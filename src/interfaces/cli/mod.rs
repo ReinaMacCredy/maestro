@@ -46,6 +46,7 @@ pub mod memory;
 pub mod migrate;
 pub mod mission_control;
 pub mod msg;
+pub mod packet;
 pub mod playbook;
 pub mod qa;
 pub mod query;
@@ -552,6 +553,8 @@ pub enum RootCommand {
     Index(IndexArgs),
     #[command(about = "Run or inspect the MCP server (serve, tools)")]
     Mcp(McpArgs),
+    #[command(about = "Read one canonical bounded Packet projection")]
+    Packet(packet::PacketArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
     #[command(
@@ -2964,17 +2967,10 @@ pub struct McpArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum McpCommand {
-    #[command(alias = "stdio", about = "Run the MCP server over stdio")]
+    #[command(about = "Run the MCP server over stdio")]
     Serve,
-    #[command(hide = true, about = "Run the MCP server over stdio (same as serve)")]
-    Stdin,
     #[command(about = "List the MCP tool names maestro exposes")]
     Tools,
-    #[command(
-        hide = true,
-        about = "List the MCP tool names maestro exposes (same as tools)"
-    )]
-    List,
 }
 
 #[derive(Debug, Args)]
@@ -3066,7 +3062,7 @@ pub fn run(cli: Cli) -> Result<()> {
     // `version`, which clap treats as a help-class query.
     if !matches!(
         cli.command,
-        RootCommand::Hook(_) | RootCommand::Mcp(_) | RootCommand::Version
+        RootCommand::Hook(_) | RootCommand::Mcp(_) | RootCommand::Packet(_) | RootCommand::Version
     ) {
         let _ = msg::inbox_banner();
         let _ = active::overlap_banner();
@@ -3140,6 +3136,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Query(args) => query::run(args),
         RootCommand::Index(args) => index::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
+        RootCommand::Packet(args) => packet::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::MissionControl(args) => mission_control::run(args),
         RootCommand::Watch(args) => watch::run(args),
@@ -3611,7 +3608,8 @@ mod tests {
             RootCommand::Card(_)
         ));
 
-        // Every hidden duplicate/synonym still parses, preserving back-compat.
+        // Remaining hidden duplicates/synonyms still parse. MCP aliases are
+        // intentionally excluded by the exact Stage 12 Serve/Tools surface.
         for argv in [
             ["maestro", "ready"].as_slice(),
             ["maestro", "verify", "task-x"].as_slice(),
@@ -3620,8 +3618,6 @@ mod tests {
             ["maestro", "query", "proof", "task-x"].as_slice(),
             ["maestro", "query", "graph", "card-x"].as_slice(),
             ["maestro", "query", "decisions"].as_slice(),
-            ["maestro", "mcp", "stdin"].as_slice(),
-            ["maestro", "mcp", "list"].as_slice(),
         ] {
             assert!(
                 Cli::try_parse_from(argv).is_ok(),

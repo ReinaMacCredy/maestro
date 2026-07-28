@@ -127,12 +127,14 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
         .expect("invariant: mcp serve should finish after stdin closes");
     assert_success(&output, &["mcp", "serve"]);
     let response = parse_mcp_frame(&output.stdout);
-    assert!(
+    assert_eq!(
         response["result"]["tools"]
             .as_array()
             .expect("invariant: tools should be an array")
             .iter()
-            .any(|tool| tool["name"] == "maestro_status")
+            .map(|tool| tool["name"].as_str().expect("tool name"))
+            .collect::<Vec<_>>(),
+        ["maestro_packet", "maestro_cli_search"]
     );
 
     let help = run_with_env(repo, &["--help"], &envs);

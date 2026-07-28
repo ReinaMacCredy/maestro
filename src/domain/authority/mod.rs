@@ -25,6 +25,7 @@ pub(in crate::domain) mod governance_attestation_stage7_seed;
 mod governance_floor;
 mod grant;
 mod identity;
+mod legacy_removal_guard;
 mod mandate;
 pub(crate) mod materialization;
 mod post_cut;
@@ -137,6 +138,11 @@ pub use identity::{
     IdempotencyKeyIdV1, InteractionClosureIdV1, MandateIdV1, ObservationIdV1, PrincipalBindingIdV1,
     PrincipalIdV1, SessionIdV1, SlotIdV1, StateTokenIdV1, TargetActionCommitmentIdV1,
 };
+#[allow(
+    unused_imports,
+    reason = "MainIntegration keeps the exact removal capability domain-only"
+)]
+pub(in crate::domain) use legacy_removal_guard::LegacyRemovalGuardV2;
 pub use mandate::{
     AuthorityMandateV1, BootstrapMandateEvaluationV1, BootstrapMandateIssuanceBindingV1,
     BootstrapMandateIssuanceV1, ConsentRequirementMemberV1, ConsentRoleV1,

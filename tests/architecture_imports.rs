@@ -4304,6 +4304,118 @@ fn stage11_private_route_guard_requires_transitive_rc_ownership() {
     ));
 }
 
+#[test]
+fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
+    let authority = read_source_file(Path::new("src/domain/authority/mod.rs"));
+    assert_eq!(authority.matches("mod legacy_removal_guard;").count(), 1);
+    assert!(
+        authority.contains("pub(in crate::domain) use legacy_removal_guard::LegacyRemovalGuardV2;")
+    );
+
+    let installation = read_source_file(Path::new("src/domain/installation/mod.rs"));
+    for owner_fact in [
+        "InstallationLegacyDeletionPlanV2",
+        "Stage12ConsumerReaderHoldClosureV2",
+        "Stage12ReplacementActivationV2",
+        "Stage12RollbackRehearsalV2",
+    ] {
+        assert!(
+            installation.contains(owner_fact),
+            "Installation must reexport {owner_fact}"
+        );
+    }
+    assert!(installation.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(installation.contains("admit_legacy_physical_pruning("));
+    assert!(installation.contains("resource_cutover::execute_stage12_product_pruning("));
+
+    let operations = read_source_file(Path::new("src/operations/installation/mod.rs"));
+    assert!(operations.contains("coordinate_stage12_product_pruning("));
+    assert!(operations.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(!operations.contains("LegacyRemovalGuardV2"));
+    assert!(!operations.contains("execute_stage12_product_pruning"));
+
+    let live_pruning_calls = rust_files_under(Path::new("src"))
+        .iter()
+        .map(|path| read_source_file(path))
+        .map(|source| {
+            source
+                .matches("coordinate_stage12_product_pruning(")
+                .count()
+        })
+        .sum::<usize>();
+    assert_eq!(
+        live_pruning_calls, 1,
+        "the sole operations coordinator must remain an uncalled definition"
+    );
+
+    let mcp_tools = read_source_file(Path::new("src/interfaces/mcp/tools.rs"));
+    let packet_index = mcp_tools.find("\"maestro_packet\"").expect("packet tool");
+    let search_index = mcp_tools
+        .find("\"maestro_cli_search\"")
+        .expect("CLI search tool");
+    assert!(packet_index < search_index);
+    assert_eq!(mcp_tools.matches("        tool(\n").count(), 2);
+    for legacy_name in [
+        "\"maestro_status\"",
+        "\"maestro_ready\"",
+        "\"maestro_query\"",
+        "\"maestro_card_get\"",
+        "\"maestro_task_show\"",
+    ] {
+        assert!(
+            !mcp_tools.contains(legacy_name),
+            "legacy MCP tool must stay refused: {legacy_name}"
+        );
+    }
+    let dispatch = mcp_tools
+        .split("pub(crate) fn call_tool")
+        .nth(1)
+        .expect("MCP dispatcher");
+    let unknown_index = dispatch
+        .find("unknown MCP tool")
+        .expect("default-deny MCP refusal");
+    assert!(
+        dispatch
+            .find("\"maestro_packet\"")
+            .expect("packet dispatch")
+            < unknown_index
+    );
+    assert!(
+        dispatch
+            .find("\"maestro_cli_search\"")
+            .expect("search dispatch")
+            < unknown_index
+    );
+
+    let server = read_source_file(Path::new("src/interfaces/mcp/server.rs"));
+    assert!(!server.contains("discover_repo_root"));
+    assert!(!server.contains("MaestroPaths"));
+    assert!(server.contains("Option<&mut dyn LiveAuthenticatedHostConnectionV1>"));
+    assert!(server.contains("let mut live_host = None;"));
+    assert!(!server.contains("\"list\" =>"));
+
+    let cli = read_source_file(Path::new("src/interfaces/cli/mod.rs"));
+    let mcp_commands = cli
+        .split("pub enum McpCommand")
+        .nth(1)
+        .expect("MCP command enum")
+        .split_once('}')
+        .expect("MCP command enum body")
+        .0;
+    assert!(mcp_commands.contains("Serve"));
+    assert!(mcp_commands.contains("Tools"));
+    assert!(!source_mentions_identifier(mcp_commands, "Stdin"));
+    assert!(!source_mentions_identifier(mcp_commands, "List"));
+    assert!(!source_mentions_identifier(mcp_commands, "stdio"));
+    assert!(cli.contains("RootCommand::Packet"));
+
+    let main = read_source_file(Path::new("src/main.rs"));
+    assert!(main.contains("RootCommand::Packet"));
+
+    let provider = read_source_file(Path::new("src/operations/adapters/live_projection.rs"));
+    assert!(provider.contains("candidate:projection:canonical-store-locator-unavailable:v1"));
+}
+
 fn source_implements_trait_for_type(source: &str, trait_name: &str, type_name: &str) -> bool {
     let code = code_for_path_scan(source);
     let compact = code.split_whitespace().collect::<Vec<_>>().join(" ");

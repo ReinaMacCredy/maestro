@@ -74,7 +74,94 @@ pub use cutover::{
 pub(crate) use resource_cutover::{
     AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1, AgentResourceReleaseOwnerFactsV1,
     AgentResourceTargetOwnerFactsV1, CommittedAgentResourceReleaseV1,
+    InstallationLegacyDeletionPlanV2, Stage12ConsumerReaderHoldClosureV2,
+    Stage12ReplacementActivationV2, Stage12RollbackRehearsalV2,
 };
+
+pub(crate) struct Stage12ProductPruningCoordinatorV2<'coordinator, 'store> {
+    authority: &'coordinator mut crate::domain::authority::AuthorityFacadeV1<'store>,
+    source_cases: &'coordinator crate::domain::migration::runtime::LegacySourceCaseManifestV3,
+    sightings: &'coordinator crate::domain::migration::runtime::Stage12SightingManifestV2,
+    classifications:
+        &'coordinator crate::domain::migration::runtime::MigrationClassificationManifestV3,
+    overlaps: &'coordinator crate::domain::migration::runtime::DeclaredOverlapManifestV2,
+    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV3,
+    quarantine: &'coordinator crate::domain::migration::runtime::SealedQuarantineManifestV3,
+    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV3,
+    activation: &'coordinator Stage12ReplacementActivationV2,
+    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV2,
+    rollback: &'coordinator Stage12RollbackRehearsalV2,
+    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV2,
+    continuation: resource_cutover::InstallationPhysicalPruningContinuationV2,
+    effects: &'coordinator mut dyn resource_cutover::InstallationPhysicalPruningEffectPortV2,
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the opaque coordinator captures every independently owned Stage 12 pruning fact"
+)]
+pub(in crate::domain) fn prepare_stage12_product_pruning_coordinator<'coordinator, 'store>(
+    authority: &'coordinator mut crate::domain::authority::AuthorityFacadeV1<'store>,
+    source_cases: &'coordinator crate::domain::migration::runtime::LegacySourceCaseManifestV3,
+    sightings: &'coordinator crate::domain::migration::runtime::Stage12SightingManifestV2,
+    classifications:
+        &'coordinator crate::domain::migration::runtime::MigrationClassificationManifestV3,
+    overlaps: &'coordinator crate::domain::migration::runtime::DeclaredOverlapManifestV2,
+    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV3,
+    quarantine: &'coordinator crate::domain::migration::runtime::SealedQuarantineManifestV3,
+    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV3,
+    activation: &'coordinator Stage12ReplacementActivationV2,
+    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV2,
+    rollback: &'coordinator Stage12RollbackRehearsalV2,
+    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV2,
+    continuation: resource_cutover::InstallationPhysicalPruningContinuationV2,
+    effects: &'coordinator mut dyn resource_cutover::InstallationPhysicalPruningEffectPortV2,
+) -> Stage12ProductPruningCoordinatorV2<'coordinator, 'store> {
+    Stage12ProductPruningCoordinatorV2 {
+        authority,
+        source_cases,
+        sightings,
+        classifications,
+        overlaps,
+        losses,
+        quarantine,
+        epoch,
+        activation,
+        consumer_reader_hold,
+        rollback,
+        deletion_plan,
+        continuation,
+        effects,
+    }
+}
+
+pub(crate) fn coordinate_authority_admitted_stage12_pruning(
+    coordinator: Stage12ProductPruningCoordinatorV2<'_, '_>,
+) -> Result<(), AgentResourceCutoverErrorV1> {
+    let guard = coordinator
+        .authority
+        .admit_legacy_physical_pruning(
+            coordinator.source_cases,
+            coordinator.sightings,
+            coordinator.classifications,
+            coordinator.overlaps,
+            coordinator.losses,
+            coordinator.quarantine,
+            coordinator.epoch,
+            coordinator.activation,
+            &coordinator.consumer_reader_hold,
+            coordinator.rollback,
+            coordinator.deletion_plan,
+        )
+        .map_err(|_| AgentResourceCutoverErrorV1::Stage12BindingMismatch)?;
+    resource_cutover::execute_stage12_product_pruning(
+        guard,
+        coordinator.consumer_reader_hold,
+        coordinator.continuation,
+        coordinator.effects,
+    )
+    .map(|_| ())
+}
 
 pub(crate) fn admit_installation_census_roots_v2(
     roots: &[impl AsRef<std::path::Path>],

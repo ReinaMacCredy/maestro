@@ -3,21 +3,20 @@ use std::io::{self, BufRead, BufReader, Write};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
-use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::domain::integration::LiveAuthenticatedHostConnectionV1;
 use crate::interfaces::mcp::tools::{call_tool, tool_definitions};
 
 const MAX_MCP_FRAME_BYTES: usize = 1024 * 1024;
 
 /// Run the stdio MCP JSON-RPC server.
 pub fn serve() -> Result<()> {
-    let repo_root = discover_repo_root()?;
-    let paths = MaestroPaths::new(repo_root);
+    let mut live_host = None;
     let stdin = io::stdin();
     let mut reader = BufReader::new(stdin.lock());
     let mut stdout = io::stdout();
 
     while let Some(body) = read_message(&mut reader)? {
-        let response = handle_request(&paths, &body);
+        let response = handle_request(&body, &mut live_host);
         if let Some(response) = response {
             write_frame(&mut stdout, &response)?;
         }
@@ -93,7 +92,10 @@ fn write_frame(writer: &mut impl Write, response: &Value) -> Result<()> {
     writer.flush().context("failed to flush MCP response")
 }
 
-fn handle_request(paths: &MaestroPaths, body: &str) -> Option<Value> {
+fn handle_request(
+    body: &str,
+    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+) -> Option<Value> {
     let request = match serde_json::from_str::<Value>(body) {
         Ok(request) => request,
         Err(error) => {
@@ -115,7 +117,7 @@ fn handle_request(paths: &MaestroPaths, body: &str) -> Option<Value> {
         }
         let responses = batch
             .iter()
-            .filter_map(|request| handle_request_value(paths, request))
+            .filter_map(|request| handle_request_value(request, live_host))
             .collect::<Vec<_>>();
         return if responses.is_empty() {
             None
@@ -124,10 +126,13 @@ fn handle_request(paths: &MaestroPaths, body: &str) -> Option<Value> {
         };
     }
 
-    handle_request_value(paths, &request)
+    handle_request_value(&request, live_host)
 }
 
-fn handle_request_value(paths: &MaestroPaths, request: &Value) -> Option<Value> {
+fn handle_request_value(
+    request: &Value,
+    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+) -> Option<Value> {
     let id = request.get("id").cloned();
     let Some(method) = request.get("method").and_then(Value::as_str) else {
         return id.map(|id| {
@@ -152,14 +157,14 @@ fn handle_request_value(paths: &MaestroPaths, request: &Value) -> Option<Value> 
             })
         }),
         "notifications/initialized" => None,
-        "tools/list" | "list" => id.map(|id| {
+        "tools/list" => id.map(|id| {
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": {"tools": tools_json()}
             })
         }),
-        "tools/call" => id.map(|id| tool_call_response(paths, id, request.get("params"))),
+        "tools/call" => id.map(|id| tool_call_response(id, request.get("params"), live_host)),
         _ => id.map(|id| {
             json!({
                 "jsonrpc": "2.0",
@@ -183,7 +188,11 @@ fn tools_json() -> Vec<Value> {
         .collect()
 }
 
-fn tool_call_response(paths: &MaestroPaths, id: Value, params: Option<&Value>) -> Value {
+fn tool_call_response(
+    id: Value,
+    params: Option<&Value>,
+    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+) -> Value {
     let Some(params) = params else {
         return invalid_params(id, "missing params");
     };
@@ -195,7 +204,7 @@ fn tool_call_response(paths: &MaestroPaths, id: Value, params: Option<&Value>) -
         .cloned()
         .unwrap_or_else(|| json!({}));
 
-    match call_tool(paths, name, &arguments) {
+    match call_tool(name, &arguments, live_host) {
         Ok(text) => json!({
             "jsonrpc": "2.0",
             "id": id,

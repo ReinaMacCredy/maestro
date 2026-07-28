@@ -7,8 +7,8 @@ use crate::interfaces::mcp::tools::tool_definitions;
 /// Execute `maestro mcp`.
 pub fn run(args: McpArgs) -> Result<()> {
     match args.command {
-        McpCommand::Serve | McpCommand::Stdin => server::serve(),
-        McpCommand::Tools | McpCommand::List => list_tools(),
+        McpCommand::Serve => server::serve(),
+        McpCommand::Tools => list_tools(),
     }
 }
 
