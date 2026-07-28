@@ -542,6 +542,15 @@ pub(crate) trait QuarantineCustodyPortV1: persistence_lease_sealed::Sealed {
     fn currentness(&self) -> [u8; 32];
     fn fence(&self) -> [u8; 32];
     fn revocation_revision(&self) -> u64;
+    fn create_loss_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), FoundationLegacyQuarantineErrorV1>;
+    fn read_loss_audit(
+        &self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1>;
     fn persist_source(
         &mut self,
         source_token: [u8; 32],
@@ -1687,6 +1696,23 @@ where
     P: ProtectedPrimaryBoundaryPortV1,
     Q: QuarantineCustodyPortV1,
 {
+    pub(crate) fn create_loss_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+        self.lease
+            .custody
+            .create_loss_audit_if_absent(audit_id, canonical_bytes)
+    }
+
+    pub(crate) fn read_loss_audit(
+        &self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1> {
+        self.lease.custody.read_loss_audit(audit_id)
+    }
+
     pub(crate) fn copy_once(
         &mut self,
         source_token: [u8; 32],
@@ -2667,6 +2693,7 @@ pub(crate) enum FoundationLegacyQuarantineErrorV1 {
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
     use std::fs;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
@@ -2839,6 +2866,7 @@ mod tests {
 
     struct TestCustody {
         records: Rc<RefCell<Vec<[u8; 32]>>>,
+        loss_audits: Rc<RefCell<BTreeMap<[u8; 32], Vec<u8>>>>,
         rolled_back: Rc<RefCell<bool>>,
     }
 
@@ -2895,6 +2923,33 @@ mod tests {
 
         fn revocation_revision(&self) -> u64 {
             1
+        }
+
+        fn create_loss_audit_if_absent(
+            &mut self,
+            audit_id: [u8; 32],
+            canonical_bytes: &[u8],
+        ) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+            let mut audits = self.loss_audits.borrow_mut();
+            match audits.get(&audit_id) {
+                Some(existing) if existing == canonical_bytes => Ok(()),
+                Some(_) => Err(FoundationLegacyQuarantineErrorV1::CustodyWriteFailed),
+                None => {
+                    audits.insert(audit_id, canonical_bytes.to_vec());
+                    Ok(())
+                }
+            }
+        }
+
+        fn read_loss_audit(
+            &self,
+            audit_id: [u8; 32],
+        ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1> {
+            self.loss_audits
+                .borrow()
+                .get(&audit_id)
+                .cloned()
+                .ok_or(FoundationLegacyQuarantineErrorV1::SourceChanged)
         }
 
         fn persist_source(
@@ -3014,6 +3069,7 @@ mod tests {
             },
             TestCustody {
                 records: Rc::new(RefCell::new(Vec::new())),
+                loss_audits: Rc::new(RefCell::new(BTreeMap::new())),
                 rolled_back: Rc::new(RefCell::new(false)),
             },
         )

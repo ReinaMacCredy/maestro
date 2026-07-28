@@ -232,6 +232,10 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
         .expect("migration runtime");
     let operation = fs::read_to_string(root.join("src/operations/migration/live_set_v3.rs"))
         .expect("migration operation");
+    let operation_facade = fs::read_to_string(root.join("src/operations/migration/mod.rs"))
+        .expect("migration operation facade");
+    let foundation = fs::read_to_string(root.join("src/foundation/core/legacy_quarantine.rs"))
+        .expect("Foundation quarantine");
     for required in [
         "encode_canonical_audit",
         "decode_canonical_audit",
@@ -265,6 +269,19 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
             "loss audit persistence gained owner/bearer authority: {forbidden}"
         );
     }
+    let normalized_operation = operation.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        normalized_operation.contains(
+            "impl<P, Q> UnavailablePreexistingLossAuditPersistencePortV1 for FoundationSourceCopyContinuationV2<P, Q>"
+        ),
+        "loss-audit persistence is not sealed to the captured Foundation custody continuation"
+    );
+    for required in ["fn create_loss_audit_if_absent(", "fn read_loss_audit("] {
+        assert!(
+            foundation.contains(required),
+            "custody port is missing loss-audit capability: {required}"
+        );
+    }
 
     let execute = operation
         .split("pub(crate) fn execute_offline_live_set_v4")
@@ -274,20 +291,31 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
                 .next()
         })
         .expect("V4 execution gate");
-    for required in [
+    assert!(
+        execute.contains(".finish()"),
+        "execute path does not consume captured custody"
+    );
+    for forbidden in [
         "A: UnavailablePreexistingLossAuditPersistencePortV1",
-        "persistence: &mut A",
+        "persistence: &mut",
+        "persistence_store",
+        "StoreV1",
         ".finish(persistence)",
     ] {
         assert!(
-            execute.contains(required),
-            "execute path does not require audit persistence: {required}"
+            !execute.contains(forbidden),
+            "V4 execution retains an external persistence target: {forbidden}"
         );
     }
+    assert!(
+        !operation_facade.contains("persistence_store"),
+        "operation facade exposes a detached persistence Store"
+    );
 
     let finish = operation
-        .split("pub(crate) fn finish<A>(")
+        .split("impl<P, Q> Stage11SealedCopyContinuationV4<P, Q>")
         .nth(1)
+        .and_then(|tail| tail.split("pub(crate) fn finish(").nth(1))
         .and_then(|tail| {
             tail.split("pub(crate) enum Stage11PhysicalClosureV4")
                 .next()
@@ -296,6 +324,10 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
     let persist = finish
         .find("persist_unavailable_preexisting_loss_audits_v4")
         .expect("persist loss audits");
+    assert!(
+        finish.contains("&mut self.physical"),
+        "loss audits are not persisted through captured custody"
+    );
     let rollback = finish
         .find("self.physical.rollback()")
         .expect("rollback on audit failure");

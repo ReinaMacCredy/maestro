@@ -439,7 +439,7 @@ impl Stage11PhysicalClosureV3 {
     clippy::too_many_arguments,
     reason = "V4 consumes both nominal owner universes and all three complete evidence sets"
 )]
-pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, A, F>(
+pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, F>(
     repository: R,
     installation: I,
     protected_primary: P,
@@ -451,7 +451,6 @@ pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, A, F>(
     invocation: [u8; 32],
     custody_lease_id: MigrationDigestV1,
     expected_old_id: MigrationDigestV1,
-    persistence: &mut A,
     classify: F,
 ) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4>
 where
@@ -462,7 +461,6 @@ where
     PE: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
     P: ProtectedPrimaryBoundaryPortV1,
     Q: QuarantineCustodyPortV1,
-    A: UnavailablePreexistingLossAuditPersistencePortV1,
     F: FnOnce(
         &LegacySourceCaseManifestV3,
     ) -> Result<MigrationClassificationManifestV3, Stage11LiveSetOperationErrorV4>,
@@ -480,7 +478,7 @@ where
     )?;
     let classifications = classify(live.source_cases())?;
     live.copy_present_sources(classifications, custody_lease_id, expected_old_id)?
-        .finish(persistence)
+        .finish()
 }
 
 pub(crate) struct Stage11LiveSetContinuationV4<P, Q> {
@@ -696,13 +694,9 @@ where
         &self.losses
     }
 
-    pub(crate) fn finish<A>(
-        self,
-        persistence: &mut A,
-    ) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4>
-    where
-        A: UnavailablePreexistingLossAuditPersistencePortV1,
-    {
+    pub(crate) fn finish(
+        mut self,
+    ) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4> {
         let rollback = LegacyRollbackAssessmentV4::assess(
             &self.source_cases,
             &self.classifications,
@@ -710,7 +704,7 @@ where
             &self.quarantine,
         )?;
         if let Err(audit_error) =
-            persist_unavailable_preexisting_loss_audits_v4(&self.losses, persistence)
+            persist_unavailable_preexisting_loss_audits_v4(&self.losses, &mut self.physical)
         {
             return Err(audit_failure_after_rollback(audit_error, || {
                 self.physical.rollback()
@@ -821,6 +815,30 @@ pub(crate) trait UnavailablePreexistingLossAuditPersistencePortV1 {
         &mut self,
         audit_id: [u8; 32],
     ) -> Result<Vec<u8>, UnavailablePreexistingLossAuditPersistenceErrorV1>;
+}
+
+impl<P, Q> UnavailablePreexistingLossAuditPersistencePortV1
+    for FoundationSourceCopyContinuationV2<P, Q>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+    Q: QuarantineCustodyPortV1,
+{
+    fn create_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), UnavailablePreexistingLossAuditPersistenceErrorV1> {
+        self.create_loss_audit_if_absent(audit_id, canonical_bytes)
+            .map_err(|_| UnavailablePreexistingLossAuditPersistenceErrorV1::CreateRejected)
+    }
+
+    fn read_audit(
+        &mut self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, UnavailablePreexistingLossAuditPersistenceErrorV1> {
+        self.read_loss_audit(audit_id)
+            .map_err(|_| UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
