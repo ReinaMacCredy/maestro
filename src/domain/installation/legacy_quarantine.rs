@@ -17,6 +17,36 @@ use crate::foundation::core::legacy_quarantine::{
     LegacyQuarantineRootAdmissionV3, observe_root_binding_v3, owner_admission_sealed,
 };
 
+pub(in crate::domain::installation) fn acquire_declared_root_universe_v1(
+    census: &InstallationCensusV1,
+    provider: Box<dyn super::root_universe::InstallationRootUniverseProviderV1>,
+    operation_attempt: [u8; 32],
+) -> Result<
+    super::root_universe::InstallationDeclaredRootUniverseLeaseV1,
+    super::root_universe::InstallationRootUniverseErrorV1,
+> {
+    super::root_universe::InstallationDeclaredRootUniverseLeaseV1::acquire(
+        census,
+        provider,
+        operation_attempt,
+    )
+}
+
+pub(in crate::domain::installation) fn capture_legacy_source_history_v1(
+    store: &crate::domain::persistence::StoreV1,
+    relative_locator: &[u8],
+    context: crate::domain::persistence::legacy_source_history::StoreLegacySourceHistoryContextV1,
+) -> Result<
+    super::legacy_source_history::LegacySourceHistorySnapshotV1,
+    super::legacy_source_history::InstallationLegacySourceHistoryErrorV1,
+> {
+    super::legacy_source_history::LegacySourceHistorySnapshotV1::capture_present_file(
+        store,
+        relative_locator,
+        context,
+    )
+}
+
 pub(crate) struct InstallationRootAdmissionV3 {
     roots: Vec<(Vec<u8>, PathBuf, [u8; 32])>,
     owner_currentness: [u8; 32],

@@ -93,6 +93,25 @@ impl ProtectedPrimaryBoundaryLeaseV1 {
             _not_send_or_sync: PhantomData,
         })
     }
+
+    pub(super) fn history_boundary_binding_v1(
+        &self,
+    ) -> super::legacy_source_history::ProtectedPrimaryHistoryBoundaryBindingV1 {
+        super::legacy_source_history::ProtectedPrimaryHistoryBoundaryBindingV1::from_boundary(
+            self.root.clone(),
+            self.identity,
+            self.facts.resolved_locator_commitment(),
+            self.facts.object_identity(),
+            self.facts.provider_identity(),
+            self.facts.mount_identity(),
+            self.facts.anchor_identity(),
+            self.realm_identity,
+            self.currentness,
+            self.fence,
+            self.revocation_revision,
+        )
+        .expect("invariant: the live protected-primary lease has a complete history binding")
+    }
 }
 
 impl persistence_lease_sealed::Sealed for ProtectedPrimaryBoundaryLeaseV1 {}

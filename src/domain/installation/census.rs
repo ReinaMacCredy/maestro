@@ -360,6 +360,13 @@ impl InstallationCensusV1 {
             owner_attestation: sha2::Sha256::digest(census_object.canonical_bytes()).into(),
         })
     }
+
+    pub(super) fn legacy_root_universe_comparison_identity_v1(
+        &self,
+    ) -> Result<[u8; 32], InstallationCensusErrorV1> {
+        self.validate()?;
+        Ok(*self.to_store_object()?.id().as_bytes())
+    }
 }
 
 pub(super) struct InstallationLegacyRootSnapshotV3 {

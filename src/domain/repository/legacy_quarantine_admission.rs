@@ -17,6 +17,31 @@ use crate::foundation::core::legacy_quarantine::{
     LegacyQuarantineRootAdmissionV3, observe_root_binding_v3, owner_admission_sealed,
 };
 
+pub(in crate::domain::repository) fn acquire_declared_root_universe_v1(
+    store: &StoreV1,
+    operation_attempt: [u8; 32],
+) -> Result<
+    super::root_universe::RepositoryDeclaredRootUniverseLeaseV1,
+    super::root_universe::RepositoryRootUniverseErrorV1,
+> {
+    super::root_universe::RepositoryDeclaredRootUniverseLeaseV1::acquire(store, operation_attempt)
+}
+
+pub(in crate::domain::repository) fn capture_legacy_source_history_v1(
+    store: &StoreV1,
+    relative_locator: &[u8],
+    context: crate::domain::persistence::legacy_source_history::StoreLegacySourceHistoryContextV1,
+) -> Result<
+    super::legacy_source_history::LegacySourceHistorySnapshotV1,
+    super::legacy_source_history::RepositoryLegacySourceHistoryErrorV1,
+> {
+    super::legacy_source_history::LegacySourceHistorySnapshotV1::capture_present_file(
+        store,
+        relative_locator,
+        context,
+    )
+}
+
 pub(crate) struct RepositoryRootAdmissionV3 {
     root: PathBuf,
     display_locator: Vec<u8>,
