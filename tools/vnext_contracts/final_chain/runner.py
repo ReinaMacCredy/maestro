@@ -30,9 +30,69 @@ EFFECT_DENYLIST = [
     "network",
     "remote_connector",
     "live_external_system",
+    "candidate_ref_write",
     "protected_primary_checkout_write",
     "outside_packet_bound_roots_write",
 ]
+STAGE12_COORDINATOR_SCHEMA = "maestro.external.stage12-legacy-cut-coordinator.v2"
+STAGE12_PACKET_IDENTITY = (
+    "sha256:171de6121c62f1c8af55e9e248da506ca96322cb5a588c75ee3762f7d8082472"
+)
+STAGE12_CANONICAL_ANCESTRY = [
+    {
+        "lane": "V7Design",
+        "commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
+        "tree": "bd2c08f87809d5093252943f2fd04a5be551aa13",
+    },
+    {
+        "lane": "Stage11",
+        "commit": "66ba4bf8470ee63b81a77bddc0f9d83e6cc4961c",
+        "tree": "f697a328de1b0271bcc266f9cb12a7d1c9ef24a3",
+    },
+    {
+        "lane": "MainIntegrationStage11Wiring",
+        "commit": "0c27ccfe2c939b50ac2f99a9349d0aa56d065ff7",
+        "tree": "4ed2c96e071532d275088d9b8089cccaebec0de9",
+    },
+    {
+        "lane": "AuthorityOwner",
+        "commit": "fc190ce78d940475073b0451c349f52016380d3c",
+        "tree": "e32bcc029e96cfbcb0f805527c19bc1efbf964af",
+    },
+    {
+        "lane": "Stage12Product",
+        "commit": "73e2d226f51ac55ee9a92b411fade9b7737fa567",
+        "tree": "9bca7075c5255b9bb3eb757693c7f13b8d294b19",
+    },
+]
+STAGE12_GATE_ORDER = [
+    ("legacy_source_case_manifest_v3", "current_complete"),
+    ("stage12_sighting_manifest_v2", "current_complete"),
+    ("migration_classification_manifest_v3", "closed"),
+    ("declared_overlap_manifest_v2", "closed_current"),
+    ("unavailable_preexisting_loss_manifest_v3", "closed_current"),
+    ("sealed_quarantine_manifest_v3", "sealed_current"),
+    ("legacy_quarantine_epoch_v3", "sealed_current"),
+    ("replacement_activation", "active_current"),
+    ("adapter_parity", "exact"),
+    ("consumer_manifest", "zero_current"),
+    ("reader_manifest", "zero_current"),
+    ("hold_manifest", "zero_current"),
+    ("rollback_rehearsal", "rehearsed_current"),
+    ("namespace_promotion_manifest", "exact"),
+    ("release_currentness", "current"),
+    ("proof_registry_currentness", "current"),
+]
+STAGE12_EFFECT_BOUNDARY = {
+    "primary_never_target": True,
+    "authority_guard_mint_or_reconstruction": False,
+    "live_product_path_pruning": False,
+    "adapter_activation": False,
+    "installation": False,
+    "publication": False,
+    "release": False,
+    "final_runner_candidate_ref_write": False,
+}
 
 
 class FinalChainError(RuntimeError):
@@ -386,6 +446,251 @@ def validate_readback(path: Path, commit: str) -> dict[str, Any]:
     return value
 
 
+def validate_stage12_coordinator(
+    closure: Path, path: Path, final_commit: str, final_tree: str
+) -> dict[str, Any]:
+    value = read_json(path)
+    if set(value) != {
+        "schema_version",
+        "authority_scope",
+        "approved_packet_identity",
+        "approved_packet",
+        "protected_primary",
+        "source_git_binding",
+        "canonical_ancestry",
+        "clean_successor_preimage",
+        "candidate_ref",
+        "retained_inputs",
+        "cas_observation",
+        "effect_boundary",
+    }:
+        raise FinalChainError("Stage 12 coordinator fields differ")
+    if (
+        value.get("schema_version") != STAGE12_COORDINATOR_SCHEMA
+        or value.get("authority_scope")
+        != "one_expected_preimage_isolated_candidate_ref_cas_only"
+        or value.get("approved_packet_identity") != STAGE12_PACKET_IDENTITY
+    ):
+        raise FinalChainError("Stage 12 coordinator identity differs")
+    if value.get("approved_packet") != {
+        "path": "control/stage12/packet/replacement-build-approval-packet.v7.json",
+        "byte_length": 10927,
+        "sha256": "sha256:0c525951a49c7406d1008c64a3ad328505777c09cb7388b11a5db8634c3f4f65",
+    }:
+        raise FinalChainError("Stage 12 approved packet artifact differs")
+    primary = value.get("protected_primary")
+    source = value.get("source_git_binding")
+    ancestry = value.get("canonical_ancestry")
+    clean = value.get("clean_successor_preimage")
+    candidate = value.get("candidate_ref")
+    if (
+        not isinstance(primary, Mapping)
+        or set(primary)
+        != {
+            "checkout_realpath",
+            "ref",
+            "commit",
+            "tree",
+            "boundary_identity",
+            "boundary",
+            "candidate_target",
+        }
+        or primary.get("candidate_target") is not False
+        or not Path(str(primary.get("checkout_realpath", ""))).is_absolute()
+        or not str(primary.get("ref", "")).startswith("refs/heads/")
+        or primary.get("commit") != "13b9a5e9b5ec67e7086b0b21992a207d2e4cde94"
+        or primary.get("tree") != "97e08a00f8a721318cda13241129a3b06651accc"
+        or primary.get("boundary_identity")
+        != "sha256:e5b4c0592b8cf373ea68fc5e0e3f84020c14f3f422c5779e8d4a423930aa6054"
+        or primary.get("boundary")
+        != {
+            "path": "control/stage12/packet/primary-dirty-boundary.v7.json",
+            "byte_length": 1126,
+            "sha256": "sha256:4f4ec8207a5f5824c9113cca1a3b04cf390f2bf731f1188e399ba56d8ad6c26a",
+        }
+        or not isinstance(source, Mapping)
+        or set(source)
+        != {
+            "identity",
+            "repository_realpath",
+            "git_common_dir_realpath",
+            "object_format",
+            "artifact",
+        }
+        or not Path(str(source.get("repository_realpath", ""))).is_absolute()
+        or not Path(str(source.get("git_common_dir_realpath", ""))).is_absolute()
+        or source.get("identity")
+        != "sha256:1099c62b3c9a333da68733a098ceece9e6754f28f1ea53f30b4b8dfcc6ae92d7"
+        or source.get("object_format") != "sha1"
+        or source.get("artifact")
+        != {
+            "path": "control/stage12/packet/source-git-control-binding.v7.json",
+            "byte_length": 1706,
+            "sha256": "sha256:7d73e0746497566712a1c6782c8d3435627aa2c7b997e59ceaea1b32756e792d",
+        }
+        or ancestry != STAGE12_CANONICAL_ANCESTRY
+        or clean
+        != {
+            "commit": "e69295329c29c1c75901315a56e947b85b7a69cf",
+            "tree": "cd36cbb2963a264cb67a834bb38c709c0ea144ae",
+        }
+        or not isinstance(candidate, Mapping)
+        or set(candidate)
+        != {
+            "repository_realpath",
+            "git_common_dir_realpath",
+            "ref",
+            "expected_preimage",
+            "declared_postimage",
+            "declared_postimage_parent",
+            "ref_update_algorithm",
+            "crash_states",
+        }
+    ):
+        raise FinalChainError("Stage 12 coordinator protected identities differ")
+    expected = candidate.get("expected_preimage")
+    declared = candidate.get("declared_postimage")
+    if (
+        not isinstance(expected, Mapping)
+        or set(expected) != {"commit", "tree"}
+        or not isinstance(declared, Mapping)
+        or set(declared) != {"commit", "tree"}
+        or candidate.get("ref") == primary.get("ref")
+        or not str(candidate.get("ref", "")).startswith("refs/heads/")
+        or not Path(str(candidate.get("repository_realpath", ""))).is_absolute()
+        or not Path(str(candidate.get("git_common_dir_realpath", ""))).is_absolute()
+        or candidate.get("repository_realpath") == primary.get("checkout_realpath")
+        or candidate.get("git_common_dir_realpath")
+        != source.get("git_common_dir_realpath")
+        or candidate.get("declared_postimage_parent") != expected.get("commit")
+        or candidate.get("ref_update_algorithm")
+        != "git-update-ref-no-deref-new-old"
+        or candidate.get("crash_states")
+        != ["exact_expected_preimage", "exact_declared_postimage"]
+        or declared != {"commit": final_commit, "tree": final_tree}
+    ):
+        raise FinalChainError("Stage 12 coordinator candidate-ref closure differs")
+    observation = value.get("cas_observation")
+    if (
+        not isinstance(observation, Mapping)
+        or set(observation) != {"state", "observed_commit", "observed_tree"}
+        or observation.get("state") != "exact_declared_postimage"
+        or observation.get("observed_commit") != final_commit
+        or observation.get("observed_tree") != final_tree
+    ):
+        raise FinalChainError("Stage 12 coordinator postimage was not observed")
+    gates = value.get("retained_inputs")
+    if (
+        not isinstance(gates, list)
+        or len(gates) != len(STAGE12_GATE_ORDER)
+        or any(not isinstance(row, Mapping) for row in gates)
+        or [(row.get("kind"), row.get("state")) for row in gates]
+        != STAGE12_GATE_ORDER
+        or any(
+            row.get("count") != 0
+            for row in gates
+            if row.get("kind")
+            in {"consumer_manifest", "reader_manifest", "hold_manifest"}
+        )
+    ):
+        raise FinalChainError("Stage 12 coordinator retained-input order differs")
+    for row in gates:
+        expected_fields = {"kind", "state", "identity", "evidence"}
+        if row.get("kind") in {
+            "consumer_manifest",
+            "reader_manifest",
+            "hold_manifest",
+        }:
+            expected_fields.add("count")
+        if row.get("kind") == "namespace_promotion_manifest":
+            expected_fields.update({"entry_count", "mismatch_count"})
+        identity = row.get("identity")
+        if (
+            set(row) != expected_fields
+            or not isinstance(identity, str)
+            or len(identity) != 71
+            or not identity.startswith("sha256:")
+            or any(character not in "0123456789abcdef" for character in identity[7:])
+        ):
+            raise FinalChainError("Stage 12 coordinator retained-input row differs")
+    namespace = gates[13]
+    if namespace.get("entry_count") != 210 or namespace.get("mismatch_count") != 0:
+        raise FinalChainError("Stage 12 coordinator namespace parity differs")
+    if value.get("effect_boundary") != STAGE12_EFFECT_BOUNDARY:
+        raise FinalChainError("Stage 12 coordinator effect boundary differs")
+    bindings = [
+        ("approved packet", value.get("approved_packet")),
+        ("protected primary boundary", primary.get("boundary")),
+        ("source Git binding", source.get("artifact")),
+        *[
+            (f"Stage 12 {row.get('kind')}", row.get("evidence"))
+            for row in gates
+        ],
+    ]
+    bound_paths = {
+        label: bound_file(closure, binding, label) for label, binding in bindings
+    }
+    packet = read_json(bound_paths["approved packet"])
+    primary_boundary = read_json(bound_paths["protected primary boundary"])
+    source_binding = read_json(bound_paths["source Git binding"])
+    packet_artifacts = packet.get("artifact_sha256")
+    source_git_control = source_binding.get("git_control")
+    source_primary = source_binding.get("primary")
+    successor_preimage = source_binding.get("successor_preimage")
+    design = source_binding.get("design")
+    if (
+        packet.get("schema") != "maestro.external-build-approval-packet.v7"
+        or f"sha256:{packet.get('packet_sha256')}" != STAGE12_PACKET_IDENTITY
+        or packet.get("source_repository_realpath") != source.get("repository_realpath")
+        or packet.get("primary_boundary_identity")
+        != str(primary.get("boundary_identity"))[7:]
+        or not isinstance(packet_artifacts, Mapping)
+        or packet_artifacts.get("primary-dirty-boundary.v7.json")
+        != str(primary["boundary"]["sha256"])[7:]
+        or packet_artifacts.get("source-git-control-binding.v7.json")
+        != str(source["artifact"]["sha256"])[7:]
+        or primary_boundary.get("schema")
+        != "maestro.external.primary-dirty-boundary.v7"
+        or primary_boundary.get("identity_sha256")
+        != str(primary.get("boundary_identity"))[7:]
+        or primary_boundary.get("repository_realpath")
+        != primary.get("checkout_realpath")
+        or primary_boundary.get("head") != primary.get("commit")
+        or primary_boundary.get("tree") != primary.get("tree")
+        or source_binding.get("schema")
+        != "maestro.external.source-git-control-binding.v7"
+        or source_binding.get("identity_sha256") != str(source.get("identity"))[7:]
+        or source_binding.get("repository_realpath")
+        != source.get("repository_realpath")
+        or not isinstance(source_git_control, Mapping)
+        or source_git_control.get("path") != source.get("git_common_dir_realpath")
+        or source.get("repository_realpath") != primary.get("checkout_realpath")
+        or not isinstance(source_primary, Mapping)
+        or {
+            "commit": source_primary.get("commit"),
+            "tree": source_primary.get("tree"),
+        }
+        != {
+            "commit": primary.get("commit"),
+            "tree": primary.get("tree"),
+        }
+        or not isinstance(successor_preimage, Mapping)
+        or {
+            "commit": successor_preimage.get("commit"),
+            "tree": successor_preimage.get("tree"),
+        }
+        != clean
+        or not isinstance(design, Mapping)
+        or design.get("commit")
+        != "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc"
+        or design.get("tree") != "bd2c08f87809d5093252943f2fd04a5be551aa13"
+    ):
+        raise FinalChainError(
+            "Stage 12 V7 packet, source Git, or protected-primary binding differs"
+        )
+    return value
+
+
 def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
     snapshot_path = closure / "control/final-cumulative-closure-snapshot.v1.json"
     snapshot = read_json(snapshot_path)
@@ -452,6 +757,12 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         or overlay.get("stage12_tree") != stages[12]["tree"]
     ):
         raise FinalChainError("Stage 12 overlay identity differs")
+    coordinator_path = bound_file(
+        closure,
+        snapshot.get("stage12_legacy_cut_coordinator"),
+        "Stage 12 legacy-cut coordinator",
+    )
+    validate_stage12_coordinator(closure, coordinator_path, commit, tree)
     promotion_path = bound_file(
         closure,
         snapshot.get("promotion_prerequisites"),
@@ -540,6 +851,7 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         "readback": bound_file(closure, snapshot.get("stage12_readback"), "readback plan"),
         "toolchain": bound_file(closure, snapshot.get("toolchain"), "toolchain"),
         "overlay": overlay_path,
+        "stage12_coordinator": coordinator_path,
         "ancestry_pack": bound_file(
             closure, snapshot.get("ancestry_pack"), "ancestry object pack"
         ),

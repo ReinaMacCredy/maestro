@@ -19,6 +19,9 @@ REPOSITORY = ROOT.parents[2]
 CONTRACTS = REPOSITORY / "contracts/vnext/final-chain"
 FIXTURES = ROOT / "fixtures"
 PACKET = Path("/private/tmp/maestro-vnext-final-closure-successor-packet-v4")
+STAGE12_PACKET = Path(
+    "/private/tmp/maestro-vnext-host-injection-successor-packet-v7"
+)
 sys.path.insert(0, str(ROOT))
 
 import generate  # type: ignore[import-not-found]  # noqa: E402
@@ -26,6 +29,33 @@ import runner  # type: ignore[import-not-found]  # noqa: E402
 
 
 class FinalChainStaticTests(unittest.TestCase):
+    def _materialize_stage12_bindings(
+        self, value: dict[str, object], root: Path, prefix: str
+    ) -> None:
+        if not STAGE12_PACKET.is_dir():
+            self.skipTest("authoritative V7 packet is unavailable")
+        packet_bindings = [
+            value["approved_packet"],
+            value["protected_primary"]["boundary"],
+            value["source_git_binding"]["artifact"],
+        ]
+        for binding in packet_bindings:
+            path = root / binding["path"]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(STAGE12_PACKET / Path(binding["path"]).name, path)
+            raw = path.read_bytes()
+            self.assertEqual(binding["byte_length"], len(raw))
+            self.assertEqual(binding["sha256"], runner.digest(raw))
+        for index, binding in enumerate(
+            row["evidence"] for row in value["retained_inputs"]
+        ):
+            path = root / binding["path"]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            raw = f"{prefix}-{index}\n".encode()
+            path.write_bytes(raw)
+            binding["byte_length"] = len(raw)
+            binding["sha256"] = runner.digest(raw)
+
     def test_contract_schemas_are_strict_and_parseable(self) -> None:
         expected = {
             "cohort-observation.v1.schema.json",
@@ -39,9 +69,10 @@ class FinalChainStaticTests(unittest.TestCase):
             "toolchain.v1.schema.json",
             "final-cumulative-seal-receipt.v1.schema.json",
             "final-pointer.v1.schema.json",
-              "input-manifest.v1.schema.json",
-              "promotion-prerequisites.v1.schema.json",
-              "stage12-overlay.v1.schema.json",
+            "input-manifest.v1.schema.json",
+            "promotion-prerequisites.v1.schema.json",
+            "stage12-overlay.v1.schema.json",
+            "stage12-legacy-cut-coordinator.v2.schema.json",
         }
         self.assertEqual(
             {path.name for path in CONTRACTS.glob("*.schema.json")}, expected
@@ -185,7 +216,9 @@ class FinalChainStaticTests(unittest.TestCase):
         self.assertIn('"sandbox protected-primary write denial probe failed"', source)
         self.assertNotIn("shell=True", source)
         self.assertNotIn("git checkout", source)
+        self.assertNotIn('"update-ref"', source)
         self.assertNotIn("fallback", source.lower())
+        self.assertIn('"candidate_ref_write"', source)
 
     def test_three_engines_do_not_import_or_launch_each_other(self) -> None:
         sources = {
@@ -707,6 +740,107 @@ class FinalChainStaticTests(unittest.TestCase):
         pointer_cas = source.index("final pointer advanced after snapshot freeze")
         self.assertLess(byte_verify, pointer_cas)
         self.assertIn("release-object semantic readback differs", source)
+
+    def test_v7_coordinator_is_postimage_bound_before_the_final_runner(self) -> None:
+        fixture_path = (
+            REPOSITORY
+            / "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v2.json"
+        )
+        value = json.loads(fixture_path.read_text(encoding="utf-8"))
+        declared = value["candidate_ref"]["declared_postimage"]
+        value["candidate_ref"]["git_common_dir_realpath"] = value[
+            "source_git_binding"
+        ]["git_common_dir_realpath"]
+        value["cas_observation"] = {
+            "state": "exact_declared_postimage",
+            "observed_commit": declared["commit"],
+            "observed_tree": declared["tree"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            closure = Path(directory)
+            self._materialize_stage12_bindings(
+                value, closure, "runner-stage12-binding"
+            )
+            path = closure / "control/stage12-legacy-cut-coordinator.v2.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(runner.canonical_bytes(value))
+            runner.validate_stage12_coordinator(
+                closure, path, declared["commit"], declared["tree"]
+            )
+            binding_mutant = copy.deepcopy(value)
+            binding_mutant["source_git_binding"][
+                "git_common_dir_realpath"
+            ] = "/foreign/git-common-dir"
+            binding_mutant["candidate_ref"][
+                "git_common_dir_realpath"
+            ] = "/foreign/git-common-dir"
+            path.write_bytes(runner.canonical_bytes(binding_mutant))
+            with self.assertRaisesRegex(
+                runner.FinalChainError,
+                "V7 packet, source Git, or protected-primary binding differs",
+            ):
+                runner.validate_stage12_coordinator(
+                    closure, path, declared["commit"], declared["tree"]
+                )
+            mutant = copy.deepcopy(value)
+            mutant["cas_observation"]["state"] = "exact_expected_preimage"
+            path.write_bytes(runner.canonical_bytes(mutant))
+            with self.assertRaisesRegex(
+                runner.FinalChainError, "postimage was not observed"
+            ):
+                runner.validate_stage12_coordinator(
+                    closure, path, declared["commit"], declared["tree"]
+                )
+
+    def test_generator_materializes_only_bound_stage12_coordinator_inputs(self) -> None:
+        fixture_path = (
+            REPOSITORY
+            / "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v2.json"
+        )
+        value = json.loads(fixture_path.read_text(encoding="utf-8"))
+        declared = value["candidate_ref"]["declared_postimage"]
+        value["candidate_ref"]["git_common_dir_realpath"] = value[
+            "source_git_binding"
+        ]["git_common_dir_realpath"]
+        value["cas_observation"] = {
+            "state": "exact_declared_postimage",
+            "observed_commit": declared["commit"],
+            "observed_tree": declared["tree"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            closure = root / "closure"
+            source.mkdir()
+            closure.mkdir()
+            self._materialize_stage12_bindings(
+                value, source, "generator-stage12-binding"
+            )
+            coordinator_path = source / "coordinator.json"
+            coordinator_path.write_bytes(generate.canonical_bytes(value))
+            binding = generate.materialize_stage12_coordinator(
+                coordinator_path,
+                source,
+                closure,
+                declared["commit"],
+                declared["tree"],
+            )
+            self.assertEqual(
+                binding["path"],
+                "control/stage12-legacy-cut-coordinator.v2.json",
+            )
+            last_binding = value["retained_inputs"][-1]["evidence"]
+            (source / last_binding["path"]).write_text("drift\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                generate.GenerationError, "input bytes differ"
+            ):
+                generate.materialize_stage12_coordinator(
+                    coordinator_path,
+                    source,
+                    root / "second-closure",
+                    declared["commit"],
+                    declared["tree"],
+                )
 
 
 if __name__ == "__main__":

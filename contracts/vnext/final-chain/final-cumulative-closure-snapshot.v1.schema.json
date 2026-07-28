@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "maestro.external.vnext-final-cumulative-closure-snapshot.v1",
   "type": "object",
-  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "provisional_stage5_source_commit", "stage5_second_parent_ancestry", "stage12_reviewed_candidate", "stage12_overlay", "ancestry_pack", "promotion_prerequisites", "input_manifest", "proof_registry", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "publication_root_identity", "expected_generation", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
+  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "provisional_stage5_source_commit", "stage5_second_parent_ancestry", "stage12_reviewed_candidate", "stage12_overlay", "stage12_legacy_cut_coordinator", "ancestry_pack", "promotion_prerequisites", "input_manifest", "proof_registry", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "publication_root_identity", "expected_generation", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
   "properties": {
     "schema_version": {"const": "maestro.external.vnext-final-cumulative-closure-snapshot.v1"},
     "state": {"const": "frozen"},
@@ -43,6 +43,7 @@
     },
     "stage12_reviewed_candidate": {"$ref": "#/$defs/identity"},
     "stage12_overlay": {"$ref": "#/$defs/bound_file"},
+    "stage12_legacy_cut_coordinator": {"$ref": "#/$defs/bound_file"},
     "ancestry_pack": {"$ref": "#/$defs/bound_file"},
     "promotion_prerequisites": {"$ref": "#/$defs/bound_file"},
     "input_manifest": {"$ref": "#/$defs/bound_file"},
@@ -96,7 +97,7 @@
         "additionalProperties": false
       }
     },
-    "effect_denylist": {"const": ["install", "publish", "activate", "release", "push", "tag", "network", "remote_connector", "live_external_system", "protected_primary_checkout_write", "outside_packet_bound_roots_write"]}
+    "effect_denylist": {"const": ["install", "publish", "activate", "release", "push", "tag", "network", "remote_connector", "live_external_system", "candidate_ref_write", "protected_primary_checkout_write", "outside_packet_bound_roots_write"]}
   },
   "$defs": {
     "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},

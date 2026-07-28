@@ -17,6 +17,11 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
+if __package__:
+    from . import runner
+else:
+    import runner
+
 
 SCHEMA = "maestro.external.vnext-final-cumulative-closure-snapshot.v1"
 PACKET_IDENTITY = "sha256:2026513c84b1993f020f7d0430154ec0bc4e821438ccefd7dd6b91834a3d6283"
@@ -86,6 +91,7 @@ EFFECT_DENYLIST = [
     "network",
     "remote_connector",
     "live_external_system",
+    "candidate_ref_write",
     "protected_primary_checkout_write",
     "outside_packet_bound_roots_write",
 ]
@@ -187,6 +193,74 @@ def bound_file(path: Path, relative: str) -> dict[str, object]:
         raise GenerationError(f"bound input is absent or unsafe: {path}")
     raw = path.read_bytes()
     return {"path": relative, "byte_length": len(raw), "sha256": digest(raw)}
+
+
+def materialize_stage12_coordinator(
+    source_path: Path,
+    source_root: Path,
+    closure: Path,
+    final_commit: str,
+    final_tree: str,
+) -> dict[str, object]:
+    value = load_json(source_path)
+    primary = value.get("protected_primary")
+    source_binding = value.get("source_git_binding")
+    retained = value.get("retained_inputs")
+    if (
+        not isinstance(primary, Mapping)
+        or not isinstance(source_binding, Mapping)
+        or not isinstance(retained, list)
+    ):
+        raise GenerationError("Stage 12 coordinator structure differs")
+    bindings = [
+        value.get("approved_packet"),
+        primary.get("boundary"),
+        source_binding.get("artifact"),
+        *[
+            row.get("evidence")
+            for row in retained
+            if isinstance(row, Mapping)
+        ],
+    ]
+    for binding in bindings:
+        if not isinstance(binding, Mapping):
+            raise GenerationError("Stage 12 coordinator binding is absent")
+        relative = safe_relative(str(binding.get("path")))
+        if not relative.is_relative_to(PurePosixPath("control/stage12")):
+            raise GenerationError("Stage 12 coordinator input escapes its control root")
+        source = source_root.joinpath(*relative.parts)
+        if source.is_symlink() or not source.is_file():
+            raise GenerationError("Stage 12 coordinator input is absent or unsafe")
+        raw = source.read_bytes()
+        if (
+            binding.get("byte_length") != len(raw)
+            or binding.get("sha256") != digest(raw)
+        ):
+            raise GenerationError("Stage 12 coordinator input bytes differ")
+        target = closure.joinpath(*relative.parts)
+        if target.exists():
+            if (
+                target.is_symlink()
+                or not target.is_file()
+                or target.read_bytes() != raw
+            ):
+                raise GenerationError("Stage 12 coordinator input collides in closure")
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+    target = closure / "control/stage12-legacy-cut-coordinator.v2.json"
+    if target.exists():
+        raise GenerationError("Stage 12 coordinator target already exists")
+    target.write_bytes(canonical_bytes(value))
+    try:
+        runner.validate_stage12_coordinator(
+            closure, target, final_commit, final_tree
+        )
+    except runner.FinalChainError as error:
+        raise GenerationError(f"Stage 12 coordinator refused: {error}") from error
+    return bound_file(
+        target, "control/stage12-legacy-cut-coordinator.v2.json"
+    )
 
 
 def require_empty_destination(path: Path) -> None:
@@ -984,6 +1058,8 @@ def main() -> int:
     parser.add_argument("--final-ref", required=True)
     parser.add_argument("--stage12-reviewed-candidate", required=True)
     parser.add_argument("--stage12-overlay-manifest", type=Path, required=True)
+    parser.add_argument("--stage12-legacy-cut-coordinator", type=Path, required=True)
+    parser.add_argument("--stage12-coordinator-root", type=Path, required=True)
     parser.add_argument("--promotion-prerequisites", type=Path, required=True)
     parser.add_argument("--stage-checkpoint", action="append", type=parse_stage, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
@@ -1121,6 +1197,13 @@ def main() -> int:
             dependency["resolved_path"] = str(output / "dependencies" / engine)
         overlay_path = control / "stage12-overlay.v1.json"
         overlay_path.write_bytes(canonical_bytes(overlay))
+        coordinator_binding = materialize_stage12_coordinator(
+            args.stage12_legacy_cut_coordinator.resolve(strict=True),
+            args.stage12_coordinator_root.resolve(strict=True),
+            temporary,
+            final_commit,
+            final_tree,
+        )
         ancestry_pack_path = control / "ancestry-objects.pack"
         ancestry_pack_path.write_bytes(ancestry_pack(repository, final_commit))
         promotion_root = control / "promotion"
@@ -1191,6 +1274,7 @@ def main() -> int:
             "stage12_overlay": bound_file(
                 overlay_path, "control/stage12-overlay.v1.json"
             ),
+            "stage12_legacy_cut_coordinator": coordinator_binding,
             "ancestry_pack": bound_file(
                 ancestry_pack_path, "control/ancestry-objects.pack"
             ),
