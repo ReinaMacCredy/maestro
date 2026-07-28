@@ -118,6 +118,15 @@ EXPECTED_OBLIGATIONS = (
     "dogfood_and_recovery_rehearsal",
     "final_edge_sweep",
 )
+EXPECTED_CENSUS_ROW_COUNT = 384
+EXPECTED_CENSUS_SCAN_SHA256 = (
+    "71c14a39a8dd7e3750e757b52fb2a1e2beefc26f0313226edf56127aa9f23c4f"
+)
+EXPECTED_LEGACY_RULE_COUNTS = {
+    "legacy_skill_surface": 274,
+    "legacy_next_surface": 108,
+    "legacy_harness_resource": 2,
+}
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(TOOLS))
 
@@ -402,19 +411,19 @@ def require_census_sight(census: Mapping[str, Any]) -> None:
         raise ValidationError(
             f"temporary namespace census is nonzero: {nonzero_temporary}"
         )
-    expected_legacy = {
-        "legacy_skill_surface": 239,
-        "legacy_next_surface": 108,
-        "legacy_harness_resource": 2,
-    }
     observed_legacy = {
-        rule_id: rule_counts.get(rule_id, 0) for rule_id in expected_legacy
+        rule_id: rule_counts.get(rule_id, 0) for rule_id in EXPECTED_LEGACY_RULE_COUNTS
     }
-    if observed_legacy != expected_legacy or census.get("row_count") != 349:
+    if (
+        observed_legacy != EXPECTED_LEGACY_RULE_COUNTS
+        or census.get("row_count") != EXPECTED_CENSUS_ROW_COUNT
+        or census.get("scan_sha256") != EXPECTED_CENSUS_SCAN_SHA256
+    ):
         raise ValidationError(
             "legacy migration blocker closure differs: "
-            f"expected {expected_legacy}/349, observed "
-            f"{observed_legacy}/{census.get('row_count')}"
+            f"expected {EXPECTED_LEGACY_RULE_COUNTS}/{EXPECTED_CENSUS_ROW_COUNT}/"
+            f"{EXPECTED_CENSUS_SCAN_SHA256}, observed "
+            f"{observed_legacy}/{census.get('row_count')}/{census.get('scan_sha256')}"
         )
 
 

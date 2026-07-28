@@ -113,6 +113,10 @@ class Stage12CandidateTests(unittest.TestCase):
         first = promotion_module.build_manifest(WORKSPACE)
         second = promotion_module.build_manifest(WORKSPACE)
         self.assertEqual(first, second)
+        self.assertEqual(
+            first,
+            promotion_module.build_manifest(WORKSPACE, WORKSPACE),
+        )
         self.assertTrue(first["closed_world"])
         self.assertEqual(first["entry_count"], 210)
         self.assertEqual(first["collision_count"], 10)
@@ -139,14 +143,45 @@ class Stage12CandidateTests(unittest.TestCase):
             sum(bool(entry["collision"]) for entry in entries) == 10
         )
 
+    def test_namespace_promotion_separates_ancestry_from_snapshot_bytes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                promotion_module.NamespacePromotionError,
+                "unsafe or missing canonical destination",
+            ):
+                promotion_module.build_manifest(
+                    WORKSPACE,
+                    Path(directory),
+                )
+
     def test_census_requires_namespace_zero_and_exact_legacy_blocker(self) -> None:
+        census = build_census(WORKSPACE, self.policy)
+        require_census_sight(census)
+
         mutant = copy.deepcopy(self.policy)
         for rule in mutant["rules"]:
             if rule["id"] == "legacy_skill_surface":
                 rule["values"] = ["pub mod vnext_never_present;"]
         with self.assertRaises(ValidationError):
             require_census_sight(build_census(WORKSPACE, mutant))
-        require_census_sight(build_census(WORKSPACE, self.policy))
+
+        historical = copy.deepcopy(census)
+        historical["rule_counts"]["legacy_skill_surface"] = 239
+        historical["row_count"] = 349
+        with self.assertRaises(ValidationError):
+            require_census_sight(historical)
+
+        off_by_one = copy.deepcopy(census)
+        off_by_one["row_count"] = 383
+        with self.assertRaises(ValidationError):
+            require_census_sight(off_by_one)
+
+        wrong_scan = copy.deepcopy(census)
+        wrong_scan["scan_sha256"] = "0" * 64
+        with self.assertRaises(ValidationError):
+            require_census_sight(wrong_scan)
 
     def test_release_preflight_fails_closed_on_temporary_namespace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

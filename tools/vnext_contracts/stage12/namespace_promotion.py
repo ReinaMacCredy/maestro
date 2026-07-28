@@ -104,8 +104,11 @@ def _root_for(source: PurePosixPath) -> str:
     raise NamespacePromotionError(f"source is outside the promotion roots: {source}")
 
 
-def build_manifest(repo: Path) -> dict[str, object]:
-    sources = _base_sources(repo)
+def build_manifest(
+    ancestry_repository: Path, snapshot_root: Path | None = None
+) -> dict[str, object]:
+    snapshot = snapshot_root or ancestry_repository
+    sources = _base_sources(ancestry_repository)
     counts = Counter(_root_for(source) for source in sources)
     if dict(counts) != EXPECTED_COUNTS or len(sources) != 210:
         raise NamespacePromotionError(
@@ -116,7 +119,7 @@ def build_manifest(repo: Path) -> dict[str, object]:
     if len(set(destinations)) != 210:
         raise NamespacePromotionError("promotion destinations are not one-to-one")
     base_paths = set(
-        _git(repo, "ls-tree", "-r", "--name-only", BASE_COMMIT)
+        _git(ancestry_repository, "ls-tree", "-r", "--name-only", BASE_COMMIT)
         .decode("utf-8")
         .splitlines()
     )
@@ -132,12 +135,12 @@ def build_manifest(repo: Path) -> dict[str, object]:
 
     entries: list[dict[str, object]] = []
     for source, destination in zip(sources, destinations, strict=True):
-        absolute_destination = repo / destination
+        absolute_destination = snapshot / destination
         if absolute_destination.is_symlink() or not absolute_destination.is_file():
             raise NamespacePromotionError(
                 f"unsafe or missing canonical destination: {destination}"
             )
-        if (repo / source).exists():
+        if (snapshot / source).exists():
             raise NamespacePromotionError(
                 f"temporary source remains after promotion: {source}"
             )
@@ -145,11 +148,15 @@ def build_manifest(repo: Path) -> dict[str, object]:
         collision = destination_path in EXPECTED_COLLISIONS
         entries.append(
             {
-                "base_source_sha256": _sha256(_base_bytes(repo, source)),
+                "base_source_sha256": _sha256(
+                    _base_bytes(ancestry_repository, source)
+                ),
                 "collision": collision,
                 "destination": destination_path,
                 "destination_preimage_sha256": (
-                    _sha256(_base_bytes(repo, destination)) if collision else None
+                    _sha256(_base_bytes(ancestry_repository, destination))
+                    if collision
+                    else None
                 ),
                 "destination_sha256": _sha256(absolute_destination.read_bytes()),
                 "disposition": (
@@ -171,12 +178,14 @@ def build_manifest(repo: Path) -> dict[str, object]:
     destination_digest_rows = [
         f"{entry['destination']}\0{entry['destination_sha256']}" for entry in entries
     ]
-    folded_source_bytes = _base_bytes(repo, EXCLUDED_FOLDED_SOURCE)
-    folded_destination = (repo / FOLD_DESTINATION).read_bytes()
+    folded_source_bytes = _base_bytes(
+        ancestry_repository, EXCLUDED_FOLDED_SOURCE
+    )
+    folded_destination = (snapshot / FOLD_DESTINATION).read_bytes()
     if b"mod cohort_observation_tests" not in folded_destination:
         raise NamespacePromotionError("Stage 11 cohort tests were not folded")
     temporary_roots = [
-        root.as_posix() for root in SOURCE_ROOTS if (repo / root).exists()
+        root.as_posix() for root in SOURCE_ROOTS if (snapshot / root).exists()
     ]
     if temporary_roots:
         raise NamespacePromotionError(
@@ -217,9 +226,27 @@ def build_manifest(repo: Path) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--ancestry-repository", type=Path)
+    parser.add_argument("--snapshot-root", type=Path)
     arguments = parser.parse_args()
     try:
-        manifest = build_manifest(arguments.repo.resolve())
+        if (arguments.ancestry_repository is None) != (
+            arguments.snapshot_root is None
+        ):
+            raise NamespacePromotionError(
+                "ancestry repository and snapshot root must be supplied together"
+            )
+        ancestry_repository = (
+            arguments.ancestry_repository or arguments.repo
+        ).resolve(strict=True)
+        snapshot_root = (
+            arguments.snapshot_root or arguments.repo
+        ).resolve(strict=True)
+        if not ancestry_repository.is_dir() or not snapshot_root.is_dir():
+            raise NamespacePromotionError(
+                "ancestry repository and snapshot root must be directories"
+            )
+        manifest = build_manifest(ancestry_repository, snapshot_root)
     except (NamespacePromotionError, OSError) as error:
         print(json.dumps({"error": str(error), "status": "error"}, sort_keys=True))
         return 1

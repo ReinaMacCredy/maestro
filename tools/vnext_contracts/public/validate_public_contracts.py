@@ -128,6 +128,10 @@ def inactive(value: dict) -> bool:
     return value.get("candidate_only") is True and value.get("runtime_activation") is False and value.get("runtime_registration") is False
 
 
+def active(value: dict) -> bool:
+    return value.get("candidate_only") is False and value.get("runtime_activation") is True and value.get("runtime_registration") is True
+
+
 def cbor_head(major: int, value: int) -> bytes:
     if value < 24:
         return bytes([(major << 5) | value])
@@ -525,8 +529,9 @@ def validate_activation(repo: Path, value: dict) -> None:
 
 
 def validate_sources(repo: Path, data: dict) -> None:
-    for key in ["recipe_source", "instruction_source", "mcp"]:
+    for key in ["recipe_source", "instruction_source"]:
         require(inactive(data[key]), f"{key} activated")
+    require(active(data["mcp"]), "mcp activation tuple mismatch")
     require([row["id"] for row in data["recipe_source"]["recipes"]] == RECIPE_IDS, "Recipe source order mismatch")
     tree = data["instruction_source"]
     require(tree["public_skills"] == ["maestro"] and len(tree["logical_paths"]) == len(set(tree["logical_paths"])) == 31, "instruction tree mismatch")
@@ -557,7 +562,7 @@ def validate_data(repo: Path, data: dict) -> dict:
     validate_sources(repo, data)
     return {
         "schema": "maestro.vnext.public-contract-validation-receipt.v1",
-        "status": "pass", "runtime_activated": False, "inactive_source_roots": 3,
+        "status": "pass", "runtime_activated": True, "inactive_source_roots": 2,
         "recipes": 10, "recipe_manifests": 10, "bounded_continuation_profiles": 2,
         "selection_application_vectors": 30, "recipe_return_reasons": 30,
         "recipe_return_vectors": 196, "job_recipe_edges": 22, "job_recipe_non_edges": 48,
@@ -575,9 +580,11 @@ Mutation = tuple[str, str, Callable[[dict], None]]
 
 def mutations() -> list[Mutation]:
     result: list[Mutation] = []
-    for key in ["recipe_source", "instruction_source", "mcp"]:
+    for key in ["recipe_source", "instruction_source"]:
         for field, value in [("candidate_only", False), ("runtime_activation", True), ("runtime_registration", True)]:
             result.append((f"{key}:{field}", key, lambda data, field=field, value=value: data.__setitem__(field, value)))
+    for field, value in [("candidate_only", True), ("runtime_activation", False), ("runtime_registration", False)]:
+        result.append((f"mcp:{field}", "mcp", lambda data, field=field, value=value: data.__setitem__(field, value)))
     for name in sorted(CRITICAL_FIELDS):
         result.append((f"schema:remove:{name}", "public", lambda data, name=name: data["schema_definitions"].__setitem__(slice(None), [row for row in data["schema_definitions"] if row["name"] != name])))
     result += [

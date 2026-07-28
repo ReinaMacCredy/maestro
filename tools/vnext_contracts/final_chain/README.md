@@ -35,8 +35,15 @@ helper-produced overlay manifest, and a byte-bound promotion-prerequisites
 receipt. The receipt must prove the legacy prune gate is zero, consumer/reader/
 hold counts are zero, promotion parity is exactly 210/210 with zero mismatches,
 and the four resolved Stage 11/12 exact lib filters match the rotated registry.
-The current promotion observation is 349 legacy rows, so generation and sealing
-remain correctly blocked.
+The current pre-promotion observation is byte-bound by the Stage 12 validator
+at 384 legacy rows. Generation and sealing remain blocked until a fresh
+post-promotion receipt proves the exact zero-legacy, zero-consumer, zero-reader,
+and zero-hold closure.
+
+The Stage 10 ownership proof runs `stage12_product_proof.py` against the frozen
+source snapshot and isolated ancestry repository. It binds the exact
+Stage12Product correction checkpoint as an ancestor of the final commit before
+validating that the frozen Stage12-owned bytes still match that checkpoint.
 
 ```text
 python3 tools/vnext_contracts/final_chain/generate.py \

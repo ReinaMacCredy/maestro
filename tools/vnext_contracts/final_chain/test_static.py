@@ -26,9 +26,28 @@ sys.path.insert(0, str(ROOT))
 
 import generate  # type: ignore[import-not-found]  # noqa: E402
 import runner  # type: ignore[import-not-found]  # noqa: E402
+import stage12_product_proof  # type: ignore[import-not-found]  # noqa: E402
 
 
 class FinalChainStaticTests(unittest.TestCase):
+    def _assert_exact_cargo_lib_filter(
+        self, row: dict[str, object], test_filter: str
+    ) -> None:
+        self.assertEqual(
+            row["command"]["argv"],
+            [
+                "{tool:cargo}",
+                "test",
+                "--offline",
+                "--frozen",
+                "--lib",
+                test_filter,
+                "--",
+                "--exact",
+                "--test-threads=1",
+            ],
+        )
+
     def _materialize_stage12_bindings(
         self, value: dict[str, object], root: Path, prefix: str
     ) -> None:
@@ -281,50 +300,188 @@ class FinalChainStaticTests(unittest.TestCase):
             "{control:ancestry-repository}", ancestry["command"]["argv"]
         )
         self.assertNotIn("{source}", ancestry["command"]["argv"])
+        rows = {row["proof_id"]: row for row in proofs}
+        self.assertEqual(
+            rows["s0-public-contract-literals"]["command"]["argv"],
+            [
+                "{tool:cargo}",
+                "test",
+                "--offline",
+                "--frozen",
+                "--test",
+                "vnext_public_contract_literals",
+                "--",
+                "--test-threads=1",
+            ],
+        )
+        self.assertEqual(
+            rows["s10-stage12-product-ownership-closure"]["command"]["argv"],
+            [
+                "{tool:python}",
+                "tools/vnext_contracts/final_chain/stage12_product_proof.py",
+                "--ancestry-repository",
+                "{control:ancestry-repository}",
+                "--snapshot",
+                "{control:snapshot}",
+                "--snapshot-root",
+                "{source}",
+            ],
+        )
+        stage12_product_proof = (
+            ROOT / "stage12_product_proof.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "673605c630db2112b5ff66ded919a6cd2d4a3558",
+            stage12_product_proof,
+        )
+        self.assertIn("merge-base", stage12_product_proof)
 
-    def test_stage11_and_stage12_rotation_slots_refuse_stale_wip_rows(self) -> None:
+    def test_stage12_product_proof_refuses_unsafe_inputs_and_propagates_child_status(
+        self,
+    ) -> None:
+        valid_snapshot = {
+            "schema_version": stage12_product_proof.SNAPSHOT_SCHEMA,
+            "state": "frozen",
+            "final_integration": {
+                "commit": stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT
+            },
+        }
+        self.assertEqual(
+            stage12_product_proof.final_commit(valid_snapshot),
+            stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+        )
+        invalid_snapshot = copy.deepcopy(valid_snapshot)
+        invalid_snapshot["state"] = "open"
+        with self.assertRaisesRegex(
+            stage12_product_proof.ProofError,
+            "does not bind one frozen final commit",
+        ):
+            stage12_product_proof.final_commit(invalid_snapshot)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing = root / "missing.json"
+            with self.assertRaisesRegex(
+                stage12_product_proof.ProofError,
+                "absent or unsafe",
+            ):
+                stage12_product_proof.load_snapshot(missing)
+            snapshot_path = root / "snapshot.json"
+            snapshot_path.write_text(json.dumps(valid_snapshot), encoding="utf-8")
+            unsafe_snapshot = root / "snapshot-link.json"
+            unsafe_snapshot.symlink_to(snapshot_path)
+            with self.assertRaisesRegex(
+                stage12_product_proof.ProofError,
+                "absent or unsafe",
+            ):
+                stage12_product_proof.load_snapshot(unsafe_snapshot)
+
+            ancestry = root / "ancestry"
+            ancestry.mkdir()
+            source = root / "source"
+            validator = source / "tools/vnext_contracts/stage10/validate.py"
+            validator.parent.mkdir(parents=True)
+            validator.write_text("raise SystemExit(0)\n", encoding="utf-8")
+            child = mock.Mock(returncode=7)
+            argv = [
+                "stage12_product_proof.py",
+                "--ancestry-repository",
+                str(ancestry),
+                "--snapshot",
+                str(snapshot_path),
+                "--snapshot-root",
+                str(source),
+            ]
+            with mock.patch.object(
+                stage12_product_proof,
+                "require_stage12_ancestor",
+            ) as ancestor_check, mock.patch.object(
+                stage12_product_proof.subprocess,
+                "run",
+                return_value=child,
+            ) as run_child, mock.patch.object(sys, "argv", argv):
+                self.assertEqual(stage12_product_proof.main(), 7)
+            ancestor_check.assert_called_once_with(
+                ancestry.resolve(),
+                stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+            )
+            child_argv = run_child.call_args.args[0]
+            self.assertEqual(
+                child_argv[-1],
+                stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+            )
+
+        refused = mock.Mock(returncode=1, stdout=b"", stderr=b"not ancestor")
+        with mock.patch.object(
+            stage12_product_proof.subprocess,
+            "run",
+            return_value=refused,
+        ), self.assertRaisesRegex(
+            stage12_product_proof.ProofError,
+            "not an ancestor",
+        ):
+            stage12_product_proof.require_stage12_ancestor(
+                Path("."),
+                "f" * 40,
+            )
+
+    def test_stage11_and_stage12_filters_are_exact_and_fully_resolved(self) -> None:
         registry = json.loads(
             (CONTRACTS / "proof-registry.v1.json").read_text(encoding="utf-8")
         )
         rows = {row["proof_id"]: row for row in registry["proofs"]}
-        for proof_id in (
-            "s11-frozen-cohort-migration",
-            "s11-frozen-cohort-rollback",
-            "s12-post-promotion-readback",
-            "s12-post-promotion-removal",
-        ):
+        stage11 = {
+            "s11-frozen-cohort-migration": (
+                "domain::migration::runtime::consumer::cohort_observation_tests::"
+                "frozen_cohort_migration_observes_real_reader_and_writer_routes"
+            ),
+            "s11-frozen-cohort-rollback": (
+                "domain::migration::runtime::consumer::cohort_observation_tests::"
+                "frozen_cohort_rollback_observes_restore_and_refusal_routes"
+            ),
+        }
+        for proof_id, test_filter in stage11.items():
             row = rows[proof_id]
-            self.assertEqual(row["rotation_slot"]["state"], "awaiting-promotion")
-            self.assertEqual(
-                row["rotation_slot"]["command_shape"], "cargo-lib-exact-test"
-            )
-            self.assertNotIn("command", row)
-        for proof_id in ("s11-frozen-cohort-migration", "s11-frozen-cohort-rollback"):
-            self.assertIn(
-                "domain::vnext::migration::runtime::cohort_observation::tests::",
-                rows[proof_id]["rotation_slot"]["provisional_8edd591b_filter"],
-            )
+            self._assert_exact_cargo_lib_filter(row, test_filter)
             self.assertEqual(
                 rows[proof_id]["harness"]["protocol"], "cohort-observation-v1"
             )
-        for proof_id in ("s12-post-promotion-readback", "s12-post-promotion-removal"):
+        stage12 = {
+            "s12-post-promotion-readback": (
+                "operations::adapters::tests::"
+                "post_promotion_canonical_readback_emits_positive_semantic_receipt"
+            ),
+            "s12-post-promotion-removal": (
+                "operations::adapters::tests::"
+                "post_promotion_legacy_and_obsolete_reader_removal_emits_positive_semantic_receipt"
+            ),
+        }
+        for proof_id, test_filter in stage12.items():
+            row = rows[proof_id]
+            self._assert_exact_cargo_lib_filter(row, test_filter)
             self.assertEqual(
-                rows[proof_id]["harness"],
+                row["input_paths"],
+                [
+                    "src/operations/adapters/mod.rs",
+                    "tools/vnext_contracts/stage12/namespace_promotion.py",
+                ],
+            )
+            self.assertEqual(
+                row["harness"],
                 {
                     "protocol": "semantic-receipt-v1",
                     "required_receipt": "semantic-artifact-readback.v1.json",
                 },
             )
-        with self.assertRaisesRegex(generate.GenerationError, "rotation slot"):
-            registry["proofs"].sort(
-                key=lambda row: 0 if "rotation_slot" in row else 1
-            )
-            generate.build_ledger(
-                {"entries": []},
-                registry,
-                {"path": "registry", "byte_length": 1, "sha256": "sha256:" + "0" * 64},
-                "a" * 40,
-            )
+        self.assertFalse(
+            any("rotation_slot" in row for row in registry["proofs"])
+        )
+        readback = generate.readback_plan(registry, "a" * 40)
+        self.assertEqual(len(readback["checks"]), 8)
+        self.assertEqual(
+            {row["kind"] for row in readback["checks"]},
+            set(generate.READBACK_KINDS),
+        )
         generator = (ROOT / "generate.py").read_text(encoding="utf-8")
         self.assertNotIn("vnext_stage12_contracts", generator)
         self.assertNotIn('"{tool:cargo}",\n                "build"', generator)
@@ -403,7 +560,7 @@ class FinalChainStaticTests(unittest.TestCase):
                 Path("."), "f" * 40, generate.PROVISIONAL_STAGE5_SOURCE
             )
 
-    def test_promotion_prerequisites_refuse_legacy_349_and_missing_receipt(self) -> None:
+    def test_promotion_prerequisites_refuse_nonzero_legacy_count_and_missing_receipt(self) -> None:
         base = {
             "schema_version": "maestro.external.vnext-final-promotion-prerequisites.v1",
             "stage11_commit": "a" * 40,
@@ -433,7 +590,7 @@ class FinalChainStaticTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "promotion-prerequisites.v1.json"
             blocked = copy.deepcopy(base)
-            blocked["legacy_prune_gate"]["observed_legacy_row_count"] = 349
+            blocked["legacy_prune_gate"]["observed_legacy_row_count"] = 384
             path.write_bytes(generate.canonical_bytes(blocked))
             with self.assertRaisesRegex(
                 generate.GenerationError, "absent, nonzero, stale, or noncanonical"

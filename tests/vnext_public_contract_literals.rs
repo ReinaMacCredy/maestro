@@ -18,7 +18,7 @@ fn run_python(repo: &Path, args: &[&str], label: &str) -> Output {
 }
 
 #[test]
-fn public_candidate_literals_are_exact_and_inactive() {
+fn public_candidate_literals_are_exact_with_active_mcp() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     let build_output = run_python(
         repo,
@@ -46,8 +46,8 @@ fn public_candidate_literals_are_exact_and_inactive() {
     let receipt: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("parse public validation receipt");
     assert_eq!(receipt["status"], "pass");
-    assert_eq!(receipt["runtime_activated"], false);
-    assert_eq!(receipt["inactive_source_roots"], 3);
+    assert_eq!(receipt["runtime_activated"], true);
+    assert_eq!(receipt["inactive_source_roots"], 2);
     assert_eq!(receipt["recipes"], 10);
     assert_eq!(receipt["recipe_manifests"], 10);
     assert_eq!(receipt["bounded_continuation_profiles"], 2);

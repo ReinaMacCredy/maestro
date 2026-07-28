@@ -1315,13 +1315,14 @@ def build_mcp_source(repo: Path) -> None:
         repo / "embedded/vnext/adapter/mcp-tools.v1.json",
         {
             "schema": "maestro.vnext.mcp-tool-source.v1",
-            "candidate_only": True,
-            "runtime_activation": False,
-            "runtime_registration": False,
+            "candidate_only": False,
+            "runtime_activation": True,
+            "runtime_registration": True,
             "scope": "global-user-agent-installation",
             "tools": [
                 {
                     "name": "maestro_packet",
+                    "description": "Read one canonical bounded Packet projection from an explicit repository locator.",
                     "read_only": True,
                     "writes": False,
                     "network_io": False,
@@ -1332,6 +1333,7 @@ def build_mcp_source(repo: Path) -> None:
                 },
                 {
                     "name": "maestro_cli_search",
+                    "description": "Search the running binary's frozen public operation catalog without repository state.",
                     "read_only": True,
                     "writes": False,
                     "network_io": False,
