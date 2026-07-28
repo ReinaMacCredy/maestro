@@ -469,6 +469,7 @@ pub(super) struct LegacyRemovalGuardBindingV3 {
     _hold_closure: [u8; 32],
     _rollback_rehearsal: [u8; 32],
     _deletion_plan: [u8; 32],
+    _expected_old_state: [u8; 32],
     _authority_snapshot: [u8; 32],
     _authority_epoch: u64,
     _trust_root: [u8; 32],
@@ -502,8 +503,13 @@ impl LegacyRemovalInvocationBindingV3 {
         epoch: &[u8; 32],
         activation: &[u8; 32],
         deletion_plan: &[u8; 32],
+        expected_old_state: &[u8; 32],
     ) -> Result<Self, LegacyRemovalGuardAdmissionErrorV3> {
-        if process_incarnation == [0; 32] || entropy == [0; 32] || sequence == 0 {
+        if process_incarnation == [0; 32]
+            || entropy == [0; 32]
+            || sequence == 0
+            || expected_old_state == &[0; 32]
+        {
             return Err(LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable);
         }
         Ok(Self {
@@ -518,6 +524,7 @@ impl LegacyRemovalInvocationBindingV3 {
                 epoch,
                 activation,
                 deletion_plan,
+                expected_old_state,
             ),
             process_incarnation,
             entropy,
@@ -538,6 +545,7 @@ impl LegacyRemovalInvocationBindingV3 {
         epoch: &[u8; 32],
         activation: &[u8; 32],
         deletion_plan: &[u8; 32],
+        expected_old_state: &[u8; 32],
     ) -> bool {
         self.process_incarnation != [0; 32]
             && self.entropy != [0; 32]
@@ -554,6 +562,7 @@ impl LegacyRemovalInvocationBindingV3 {
                     epoch,
                     activation,
                     deletion_plan,
+                    expected_old_state,
                 )
     }
 
@@ -578,6 +587,7 @@ fn legacy_removal_invocation_commitment_v3(
     epoch: &[u8; 32],
     activation: &[u8; 32],
     deletion_plan: &[u8; 32],
+    expected_old_state: &[u8; 32],
 ) -> [u8; 32] {
     let mut digest = Sha256::new();
     let domain = b"maestro.authority.legacy-removal-invocation.v3\0";
@@ -595,6 +605,7 @@ fn legacy_removal_invocation_commitment_v3(
         epoch.as_slice(),
         activation.as_slice(),
         deletion_plan.as_slice(),
+        expected_old_state.as_slice(),
     ] {
         digest.update((field.len() as u64).to_be_bytes());
         digest.update(field);
@@ -635,6 +646,7 @@ pub(super) struct LegacyRemovalConsumerBindingV3 {
     pub(super) hold_closure: [u8; 32],
     pub(super) rollback_rehearsal: [u8; 32],
     pub(super) deletion_plan: [u8; 32],
+    pub(super) expected_old_state: [u8; 32],
 }
 
 impl LegacyRemovalConsumerBindingV3 {
@@ -656,6 +668,7 @@ impl LegacyRemovalConsumerBindingV3 {
             hold_closure: *closure.physical_pruning_hold_zero_id().as_bytes(),
             rollback_rehearsal: *closure.rollback_rehearsal_id().as_bytes(),
             deletion_plan: *closure.deletion_plan_id().as_bytes(),
+            expected_old_state: *closure.expected_old_state_id().as_bytes(),
         }
     }
 }
@@ -686,6 +699,7 @@ impl LegacyRemovalGuardBindingV3 {
         hold_closure: [u8; 32],
         rollback_rehearsal: [u8; 32],
         deletion_plan: [u8; 32],
+        expected_old_state: [u8; 32],
         authority_snapshot: [u8; 32],
         authority_epoch: u64,
         trust_root: [u8; 32],
@@ -716,6 +730,7 @@ impl LegacyRemovalGuardBindingV3 {
             _hold_closure: hold_closure,
             _rollback_rehearsal: rollback_rehearsal,
             _deletion_plan: deletion_plan,
+            _expected_old_state: expected_old_state,
             _authority_snapshot: authority_snapshot,
             _authority_epoch: authority_epoch,
             _trust_root: trust_root,
@@ -740,6 +755,7 @@ impl LegacyRemovalGuardBindingV3 {
             &self._quarantine_epoch,
             &self._replacement_activation,
             &self._deletion_plan,
+            &self._expected_old_state,
         ) {
             return Err(LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable);
         }
@@ -752,6 +768,7 @@ impl LegacyRemovalGuardBindingV3 {
             self._quarantine_manifest,
             self._foundation_closure,
             self._rollback_assessment,
+            self._expected_old_state,
         ]
         .contains(&[0; 32])
         {
@@ -773,6 +790,7 @@ impl LegacyRemovalGuardBindingV3 {
             || self._hold_closure != consumer.hold_closure
             || self._rollback_rehearsal != consumer.rollback_rehearsal
             || self._deletion_plan != consumer.deletion_plan
+            || self._expected_old_state != consumer.expected_old_state
         {
             return Err(LegacyRemovalGuardAdmissionErrorV3::OwnerFactsMismatch);
         }
@@ -814,6 +832,7 @@ impl LegacyRemovalGuardBindingV3 {
                 &consumer.quarantine_epoch,
                 &consumer.replacement_activation,
                 &consumer.deletion_plan,
+                &consumer.expected_old_state,
             )
             .expect("test V3 invocation basis is valid"),
             consumer.source_case_manifest,
@@ -831,6 +850,7 @@ impl LegacyRemovalGuardBindingV3 {
             consumer.hold_closure,
             consumer.rollback_rehearsal,
             consumer.deletion_plan,
+            consumer.expected_old_state,
             currentness.authority_snapshot,
             currentness.authority_epoch,
             currentness.trust_root,
@@ -921,5 +941,88 @@ impl<'cut> LegacyRemovalGuardV3<'cut> {
         linearize_expected_old: impl FnOnce() -> Result<T, E>,
     ) -> Result<Result<T, E>, LegacyRemovalGuardAdmissionErrorV3> {
         self.consume_bound_with_linearization(consumer, linearize_expected_old)
+    }
+}
+
+#[cfg(test)]
+mod expected_old_tests {
+    use super::{
+        LegacyRemovalConsumerBindingV3, LegacyRemovalGuardAdmissionErrorV3,
+        LegacyRemovalGuardBindingV3, LegacyRemovalGuardCurrentnessV3,
+        LegacyRemovalInvocationBindingV3,
+    };
+
+    fn currentness() -> LegacyRemovalGuardCurrentnessV3 {
+        LegacyRemovalGuardCurrentnessV3 {
+            realm: [1; 32],
+            store_generation: [2; 32],
+            store_head: [3; 32],
+            authority_snapshot: [4; 32],
+            authority_epoch: 5,
+            trust_root: [6; 32],
+            authority_fence: [7; 32],
+            state_token: [8; 32],
+            authority_currentness: [9; 32],
+            revocation_revision: 10,
+            revocation_state: [11; 32],
+        }
+    }
+
+    fn consumer() -> LegacyRemovalConsumerBindingV3 {
+        LegacyRemovalConsumerBindingV3 {
+            consumer_closure: [20; 32],
+            release: [21; 32],
+            source_case_manifest: [22; 32],
+            sighting_manifest: [23; 32],
+            classification_manifest: [24; 32],
+            overlap_manifest: [25; 32],
+            loss_manifest: [26; 32],
+            quarantine_manifest: [27; 32],
+            foundation_closure: [28; 32],
+            rollback_assessment: [29; 32],
+            quarantine_epoch: [30; 32],
+            replacement_activation: [31; 32],
+            reader_closure: [32; 32],
+            hold_closure: [33; 32],
+            rollback_rehearsal: [34; 32],
+            deletion_plan: [35; 32],
+            expected_old_state: [36; 32],
+        }
+    }
+
+    #[test]
+    fn v3_invocation_refuses_a_zero_expected_old_state() {
+        let result = LegacyRemovalInvocationBindingV3::mint(
+            [40; 32], [41; 32], 1, &[42; 32], &[43; 32], &[44; 32], &[45; 32], &[46; 32],
+            &[47; 32], &[48; 32], &[0; 32],
+        );
+
+        assert!(matches!(
+            result,
+            Err(LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable)
+        ));
+    }
+
+    #[test]
+    fn v3_guard_refuses_expected_old_substitution_and_late_binding_change() {
+        let currentness = currentness();
+        let consumer = consumer();
+        let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+        assert_eq!(binding.recheck(currentness, consumer), Ok(()));
+
+        let mut substituted_consumer = consumer;
+        substituted_consumer.expected_old_state = [49; 32];
+        assert_eq!(
+            binding.recheck(currentness, substituted_consumer),
+            Err(LegacyRemovalGuardAdmissionErrorV3::OwnerFactsMismatch)
+        );
+
+        let mut late_changed_binding =
+            LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+        late_changed_binding._expected_old_state = [50; 32];
+        assert_eq!(
+            late_changed_binding.recheck(currentness, consumer),
+            Err(LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable)
+        );
     }
 }

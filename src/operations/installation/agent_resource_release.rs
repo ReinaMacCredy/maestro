@@ -11,6 +11,7 @@ use crate::domain::installation::{
     CommittedAgentResourceReleaseV1, InstallationLegacyDeletionPlanV3,
     ObservedInstallationClosureV1, Stage12RollbackRehearsalV3, UserAgentInstallationClosureV1,
 };
+use crate::domain::migration::runtime::MigrationDigestV1;
 use crate::domain::migration::runtime::{LegacyQuarantineEpochV4, LegacyRollbackAssessmentV4};
 use crate::domain::persistence::StorePublicationOutcomeV1;
 use crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2;
@@ -208,6 +209,7 @@ impl ActiveInstallationFacadeV1<'_> {
         epoch: &LegacyQuarantineEpochV4,
         foundation: &FoundationLegacyQuarantineClosureV2,
         rollback_assessment: &LegacyRollbackAssessmentV4,
+        expected_old_state_id: MigrationDigestV1,
     ) -> Result<
         (Stage12RollbackRehearsalV3, InstallationLegacyDeletionPlanV3),
         AgentResourceReleaseOperationErrorV1,
@@ -225,6 +227,7 @@ impl ActiveInstallationFacadeV1<'_> {
             foundation,
             rollback_assessment,
             &rollback,
+            expected_old_state_id,
         )?;
         Ok((rollback, deletion_plan))
     }

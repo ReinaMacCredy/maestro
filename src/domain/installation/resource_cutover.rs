@@ -266,6 +266,7 @@ impl AgentResourceReleaseAdmissionV1 {
         foundation: &FoundationLegacyQuarantineClosureV2,
         rollback_assessment: &LegacyRollbackAssessmentV4,
         rollback_rehearsal: &Stage12RollbackRehearsalV3,
+        expected_old_state_id: MigrationDigestV1,
     ) -> Result<InstallationLegacyDeletionPlanV3, AgentResourceCutoverErrorV1> {
         let release_id = migration_release_id(self.release_id)?;
         let foundation_closure_id = migration_digest(foundation.identity())?;
@@ -276,6 +277,7 @@ impl AgentResourceReleaseAdmissionV1 {
             || rollback_rehearsal.legacy_quarantine_epoch_id() != epoch.identity()
             || rollback_rehearsal.foundation_closure_id() != foundation_closure_id
             || rollback_rehearsal.rollback_assessment_id() != rollback_assessment.identity()
+            || expected_old_state_id.as_bytes() == &[0; 32]
         {
             return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
         }
@@ -288,6 +290,7 @@ impl AgentResourceReleaseAdmissionV1 {
                 *foundation_closure_id.as_bytes(),
                 *rollback_assessment.identity().as_bytes(),
                 *rollback_rehearsal_id.as_bytes(),
+                *expected_old_state_id.as_bytes(),
                 self.legacy_ledger_closure,
                 self.journal_closure,
                 *self.plan.meaning_digest().as_bytes(),
@@ -300,6 +303,7 @@ impl AgentResourceReleaseAdmissionV1 {
             foundation_closure_id,
             rollback_assessment_id: rollback_assessment.identity(),
             rollback_rehearsal_id,
+            expected_old_state_id,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -688,6 +692,7 @@ pub(crate) struct InstallationLegacyDeletionPlanV3 {
     foundation_closure_id: MigrationDigestV1,
     rollback_assessment_id: MigrationDigestV1,
     rollback_rehearsal_id: MigrationDigestV1,
+    expected_old_state_id: MigrationDigestV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
@@ -714,6 +719,10 @@ impl InstallationLegacyDeletionPlanV3 {
 
     pub(crate) const fn rollback_rehearsal_id(&self) -> MigrationDigestV1 {
         self.rollback_rehearsal_id
+    }
+
+    pub(crate) const fn expected_old_state_id(&self) -> MigrationDigestV1 {
+        self.expected_old_state_id
     }
 }
 
@@ -851,6 +860,7 @@ pub(crate) struct Stage12ConsumerReaderHoldClosureV3 {
     replacement_activation_id: MigrationDigestV1,
     rollback_rehearsal_id: MigrationDigestV1,
     deletion_plan_id: MigrationDigestV1,
+    expected_old_state_id: MigrationDigestV1,
     physical_pruning_reader_zero_id: MigrationDigestV1,
     physical_pruning_hold_zero_id: MigrationDigestV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
@@ -903,6 +913,7 @@ impl Stage12ConsumerReaderHoldClosureV3 {
             || deletion_plan.foundation_closure_id() != foundation_closure_id
             || deletion_plan.rollback_assessment_id() != rollback_assessment_id
             || deletion_plan.rollback_rehearsal_id() != rollback_rehearsal.identity()
+            || deletion_plan.expected_old_state_id().as_bytes() == &[0; 32]
         {
             return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
         }
@@ -943,6 +954,7 @@ impl Stage12ConsumerReaderHoldClosureV3 {
                 *activation.identity().as_bytes(),
                 *rollback_rehearsal.identity().as_bytes(),
                 *deletion_plan.identity().as_bytes(),
+                *deletion_plan.expected_old_state_id().as_bytes(),
                 *pre_currentness_id.as_bytes(),
                 *protected_retention_id.as_bytes(),
                 *physical_pruning_reader_zero_id.as_bytes(),
@@ -964,6 +976,7 @@ impl Stage12ConsumerReaderHoldClosureV3 {
             replacement_activation_id: activation.identity(),
             rollback_rehearsal_id: rollback_rehearsal.identity(),
             deletion_plan_id: deletion_plan.identity(),
+            expected_old_state_id: deletion_plan.expected_old_state_id(),
             physical_pruning_reader_zero_id,
             physical_pruning_hold_zero_id,
             _not_send_or_sync: PhantomData,
@@ -1024,6 +1037,10 @@ impl Stage12ConsumerReaderHoldClosureV3 {
 
     pub(crate) const fn deletion_plan_id(&self) -> MigrationDigestV1 {
         self.deletion_plan_id
+    }
+
+    pub(crate) const fn expected_old_state_id(&self) -> MigrationDigestV1 {
+        self.expected_old_state_id
     }
 
     pub(crate) const fn physical_pruning_reader_zero_id(&self) -> MigrationDigestV1 {
@@ -1103,11 +1120,10 @@ pub(in crate::domain) struct InstallationPhysicalPruningContinuationV3 {
 impl InstallationPhysicalPruningContinuationV3 {
     pub(in crate::domain::installation) fn prepare_from_owner(
         closure: &Stage12ConsumerReaderHoldClosureV3,
-        expected_old_state_id: MigrationDigestV1,
     ) -> Self {
         Self {
             deletion_plan_id: closure.deletion_plan_id(),
-            expected_old_state_id,
+            expected_old_state_id: closure.expected_old_state_id(),
             foundation_closure_id: closure.foundation_closure_id(),
             rollback_assessment_id: closure.rollback_assessment_id(),
             legacy_quarantine_epoch_id: closure.legacy_quarantine_epoch_id(),
@@ -1147,7 +1163,8 @@ pub(in crate::domain) fn execute_stage12_product_pruning(
         || continuation.foundation_closure_id != closure.foundation_closure_id()
         || continuation.rollback_assessment_id != closure.rollback_assessment_id()
         || continuation.legacy_quarantine_epoch_id != closure.legacy_quarantine_epoch_id()
-        || continuation.expected_old_state_id.as_bytes() == &[0; 32]
+        || continuation.expected_old_state_id != closure.expected_old_state_id()
+        || closure.expected_old_state_id().as_bytes() == &[0; 32]
     {
         return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
     }
@@ -1155,7 +1172,7 @@ pub(in crate::domain) fn execute_stage12_product_pruning(
         .consume_with_linearization(&closure, || {
             effects.compare_expected_old_and_prune(
                 continuation.deletion_plan_id,
-                continuation.expected_old_state_id,
+                closure.expected_old_state_id(),
             )
         })
         .map_err(|_| AgentResourceCutoverErrorV1::Stage12BindingMismatch)??;
@@ -1168,7 +1185,7 @@ pub(in crate::domain) fn execute_stage12_product_pruning(
             *closure.rollback_assessment_id().as_bytes(),
             *closure.legacy_quarantine_epoch_id().as_bytes(),
             *continuation.deletion_plan_id.as_bytes(),
-            *continuation.expected_old_state_id.as_bytes(),
+            *closure.expected_old_state_id().as_bytes(),
             *effect_receipt_id.as_bytes(),
         ],
     )?;
