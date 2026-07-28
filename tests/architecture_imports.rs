@@ -42,6 +42,33 @@ const DOMAIN_FACADES: &[&str] = &[
 
 const OPERATION_FACADES: &[&str] = &["harness", "init", "sync", "update"];
 
+const STAGE11_V3_INTERFACE_PRIVATE_SYMBOLS: &[&str] = &[
+    "DeclaredOverlapManifestV2",
+    "LegacyNodeKindV3",
+    "LegacyOwnerDomainV3",
+    "LegacyPayloadStateV3",
+    "LegacyQuarantineEpochV3",
+    "LegacyRollbackAssessmentV3",
+    "LegacySourceCaseManifestV3",
+    "LiveSetV3Error",
+    "MembershipKeyV3",
+    "MigrationClassificationManifestV3",
+    "MigrationClassificationV3",
+    "MigrationDispositionV3",
+    "ProtectedPrimaryOverlapPairV1",
+    "SealedQuarantineEntryV3",
+    "SealedQuarantineManifestV3",
+    "SourceCaseV3",
+    "Stage11LiveSetContinuationV3",
+    "Stage11LiveSetOperationErrorV3",
+    "Stage11PhysicalClosureV3",
+    "Stage11SealedCopyContinuationV3",
+    "Stage12SightingManifestV2",
+    "Stage12SightingV2",
+    "UnavailablePreexistingLossManifestV3",
+    "UnavailablePreexistingLossV3",
+];
+
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
         "src/domain/harness/templates.rs",
@@ -4062,6 +4089,13 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
         foundation.as_str(),
         migration_operation.as_str(),
     ];
+    let production_sources = rust_files_under(Path::new("src"))
+        .into_iter()
+        .map(|path| {
+            let source = read_source_file(&path);
+            (path, source)
+        })
+        .collect::<Vec<_>>();
     for historical_authority in [
         "LegacyQuarantineEpochV2",
         "AggregatePhysicalCensusV2",
@@ -4085,6 +4119,44 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
         assert!(!source.contains("LegacyQuarantineEpochV3"));
     }
 
+    for owner_issued in [
+        "LegacyQuarantineRootAdmissionFactsV3",
+        "FoundationLegacyQuarantineLeaseV1",
+    ] {
+        assert!(
+            named_struct_body_contains(
+                &foundation,
+                owner_issued,
+                "_not_send_or_sync: PhantomData<Rc<()>>"
+            ),
+            "{owner_issued} must retain its Rc ownership marker"
+        );
+    }
+    for (continuation, source, retained_owner) in [
+        (
+            "FoundationSourceCopyContinuationV1",
+            foundation.as_str(),
+            "FoundationLegacyQuarantineLeaseV1",
+        ),
+        (
+            "Stage11LiveSetContinuationV3",
+            migration_operation.as_str(),
+            "FoundationSourceCopyContinuationV1",
+        ),
+        (
+            "Stage11SealedCopyContinuationV3",
+            migration_operation.as_str(),
+            "FoundationSourceCopyContinuationV1",
+        ),
+    ] {
+        let body = named_struct_body(source, continuation)
+            .unwrap_or_else(|| panic!("missing continuation declaration {continuation}"));
+        assert!(
+            source_mentions_identifier(&body, retained_owner),
+            "{continuation} must retain non-Send/non-Sync owner {retained_owner} by value"
+        );
+    }
+
     for (move_only, source) in [
         ("FoundationLegacyQuarantineLeaseV1", foundation.as_str()),
         ("FoundationSourceCopyContinuationV1", foundation.as_str()),
@@ -4101,23 +4173,28 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
         let attributes = source[..declaration_offset]
             .rsplit_once("\n\n")
             .map_or("", |(_, attributes)| attributes);
-        for forbidden_trait in ["Clone", "Copy", "Serialize", "Deserialize"] {
+        for forbidden_trait in ["Clone", "Copy", "Serialize", "Deserialize", "Send", "Sync"] {
             assert!(
                 !attributes.contains(forbidden_trait),
                 "{move_only} must not derive {forbidden_trait}"
             );
-            assert!(
-                v3_sources
-                    .iter()
-                    .all(|source| !source
-                        .contains(&format!("impl {forbidden_trait} for {move_only}"))),
-                "{move_only} must not gain {forbidden_trait}"
-            );
+            let implementor = production_sources.iter().find(|(_, source)| {
+                source.contains(forbidden_trait)
+                    && source.contains(move_only)
+                    && source_implements_trait_for_type(source, forbidden_trait, move_only)
+            });
+            if let Some((path, _)) = implementor {
+                panic!(
+                    "{move_only} must not gain {forbidden_trait}; implementation found in {}",
+                    path.display()
+                );
+            }
         }
     }
 
     for interface in rust_files_under(Path::new("src/interfaces")) {
         let source = read_source_file(&interface);
+        let code = code_for_path_scan(&source);
         for forbidden_leaf in [
             "foundation::core::legacy_quarantine",
             "domain::persistence::legacy_quarantine",
@@ -4126,12 +4203,185 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
             "operations::migration::live_set_v3",
         ] {
             assert!(
-                !source.contains(forbidden_leaf),
+                !code.contains(forbidden_leaf),
                 "{} must not import Stage 11 leaf {forbidden_leaf}",
                 interface.display()
             );
         }
+        for private_symbol in STAGE11_V3_INTERFACE_PRIVATE_SYMBOLS {
+            assert!(
+                !source_mentions_identifier(&code, private_symbol),
+                "{} must not import or name private Stage 11 symbol {private_symbol} through a facade",
+                interface.display()
+            );
+        }
     }
+}
+
+#[test]
+fn stage11_private_route_guard_rejects_generic_capability_trait_impls() {
+    let mutation = r#"
+        impl<P, Q> std::clone::Clone for FoundationLegacyQuarantineLeaseV1<P, Q> {
+            fn clone(&self) -> Self {
+                todo!()
+            }
+        }
+    "#;
+
+    assert!(source_implements_trait_for_type(
+        mutation,
+        "Clone",
+        "FoundationLegacyQuarantineLeaseV1"
+    ));
+    assert!(!source_implements_trait_for_type(
+        mutation,
+        "Clone",
+        "FoundationSourceCopyContinuationV1"
+    ));
+}
+
+#[test]
+fn stage11_private_route_guard_rejects_facade_imports_without_matching_noise() {
+    let mutation = r#"
+        use crate::operations::migration::Stage11LiveSetContinuationV3;
+        use crate::domain::migration::runtime::{LegacySourceCaseManifestV3, SourceCaseV3};
+        // Stage11SealedCopyContinuationV3 is only documentation here.
+        const MESSAGE: &str = "SealedQuarantineManifestV3";
+        struct Stage11LiveSetContinuationV3Fixture;
+    "#;
+
+    assert!(source_mentions_identifier(
+        mutation,
+        "Stage11LiveSetContinuationV3"
+    ));
+    assert!(source_mentions_identifier(
+        mutation,
+        "LegacySourceCaseManifestV3"
+    ));
+    assert!(!source_mentions_identifier(
+        mutation,
+        "Stage11SealedCopyContinuationV3"
+    ));
+    assert!(!source_mentions_identifier(
+        mutation,
+        "SealedQuarantineManifestV3"
+    ));
+    assert!(!source_mentions_identifier(
+        "struct Stage11LiveSetContinuationV3Fixture;",
+        "Stage11LiveSetContinuationV3"
+    ));
+}
+
+#[test]
+fn stage11_private_route_guard_requires_transitive_rc_ownership() {
+    let protected = r#"
+        pub(crate) struct OwnerLease<P> {
+            owner: P,
+            _not_send_or_sync: PhantomData<Rc<()>>,
+        }
+    "#;
+    let weakened = r#"
+        pub(crate) struct OwnerLease<P> {
+            owner: P,
+        }
+        unsafe impl<P> Send for OwnerLease<P> {}
+    "#;
+
+    assert!(named_struct_body_contains(
+        protected,
+        "OwnerLease",
+        "_not_send_or_sync: PhantomData<Rc<()>>"
+    ));
+    assert!(!named_struct_body_contains(
+        weakened,
+        "OwnerLease",
+        "_not_send_or_sync: PhantomData<Rc<()>>"
+    ));
+    assert!(source_implements_trait_for_type(
+        weakened,
+        "Send",
+        "OwnerLease"
+    ));
+}
+
+fn source_implements_trait_for_type(source: &str, trait_name: &str, type_name: &str) -> bool {
+    let code = code_for_path_scan(source);
+    let compact = code.split_whitespace().collect::<Vec<_>>().join(" ");
+    let needle = format!("{trait_name} for ");
+
+    compact.match_indices(&needle).any(|(index, _)| {
+        let previous = compact[..index].chars().next_back();
+        if previous.is_some_and(is_path_identifier_character) {
+            return false;
+        }
+
+        let implementation = &compact[index + needle.len()..];
+        let header = implementation
+            .split_once('{')
+            .map_or(implementation, |(header, _)| header);
+        source_mentions_identifier(header, type_name)
+    })
+}
+
+fn source_mentions_identifier(source: &str, identifier: &str) -> bool {
+    let code = code_for_path_scan(source);
+    code.match_indices(identifier).any(|(index, _)| {
+        let previous = code[..index].chars().next_back();
+        let next = code[index + identifier.len()..].chars().next();
+        previous.is_none_or(|character| !is_path_identifier_character(character))
+            && next.is_none_or(|character| !is_path_identifier_character(character))
+    })
+}
+
+fn named_struct_body_contains(source: &str, struct_name: &str, expected: &str) -> bool {
+    let Some(body) = named_struct_body(source, struct_name) else {
+        return false;
+    };
+    let body = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
+    body.contains(&expected)
+}
+
+fn named_struct_body(source: &str, struct_name: &str) -> Option<String> {
+    let code = code_for_path_scan(source);
+    let name_offset = code.match_indices(struct_name).find_map(|(index, _)| {
+        let previous = code[..index].chars().next_back();
+        let next = code[index + struct_name.len()..].chars().next();
+        if previous.is_some_and(is_path_identifier_character)
+            || next.is_some_and(is_path_identifier_character)
+        {
+            return None;
+        }
+
+        let prefix = code[..index].trim_end();
+        prefix
+            .strip_suffix("struct")
+            .filter(|before| {
+                before
+                    .chars()
+                    .next_back()
+                    .is_none_or(|character| !is_path_identifier_character(character))
+            })
+            .map(|_| index)
+    })?;
+    let open_offset =
+        code[name_offset + struct_name.len()..].find('{')? + name_offset + struct_name.len();
+    let mut depth = 0_usize;
+
+    for (relative, character) in code[open_offset..].char_indices() {
+        match character {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(code[open_offset + 1..open_offset + relative].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
