@@ -3224,3 +3224,148 @@ fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
     fs::remove_dir_all(mutant_root).unwrap();
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape() {
+    let source = include_str!("legacy_removal_guard.rs");
+    let guard = source
+        .split("pub(in crate::domain) struct LegacyRemovalGuardV2")
+        .nth(1)
+        .expect("guard definition must remain present");
+
+    assert!(guard.contains("_cut: PhantomData<&'cut mut AuthorityRemovalCutLifetimeV2>"));
+    assert!(guard.contains("_not_send_or_sync: PhantomData<Rc<()>>"));
+    assert!(guard.contains("pub(super) const fn mint("));
+    assert!(guard.contains("pub(in crate::domain) fn consume_for("));
+    assert!(guard.contains("self,\n        closure: &Stage12ConsumerReaderHoldClosureV2"));
+    assert!(guard.contains("Result<(), LegacyRemovalGuardAdmissionErrorV2>"));
+    for closure_binding in [
+        "closure.identity()",
+        "closure.release_id()",
+        "closure.legacy_quarantine_epoch_id()",
+        "closure.sighting_manifest_id()",
+        "closure.replacement_activation_id()",
+        "closure.physical_pruning_reader_zero_id()",
+        "closure.physical_pruning_hold_zero_id()",
+        "closure.rollback_rehearsal_id()",
+        "closure.deletion_plan_id()",
+    ] {
+        assert!(
+            guard.contains(closure_binding),
+            "missing consumption recheck {closure_binding}"
+        );
+    }
+    assert!(!guard.contains("pub fn new("));
+    assert!(!guard.contains("pub(crate) fn"));
+    assert_eq!(guard.matches("pub(in crate::domain) fn").count(), 1);
+    assert!(!guard.contains("impl Clone"));
+    assert!(!guard.contains("impl Debug"));
+    assert!(!guard.contains("Serialize"));
+    assert!(!guard.contains("Deserialize"));
+    assert!(!guard.contains("canonical_bytes"));
+    assert!(!guard.contains("schema_value"));
+    assert!(!guard.contains("<'static>"));
+    assert!(!guard.contains("into_"));
+    assert!(!guard.contains("-> [u8; 32]"));
+    assert!(!guard.contains("-> MigrationDigestV1"));
+}
+
+#[test]
+fn legacy_removal_guard_v2_admission_requires_exact_owner_issued_facts() {
+    let source = include_str!("facade.rs");
+    let admission = source
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(in crate::domain::authority) fn").next())
+        .expect("named pruning admission must remain present");
+
+    for owner_fact in [
+        "&LegacySourceCaseManifestV3",
+        "&Stage12SightingManifestV2",
+        "&MigrationClassificationManifestV3",
+        "&DeclaredOverlapManifestV2",
+        "&UnavailablePreexistingLossManifestV3",
+        "&SealedQuarantineManifestV3",
+        "&LegacyQuarantineEpochV3",
+        "&Stage12ReplacementActivationV2",
+        "&Stage12ConsumerReaderHoldClosureV2",
+        "&Stage12RollbackRehearsalV2",
+        "&InstallationLegacyDeletionPlanV2",
+    ] {
+        assert!(
+            admission.contains(owner_fact),
+            "missing typed owner fact {owner_fact}"
+        );
+    }
+    assert!(!admission.contains("usize"));
+    assert!(!admission.contains("historical"));
+    assert!(!admission.contains("count:"));
+    assert!(!admission.contains("digest:"));
+    assert!(!admission.contains("Vec<"));
+    assert!(!admission.contains("String"));
+}
+
+#[test]
+fn legacy_removal_guard_v2_validation_is_atomic_and_effect_inert() {
+    let source = include_str!("facade.rs");
+    let validation = source
+        .split("fn validate_legacy_physical_pruning_admission")
+        .nth(1)
+        .and_then(|tail| tail.split("struct CurrentAuthorityV1").next())
+        .expect("guard validation must remain present");
+
+    let admission = source
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(in crate::domain::authority) fn").next())
+        .expect("named pruning admission must remain present");
+    assert!(admission.contains("with_serialized_active_view"));
+    for required_recheck in [
+        "select_current_authority_root",
+        "load_current_authority",
+        "StoreRoleV1::Installation",
+        "current_generation.id()",
+        "current_head.id()",
+        "context.authority_epoch()",
+        "context.trust_root_revision()",
+        "current.state.carrier_fence()",
+        "current.state.state_token()",
+        "current.state.carrier_currentness()",
+        "epoch.revocation_revision()",
+        ".revocations()",
+    ] {
+        assert!(
+            validation.contains(required_recheck),
+            "missing live Authority recheck {required_recheck}"
+        );
+    }
+    for forbidden_effect in [
+        "remove_file",
+        "remove_dir",
+        "delete(",
+        "rename",
+        "write(",
+        "publish_generation",
+        "commit(",
+    ] {
+        assert!(
+            !validation.contains(forbidden_effect),
+            "guard admission must remain effect-inert: {forbidden_effect}"
+        );
+    }
+}
+
+#[test]
+fn legacy_removal_guard_v2_is_not_a_wire_resource_action_or_scope_atom() {
+    let forbidden_surfaces = [
+        include_str!("action_basis.rs"),
+        include_str!("context.rs"),
+        include_str!("grant.rs"),
+        include_str!("../capability/literals.rs"),
+    ];
+    assert!(
+        forbidden_surfaces
+            .iter()
+            .all(|source| !source.contains("LegacyRemovalGuardV2"))
+    );
+}
