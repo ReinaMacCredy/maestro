@@ -4000,6 +4000,140 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     );
 }
 
+#[test]
+fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() {
+    let installation_census = read_source_file(Path::new("src/domain/installation/census.rs"));
+    let installation_admission =
+        read_source_file(Path::new("src/domain/installation/legacy_quarantine.rs"));
+    let migration_runtime =
+        read_source_file(Path::new("src/domain/migration/runtime/live_set_v3.rs"));
+    let migration_runtime_mod = read_source_file(Path::new("src/domain/migration/runtime/mod.rs"));
+    let persistence = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let repository = read_source_file(Path::new(
+        "src/domain/repository/legacy_quarantine_admission.rs",
+    ));
+    let repository_mod = read_source_file(Path::new("src/domain/repository/mod.rs"));
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let migration_operation =
+        read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    let migration_operation_mod = read_source_file(Path::new("src/operations/migration/mod.rs"));
+
+    for required_route in [
+        "pub(crate) fn from_live_owners(",
+        "RepositoryRootAdmissionV3::mint_from_store",
+        "installation_census.admit_legacy_quarantine_roots_v3()",
+        "FoundationLegacyQuarantineLeaseV1::acquire(",
+        "self.physical.copy_once(token)",
+        "self.physical.rollback()",
+        ".finish(self.quarantine.identity().into_bytes())",
+        "Stage11PhysicalClosureV3::new(",
+    ] {
+        assert!(
+            migration_operation.contains(required_route),
+            "Stage 11 V3 route is missing {required_route}"
+        );
+    }
+    assert!(
+        installation_census.contains("#[path = \"legacy_quarantine.rs\"]\nmod legacy_quarantine;")
+    );
+    assert!(installation_admission.contains("pub(crate) struct InstallationRootAdmissionV3"));
+    assert!(repository.contains("pub(crate) struct RepositoryRootAdmissionV3"));
+    assert!(repository_mod.contains("\nmod legacy_quarantine_admission;\n"));
+    assert!(repository_mod.contains("pub(crate) use legacy_quarantine_admission::{"));
+    assert!(persistence_mod.contains("\npub(crate) mod legacy_quarantine;\n"));
+    assert!(foundation_mod.contains("\npub(crate) mod legacy_quarantine;\n"));
+    assert!(migration_runtime_mod.contains("\nmod live_set_v3;\n"));
+    assert!(migration_runtime_mod.contains("pub use live_set_v3::{"));
+    assert!(migration_operation_mod.contains("\nmod live_set_v3;\n"));
+    assert!(migration_operation_mod.contains("pub(crate) use live_set_v3::{"));
+    assert!(!repository_mod.contains("pub mod legacy_quarantine_admission"));
+    assert!(!persistence_mod.contains("pub mod legacy_quarantine"));
+    assert!(!foundation_mod.contains("pub mod legacy_quarantine"));
+    assert!(!migration_runtime_mod.contains("pub mod live_set_v3"));
+    assert!(!migration_operation_mod.contains("pub mod live_set_v3"));
+
+    let v3_sources = [
+        installation_admission.as_str(),
+        migration_runtime.as_str(),
+        persistence.as_str(),
+        repository.as_str(),
+        foundation.as_str(),
+        migration_operation.as_str(),
+    ];
+    for historical_authority in [
+        "LegacyQuarantineEpochV2",
+        "AggregatePhysicalCensusV2",
+        "Stage11CensusContinuationV2",
+        "stage11_aggregate_census",
+    ] {
+        assert!(
+            v3_sources
+                .iter()
+                .all(|source| !source.contains(historical_authority)),
+            "current Stage 11 V3 code must not import or adapt {historical_authority}"
+        );
+    }
+    for historical in [
+        "src/foundation/core/aggregate_census.rs",
+        "src/foundation/core/aggregate_census_stage11_seed.rs",
+    ] {
+        let source = read_source_file(Path::new(historical));
+        assert!(source.contains("AggregateCensus"));
+        assert!(!source.contains("FoundationLegacyQuarantineLeaseV1"));
+        assert!(!source.contains("LegacyQuarantineEpochV3"));
+    }
+
+    for (move_only, source) in [
+        ("FoundationLegacyQuarantineLeaseV1", foundation.as_str()),
+        ("FoundationSourceCopyContinuationV1", foundation.as_str()),
+        ("Stage11LiveSetContinuationV3", migration_operation.as_str()),
+        (
+            "Stage11SealedCopyContinuationV3",
+            migration_operation.as_str(),
+        ),
+    ] {
+        let declaration = format!("pub(crate) struct {move_only}");
+        let declaration_offset = source
+            .find(&declaration)
+            .unwrap_or_else(|| panic!("missing move-only declaration {declaration}"));
+        let attributes = source[..declaration_offset]
+            .rsplit_once("\n\n")
+            .map_or("", |(_, attributes)| attributes);
+        for forbidden_trait in ["Clone", "Copy", "Serialize", "Deserialize"] {
+            assert!(
+                !attributes.contains(forbidden_trait),
+                "{move_only} must not derive {forbidden_trait}"
+            );
+            assert!(
+                v3_sources
+                    .iter()
+                    .all(|source| !source
+                        .contains(&format!("impl {forbidden_trait} for {move_only}"))),
+                "{move_only} must not gain {forbidden_trait}"
+            );
+        }
+    }
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = read_source_file(&interface);
+        for forbidden_leaf in [
+            "foundation::core::legacy_quarantine",
+            "domain::persistence::legacy_quarantine",
+            "domain::repository::legacy_quarantine_admission",
+            "domain::installation::legacy_quarantine",
+            "operations::migration::live_set_v3",
+        ] {
+            assert!(
+                !source.contains(forbidden_leaf),
+                "{} must not import Stage 11 leaf {forbidden_leaf}",
+                interface.display()
+            );
+        }
+    }
+}
+
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(root, &mut files);
