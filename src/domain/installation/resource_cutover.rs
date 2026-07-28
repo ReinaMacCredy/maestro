@@ -260,10 +260,6 @@ impl AgentResourceReleaseAdmissionV1 {
         })
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the V4 deletion plan binds each independently owner-issued final-cut fact"
-    )]
     pub(crate) fn stage12_deletion_plan_v3(
         &self,
         epoch: &LegacyQuarantineEpochV4,
