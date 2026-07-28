@@ -18,9 +18,11 @@ use super::{
 use crate::domain::identity::SchemaIdV1;
 use crate::foundation::core::deterministic_cbor::{self, CborValue};
 use crate::foundation::core::legacy_loss_evidence::{
-    FoundationLegacyLossEvidenceErrorV1, LegacySourceCurrentBindingV1,
-    LegacySourceHistoricalBindingV1, LegacySourceHistoryKindV1,
-    OwnerIssuedUnavailablePreexistingLossEvidenceSetV1, OwnerUnavailablePreexistingLossWitnessV1,
+    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
+    LegacySourceCurrentBindingV1, LegacySourceHistoricalBindingV1, LegacySourceHistoryKindV1,
+    OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
+    OwnerUnavailablePreexistingLossWitnessV1, owner_loss_evidence_issuer_sealed,
 };
 use crate::foundation::core::legacy_quarantine::LegacyQuarantineOwnerDomainV3;
 use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
@@ -42,10 +44,22 @@ pub(in crate::domain) struct StoreLegacySourceHistoryContextV1 {
 
 #[derive(Clone, Copy)]
 pub(in crate::domain) struct StoreLegacySourceCurrentnessV1 {
-    pub(in crate::domain) expected_source_set_id: [u8; 32],
-    pub(in crate::domain) operation_attempt: [u8; 32],
-    pub(in crate::domain) owner_admission_id: [u8; 32],
-    pub(in crate::domain) owner_currentness_id: [u8; 32],
+    expected_source_set_id: [u8; 32],
+    operation_attempt: [u8; 32],
+    owner_admission_id: [u8; 32],
+    owner_currentness_id: [u8; 32],
+    namespace_epoch: u64,
+    trust_root_id: [u8; 32],
+    release_id: [u8; 32],
+    provider_id: [u8; 32],
+    mount_id: [u8; 32],
+    anchor_id: [u8; 32],
+    fence_id: [u8; 32],
+    revocation_revision: u64,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::domain) struct StoreLegacySourceCurrentViewV1 {
     pub(in crate::domain) namespace_epoch: u64,
     pub(in crate::domain) trust_root_id: [u8; 32],
     pub(in crate::domain) release_id: [u8; 32],
@@ -54,6 +68,44 @@ pub(in crate::domain) struct StoreLegacySourceCurrentnessV1 {
     pub(in crate::domain) anchor_id: [u8; 32],
     pub(in crate::domain) fence_id: [u8; 32],
     pub(in crate::domain) revocation_revision: u64,
+}
+
+impl StoreLegacySourceCurrentViewV1 {
+    pub(in crate::domain) fn bind_foundation_issuance(
+        self,
+        binding: &FoundationOwnerEvidenceIssuanceBindingV1,
+        expected_owner: LegacyQuarantineOwnerDomainV3,
+    ) -> Result<StoreLegacySourceCurrentnessV1, FoundationLegacyLossEvidenceErrorV1> {
+        if binding.owner() != expected_owner
+            || self.namespace_epoch == 0
+            || self.revocation_revision == 0
+            || [
+                self.trust_root_id,
+                self.release_id,
+                self.provider_id,
+                self.mount_id,
+                self.anchor_id,
+                self.fence_id,
+            ]
+            .contains(&[0; 32])
+        {
+            return Err(FoundationLegacyLossEvidenceErrorV1::InvalidIssuanceBinding);
+        }
+        Ok(StoreLegacySourceCurrentnessV1 {
+            expected_source_set_id: binding.expected_source_set_id(),
+            operation_attempt: binding.operation_attempt(),
+            owner_admission_id: binding.owner_admission_id(),
+            owner_currentness_id: binding.owner_currentness_id(),
+            namespace_epoch: self.namespace_epoch,
+            trust_root_id: self.trust_root_id,
+            release_id: self.release_id,
+            provider_id: self.provider_id,
+            mount_id: self.mount_id,
+            anchor_id: self.anchor_id,
+            fence_id: self.fence_id,
+            revocation_revision: self.revocation_revision,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -577,6 +629,56 @@ pub(crate) struct ProtectedPrimaryHistoryJournalV1 {
     _not_send_or_sync: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 
+pub(crate) struct ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1 {
+    journal: ProtectedPrimaryHistoryJournalV1,
+    boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
+    current_view: StoreLegacySourceCurrentViewV1,
+    absent_sources: Vec<LegacySourceHistorySelectorV1>,
+    _not_send_or_sync: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+impl ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1 {
+    pub(super) fn prepare(
+        journal: ProtectedPrimaryHistoryJournalV1,
+        boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
+        current_view: StoreLegacySourceCurrentViewV1,
+        absent_sources: Vec<LegacySourceHistorySelectorV1>,
+    ) -> Self {
+        Self {
+            journal,
+            boundary,
+            current_view,
+            absent_sources,
+            _not_send_or_sync: std::marker::PhantomData,
+        }
+    }
+}
+
+impl owner_loss_evidence_issuer_sealed::Sealed
+    for ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1
+{
+}
+
+impl OwnerUnavailablePreexistingLossEvidenceIssuerPortV1
+    for ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1
+{
+    fn issue_for_foundation(
+        self,
+        binding: FoundationOwnerEvidenceIssuanceBindingV1,
+    ) -> Result<
+        OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+        FoundationLegacyLossEvidenceErrorV1,
+    > {
+        let currentness = self.current_view.bind_foundation_issuance(
+            &binding,
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+        )?;
+        self.journal
+            .issue_bound_absent_sources(self.boundary, currentness, &self.absent_sources)
+            .map_err(|_| FoundationLegacyLossEvidenceErrorV1::InvalidEvidenceSet)
+    }
+}
+
 impl ProtectedPrimaryHistoryJournalV1 {
     pub(super) fn open_or_create(
         journal_root: impl AsRef<Path>,
@@ -703,7 +805,7 @@ impl ProtectedPrimaryHistoryJournalV1 {
         Ok(record.snapshot_id)
     }
 
-    pub(super) fn issue_for_absent_sources(
+    fn issue_bound_absent_sources(
         self,
         boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
         currentness: StoreLegacySourceCurrentnessV1,
@@ -1125,7 +1227,7 @@ impl StoreLegacySourceHistoryProviderV1 {
         })
     }
 
-    pub(in crate::domain) fn issue_for_absent_sources(
+    pub(in crate::domain) fn issue_bound_absent_sources(
         self,
         store: &StoreV1,
         currentness: StoreLegacySourceCurrentnessV1,

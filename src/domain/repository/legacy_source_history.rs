@@ -6,13 +6,16 @@
 use crate::domain::persistence::{
     StoreRoleV1, StoreV1,
     legacy_source_history::{
-        LegacySourceHistorySelectorV1, StoreLegacySourceCurrentnessV1,
-        StoreLegacySourceHistoryContextV1, StoreLegacySourceHistoryErrorV1,
-        StoreLegacySourceHistoryProviderV1, StoreLegacySourceHistorySnapshotV1,
+        LegacySourceHistorySelectorV1, StoreLegacySourceCurrentViewV1,
+        StoreLegacySourceHistoryContextV1,
+        StoreLegacySourceHistoryErrorV1, StoreLegacySourceHistoryProviderV1,
+        StoreLegacySourceHistorySnapshotV1,
     },
 };
 use crate::foundation::core::legacy_loss_evidence::{
+    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
     LegacySourceHistoryKindV1, OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, owner_loss_evidence_issuer_sealed,
 };
 use crate::foundation::core::legacy_quarantine::LegacyQuarantineOwnerDomainV3;
 
@@ -49,34 +52,58 @@ impl LegacySourceHistorySnapshotV1 {
     }
 }
 
-pub(in crate::domain::repository) struct RepositoryLegacySourceHistoryProviderV1 {
+pub(in crate::domain::repository) struct RepositoryUnavailablePreexistingLossEvidenceIssuerV1<
+    'store,
+> {
     provider: StoreLegacySourceHistoryProviderV1,
+    store: &'store StoreV1,
+    current_view: StoreLegacySourceCurrentViewV1,
+    absent_sources: Vec<LegacySourceHistorySelectorV1>,
+    _not_send_or_sync: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 
-impl RepositoryLegacySourceHistoryProviderV1 {
-    pub(in crate::domain::repository) fn acquire(
-        store: &StoreV1,
+impl<'store> RepositoryUnavailablePreexistingLossEvidenceIssuerV1<'store> {
+    pub(in crate::domain::repository) fn prepare(
+        store: &'store StoreV1,
+        current_view: StoreLegacySourceCurrentViewV1,
+        absent_sources: Vec<LegacySourceHistorySelectorV1>,
     ) -> Result<Self, RepositoryLegacySourceHistoryErrorV1> {
         Ok(Self {
             provider: StoreLegacySourceHistoryProviderV1::acquire(
                 store,
                 LegacyQuarantineOwnerDomainV3::Repository,
             )?,
+            store,
+            current_view,
+            absent_sources,
+            _not_send_or_sync: std::marker::PhantomData,
         })
     }
+}
 
-    pub(in crate::domain::repository) fn issue_for_absent_sources(
+impl owner_loss_evidence_issuer_sealed::Sealed
+    for RepositoryUnavailablePreexistingLossEvidenceIssuerV1<'_>
+{
+}
+
+impl OwnerUnavailablePreexistingLossEvidenceIssuerPortV1
+    for RepositoryUnavailablePreexistingLossEvidenceIssuerV1<'_>
+{
+    fn issue_for_foundation(
         self,
-        store: &StoreV1,
-        currentness: StoreLegacySourceCurrentnessV1,
-        absent_sources: &[LegacySourceHistorySelectorV1],
+        binding: FoundationOwnerEvidenceIssuanceBindingV1,
     ) -> Result<
         OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
-        RepositoryLegacySourceHistoryErrorV1,
+        FoundationLegacyLossEvidenceErrorV1,
     > {
-        Ok(self
+        let currentness = self.current_view.bind_foundation_issuance(
+            &binding,
+            LegacyQuarantineOwnerDomainV3::Repository,
+        )?;
+        self
             .provider
-            .issue_for_absent_sources(store, currentness, absent_sources)?)
+            .issue_bound_absent_sources(self.store, currentness, &self.absent_sources)
+            .map_err(|_| FoundationLegacyLossEvidenceErrorV1::InvalidEvidenceSet)
     }
 }
 
