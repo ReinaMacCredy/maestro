@@ -368,6 +368,16 @@ pub(crate) struct OwnerIssuedUnavailablePreexistingLossEvidenceSetV1 {
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
+pub(in crate::foundation::core) struct FoundationConsumedOwnerEvidenceSetV1 {
+    pub(in crate::foundation::core) identity: [u8; 32],
+    pub(in crate::foundation::core) owner: LegacyQuarantineOwnerDomainV3,
+    pub(in crate::foundation::core) expected_source_set_id: [u8; 32],
+    pub(in crate::foundation::core) operation_attempt: [u8; 32],
+    pub(in crate::foundation::core) owner_admission_id: [u8; 32],
+    pub(in crate::foundation::core) owner_currentness_id: [u8; 32],
+    pub(in crate::foundation::core) witnesses: Vec<OwnerUnavailablePreexistingLossWitnessV1>,
+}
+
 pub(crate) struct FoundationOwnerEvidenceIssuanceBindingV1 {
     owner: LegacyQuarantineOwnerDomainV3,
     expected_source_set_id: [u8; 32],
@@ -505,24 +515,16 @@ impl OwnerIssuedUnavailablePreexistingLossEvidenceSetV1 {
 
     pub(in crate::foundation::core) fn into_foundation_witnesses(
         self,
-    ) -> (
-        [u8; 32],
-        LegacyQuarantineOwnerDomainV3,
-        [u8; 32],
-        [u8; 32],
-        [u8; 32],
-        [u8; 32],
-        Vec<OwnerUnavailablePreexistingLossWitnessV1>,
-    ) {
-        (
-            self.identity,
-            self.owner,
-            self.expected_source_set_id,
-            self.operation_attempt,
-            self.owner_admission_id,
-            self.owner_currentness_id,
-            self.witnesses,
-        )
+    ) -> FoundationConsumedOwnerEvidenceSetV1 {
+        FoundationConsumedOwnerEvidenceSetV1 {
+            identity: self.identity,
+            owner: self.owner,
+            expected_source_set_id: self.expected_source_set_id,
+            operation_attempt: self.operation_attempt,
+            owner_admission_id: self.owner_admission_id,
+            owner_currentness_id: self.owner_currentness_id,
+            witnesses: self.witnesses,
+        }
     }
 }
 
@@ -542,10 +544,6 @@ pub(crate) struct FoundationValidatedUnavailablePreexistingLossReceiptV1 {
 }
 
 impl FoundationValidatedUnavailablePreexistingLossReceiptV1 {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Foundation receipt binds both absence passes and every authenticated owner join"
-    )]
     pub(in crate::foundation::core) fn from_foundation(
         source_token: [u8; 32],
         witness: &OwnerUnavailablePreexistingLossWitnessV1,

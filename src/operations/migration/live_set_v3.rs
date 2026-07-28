@@ -730,7 +730,7 @@ where
             FoundationLegacyQuarantineFinalityV2::Closed {
                 closure,
                 persistence_receipt,
-            } => Ok(Stage11PhysicalClosureV4::Closed(
+            } => Ok(Stage11PhysicalClosureV4::Closed(Box::new(
                 Stage11ClosedPhysicalClosureV4 {
                     foundation_closure_id: MigrationDigestV1::from_digest(closure.identity())?,
                     persistence_receipt_id: MigrationDigestV1::from_digest(persistence_receipt)?,
@@ -741,7 +741,7 @@ where
                     quarantine: self.quarantine,
                     rollback,
                 },
-            )),
+            ))),
             FoundationLegacyQuarantineFinalityV2::RecoveryRequired {
                 admitted_set,
                 persistence_receipt,
@@ -761,7 +761,7 @@ where
 }
 
 pub(crate) enum Stage11PhysicalClosureV4 {
-    Closed(Stage11ClosedPhysicalClosureV4),
+    Closed(Box<Stage11ClosedPhysicalClosureV4>),
     RecoveryRequired {
         admitted_set_id: MigrationDigestV1,
         persistence_receipt_id: MigrationDigestV1,

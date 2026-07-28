@@ -15,7 +15,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use super::legacy_loss_evidence::{
-    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
+    FoundationConsumedOwnerEvidenceSetV1, FoundationLegacyLossEvidenceErrorV1,
+    FoundationOwnerEvidenceIssuanceBindingV1,
     FoundationValidatedUnavailablePreexistingLossReceiptV1,
     OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
     OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, OwnerUnavailablePreexistingLossWitnessV1,
@@ -45,6 +46,10 @@ const EXPECTED_SOURCE_SET_DOMAIN_V4: &[u8] =
 const ADMITTED_SET_DOMAIN_V4: &[u8] = b"maestro.foundation.legacy-quarantine.admitted-set.v4\0";
 const SOURCE_TOKEN_DOMAIN_V2: &[u8] = b"maestro.foundation.legacy-quarantine.source-token.v2\0";
 const CLOSURE_DOMAIN_V2: &[u8] = b"maestro.foundation.legacy-quarantine.closure.v2\0";
+
+type OwnerLossWitnessKeyV1 = (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]);
+type OwnerLossWitnessMapV1 =
+    std::collections::BTreeMap<OwnerLossWitnessKeyV1, OwnerUnavailablePreexistingLossWitnessV1>;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) enum LegacyQuarantineOwnerDomainV3 {
@@ -1796,14 +1801,8 @@ fn consume_owner_evidence_sets(
     installation_currentness: [u8; 32],
     protected_primary_admission: [u8; 32],
     protected_primary_currentness: [u8; 32],
-) -> Result<
-    std::collections::BTreeMap<
-        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
-        OwnerUnavailablePreexistingLossWitnessV1,
-    >,
-    FoundationLegacyQuarantineErrorV1,
-> {
-    let mut witnesses = std::collections::BTreeMap::new();
+) -> Result<OwnerLossWitnessMapV1, FoundationLegacyQuarantineErrorV1> {
+    let mut witnesses = OwnerLossWitnessMapV1::new();
     for (set, expected_owner, expected_admission, expected_currentness) in [
         (
             repository,
@@ -1824,15 +1823,15 @@ fn consume_owner_evidence_sets(
             protected_primary_currentness,
         ),
     ] {
-        let (
-            _set_identity,
+        let FoundationConsumedOwnerEvidenceSetV1 {
+            identity: _,
             owner,
-            set_expected_sources,
-            set_attempt,
-            owner_admission,
-            owner_currentness,
-            rows,
-        ) = set.into_foundation_witnesses();
+            expected_source_set_id: set_expected_sources,
+            operation_attempt: set_attempt,
+            owner_admission_id: owner_admission,
+            owner_currentness_id: owner_currentness,
+            witnesses: rows,
+        } = set.into_foundation_witnesses();
         if owner != expected_owner
             || set_expected_sources != expected_source_set
             || set_attempt != invocation
@@ -1892,7 +1891,7 @@ fn relative_locator_commitment_v1(
     owner: LegacyQuarantineOwnerDomainV3,
     relative_locator: &[u8],
 ) -> [u8; 32] {
-    let domain = match owner {
+    let namespace = match owner {
         LegacyQuarantineOwnerDomainV3::Repository | LegacyQuarantineOwnerDomainV3::Installation => {
             b"maestro.v8.legacy-source.relative-locator.v1\0".as_slice()
         }
@@ -1900,7 +1899,7 @@ fn relative_locator_commitment_v1(
             b"maestro.v8.protected-primary.relative-locator.v1\0".as_slice()
         }
     };
-    commitment(domain, &[relative_locator])
+    commitment(namespace, &[relative_locator])
 }
 
 fn reconcile_expected_sources_v4(
@@ -1908,10 +1907,7 @@ fn reconcile_expected_sources_v4(
     admitted_set: [u8; 32],
     root: &RetainedRootV2,
     expected_sources: &[LegacyQuarantineExpectedSourceV4],
-    witnesses: &mut std::collections::BTreeMap<
-        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
-        OwnerUnavailablePreexistingLossWitnessV1,
-    >,
+    witnesses: &mut OwnerLossWitnessMapV1,
 ) -> Result<Vec<FoundationSourceCaseV2>, FoundationLegacyQuarantineErrorV1> {
     let expected_sources = expected_sources
         .iter()
@@ -2019,10 +2015,7 @@ fn reconcile_protected_primary_sources_v4<P>(
     admitted_set: [u8; 32],
     primary: &P,
     expected_sources: &[LegacyQuarantineExpectedSourceV4],
-    witnesses: &mut std::collections::BTreeMap<
-        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
-        OwnerUnavailablePreexistingLossWitnessV1,
-    >,
+    witnesses: &mut OwnerLossWitnessMapV1,
 ) -> Result<Vec<FoundationSourceCaseV2>, FoundationLegacyQuarantineErrorV1>
 where
     P: ProtectedPrimaryBoundaryPortV1,
