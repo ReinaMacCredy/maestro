@@ -513,9 +513,9 @@ impl Stage12ConsumerReaderHoldClosureV2 {
     pub(in crate::domain::installation) fn seal(
         epoch: &LegacyQuarantineEpochV3,
         sightings: &Stage12SightingManifestV2,
-        activation: Stage12ReplacementActivationV2,
-        rollback: Stage12RollbackRehearsalV2,
-        deletion_plan: InstallationLegacyDeletionPlanV2,
+        activation: &Stage12ReplacementActivationV2,
+        rollback: &Stage12RollbackRehearsalV2,
+        deletion_plan: &InstallationLegacyDeletionPlanV2,
         pre_currentness: ConsumerClosureReceiptV1<'_, '_, PreCurrentnessConsumerStageV1>,
         protected_retention: ConsumerClosureReceiptV1<'_, '_, ProtectedRetentionConsumerStageV1>,
         physical_pruning: ConsumerClosureReceiptV1<'_, '_, PhysicalPruningConsumerStageV1>,
@@ -622,6 +622,19 @@ pub(in crate::domain) struct InstallationPhysicalPruningContinuationV2 {
     deletion_plan_id: MigrationDigestV1,
     expected_old_state_id: MigrationDigestV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl InstallationPhysicalPruningContinuationV2 {
+    pub(in crate::domain::installation) fn prepare_from_owner(
+        closure: &Stage12ConsumerReaderHoldClosureV2,
+        expected_old_state_id: MigrationDigestV1,
+    ) -> Self {
+        Self {
+            deletion_plan_id: closure.deletion_plan_id(),
+            expected_old_state_id,
+            _not_send_or_sync: PhantomData,
+        }
+    }
 }
 
 pub(in crate::domain) struct CommittedLegacyPhysicalPruningV2 {
@@ -981,6 +994,32 @@ mod tests {
             targets,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn physical_pruning_continuation_is_prepared_from_the_owner_closure() {
+        let deletion_plan_id = MigrationDigestV1::from_digest([71; 32]).unwrap();
+        let expected_old_state_id = MigrationDigestV1::from_digest([72; 32]).unwrap();
+        let closure = Stage12ConsumerReaderHoldClosureV2 {
+            identity: MigrationDigestV1::from_digest([61; 32]).unwrap(),
+            release_id: MigrationDigestV1::from_digest([62; 32]).unwrap(),
+            legacy_quarantine_epoch_id: MigrationDigestV1::from_digest([63; 32]).unwrap(),
+            sighting_manifest_id: MigrationDigestV1::from_digest([64; 32]).unwrap(),
+            replacement_activation_id: MigrationDigestV1::from_digest([65; 32]).unwrap(),
+            rollback_rehearsal_id: MigrationDigestV1::from_digest([66; 32]).unwrap(),
+            deletion_plan_id,
+            physical_pruning_reader_zero_id: MigrationDigestV1::from_digest([67; 32]).unwrap(),
+            physical_pruning_hold_zero_id: MigrationDigestV1::from_digest([68; 32]).unwrap(),
+            _not_send_or_sync: PhantomData,
+        };
+
+        let continuation = InstallationPhysicalPruningContinuationV2::prepare_from_owner(
+            &closure,
+            expected_old_state_id,
+        );
+
+        assert_eq!(continuation.deletion_plan_id, deletion_plan_id);
+        assert_eq!(continuation.expected_old_state_id, expected_old_state_id);
     }
 
     #[test]
