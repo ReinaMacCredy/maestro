@@ -3,10 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 use crate::foundation::core::deterministic_cbor::{CborError, CborValue};
-use crate::foundation::core::{
-    FoundationLegacyPayloadStateV3, FoundationMigrationSourcePartsV1,
-    FoundationValidatedUnavailablePreexistingLossReceiptV1, LegacyQuarantineOwnerDomainV3,
+use crate::foundation::core::legacy_loss_evidence::FoundationValidatedUnavailablePreexistingLossReceiptV1;
+use crate::foundation::core::legacy_quarantine::{
+    FoundationLegacyPayloadStateV3, FoundationMigrationSourcePartsV1, LegacyQuarantineOwnerDomainV3,
 };
+use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
 
 use super::{MigrationDigestV1, MigrationIdentityErrorV1};
 
@@ -288,12 +289,8 @@ impl FoundationMaterializedSourceCaseV3 {
             }
         };
         let node_kind = match parts.kind {
-            crate::foundation::core::DescriptorCensusObjectKindV1::RegularFile => {
-                LegacyNodeKindV3::RegularFile
-            }
-            crate::foundation::core::DescriptorCensusObjectKindV1::SymbolicLink => {
-                LegacyNodeKindV3::SymbolicLink
-            }
+            DescriptorCensusObjectKindV1::RegularFile => LegacyNodeKindV3::RegularFile,
+            DescriptorCensusObjectKindV1::SymbolicLink => LegacyNodeKindV3::SymbolicLink,
         };
         let root_binding = MigrationDigestV1::from_digest(parts.root_binding)?;
         let resolved_locator_commitment = MigrationDigestV1::identify(
