@@ -1,6 +1,6 @@
 {
   "schema": "maestro.vnext.stage11.live-set-v3-contract.v1",
-  "status": "provisional_unintegrated_unverified",
+  "status": "stage11_corrected_focused_verified_awaiting_main_integration",
   "immutable_v2_sources": {
     "src/foundation/core/aggregate_census.rs": "194f5e4361b5bc171f4382e952196eba25b47b18a5343f07b94d8533942f1f3b",
     "src/foundation/core/aggregate_census_stage11_seed.rs": "a7675fcd6d59651ee1f78b5b0db296dffada7601334cccb7012660dd84f75873"
@@ -23,6 +23,15 @@
       "persist_source",
       "rollback_partial",
       "consume_final_recheck"
+    ],
+    "src/operations/migration/live_set_v3.rs": [
+      "execute_offline_live_set_v3",
+      "from_live_owners",
+      "copy_present_sources",
+      "UnavailablePreexistingLossV3::new",
+      "UnavailablePreexistingLossManifestV3::new",
+      "LegacyRollbackAssessmentV3::assess",
+      "finish"
     ],
     "src/domain/persistence/legacy_quarantine.rs": [
       "pub(crate) struct ProtectedPrimaryBoundaryLeaseV1",

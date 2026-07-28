@@ -12,9 +12,9 @@ use thiserror::Error;
 
 use crate::domain::persistence::{StoreRoleV1, StoreStateV1, StoreV1};
 use crate::foundation::core::legacy_quarantine::{
-    FoundationLegacyQuarantineErrorV1, LegacyQuarantineOwnerDomainV3,
-    LegacyQuarantineRootAdmissionFactsV3, LegacyQuarantineRootAdmissionV3, observe_root_binding_v3,
-    owner_admission_sealed,
+    FoundationLegacyQuarantineErrorV1, LegacyQuarantineExpectedSourceSetV3,
+    LegacyQuarantineOwnerDomainV3, LegacyQuarantineRootAdmissionFactsV3,
+    LegacyQuarantineRootAdmissionV3, observe_root_binding_v3, owner_admission_sealed,
 };
 
 pub(crate) struct RepositoryRootAdmissionV3 {
@@ -23,11 +23,15 @@ pub(crate) struct RepositoryRootAdmissionV3 {
     root_binding: [u8; 32],
     owner_currentness: [u8; 32],
     owner_attestation: [u8; 32],
+    expected_sources: LegacyQuarantineExpectedSourceSetV3,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl RepositoryRootAdmissionV3 {
-    pub(crate) fn mint_from_store(store: &StoreV1) -> Result<Self, RepositoryRootAdmissionErrorV3> {
+    pub(crate) fn mint_from_store(
+        store: &StoreV1,
+        expected_sources: LegacyQuarantineExpectedSourceSetV3,
+    ) -> Result<Self, RepositoryRootAdmissionErrorV3> {
         if store.role() != StoreRoleV1::Repository {
             return Err(RepositoryRootAdmissionErrorV3::WrongStoreRole);
         }
@@ -41,6 +45,11 @@ impl RepositoryRootAdmissionV3 {
         let root = store.legacy_quarantine_root_path_v3().to_path_buf();
         let display_locator = lossless_locator(&root)?;
         let root_binding = observe_root_binding_v3(&root)?;
+        if !expected_sources
+            .binds_owner_roots(LegacyQuarantineOwnerDomainV3::Repository, &[root_binding])
+        {
+            return Err(RepositoryRootAdmissionErrorV3::InvalidExpectedSources);
+        }
         let owner_currentness = commitment(
             b"maestro.repository.legacy-quarantine.currentness.v3\0",
             &[
@@ -56,6 +65,7 @@ impl RepositoryRootAdmissionV3 {
                 &display_locator,
                 &root_binding,
                 &owner_currentness,
+                &expected_sources.identity(),
                 head.id().as_bytes(),
             ],
         );
@@ -65,6 +75,7 @@ impl RepositoryRootAdmissionV3 {
             root_binding,
             owner_currentness,
             owner_attestation,
+            expected_sources,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -85,6 +96,7 @@ impl LegacyQuarantineRootAdmissionV3 for RepositoryRootAdmissionV3 {
         LegacyQuarantineRootAdmissionFactsV3::from_owner(
             LegacyQuarantineOwnerDomainV3::Repository,
             vec![(self.display_locator, self.root, self.root_binding)],
+            self.expected_sources,
             self.owner_currentness,
             self.owner_attestation,
         )
@@ -130,6 +142,8 @@ pub(crate) enum RepositoryRootAdmissionErrorV3 {
     InvalidLocator,
     #[error("Repository root admission is unsupported on this platform")]
     UnsupportedPlatform,
+    #[error("Repository expected source universe is not packet-bound")]
+    InvalidExpectedSources,
     #[error(transparent)]
     Store(#[from] crate::domain::persistence::StoreError),
     #[error(transparent)]

@@ -11,7 +11,7 @@ contract_path = File.join(
 )
 contract = JSON.parse(File.read(contract_path, encoding: "UTF-8"))
 
-unless contract.fetch("status") == "provisional_unintegrated_unverified"
+unless contract.fetch("status") == "stage11_corrected_focused_verified_awaiting_main_integration"
   abort("stage11-v3: status drift")
 end
 

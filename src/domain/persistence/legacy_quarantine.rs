@@ -13,6 +13,7 @@ use thiserror::Error;
 use super::{StoreRoleV1, StoreStateV1, StoreV1};
 use crate::foundation::core::legacy_quarantine::{
     FoundationCustodyCopyReceiptV1, FoundationLegacyQuarantineErrorV1,
+    LegacyQuarantineExpectedSourceSetV3, LegacyQuarantineOwnerDomainV3,
     LegacyQuarantinePhysicalFactsV1, ProtectedPrimaryBoundaryPortV1, QuarantineCustodyPortV1,
     observe_physical_facts_v1, persistence_lease_sealed,
 };
@@ -29,6 +30,7 @@ pub(crate) struct ProtectedPrimaryBoundaryLeaseV1 {
     currentness: [u8; 32],
     fence: [u8; 32],
     revocation_revision: u64,
+    expected_sources: LegacyQuarantineExpectedSourceSetV3,
     retained_sources: Option<RetainedDescriptorCensusLeaseV3>,
     retained_limits: Option<DescriptorCensusLimitsV1>,
     _not_send_or_sync: PhantomData<Rc<()>>,
@@ -40,12 +42,19 @@ impl ProtectedPrimaryBoundaryLeaseV1 {
         realm_identity: [u8; 32],
         currentness: [u8; 32],
         revocation_revision: u64,
+        expected_sources: LegacyQuarantineExpectedSourceSetV3,
     ) -> Result<Self, PersistenceLegacyQuarantineErrorV1> {
         if realm_identity == [0; 32] || currentness == [0; 32] || revocation_revision == 0 {
             return Err(PersistenceLegacyQuarantineErrorV1::InvalidCurrentness);
         }
         let root = root.as_ref().to_path_buf();
         let facts = observe_physical_facts_v1(&root)?;
+        if !expected_sources.binds_owner_roots(
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            &[facts.resolved_locator_commitment()],
+        ) {
+            return Err(PersistenceLegacyQuarantineErrorV1::InvalidExpectedSources);
+        }
         let fence = commitment(
             b"maestro.persistence.protected-primary.fence.v1\0",
             &[
@@ -67,6 +76,7 @@ impl ProtectedPrimaryBoundaryLeaseV1 {
                 &currentness,
                 &fence,
                 &revocation_revision.to_be_bytes(),
+                &expected_sources.identity(),
             ],
         );
         Ok(Self {
@@ -77,6 +87,7 @@ impl ProtectedPrimaryBoundaryLeaseV1 {
             currentness,
             fence,
             revocation_revision,
+            expected_sources,
             retained_sources: None,
             retained_limits: None,
             _not_send_or_sync: PhantomData,
@@ -129,6 +140,10 @@ impl ProtectedPrimaryBoundaryPortV1 for ProtectedPrimaryBoundaryLeaseV1 {
 
     fn revocation_revision(&self) -> u64 {
         self.revocation_revision
+    }
+
+    fn expected_sources(&self) -> &LegacyQuarantineExpectedSourceSetV3 {
+        &self.expected_sources
     }
 
     fn retain_source_census(
@@ -405,10 +420,7 @@ impl QuarantineCustodyPortV1 for QuarantineCustodyLeaseV1<'_> {
         candidate_manifest: [u8; 32],
         custody_records: &[[u8; 32]],
     ) -> Result<[u8; 32], FoundationLegacyQuarantineErrorV1> {
-        if candidate_manifest == [0; 32]
-            || custody_records.is_empty()
-            || custody_records != self.custody_records
-        {
+        if candidate_manifest == [0; 32] || custody_records != self.custody_records {
             return Err(FoundationLegacyQuarantineErrorV1::PartialCopy);
         }
         let (state, revision) = self
@@ -584,6 +596,8 @@ fn commitment(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
 pub(crate) enum PersistenceLegacyQuarantineErrorV1 {
     #[error("protected-primary currentness is incomplete")]
     InvalidCurrentness,
+    #[error("protected-primary expected source universe is invalid")]
+    InvalidExpectedSources,
     #[error("quarantine custody requires a live inactive Installation Store")]
     InvalidCustodyStore,
     #[error("quarantine custody Store is active or has a live head")]
@@ -603,6 +617,7 @@ mod tests {
 
     use super::*;
     use crate::domain::persistence::{StoreDomainV1, StoreRoleV1, StoreV1};
+    use crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceV3;
 
     struct TempRoot(PathBuf);
 
@@ -807,8 +822,33 @@ mod tests {
     fn protected_primary_retains_descriptor_serviced_bytes_through_final_recheck() {
         let root = TempRoot::new("primary-retained");
         fs::write(root.0.join("legacy.txt"), b"protected primary bytes").expect("write source");
+        let facts = observe_physical_facts_v1(&root.0).expect("primary facts");
+        let census = SecureRoot::open(&root.0)
+            .expect("open primary")
+            .retain_descriptor_census_root_v3(DescriptorCensusLimitsV1::bounded_default())
+            .expect("expected census");
+        let expected = census.census().rows()[0].clone();
+        let expected = LegacyQuarantineExpectedSourceV3::from_packet(
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            facts.resolved_locator_commitment(),
+            expected.relative_name().to_vec(),
+            expected.kind(),
+            expected.logical_byte_length(),
+            expected.object_identity(),
+            expected.content_identity(),
+            [12; 32],
+            None,
+        )
+        .expect("expected source");
+        let expected = LegacyQuarantineExpectedSourceSetV3::from_packet(
+            [13; 32],
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            vec![expected],
+        )
+        .expect("expected source set");
+        drop(census);
         let mut primary = ProtectedPrimaryBoundaryLeaseV1::acquire_from_live_backend(
-            &root.0, [10; 32], [11; 32], 5,
+            &root.0, [10; 32], [11; 32], 5, expected,
         )
         .expect("acquire protected primary");
         primary

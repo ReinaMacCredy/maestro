@@ -5,24 +5,66 @@ use thiserror::Error;
 use crate::domain::installation::InstallationCensusV1;
 use crate::domain::migration::runtime::{
     DeclaredOverlapManifestV2, LegacyNodeKindV3, LegacyOwnerDomainV3, LegacyPayloadStateV3,
-    LegacySourceCaseManifestV3, LiveSetV3Error, MembershipKeyV3, MigrationClassificationManifestV3,
-    MigrationDigestV1, MigrationIdentityErrorV1, ProtectedPrimaryOverlapPairV1,
-    SealedQuarantineEntryV3, SealedQuarantineManifestV3, SourceCaseV3,
+    LegacyRollbackAssessmentV3, LegacySourceCaseManifestV3, LiveSetV3Error, MembershipKeyV3,
+    MigrationClassificationManifestV3, MigrationDigestV1, MigrationIdentityErrorV1,
+    ProtectedPrimaryOverlapPairV1, SealedQuarantineEntryV3, SealedQuarantineManifestV3,
+    SourceCaseV3, UnavailablePreexistingLossManifestV3, UnavailablePreexistingLossV3,
 };
 use crate::domain::persistence::StoreV1;
 use crate::domain::repository::RepositoryRootAdmissionV3;
 use crate::foundation::core::deterministic_cbor::CborValue;
 use crate::foundation::core::legacy_quarantine::{
-    FoundationLegacyQuarantineClosureV1, FoundationLegacyQuarantineErrorV1,
+    FoundationLegacyPayloadStateV3, FoundationLegacyQuarantineErrorV1,
     FoundationLegacyQuarantineLeaseV1, FoundationSourceCopyContinuationV1,
-    LegacyQuarantineOwnerDomainV3, ProtectedPrimaryBoundaryPortV1, QuarantineCustodyPortV1,
+    LegacyQuarantineExpectedSourceSetV3, LegacyQuarantineOwnerDomainV3,
+    ProtectedPrimaryBoundaryPortV1, QuarantineCustodyPortV1,
 };
 use crate::foundation::core::secure_fs::DescriptorCensusLimitsV1;
 use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the offline workflow keeps every owner, custody, and expected-old input explicit"
+)]
+pub(crate) fn execute_offline_live_set_v3<P, Q, F>(
+    repository_store: &StoreV1,
+    repository_expected_sources: LegacyQuarantineExpectedSourceSetV3,
+    installation_census: &InstallationCensusV1,
+    installation_expected_sources: LegacyQuarantineExpectedSourceSetV3,
+    protected_primary: P,
+    custody: Q,
+    invocation: [u8; 32],
+    limits: DescriptorCensusLimitsV1,
+    custody_lease_id: MigrationDigestV1,
+    expected_old_id: MigrationDigestV1,
+    classify: F,
+) -> Result<Stage11PhysicalClosureV3, Stage11LiveSetOperationErrorV3>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+    Q: QuarantineCustodyPortV1,
+    F: FnOnce(
+        &LegacySourceCaseManifestV3,
+    ) -> Result<MigrationClassificationManifestV3, Stage11LiveSetOperationErrorV3>,
+{
+    let live = Stage11LiveSetContinuationV3::from_live_owners(
+        repository_store,
+        repository_expected_sources,
+        installation_census,
+        installation_expected_sources,
+        protected_primary,
+        custody,
+        invocation,
+        limits,
+    )?;
+    let classifications = classify(live.source_cases())?;
+    live.copy_present_sources(classifications, custody_lease_id, expected_old_id)?
+        .finish()
+}
+
 pub(crate) struct Stage11LiveSetContinuationV3<P, Q> {
     source_cases: LegacySourceCaseManifestV3,
     overlaps: DeclaredOverlapManifestV2,
+    loss_rows: Vec<UnavailablePreexistingLossV3>,
     source_tokens: BTreeMap<MigrationDigestV1, [u8; 32]>,
     physical: FoundationSourceCopyContinuationV1<P, Q>,
 }
@@ -32,16 +74,26 @@ where
     P: ProtectedPrimaryBoundaryPortV1,
     Q: QuarantineCustodyPortV1,
 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the live owner admission keeps both packet-bound source sets explicit"
+    )]
     pub(crate) fn from_live_owners(
         repository_store: &StoreV1,
+        repository_expected_sources: LegacyQuarantineExpectedSourceSetV3,
         installation_census: &InstallationCensusV1,
+        installation_expected_sources: LegacyQuarantineExpectedSourceSetV3,
         protected_primary: P,
         custody: Q,
         invocation: [u8; 32],
         limits: DescriptorCensusLimitsV1,
     ) -> Result<Self, Stage11LiveSetOperationErrorV3> {
-        let repository = RepositoryRootAdmissionV3::mint_from_store(repository_store)?;
-        let installation = installation_census.admit_legacy_quarantine_roots_v3()?;
+        let repository = RepositoryRootAdmissionV3::mint_from_store(
+            repository_store,
+            repository_expected_sources,
+        )?;
+        let installation =
+            installation_census.admit_legacy_quarantine_roots_v3(installation_expected_sources)?;
         let foundation = FoundationLegacyQuarantineLeaseV1::acquire(
             repository,
             installation,
@@ -61,6 +113,7 @@ where
         let mut rows = Vec::with_capacity(foundation.source_cases().len());
         let mut source_tokens = BTreeMap::new();
         let mut source_facts = BTreeMap::new();
+        let mut loss_rows = Vec::new();
         for source in foundation.source_cases() {
             let owner = match source.owner() {
                 LegacyQuarantineOwnerDomainV3::Repository => LegacyOwnerDomainV3::Repository,
@@ -74,8 +127,7 @@ where
                 display_locator.push(b'/');
             }
             display_locator.extend_from_slice(source.relative_locator());
-            let row = source.row();
-            let node_kind = match row.kind() {
+            let node_kind = match source.kind() {
                 DescriptorCensusObjectKindV1::RegularFile => LegacyNodeKindV3::RegularFile,
                 DescriptorCensusObjectKindV1::SymbolicLink => LegacyNodeKindV3::SymbolicLink,
             };
@@ -87,8 +139,8 @@ where
                     CborValue::Bytes(source.relative_locator().to_vec()),
                 ]),
             )?;
-            let object_identity = MigrationDigestV1::from_digest(row.object_identity())?;
-            let content_sha256 = MigrationDigestV1::from_digest(row.content_identity())?;
+            let object_identity = MigrationDigestV1::from_digest(source.object_identity())?;
+            let content_sha256 = MigrationDigestV1::from_digest(source.content_identity())?;
             let metadata_commitment = MigrationDigestV1::identify(
                 b"maestro.migration.source-metadata.v3\0",
                 &CborValue::Array(vec![
@@ -96,7 +148,7 @@ where
                         LegacyNodeKindV3::RegularFile => 1,
                         LegacyNodeKindV3::SymbolicLink => 2,
                     }),
-                    CborValue::Unsigned(row.logical_byte_length()),
+                    CborValue::Unsigned(source.logical_byte_length()),
                     object_identity.canonical_value(),
                     content_sha256.canonical_value(),
                 ]),
@@ -112,19 +164,39 @@ where
                 MigrationDigestV1::from_digest(source.owner_currentness())?,
                 MigrationDigestV1::from_digest(source.owner_attestation())?,
             )?;
+            let payload_state = match source.payload_state() {
+                FoundationLegacyPayloadStateV3::Present => LegacyPayloadStateV3::Present,
+                FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss => {
+                    LegacyPayloadStateV3::UnavailablePreexistingLoss
+                }
+            };
             let source_case = SourceCaseV3::from_foundation(
                 membership,
                 foundation_invocation,
-                LegacyPayloadStateV3::Present,
-                row.logical_byte_length(),
+                payload_state,
+                source.logical_byte_length(),
                 content_sha256,
                 metadata_commitment,
             )?;
-            if source_tokens
-                .insert(source_case.identity(), source.source_token())
-                .is_some()
-            {
-                return Err(Stage11LiveSetOperationErrorV3::DuplicateSource);
+            if payload_state == LegacyPayloadStateV3::Present {
+                if source_tokens
+                    .insert(source_case.identity(), source.source_token())
+                    .is_some()
+                {
+                    return Err(Stage11LiveSetOperationErrorV3::DuplicateSource);
+                }
+            } else {
+                let loss_evidence_id = source
+                    .loss_evidence_id()
+                    .ok_or(Stage11LiveSetOperationErrorV3::MissingLossEvidence)?;
+                loss_rows.push(UnavailablePreexistingLossV3::new(
+                    &source_case,
+                    source.logical_byte_length(),
+                    content_sha256,
+                    metadata_commitment,
+                    MigrationDigestV1::from_digest(source.source_provenance_id())?,
+                    MigrationDigestV1::from_digest(loss_evidence_id)?,
+                )?);
             }
             source_facts.insert(
                 source.source_token(),
@@ -164,6 +236,7 @@ where
         Ok(Self {
             source_cases,
             overlaps,
+            loss_rows,
             source_tokens,
             physical: foundation.into_copy_continuation(),
         })
@@ -219,6 +292,17 @@ where
             self.physical.rollback()?;
             return Err(Stage11LiveSetOperationErrorV3::MissingSourceToken);
         }
+        let losses = match UnavailablePreexistingLossManifestV3::new(
+            &self.source_cases,
+            &classifications,
+            self.loss_rows,
+        ) {
+            Ok(losses) => losses,
+            Err(error) => {
+                self.physical.rollback()?;
+                return Err(error.into());
+            }
+        };
         let quarantine = match SealedQuarantineManifestV3::new(
             &self.source_cases,
             &classifications,
@@ -236,6 +320,7 @@ where
             source_cases: self.source_cases,
             overlaps: self.overlaps,
             classifications,
+            losses,
             quarantine,
             physical: self.physical,
         })
@@ -246,6 +331,7 @@ pub(crate) struct Stage11SealedCopyContinuationV3<P, Q> {
     source_cases: LegacySourceCaseManifestV3,
     overlaps: DeclaredOverlapManifestV2,
     classifications: MigrationClassificationManifestV3,
+    losses: UnavailablePreexistingLossManifestV3,
     quarantine: SealedQuarantineManifestV3,
     physical: FoundationSourceCopyContinuationV1<P, Q>,
 }
@@ -267,22 +353,34 @@ where
         &self.overlaps
     }
 
+    pub(crate) const fn losses(&self) -> &UnavailablePreexistingLossManifestV3 {
+        &self.losses
+    }
+
     pub(crate) const fn quarantine(&self) -> &SealedQuarantineManifestV3 {
         &self.quarantine
     }
 
     pub(crate) fn finish(self) -> Result<Stage11PhysicalClosureV3, Stage11LiveSetOperationErrorV3> {
+        let rollback = LegacyRollbackAssessmentV3::assess(
+            &self.source_cases,
+            &self.classifications,
+            &self.losses,
+            &self.quarantine,
+        )?;
         let (closure, persistence_receipt) = self
             .physical
             .finish(self.quarantine.identity().into_bytes())?;
-        Ok(Stage11PhysicalClosureV3::new(
-            closure,
-            persistence_receipt,
-            self.source_cases,
-            self.overlaps,
-            self.classifications,
-            self.quarantine,
-        )?)
+        Ok(Stage11PhysicalClosureV3 {
+            foundation_closure_id: MigrationDigestV1::from_digest(closure.identity())?,
+            persistence_receipt_id: MigrationDigestV1::from_digest(persistence_receipt)?,
+            source_cases: self.source_cases,
+            overlaps: self.overlaps,
+            classifications: self.classifications,
+            losses: self.losses,
+            quarantine: self.quarantine,
+            rollback,
+        })
     }
 }
 
@@ -292,28 +390,12 @@ pub(crate) struct Stage11PhysicalClosureV3 {
     source_cases: LegacySourceCaseManifestV3,
     overlaps: DeclaredOverlapManifestV2,
     classifications: MigrationClassificationManifestV3,
+    losses: UnavailablePreexistingLossManifestV3,
     quarantine: SealedQuarantineManifestV3,
+    rollback: LegacyRollbackAssessmentV3,
 }
 
 impl Stage11PhysicalClosureV3 {
-    fn new(
-        closure: FoundationLegacyQuarantineClosureV1,
-        persistence_receipt: [u8; 32],
-        source_cases: LegacySourceCaseManifestV3,
-        overlaps: DeclaredOverlapManifestV2,
-        classifications: MigrationClassificationManifestV3,
-        quarantine: SealedQuarantineManifestV3,
-    ) -> Result<Self, MigrationIdentityErrorV1> {
-        Ok(Self {
-            foundation_closure_id: MigrationDigestV1::from_digest(closure.identity())?,
-            persistence_receipt_id: MigrationDigestV1::from_digest(persistence_receipt)?,
-            source_cases,
-            overlaps,
-            classifications,
-            quarantine,
-        })
-    }
-
     pub(crate) const fn foundation_closure_id(&self) -> MigrationDigestV1 {
         self.foundation_closure_id
     }
@@ -334,8 +416,16 @@ impl Stage11PhysicalClosureV3 {
         &self.overlaps
     }
 
+    pub(crate) const fn losses(&self) -> &UnavailablePreexistingLossManifestV3 {
+        &self.losses
+    }
+
     pub(crate) const fn quarantine(&self) -> &SealedQuarantineManifestV3 {
         &self.quarantine
+    }
+
+    pub(crate) const fn rollback(&self) -> &LegacyRollbackAssessmentV3 {
+        &self.rollback
     }
 }
 
@@ -347,6 +437,8 @@ pub(crate) enum Stage11LiveSetOperationErrorV3 {
     MissingSourceToken,
     #[error("Stage-11 Foundation overlap pair did not bind two retained source cases")]
     InvalidOverlap,
+    #[error("Stage-11 unavailable source lacks independent loss evidence")]
+    MissingLossEvidence,
     #[error(transparent)]
     Foundation(#[from] FoundationLegacyQuarantineErrorV1),
     #[error(transparent)]

@@ -12,21 +12,23 @@ use thiserror::Error;
 
 use super::InstallationCensusV1;
 use crate::foundation::core::legacy_quarantine::{
-    FoundationLegacyQuarantineErrorV1, LegacyQuarantineOwnerDomainV3,
-    LegacyQuarantineRootAdmissionFactsV3, LegacyQuarantineRootAdmissionV3, observe_root_binding_v3,
-    owner_admission_sealed,
+    FoundationLegacyQuarantineErrorV1, LegacyQuarantineExpectedSourceSetV3,
+    LegacyQuarantineOwnerDomainV3, LegacyQuarantineRootAdmissionFactsV3,
+    LegacyQuarantineRootAdmissionV3, observe_root_binding_v3, owner_admission_sealed,
 };
 
 pub(crate) struct InstallationRootAdmissionV3 {
     roots: Vec<(Vec<u8>, PathBuf, [u8; 32])>,
     owner_currentness: [u8; 32],
     owner_attestation: [u8; 32],
+    expected_sources: LegacyQuarantineExpectedSourceSetV3,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl InstallationRootAdmissionV3 {
     pub(crate) fn mint_from_live_registry(
         census: &InstallationCensusV1,
+        expected_sources: LegacyQuarantineExpectedSourceSetV3,
     ) -> Result<Self, InstallationRootAdmissionErrorV3> {
         let snapshot = census.legacy_quarantine_root_snapshot_v3()?;
         let mut roots = Vec::with_capacity(snapshot.roots.len());
@@ -52,6 +54,12 @@ impl InstallationRootAdmissionV3 {
         {
             return Err(InstallationRootAdmissionErrorV3::DuplicateRegistryRoot);
         }
+        let root_bindings = roots.iter().map(|root| root.2).collect::<Vec<_>>();
+        if !expected_sources
+            .binds_owner_roots(LegacyQuarantineOwnerDomainV3::Installation, &root_bindings)
+        {
+            return Err(InstallationRootAdmissionErrorV3::InvalidExpectedSources);
+        }
         let mut hasher = Sha256::new();
         hasher.update(b"maestro.installation.legacy-quarantine.admission.v3\0");
         hasher.update(snapshot.owner_attestation);
@@ -61,11 +69,13 @@ impl InstallationRootAdmissionV3 {
             hasher.update(display);
             hasher.update(binding);
         }
+        hasher.update(expected_sources.identity());
         let owner_attestation = hasher.finalize().into();
         Ok(Self {
             roots,
             owner_currentness: snapshot.owner_currentness,
             owner_attestation,
+            expected_sources,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -86,6 +96,7 @@ impl LegacyQuarantineRootAdmissionV3 for InstallationRootAdmissionV3 {
         LegacyQuarantineRootAdmissionFactsV3::from_owner(
             LegacyQuarantineOwnerDomainV3::Installation,
             self.roots,
+            self.expected_sources,
             self.owner_currentness,
             self.owner_attestation,
         )
@@ -117,6 +128,8 @@ pub(crate) enum InstallationRootAdmissionErrorV3 {
     DuplicateRegistryRoot,
     #[error("Installation root admission is unsupported on this platform")]
     UnsupportedPlatform,
+    #[error("Installation expected source universe is not packet-bound")]
+    InvalidExpectedSources,
     #[error(transparent)]
     Census(#[from] super::InstallationCensusErrorV1),
     #[error(transparent)]

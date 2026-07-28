@@ -58,7 +58,7 @@ pub(crate) use legacy_census_v1::{
 )]
 pub(crate) use live_set_v3::{
     Stage11LiveSetContinuationV3, Stage11LiveSetOperationErrorV3, Stage11PhysicalClosureV3,
-    Stage11SealedCopyContinuationV3,
+    Stage11SealedCopyContinuationV3, execute_offline_live_set_v3,
 };
 #[allow(
     unused_imports,

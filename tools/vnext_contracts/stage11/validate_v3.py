@@ -19,8 +19,11 @@ def fail(message: str) -> None:
 
 def main() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    if contract["status"] != "provisional_unintegrated_unverified":
-        fail("candidate status must remain provisional_unintegrated_unverified")
+    if (
+        contract["status"]
+        != "stage11_corrected_focused_verified_awaiting_main_integration"
+    ):
+        fail("candidate status must remain focused-verified and await MainIntegration")
 
     for relative, expected in contract["immutable_v2_sources"].items():
         source = (ROOT / relative).read_bytes()

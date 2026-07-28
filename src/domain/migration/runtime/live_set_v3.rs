@@ -670,6 +670,11 @@ impl ProtectedPrimaryOverlapPairV1 {
         if owner.membership().owner() == LegacyOwnerDomainV3::ProtectedPrimary
             || primary.membership().owner() != LegacyOwnerDomainV3::ProtectedPrimary
             || owner.identity() == primary.identity()
+            || owner.membership().object_identity() != primary.membership().object_identity()
+            || owner_mount_identity != primary_mount_identity
+            || owner_provider_identity != primary_provider_identity
+            || owner.content_sha256() != primary.content_sha256()
+            || owner.metadata_commitment() != primary.metadata_commitment()
         {
             return Err(LiveSetV3Error::InvalidOverlapPair);
         }
@@ -753,10 +758,15 @@ impl ProtectedPrimaryOverlapPairV1 {
             && primary.membership().owner_attestation() == self.primary_attestation
             && owner.membership().object_identity() == self.owner_object_identity
             && primary.membership().object_identity() == self.primary_object_identity
+            && self.owner_object_identity == self.primary_object_identity
+            && self.owner_mount_identity == self.primary_mount_identity
+            && self.owner_provider_identity == self.primary_provider_identity
             && owner.content_sha256() == self.owner_content_commitment
             && primary.content_sha256() == self.primary_content_commitment
+            && self.owner_content_commitment == self.primary_content_commitment
             && owner.metadata_commitment() == self.owner_metadata_commitment
             && primary.metadata_commitment() == self.primary_metadata_commitment
+            && self.owner_metadata_commitment == self.primary_metadata_commitment
             && owner.membership().owner_currentness() == self.owner_currentness
             && primary.membership().owner_currentness() == self.primary_currentness
     }
@@ -1603,14 +1613,28 @@ mod tests {
         MigrationDigestV1::digest_bytes(label).expect("non-zero test digest")
     }
 
-    fn present_source(bytes: &[u8]) -> SourceCaseV3 {
-        let metadata = digest(b"metadata");
+    fn present_source_for(
+        owner: LegacyOwnerDomainV3,
+        object: MigrationDigestV1,
+        bytes: &[u8],
+    ) -> SourceCaseV3 {
+        let content = MigrationDigestV1::digest_bytes(bytes).expect("content digest");
+        let metadata = MigrationDigestV1::identify(
+            b"maestro.migration.source-metadata.v3\0",
+            &CborValue::Array(vec![
+                CborValue::Unsigned(1),
+                CborValue::Unsigned(bytes.len() as u64),
+                object.canonical_value(),
+                content.canonical_value(),
+            ]),
+        )
+        .expect("metadata");
         let membership = MembershipKeyV3::from_foundation(
-            LegacyOwnerDomainV3::Repository,
+            owner,
             digest(b"root"),
             b"/owner/root/object".to_vec(),
             digest(b"resolved"),
-            digest(b"object"),
+            object,
             LegacyNodeKindV3::RegularFile,
             metadata,
             digest(b"owner-currentness"),
@@ -1622,10 +1646,39 @@ mod tests {
             digest(b"foundation-invocation"),
             LegacyPayloadStateV3::Present,
             bytes.len() as u64,
-            MigrationDigestV1::digest_bytes(bytes).expect("content digest"),
+            content,
             metadata,
         )
         .expect("source")
+    }
+
+    fn present_source(bytes: &[u8]) -> SourceCaseV3 {
+        present_source_for(LegacyOwnerDomainV3::Repository, digest(b"object"), bytes)
+    }
+
+    #[test]
+    fn protected_primary_overlap_requires_same_object_and_exact_bytes() {
+        let owner = present_source_for(
+            LegacyOwnerDomainV3::Repository,
+            digest(b"owner-object"),
+            b"owner bytes",
+        );
+        let primary = present_source_for(
+            LegacyOwnerDomainV3::ProtectedPrimary,
+            digest(b"primary-object"),
+            b"primary bytes",
+        );
+        assert!(matches!(
+            ProtectedPrimaryOverlapPairV1::from_foundation(
+                &owner,
+                &primary,
+                digest(b"mount"),
+                digest(b"mount"),
+                digest(b"provider"),
+                digest(b"provider"),
+            ),
+            Err(LiveSetV3Error::InvalidOverlapPair)
+        ));
     }
 
     #[test]

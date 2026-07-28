@@ -318,12 +318,16 @@ impl InstallationCensusV1 {
 
     pub(crate) fn admit_legacy_quarantine_roots_v3(
         &self,
+        expected_sources: crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceSetV3,
     ) -> Result<
         impl crate::foundation::core::legacy_quarantine::LegacyQuarantineRootAdmissionV3,
         InstallationCensusErrorV1,
     > {
-        legacy_quarantine::InstallationRootAdmissionV3::mint_from_live_registry(self)
-            .map_err(|_| InstallationCensusErrorV1::LegacyAdmissionUnavailable)
+        legacy_quarantine::InstallationRootAdmissionV3::mint_from_live_registry(
+            self,
+            expected_sources,
+        )
+        .map_err(|_| InstallationCensusErrorV1::LegacyAdmissionUnavailable)
     }
 
     pub(super) fn legacy_quarantine_root_snapshot_v3(
