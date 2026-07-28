@@ -21,8 +21,17 @@ use crate::foundation::core::root_universe::{
 
 const INSTALLATION_UNIVERSE_FORMAT_V1: u64 = 1;
 const MAX_INSTALLATION_DECLARATIONS_V1: usize = 65_536;
+const COMPLETE_INSTALLATION_ROOT_ROLES_V1: [FoundationDeclaredRootRoleV1; 7] = [
+    FoundationDeclaredRootRoleV1::Active,
+    FoundationDeclaredRootRoleV1::Inactive,
+    FoundationDeclaredRootRoleV1::Snapshot,
+    FoundationDeclaredRootRoleV1::Cache,
+    FoundationDeclaredRootRoleV1::Archive,
+    FoundationDeclaredRootRoleV1::Host,
+    FoundationDeclaredRootRoleV1::Legacy,
+];
 
-pub(crate) mod installation_root_provider_sealed {
+mod installation_root_provider_sealed {
     pub trait Sealed {}
 }
 
@@ -53,7 +62,7 @@ impl InstallationDeclaredRootUniverseLeaseV1 {
         let census_comparison_identity = census.legacy_root_universe_comparison_identity_v1()?;
         let observed =
             provider.observe_complete_universe(census_comparison_identity, operation_attempt)?;
-        observed.validate(operation_attempt)?;
+        observed.validate(census_comparison_identity, operation_attempt)?;
         let mut rows = Vec::with_capacity(observed.declarations.len());
         for declaration in &observed.declarations {
             rows.push(declaration.to_foundation_row(&observed, operation_attempt)?);
@@ -96,6 +105,7 @@ impl DeclaredRootUniverseLeaseV1 for InstallationDeclaredRootUniverseLeaseV1 {
 
 #[derive(Clone)]
 pub(crate) struct InstallationRootUniverseObservationV1 {
+    census_comparison_identity: [u8; 32],
     declaration_set_revision: u64,
     realm: [u8; 32],
     provider_implementation: [u8; 32],
@@ -106,7 +116,12 @@ pub(crate) struct InstallationRootUniverseObservationV1 {
 }
 
 impl InstallationRootUniverseObservationV1 {
-    pub(crate) fn from_owner_provider(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the owner observation binds the complete provider and census currentness tuple"
+    )]
+    fn from_owner_provider(
+        census_comparison_identity: [u8; 32],
         declaration_set_revision: u64,
         realm: [u8; 32],
         provider_implementation: [u8; 32],
@@ -116,6 +131,7 @@ impl InstallationRootUniverseObservationV1 {
         declarations: Vec<InstallationDeclaredRootV1>,
     ) -> Result<Self, InstallationRootUniverseErrorV1> {
         let observed = Self {
+            census_comparison_identity,
             declaration_set_revision,
             realm,
             provider_implementation,
@@ -128,9 +144,15 @@ impl InstallationRootUniverseObservationV1 {
         Ok(observed)
     }
 
-    fn validate(&self, operation_attempt: [u8; 32]) -> Result<(), InstallationRootUniverseErrorV1> {
+    fn validate(
+        &self,
+        census_comparison_identity: [u8; 32],
+        operation_attempt: [u8; 32],
+    ) -> Result<(), InstallationRootUniverseErrorV1> {
         self.validate_non_attempt_fields()?;
-        if operation_attempt == [0; 32] {
+        if operation_attempt == [0; 32]
+            || self.census_comparison_identity != census_comparison_identity
+        {
             return Err(InstallationRootUniverseErrorV1::InvalidUniverse);
         }
         for declaration in &self.declarations {
@@ -143,8 +165,14 @@ impl InstallationRootUniverseObservationV1 {
         if self.declaration_set_revision == 0
             || self.provider_revision == 0
             || self.revocation_revision == 0
-            || [self.realm, self.provider_implementation, self.currentness].contains(&[0; 32])
-            || self.declarations.is_empty()
+            || [
+                self.census_comparison_identity,
+                self.realm,
+                self.provider_implementation,
+                self.currentness,
+            ]
+            .contains(&[0; 32])
+            || self.declarations.len() != COMPLETE_INSTALLATION_ROOT_ROLES_V1.len()
             || self.declarations.len() > MAX_INSTALLATION_DECLARATIONS_V1
         {
             return Err(InstallationRootUniverseErrorV1::InvalidUniverse);
@@ -157,12 +185,27 @@ impl InstallationRootUniverseObservationV1 {
         }) {
             return Err(InstallationRootUniverseErrorV1::DuplicateDeclaration);
         }
+        let mut roles = self
+            .declarations
+            .iter()
+            .map(|row| role_tag(row.role))
+            .collect::<Vec<_>>();
+        roles.sort_unstable();
+        let mut expected_roles = COMPLETE_INSTALLATION_ROOT_ROLES_V1
+            .iter()
+            .map(|role| role_tag(*role))
+            .collect::<Vec<_>>();
+        expected_roles.sort_unstable();
+        if roles != expected_roles {
+            return Err(InstallationRootUniverseErrorV1::IncompleteRoleCoverage);
+        }
         Ok(())
     }
 
     fn identity(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(b"maestro.v8.installation.owner-root-universe-observation.v1\0");
+        hasher.update(self.census_comparison_identity);
         hasher.update(self.declaration_set_revision.to_be_bytes());
         hasher.update(self.realm);
         hasher.update(self.provider_implementation);
@@ -484,7 +527,7 @@ impl OwnerUniverseFinalRecheckPortV1 for InstallationUniverseFinalRecheckV1 {
             .provider
             .observe_complete_universe(self.census_comparison_identity, self.operation_attempt)
             .and_then(|observed| {
-                observed.validate(self.operation_attempt)?;
+                observed.validate(self.census_comparison_identity, self.operation_attempt)?;
                 Ok(observed)
             })
             .map_err(|_| FoundationRootUniverseErrorV1::OwnerCurrentnessDrift)?;
@@ -559,6 +602,10 @@ pub(crate) enum InstallationRootUniverseErrorV1 {
     InvalidUniverse,
     #[error("Installation root-universe contains duplicate declarations or locators")]
     DuplicateDeclaration,
+    #[error(
+        "Installation root-universe does not cover each required Installation role exactly once"
+    )]
+    IncompleteRoleCoverage,
     #[error("Installation root disposition is required-absent or unsupported")]
     RefusedDisposition,
     #[error("Installation present root is unavailable, unreadable, or not a directory")]
@@ -575,4 +622,117 @@ pub(crate) enum InstallationRootUniverseErrorV1 {
     Census(#[from] super::InstallationCensusErrorV1),
     #[error(transparent)]
     Foundation(#[from] FoundationRootUniverseErrorV1),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CENSUS_ID: [u8; 32] = [1; 32];
+    const ATTEMPT: [u8; 32] = [2; 32];
+
+    fn declarations() -> Vec<InstallationDeclaredRootV1> {
+        COMPLETE_INSTALLATION_ROOT_ROLES_V1
+            .iter()
+            .enumerate()
+            .map(|(index, role)| {
+                let byte = u8::try_from(index + 10).expect("test role count fits in u8");
+                InstallationDeclaredRootV1::declared_absent(
+                    [byte; 32],
+                    1,
+                    *role,
+                    false,
+                    [byte.saturating_add(20); 32],
+                    [byte.saturating_add(40); 32],
+                    [9; 32],
+                    1,
+                )
+                .expect("test declaration is valid")
+            })
+            .collect()
+    }
+
+    fn observation(
+        rows: Vec<InstallationDeclaredRootV1>,
+    ) -> Result<InstallationRootUniverseObservationV1, InstallationRootUniverseErrorV1> {
+        InstallationRootUniverseObservationV1::from_owner_provider(
+            CENSUS_ID, 1, [3; 32], [4; 32], 1, [5; 32], 1, rows,
+        )
+    }
+
+    #[test]
+    fn complete_installation_role_set_is_bound_to_exact_census_identity() {
+        let observed = observation(declarations()).expect("complete observation");
+
+        observed
+            .validate(CENSUS_ID, ATTEMPT)
+            .expect("exact complete owner observation");
+        assert!(matches!(
+            observed.validate([99; 32], ATTEMPT),
+            Err(InstallationRootUniverseErrorV1::InvalidUniverse)
+        ));
+    }
+
+    #[test]
+    fn omitted_or_substituted_installation_role_is_rejected() {
+        let mut omitted = declarations();
+        omitted.pop();
+        assert!(matches!(
+            observation(omitted),
+            Err(InstallationRootUniverseErrorV1::InvalidUniverse)
+        ));
+
+        let mut substituted = declarations();
+        substituted[0].role = FoundationDeclaredRootRoleV1::RepositoryStore;
+        assert!(matches!(
+            observation(substituted),
+            Err(InstallationRootUniverseErrorV1::IncompleteRoleCoverage)
+        ));
+    }
+
+    #[test]
+    fn duplicate_role_and_duplicate_declaration_identity_are_rejected() {
+        let mut duplicate_role = declarations();
+        duplicate_role[0].role = duplicate_role[1].role;
+        assert!(matches!(
+            observation(duplicate_role),
+            Err(InstallationRootUniverseErrorV1::IncompleteRoleCoverage)
+        ));
+
+        let mut duplicate_identity = declarations();
+        duplicate_identity[0].declaration_id = duplicate_identity[1].declaration_id;
+        assert!(matches!(
+            observation(duplicate_identity),
+            Err(InstallationRootUniverseErrorV1::DuplicateDeclaration)
+        ));
+    }
+
+    #[test]
+    fn required_absence_and_unsupported_dispositions_are_refused() {
+        let mut required_absent = declarations();
+        required_absent[0].required = true;
+        let observed = observation(required_absent).expect("shape is complete");
+        assert!(matches!(
+            observed.validate(CENSUS_ID, ATTEMPT),
+            Err(InstallationRootUniverseErrorV1::RefusedDisposition)
+        ));
+
+        let mut unsupported = declarations();
+        unsupported[0] = InstallationDeclaredRootV1::unsupported(
+            [80; 32],
+            1,
+            FoundationDeclaredRootRoleV1::Active,
+            false,
+            [81; 32],
+            [82; 32],
+            [83; 32],
+            [84; 32],
+        )
+        .expect("unsupported row shape is valid");
+        let observed = observation(unsupported).expect("shape is complete");
+        assert!(matches!(
+            observed.validate(CENSUS_ID, ATTEMPT),
+            Err(InstallationRootUniverseErrorV1::RefusedDisposition)
+        ));
+    }
 }

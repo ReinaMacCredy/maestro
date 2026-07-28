@@ -18,13 +18,12 @@ use super::{
 use crate::domain::identity::SchemaIdV1;
 use crate::foundation::core::deterministic_cbor::{self, CborValue};
 use crate::foundation::core::legacy_loss_evidence::{
-    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
-    LegacySourceCurrentBindingV1, LegacySourceHistoricalBindingV1, LegacySourceHistoryKindV1,
-    OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
-    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, OwnerUnavailablePreexistingLossWitnessV1,
-    owner_loss_evidence_issuer_sealed,
+    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceMintV1, LegacySourceHistoryKindV1,
+    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, owner_loss_evidence_issuer_sealed,
 };
-use crate::foundation::core::legacy_quarantine::LegacyQuarantineOwnerDomainV3;
+use crate::foundation::core::legacy_quarantine::{
+    LegacyQuarantineOwnerDomainV3, observe_physical_facts_v1,
+};
 use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
 
 const HISTORY_SCHEMA_ID: &str =
@@ -44,10 +43,6 @@ pub(in crate::domain) struct StoreLegacySourceHistoryContextV1 {
 
 #[derive(Clone, Copy)]
 pub(in crate::domain) struct StoreLegacySourceCurrentnessV1 {
-    expected_source_set_id: [u8; 32],
-    operation_attempt: [u8; 32],
-    owner_admission_id: [u8; 32],
-    owner_currentness_id: [u8; 32],
     namespace_epoch: u64,
     trust_root_id: [u8; 32],
     release_id: [u8; 32],
@@ -58,30 +53,84 @@ pub(in crate::domain) struct StoreLegacySourceCurrentnessV1 {
     revocation_revision: u64,
 }
 
-#[derive(Clone, Copy)]
-pub(in crate::domain) struct StoreLegacySourceCurrentViewV1 {
-    pub(in crate::domain) namespace_epoch: u64,
-    pub(in crate::domain) trust_root_id: [u8; 32],
-    pub(in crate::domain) release_id: [u8; 32],
-    pub(in crate::domain) provider_id: [u8; 32],
-    pub(in crate::domain) mount_id: [u8; 32],
-    pub(in crate::domain) anchor_id: [u8; 32],
-    pub(in crate::domain) fence_id: [u8; 32],
-    pub(in crate::domain) revocation_revision: u64,
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct StoreLegacySourceProviderObservationV1 {
+    head_id: [u8; 32],
+    generation_id: [u8; 32],
+    state_revision: u64,
+    namespace_epoch: u64,
+    trust_root_id: [u8; 32],
+    root_binding: [u8; 32],
+    object_id: [u8; 32],
+    provider_id: [u8; 32],
+    mount_id: [u8; 32],
+    anchor_id: [u8; 32],
+    fence_id: [u8; 32],
 }
 
-impl StoreLegacySourceCurrentViewV1 {
-    pub(in crate::domain) fn bind_foundation_issuance(
+impl StoreLegacySourceProviderObservationV1 {
+    fn observe(
+        store: &StoreV1,
+        owner: LegacyQuarantineOwnerDomainV3,
+    ) -> Result<Self, StoreLegacySourceHistoryErrorV1> {
+        if store.role() != store_role_for_owner(owner) {
+            return Err(StoreLegacySourceHistoryErrorV1::WrongOwner);
+        }
+        let (state, state_revision) = store.state()?;
+        let head = store
+            .active_head()?
+            .ok_or(StoreLegacySourceHistoryErrorV1::StoreNotCurrent)?;
+        let generation = store.publication_generation(head.id())?;
+        if state != StoreStateV1::Active
+            || state_revision == 0
+            || generation.id() != head.generation_id()
+            || generation.ordinal() != head.revision()
+            || generation.domain() != store.domain()
+        {
+            return Err(StoreLegacySourceHistoryErrorV1::StoreNotCurrent);
+        }
+        let physical = observe_physical_facts_v1(store.legacy_quarantine_root_path_v3())?;
+        let head_id = *head.id().as_bytes();
+        let generation_id = *generation.id().as_bytes();
+        let trust_root_id = *generation.contract_root_id().as_bytes();
+        let fence_id = commitment(
+            b"maestro.v8.store-legacy-source-provider-fence.v1\0",
+            &[
+                &physical.fence_identity(),
+                &head_id,
+                &generation_id,
+                &state_revision.to_be_bytes(),
+            ],
+        );
+        Ok(Self {
+            head_id,
+            generation_id,
+            state_revision,
+            namespace_epoch: generation.ordinal(),
+            trust_root_id,
+            root_binding: physical.resolved_locator_commitment(),
+            object_id: physical.object_identity(),
+            provider_id: physical.provider_identity(),
+            mount_id: physical.mount_identity(),
+            anchor_id: physical.anchor_identity(),
+            fence_id,
+        })
+    }
+
+    fn bind_foundation_issuance(
         self,
-        binding: &FoundationOwnerEvidenceIssuanceBindingV1,
+        mint: &FoundationOwnerEvidenceMintV1,
         expected_owner: LegacyQuarantineOwnerDomainV3,
+        release_id: [u8; 32],
     ) -> Result<StoreLegacySourceCurrentnessV1, FoundationLegacyLossEvidenceErrorV1> {
-        if binding.owner() != expected_owner
+        if mint.owner() != expected_owner
             || self.namespace_epoch == 0
-            || self.revocation_revision == 0
+            || self.state_revision == 0
             || [
                 self.trust_root_id,
-                self.release_id,
+                release_id,
+                self.root_binding,
+                self.object_id,
                 self.provider_id,
                 self.mount_id,
                 self.anchor_id,
@@ -92,18 +141,14 @@ impl StoreLegacySourceCurrentViewV1 {
             return Err(FoundationLegacyLossEvidenceErrorV1::InvalidIssuanceBinding);
         }
         Ok(StoreLegacySourceCurrentnessV1 {
-            expected_source_set_id: binding.expected_source_set_id(),
-            operation_attempt: binding.operation_attempt(),
-            owner_admission_id: binding.owner_admission_id(),
-            owner_currentness_id: binding.owner_currentness_id(),
             namespace_epoch: self.namespace_epoch,
             trust_root_id: self.trust_root_id,
-            release_id: self.release_id,
+            release_id,
             provider_id: self.provider_id,
             mount_id: self.mount_id,
             anchor_id: self.anchor_id,
             fence_id: self.fence_id,
-            revocation_revision: self.revocation_revision,
+            revocation_revision: self.state_revision,
         })
     }
 }
@@ -414,33 +459,6 @@ impl StoreLegacySourceHistorySnapshotV1 {
         Ok(Some(snapshot))
     }
 
-    fn historical_binding(
-        &self,
-    ) -> Result<LegacySourceHistoricalBindingV1, StoreLegacySourceHistoryErrorV1> {
-        Ok(LegacySourceHistoricalBindingV1::from_owner(
-            self.owner,
-            self.history_kind,
-            self.snapshot_id,
-            self.issuer_id,
-            self.history_instance_id,
-            self.historical_head_id,
-            self.historical_generation_id,
-            self.historical_state_revision,
-            self.namespace_epoch,
-            self.trust_root_id,
-            self.release_id,
-            self.provider_revision,
-            self.source_provenance_id,
-            self.root_binding,
-            self.relative_locator_commitment,
-            self.object_kind,
-            self.object_identity,
-            self.expected_length,
-            self.content_sha256,
-            self.metadata_commitment,
-        )?)
-    }
-
     fn validate(&self) -> Result<(), StoreLegacySourceHistoryErrorV1> {
         require_owner_store_role(
             self.owner,
@@ -529,6 +547,7 @@ impl StoreLegacySourceHistorySnapshotV1 {
 
 pub(in crate::domain) struct StoreLegacySourceHistoryProviderV1 {
     owner: LegacyQuarantineOwnerDomainV3,
+    acquisition: StoreLegacySourceProviderObservationV1,
     snapshots: Vec<StoreLegacySourceHistorySnapshotV1>,
     _not_send_or_sync: std::marker::PhantomData<std::rc::Rc<()>>,
 }
@@ -632,7 +651,6 @@ pub(crate) struct ProtectedPrimaryHistoryJournalV1 {
 pub(crate) struct ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1 {
     journal: ProtectedPrimaryHistoryJournalV1,
     boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
-    current_view: StoreLegacySourceCurrentViewV1,
     absent_sources: Vec<LegacySourceHistorySelectorV1>,
     _not_send_or_sync: std::marker::PhantomData<std::rc::Rc<()>>,
 }
@@ -641,13 +659,11 @@ impl ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1 {
     pub(super) fn prepare(
         journal: ProtectedPrimaryHistoryJournalV1,
         boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
-        current_view: StoreLegacySourceCurrentViewV1,
         absent_sources: Vec<LegacySourceHistorySelectorV1>,
     ) -> Self {
         Self {
             journal,
             boundary,
-            current_view,
             absent_sources,
             _not_send_or_sync: std::marker::PhantomData,
         }
@@ -664,16 +680,10 @@ impl OwnerUnavailablePreexistingLossEvidenceIssuerPortV1
 {
     fn issue_for_foundation(
         self,
-        binding: FoundationOwnerEvidenceIssuanceBindingV1,
-    ) -> Result<
-        OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
-        FoundationLegacyLossEvidenceErrorV1,
-    > {
-        let currentness = self
-            .current_view
-            .bind_foundation_issuance(&binding, LegacyQuarantineOwnerDomainV3::ProtectedPrimary)?;
+        mint: &mut FoundationOwnerEvidenceMintV1,
+    ) -> Result<(), FoundationLegacyLossEvidenceErrorV1> {
         self.journal
-            .issue_bound_absent_sources(self.boundary, currentness, &self.absent_sources)
+            .issue_bound_absent_sources(self.boundary, mint, &self.absent_sources)
             .map_err(|_| FoundationLegacyLossEvidenceErrorV1::InvalidEvidenceSet)
     }
 }
@@ -807,21 +817,26 @@ impl ProtectedPrimaryHistoryJournalV1 {
     fn issue_bound_absent_sources(
         self,
         boundary: ProtectedPrimaryHistoryBoundaryBindingV1,
-        currentness: StoreLegacySourceCurrentnessV1,
+        mint: &mut FoundationOwnerEvidenceMintV1,
         absent_sources: &[LegacySourceHistorySelectorV1],
-    ) -> Result<OwnerIssuedUnavailablePreexistingLossEvidenceSetV1, StoreLegacySourceHistoryErrorV1>
-    {
-        validate_currentness(currentness)?;
+    ) -> Result<(), StoreLegacySourceHistoryErrorV1> {
         boundary.validate_live()?;
-        if currentness.provider_id != boundary.provider_id
-            || currentness.mount_id != boundary.mount_id
-            || currentness.anchor_id != boundary.anchor_id
-            || currentness.fence_id != boundary.fence_id
-            || currentness.owner_currentness_id != boundary.currentness
-            || currentness.revocation_revision != boundary.revocation_revision
+        if mint.owner() != LegacyQuarantineOwnerDomainV3::ProtectedPrimary
+            || mint.owner_currentness_id() != boundary.currentness
         {
             return Err(StoreLegacySourceHistoryErrorV1::InvalidCurrentness);
         }
+        let currentness = StoreLegacySourceCurrentnessV1 {
+            namespace_epoch: self.context.namespace_epoch,
+            trust_root_id: self.context.trust_root_id,
+            release_id: self.context.release_id,
+            provider_id: boundary.provider_id,
+            mount_id: boundary.mount_id,
+            anchor_id: boundary.anchor_id,
+            fence_id: boundary.fence_id,
+            revocation_revision: boundary.revocation_revision,
+        };
+        validate_currentness(currentness)?;
         let (journal_revision, journal_head) = read_journal_head(&self.journal_root)?;
         let journal_head = journal_head.ok_or(StoreLegacySourceHistoryErrorV1::MissingHistory)?;
         let mut expected = absent_sources.to_vec();
@@ -833,7 +848,6 @@ impl ProtectedPrimaryHistoryJournalV1 {
             return Err(StoreLegacySourceHistoryErrorV1::AmbiguousHistory);
         }
         let records = self.load_current_records(journal_head)?;
-        let mut witnesses = Vec::with_capacity(expected.len());
         for selector in expected {
             let matches = records
                 .iter()
@@ -867,39 +881,37 @@ impl ProtectedPrimaryHistoryJournalV1 {
             {
                 return Err(StoreLegacySourceHistoryErrorV1::InvalidCurrentness);
             }
-            let historical = record.historical_binding()?;
-            let current = LegacySourceCurrentBindingV1::from_owner(
-                LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
-                currentness.expected_source_set_id,
-                currentness.operation_attempt,
-                currentness.owner_admission_id,
-                currentness.owner_currentness_id,
+            mint.record_unavailable_preexisting_loss(
+                LegacySourceHistoryKindV1::ProtectedPrimaryJournal,
+                record.snapshot_id,
+                record.issuer_id,
+                record.journal_instance_id,
+                record.historical_head_id,
+                record.historical_generation_id,
+                record.journal_revision,
+                record.namespace_epoch,
+                record.trust_root_id,
+                record.release_id,
+                record.backend_revision,
+                record.source_provenance_id,
+                record.root_binding,
+                record.relative_locator_commitment,
+                DescriptorCensusObjectKindV1::RegularFile,
+                record.object_identity,
+                record.expected_length,
+                record.content_sha256,
+                record.metadata_commitment,
                 journal_head,
                 self.journal_instance_id,
                 journal_revision,
-                currentness.namespace_epoch,
-                currentness.trust_root_id,
-                currentness.release_id,
                 currentness.provider_id,
                 currentness.mount_id,
                 currentness.anchor_id,
                 currentness.fence_id,
                 currentness.revocation_revision,
             )?;
-            witnesses.push(OwnerUnavailablePreexistingLossWitnessV1::from_owner(
-                historical, current,
-            )?);
         }
-        Ok(
-            OwnerIssuedUnavailablePreexistingLossEvidenceSetV1::from_owner(
-                LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
-                currentness.expected_source_set_id,
-                currentness.operation_attempt,
-                currentness.owner_admission_id,
-                currentness.owner_currentness_id,
-                witnesses,
-            )?,
-        )
+        Ok(())
     }
 
     fn load_current_records(
@@ -972,33 +984,6 @@ struct ProtectedPrimaryHistoryRecordV1 {
 }
 
 impl ProtectedPrimaryHistoryRecordV1 {
-    fn historical_binding(
-        &self,
-    ) -> Result<LegacySourceHistoricalBindingV1, StoreLegacySourceHistoryErrorV1> {
-        Ok(LegacySourceHistoricalBindingV1::from_owner(
-            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
-            LegacySourceHistoryKindV1::ProtectedPrimaryJournal,
-            self.snapshot_id,
-            self.issuer_id,
-            self.journal_instance_id,
-            self.historical_head_id,
-            self.historical_generation_id,
-            self.journal_revision,
-            self.namespace_epoch,
-            self.trust_root_id,
-            self.release_id,
-            self.backend_revision,
-            self.source_provenance_id,
-            self.root_binding,
-            self.relative_locator_commitment,
-            DescriptorCensusObjectKindV1::RegularFile,
-            self.object_identity,
-            self.expected_length,
-            self.content_sha256,
-            self.metadata_commitment,
-        )?)
-    }
-
     fn identity(&self) -> [u8; 32] {
         let bytes = self.canonical_value(false);
         Sha256::digest(
@@ -1185,17 +1170,9 @@ impl StoreLegacySourceHistoryProviderV1 {
         store: &StoreV1,
         owner: LegacyQuarantineOwnerDomainV3,
     ) -> Result<Self, StoreLegacySourceHistoryErrorV1> {
-        if store.role() != store_role_for_owner(owner) {
-            return Err(StoreLegacySourceHistoryErrorV1::WrongOwner);
-        }
-        let (state, _) = store.state()?;
-        if state != StoreStateV1::Active {
-            return Err(StoreLegacySourceHistoryErrorV1::StoreNotCurrent);
-        }
-        let mut generation = store
-            .active_head()?
-            .ok_or(StoreLegacySourceHistoryErrorV1::StoreNotCurrent)?
-            .generation_id();
+        let acquisition = StoreLegacySourceProviderObservationV1::observe(store, owner)?;
+        let mut generation =
+            crate::domain::identity::StoreGenerationIdV1::from_digest(acquisition.generation_id);
         let mut snapshots = Vec::new();
         loop {
             let (_, historical_generation, objects) =
@@ -1220,6 +1197,7 @@ impl StoreLegacySourceHistoryProviderV1 {
         }
         Ok(Self {
             owner,
+            acquisition,
             snapshots,
             _not_send_or_sync: std::marker::PhantomData,
         })
@@ -1228,22 +1206,18 @@ impl StoreLegacySourceHistoryProviderV1 {
     pub(in crate::domain) fn issue_bound_absent_sources(
         self,
         store: &StoreV1,
-        currentness: StoreLegacySourceCurrentnessV1,
+        mint: &mut FoundationOwnerEvidenceMintV1,
+        release_id: [u8; 32],
         absent_sources: &[LegacySourceHistorySelectorV1],
-    ) -> Result<OwnerIssuedUnavailablePreexistingLossEvidenceSetV1, StoreLegacySourceHistoryErrorV1>
-    {
-        validate_currentness(currentness)?;
-        let (state, state_revision) = store.state()?;
-        let head = store
-            .active_head()?
-            .ok_or(StoreLegacySourceHistoryErrorV1::StoreNotCurrent)?;
-        let generation = store.publication_generation(head.id())?;
-        if state != StoreStateV1::Active
-            || state_revision == 0
-            || store.role() != store_role_for_owner(self.owner)
-        {
-            return Err(StoreLegacySourceHistoryErrorV1::StoreNotCurrent);
+    ) -> Result<(), StoreLegacySourceHistoryErrorV1> {
+        let live = StoreLegacySourceProviderObservationV1::observe(store, self.owner)?;
+        if live != self.acquisition {
+            return Err(StoreLegacySourceHistoryErrorV1::SourceChanged);
         }
+        let currentness = live
+            .bind_foundation_issuance(mint, self.owner, release_id)
+            .map_err(|_| StoreLegacySourceHistoryErrorV1::InvalidCurrentness)?;
+        validate_currentness(currentness)?;
         let mut expected = absent_sources.to_vec();
         expected.sort_by_key(LegacySourceHistorySelectorV1::identity);
         if expected
@@ -1252,7 +1226,6 @@ impl StoreLegacySourceHistoryProviderV1 {
         {
             return Err(StoreLegacySourceHistoryErrorV1::AmbiguousHistory);
         }
-        let mut witnesses = Vec::with_capacity(expected.len());
         for selector in expected {
             let mut matches = self.snapshots.iter().filter(|snapshot| {
                 snapshot.root_binding == selector.root_binding
@@ -1273,39 +1246,37 @@ impl StoreLegacySourceHistoryProviderV1 {
             if matches.next().is_some() {
                 return Err(StoreLegacySourceHistoryErrorV1::AmbiguousHistory);
             }
-            let historical = snapshot.historical_binding()?;
-            let current = LegacySourceCurrentBindingV1::from_owner(
-                self.owner,
-                currentness.expected_source_set_id,
-                currentness.operation_attempt,
-                currentness.owner_admission_id,
-                currentness.owner_currentness_id,
-                *head.id().as_bytes(),
-                *generation.id().as_bytes(),
-                state_revision,
-                currentness.namespace_epoch,
-                currentness.trust_root_id,
-                currentness.release_id,
+            mint.record_unavailable_preexisting_loss(
+                snapshot.history_kind,
+                snapshot.snapshot_id,
+                snapshot.issuer_id,
+                snapshot.history_instance_id,
+                snapshot.historical_head_id,
+                snapshot.historical_generation_id,
+                snapshot.historical_state_revision,
+                snapshot.namespace_epoch,
+                snapshot.trust_root_id,
+                snapshot.release_id,
+                snapshot.provider_revision,
+                snapshot.source_provenance_id,
+                snapshot.root_binding,
+                snapshot.relative_locator_commitment,
+                snapshot.object_kind,
+                snapshot.object_identity,
+                snapshot.expected_length,
+                snapshot.content_sha256,
+                snapshot.metadata_commitment,
+                live.head_id,
+                live.generation_id,
+                live.state_revision,
                 currentness.provider_id,
                 currentness.mount_id,
                 currentness.anchor_id,
                 currentness.fence_id,
                 currentness.revocation_revision,
             )?;
-            witnesses.push(OwnerUnavailablePreexistingLossWitnessV1::from_owner(
-                historical, current,
-            )?);
         }
-        Ok(
-            OwnerIssuedUnavailablePreexistingLossEvidenceSetV1::from_owner(
-                self.owner,
-                currentness.expected_source_set_id,
-                currentness.operation_attempt,
-                currentness.owner_admission_id,
-                currentness.owner_currentness_id,
-                witnesses,
-            )?,
-        )
+        Ok(())
     }
 }
 
@@ -1332,10 +1303,6 @@ fn validate_currentness(
     if currentness.namespace_epoch == 0
         || currentness.revocation_revision == 0
         || [
-            currentness.expected_source_set_id,
-            currentness.operation_attempt,
-            currentness.owner_admission_id,
-            currentness.owner_currentness_id,
             currentness.trust_root_id,
             currentness.release_id,
             currentness.provider_id,
