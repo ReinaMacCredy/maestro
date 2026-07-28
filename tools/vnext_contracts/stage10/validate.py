@@ -56,12 +56,17 @@ def load_json(relative: str) -> object:
         fail(f"invalid JSON in {relative}: {error}")
 
 
-def changed_paths(base: str) -> set[str]:
+def changed_paths(base: str, target: str | None = None) -> set[str]:
+    diff_args = ("git", "diff", "--name-only", base)
+    if target is not None:
+        diff_args = (*diff_args, target)
     tracked = {
         line
-        for line in run("git", "diff", "--name-only", base).splitlines()
+        for line in run(*diff_args).splitlines()
         if line
     }
+    if target is not None:
+        return tracked
     untracked = {
         line
         for line in run("git", "ls-files", "--others", "--exclude-standard").splitlines()
@@ -81,8 +86,16 @@ def base_blob(base: str, relative: str) -> tuple[str, str, str] | None:
     return mode, object_type, object_id
 
 
+def require_ancestor(ancestor: str, descendant: str, label: str) -> None:
+    if run("git", "merge-base", ancestor, descendant).strip() != ancestor:
+        fail(f"{label} ancestry differs: {ancestor} is not an ancestor of {descendant}")
+
+
 def validate_ownership(manifest: dict[str, object]) -> set[str]:
     base = str(manifest["base"])
+    product_checkpoint = str(manifest["product_checkpoint"])
+    affected_suffix_parent = str(manifest["affected_suffix_parent"])
+    affected_suffix_proof_inputs = set(manifest["affected_suffix_proof_inputs"])
     existing = set(manifest["existing_exact_files"])
     planned_new = set(manifest["planned_new_exact_files"])
     prefixes = tuple(manifest["path_prefixes"])
@@ -93,6 +106,17 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         fail("ownership manifest does not match the V7 24/7/one-prefix grant")
     if existing & planned_new:
         fail("existing and planned-new exact path sets overlap")
+    if affected_suffix_proof_inputs != {
+        "tests/fixtures/vnext/stage10/trusted-host-parity.v1.json",
+        "tools/vnext_contracts/stage10/path-manifest.v1.json",
+        "tools/vnext_contracts/stage10/validate.py",
+    }:
+        fail("affected-suffix proof input closure drifted")
+    if not affected_suffix_proof_inputs <= existing:
+        fail("affected-suffix proof input is outside the original exact grant")
+    require_ancestor(base, product_checkpoint, "original Stage12 product")
+    require_ancestor(product_checkpoint, affected_suffix_parent, "affected Stage12 suffix")
+    require_ancestor(affected_suffix_parent, "HEAD", "current affected Stage12 suffix")
     for relative in existing:
         blob = base_blob(base, relative)
         if blob is None or blob[0] not in {"100644", "100755"} or blob[1] != "blob":
@@ -100,12 +124,35 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
     for relative in planned_new:
         if base_blob(base, relative) is not None:
             fail(f"planned-new exact path exists at the V7 design preimage: {relative}")
-    changed = changed_paths(base)
-    for relative in changed:
+    original_changed = changed_paths(base, product_checkpoint)
+    if len(original_changed) != 22:
+        fail("original Stage12 product checkpoint does not preserve the exact 22-path change")
+    for relative in original_changed:
         if relative in denied:
             fail(f"immutable V1 path changed: {relative}")
         if relative not in existing and relative not in planned_new and not relative.startswith(prefixes):
-            fail(f"default-deny rejected unowned path: {relative}")
+            fail(f"original Stage12 checkpoint changed an unowned path: {relative}")
+        checkpoint_blob = base_blob(product_checkpoint, relative)
+        if checkpoint_blob is None or checkpoint_blob[0] not in {"100644", "100755"} or checkpoint_blob[1] != "blob":
+            fail(f"original Stage12 checkpoint path is not a regular blob: {relative}")
+    checkpoint_prefix_paths = {
+        relative
+        for relative in run("git", "ls-tree", "-r", "--name-only", product_checkpoint).splitlines()
+        if relative.startswith(prefixes)
+    }
+    checkpoint_product_paths = existing | planned_new | checkpoint_prefix_paths
+    for relative in checkpoint_product_paths:
+        checkpoint_blob = base_blob(product_checkpoint, relative)
+        if checkpoint_blob is None or checkpoint_blob[0] not in {"100644", "100755"} or checkpoint_blob[1] != "blob":
+            fail(f"Stage12-owned checkpoint path is not a regular blob: {relative}")
+        if relative not in affected_suffix_proof_inputs:
+            current_blob = run("git", "hash-object", "--", relative).strip()
+            if current_blob != checkpoint_blob[2]:
+                fail(f"Stage12 product bytes drifted after the private-leaf checkpoint: {relative}")
+    changed = changed_paths(affected_suffix_parent)
+    if changed != affected_suffix_proof_inputs:
+        fail("affected Stage12 suffix is not the exact three-file proof-input rebind")
+    for relative in changed:
         path = ROOT / relative
         try:
             mode = path.lstat().st_mode
@@ -113,7 +160,7 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
             fail(f"changed path was deleted: {relative}")
         if not stat.S_ISREG(mode) or path.is_symlink():
             fail(f"changed path is not a regular file: {relative}")
-    summary = run("git", "diff", "--summary", base)
+    summary = run("git", "diff", "--summary", affected_suffix_parent)
     for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
         if forbidden in summary:
             fail(f"forbidden change shape present: {forbidden}")
@@ -286,6 +333,9 @@ def main() -> int:
             {
                 "schema": "maestro.external.stage12-product-validation.v3",
                 "base": manifest["base"],
+                "product_checkpoint": manifest["product_checkpoint"],
+                "affected_suffix_parent": manifest["affected_suffix_parent"],
+                "original_changed_path_count": 22,
                 "changed_path_count": len(changed),
                 "host_profiles": "v2-inactive",
                 "mcp_tools": ["maestro_packet", "maestro_cli_search"],

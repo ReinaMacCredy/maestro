@@ -1,6 +1,13 @@
 {
   "schema": "maestro.vnext.stage12-product-path-manifest.v2",
   "base": "fc190ce78d940475073b0451c349f52016380d3c",
+  "product_checkpoint": "73e2d226f51ac55ee9a92b411fade9b7737fa567",
+  "affected_suffix_parent": "acd2a469d058f5a17162d3f0a5a44fe394cf6676",
+  "affected_suffix_proof_inputs": [
+    "tests/fixtures/vnext/stage10/trusted-host-parity.v1.json",
+    "tools/vnext_contracts/stage10/path-manifest.v1.json",
+    "tools/vnext_contracts/stage10/validate.py"
+  ],
   "owner": "Stage12Product",
   "default_deny_unowned": true,
   "existing_exact_files": [
