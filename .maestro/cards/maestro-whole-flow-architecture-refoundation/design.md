@@ -12947,3 +12947,355 @@ seals, one final cumulative seal, one final receipt and one derived pointer.
 Until that exact packet is independently verified and explicitly approved, no
 implementation, candidate
 reconstruction, canonical regeneration, integration or seal is authorized.
+
+## Owner-issued loss evidence and complete root-universe V8 boundary
+
+The fresh user-role event `APPROVE SUCCESSOR DESIGN PASS.` in recipient task
+`019f8416-e121-7703-8ab4-d3f9c3b374fa` authorizes this successor design pass
+only. It does not authorize product implementation, candidate reconstruction,
+canonical artifact regeneration, integration, pruning, seal execution,
+publication, installation, release or live external mutation.
+
+The clean existing successor preimage is commit
+`1685b39138a045bcd5e87744860d95eb589999d2`, tree
+`2daa5f8458411cf9e6d6288bf51606c98a4e31c9`, on
+`codex/maestro-vnext-legacy-cutover-successor-build`. It contains the V7/V7.1
+implementation candidate and its consolidated in-packet correction loop, but
+it is unsealed, unverified and not current. This V8 pass preserves that exact
+candidate as the implementation preimage and changes no source, test,
+validator, canonical artifact, receipt, pointer or candidate ref.
+
+Live read-only inspection demonstrated two frozen-interface contradictions.
+First, the Stage-11 production seam accepts one caller-supplied optional digest
+as historical loss evidence, carries it through nominal owner admissions and
+lets Migration persist a loss record without authenticating any pre-loss owner
+history. Second, opaque Installation census-header references plus four
+packet-derived classifications are treated as a complete physical root set,
+although no Repository or Installation production provider resolves and holds
+the full current declaration universe through Foundation finality. These are
+not ordinary adapter/compiler findings: the current private constructors admit
+authority that the locked design forbids and omit owner authority that the
+locked design requires.
+
+### Locked successor Decisions
+
+The main Orchestrator locked the following successors in exact order after two
+independent read-only skeptic relays and one fresh adversarial review of the
+combined typed closure:
+
+1. `dec-canonical-owner-issued-loss-evidence-0e5b`, **Canonical owner-issued
+   unavailable-preexisting-loss evidence closure**, superseding
+   `dec-canonical-live-set-migration-census-and-8e6a` only where historical
+   loss acquisition, validation and materialization were incomplete.
+2. `dec-canonical-owner-resolved-root-universe-fabd`, **Canonical
+   owner-resolved complete declared-root universe lease and final Stage-11
+   currentness**, superseding
+   `dec-canonical-foundation-and-persistence-b79c` and incorporating its
+   unaffected descriptor, custody, overlap, rollback and expected-old laws.
+3. `dec-canonical-loss-root-reconciliation-eeea`, **Canonical authenticated
+   loss and declared-root reconciliation closure**, superseding the first two
+   V8 Decisions only to close protected-primary history ownership,
+   `DeclaredAbsent` reconciliation and exact V4 dependent versions.
+4. `dec-canonical-v4-loss-bound-final-cut-3e18`, **Canonical V4-loss-bound
+   removal guard and final cut**, superseding
+   `dec-canonical-manifest-bound-one-use-legacy-d5db`.
+5. `dec-canonical-v4-loss-authority-naming-2e14`, **Canonical V4-loss-bound
+   current removal authority naming**, superseding the fourth V8 Decision only
+   to remove an ambiguous authority-family sentence without semantic change.
+
+The first, second and fourth V8 Decisions remain immutable reviewed provenance
+and are superseded, not edited. The third and fifth are the current V8 heads.
+
+Repository and Installation each persist their own immutable
+`LegacySourceHistorySnapshotV1` while a governed source is still present;
+Persistence uses the separately named protected-primary journal below.
+That retained history is non-bearer audit state, not execution authority.
+Only the matching owner may atomically validate it against the current real
+Store/provider view and mint one private
+`OwnerIssuedUnavailablePreexistingLossEvidenceSetV1`. The capability is
+process-local, private-field, move-only, one-use, non-Clone, non-Debug,
+non-serializable, non-persistent, non-cacheable, non-replayable, non-Send,
+non-Sync and non-wire, with no public constructor, scalar conversion,
+registry, Resource, Action or ScopeAtom representation.
+
+The owner snapshot and fresh capability jointly bind historical owner,
+root/source provenance, lossless locator commitment, object kind and identity,
+length, digest, metadata, Store generation and head, namespace epoch, Trust
+Root, Release, provider, mount, anchor, fence, currentness and revocation.
+Current absence, packet assertions, arbitrary digests, zero values, Git-object
+existence, detached census objects and orphan Store objects authenticate
+nothing. If no qualifying retained pre-loss snapshot exists, the epoch cannot
+succeed; restoration of exact independently verified bytes or an already
+retained owner snapshot is required, with no force path.
+
+Repository and Installation snapshots remain reachable through their owner
+Store generation/history graphs. Protected-primary history is instead owned by
+Persistence in one internal `ProtectedPrimaryHistoryJournalV1` held by the real
+protected-boundary backend. It does not add a `StoreRoleV1` or enter Repository
+or Installation Store schemas. The journal record is written only while the
+protected bytes are present, binds the live protected-locator lease and backend
+currentness, and is audit state without locator, reader or mutation authority.
+
+Foundation consumes the complete owner evidence set once while retaining the
+same owner leases, descriptors and fences used for the physical census. Present
+bytes always classify `Present`. One absent expected source requires exactly
+one owner-matching historical witness and exact pass-A/pass-B non-membership.
+Foundation alone mints
+`FoundationValidatedUnavailablePreexistingLossReceiptV1`. A source that
+disappears after admission is physical drift and rollback, never preexisting
+loss. Migration receives only opaque source-case identities, semantic
+classification and the Foundation receipt; it receives no path, locator,
+descriptor, Store reader, history provider, raw loss field or constructor.
+Authenticated loss records rotate to `UnavailablePreexistingLossV4` and
+`UnavailablePreexistingLossManifestV4`, with every dependent rollback,
+currentness, epoch, guard, coordinator and proof identity rotated. V3 candidate
+records remain immutable historical evidence and have no adapter into current
+authority.
+
+Repository and Installation also each mint one nominal complete-universe
+lease from a coherent live owner/provider view:
+`RepositoryDeclaredRootUniverseLeaseV1` and
+`InstallationDeclaredRootUniverseLeaseV1`. The same process-local,
+move-only, one-use and no-public-constructor law applies. Repository enumerates
+its required Store root. Installation enumerates every Active, Inactive,
+Snapshot, Cache, Archive, Host and Legacy declaration slot, including
+non-discoverable and historical roots. Every canonical row binds declaration
+identity and revision, role, requiredness, provider revision, lossless locator
+commitment, owner realm, attempt, currentness, fence and revocation, plus
+exactly one closed disposition: retained `Present`, owner-fenced
+`DeclaredAbsent` where versioned semantics permit it, or `Unsupported`.
+Required absence, present-but-unavailable state, unsupported production rows,
+omission, extra membership, duplication or role substitution refuses the
+whole attempt.
+
+Loss evidence is admissible only beneath exactly one `Present` row whose
+retained root capability remains live across both passes and finality. A
+packet-expected source beneath `DeclaredAbsent` or `Unsupported`, or beneath a
+changed, stale or foreign absence fence, refuses before evidence consumption
+and before any custody write. `DeclaredAbsent` never authenticates historical
+leaf membership.
+
+Repository owns Repository membership and Store currentness. Installation
+owns completeness of the Installation union and consumes sealed Persistence
+facts plus an Integration-owned complete host-slot snapshot without
+fabricating their provider facts. Persistence owns retained Store-root,
+protected-primary and custody capabilities. Foundation alone derives physical
+descriptor, root binding, object, mount, provider, anchor and fence facts and
+rejects duplicate, ancestor, descendant and cross-root aliases except the
+already locked bijective protected-primary overlap. No caller, owner or
+Migration path string becomes physical authority.
+
+`InstallationCensusHeaderV1` and `InstallationCensusV1` remain byte-identical
+persisted/read-model artifacts. Their `DeclaredRootSet`, `HostAdapterSet` and
+`LegacyLocatorSet` references are comparison provenance only. The current
+four-class filter cannot define scope. Foundation consumes both complete owner
+leases, the protected-primary lease and custody lease once through
+`FoundationLegacyQuarantineLeaseV2`, retains every present descriptor and
+owner fence across both passes, classification and copying, and performs one
+final physical plus owner-currentness recheck while Persistence seals custody
+under expected-old authority. `MembershipKeyV3` and `SourceCaseV3` keep their
+persisted field shapes but are constructed only from Foundation-owned physical
+cases; Migration never constructs either from a display or combined locator.
+Post-seal drift produces `recovery_required` or `in_doubt`, never a false
+zero-write rollback or removal authority.
+
+These Decisions change no public Packet, Operation, Result, Action,
+ScopeAtom, Ceremony, MCP Tool, Recipe, Resource, Bundle, Release, catalog or
+wire member. The exact-two MCP surface, host-native injection law, 210-entry
+namespace promotion, protected-primary no-target rule and one cumulative final
+seal remain unchanged.
+
+The exact typed removal successors are `LegacyRemovalGuardV3` and
+`Stage12LegacyCutCoordinatorV3`. They bind
+`FoundationLegacyQuarantineClosureV2`,
+`UnavailablePreexistingLossManifestV4`, `LegacyRollbackAssessmentV4` and
+`LegacyQuarantineEpochV4` plus the unchanged-shape V3/V2 source, sighting,
+classification, overlap and sealed-quarantine manifests. V2 guard/coordinator
+and V3 loss/epoch values remain historical only and have no conversion or
+fallback path.
+
+### Rotated Stage-5 dependency and five default-deny correction lanes
+
+The frozen Stage-5 public product interface remains semantically unchanged.
+Its design dependency rotates to this V8 design commit and all five V8
+Decision bodies. Stage 5 remains immutable historical predecessor evidence; no
+standalone Stage-5 regeneration or seal is authorized.
+
+The replacement ownership manifest contains exactly five pairwise-disjoint
+default-deny lanes. Every exact existing path is bound to its `1685b391`
+regular-blob preimage; every new path must be declared as one regular-blob
+creation. `MainIntegration` remains the sole shared-file authority.
+
+| Lane | Exact V8 obligation |
+| --- | --- |
+| Stage11Owners | Owner-private Repository, Installation and Persistence history/root providers, owner-local tests and new non-shared modules only. It cannot edit Foundation, Migration, shared facades or Stage 12. |
+| FoundationMigration | Foundation aggregate/root/evidence consumption, Migration semantic V4 loss materialization and their focused tests only. It receives no shared module-export or Stage-12 path. |
+| Stage12Dependency | Authority guard, Installation pruning continuation and Stage-12 product dependency rotations caused solely by the V4 loss/epoch identities. It cannot edit Stage-11 owner or Foundation bytes. |
+| ExternalProofControl | Stage-11/12 fixtures, validators, mutants, architecture/proof ledger, effect-inert final-chain proof sources and the separately named `Stage12LegacyCutCoordinatorV3`; only that coordinator may perform its single packet-bound isolated candidate-ref CAS. It owns no `src/` product path, never targets primary and cannot run a seal during implementation. |
+| MainIntegration | Shared `mod.rs` exports, shared operations/runtime wiring, cross-lane tests and final linear integration only. It may accept or reject lane outputs but may edit only its exact shared-file grant. |
+
+The complete deterministic ownership input has no writable prefixes.
+`Stage11Owners` owns these exact existing regular blobs:
+
+- `src/domain/repository/legacy_quarantine_admission.rs`
+- `src/domain/installation/legacy_quarantine.rs`
+- `src/domain/installation/census.rs`
+- `src/domain/persistence/legacy_quarantine.rs`
+
+It alone may create these exact new regular blobs:
+
+- `src/domain/repository/legacy_source_history.rs`
+- `src/domain/repository/root_universe.rs`
+- `src/domain/installation/legacy_source_history.rs`
+- `src/domain/installation/root_universe.rs`
+- `src/domain/persistence/legacy_source_history.rs`
+- `src/domain/persistence/root_universe.rs`
+
+`FoundationMigration` owns these exact existing regular blobs:
+
+- `src/foundation/core/legacy_quarantine.rs`
+- `src/domain/migration/runtime/live_set_v3.rs`
+- `src/operations/migration/live_set_v3.rs`
+- `tests/vnext_stage11_live_set_v3_contract.rs`
+- `tests/vnext_stage11_census_quarantine.rs`
+
+It alone may create these exact new regular blobs:
+
+- `src/foundation/core/legacy_loss_evidence.rs`
+- `src/foundation/core/root_universe.rs`
+
+`Stage12Dependency` owns these exact existing regular blobs and no creation:
+
+- `src/domain/authority/legacy_removal_guard.rs`
+- `src/domain/installation/resource_cutover.rs`
+- `src/operations/installation/agent_resource_release.rs`
+- `tests/vnext_stage12_guard_linearization.rs`
+
+`ExternalProofControl` owns these exact existing regular blobs:
+
+- `tools/vnext_contracts/stage12/architecture_guard.py`
+- `tools/vnext_contracts/final_chain/stage12_product_proof.py`
+- `tools/vnext_contracts/final_chain/test_stage12_product_proof.py`
+- `tests/fixtures/vnext/stage12/release-proof-inputs.v1.json`
+- `tests/vnext_stage12_affected_suffix.rs`
+- `tests/vnext_stage12_contracts.rs`
+
+It alone may create these exact new regular blobs:
+
+- `tests/fixtures/vnext/stage11/live_set_v4_contract.v1.json`
+- `tests/fixtures/vnext/stage11/root-universe.v1.json`
+- `tools/vnext_contracts/stage11/validate_v4.py`
+- `tools/vnext_contracts/stage11/test_validate_v4.py`
+- `tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v3.json`
+- `tools/vnext_contracts/stage12/coordinator_v3.py`
+- `tools/vnext_contracts/stage12/test_coordinator_v3.py`
+
+`MainIntegration` owns these exact existing regular blobs:
+
+- `src/domain/repository/mod.rs`
+- `src/domain/installation/mod.rs`
+- `src/domain/persistence/mod.rs`
+- `src/domain/integration/mod.rs`
+- `src/foundation/core/mod.rs`
+- `src/domain/migration/runtime/mod.rs`
+- `src/domain/authority/mod.rs`
+- `src/domain/authority/facade.rs`
+- `src/domain/authority/facade_tests.rs`
+- `src/operations/migration/mod.rs`
+- `src/operations/installation/mod.rs`
+- `tests/architecture_imports.rs`
+
+It alone may create the exact regular blob
+`src/domain/integration/legacy_host_slots.rs`. The V3 Stage-11 fixture and
+validator, V2 Stage-12 coordinator fixture, V2 coordinator implementation and
+every other historical proof input remain explicitly denied; V4/V3 successors
+do not edit or adapt them. Every listed existing path must resolve to mode
+`100644` or `100755` in tree `2daa5f84`, every planned-new path must be absent,
+and the packet builder must fail if either fact is false.
+
+All exact/exact, exact/prefix and prefix/prefix overlaps are refused. Every
+unowned path is denied. The denylist keeps V1/V2/V3 historical descriptors,
+candidate receipts, canonical contracts, primary paths, Cargo/toolchain
+inputs and unrelated Stage 0 through 10 product bytes immutable. Deletion,
+rename, mode change, symlink, gitlink, hidden Git configuration, alias,
+unowned write and cross-lane repair are forbidden. The route table must close:
+owner-retained history creation; production history currentness; complete
+Repository universe; complete Installation Active/Inactive/Snapshot/Cache/
+Archive/Host/Legacy universe; Foundation two-pass absence validation; no
+Migration locator; exact present copying; expected-old custody seal; final
+owner rechecks; recovery-required/in-doubt; V4 loss/epoch/guard/coordinator
+rotation; the coordinator's sole expected-preimage isolated candidate-ref CAS;
+effect-inert cumulative proof; and public zero-delta.
+
+Canonical implementation ancestry is linear with bounded shared-file
+checkpoints:
+
+`V8 design -> Stage11Owners -> MainIntegration owner wiring ->
+FoundationMigration -> MainIntegration Foundation/V4 wiring ->
+Stage12Dependency -> MainIntegration guard/coordinator wiring ->
+ExternalProofControl -> MainIntegration final closure`.
+
+Lanes may prepare isolated candidate-only deltas concurrently after packet
+approval, but each delta must be reconstructed and path-checked on its exact
+immediate predecessor before integration. Cheap format, compile, strict lint,
+focused authority/migration/frozen-interface/ownership falsifiers run at each
+lane plus its immediately following `MainIntegration` wiring checkpoint.
+Candidate-only new-module preparation may use syntax and dedicated harness
+falsifiers, but canonical touched-surface compile acceptance occurs only after
+the shared export checkpoint. No per-lane broad gate, canonical regeneration
+or interim seal is permitted.
+
+### Proof, handoff and protected-primary boundary
+
+The exact final candidate receives one concurrent read-only Authority/security,
+migration/data-loss and architecture/proof review, one consolidated fix loop,
+one full compile/lint/test/broad/mutant/race/crash/replay/migration/rollback/
+adapter/removal pass, one affected canonical regeneration epoch, one freeze and
+exactly one cumulative independent Python/Rust/Ruby Stage 0 through 12 seal.
+The proof must include field-by-field historical-evidence mutants, absent versus
+post-admission-disappearance separation, owner/provider/revocation races,
+complete mixed root universes, omission/duplicate/role/unsupported mutants,
+header-reference-without-rows refusal, expected-source-under-DeclaredAbsent
+and Unsupported refusal, requiredness/disposition flips, stale/foreign absence
+fences, caller-root refusal, cross-root alias and A-to-B-to-A substitution,
+every rollback/seal/final-recheck cut, protected-primary journal reachability,
+supported platform parity, test-adapter nonreachability and zero
+public/persisted census schema delta. After the seal, only receipt-bound
+independent readback, semantic edge sweep and one derived pointer write are
+allowed.
+
+The protected primary remains at
+`13b9a5e9b5ec67e7086b0b21992a207d2e4cde94`, tree
+`97e08a00f8a721318cda13241129a3b06651accc`, with exactly 34 dirty paths,
+path-manifest SHA-256
+`a25912f9899851cc72b39254d62e1c71e289f43b775b7b0d236b7315129d0e83`,
+tracked binary-diff SHA-256
+`d110099bd78896c4700188737477cd8024d39d3741b4f50a97035d2b1f35d6cc`
+and exactly ten untracked regular files bound by identity
+`b9e865f6f51cfabe1a92c8a7b4c629590a5c2065384ebf441bf00f2e2abfd047`.
+Primary remains read-only and is never staged, stashed, reset, cleaned,
+normalized, overwritten, used as a worktree or targeted by candidate-ref CAS.
+
+The V7 packet
+`sha256:171de6121c62f1c8af55e9e248da506ca96322cb5a588c75ee3762f7d8082472`
+and V7.1 ownership-correction packet
+`sha256:2e214dbe436ea4fdb89cd81abd3d8666e64bc33eaf9feeba7f8a1be752eb60c8`
+remain immutable historical provenance but are obsolete for every future
+write. The replacement External Build Plan Handoff must bind this V8 design
+commit/tree and direct `1685b391` parent, the complete ordered Decision
+closure, the clean existing implementation workspace, exact 34-path protected
+primary boundary, rotated Stage-5 dependency, V4 historical-loss closure,
+complete owner-root-universe closure, five disjoint ownership lanes and
+denylist, linear integration order, zero interim seals, one final cumulative
+seal, one final receipt and one derived pointer. Until that external handoff
+and replacement Build Approval Packet are independently reconstructed,
+verified and explicitly approved in this exact recipient task, no
+implementation, reconstruction, canonical regeneration, integration or seal
+is authorized.
+
+The file-backed feature list and durable Decision cards are two indexed
+representations of the same logical records, not independent votes. Packet
+construction groups them by stable Decision id, requires exact semantic
+equality for every duplicate representation, hashes both raw byte sources,
+emits one ordered logical row per id and refuses any missing counterpart,
+conflicting field, extra copy or duplicate logical id after normalization.
