@@ -1916,23 +1916,54 @@ fn mcp_transport_accepts_newline_delimited_json_rpc() {
 #[test]
 fn mcp_invalid_or_missing_protocol_fields_never_dispatch() {
     let temp = TestTempDir::new("maestro-mcp-invalid-protocol");
+    let repo = temp.path().canonicalize().expect("canonical repository");
+    let packet_arguments = serde_json::json!({
+        "schema_version": 1,
+        "request_id": "invalid-envelope-must-not-dispatch",
+        "repository_locator": repo,
+        "authenticated_host_connection_context_ref": "candidate:host:test:v1",
+        "projection_scope": {"variant": "Repository"},
+        "expected_release_ref": "candidate:release:known-stale:v1",
+        "expected_public_catalog_ref": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+        "bounded_response_redaction_profile": "repository-local",
+        "read_mode": {"variant": "DiscoverSelectionContextV1"}
+    });
+    let missing_version = serde_json::json!({
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_packet",
+            "arguments": packet_arguments.clone()
+        }
+    })
+    .to_string();
+    let wrong_version = serde_json::json!({
+        "jsonrpc": "1.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_packet",
+            "arguments": packet_arguments
+        }
+    })
+    .to_string();
     let responses = run_mcp_requests(
         temp.path(),
         &[
-            r#"{"jsonrpc":"2.0","id":1,"params":{"name":"maestro_packet","arguments":{"repository_locator":"/must-not-open"}}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call"}"#,
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":4,"method":7,"params":{"name":"maestro_packet"}}"#,
+            &missing_version,
+            &wrong_version,
+            r#"7"#,
+            r#"{"jsonrpc":"2.0","id":4,"params":{"name":"maestro_packet"}}"#,
+            r#"{"jsonrpc":"2.0","id":5,"method":7,"params":{"name":"maestro_packet"}}"#,
+            r#"{"jsonrpc":"2.0","id":6,"method":"tools/call"}"#,
+            r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":[]}"#,
+            r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{}}"#,
         ],
     );
-    assert_eq!(responses.len(), 4);
-    assert_eq!(responses[0]["error"]["code"], -32600);
-    assert_eq!(responses[0]["error"]["message"], "missing method");
-    for response in &responses[1..3] {
-        assert_eq!(response["error"]["code"], -32602);
-    }
-    assert_eq!(responses[3]["error"]["code"], -32600);
+    assert_eq!(responses.len(), 8);
     for response in responses {
+        assert_eq!(response["error"]["code"], -32600);
+        assert_eq!(response["error"]["message"], "invalid request");
         let message = response["error"]["message"]
             .as_str()
             .expect("error message");
@@ -1944,6 +1975,10 @@ fn mcp_invalid_or_missing_protocol_fields_never_dispatch() {
 
 #[test]
 fn mcp_transport_is_framed_bounded_and_has_no_legacy_list_method() {
+    const MAX_FRAME_BYTES: usize = 1024 * 1024;
+    const MAX_HEADER_BYTES: usize = 8 * 1024;
+    const MAX_HEADER_COUNT: usize = 32;
+
     let temp = TestTempDir::new("maestro-mcp-transport");
     let requests = [
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
@@ -1961,6 +1996,49 @@ fn mcp_transport_is_framed_bounded_and_has_no_legacy_list_method() {
     assert!(
         String::from_utf8_lossy(&oversized.stderr)
             .contains("MCP frame exceeds maximum size of 1048576 bytes")
+    );
+
+    let oversized_newline = run_mcp_bytes_raw(temp.path(), &vec![b' '; MAX_FRAME_BYTES + 1]);
+    assert!(!oversized_newline.status.success());
+    assert!(
+        String::from_utf8_lossy(&oversized_newline.stderr)
+            .contains("MCP newline frame exceeds maximum size of 1048576 bytes")
+    );
+
+    let mut oversized_single_header = b"Content-Length: 0".to_vec();
+    oversized_single_header.resize(MAX_HEADER_BYTES + 1, b' ');
+    oversized_single_header.extend_from_slice(b"\r\n\r\n");
+    let oversized_single_header = run_mcp_bytes_raw(temp.path(), &oversized_single_header);
+    assert!(!oversized_single_header.status.success());
+    assert!(
+        String::from_utf8_lossy(&oversized_single_header.stderr)
+            .contains("MCP frame header exceeds maximum size of 8192 bytes")
+    );
+
+    let mut excessive_header_count = b"Content-Length: 0\r\n".to_vec();
+    for _ in 0..MAX_HEADER_COUNT {
+        excessive_header_count.extend_from_slice(b"X-Maestro-Test: value\r\n");
+    }
+    excessive_header_count.extend_from_slice(b"\r\n");
+    let excessive_header_count = run_mcp_bytes_raw(temp.path(), &excessive_header_count);
+    assert!(!excessive_header_count.status.success());
+    assert!(
+        String::from_utf8_lossy(&excessive_header_count.stderr)
+            .contains("MCP frame exceeds maximum header count of 32")
+    );
+
+    let mut excessive_header_bytes = b"Content-Length: 0\r\n".to_vec();
+    for name in ["X-Maestro-A: ", "X-Maestro-B: "] {
+        excessive_header_bytes.extend_from_slice(name.as_bytes());
+        excessive_header_bytes.extend(std::iter::repeat_n(b'x', MAX_HEADER_BYTES / 2));
+        excessive_header_bytes.extend_from_slice(b"\r\n");
+    }
+    excessive_header_bytes.extend_from_slice(b"\r\n");
+    let excessive_header_bytes = run_mcp_bytes_raw(temp.path(), &excessive_header_bytes);
+    assert!(!excessive_header_bytes.status.success());
+    assert!(
+        String::from_utf8_lossy(&excessive_header_bytes.stderr)
+            .contains("MCP frame headers exceed maximum total size of 8192 bytes")
     );
 }
 
