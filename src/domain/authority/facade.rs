@@ -38,8 +38,6 @@ pub(in crate::domain) use crate::domain::persistence::{
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
-#[path = "legacy_removal_guard.rs"]
-mod legacy_removal_guard;
 mod repository_admission;
 mod repository_leaf_authority;
 
@@ -48,6 +46,9 @@ use super::governance_attestation::{
 };
 use super::governance_floor::{
     RepositoryGovernanceAuthorityCurrentnessV1, resolve_repository_governance_floor_current_view,
+};
+use super::legacy_removal_guard::{
+    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardBindingV2, LegacyRemovalGuardV2,
 };
 use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
@@ -58,9 +59,6 @@ use super::protected_diagnostic_envelope::{
 use super::protected_diagnostic_envelope::{
     protected_diagnostic_envelope_test_observation,
     reset_protected_diagnostic_envelope_test_observation,
-};
-use legacy_removal_guard::{
-    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardBindingV2, LegacyRemovalGuardV2,
 };
 
 pub(in crate::domain::authority) use repository_admission::MaterializationAuthorityAdmissionV1;
