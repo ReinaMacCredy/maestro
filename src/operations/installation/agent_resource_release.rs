@@ -8,11 +8,12 @@ use crate::domain::execution::EffectIntentIdV1;
 use crate::domain::installation::{
     AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1,
     AgentResourceReleaseConsumerSealV1, AgentResourceReleaseOwnerFactsV1,
-    CommittedAgentResourceReleaseV1, InstallationLegacyDeletionPlanV2,
-    ObservedInstallationClosureV1, Stage12RollbackRehearsalV2, UserAgentInstallationClosureV1,
+    CommittedAgentResourceReleaseV1, InstallationLegacyDeletionPlanV3,
+    ObservedInstallationClosureV1, Stage12RollbackRehearsalV3, UserAgentInstallationClosureV1,
 };
-use crate::domain::migration::runtime::LegacyQuarantineEpochV3;
+use crate::domain::migration::runtime::{LegacyQuarantineEpochV4, LegacyRollbackAssessmentV4};
 use crate::domain::persistence::StorePublicationOutcomeV1;
+use crate::foundation::core::FoundationLegacyQuarantineClosureV2;
 
 use super::{
     ActiveDistributionTransactionV1, ActiveInstallationFacadeV1, ActivePublicationObjectsV1,
@@ -204,20 +205,27 @@ impl ActiveInstallationFacadeV1<'_> {
         &mut self,
         active: &mut ActiveAgentResourceReleaseV1,
         effects: &mut impl DistributionEffectPortV1,
-        epoch: &LegacyQuarantineEpochV3,
+        epoch: &LegacyQuarantineEpochV4,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
     ) -> Result<
-        (Stage12RollbackRehearsalV2, InstallationLegacyDeletionPlanV2),
+        (Stage12RollbackRehearsalV3, InstallationLegacyDeletionPlanV3),
         AgentResourceReleaseOperationErrorV1,
     > {
         self.restore_from_captures(&mut active.transaction, effects)?;
-        let rollback = Stage12RollbackRehearsalV2::confirm(
+        let rollback = Stage12RollbackRehearsalV3::confirm(
             active.admission.release_id(),
             epoch,
+            foundation,
+            rollback_assessment,
             active.transaction.transaction(),
         )?;
-        let deletion_plan = active
-            .admission
-            .stage12_deletion_plan_v2(epoch, &rollback)?;
+        let deletion_plan = active.admission.stage12_deletion_plan_v3(
+            epoch,
+            foundation,
+            rollback_assessment,
+            &rollback,
+        )?;
         Ok((rollback, deletion_plan))
     }
 

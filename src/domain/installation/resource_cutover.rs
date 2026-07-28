@@ -4,7 +4,7 @@ use std::rc::Rc;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::authority::LegacyRemovalGuardV2;
+use crate::domain::authority::LegacyRemovalGuardV3;
 use crate::domain::capability::literals::{
     CanonicalAgentResourceInventoryV1, LegacySkillDispositionV1,
 };
@@ -16,8 +16,12 @@ use crate::domain::distribution::runtime::{
 };
 use crate::domain::distribution::{CommitmentV1, ReleaseIdV1};
 use crate::domain::migration::runtime::{
-    LegacyQuarantineEpochV3, MigrationDigestV1, Stage12SightingManifestV2,
+    DeclaredOverlapManifestV2, LegacyQuarantineEpochV3, LegacyQuarantineEpochV4,
+    LegacyRollbackAssessmentV4, LegacySourceCaseManifestV3, MigrationClassificationManifestV3,
+    MigrationDigestV1, SealedQuarantineManifestV3, Stage12SightingManifestV2,
+    UnavailablePreexistingLossManifestV4,
 };
+use crate::foundation::core::FoundationLegacyQuarantineClosureV2;
 
 use super::consumer_snapshot::{
     AgentResourceReleaseConsumerSealV1, ConsumerClosureReceiptV1, PhysicalPruningConsumerStageV1,
@@ -256,6 +260,54 @@ impl AgentResourceReleaseAdmissionV1 {
         })
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the V4 deletion plan binds each independently owner-issued final-cut fact"
+    )]
+    pub(crate) fn stage12_deletion_plan_v3(
+        &self,
+        epoch: &LegacyQuarantineEpochV4,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
+        rollback_rehearsal: &Stage12RollbackRehearsalV3,
+    ) -> Result<InstallationLegacyDeletionPlanV3, AgentResourceCutoverErrorV1> {
+        let release_id = migration_release_id(self.release_id)?;
+        let foundation_closure_id = migration_digest(foundation.identity())?;
+        if epoch.release_id() != release_id
+            || epoch.foundation_closure_id() != foundation_closure_id
+            || epoch.rollback_plan_id() != rollback_assessment.identity()
+            || rollback_rehearsal.release_id() != release_id
+            || rollback_rehearsal.legacy_quarantine_epoch_id() != epoch.identity()
+            || rollback_rehearsal.foundation_closure_id() != foundation_closure_id
+            || rollback_rehearsal.rollback_assessment_id() != rollback_assessment.identity()
+        {
+            return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
+        }
+        let rollback_rehearsal_id = rollback_rehearsal.identity();
+        let identity = migration_commitment(
+            b"maestro.vnext.installation-legacy-deletion-plan.v3",
+            &[
+                *release_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment.identity().as_bytes(),
+                *rollback_rehearsal_id.as_bytes(),
+                self.legacy_ledger_closure,
+                self.journal_closure,
+                *self.plan.meaning_digest().as_bytes(),
+            ],
+        )?;
+        Ok(InstallationLegacyDeletionPlanV3 {
+            identity,
+            release_id,
+            legacy_quarantine_epoch_id: epoch.identity(),
+            foundation_closure_id,
+            rollback_assessment_id: rollback_assessment.identity(),
+            rollback_rehearsal_id,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
     fn has_exact_embedded_journal(&self) -> Result<bool, AgentResourceCutoverErrorV1> {
         let inventory = CanonicalAgentResourceInventoryV1::load_embedded()
             .map_err(|_| AgentResourceCutoverErrorV1::InvalidCanonicalInventory)?;
@@ -373,6 +425,45 @@ impl CommittedAgentResourceReleaseV1 {
         })
     }
 
+    pub(in crate::domain::installation) fn stage12_replacement_activation_v3(
+        &self,
+        epoch: &LegacyQuarantineEpochV4,
+        sightings: &Stage12SightingManifestV2,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
+    ) -> Result<Stage12ReplacementActivationV3, AgentResourceCutoverErrorV1> {
+        let release_id = migration_release_id(self.release_id)?;
+        let foundation_closure_id = migration_digest(foundation.identity())?;
+        if epoch.release_id() != release_id
+            || epoch.sighting_manifest_id() != sightings.identity()
+            || epoch.foundation_closure_id() != foundation_closure_id
+            || epoch.rollback_plan_id() != rollback_assessment.identity()
+        {
+            return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
+        }
+        let identity = migration_commitment(
+            b"maestro.vnext.stage12-replacement-activation.v3",
+            &[
+                *release_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+                *sightings.identity().as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment.identity().as_bytes(),
+                self.installation_result_closure,
+                self.reconnect_closure,
+            ],
+        )?;
+        Ok(Stage12ReplacementActivationV3 {
+            identity,
+            release_id,
+            legacy_quarantine_epoch_id: epoch.identity(),
+            sighting_manifest_id: sightings.identity(),
+            foundation_closure_id,
+            rollback_assessment_id: rollback_assessment.identity(),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
     #[cfg(test)]
     pub(in crate::domain) fn test_committed(
         release_id: ReleaseIdV1,
@@ -412,6 +503,42 @@ impl Stage12ReplacementActivationV2 {
 
     pub(crate) const fn sighting_manifest_id(&self) -> MigrationDigestV1 {
         self.sighting_manifest_id
+    }
+}
+
+pub(crate) struct Stage12ReplacementActivationV3 {
+    identity: MigrationDigestV1,
+    release_id: MigrationDigestV1,
+    legacy_quarantine_epoch_id: MigrationDigestV1,
+    sighting_manifest_id: MigrationDigestV1,
+    foundation_closure_id: MigrationDigestV1,
+    rollback_assessment_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl Stage12ReplacementActivationV3 {
+    pub(crate) const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub(crate) const fn release_id(&self) -> MigrationDigestV1 {
+        self.release_id
+    }
+
+    pub(crate) const fn legacy_quarantine_epoch_id(&self) -> MigrationDigestV1 {
+        self.legacy_quarantine_epoch_id
+    }
+
+    pub(crate) const fn sighting_manifest_id(&self) -> MigrationDigestV1 {
+        self.sighting_manifest_id
+    }
+
+    pub(crate) const fn foundation_closure_id(&self) -> MigrationDigestV1 {
+        self.foundation_closure_id
+    }
+
+    pub(crate) const fn rollback_assessment_id(&self) -> MigrationDigestV1 {
+        self.rollback_assessment_id
     }
 }
 
@@ -464,6 +591,73 @@ impl Stage12RollbackRehearsalV2 {
     }
 }
 
+pub(crate) struct Stage12RollbackRehearsalV3 {
+    identity: MigrationDigestV1,
+    release_id: MigrationDigestV1,
+    legacy_quarantine_epoch_id: MigrationDigestV1,
+    foundation_closure_id: MigrationDigestV1,
+    rollback_assessment_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl Stage12RollbackRehearsalV3 {
+    pub(crate) fn confirm(
+        release_id: ReleaseIdV1,
+        epoch: &LegacyQuarantineEpochV4,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
+        transaction: &DistributionTransactionV1,
+    ) -> Result<Self, AgentResourceCutoverErrorV1> {
+        let release_id = migration_release_id(release_id)?;
+        let foundation_closure_id = migration_digest(foundation.identity())?;
+        if epoch.release_id() != release_id
+            || epoch.foundation_closure_id() != foundation_closure_id
+            || epoch.rollback_plan_id() != rollback_assessment.identity()
+            || transaction.phase() != DistributionTransactionPhaseV1::RolledBack
+        {
+            return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
+        }
+        let identity = migration_commitment(
+            b"maestro.vnext.stage12-rollback-rehearsal.v3",
+            &[
+                *release_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment.identity().as_bytes(),
+                *transaction.plan().meaning_digest().as_bytes(),
+            ],
+        )?;
+        Ok(Self {
+            identity,
+            release_id,
+            legacy_quarantine_epoch_id: epoch.identity(),
+            foundation_closure_id,
+            rollback_assessment_id: rollback_assessment.identity(),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub(crate) const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub(crate) const fn release_id(&self) -> MigrationDigestV1 {
+        self.release_id
+    }
+
+    pub(crate) const fn legacy_quarantine_epoch_id(&self) -> MigrationDigestV1 {
+        self.legacy_quarantine_epoch_id
+    }
+
+    pub(crate) const fn foundation_closure_id(&self) -> MigrationDigestV1 {
+        self.foundation_closure_id
+    }
+
+    pub(crate) const fn rollback_assessment_id(&self) -> MigrationDigestV1 {
+        self.rollback_assessment_id
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct InstallationLegacyDeletionPlanV2 {
     identity: MigrationDigestV1,
@@ -484,6 +678,42 @@ impl InstallationLegacyDeletionPlanV2 {
 
     pub(crate) const fn legacy_quarantine_epoch_id(&self) -> MigrationDigestV1 {
         self.legacy_quarantine_epoch_id
+    }
+
+    pub(crate) const fn rollback_rehearsal_id(&self) -> MigrationDigestV1 {
+        self.rollback_rehearsal_id
+    }
+}
+
+pub(crate) struct InstallationLegacyDeletionPlanV3 {
+    identity: MigrationDigestV1,
+    release_id: MigrationDigestV1,
+    legacy_quarantine_epoch_id: MigrationDigestV1,
+    foundation_closure_id: MigrationDigestV1,
+    rollback_assessment_id: MigrationDigestV1,
+    rollback_rehearsal_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl InstallationLegacyDeletionPlanV3 {
+    pub(crate) const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub(crate) const fn release_id(&self) -> MigrationDigestV1 {
+        self.release_id
+    }
+
+    pub(crate) const fn legacy_quarantine_epoch_id(&self) -> MigrationDigestV1 {
+        self.legacy_quarantine_epoch_id
+    }
+
+    pub(crate) const fn foundation_closure_id(&self) -> MigrationDigestV1 {
+        self.foundation_closure_id
+    }
+
+    pub(crate) const fn rollback_assessment_id(&self) -> MigrationDigestV1 {
+        self.rollback_assessment_id
     }
 
     pub(crate) const fn rollback_rehearsal_id(&self) -> MigrationDigestV1 {
@@ -610,6 +840,205 @@ impl Stage12ConsumerReaderHoldClosureV2 {
     }
 }
 
+pub(crate) struct Stage12ConsumerReaderHoldClosureV3 {
+    identity: MigrationDigestV1,
+    release_id: MigrationDigestV1,
+    source_case_manifest_id: MigrationDigestV1,
+    sighting_manifest_id: MigrationDigestV1,
+    classification_manifest_id: MigrationDigestV1,
+    overlap_manifest_id: MigrationDigestV1,
+    loss_manifest_id: MigrationDigestV1,
+    quarantine_manifest_id: MigrationDigestV1,
+    foundation_closure_id: MigrationDigestV1,
+    rollback_assessment_id: MigrationDigestV1,
+    legacy_quarantine_epoch_id: MigrationDigestV1,
+    replacement_activation_id: MigrationDigestV1,
+    rollback_rehearsal_id: MigrationDigestV1,
+    deletion_plan_id: MigrationDigestV1,
+    physical_pruning_reader_zero_id: MigrationDigestV1,
+    physical_pruning_hold_zero_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl Stage12ConsumerReaderHoldClosureV3 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the V3 Stage 12 closure binds every V4 owner, migration, and consumer receipt"
+    )]
+    pub(in crate::domain::installation) fn seal(
+        source_cases: &LegacySourceCaseManifestV3,
+        sightings: &Stage12SightingManifestV2,
+        classifications: &MigrationClassificationManifestV3,
+        overlaps: &DeclaredOverlapManifestV2,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
+        epoch: &LegacyQuarantineEpochV4,
+        activation: &Stage12ReplacementActivationV3,
+        rollback_rehearsal: &Stage12RollbackRehearsalV3,
+        deletion_plan: &InstallationLegacyDeletionPlanV3,
+        pre_currentness: ConsumerClosureReceiptV1<'_, '_, PreCurrentnessConsumerStageV1>,
+        protected_retention: ConsumerClosureReceiptV1<'_, '_, ProtectedRetentionConsumerStageV1>,
+        physical_pruning: ConsumerClosureReceiptV1<'_, '_, PhysicalPruningConsumerStageV1>,
+    ) -> Result<Self, AgentResourceCutoverErrorV1> {
+        let release_id = epoch.release_id();
+        let foundation_closure_id = migration_digest(foundation.identity())?;
+        let rollback_assessment_id = rollback_assessment.identity();
+        if epoch.source_case_manifest_id() != source_cases.identity()
+            || epoch.sighting_manifest_id() != sightings.identity()
+            || epoch.classification_manifest_id() != classifications.identity()
+            || epoch.overlap_manifest_id() != overlaps.identity()
+            || epoch.loss_manifest_id() != losses.identity()
+            || epoch.quarantine_manifest_id() != quarantine.identity()
+            || epoch.foundation_closure_id() != foundation_closure_id
+            || epoch.rollback_plan_id() != rollback_assessment_id
+            || activation.release_id() != release_id
+            || activation.legacy_quarantine_epoch_id() != epoch.identity()
+            || activation.sighting_manifest_id() != sightings.identity()
+            || activation.foundation_closure_id() != foundation_closure_id
+            || activation.rollback_assessment_id() != rollback_assessment_id
+            || rollback_rehearsal.release_id() != release_id
+            || rollback_rehearsal.legacy_quarantine_epoch_id() != epoch.identity()
+            || rollback_rehearsal.foundation_closure_id() != foundation_closure_id
+            || rollback_rehearsal.rollback_assessment_id() != rollback_assessment_id
+            || deletion_plan.release_id() != release_id
+            || deletion_plan.legacy_quarantine_epoch_id() != epoch.identity()
+            || deletion_plan.foundation_closure_id() != foundation_closure_id
+            || deletion_plan.rollback_assessment_id() != rollback_assessment_id
+            || deletion_plan.rollback_rehearsal_id() != rollback_rehearsal.identity()
+        {
+            return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
+        }
+        let pre_currentness_id = migration_digest(pre_currentness.finality_commitment())?;
+        let protected_retention_id = migration_digest(protected_retention.finality_commitment())?;
+        let physical_pruning_id = migration_digest(physical_pruning.finality_commitment())?;
+        let physical_pruning_reader_zero_id = migration_commitment(
+            b"maestro.vnext.physical-pruning-reader-zero.v3",
+            &[
+                *physical_pruning_id.as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+            ],
+        )?;
+        let physical_pruning_hold_zero_id = migration_commitment(
+            b"maestro.vnext.physical-pruning-hold-zero.v3",
+            &[
+                *physical_pruning_id.as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+            ],
+        )?;
+        let identity = migration_commitment(
+            b"maestro.vnext.stage12-consumer-reader-hold-closure.v3",
+            &[
+                *release_id.as_bytes(),
+                *source_cases.identity().as_bytes(),
+                *sightings.identity().as_bytes(),
+                *classifications.identity().as_bytes(),
+                *overlaps.identity().as_bytes(),
+                *losses.identity().as_bytes(),
+                *quarantine.identity().as_bytes(),
+                *foundation_closure_id.as_bytes(),
+                *rollback_assessment_id.as_bytes(),
+                *epoch.identity().as_bytes(),
+                *activation.identity().as_bytes(),
+                *rollback_rehearsal.identity().as_bytes(),
+                *deletion_plan.identity().as_bytes(),
+                *pre_currentness_id.as_bytes(),
+                *protected_retention_id.as_bytes(),
+                *physical_pruning_reader_zero_id.as_bytes(),
+                *physical_pruning_hold_zero_id.as_bytes(),
+            ],
+        )?;
+        Ok(Self {
+            identity,
+            release_id,
+            source_case_manifest_id: source_cases.identity(),
+            sighting_manifest_id: sightings.identity(),
+            classification_manifest_id: classifications.identity(),
+            overlap_manifest_id: overlaps.identity(),
+            loss_manifest_id: losses.identity(),
+            quarantine_manifest_id: quarantine.identity(),
+            foundation_closure_id,
+            rollback_assessment_id,
+            legacy_quarantine_epoch_id: epoch.identity(),
+            replacement_activation_id: activation.identity(),
+            rollback_rehearsal_id: rollback_rehearsal.identity(),
+            deletion_plan_id: deletion_plan.identity(),
+            physical_pruning_reader_zero_id,
+            physical_pruning_hold_zero_id,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub(crate) const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub(crate) const fn release_id(&self) -> MigrationDigestV1 {
+        self.release_id
+    }
+
+    pub(crate) const fn source_case_manifest_id(&self) -> MigrationDigestV1 {
+        self.source_case_manifest_id
+    }
+
+    pub(crate) const fn sighting_manifest_id(&self) -> MigrationDigestV1 {
+        self.sighting_manifest_id
+    }
+
+    pub(crate) const fn classification_manifest_id(&self) -> MigrationDigestV1 {
+        self.classification_manifest_id
+    }
+
+    pub(crate) const fn overlap_manifest_id(&self) -> MigrationDigestV1 {
+        self.overlap_manifest_id
+    }
+
+    pub(crate) const fn loss_manifest_id(&self) -> MigrationDigestV1 {
+        self.loss_manifest_id
+    }
+
+    pub(crate) const fn quarantine_manifest_id(&self) -> MigrationDigestV1 {
+        self.quarantine_manifest_id
+    }
+
+    pub(crate) const fn foundation_closure_id(&self) -> MigrationDigestV1 {
+        self.foundation_closure_id
+    }
+
+    pub(crate) const fn rollback_assessment_id(&self) -> MigrationDigestV1 {
+        self.rollback_assessment_id
+    }
+
+    pub(crate) const fn legacy_quarantine_epoch_id(&self) -> MigrationDigestV1 {
+        self.legacy_quarantine_epoch_id
+    }
+
+    pub(crate) const fn replacement_activation_id(&self) -> MigrationDigestV1 {
+        self.replacement_activation_id
+    }
+
+    pub(crate) const fn rollback_rehearsal_id(&self) -> MigrationDigestV1 {
+        self.rollback_rehearsal_id
+    }
+
+    pub(crate) const fn deletion_plan_id(&self) -> MigrationDigestV1 {
+        self.deletion_plan_id
+    }
+
+    pub(crate) const fn physical_pruning_reader_zero_id(&self) -> MigrationDigestV1 {
+        self.physical_pruning_reader_zero_id
+    }
+
+    pub(crate) const fn physical_pruning_hold_zero_id(&self) -> MigrationDigestV1 {
+        self.physical_pruning_hold_zero_id
+    }
+}
+
 pub(in crate::domain) trait InstallationPhysicalPruningEffectPortV2 {
     fn compare_expected_old_and_prune(
         &mut self,
@@ -658,14 +1087,72 @@ impl CommittedLegacyPhysicalPruningV2 {
     }
 }
 
+pub(in crate::domain) trait InstallationPhysicalPruningEffectPortV3 {
+    fn compare_expected_old_and_prune(
+        &mut self,
+        deletion_plan_id: MigrationDigestV1,
+        expected_old_state_id: MigrationDigestV1,
+    ) -> Result<MigrationDigestV1, AgentResourceCutoverErrorV1>;
+}
+
+pub(in crate::domain) struct InstallationPhysicalPruningContinuationV3 {
+    deletion_plan_id: MigrationDigestV1,
+    expected_old_state_id: MigrationDigestV1,
+    foundation_closure_id: MigrationDigestV1,
+    rollback_assessment_id: MigrationDigestV1,
+    legacy_quarantine_epoch_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl InstallationPhysicalPruningContinuationV3 {
+    pub(in crate::domain::installation) fn prepare_from_owner(
+        closure: &Stage12ConsumerReaderHoldClosureV3,
+        expected_old_state_id: MigrationDigestV1,
+    ) -> Self {
+        Self {
+            deletion_plan_id: closure.deletion_plan_id(),
+            expected_old_state_id,
+            foundation_closure_id: closure.foundation_closure_id(),
+            rollback_assessment_id: closure.rollback_assessment_id(),
+            legacy_quarantine_epoch_id: closure.legacy_quarantine_epoch_id(),
+            _not_send_or_sync: PhantomData,
+        }
+    }
+}
+
+pub(in crate::domain) struct CommittedLegacyPhysicalPruningV3 {
+    identity: MigrationDigestV1,
+    deletion_plan_id: MigrationDigestV1,
+    effect_receipt_id: MigrationDigestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl CommittedLegacyPhysicalPruningV3 {
+    pub(in crate::domain) const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub(in crate::domain) const fn deletion_plan_id(&self) -> MigrationDigestV1 {
+        self.deletion_plan_id
+    }
+
+    pub(in crate::domain) const fn effect_receipt_id(&self) -> MigrationDigestV1 {
+        self.effect_receipt_id
+    }
+}
+
 pub(in crate::domain) fn execute_stage12_product_pruning(
-    guard: LegacyRemovalGuardV2<'_>,
-    closure: Stage12ConsumerReaderHoldClosureV2,
-    continuation: InstallationPhysicalPruningContinuationV2,
-    effects: &mut dyn InstallationPhysicalPruningEffectPortV2,
-) -> Result<CommittedLegacyPhysicalPruningV2, AgentResourceCutoverErrorV1> {
-    let _non_authorizing_compatibility_entry = LegacyRemovalGuardV2::consume_for;
-    if continuation.deletion_plan_id != closure.deletion_plan_id() {
+    guard: LegacyRemovalGuardV3<'_>,
+    closure: Stage12ConsumerReaderHoldClosureV3,
+    continuation: InstallationPhysicalPruningContinuationV3,
+    effects: &mut dyn InstallationPhysicalPruningEffectPortV3,
+) -> Result<CommittedLegacyPhysicalPruningV3, AgentResourceCutoverErrorV1> {
+    if continuation.deletion_plan_id != closure.deletion_plan_id()
+        || continuation.foundation_closure_id != closure.foundation_closure_id()
+        || continuation.rollback_assessment_id != closure.rollback_assessment_id()
+        || continuation.legacy_quarantine_epoch_id != closure.legacy_quarantine_epoch_id()
+        || continuation.expected_old_state_id.as_bytes() == &[0; 32]
+    {
         return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
     }
     let effect_receipt_id = guard
@@ -677,15 +1164,19 @@ pub(in crate::domain) fn execute_stage12_product_pruning(
         })
         .map_err(|_| AgentResourceCutoverErrorV1::Stage12BindingMismatch)??;
     let identity = migration_commitment(
-        b"maestro.vnext.committed-legacy-physical-pruning.v2",
+        b"maestro.vnext.committed-legacy-physical-pruning.v3",
         &[
             *closure.identity().as_bytes(),
+            *closure.loss_manifest_id().as_bytes(),
+            *closure.foundation_closure_id().as_bytes(),
+            *closure.rollback_assessment_id().as_bytes(),
+            *closure.legacy_quarantine_epoch_id().as_bytes(),
             *continuation.deletion_plan_id.as_bytes(),
             *continuation.expected_old_state_id.as_bytes(),
             *effect_receipt_id.as_bytes(),
         ],
     )?;
-    Ok(CommittedLegacyPhysicalPruningV2 {
+    Ok(CommittedLegacyPhysicalPruningV3 {
         identity,
         deletion_plan_id: continuation.deletion_plan_id,
         effect_receipt_id,
