@@ -62,9 +62,30 @@ def load_json(relative: str) -> object:
 def changed_paths(base: str, target: str) -> set[str]:
     return {
         line
-        for line in run("git", "diff", "--name-only", base, target).splitlines()
+        for line in run(
+            "git",
+            "diff",
+            "--no-renames",
+            "--name-only",
+            base,
+            target,
+        ).splitlines()
         if line
     }
+
+
+def first_parent_commits(ancestor: str, descendant: str) -> list[str]:
+    return [
+        line
+        for line in run(
+            "git",
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            f"{ancestor}..{descendant}",
+        ).splitlines()
+        if line
+    ]
 
 
 def base_blob(base: str, relative: str) -> tuple[str, str, str] | None:
@@ -108,6 +129,69 @@ def snapshot_blob(relative: str) -> str:
             f"{result.stderr.decode(errors='replace').strip()}"
         )
     return result.stdout.decode().strip()
+
+
+def is_product_owned(
+    relative: str,
+    existing: set[str],
+    planned_new: set[str],
+    prefixes: tuple[str, ...],
+) -> bool:
+    return (
+        relative in existing
+        or relative in planned_new
+        or relative.startswith(prefixes)
+    )
+
+
+def find_correction_checkpoint(
+    correction_predecessor: str,
+    existing: set[str],
+    planned_new: set[str],
+    prefixes: tuple[str, ...],
+) -> tuple[str, set[str]]:
+    expected_parent = correction_predecessor
+    checkpoint = ""
+    correction_changed: set[str] = set()
+    for commit in first_parent_commits(correction_predecessor, FINAL_REF):
+        parent = run("git", "rev-parse", f"{commit}^1").strip()
+        if parent != expected_parent:
+            fail("Stage12 correction first-parent chain drifted")
+        changed = changed_paths(parent, commit)
+        owned_changed = {
+            relative
+            for relative in changed
+            if is_product_owned(relative, existing, planned_new, prefixes)
+        }
+        unowned_changed = changed - owned_changed
+        if owned_changed and unowned_changed:
+            fail(
+                "first-parent commit mixes Stage12Product-owned and unowned paths: "
+                f"{sorted(unowned_changed)[0]}"
+            )
+        if owned_changed:
+            for relative in owned_changed:
+                blob = base_blob(commit, relative)
+                if (
+                    blob is None
+                    or blob[0] not in {"100644", "100755"}
+                    or blob[1] != "blob"
+                ):
+                    fail(
+                        "Stage12 correction path is not a regular blob: "
+                        f"{relative}"
+                    )
+            summary = run("git", "diff", "--summary", parent, commit)
+            for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
+                if forbidden in summary:
+                    fail(f"forbidden Stage12 correction shape present: {forbidden}")
+            checkpoint = commit
+            correction_changed.update(owned_changed)
+        expected_parent = commit
+    if not checkpoint:
+        fail("Stage12 correction has no owner-only checkpoint")
+    require_ancestor(checkpoint, FINAL_REF, "Stage12 correction checkpoint")
+    return checkpoint, correction_changed
 
 
 def validate_ownership(manifest: dict[str, object]) -> set[str]:
@@ -183,33 +267,37 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         if forbidden in affected_summary:
             fail(f"forbidden affected-suffix change shape present: {forbidden}")
 
-    correction_changed = changed_paths(correction_predecessor, FINAL_REF)
+    correction_checkpoint, correction_changed = find_correction_checkpoint(
+        correction_predecessor,
+        existing,
+        planned_new,
+        prefixes,
+    )
     for relative in correction_changed:
-        if (
-            relative not in existing
-            and relative not in planned_new
-            and not relative.startswith(prefixes)
-        ):
+        if not is_product_owned(relative, existing, planned_new, prefixes):
             fail(f"Stage12 correction changed an unowned path: {relative}")
-        blob = base_blob(FINAL_REF, relative)
+        blob = base_blob(correction_checkpoint, relative)
         if blob is None or blob[0] not in {"100644", "100755"} or blob[1] != "blob":
             fail(f"Stage12 correction path is not a regular blob: {relative}")
-    correction_summary = run(
-        "git",
-        "diff",
-        "--summary",
-        correction_predecessor,
-        FINAL_REF,
-    )
-    for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
-        if forbidden in correction_summary:
-            fail(f"forbidden Stage12 correction shape present: {forbidden}")
 
+    checkpoint_prefix_paths = {
+        relative
+        for relative in run(
+            "git",
+            "ls-tree",
+            "-r",
+            "--name-only",
+            correction_checkpoint,
+        ).splitlines()
+        if relative.startswith(prefixes)
+    }
     final_prefix_paths = {
         relative
         for relative in run("git", "ls-tree", "-r", "--name-only", FINAL_REF).splitlines()
         if relative.startswith(prefixes)
     }
+    if final_prefix_paths != checkpoint_prefix_paths:
+        fail("Stage12-owned prefix path set changed after the correction checkpoint")
     snapshot_tests = SNAPSHOT_ROOT / "tests"
     snapshot_prefix_paths = {
         path.relative_to(SNAPSHOT_ROOT).as_posix()
@@ -218,15 +306,24 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
     }
     if snapshot_prefix_paths != final_prefix_paths:
         fail("Stage12-owned prefix paths differ between final ref and snapshot")
-    final_product_paths = existing | planned_new | final_prefix_paths
-    for relative in final_product_paths:
+    checkpoint_product_paths = existing | planned_new | checkpoint_prefix_paths
+    for relative in checkpoint_product_paths:
+        checkpoint_blob = base_blob(correction_checkpoint, relative)
         final_blob = base_blob(FINAL_REF, relative)
+        if (
+            checkpoint_blob is None
+            or checkpoint_blob[0] not in {"100644", "100755"}
+            or checkpoint_blob[1] != "blob"
+        ):
+            fail(f"correction checkpoint Stage12-owned path is not a regular blob: {relative}")
         if (
             final_blob is None
             or final_blob[0] not in {"100644", "100755"}
             or final_blob[1] != "blob"
         ):
             fail(f"final Stage12-owned path is not a regular blob: {relative}")
+        if final_blob != checkpoint_blob:
+            fail(f"final Stage12-owned path differs from correction checkpoint: {relative}")
         path = SNAPSHOT_ROOT / relative
         try:
             mode = path.lstat().st_mode
@@ -235,9 +332,9 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         if not stat.S_ISREG(mode) or path.is_symlink():
             fail(f"final snapshot Stage12 path is not a regular file: {relative}")
         snapshot_mode = "100755" if mode & stat.S_IXUSR else "100644"
-        if snapshot_mode != final_blob[0]:
+        if snapshot_mode != checkpoint_blob[0]:
             fail(f"final snapshot Stage12 mode differs: {relative}")
-        if snapshot_blob(relative) != final_blob[2]:
+        if snapshot_blob(relative) != checkpoint_blob[2]:
             fail(f"final snapshot Stage12 bytes differ: {relative}")
     for relative, expected in denied.items():
         if digest(SNAPSHOT_ROOT / relative) != expected:
@@ -442,9 +539,14 @@ def main() -> int:
         SNAPSHOT_ROOT = args.snapshot_root.resolve(strict=True)
     except OSError as error:
         fail(f"invalid ancestry repository or snapshot root: {error}")
-    FINAL_REF = args.final_ref
     if not ANCESTRY_REPOSITORY.is_dir() or not SNAPSHOT_ROOT.is_dir():
         fail("ancestry repository and snapshot root must be directories")
+    FINAL_REF = run(
+        "git",
+        "rev-parse",
+        "--verify",
+        f"{args.final_ref}^{{commit}}",
+    ).strip()
 
     manifest = load_json("tools/vnext_contracts/stage10/path-manifest.v1.json")
     changed = validate_ownership(manifest)
