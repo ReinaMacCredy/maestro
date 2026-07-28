@@ -15,6 +15,7 @@ pub(in crate::domain) mod consumer_snapshot;
 mod export;
 mod generation;
 mod idempotency;
+pub(crate) mod legacy_quarantine;
 mod metadata;
 mod object;
 mod protected_diagnostic;

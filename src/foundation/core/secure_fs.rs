@@ -528,6 +528,56 @@ mod platform {
         lease: PlatformCensusLeaseV1,
     }
 
+    pub(crate) struct RetainedDescriptorCensusLeaseV3 {
+        root: SecureRoot,
+        initial_root: FileIdentity,
+        root_mount: [u8; 32],
+        root_binding: DescriptorCensusRootBindingV1,
+        lease: PlatformCensusLeaseV1,
+        census: DescriptorAnchoredCensusV1,
+    }
+
+    impl RetainedDescriptorCensusLeaseV3 {
+        pub(crate) const fn census(&self) -> &DescriptorAnchoredCensusV1 {
+            &self.census
+        }
+
+        pub(crate) fn read_immutable(
+            &self,
+            relative: impl AsRef<Path>,
+            kind: DescriptorCensusObjectKindV1,
+        ) -> SecureFsResult<Vec<u8>> {
+            match kind {
+                DescriptorCensusObjectKindV1::RegularFile => self.root.read_immutable(relative),
+                DescriptorCensusObjectKindV1::SymbolicLink => {
+                    let relative = BoundedPath::new(relative.as_ref())?;
+                    let (parent, leaf, path) = self.root.open_parent(&relative)?;
+                    read_link_at(parent.as_raw_fd(), leaf, &path)?
+                        .ok_or_else(|| unsafe_object(&path, "symbolic link changed during copy"))
+                }
+            }
+        }
+
+        pub(crate) fn consume_final_recheck(
+            self,
+            limits: DescriptorCensusLimitsV1,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            let final_census = self.root.descriptor_anchored_census_passes(
+                limits,
+                self.initial_root,
+                self.root_mount,
+                self.root_binding,
+                &self.lease,
+            )?;
+            if final_census != self.census || !self.lease.consume_final_recheck() {
+                return Err(SecureFsError::ChangedDuringRead {
+                    path: self.root.path.clone(),
+                });
+            }
+            Ok(final_census)
+        }
+    }
+
     impl DescriptorCensusMutationLeasePortV1 for PlatformCensusLeaseV1 {
         fn facts(&self) -> DescriptorCensusMutationFenceFactsV1 {
             self.facts
@@ -755,6 +805,45 @@ mod platform {
             )
         }
 
+        pub(crate) fn retain_descriptor_census_root_v3(
+            self,
+            limits: DescriptorCensusLimitsV1,
+        ) -> SecureFsResult<RetainedDescriptorCensusLeaseV3> {
+            let initial_root = FileIdentity::from(&metadata(&self.directory, &self.path)?);
+            let root_mount = mount_identity(&self.directory, &self.path)?;
+            let root_binding = self.descriptor_chain_binding(root_mount)?;
+            let namespace_lease =
+                NamespaceMutationLeaseV1::acquire(&self.namespace_anchor, &self.path)?;
+            let mut writer = Sha256::new();
+            writer.update(b"maestro.foundation.namespace-writer.v3\0");
+            writer.update(process::id().to_be_bytes());
+            writer.update(root_binding.identity);
+            let lease = PlatformCensusLeaseV1 {
+                lease: namespace_lease,
+                facts: DescriptorCensusMutationFenceFactsV1 {
+                    writer_identity: writer.finalize().into(),
+                    namespace_identity: root_binding.identity,
+                    monotonic_epoch: NAMESPACE_EPOCH.fetch_add(1, Ordering::AcqRel),
+                },
+                root_binding,
+            };
+            let census = self.descriptor_anchored_census_passes(
+                limits,
+                initial_root,
+                root_mount,
+                root_binding,
+                &lease,
+            )?;
+            Ok(RetainedDescriptorCensusLeaseV3 {
+                root: self,
+                initial_root,
+                root_mount,
+                root_binding,
+                lease,
+                census,
+            })
+        }
+
         #[cfg(test)]
         pub(crate) fn install_after_first_census_pass_test_hook(
             hook: impl FnOnce(&Path) + 'static,
@@ -799,6 +888,29 @@ mod platform {
             root_binding: DescriptorCensusRootBindingV1,
             lease: L,
         ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            let census = self.descriptor_anchored_census_passes(
+                limits,
+                initial_root,
+                root_mount,
+                root_binding,
+                &lease,
+            )?;
+            if !lease.consume_final_recheck() {
+                return Err(SecureFsError::ChangedDuringRead {
+                    path: self.path.clone(),
+                });
+            }
+            Ok(census)
+        }
+
+        fn descriptor_anchored_census_passes<L: DescriptorCensusMutationLeasePortV1>(
+            &self,
+            limits: DescriptorCensusLimitsV1,
+            initial_root: FileIdentity,
+            root_mount: [u8; 32],
+            root_binding: DescriptorCensusRootBindingV1,
+            lease: &L,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
             let initial_fence = lease.facts();
             if DescriptorCensusMutationFenceFactsV1::from_live_owner(
                 initial_fence.writer_identity,
@@ -833,7 +945,6 @@ mod platform {
                 || initial_root != final_root
                 || first != second
                 || final_root_binding != root_binding
-                || !lease.consume_final_recheck()
             {
                 return Err(SecureFsError::ChangedDuringRead {
                     path: self.path.clone(),
@@ -1038,7 +1149,14 @@ mod platform {
             expected: &RegularFileBinding,
         ) -> SecureFsResult<()> {
             let relative = relative.as_ref();
-            if self.bind_regular_file(relative)? != *expected {
+            let observed = match self.bind_regular_file(relative) {
+                Ok(observed) => observed,
+                Err(SecureFsError::UnsafeObject { .. }) => {
+                    return Err(SecureFsError::CensusRefused);
+                }
+                Err(error) => return Err(error),
+            };
+            if observed != *expected {
                 return Err(SecureFsError::ChangedDuringRead {
                     path: self.path.join(relative),
                 });
@@ -3028,6 +3146,31 @@ mod platform {
         _root: std::marker::PhantomData<&'root SecureRoot>,
     }
 
+    pub(crate) struct RetainedDescriptorCensusLeaseV3 {
+        _private: (),
+    }
+
+    impl RetainedDescriptorCensusLeaseV3 {
+        pub(crate) fn census(&self) -> &DescriptorAnchoredCensusV1 {
+            unreachable!("unsupported platforms refuse retained census construction")
+        }
+
+        pub(crate) fn read_immutable(
+            &self,
+            _relative: impl AsRef<Path>,
+            _kind: super::DescriptorCensusObjectKindV1,
+        ) -> SecureFsResult<Vec<u8>> {
+            unsupported()
+        }
+
+        pub(crate) fn consume_final_recheck(
+            self,
+            _limits: DescriptorCensusLimitsV1,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            unsupported()
+        }
+    }
+
     #[derive(Clone, Copy, Eq, PartialEq)]
     pub(super) struct RegularFileIdentity {
         _private: (),
@@ -3066,6 +3209,12 @@ mod platform {
             _admitted: AdmittedDescriptorCensusRootV1<'_>,
             _limits: DescriptorCensusLimitsV1,
         ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            unsupported()
+        }
+        pub(crate) fn retain_descriptor_census_root_v3(
+            self,
+            _limits: DescriptorCensusLimitsV1,
+        ) -> SecureFsResult<RetainedDescriptorCensusLeaseV3> {
             unsupported()
         }
         pub fn open_dir(&self, _path: impl AsRef<Path>) -> SecureFsResult<Self> {
@@ -3174,6 +3323,7 @@ mod platform {
     }
 }
 
+pub(crate) use platform::RetainedDescriptorCensusLeaseV3;
 pub use platform::{AdmittedDescriptorCensusRootV1, SecureRoot};
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]

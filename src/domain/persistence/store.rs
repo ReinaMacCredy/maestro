@@ -695,6 +695,22 @@ impl StoreV1 {
         self.domain.role()
     }
 
+    #[allow(
+        dead_code,
+        reason = "Stage 11 legacy quarantine owner leaves await MainIntegration wiring"
+    )]
+    pub(crate) fn legacy_quarantine_root_path_v3(&self) -> &Path {
+        self.root.path()
+    }
+
+    #[allow(
+        dead_code,
+        reason = "Stage 11 owner-held quarantine custody is accepted before shared wiring"
+    )]
+    pub(super) const fn legacy_quarantine_secure_root_v3(&self) -> &SecureRoot {
+        &self.root
+    }
+
     pub(crate) fn admit_repository_census_root_v2(
         &self,
         owner_currentness: [u8; 32],

@@ -20,6 +20,11 @@ mod import;
 mod legacy_census_v1;
 #[allow(
     dead_code,
+    reason = "the V3 continuation awaits MainIntegration owner wiring"
+)]
+mod live_set_v3;
+#[allow(
+    dead_code,
     reason = "sealed quarantine materialization remains dormant pending inventory closure"
 )]
 mod quarantine;
@@ -46,6 +51,14 @@ pub use import::import_inactive_store;
 )]
 pub(crate) use legacy_census_v1::{
     DeclaredRootScanV1, MigrationCensusErrorV1, recensus_declared_roots,
+};
+#[allow(
+    unused_imports,
+    reason = "the V3 continuation facade awaits MainIntegration owner wiring"
+)]
+pub(crate) use live_set_v3::{
+    Stage11LiveSetContinuationV3, Stage11LiveSetOperationErrorV3, Stage11PhysicalClosureV3,
+    Stage11SealedCopyContinuationV3,
 };
 #[allow(
     unused_imports,

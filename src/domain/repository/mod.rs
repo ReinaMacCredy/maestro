@@ -1,12 +1,20 @@
 //! Authoritative Repository-Store publication for implemented Stage 3 owner actions.
 
 mod bootstrap;
+mod legacy_quarantine_admission;
 
 pub(crate) use bootstrap::{
     CommittedRepositoryBootstrapV1, RepositoryBootstrapAdmissionV1,
     RepositoryBootstrapDescriptorObservationV1, RepositoryBootstrapDescriptorReadPortV1,
     RepositoryBootstrapEffectObservationV1, RepositoryBootstrapEffectPermitV1,
     RepositoryBootstrapErrorV1, RepositoryBootstrapOwnerFactsV1,
+};
+#[allow(
+    unused_imports,
+    reason = "Stage 11 Repository admission awaits MainIntegration wiring"
+)]
+pub(crate) use legacy_quarantine_admission::{
+    RepositoryRootAdmissionErrorV3, RepositoryRootAdmissionV3,
 };
 
 use std::collections::{BTreeMap, BTreeSet};

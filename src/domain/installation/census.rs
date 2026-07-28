@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use sha2::Digest;
 use thiserror::Error;
 
 use crate::domain::distribution::runtime::{
@@ -12,6 +13,9 @@ use crate::domain::distribution::{
 use crate::domain::identity::StoreObjectIdV1;
 use crate::domain::persistence::{StoreObjectError, StoreObjectV1};
 use crate::foundation::core::deterministic_cbor::{CborError, CborValue};
+
+#[path = "legacy_quarantine.rs"]
+mod legacy_quarantine;
 
 const MAX_CENSUS_ENTRIES_V1: usize = 1_048_576;
 const MAX_CONSUMER_REFS_V1: usize = 65_535;
@@ -311,6 +315,53 @@ impl InstallationCensusV1 {
             references.into_iter().collect(),
         )?)
     }
+
+    pub(crate) fn admit_legacy_quarantine_roots_v3(
+        &self,
+    ) -> Result<
+        impl crate::foundation::core::legacy_quarantine::LegacyQuarantineRootAdmissionV3,
+        InstallationCensusErrorV1,
+    > {
+        legacy_quarantine::InstallationRootAdmissionV3::mint_from_live_registry(self)
+            .map_err(|_| InstallationCensusErrorV1::LegacyAdmissionUnavailable)
+    }
+
+    pub(super) fn legacy_quarantine_root_snapshot_v3(
+        &self,
+    ) -> Result<InstallationLegacyRootSnapshotV3, InstallationCensusErrorV1> {
+        self.validate()?;
+        let mut roots = self
+            .rows
+            .iter()
+            .filter(|(_, _, entry)| {
+                matches!(
+                    entry.classification,
+                    InstallationCensusClassV1::Legacy
+                        | InstallationCensusClassV1::RemovalCandidate
+                        | InstallationCensusClassV1::ModifiedManaged
+                        | InstallationCensusClassV1::Stale
+                )
+            })
+            .map(|(_, _, entry)| entry.resolved_locator.clone())
+            .collect::<Vec<_>>();
+        roots.sort();
+        roots.dedup();
+        if roots.is_empty() {
+            return Err(InstallationCensusErrorV1::MissingLegacyRoot);
+        }
+        let census_object = self.to_store_object()?;
+        Ok(InstallationLegacyRootSnapshotV3 {
+            roots,
+            owner_currentness: *census_object.id().as_bytes(),
+            owner_attestation: sha2::Sha256::digest(census_object.canonical_bytes()).into(),
+        })
+    }
+}
+
+pub(super) struct InstallationLegacyRootSnapshotV3 {
+    pub(super) roots: Vec<String>,
+    pub(super) owner_currentness: [u8; 32],
+    pub(super) owner_attestation: [u8; 32],
 }
 
 #[derive(Debug, Error)]
@@ -331,6 +382,10 @@ pub enum InstallationCensusErrorV1 {
     ClassificationCustodyMismatch,
     #[error("Installation census commitment must be non-zero")]
     ZeroCommitment,
+    #[error("Installation census has no live legacy root eligible for Stage 11 admission")]
+    MissingLegacyRoot,
+    #[error("Installation could not mint its live Stage 11 root admission")]
+    LegacyAdmissionUnavailable,
     #[error(transparent)]
     Model(#[from] DistributionModelErrorV1),
     #[error(transparent)]

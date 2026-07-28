@@ -37,6 +37,11 @@ mod import;
 mod inventory;
 #[allow(
     dead_code,
+    reason = "the V3 live-set contract awaits MainIntegration and Stage-12 owner wiring"
+)]
+mod live_set_v3;
+#[allow(
+    dead_code,
     reason = "quarantine domain binding is dormant pending inventory closure"
 )]
 mod quarantine;
@@ -106,6 +111,23 @@ pub use import::{
 pub use inventory::{
     ByteTotalInventoryV1, DeclaredRootV1, InventoryDomainV1, InventoryErrorV1, InventoryNodeKindV1,
     InventoryPayloadV1, InventoryRowV1, NormalizedLocatorV1,
+};
+#[allow(
+    unused_imports,
+    reason = "the V3 epoch basis is reserved for MainIntegration owner wiring"
+)]
+pub(in crate::domain) use live_set_v3::LegacyQuarantineEpochBasisV3;
+#[allow(
+    unused_imports,
+    reason = "the V3 live-set facade is reserved for MainIntegration and Stage-12 owner wiring"
+)]
+pub use live_set_v3::{
+    DeclaredOverlapManifestV2, LegacyNodeKindV3, LegacyOwnerDomainV3, LegacyPayloadStateV3,
+    LegacyQuarantineEpochV3, LegacyRollbackAssessmentV3, LegacySourceCaseManifestV3,
+    LiveSetV3Error, MembershipKeyV3, MigrationClassificationManifestV3, MigrationClassificationV3,
+    MigrationDispositionV3, ProtectedPrimaryOverlapPairV1, SealedQuarantineEntryV3,
+    SealedQuarantineManifestV3, SourceCaseV3, Stage12SightingManifestV2, Stage12SightingV2,
+    UnavailablePreexistingLossManifestV3, UnavailablePreexistingLossV3,
 };
 #[allow(
     unused_imports,
