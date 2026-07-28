@@ -14,6 +14,18 @@ use std::os::unix::ffi::OsStrExt;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use super::legacy_loss_evidence::{
+    FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
+    FoundationValidatedUnavailablePreexistingLossReceiptV1,
+    OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, OwnerUnavailablePreexistingLossWitnessV1,
+};
+use super::root_universe::{
+    DeclaredRootUniverseLeaseV1, FoundationDeclaredAbsenceFenceV1,
+    FoundationDeclaredRootDispositionV1, FoundationDeclaredRootRoleV1,
+    FoundationOwnerUniverseCurrentnessV1, FoundationRootUniverseErrorV1,
+    OwnerUniverseFinalRecheckPortV1,
+};
 use super::secure_fs::{
     DescriptorCensusLimitsV1, DescriptorCensusObjectKindV1, InventoryRowV1,
     RetainedDescriptorCensusLeaseV3, SecureFsError, SecureRoot,
@@ -26,6 +38,13 @@ const EXPECTED_SOURCE_SET_DOMAIN_V3: &[u8] =
     b"maestro.foundation.legacy-quarantine.expected-source-set.v3\0";
 const SOURCE_TOKEN_DOMAIN_V1: &[u8] = b"maestro.foundation.legacy-quarantine.source-token.v1\0";
 const CLOSURE_DOMAIN_V1: &[u8] = b"maestro.foundation.legacy-quarantine.closure.v1\0";
+const EXPECTED_SOURCE_DOMAIN_V4: &[u8] =
+    b"maestro.foundation.legacy-quarantine.expected-source.v4\0";
+const EXPECTED_SOURCE_SET_DOMAIN_V4: &[u8] =
+    b"maestro.foundation.legacy-quarantine.expected-source-set.v4\0";
+const ADMITTED_SET_DOMAIN_V4: &[u8] = b"maestro.foundation.legacy-quarantine.admitted-set.v4\0";
+const SOURCE_TOKEN_DOMAIN_V2: &[u8] = b"maestro.foundation.legacy-quarantine.source-token.v2\0";
+const CLOSURE_DOMAIN_V2: &[u8] = b"maestro.foundation.legacy-quarantine.closure.v2\0";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) enum LegacyQuarantineOwnerDomainV3 {
@@ -35,7 +54,7 @@ pub(crate) enum LegacyQuarantineOwnerDomainV3 {
 }
 
 impl LegacyQuarantineOwnerDomainV3 {
-    const fn tag(self) -> u8 {
+    pub(in crate::foundation::core) const fn tag(self) -> u8 {
         match self {
             Self::Repository => 1,
             Self::Installation => 2,
@@ -183,6 +202,130 @@ impl LegacyQuarantineExpectedSourceSetV3 {
             && root_bindings
                 .iter()
                 .all(|binding| self.rows.iter().any(|row| row.root_binding == *binding))
+    }
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct LegacyQuarantineExpectedSourceV4 {
+    identity: [u8; 32],
+    owner: LegacyQuarantineOwnerDomainV3,
+    declaration_id: [u8; 32],
+    relative_locator: Vec<u8>,
+    kind: DescriptorCensusObjectKindV1,
+    logical_byte_length: u64,
+    object_identity: [u8; 32],
+    content_identity: [u8; 32],
+    metadata_commitment: [u8; 32],
+    source_provenance_id: [u8; 32],
+}
+
+impl LegacyQuarantineExpectedSourceV4 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "packet expectation binds source semantics without physical root authority"
+    )]
+    pub(crate) fn from_packet(
+        owner: LegacyQuarantineOwnerDomainV3,
+        declaration_id: [u8; 32],
+        relative_locator: Vec<u8>,
+        kind: DescriptorCensusObjectKindV1,
+        logical_byte_length: u64,
+        object_identity: [u8; 32],
+        content_identity: [u8; 32],
+        metadata_commitment: [u8; 32],
+        source_provenance_id: [u8; 32],
+    ) -> Result<Self, FoundationLegacyQuarantineErrorV1> {
+        if declaration_id == [0; 32]
+            || !valid_relative_locator(&relative_locator)
+            || [
+                object_identity,
+                content_identity,
+                metadata_commitment,
+                source_provenance_id,
+            ]
+            .contains(&[0; 32])
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::InvalidExpectedSource);
+        }
+        let kind_tag = [match kind {
+            DescriptorCensusObjectKindV1::RegularFile => 1,
+            DescriptorCensusObjectKindV1::SymbolicLink => 2,
+        }];
+        let identity = commitment(
+            EXPECTED_SOURCE_DOMAIN_V4,
+            &[
+                &[owner.tag()],
+                &declaration_id,
+                &relative_locator,
+                &kind_tag,
+                &logical_byte_length.to_be_bytes(),
+                &object_identity,
+                &content_identity,
+                &metadata_commitment,
+                &source_provenance_id,
+            ],
+        );
+        Ok(Self {
+            identity,
+            owner,
+            declaration_id,
+            relative_locator,
+            kind,
+            logical_byte_length,
+            object_identity,
+            content_identity,
+            metadata_commitment,
+            source_provenance_id,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct LegacyQuarantineExpectedSourceSetV4 {
+    identity: [u8; 32],
+    packet_identity: [u8; 32],
+    rows: Vec<LegacyQuarantineExpectedSourceV4>,
+}
+
+impl LegacyQuarantineExpectedSourceSetV4 {
+    pub(crate) fn from_packet(
+        packet_identity: [u8; 32],
+        mut rows: Vec<LegacyQuarantineExpectedSourceV4>,
+    ) -> Result<Self, FoundationLegacyQuarantineErrorV1> {
+        rows.sort_by_key(|row| (row.owner, row.declaration_id, row.identity));
+        if packet_identity == [0; 32]
+            || rows.is_empty()
+            || rows.windows(2).any(|pair| {
+                pair[0].identity == pair[1].identity
+                    || (
+                        pair[0].owner,
+                        pair[0].declaration_id,
+                        &pair[0].relative_locator,
+                    ) == (
+                        pair[1].owner,
+                        pair[1].declaration_id,
+                        &pair[1].relative_locator,
+                    )
+            })
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::InvalidExpectedSource);
+        }
+        let mut parts = vec![packet_identity.as_slice()];
+        parts.extend(rows.iter().map(|row| row.identity.as_slice()));
+        let identity = commitment(EXPECTED_SOURCE_SET_DOMAIN_V4, &parts);
+        Ok(Self {
+            identity,
+            packet_identity,
+            rows,
+        })
+    }
+
+    pub(crate) const fn identity(&self) -> [u8; 32] {
+        self.identity
+    }
+
+    pub(crate) const fn packet_identity(&self) -> [u8; 32] {
+        self.packet_identity
     }
 }
 
@@ -912,6 +1055,631 @@ impl FoundationLegacyQuarantineClosureV1 {
     }
 }
 
+struct RetainedRootV2 {
+    owner: LegacyQuarantineOwnerDomainV3,
+    declaration_id: [u8; 32],
+    role: FoundationDeclaredRootRoleV1,
+    display_locator: Vec<u8>,
+    root_binding: [u8; 32],
+    resolved_locator_commitment: [u8; 32],
+    object_identity: [u8; 32],
+    mount_identity: [u8; 32],
+    provider_identity: [u8; 32],
+    anchor_identity: [u8; 32],
+    fence_identity: [u8; 32],
+    universe_identity: [u8; 32],
+    owner_currentness: [u8; 32],
+    lease: RetainedDescriptorCensusLeaseV3,
+}
+
+struct OwnerUniverseHoldV1 {
+    expected: FoundationOwnerUniverseCurrentnessV1,
+    final_recheck: Box<dyn OwnerUniverseFinalRecheckPortV1>,
+}
+
+pub(crate) struct FoundationSourceCaseV2 {
+    source_token: [u8; 32],
+    owner: LegacyQuarantineOwnerDomainV3,
+    declaration_id: [u8; 32],
+    display_locator: Vec<u8>,
+    root_binding: [u8; 32],
+    relative_locator: Vec<u8>,
+    payload_state: FoundationLegacyPayloadStateV3,
+    kind: DescriptorCensusObjectKindV1,
+    logical_byte_length: u64,
+    object_identity: [u8; 32],
+    content_identity: [u8; 32],
+    metadata_commitment: [u8; 32],
+    source_provenance_id: [u8; 32],
+    mount_identity: [u8; 32],
+    provider_identity: [u8; 32],
+    anchor_identity: [u8; 32],
+    fence_identity: [u8; 32],
+    owner_currentness: [u8; 32],
+    owner_attestation: [u8; 32],
+    loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+}
+
+impl FoundationSourceCaseV2 {
+    pub(crate) const fn source_token(&self) -> [u8; 32] {
+        self.source_token
+    }
+
+    pub(crate) const fn payload_state(&self) -> FoundationLegacyPayloadStateV3 {
+        self.payload_state
+    }
+
+    fn take_migration_parts(&mut self) -> FoundationMigrationSourcePartsV1 {
+        FoundationMigrationSourcePartsV1 {
+            source_token: self.source_token,
+            owner: self.owner,
+            display_locator: self.display_locator.clone(),
+            root_binding: self.root_binding,
+            relative_locator: self.relative_locator.clone(),
+            payload_state: self.payload_state,
+            kind: self.kind,
+            logical_byte_length: self.logical_byte_length,
+            object_identity: self.object_identity,
+            content_identity: self.content_identity,
+            metadata_commitment: self.metadata_commitment,
+            source_provenance_id: self.source_provenance_id,
+            mount_identity: self.mount_identity,
+            provider_identity: self.provider_identity,
+            anchor_identity: self.anchor_identity,
+            fence_identity: self.fence_identity,
+            owner_currentness: self.owner_currentness,
+            owner_attestation: self.owner_attestation,
+            loss_receipt: self.loss_receipt.take(),
+        }
+    }
+}
+
+pub(crate) struct FoundationMigrationSourcePartsV1 {
+    pub(crate) source_token: [u8; 32],
+    pub(crate) owner: LegacyQuarantineOwnerDomainV3,
+    pub(crate) display_locator: Vec<u8>,
+    pub(crate) root_binding: [u8; 32],
+    pub(crate) relative_locator: Vec<u8>,
+    pub(crate) payload_state: FoundationLegacyPayloadStateV3,
+    pub(crate) kind: DescriptorCensusObjectKindV1,
+    pub(crate) logical_byte_length: u64,
+    pub(crate) object_identity: [u8; 32],
+    pub(crate) content_identity: [u8; 32],
+    pub(crate) metadata_commitment: [u8; 32],
+    pub(crate) source_provenance_id: [u8; 32],
+    pub(crate) mount_identity: [u8; 32],
+    pub(crate) provider_identity: [u8; 32],
+    pub(crate) anchor_identity: [u8; 32],
+    pub(crate) fence_identity: [u8; 32],
+    pub(crate) owner_currentness: [u8; 32],
+    pub(crate) owner_attestation: [u8; 32],
+    pub(crate) loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+}
+
+pub(crate) struct FoundationLegacyQuarantineLeaseV2<P, Q> {
+    invocation: [u8; 32],
+    admitted_set: [u8; 32],
+    repository_universe: [u8; 32],
+    installation_universe: [u8; 32],
+    repository_hold: OwnerUniverseHoldV1,
+    installation_hold: OwnerUniverseHoldV1,
+    roots: Vec<RetainedRootV2>,
+    absence_fences: Vec<FoundationDeclaredAbsenceFenceV1>,
+    source_cases: Vec<FoundationSourceCaseV2>,
+    overlap_pairs: Vec<FoundationProtectedPrimaryOverlapPairV1>,
+    protected_primary: P,
+    custody: Q,
+    limits: DescriptorCensusLimitsV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl<P, Q> FoundationLegacyQuarantineLeaseV2<P, Q>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+    Q: QuarantineCustodyPortV1,
+{
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "V8 acquisition consumes both complete universes and all three nominal evidence sets"
+    )]
+    pub(crate) fn acquire<R, I, RE, IE, PE>(
+        repository: R,
+        installation: I,
+        mut protected_primary: P,
+        custody: Q,
+        expected_sources: LegacyQuarantineExpectedSourceSetV4,
+        repository_evidence_issuer: RE,
+        installation_evidence_issuer: IE,
+        protected_primary_evidence_issuer: PE,
+        invocation: [u8; 32],
+    ) -> Result<Self, FoundationLegacyQuarantineErrorV1>
+    where
+        R: DeclaredRootUniverseLeaseV1,
+        I: DeclaredRootUniverseLeaseV1,
+        RE: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
+        IE: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
+        PE: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
+    {
+        if invocation == [0; 32] {
+            return Err(FoundationLegacyQuarantineErrorV1::InvalidInvocation);
+        }
+        let repository = repository.into_foundation_universe()?;
+        let installation = installation.into_foundation_universe()?;
+        let (
+            repository_universe,
+            repository_currentness,
+            repository_rows,
+            repository_final_recheck,
+        ) = repository.into_parts();
+        let (
+            installation_universe,
+            installation_currentness,
+            installation_rows,
+            installation_final_recheck,
+        ) = installation.into_parts();
+        if repository_currentness.owner() != LegacyQuarantineOwnerDomainV3::Repository
+            || installation_currentness.owner() != LegacyQuarantineOwnerDomainV3::Installation
+            || repository_currentness.operation_attempt() != invocation
+            || installation_currentness.operation_attempt() != invocation
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::InvalidOwnerAdmission);
+        }
+
+        let mut disposition_index = std::collections::BTreeMap::new();
+        for row in repository_rows.iter().chain(&installation_rows) {
+            if disposition_index
+                .insert((row.owner(), row.declaration_id()), row.identity())
+                .is_some()
+            {
+                return Err(FoundationLegacyQuarantineErrorV1::DuplicateSource);
+            }
+        }
+        for expected in &expected_sources.rows {
+            if expected.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary {
+                if expected.declaration_id != protected_primary.identity() {
+                    return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+                }
+                continue;
+            }
+            if !disposition_index.contains_key(&(expected.owner, expected.declaration_id)) {
+                return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+            }
+        }
+
+        let repository_hold = OwnerUniverseHoldV1 {
+            expected: repository_currentness,
+            final_recheck: repository_final_recheck,
+        };
+        let installation_hold = OwnerUniverseHoldV1 {
+            expected: installation_currentness,
+            final_recheck: installation_final_recheck,
+        };
+        let limits = DescriptorCensusLimitsV1::bounded_default();
+        let mut roots = Vec::new();
+        let mut absence_fences = Vec::new();
+        for row in repository_rows.into_iter().chain(installation_rows) {
+            let owner = row.owner();
+            let declaration_id = row.declaration_id();
+            let role = row.role();
+            let required = row.required();
+            let declared_locator_commitment = row.declared_locator_commitment();
+            let owner_currentness = row.currentness();
+            let owner_attestation = match owner {
+                LegacyQuarantineOwnerDomainV3::Repository => repository_hold.expected.identity(),
+                LegacyQuarantineOwnerDomainV3::Installation => {
+                    installation_hold.expected.identity()
+                }
+                LegacyQuarantineOwnerDomainV3::ProtectedPrimary => {
+                    return Err(FoundationLegacyQuarantineErrorV1::InvalidOwnerAdmission);
+                }
+            };
+            match row.into_disposition() {
+                FoundationDeclaredRootDispositionV1::Present(acquisition) => {
+                    let (path, capability_commitment) = acquisition.into_path();
+                    if capability_commitment != declared_locator_commitment {
+                        return Err(FoundationLegacyQuarantineErrorV1::RootBindingDrift);
+                    }
+                    let root = SecureRoot::open(&path)?;
+                    let physical = observe_physical_facts_v1(&path)?;
+                    let root_binding = commitment(
+                        b"maestro.foundation.legacy-quarantine.root-binding.v3\0",
+                        &[&physical.object_identity(), &physical.mount_identity()],
+                    );
+                    let lease = root.retain_descriptor_census_root_v3(limits)?;
+                    roots.push(RetainedRootV2 {
+                        owner,
+                        declaration_id,
+                        role,
+                        display_locator: path.as_os_str().as_bytes().to_vec(),
+                        root_binding,
+                        resolved_locator_commitment: physical.resolved_locator_commitment(),
+                        object_identity: physical.object_identity(),
+                        mount_identity: physical.mount_identity(),
+                        provider_identity: physical.provider_identity(),
+                        anchor_identity: physical.anchor_identity(),
+                        fence_identity: physical.fence_identity(),
+                        universe_identity: match owner {
+                            LegacyQuarantineOwnerDomainV3::Repository => repository_universe,
+                            LegacyQuarantineOwnerDomainV3::Installation => installation_universe,
+                            LegacyQuarantineOwnerDomainV3::ProtectedPrimary => unreachable!(),
+                        },
+                        owner_currentness,
+                        lease,
+                    });
+                }
+                FoundationDeclaredRootDispositionV1::DeclaredAbsent(absence) => {
+                    let has_expected = expected_sources.rows.iter().any(|expected| {
+                        expected.owner == owner && expected.declaration_id == declaration_id
+                    });
+                    if required || has_expected {
+                        return Err(FoundationLegacyQuarantineErrorV1::DeclaredRootRefusal);
+                    }
+                    absence_fences.push(absence);
+                }
+                FoundationDeclaredRootDispositionV1::Unsupported { .. } => {
+                    return Err(FoundationLegacyQuarantineErrorV1::DeclaredRootRefusal);
+                }
+            }
+        }
+        roots.sort_by_key(|root| (root.owner, root.declaration_id));
+        validate_retained_physical_separation_v2(&roots, &protected_primary, &custody)?;
+        protected_primary.retain_source_census(limits)?;
+
+        let admitted_set = admitted_set_identity_v4(
+            invocation,
+            repository_universe,
+            installation_universe,
+            protected_primary.identity(),
+            &roots,
+            expected_sources.identity(),
+        );
+        let repository_evidence = repository_evidence_issuer.issue_for_foundation(
+            FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
+                LegacyQuarantineOwnerDomainV3::Repository,
+                expected_sources.identity(),
+                invocation,
+                repository_universe,
+                repository_hold.expected.identity(),
+            )?,
+        )?;
+        let installation_evidence = installation_evidence_issuer.issue_for_foundation(
+            FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
+                LegacyQuarantineOwnerDomainV3::Installation,
+                expected_sources.identity(),
+                invocation,
+                installation_universe,
+                installation_hold.expected.identity(),
+            )?,
+        )?;
+        let protected_primary_evidence = protected_primary_evidence_issuer.issue_for_foundation(
+            FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
+                LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+                expected_sources.identity(),
+                invocation,
+                protected_primary.identity(),
+                protected_primary.currentness(),
+            )?,
+        )?;
+        let mut witnesses = consume_owner_evidence_sets(
+            repository_evidence,
+            installation_evidence,
+            protected_primary_evidence,
+            expected_sources.identity(),
+            invocation,
+            repository_universe,
+            repository_hold.expected.identity(),
+            installation_universe,
+            installation_hold.expected.identity(),
+            protected_primary.identity(),
+            protected_primary.currentness(),
+        )?;
+        let mut source_cases = Vec::new();
+        for root in &roots {
+            source_cases.extend(reconcile_expected_sources_v4(
+                invocation,
+                admitted_set,
+                root,
+                &expected_sources.rows,
+                &mut witnesses,
+            )?);
+        }
+        source_cases.extend(reconcile_protected_primary_sources_v4(
+            invocation,
+            admitted_set,
+            &protected_primary,
+            &expected_sources.rows,
+            &mut witnesses,
+        )?);
+        if !witnesses.is_empty() {
+            return Err(FoundationLegacyQuarantineErrorV1::UnexpectedLossEvidence);
+        }
+        source_cases.sort_by_key(|source| source.source_token);
+        if source_cases
+            .iter()
+            .map(FoundationSourceCaseV2::source_token)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != source_cases.len()
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::DuplicateSource);
+        }
+        let overlap_pairs = derive_overlap_pairs_v2(&source_cases)?;
+        Ok(Self {
+            invocation,
+            admitted_set,
+            repository_universe,
+            installation_universe,
+            repository_hold,
+            installation_hold,
+            roots,
+            absence_fences,
+            source_cases,
+            overlap_pairs,
+            protected_primary,
+            custody,
+            limits,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub(crate) const fn admitted_set(&self) -> [u8; 32] {
+        self.admitted_set
+    }
+
+    pub(crate) const fn invocation(&self) -> [u8; 32] {
+        self.invocation
+    }
+
+    pub(crate) fn take_migration_sources(&mut self) -> Vec<FoundationMigrationSourcePartsV1> {
+        self.source_cases
+            .iter_mut()
+            .map(FoundationSourceCaseV2::take_migration_parts)
+            .collect()
+    }
+
+    pub(crate) fn overlap_pairs(&self) -> &[FoundationProtectedPrimaryOverlapPairV1] {
+        &self.overlap_pairs
+    }
+
+    pub(crate) fn into_copy_continuation(self) -> FoundationSourceCopyContinuationV2<P, Q> {
+        FoundationSourceCopyContinuationV2 {
+            lease: self,
+            copied: BTreeSet::new(),
+            custody_records: Vec::new(),
+        }
+    }
+}
+
+pub(crate) struct FoundationSourceCopyContinuationV2<P, Q> {
+    lease: FoundationLegacyQuarantineLeaseV2<P, Q>,
+    copied: BTreeSet<[u8; 32]>,
+    custody_records: Vec<[u8; 32]>,
+}
+
+impl<P, Q> FoundationSourceCopyContinuationV2<P, Q>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+    Q: QuarantineCustodyPortV1,
+{
+    pub(crate) fn copy_once(
+        &mut self,
+        source_token: [u8; 32],
+    ) -> Result<FoundationCustodyCopyReceiptV1, FoundationLegacyQuarantineErrorV1> {
+        if !self.copied.insert(source_token) {
+            return Err(FoundationLegacyQuarantineErrorV1::SourceTokenReused);
+        }
+        let source = self
+            .lease
+            .source_cases
+            .iter()
+            .find(|source| source.source_token == source_token)
+            .ok_or(FoundationLegacyQuarantineErrorV1::UnknownSourceToken)?;
+        if source.payload_state != FoundationLegacyPayloadStateV3::Present {
+            return Err(FoundationLegacyQuarantineErrorV1::UnknownSourceToken);
+        }
+        let bytes = if source.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary {
+            self.lease
+                .protected_primary
+                .read_source(&source.relative_locator, source.kind)
+                .map_err(|_| FoundationLegacyQuarantineErrorV1::SourceChanged)?
+        } else {
+            let root = self
+                .lease
+                .roots
+                .iter()
+                .find(|root| {
+                    root.owner == source.owner
+                        && root.declaration_id == source.declaration_id
+                        && root.root_binding == source.root_binding
+                })
+                .ok_or(FoundationLegacyQuarantineErrorV1::UnknownSourceToken)?;
+            root.lease
+                .read_immutable(
+                    std::path::Path::new(std::ffi::OsStr::from_bytes(&source.relative_locator)),
+                    source.kind,
+                )
+                .map_err(|_| FoundationLegacyQuarantineErrorV1::SourceChanged)?
+        };
+        if bytes.len() as u64 != source.logical_byte_length
+            || <[u8; 32]>::from(Sha256::digest(&bytes)) != source.content_identity
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::SourceChanged);
+        }
+        let receipt = self.lease.custody.persist_source(
+            source.source_token,
+            source.object_identity,
+            source.kind,
+            &bytes,
+        )?;
+        if receipt.copied_length() != source.logical_byte_length
+            || receipt.copied_sha256() != source.content_identity
+            || self.custody_records.contains(&receipt.identity())
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::CustodyWriteFailed);
+        }
+        self.custody_records.push(receipt.identity());
+        Ok(receipt)
+    }
+
+    pub(crate) fn rollback(self) -> Result<[u8; 32], FoundationLegacyQuarantineErrorV1> {
+        self.lease.custody.rollback_partial()
+    }
+
+    pub(crate) fn finish(
+        self,
+        candidate_manifest: [u8; 32],
+    ) -> Result<FoundationLegacyQuarantineFinalityV2, FoundationLegacyQuarantineErrorV1> {
+        let present_count = self
+            .lease
+            .source_cases
+            .iter()
+            .filter(|source| source.payload_state == FoundationLegacyPayloadStateV3::Present)
+            .count();
+        if candidate_manifest == [0; 32] || self.copied.len() != present_count {
+            return Err(FoundationLegacyQuarantineErrorV1::PartialCopy);
+        }
+        let FoundationSourceCopyContinuationV2 {
+            lease,
+            custody_records,
+            ..
+        } = self;
+        let FoundationLegacyQuarantineLeaseV2 {
+            invocation,
+            admitted_set,
+            repository_universe,
+            installation_universe,
+            repository_hold,
+            installation_hold,
+            roots,
+            absence_fences,
+            protected_primary,
+            custody,
+            limits,
+            ..
+        } = lease;
+        let _held_absence_fences = absence_fences;
+        let mut final_physical = Vec::new();
+        for root in roots {
+            final_physical.push(root.lease.consume_final_recheck(limits)?.identity());
+        }
+        let primary_currentness = protected_primary.final_recheck()?;
+        let persistence_receipt =
+            match custody.seal_expected_old(candidate_manifest, &custody_records) {
+                Ok(receipt) => receipt,
+                Err(_) => {
+                    return Ok(FoundationLegacyQuarantineFinalityV2::InDoubt {
+                        admitted_set,
+                        candidate_manifest,
+                    });
+                }
+            };
+        let repository_final = match repository_hold
+            .final_recheck
+            .final_recheck(&repository_hold.expected)
+        {
+            Ok(commitment) if commitment != [0; 32] => commitment,
+            _ => {
+                return Ok(FoundationLegacyQuarantineFinalityV2::RecoveryRequired {
+                    admitted_set,
+                    persistence_receipt,
+                });
+            }
+        };
+        let installation_final = match installation_hold
+            .final_recheck
+            .final_recheck(&installation_hold.expected)
+        {
+            Ok(commitment) if commitment != [0; 32] => commitment,
+            _ => {
+                return Ok(FoundationLegacyQuarantineFinalityV2::RecoveryRequired {
+                    admitted_set,
+                    persistence_receipt,
+                });
+            }
+        };
+        let mut physical_parts = final_physical
+            .iter()
+            .map(<[u8; 32]>::as_slice)
+            .collect::<Vec<_>>();
+        physical_parts.extend([
+            primary_currentness.as_slice(),
+            repository_final.as_slice(),
+            installation_final.as_slice(),
+        ]);
+        let final_currentness = commitment(
+            b"maestro.foundation.legacy-quarantine.final-currentness.v2\0",
+            &physical_parts,
+        );
+        let closure_id = commitment(
+            CLOSURE_DOMAIN_V2,
+            &[
+                &invocation,
+                &admitted_set,
+                &repository_universe,
+                &installation_universe,
+                &candidate_manifest,
+                &primary_currentness,
+                &repository_final,
+                &installation_final,
+                &final_currentness,
+                &persistence_receipt,
+            ],
+        );
+        Ok(FoundationLegacyQuarantineFinalityV2::Closed {
+            closure: FoundationLegacyQuarantineClosureV2 {
+                identity: closure_id,
+                admitted_set,
+                repository_universe,
+                installation_universe,
+                candidate_manifest,
+                final_currentness,
+                persistence_receipt,
+            },
+            persistence_receipt,
+        })
+    }
+}
+
+pub(crate) enum FoundationLegacyQuarantineFinalityV2 {
+    Closed {
+        closure: FoundationLegacyQuarantineClosureV2,
+        persistence_receipt: [u8; 32],
+    },
+    RecoveryRequired {
+        admitted_set: [u8; 32],
+        persistence_receipt: [u8; 32],
+    },
+    InDoubt {
+        admitted_set: [u8; 32],
+        candidate_manifest: [u8; 32],
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FoundationLegacyQuarantineClosureV2 {
+    identity: [u8; 32],
+    admitted_set: [u8; 32],
+    repository_universe: [u8; 32],
+    installation_universe: [u8; 32],
+    candidate_manifest: [u8; 32],
+    final_currentness: [u8; 32],
+    persistence_receipt: [u8; 32],
+}
+
+impl FoundationLegacyQuarantineClosureV2 {
+    pub(crate) const fn identity(&self) -> [u8; 32] {
+        self.identity
+    }
+
+    pub(crate) const fn admitted_set(&self) -> [u8; 32] {
+        self.admitted_set
+    }
+
+    pub(crate) const fn persistence_receipt(&self) -> [u8; 32] {
+        self.persistence_receipt
+    }
+}
+
 fn validate_physical_separation<P, Q>(
     repository: &LegacyQuarantineRootAdmissionFactsV3,
     installation: &LegacyQuarantineRootAdmissionFactsV3,
@@ -952,6 +1720,501 @@ where
         return Err(FoundationLegacyQuarantineErrorV1::PhysicalSeparationFailed);
     }
     Ok(())
+}
+
+fn validate_retained_physical_separation_v2<P, Q>(
+    roots: &[RetainedRootV2],
+    primary: &P,
+    custody: &Q,
+) -> Result<(), FoundationLegacyQuarantineErrorV1>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+    Q: QuarantineCustodyPortV1,
+{
+    for (index, root) in roots.iter().enumerate() {
+        if locator_contains(&root.display_locator, custody.display_locator())
+            || locator_contains(custody.display_locator(), &root.display_locator)
+            || locator_contains(&root.display_locator, primary.display_locator())
+            || locator_contains(primary.display_locator(), &root.display_locator)
+            || root.resolved_locator_commitment == primary.resolved_locator_commitment()
+            || (root.object_identity == primary.object_identity()
+                && root.mount_identity == primary.mount_identity()
+                && root.provider_identity == primary.provider_identity())
+            || root.resolved_locator_commitment == custody.resolved_locator_commitment()
+            || (root.object_identity == custody.object_identity()
+                && root.mount_identity == custody.mount_identity()
+                && root.provider_identity == custody.provider_identity())
+            || roots.iter().skip(index + 1).any(|other| {
+                root.root_binding == other.root_binding
+                    || root.resolved_locator_commitment == other.resolved_locator_commitment
+                    || (root.object_identity == other.object_identity
+                        && root.mount_identity == other.mount_identity
+                        && root.provider_identity == other.provider_identity)
+                    || locator_contains(&root.display_locator, &other.display_locator)
+                    || locator_contains(&other.display_locator, &root.display_locator)
+            })
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::PhysicalSeparationFailed);
+        }
+    }
+    if primary.identity() == custody.identity()
+        || primary.resolved_locator_commitment() == custody.resolved_locator_commitment()
+        || primary.object_identity() == custody.object_identity()
+        || primary.mount_identity() == custody.mount_identity()
+        || primary.provider_identity() == custody.provider_identity()
+        || primary.anchor_identity() == custody.anchor_identity()
+        || primary.realm_identity() == custody.manager_realm_identity()
+        || primary.realm_identity() == custody.security_realm_identity()
+        || primary.currentness() == [0; 32]
+        || primary.fence() == [0; 32]
+        || custody.expected_old() == [0; 32]
+        || custody.currentness() == [0; 32]
+        || custody.fence() == [0; 32]
+        || primary.revocation_revision() == 0
+        || custody.revocation_revision() == 0
+    {
+        return Err(FoundationLegacyQuarantineErrorV1::PhysicalSeparationFailed);
+    }
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "evidence admission binds all three nominal owners to the same invocation"
+)]
+fn consume_owner_evidence_sets(
+    repository: OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    installation: OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    protected_primary: OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+    expected_source_set: [u8; 32],
+    invocation: [u8; 32],
+    repository_admission: [u8; 32],
+    repository_currentness: [u8; 32],
+    installation_admission: [u8; 32],
+    installation_currentness: [u8; 32],
+    protected_primary_admission: [u8; 32],
+    protected_primary_currentness: [u8; 32],
+) -> Result<
+    std::collections::BTreeMap<
+        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
+        OwnerUnavailablePreexistingLossWitnessV1,
+    >,
+    FoundationLegacyQuarantineErrorV1,
+> {
+    let mut witnesses = std::collections::BTreeMap::new();
+    for (set, expected_owner, expected_admission, expected_currentness) in [
+        (
+            repository,
+            LegacyQuarantineOwnerDomainV3::Repository,
+            repository_admission,
+            repository_currentness,
+        ),
+        (
+            installation,
+            LegacyQuarantineOwnerDomainV3::Installation,
+            installation_admission,
+            installation_currentness,
+        ),
+        (
+            protected_primary,
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            protected_primary_admission,
+            protected_primary_currentness,
+        ),
+    ] {
+        let (
+            _set_identity,
+            owner,
+            set_expected_sources,
+            set_attempt,
+            owner_admission,
+            owner_currentness,
+            rows,
+        ) = set.into_foundation_witnesses();
+        if owner != expected_owner
+            || set_expected_sources != expected_source_set
+            || set_attempt != invocation
+            || owner_admission != expected_admission
+            || owner_currentness != expected_currentness
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::InvalidLossEvidence);
+        }
+        for witness in rows {
+            let key = (
+                witness.owner(),
+                witness.root_binding(),
+                witness.relative_locator_commitment(),
+            );
+            if witnesses.insert(key, witness).is_some() {
+                return Err(FoundationLegacyQuarantineErrorV1::InvalidLossEvidence);
+            }
+        }
+    }
+    Ok(witnesses)
+}
+
+fn admitted_set_identity_v4(
+    invocation: [u8; 32],
+    repository_universe: [u8; 32],
+    installation_universe: [u8; 32],
+    protected_primary: [u8; 32],
+    roots: &[RetainedRootV2],
+    expected_source_set: [u8; 32],
+) -> [u8; 32] {
+    let mut parts = vec![
+        invocation.as_slice(),
+        repository_universe.as_slice(),
+        installation_universe.as_slice(),
+        protected_primary.as_slice(),
+        expected_source_set.as_slice(),
+    ];
+    for root in roots {
+        parts.extend([
+            root.declaration_id.as_slice(),
+            root.root_binding.as_slice(),
+            root.resolved_locator_commitment.as_slice(),
+            root.object_identity.as_slice(),
+            root.mount_identity.as_slice(),
+            root.provider_identity.as_slice(),
+            root.anchor_identity.as_slice(),
+            root.fence_identity.as_slice(),
+            root.universe_identity.as_slice(),
+            root.owner_currentness.as_slice(),
+        ]);
+    }
+    commitment(ADMITTED_SET_DOMAIN_V4, &parts)
+}
+
+fn relative_locator_commitment_v1(
+    owner: LegacyQuarantineOwnerDomainV3,
+    relative_locator: &[u8],
+) -> [u8; 32] {
+    let domain = match owner {
+        LegacyQuarantineOwnerDomainV3::Repository | LegacyQuarantineOwnerDomainV3::Installation => {
+            b"maestro.v8.legacy-source.relative-locator.v1\0".as_slice()
+        }
+        LegacyQuarantineOwnerDomainV3::ProtectedPrimary => {
+            b"maestro.v8.protected-primary.relative-locator.v1\0".as_slice()
+        }
+    };
+    commitment(domain, &[relative_locator])
+}
+
+fn reconcile_expected_sources_v4(
+    invocation: [u8; 32],
+    admitted_set: [u8; 32],
+    root: &RetainedRootV2,
+    expected_sources: &[LegacyQuarantineExpectedSourceV4],
+    witnesses: &mut std::collections::BTreeMap<
+        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
+        OwnerUnavailablePreexistingLossWitnessV1,
+    >,
+) -> Result<Vec<FoundationSourceCaseV2>, FoundationLegacyQuarantineErrorV1> {
+    let expected_sources = expected_sources
+        .iter()
+        .filter(|expected| {
+            expected.owner == root.owner && expected.declaration_id == root.declaration_id
+        })
+        .collect::<Vec<_>>();
+    let mut observed = root
+        .lease
+        .census()
+        .rows()
+        .iter()
+        .map(|row| (row.relative_name().to_vec(), row))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if observed.len() != root.lease.census().rows().len() {
+        return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+    }
+    let mut sources = Vec::with_capacity(expected_sources.len());
+    for expected in expected_sources {
+        let relative_commitment =
+            relative_locator_commitment_v1(root.owner, &expected.relative_locator);
+        let source_token = commitment(
+            SOURCE_TOKEN_DOMAIN_V2,
+            &[
+                &invocation,
+                &admitted_set,
+                &expected.identity,
+                &root.root_binding,
+            ],
+        );
+        let observed_row = observed.remove(&expected.relative_locator);
+        let (payload_state, loss_receipt) = match observed_row {
+            Some(row)
+                if row.kind() == expected.kind
+                    && row.logical_byte_length() == expected.logical_byte_length
+                    && row.object_identity() == expected.object_identity
+                    && row.content_identity() == expected.content_identity =>
+            {
+                (FoundationLegacyPayloadStateV3::Present, None)
+            }
+            Some(_) => return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch),
+            None => {
+                let witness = witnesses
+                    .remove(&(root.owner, root.root_binding, relative_commitment))
+                    .ok_or(FoundationLegacyQuarantineErrorV1::MissingLossEvidence)?;
+                validate_witness_matches_expected(&witness, expected)?;
+                let pass_a_absence_id = commitment(
+                    b"maestro.foundation.legacy-loss-absence-pass-a.v1\0",
+                    &[&root.lease.census().identity(), &expected.identity],
+                );
+                let pass_b_absence_id = commitment(
+                    b"maestro.foundation.legacy-loss-absence-pass-b.v1\0",
+                    &[
+                        &root.lease.census().identity(),
+                        &expected.identity,
+                        &root.fence_identity,
+                    ],
+                );
+                let receipt =
+                    FoundationValidatedUnavailablePreexistingLossReceiptV1::from_foundation(
+                        source_token,
+                        &witness,
+                        invocation,
+                        admitted_set,
+                        pass_a_absence_id,
+                        pass_b_absence_id,
+                    )?;
+                (
+                    FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss,
+                    Some(receipt),
+                )
+            }
+        };
+        sources.push(FoundationSourceCaseV2 {
+            source_token,
+            owner: root.owner,
+            declaration_id: root.declaration_id,
+            display_locator: root.display_locator.clone(),
+            root_binding: root.root_binding,
+            relative_locator: expected.relative_locator.clone(),
+            payload_state,
+            kind: expected.kind,
+            logical_byte_length: expected.logical_byte_length,
+            object_identity: expected.object_identity,
+            content_identity: expected.content_identity,
+            metadata_commitment: expected.metadata_commitment,
+            source_provenance_id: expected.source_provenance_id,
+            mount_identity: root.mount_identity,
+            provider_identity: root.provider_identity,
+            anchor_identity: root.anchor_identity,
+            fence_identity: root.fence_identity,
+            owner_currentness: root.owner_currentness,
+            owner_attestation: root.universe_identity,
+            loss_receipt,
+        });
+    }
+    if !observed.is_empty() {
+        return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+    }
+    Ok(sources)
+}
+
+fn reconcile_protected_primary_sources_v4<P>(
+    invocation: [u8; 32],
+    admitted_set: [u8; 32],
+    primary: &P,
+    expected_sources: &[LegacyQuarantineExpectedSourceV4],
+    witnesses: &mut std::collections::BTreeMap<
+        (LegacyQuarantineOwnerDomainV3, [u8; 32], [u8; 32]),
+        OwnerUnavailablePreexistingLossWitnessV1,
+    >,
+) -> Result<Vec<FoundationSourceCaseV2>, FoundationLegacyQuarantineErrorV1>
+where
+    P: ProtectedPrimaryBoundaryPortV1,
+{
+    let expected_sources = expected_sources
+        .iter()
+        .filter(|expected| expected.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary)
+        .collect::<Vec<_>>();
+    let mut observed = primary
+        .source_rows()?
+        .iter()
+        .map(|row| (row.relative_name().to_vec(), row))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if observed.len() != primary.source_rows()?.len() {
+        return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+    }
+    let root_binding = primary.resolved_locator_commitment();
+    let census_identity = protected_primary_census_identity(primary.source_rows()?);
+    let mut sources = Vec::with_capacity(expected_sources.len());
+    for expected in expected_sources {
+        if expected.declaration_id != primary.identity() {
+            return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+        }
+        let relative_commitment = relative_locator_commitment_v1(
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            &expected.relative_locator,
+        );
+        let source_token = commitment(
+            SOURCE_TOKEN_DOMAIN_V2,
+            &[
+                &invocation,
+                &admitted_set,
+                &expected.identity,
+                &root_binding,
+            ],
+        );
+        let observed_row = observed.remove(&expected.relative_locator);
+        let (payload_state, loss_receipt) = match observed_row {
+            Some(row)
+                if row.kind() == expected.kind
+                    && row.logical_byte_length() == expected.logical_byte_length
+                    && row.object_identity() == expected.object_identity
+                    && row.content_identity() == expected.content_identity =>
+            {
+                (FoundationLegacyPayloadStateV3::Present, None)
+            }
+            Some(_) => return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch),
+            None => {
+                let witness = witnesses
+                    .remove(&(
+                        LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+                        root_binding,
+                        relative_commitment,
+                    ))
+                    .ok_or(FoundationLegacyQuarantineErrorV1::MissingLossEvidence)?;
+                validate_witness_matches_expected(&witness, expected)?;
+                let pass_a_absence_id = commitment(
+                    b"maestro.foundation.legacy-loss-absence-pass-a.v1\0",
+                    &[&census_identity, &expected.identity],
+                );
+                let pass_b_absence_id = commitment(
+                    b"maestro.foundation.legacy-loss-absence-pass-b.v1\0",
+                    &[&census_identity, &expected.identity, &primary.fence()],
+                );
+                let receipt =
+                    FoundationValidatedUnavailablePreexistingLossReceiptV1::from_foundation(
+                        source_token,
+                        &witness,
+                        invocation,
+                        admitted_set,
+                        pass_a_absence_id,
+                        pass_b_absence_id,
+                    )?;
+                (
+                    FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss,
+                    Some(receipt),
+                )
+            }
+        };
+        sources.push(FoundationSourceCaseV2 {
+            source_token,
+            owner: LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+            declaration_id: primary.identity(),
+            display_locator: primary.display_locator().to_vec(),
+            root_binding,
+            relative_locator: expected.relative_locator.clone(),
+            payload_state,
+            kind: expected.kind,
+            logical_byte_length: expected.logical_byte_length,
+            object_identity: expected.object_identity,
+            content_identity: expected.content_identity,
+            metadata_commitment: expected.metadata_commitment,
+            source_provenance_id: expected.source_provenance_id,
+            mount_identity: primary.mount_identity(),
+            provider_identity: primary.provider_identity(),
+            anchor_identity: primary.anchor_identity(),
+            fence_identity: primary.fence(),
+            owner_currentness: primary.currentness(),
+            owner_attestation: primary.identity(),
+            loss_receipt,
+        });
+    }
+    if !observed.is_empty() {
+        return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+    }
+    Ok(sources)
+}
+
+fn validate_witness_matches_expected(
+    witness: &OwnerUnavailablePreexistingLossWitnessV1,
+    expected: &LegacyQuarantineExpectedSourceV4,
+) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+    if witness.owner() != expected.owner
+        || witness.object_kind() != expected.kind
+        || witness.object_identity() != expected.object_identity
+        || witness.expected_length() != expected.logical_byte_length
+        || witness.content_sha256() != expected.content_identity
+        || witness.metadata_commitment() != expected.metadata_commitment
+        || witness.source_provenance_id() != expected.source_provenance_id
+    {
+        return Err(FoundationLegacyQuarantineErrorV1::InvalidLossEvidence);
+    }
+    Ok(())
+}
+
+fn protected_primary_census_identity(rows: &[InventoryRowV1]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"maestro.foundation.protected-primary-census.v1\0");
+    for row in rows {
+        let kind_tag = [match row.kind() {
+            DescriptorCensusObjectKindV1::RegularFile => 1,
+            DescriptorCensusObjectKindV1::SymbolicLink => 2,
+        }];
+        let length = row.logical_byte_length().to_be_bytes();
+        let object_identity = row.object_identity();
+        let content_identity = row.content_identity();
+        for part in [
+            row.relative_name(),
+            kind_tag.as_slice(),
+            length.as_slice(),
+            object_identity.as_slice(),
+            content_identity.as_slice(),
+        ] {
+            hasher.update((part.len() as u64).to_be_bytes());
+            hasher.update(part);
+        }
+    }
+    hasher.finalize().into()
+}
+
+fn derive_overlap_pairs_v2(
+    source_cases: &[FoundationSourceCaseV2],
+) -> Result<Vec<FoundationProtectedPrimaryOverlapPairV1>, FoundationLegacyQuarantineErrorV1> {
+    let mut sources_by_object = std::collections::BTreeMap::new();
+    for source in source_cases
+        .iter()
+        .filter(|source| source.payload_state == FoundationLegacyPayloadStateV3::Present)
+    {
+        let key = (
+            source.object_identity,
+            source.mount_identity,
+            source.provider_identity,
+        );
+        sources_by_object
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push(source);
+    }
+    let mut overlap_pairs = Vec::new();
+    for sources in sources_by_object.values() {
+        let [left, right] = sources.as_slice() else {
+            if sources.len() == 1 {
+                continue;
+            }
+            return Err(FoundationLegacyQuarantineErrorV1::RootAlias);
+        };
+        let (owner, primary) = match (left.owner, right.owner) {
+            (LegacyQuarantineOwnerDomainV3::ProtectedPrimary, _) => (right, left),
+            (_, LegacyQuarantineOwnerDomainV3::ProtectedPrimary) => (left, right),
+            _ => return Err(FoundationLegacyQuarantineErrorV1::RootAlias),
+        };
+        if owner.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary
+            || owner.kind != primary.kind
+            || owner.logical_byte_length != primary.logical_byte_length
+            || owner.content_identity != primary.content_identity
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::RootAlias);
+        }
+        overlap_pairs.push(FoundationProtectedPrimaryOverlapPairV1 {
+            owner_source_token: owner.source_token,
+            primary_source_token: primary.source_token,
+        });
+    }
+    overlap_pairs.sort_by_key(|pair| (pair.owner_source_token, pair.primary_source_token));
+    Ok(overlap_pairs)
 }
 
 fn admitted_set_identity(
@@ -1144,6 +2407,12 @@ pub(crate) enum FoundationLegacyQuarantineErrorV1 {
     ExpectedSourceMismatch,
     #[error("expected legacy source is absent without independent preexisting-loss evidence")]
     MissingLossEvidence,
+    #[error("owner-issued loss evidence does not match the admitted source or owner currentness")]
+    InvalidLossEvidence,
+    #[error("owner-issued loss evidence was not consumed by exactly one absent expected source")]
+    UnexpectedLossEvidence,
+    #[error("expected source maps beneath a required-absent or unsupported declared root")]
+    DeclaredRootRefusal,
     #[error("legacy quarantine source token is unknown")]
     UnknownSourceToken,
     #[error("legacy quarantine source token is one-use")]
@@ -1156,6 +2425,10 @@ pub(crate) enum FoundationLegacyQuarantineErrorV1 {
     CustodyWriteFailed,
     #[error("legacy quarantine platform is unsupported")]
     UnsupportedPlatform,
+    #[error(transparent)]
+    LossEvidence(#[from] FoundationLegacyLossEvidenceErrorV1),
+    #[error(transparent)]
+    RootUniverse(#[from] FoundationRootUniverseErrorV1),
     #[error(transparent)]
     SecureFs(#[from] SecureFsError),
 }

@@ -3,6 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 use crate::foundation::core::deterministic_cbor::{CborError, CborValue};
+use crate::foundation::core::{
+    FoundationLegacyPayloadStateV3, FoundationMigrationSourcePartsV1,
+    FoundationValidatedUnavailablePreexistingLossReceiptV1, LegacyQuarantineOwnerDomainV3,
+};
 
 use super::{MigrationDigestV1, MigrationIdentityErrorV1};
 
@@ -258,6 +262,134 @@ impl SourceCaseV3 {
             self.content_sha256.canonical_value(),
             self.metadata_commitment.canonical_value(),
         ])
+    }
+}
+
+pub(crate) struct FoundationMaterializedSourceCaseV3 {
+    source_case: SourceCaseV3,
+    source_token: [u8; 32],
+    mount_identity: MigrationDigestV1,
+    provider_identity: MigrationDigestV1,
+    anchor_identity: MigrationDigestV1,
+    fence_identity: MigrationDigestV1,
+    loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+}
+
+impl FoundationMaterializedSourceCaseV3 {
+    pub(crate) fn from_foundation_v2(
+        parts: FoundationMigrationSourcePartsV1,
+        foundation_invocation: MigrationDigestV1,
+    ) -> Result<Self, LiveSetV3Error> {
+        let owner = match parts.owner {
+            LegacyQuarantineOwnerDomainV3::Repository => LegacyOwnerDomainV3::Repository,
+            LegacyQuarantineOwnerDomainV3::Installation => LegacyOwnerDomainV3::Installation,
+            LegacyQuarantineOwnerDomainV3::ProtectedPrimary => {
+                LegacyOwnerDomainV3::ProtectedPrimary
+            }
+        };
+        let node_kind = match parts.kind {
+            crate::foundation::core::DescriptorCensusObjectKindV1::RegularFile => {
+                LegacyNodeKindV3::RegularFile
+            }
+            crate::foundation::core::DescriptorCensusObjectKindV1::SymbolicLink => {
+                LegacyNodeKindV3::SymbolicLink
+            }
+        };
+        let root_binding = MigrationDigestV1::from_digest(parts.root_binding)?;
+        let resolved_locator_commitment = MigrationDigestV1::identify(
+            b"maestro.migration.resolved-leaf-locator.v3\0",
+            &CborValue::Array(vec![
+                root_binding.canonical_value(),
+                CborValue::Bytes(parts.relative_locator.clone()),
+            ]),
+        )?;
+        let object_identity = MigrationDigestV1::from_digest(parts.object_identity)?;
+        let content_sha256 = MigrationDigestV1::from_digest(parts.content_identity)?;
+        let metadata_commitment = MigrationDigestV1::identify(
+            b"maestro.migration.source-metadata.v3\0",
+            &CborValue::Array(vec![
+                CborValue::Unsigned(node_kind.tag()),
+                CborValue::Unsigned(parts.logical_byte_length),
+                object_identity.canonical_value(),
+                content_sha256.canonical_value(),
+            ]),
+        )?;
+        if metadata_commitment.into_bytes() != parts.metadata_commitment {
+            return Err(LiveSetV3Error::MetadataMismatch);
+        }
+        let mut display_locator = parts.display_locator;
+        if !display_locator.ends_with(b"/") {
+            display_locator.push(b'/');
+        }
+        display_locator.extend_from_slice(&parts.relative_locator);
+        let membership = MembershipKeyV3::from_foundation(
+            owner,
+            root_binding,
+            display_locator,
+            resolved_locator_commitment,
+            object_identity,
+            node_kind,
+            metadata_commitment,
+            MigrationDigestV1::from_digest(parts.owner_currentness)?,
+            MigrationDigestV1::from_digest(parts.owner_attestation)?,
+        )?;
+        let payload_state = match parts.payload_state {
+            FoundationLegacyPayloadStateV3::Present => LegacyPayloadStateV3::Present,
+            FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss => {
+                LegacyPayloadStateV3::UnavailablePreexistingLoss
+            }
+        };
+        let source_case = SourceCaseV3::from_foundation(
+            membership,
+            foundation_invocation,
+            payload_state,
+            parts.logical_byte_length,
+            content_sha256,
+            metadata_commitment,
+        )?;
+        Ok(Self {
+            source_case,
+            source_token: parts.source_token,
+            mount_identity: MigrationDigestV1::from_digest(parts.mount_identity)?,
+            provider_identity: MigrationDigestV1::from_digest(parts.provider_identity)?,
+            anchor_identity: MigrationDigestV1::from_digest(parts.anchor_identity)?,
+            fence_identity: MigrationDigestV1::from_digest(parts.fence_identity)?,
+            loss_receipt: parts.loss_receipt,
+        })
+    }
+
+    pub(crate) const fn source_case(&self) -> &SourceCaseV3 {
+        &self.source_case
+    }
+
+    pub(crate) const fn source_token(&self) -> [u8; 32] {
+        self.source_token
+    }
+
+    pub(crate) const fn mount_identity(&self) -> MigrationDigestV1 {
+        self.mount_identity
+    }
+
+    pub(crate) const fn provider_identity(&self) -> MigrationDigestV1 {
+        self.provider_identity
+    }
+
+    pub(crate) const fn anchor_identity(&self) -> MigrationDigestV1 {
+        self.anchor_identity
+    }
+
+    pub(crate) const fn fence_identity(&self) -> MigrationDigestV1 {
+        self.fence_identity
+    }
+
+    pub(crate) fn take_loss_receipt(
+        &mut self,
+    ) -> Option<FoundationValidatedUnavailablePreexistingLossReceiptV1> {
+        self.loss_receipt.take()
+    }
+
+    pub(crate) fn into_source_case(self) -> SourceCaseV3 {
+        self.source_case
     }
 }
 
@@ -983,6 +1115,168 @@ impl UnavailablePreexistingLossManifestV3 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnavailablePreexistingLossV4 {
+    identity: MigrationDigestV1,
+    source_case_id: MigrationDigestV1,
+    owner_snapshot_id: MigrationDigestV1,
+    issuer_id: MigrationDigestV1,
+    historical_tuple_id: MigrationDigestV1,
+    owner_current_tuple_id: MigrationDigestV1,
+    source_provenance_id: MigrationDigestV1,
+    owner_admission_id: MigrationDigestV1,
+    owner_currentness_id: MigrationDigestV1,
+    foundation_loss_receipt_id: MigrationDigestV1,
+    validation_invocation_id: MigrationDigestV1,
+    pass_a_absence_id: MigrationDigestV1,
+    pass_b_absence_id: MigrationDigestV1,
+}
+
+impl UnavailablePreexistingLossV4 {
+    pub(crate) fn from_foundation(
+        source: &SourceCaseV3,
+        source_token: [u8; 32],
+        receipt: FoundationValidatedUnavailablePreexistingLossReceiptV1,
+    ) -> Result<Self, LiveSetV3Error> {
+        if source.payload_state() != LegacyPayloadStateV3::UnavailablePreexistingLoss
+            || receipt.source_token() != source_token
+        {
+            return Err(LiveSetV3Error::InvalidLossEvidence);
+        }
+        let owner_snapshot_id = MigrationDigestV1::from_digest(receipt.snapshot_id())?;
+        let issuer_id = MigrationDigestV1::from_digest(receipt.issuer_id())?;
+        let historical_tuple_id = MigrationDigestV1::from_digest(receipt.historical_tuple_id())?;
+        let owner_current_tuple_id = MigrationDigestV1::from_digest(receipt.current_tuple_id())?;
+        let source_provenance_id = MigrationDigestV1::from_digest(receipt.source_provenance_id())?;
+        let owner_admission_id = MigrationDigestV1::from_digest(receipt.owner_admission_id())?;
+        let owner_currentness_id = MigrationDigestV1::from_digest(receipt.owner_currentness_id())?;
+        let foundation_loss_receipt_id = MigrationDigestV1::from_digest(receipt.identity())?;
+        let validation_invocation_id =
+            MigrationDigestV1::from_digest(receipt.validation_invocation())?;
+        let pass_a_absence_id = MigrationDigestV1::from_digest(receipt.pass_a_absence_id())?;
+        let pass_b_absence_id = MigrationDigestV1::from_digest(receipt.pass_b_absence_id())?;
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.unavailable-preexisting-loss.v4\0",
+            &CborValue::Array(vec![
+                source.identity().canonical_value(),
+                owner_snapshot_id.canonical_value(),
+                issuer_id.canonical_value(),
+                historical_tuple_id.canonical_value(),
+                owner_current_tuple_id.canonical_value(),
+                source_provenance_id.canonical_value(),
+                owner_admission_id.canonical_value(),
+                owner_currentness_id.canonical_value(),
+                foundation_loss_receipt_id.canonical_value(),
+                validation_invocation_id.canonical_value(),
+                pass_a_absence_id.canonical_value(),
+                pass_b_absence_id.canonical_value(),
+            ]),
+        )?;
+        Ok(Self {
+            identity,
+            source_case_id: source.identity(),
+            owner_snapshot_id,
+            issuer_id,
+            historical_tuple_id,
+            owner_current_tuple_id,
+            source_provenance_id,
+            owner_admission_id,
+            owner_currentness_id,
+            foundation_loss_receipt_id,
+            validation_invocation_id,
+            pass_a_absence_id,
+            pass_b_absence_id,
+        })
+    }
+
+    pub const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub const fn source_case_id(&self) -> MigrationDigestV1 {
+        self.source_case_id
+    }
+
+    fn canonical_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            self.identity.canonical_value(),
+            self.source_case_id.canonical_value(),
+            self.owner_snapshot_id.canonical_value(),
+            self.issuer_id.canonical_value(),
+            self.historical_tuple_id.canonical_value(),
+            self.owner_current_tuple_id.canonical_value(),
+            self.source_provenance_id.canonical_value(),
+            self.owner_admission_id.canonical_value(),
+            self.owner_currentness_id.canonical_value(),
+            self.foundation_loss_receipt_id.canonical_value(),
+            self.validation_invocation_id.canonical_value(),
+            self.pass_a_absence_id.canonical_value(),
+            self.pass_b_absence_id.canonical_value(),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnavailablePreexistingLossManifestV4 {
+    identity: MigrationDigestV1,
+    source_case_manifest_id: MigrationDigestV1,
+    classification_manifest_id: MigrationDigestV1,
+    rows: Vec<UnavailablePreexistingLossV4>,
+}
+
+impl UnavailablePreexistingLossManifestV4 {
+    pub(crate) fn new(
+        source_cases: &LegacySourceCaseManifestV3,
+        classifications: &MigrationClassificationManifestV3,
+        mut rows: Vec<UnavailablePreexistingLossV4>,
+    ) -> Result<Self, LiveSetV3Error> {
+        rows.sort_by_key(UnavailablePreexistingLossV4::source_case_id);
+        let expected = classifications
+            .rows()
+            .iter()
+            .filter(|row| row.disposition() == MigrationDispositionV3::UnavailablePreexistingLoss)
+            .map(MigrationClassificationV3::source_case_id)
+            .collect::<Vec<_>>();
+        let observed = rows
+            .iter()
+            .map(UnavailablePreexistingLossV4::source_case_id)
+            .collect::<Vec<_>>();
+        if expected != observed
+            || rows
+                .iter()
+                .any(|row| !source_cases.by_id().contains_key(&row.source_case_id()))
+        {
+            return Err(LiveSetV3Error::InvalidLossEvidence);
+        }
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.unavailable-preexisting-loss-manifest.v4\0",
+            &CborValue::Array(vec![
+                source_cases.identity().canonical_value(),
+                classifications.identity().canonical_value(),
+                CborValue::Array(
+                    rows.iter()
+                        .map(UnavailablePreexistingLossV4::canonical_value)
+                        .collect(),
+                ),
+            ]),
+        )?;
+        Ok(Self {
+            identity,
+            source_case_manifest_id: source_cases.identity(),
+            classification_manifest_id: classifications.identity(),
+            rows,
+        })
+    }
+
+    pub const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub fn rows(&self) -> &[UnavailablePreexistingLossV4] {
+        &self.rows
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SealedQuarantineEntryV3 {
     identity: MigrationDigestV1,
     source_case_id: MigrationDigestV1,
@@ -1189,6 +1483,83 @@ impl LegacyRollbackAssessmentV3 {
         }
         let identity = MigrationDigestV1::identify(
             b"maestro.migration.legacy-rollback-assessment.v3\0",
+            &CborValue::Array(vec![
+                source_cases.identity().canonical_value(),
+                classifications.identity().canonical_value(),
+                losses.identity().canonical_value(),
+                quarantine.identity().canonical_value(),
+                quarantine.expected_old_id().canonical_value(),
+            ]),
+        )?;
+        Ok(Self {
+            identity,
+            source_case_manifest_id: source_cases.identity(),
+            classification_manifest_id: classifications.identity(),
+            loss_manifest_id: losses.identity(),
+            quarantine_manifest_id: quarantine.identity(),
+            expected_old_id: quarantine.expected_old_id(),
+        })
+    }
+
+    pub const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LegacyRollbackAssessmentV4 {
+    identity: MigrationDigestV1,
+    source_case_manifest_id: MigrationDigestV1,
+    classification_manifest_id: MigrationDigestV1,
+    loss_manifest_id: MigrationDigestV1,
+    quarantine_manifest_id: MigrationDigestV1,
+    expected_old_id: MigrationDigestV1,
+}
+
+impl LegacyRollbackAssessmentV4 {
+    pub(crate) fn assess(
+        source_cases: &LegacySourceCaseManifestV3,
+        classifications: &MigrationClassificationManifestV3,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+    ) -> Result<Self, LiveSetV3Error> {
+        if classifications.source_case_manifest_id() != source_cases.identity()
+            || losses.source_case_manifest_id != source_cases.identity()
+            || losses.classification_manifest_id != classifications.identity()
+            || quarantine.source_case_manifest_id != source_cases.identity()
+            || quarantine.classification_manifest_id != classifications.identity()
+        {
+            return Err(LiveSetV3Error::RollbackIncomplete);
+        }
+        let present = source_cases
+            .rows()
+            .iter()
+            .filter(|source| source.payload_state() == LegacyPayloadStateV3::Present)
+            .map(SourceCaseV3::identity)
+            .collect::<Vec<_>>();
+        let quarantined = quarantine
+            .rows()
+            .iter()
+            .map(SealedQuarantineEntryV3::source_case_id)
+            .collect::<Vec<_>>();
+        let unavailable = source_cases
+            .rows()
+            .iter()
+            .filter(|source| {
+                source.payload_state() == LegacyPayloadStateV3::UnavailablePreexistingLoss
+            })
+            .map(SourceCaseV3::identity)
+            .collect::<Vec<_>>();
+        let loss_rows = losses
+            .rows()
+            .iter()
+            .map(UnavailablePreexistingLossV4::source_case_id)
+            .collect::<Vec<_>>();
+        if present != quarantined || unavailable != loss_rows {
+            return Err(LiveSetV3Error::RollbackIncomplete);
+        }
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.legacy-rollback-assessment.v4\0",
             &CborValue::Array(vec![
                 source_cases.identity().canonical_value(),
                 classifications.identity().canonical_value(),
@@ -1442,6 +1813,349 @@ impl LegacyQuarantineEpochV3 {
         fields.push(CborValue::Unsigned(basis.revocation_revision));
         let identity = MigrationDigestV1::identify(
             b"maestro.migration.legacy-quarantine-epoch.v3\0",
+            &CborValue::Array(fields),
+        )?;
+        Ok(Self {
+            identity,
+            source_case_manifest_id: source_cases.identity(),
+            sighting_manifest_id: sightings.identity(),
+            classification_manifest_id: classifications.identity(),
+            overlap_manifest_id: overlaps.identity(),
+            loss_manifest_id: losses.identity(),
+            quarantine_manifest_id: quarantine.identity(),
+            basis,
+        })
+    }
+
+    pub const fn identity(&self) -> MigrationDigestV1 {
+        self.identity
+    }
+
+    pub const fn source_case_manifest_id(&self) -> MigrationDigestV1 {
+        self.source_case_manifest_id
+    }
+
+    pub const fn sighting_manifest_id(&self) -> MigrationDigestV1 {
+        self.sighting_manifest_id
+    }
+
+    pub const fn classification_manifest_id(&self) -> MigrationDigestV1 {
+        self.classification_manifest_id
+    }
+
+    pub const fn overlap_manifest_id(&self) -> MigrationDigestV1 {
+        self.overlap_manifest_id
+    }
+
+    pub const fn loss_manifest_id(&self) -> MigrationDigestV1 {
+        self.loss_manifest_id
+    }
+
+    pub const fn quarantine_manifest_id(&self) -> MigrationDigestV1 {
+        self.quarantine_manifest_id
+    }
+
+    pub const fn foundation_closure_id(&self) -> MigrationDigestV1 {
+        self.basis.foundation_closure_id
+    }
+
+    pub const fn persistence_receipt_id(&self) -> MigrationDigestV1 {
+        self.basis.persistence_receipt_id
+    }
+
+    pub const fn release_id(&self) -> MigrationDigestV1 {
+        self.basis.release_id
+    }
+
+    pub const fn store_generation_id(&self) -> MigrationDigestV1 {
+        self.basis.store_generation_id
+    }
+
+    pub const fn store_head_id(&self) -> MigrationDigestV1 {
+        self.basis.store_head_id
+    }
+
+    pub const fn namespace_epoch(&self) -> u64 {
+        self.basis.namespace_epoch
+    }
+
+    pub const fn trust_root_id(&self) -> MigrationDigestV1 {
+        self.basis.trust_root_id
+    }
+
+    pub const fn provider_id(&self) -> MigrationDigestV1 {
+        self.basis.provider_id
+    }
+
+    pub const fn mount_id(&self) -> MigrationDigestV1 {
+        self.basis.mount_id
+    }
+
+    pub const fn anchor_id(&self) -> MigrationDigestV1 {
+        self.basis.anchor_id
+    }
+
+    pub const fn fence_id(&self) -> MigrationDigestV1 {
+        self.basis.fence_id
+    }
+
+    pub const fn candidate_commit_id(&self) -> MigrationDigestV1 {
+        self.basis.candidate_commit_id
+    }
+
+    pub const fn candidate_tree_id(&self) -> MigrationDigestV1 {
+        self.basis.candidate_tree_id
+    }
+
+    pub const fn protected_primary_boundary_id(&self) -> MigrationDigestV1 {
+        self.basis.protected_primary_boundary_id
+    }
+
+    pub const fn rollback_plan_id(&self) -> MigrationDigestV1 {
+        self.basis.rollback_plan_id
+    }
+
+    pub const fn currentness_id(&self) -> MigrationDigestV1 {
+        self.basis.currentness_id
+    }
+
+    pub const fn revocation_revision(&self) -> u64 {
+        self.basis.revocation_revision
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LegacyQuarantineEpochBasisV4 {
+    foundation_closure_id: MigrationDigestV1,
+    persistence_receipt_id: MigrationDigestV1,
+    release_id: MigrationDigestV1,
+    store_generation_id: MigrationDigestV1,
+    store_head_id: MigrationDigestV1,
+    namespace_epoch: u64,
+    trust_root_id: MigrationDigestV1,
+    provider_id: MigrationDigestV1,
+    mount_id: MigrationDigestV1,
+    anchor_id: MigrationDigestV1,
+    fence_id: MigrationDigestV1,
+    candidate_commit_id: MigrationDigestV1,
+    candidate_tree_id: MigrationDigestV1,
+    protected_primary_boundary_id: MigrationDigestV1,
+    rollback_plan_id: MigrationDigestV1,
+    currentness_id: MigrationDigestV1,
+    revocation_revision: u64,
+}
+
+impl LegacyQuarantineEpochBasisV4 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "V4 finality binds the complete V4 loss, owner, and physical tuple"
+    )]
+    pub(crate) fn from_final_owner_recheck(
+        source_cases: &LegacySourceCaseManifestV3,
+        sightings: &Stage12SightingManifestV2,
+        classifications: &MigrationClassificationManifestV3,
+        overlaps: &DeclaredOverlapManifestV2,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+        rollback: &LegacyRollbackAssessmentV4,
+        foundation_closure_id: MigrationDigestV1,
+        persistence_receipt_id: MigrationDigestV1,
+        release_id: MigrationDigestV1,
+        store_generation_id: MigrationDigestV1,
+        store_head_id: MigrationDigestV1,
+        namespace_epoch: u64,
+        trust_root_id: MigrationDigestV1,
+        provider_id: MigrationDigestV1,
+        mount_id: MigrationDigestV1,
+        anchor_id: MigrationDigestV1,
+        fence_id: MigrationDigestV1,
+        candidate_commit_id: MigrationDigestV1,
+        candidate_tree_id: MigrationDigestV1,
+        protected_primary_boundary_id: MigrationDigestV1,
+        revocation_revision: u64,
+    ) -> Result<Self, LiveSetV3Error> {
+        if namespace_epoch == 0
+            || revocation_revision == 0
+            || rollback.source_case_manifest_id != source_cases.identity()
+            || rollback.classification_manifest_id != classifications.identity()
+            || rollback.loss_manifest_id != losses.identity()
+            || rollback.quarantine_manifest_id != quarantine.identity()
+            || rollback.expected_old_id != quarantine.expected_old_id()
+            || sightings.source_case_manifest_id() != source_cases.identity()
+            || sightings.candidate_commit_id() != candidate_commit_id
+            || sightings.candidate_tree_id() != candidate_tree_id
+            || classifications.source_case_manifest_id() != source_cases.identity()
+            || overlaps.source_case_manifest_id != source_cases.identity()
+        {
+            return Err(LiveSetV3Error::CurrentnessMismatch);
+        }
+        let rollback_plan_id = rollback.identity();
+        let mut basis = Self {
+            foundation_closure_id,
+            persistence_receipt_id,
+            release_id,
+            store_generation_id,
+            store_head_id,
+            namespace_epoch,
+            trust_root_id,
+            provider_id,
+            mount_id,
+            anchor_id,
+            fence_id,
+            candidate_commit_id,
+            candidate_tree_id,
+            protected_primary_boundary_id,
+            rollback_plan_id,
+            currentness_id: rollback_plan_id,
+            revocation_revision,
+        };
+        basis.currentness_id = basis.calculate_currentness(
+            source_cases,
+            sightings,
+            classifications,
+            overlaps,
+            losses,
+            quarantine,
+        )?;
+        Ok(basis)
+    }
+
+    fn calculate_currentness(
+        &self,
+        source_cases: &LegacySourceCaseManifestV3,
+        sightings: &Stage12SightingManifestV2,
+        classifications: &MigrationClassificationManifestV3,
+        overlaps: &DeclaredOverlapManifestV2,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+    ) -> Result<MigrationDigestV1, LiveSetV3Error> {
+        let mut fields = vec![
+            source_cases.identity().canonical_value(),
+            sightings.identity().canonical_value(),
+            classifications.identity().canonical_value(),
+            overlaps.identity().canonical_value(),
+            losses.identity().canonical_value(),
+            quarantine.identity().canonical_value(),
+            self.rollback_plan_id.canonical_value(),
+        ];
+        fields.extend(
+            [
+                self.foundation_closure_id,
+                self.persistence_receipt_id,
+                self.release_id,
+                self.store_generation_id,
+                self.store_head_id,
+                self.trust_root_id,
+                self.provider_id,
+                self.mount_id,
+                self.anchor_id,
+                self.fence_id,
+                self.candidate_commit_id,
+                self.candidate_tree_id,
+                self.protected_primary_boundary_id,
+            ]
+            .into_iter()
+            .map(MigrationDigestV1::canonical_value),
+        );
+        fields.push(CborValue::Unsigned(self.namespace_epoch));
+        fields.push(CborValue::Unsigned(self.revocation_revision));
+        MigrationDigestV1::identify(
+            b"maestro.migration.legacy-quarantine-final-currentness.v4\0",
+            &CborValue::Array(fields),
+        )
+        .map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LegacyQuarantineEpochV4 {
+    identity: MigrationDigestV1,
+    source_case_manifest_id: MigrationDigestV1,
+    sighting_manifest_id: MigrationDigestV1,
+    classification_manifest_id: MigrationDigestV1,
+    overlap_manifest_id: MigrationDigestV1,
+    loss_manifest_id: MigrationDigestV1,
+    quarantine_manifest_id: MigrationDigestV1,
+    basis: LegacyQuarantineEpochBasisV4,
+}
+
+impl LegacyQuarantineEpochV4 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "V4 epoch finalization revalidates every joined manifest and currentness field"
+    )]
+    pub(crate) fn finalize(
+        source_cases: &LegacySourceCaseManifestV3,
+        sightings: &Stage12SightingManifestV2,
+        classifications: &MigrationClassificationManifestV3,
+        overlaps: &DeclaredOverlapManifestV2,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+        rollback: &LegacyRollbackAssessmentV4,
+        basis: LegacyQuarantineEpochBasisV4,
+    ) -> Result<Self, LiveSetV3Error> {
+        let recomputed_currentness = basis.calculate_currentness(
+            source_cases,
+            sightings,
+            classifications,
+            overlaps,
+            losses,
+            quarantine,
+        )?;
+        if basis.namespace_epoch == 0
+            || basis.revocation_revision == 0
+            || sightings.source_case_manifest_id() != source_cases.identity()
+            || classifications.source_case_manifest_id() != source_cases.identity()
+            || overlaps.source_case_manifest_id != source_cases.identity()
+            || losses.source_case_manifest_id != source_cases.identity()
+            || losses.classification_manifest_id != classifications.identity()
+            || quarantine.source_case_manifest_id != source_cases.identity()
+            || quarantine.classification_manifest_id != classifications.identity()
+            || rollback.source_case_manifest_id != source_cases.identity()
+            || rollback.classification_manifest_id != classifications.identity()
+            || rollback.loss_manifest_id != losses.identity()
+            || rollback.quarantine_manifest_id != quarantine.identity()
+            || rollback.expected_old_id != quarantine.expected_old_id()
+            || rollback.identity() != basis.rollback_plan_id
+            || sightings.candidate_commit_id() != basis.candidate_commit_id
+            || sightings.candidate_tree_id() != basis.candidate_tree_id
+            || basis.currentness_id != recomputed_currentness
+        {
+            return Err(LiveSetV3Error::CurrentnessMismatch);
+        }
+        let mut fields = vec![
+            source_cases.identity().canonical_value(),
+            sightings.identity().canonical_value(),
+            classifications.identity().canonical_value(),
+            overlaps.identity().canonical_value(),
+            losses.identity().canonical_value(),
+            quarantine.identity().canonical_value(),
+        ];
+        fields.extend(
+            [
+                basis.foundation_closure_id,
+                basis.persistence_receipt_id,
+                basis.release_id,
+                basis.store_generation_id,
+                basis.store_head_id,
+                basis.trust_root_id,
+                basis.provider_id,
+                basis.mount_id,
+                basis.anchor_id,
+                basis.fence_id,
+                basis.candidate_commit_id,
+                basis.candidate_tree_id,
+                basis.protected_primary_boundary_id,
+                basis.rollback_plan_id,
+                basis.currentness_id,
+            ]
+            .into_iter()
+            .map(MigrationDigestV1::canonical_value),
+        );
+        fields.push(CborValue::Unsigned(basis.namespace_epoch));
+        fields.push(CborValue::Unsigned(basis.revocation_revision));
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.legacy-quarantine-epoch.v4\0",
             &CborValue::Array(fields),
         )?;
         Ok(Self {
