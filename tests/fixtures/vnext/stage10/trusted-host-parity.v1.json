@@ -1,12 +1,14 @@
 {
-  "schema": "maestro.vnext.stage10.trusted-host-parity.v3",
+  "schema": "maestro.vnext.stage10.trusted-host-parity.v4",
   "v7_design_commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
   "required_ports": [
     "TrustedHostDiagnosticConnectionPortV1",
     "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
     "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1",
     "LiveAuthenticatedHostConnectionV1",
-    "Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host"
+    "Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector",
+    "crate::interfaces::connectors::acquire_trusted_host_diagnostic_connection",
+    "packet_read_with_protected_continuity"
   ],
   "upstream_references": [
     {
@@ -17,7 +19,7 @@
     {
       "owner": "Stage5 Authority",
       "path": "src/domain/authority/facade.rs",
-      "sha256": "05e7902869bb8016807b1edb467105ddc840e3c5f5e17dd819a308ae9de97732"
+      "sha256": "f474d3f4ce26443135065051db441cb2c46aed014317ee7abf888d27897a491c"
     },
     {
       "owner": "Stage8 Authority consumer",

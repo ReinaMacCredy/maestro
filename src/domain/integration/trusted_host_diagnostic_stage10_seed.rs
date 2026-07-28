@@ -72,7 +72,7 @@ pub(crate) struct Stage10OwnerLocalConnectionSeedV1<'host> {
 }
 
 impl<'host> Stage10OwnerLocalConnectionSeedV1<'host> {
-    pub(crate) fn acquire_from_authenticated_host(
+    pub(crate) fn acquire_from_designated_connector(
         host: &'host mut dyn LiveAuthenticatedHostConnectionV1,
     ) -> Option<Self> {
         (!host.profile_id().is_empty()).then_some(Self {
@@ -625,7 +625,8 @@ mod production_factory_tests {
             facts: facts(),
         };
         assert!(
-            Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host(&mut host).is_some()
+            Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(&mut host)
+                .is_some()
         );
 
         let mut unnamed = AuthenticatedHost {
@@ -633,7 +634,7 @@ mod production_factory_tests {
             facts: facts(),
         };
         assert!(
-            Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host(&mut unnamed)
+            Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(&mut unnamed)
                 .is_none()
         );
     }

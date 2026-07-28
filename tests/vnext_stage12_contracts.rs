@@ -45,14 +45,14 @@ fn canonical_promotion_checkpoint_is_deterministic_and_non_authoritative() {
     let census = parse_stdout(&first);
     assert_eq!(census["closed_world"], false);
     assert_eq!(census["release_claim"], false);
-    assert_eq!(census["row_count"], 349);
+    assert_eq!(census["row_count"], 384);
     assert_eq!(census["rule_counts"]["temporary_vnext_source_path"], 0);
     assert_eq!(
         census["rule_counts"]["temporary_domain_namespace_reference"],
         0
     );
     assert_eq!(census["rule_counts"]["temporary_domain_module_export"], 0);
-    assert_eq!(census["rule_counts"]["legacy_skill_surface"], 239);
+    assert_eq!(census["rule_counts"]["legacy_skill_surface"], 274);
     assert_eq!(census["rule_counts"]["legacy_next_surface"], 108);
     assert_eq!(census["rule_counts"]["legacy_harness_resource"], 2);
 
@@ -108,7 +108,7 @@ fn release_preflight_fails_closed_on_legacy_consumers_and_missing_seal_inputs() 
     assert!(blockers.iter().any(|blocker| {
         blocker["id"] == "consumer_rows_nonzero"
             && blocker["rule_id"] == "legacy_skill_surface"
-            && blocker["count"] == 239
+            && blocker["count"] == 274
     }));
     assert!(blockers.iter().any(|blocker| {
         blocker["id"] == "consumer_rows_nonzero"

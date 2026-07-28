@@ -35,8 +35,18 @@ use crate::domain::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlobalMcpAdapterKindV1 {
+    Packet,
+    CliSearch,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GlobalMcpAdapterDefinitionV1 {
+    pub kind: GlobalMcpAdapterKindV1,
     pub name: &'static str,
+    pub description: &'static str,
+    pub request_schema: &'static str,
+    pub response_schema: &'static str,
     pub read_only: bool,
     pub writes: bool,
     pub network_io: bool,
@@ -44,18 +54,32 @@ pub struct GlobalMcpAdapterDefinitionV1 {
 
 pub const GLOBAL_MCP_TOOLS_V1: [GlobalMcpAdapterDefinitionV1; 2] = [
     GlobalMcpAdapterDefinitionV1 {
+        kind: GlobalMcpAdapterKindV1::Packet,
         name: "maestro_packet",
+        description: "Read one canonical bounded Packet projection from an explicit repository locator.",
+        request_schema: "McpPacketReadRequestV1",
+        response_schema: "McpPacketReadEnvelopeV1",
         read_only: true,
         writes: false,
         network_io: false,
     },
     GlobalMcpAdapterDefinitionV1 {
+        kind: GlobalMcpAdapterKindV1::CliSearch,
         name: "maestro_cli_search",
+        description: "Search the running binary's frozen public operation catalog without repository state.",
+        request_schema: "McpCliSearchRequestV1",
+        response_schema: "McpCliSearchEnvelopeV1",
         read_only: true,
         writes: false,
         network_io: false,
     },
 ];
+
+pub(crate) fn global_mcp_adapter(name: &str) -> Option<&'static GlobalMcpAdapterDefinitionV1> {
+    GLOBAL_MCP_TOOLS_V1
+        .iter()
+        .find(|definition| definition.name == name)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Stage10AdapterError {
@@ -106,6 +130,33 @@ pub fn read_protected_continuity_diagnostic(
         .map_err(|_| Stage10AdapterError::TrustedHostAuthorityRejected)
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) struct ProtectedPacketReadV1 {
+    pub packet: McpPacketReadEnvelopeV1,
+    pub protected_continuity_diagnostic: Box<[u8]>,
+}
+
+pub(crate) fn packet_read_with_protected_continuity(
+    authority: &mut AuthorityFacadeV1,
+    connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
+    current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+    requested_subject: ContinuityReferenceV1,
+    projection: &dyn ProjectionReadPortV1,
+    request: &McpPacketReadRequestV1,
+) -> Result<ProtectedPacketReadV1, Stage10AdapterError> {
+    let protected_continuity_diagnostic = read_protected_continuity_diagnostic(
+        authority,
+        connection,
+        current_view_provider,
+        requested_subject,
+    )?;
+    let packet = packet_read(projection, request)?;
+    Ok(ProtectedPacketReadV1 {
+        packet,
+        protected_continuity_diagnostic,
+    })
+}
+
 pub(crate) fn packet_read(
     projection: &dyn ProjectionReadPortV1,
     request: &McpPacketReadRequestV1,
@@ -128,5 +179,60 @@ mod successor_route_tests {
         let refusal = legacy_successor_refusal(LegacySuccessorSurfaceV1::TaskNext).unwrap();
         assert_eq!(refusal.code, "unsupported_legacy_successor_surface");
         assert_eq!(refusal.canonical_replacement, "maestro packet read");
+    }
+
+    #[test]
+    fn global_mcp_registry_is_closed_ordered_and_alias_free() {
+        assert_eq!(
+            GLOBAL_MCP_TOOLS_V1.map(|definition| definition.kind),
+            [
+                GlobalMcpAdapterKindV1::Packet,
+                GlobalMcpAdapterKindV1::CliSearch
+            ]
+        );
+        assert_eq!(
+            GLOBAL_MCP_TOOLS_V1.map(|definition| definition.name),
+            ["maestro_packet", "maestro_cli_search"]
+        );
+        for definition in GLOBAL_MCP_TOOLS_V1 {
+            assert!(definition.read_only);
+            assert!(!definition.writes);
+            assert!(!definition.network_io);
+            assert!(!definition.description.is_empty());
+            assert!(!definition.request_schema.is_empty());
+            assert!(!definition.response_schema.is_empty());
+        }
+        for alias in [
+            "",
+            "maestro_status",
+            "maestro_ready",
+            "maestro_query",
+            "packet",
+            "maestro-packet",
+            "MAESTRO_PACKET",
+            " maestro_packet",
+            "maestro_packet ",
+        ] {
+            assert_eq!(global_mcp_adapter(alias), None, "{alias:?}");
+        }
+    }
+
+    #[test]
+    fn global_mcp_registry_has_complete_shipped_descriptor_parity() {
+        let descriptor: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../embedded/vnext/adapter/mcp-tools.v1.json"
+        ))
+        .unwrap();
+        let rows = descriptor["tools"].as_array().unwrap();
+        assert_eq!(rows.len(), GLOBAL_MCP_TOOLS_V1.len());
+        for (definition, row) in GLOBAL_MCP_TOOLS_V1.iter().zip(rows) {
+            assert_eq!(row["name"], definition.name);
+            assert_eq!(row["description"], definition.description);
+            assert_eq!(row["request_schema"], definition.request_schema);
+            assert_eq!(row["response_schema"], definition.response_schema);
+            assert_eq!(row["read_only"], definition.read_only);
+            assert_eq!(row["writes"], definition.writes);
+            assert_eq!(row["network_io"], definition.network_io);
+        }
     }
 }

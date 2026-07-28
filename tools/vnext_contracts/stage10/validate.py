@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import hashlib
 import json
 import os
@@ -8,7 +9,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-MANIFEST_PATH = ROOT / "tools/vnext_contracts/stage10/path-manifest.v1.json"
+SNAPSHOT_ROOT = ROOT
+ANCESTRY_REPOSITORY = ROOT
+FINAL_REF = "HEAD"
 V2_DESCRIPTOR_PATHS = (
     "embedded/vnext/hosts/agents-compatible-cli.v2.json",
     "embedded/vnext/hosts/claude-code.v2.json",
@@ -30,7 +33,7 @@ def fail(message: str) -> None:
 def run(*args: str) -> str:
     result = subprocess.run(
         args,
-        cwd=ROOT,
+        cwd=ANCESTRY_REPOSITORY,
         env=GIT_ENV,
         check=False,
         text=True,
@@ -47,7 +50,7 @@ def digest(path: Path) -> str:
 
 
 def load_json(relative: str) -> object:
-    path = ROOT / relative
+    path = SNAPSHOT_ROOT / relative
     if not path.is_file():
         fail(f"missing required file: {relative}")
     try:
@@ -56,23 +59,12 @@ def load_json(relative: str) -> object:
         fail(f"invalid JSON in {relative}: {error}")
 
 
-def changed_paths(base: str, target: str | None = None) -> set[str]:
-    diff_args = ("git", "diff", "--name-only", base)
-    if target is not None:
-        diff_args = (*diff_args, target)
-    tracked = {
+def changed_paths(base: str, target: str) -> set[str]:
+    return {
         line
-        for line in run(*diff_args).splitlines()
+        for line in run("git", "diff", "--name-only", base, target).splitlines()
         if line
     }
-    if target is not None:
-        return tracked
-    untracked = {
-        line
-        for line in run("git", "ls-files", "--others", "--exclude-standard").splitlines()
-        if line
-    }
-    return tracked | untracked
 
 
 def base_blob(base: str, relative: str) -> tuple[str, str, str] | None:
@@ -91,10 +83,40 @@ def require_ancestor(ancestor: str, descendant: str, label: str) -> None:
         fail(f"{label} ancestry differs: {ancestor} is not an ancestor of {descendant}")
 
 
+def tree_id(commit: str) -> str:
+    return run("git", "rev-parse", f"{commit}^{{tree}}").strip()
+
+
+def snapshot_blob(relative: str) -> str:
+    path = SNAPSHOT_ROOT / relative
+    try:
+        bytes_ = path.read_bytes()
+    except OSError as error:
+        fail(f"cannot read snapshot file {relative}: {error}")
+    result = subprocess.run(
+        ("git", "hash-object", "--stdin"),
+        cwd=ANCESTRY_REPOSITORY,
+        env=GIT_ENV,
+        input=bytes_,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        fail(
+            f"cannot hash snapshot file {relative}: "
+            f"{result.stderr.decode(errors='replace').strip()}"
+        )
+    return result.stdout.decode().strip()
+
+
 def validate_ownership(manifest: dict[str, object]) -> set[str]:
     base = str(manifest["base"])
     product_checkpoint = str(manifest["product_checkpoint"])
     affected_suffix_parent = str(manifest["affected_suffix_parent"])
+    affected_suffix_checkpoint = str(manifest["affected_suffix_checkpoint"])
+    affected_suffix_tree = str(manifest["affected_suffix_tree"])
+    correction_predecessor = str(manifest["correction_predecessor"])
     affected_suffix_proof_inputs = set(manifest["affected_suffix_proof_inputs"])
     existing = set(manifest["existing_exact_files"])
     planned_new = set(manifest["planned_new_exact_files"])
@@ -116,7 +138,19 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         fail("affected-suffix proof input is outside the original exact grant")
     require_ancestor(base, product_checkpoint, "original Stage12 product")
     require_ancestor(product_checkpoint, affected_suffix_parent, "affected Stage12 suffix")
-    require_ancestor(affected_suffix_parent, "HEAD", "current affected Stage12 suffix")
+    require_ancestor(
+        affected_suffix_parent,
+        affected_suffix_checkpoint,
+        "affected Stage12 suffix checkpoint",
+    )
+    require_ancestor(
+        affected_suffix_checkpoint,
+        FINAL_REF,
+        "final candidate affected Stage12 suffix",
+    )
+    require_ancestor(correction_predecessor, FINAL_REF, "Stage12 correction")
+    if tree_id(affected_suffix_checkpoint) != affected_suffix_tree:
+        fail("affected Stage12 suffix checkpoint tree drifted")
     for relative in existing:
         blob = base_blob(base, relative)
         if blob is None or blob[0] not in {"100644", "100755"} or blob[1] != "blob":
@@ -135,39 +169,80 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         checkpoint_blob = base_blob(product_checkpoint, relative)
         if checkpoint_blob is None or checkpoint_blob[0] not in {"100644", "100755"} or checkpoint_blob[1] != "blob":
             fail(f"original Stage12 checkpoint path is not a regular blob: {relative}")
-    checkpoint_prefix_paths = {
+    affected_changed = changed_paths(affected_suffix_parent, affected_suffix_checkpoint)
+    if affected_changed != affected_suffix_proof_inputs:
+        fail("affected Stage12 suffix is not the exact three-file proof-input rebind")
+    affected_summary = run(
+        "git",
+        "diff",
+        "--summary",
+        affected_suffix_parent,
+        affected_suffix_checkpoint,
+    )
+    for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
+        if forbidden in affected_summary:
+            fail(f"forbidden affected-suffix change shape present: {forbidden}")
+
+    correction_changed = changed_paths(correction_predecessor, FINAL_REF)
+    for relative in correction_changed:
+        if (
+            relative not in existing
+            and relative not in planned_new
+            and not relative.startswith(prefixes)
+        ):
+            fail(f"Stage12 correction changed an unowned path: {relative}")
+        blob = base_blob(FINAL_REF, relative)
+        if blob is None or blob[0] not in {"100644", "100755"} or blob[1] != "blob":
+            fail(f"Stage12 correction path is not a regular blob: {relative}")
+    correction_summary = run(
+        "git",
+        "diff",
+        "--summary",
+        correction_predecessor,
+        FINAL_REF,
+    )
+    for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
+        if forbidden in correction_summary:
+            fail(f"forbidden Stage12 correction shape present: {forbidden}")
+
+    final_prefix_paths = {
         relative
-        for relative in run("git", "ls-tree", "-r", "--name-only", product_checkpoint).splitlines()
+        for relative in run("git", "ls-tree", "-r", "--name-only", FINAL_REF).splitlines()
         if relative.startswith(prefixes)
     }
-    checkpoint_product_paths = existing | planned_new | checkpoint_prefix_paths
-    for relative in checkpoint_product_paths:
-        checkpoint_blob = base_blob(product_checkpoint, relative)
-        if checkpoint_blob is None or checkpoint_blob[0] not in {"100644", "100755"} or checkpoint_blob[1] != "blob":
-            fail(f"Stage12-owned checkpoint path is not a regular blob: {relative}")
-        if relative not in affected_suffix_proof_inputs:
-            current_blob = run("git", "hash-object", "--", relative).strip()
-            if current_blob != checkpoint_blob[2]:
-                fail(f"Stage12 product bytes drifted after the private-leaf checkpoint: {relative}")
-    changed = changed_paths(affected_suffix_parent)
-    if changed != affected_suffix_proof_inputs:
-        fail("affected Stage12 suffix is not the exact three-file proof-input rebind")
-    for relative in changed:
-        path = ROOT / relative
+    snapshot_tests = SNAPSHOT_ROOT / "tests"
+    snapshot_prefix_paths = {
+        path.relative_to(SNAPSHOT_ROOT).as_posix()
+        for path in snapshot_tests.glob("vnext_stage12_*")
+        if path.is_file() and not path.is_symlink()
+    }
+    if snapshot_prefix_paths != final_prefix_paths:
+        fail("Stage12-owned prefix paths differ between final ref and snapshot")
+    final_product_paths = existing | planned_new | final_prefix_paths
+    for relative in final_product_paths:
+        final_blob = base_blob(FINAL_REF, relative)
+        if (
+            final_blob is None
+            or final_blob[0] not in {"100644", "100755"}
+            or final_blob[1] != "blob"
+        ):
+            fail(f"final Stage12-owned path is not a regular blob: {relative}")
+        path = SNAPSHOT_ROOT / relative
         try:
             mode = path.lstat().st_mode
         except FileNotFoundError:
-            fail(f"changed path was deleted: {relative}")
+            fail(f"final snapshot is missing Stage12-owned path: {relative}")
         if not stat.S_ISREG(mode) or path.is_symlink():
-            fail(f"changed path is not a regular file: {relative}")
-    summary = run("git", "diff", "--summary", affected_suffix_parent)
-    for forbidden in ("delete mode", "rename from", "rename to", "mode change"):
-        if forbidden in summary:
-            fail(f"forbidden change shape present: {forbidden}")
+            fail(f"final snapshot Stage12 path is not a regular file: {relative}")
+        snapshot_mode = "100755" if mode & stat.S_IXUSR else "100644"
+        if snapshot_mode != final_blob[0]:
+            fail(f"final snapshot Stage12 mode differs: {relative}")
+        if snapshot_blob(relative) != final_blob[2]:
+            fail(f"final snapshot Stage12 bytes differ: {relative}")
     for relative, expected in denied.items():
-        if digest(ROOT / relative) != expected:
+        if digest(SNAPSHOT_ROOT / relative) != expected:
             fail(f"immutable V1 bytes drifted: {relative}")
-    return changed
+    return correction_changed
 
 
 def validate_v2_resources() -> None:
@@ -231,19 +306,23 @@ def validate_product_sources() -> None:
     if descriptor["runtime_activation"] is not True or descriptor["runtime_registration"] is not True:
         fail("exact-two MCP production descriptor is not activated and registered")
     if any(
-        row["read_only"] is not True
+        not isinstance(row.get("description"), str)
+        or not row["description"]
+        or not isinstance(row.get("request_schema"), str)
+        or not isinstance(row.get("response_schema"), str)
+        or row["read_only"] is not True
         or row["writes"] is not False
         or row["network_io"] is not False
         for row in descriptor["tools"]
     ):
-        fail("exact-two MCP descriptor contains a non-read-only Tool")
-    connectors = (ROOT / "src/interfaces/connectors/mod.rs").read_text()
+        fail("exact-two MCP descriptor is incomplete or contains a non-read-only Tool")
+    connectors = (SNAPSHOT_ROOT / "src/interfaces/connectors/mod.rs").read_text()
     for required in (
         "HostDescriptorV2",
         "ProtectedRuntimeActivationBindingV2",
         "LiveAuthenticatedHostConnectionV1",
         "acquire_trusted_host_diagnostic_connection",
-        "Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host",
+        "Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector",
         "connection.provider_implementation_identity()",
         "connection.production_conformance_proof_identity()",
         "connection.production_negative_proof_identity()",
@@ -264,30 +343,48 @@ def validate_product_sources() -> None:
     ):
         if forbidden in connectors:
             fail(f"host-native connector seam contains forbidden fallback source: {forbidden}")
-    packet = (ROOT / "src/interfaces/cli/packet.rs").read_text()
+    if connectors.count(
+        "Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector("
+    ) != 1:
+        fail("designated connector must be the exact-one seed-construction caller")
+    seed = (
+        SNAPSHOT_ROOT
+        / "src/domain/integration/trusted_host_diagnostic_stage10_seed.rs"
+    ).read_text()
+    if "pub(crate) fn acquire_from_designated_connector(" not in seed:
+        fail("Integration seed lacks its caller-censused designated constructor")
+    if "acquire_from_authenticated_host" in seed or "acquire_from_authenticated_host" in connectors:
+        fail("raw Stage10 host seed constructor remains reachable")
+    packet = (SNAPSHOT_ROOT / "src/interfaces/cli/packet.rs").read_text()
     for required in (
         "request.repository_locator",
-        "is_absolute()",
-        "canonicalize()",
-        "alias-closed canonical path",
+        "open_explicit_repository",
     ):
         if required not in packet:
             fail(f"Packet adapter does not enforce explicit alias-closed locator: {required}")
-    if "discover_repo_root" in packet or "current_dir()" in packet.split("#[cfg(test)]", 1)[0]:
+    packet_production = packet.split("#[cfg(test)]", 1)[0]
+    if (
+        "discover_repo_root" in packet_production
+        or "current_dir()" in packet_production
+        or "canonicalize()" in packet_production
+    ):
         fail("Packet production adapter discovers repository identity from cwd")
-    adapter_facade = (ROOT / "src/operations/adapters/mod.rs").read_text()
+    adapter_facade = (SNAPSHOT_ROOT / "src/operations/adapters/mod.rs").read_text()
     for required in (
         "mod live_projection;",
         "pub(crate) use live_projection::{",
         "decode_cli_search_request",
         "encode_cli_search_envelope",
         "RunningBinaryIdentityV1",
+        "GlobalMcpAdapterKindV1",
+        "global_mcp_adapter",
+        "packet_read_with_protected_continuity",
     ):
         if required not in adapter_facade:
             fail(f"binary-local CLI search facade is missing {required}")
     if "pub(crate) mod live_projection;" in adapter_facade:
         fail("binary-local CLI search exposes its implementation leaf")
-    search = (ROOT / "src/operations/adapters/live_projection.rs").read_text()
+    search = (SNAPSHOT_ROOT / "src/operations/adapters/live_projection.rs").read_text()
     for required in (
         "decode_cli_search_request",
         "encode_cli_search_envelope",
@@ -296,19 +393,29 @@ def validate_product_sources() -> None:
     ):
         if required not in search:
             fail(f"binary-local CLI search adapter is missing {required}")
-    projection = (ROOT / "src/operations/adapters/live_projection.rs").read_text()
-    if "_ => false" not in projection:
-        fail("Projection repository identity does not fail closed on canonicalization failure")
+    projection = (SNAPSHOT_ROOT / "src/operations/adapters/live_projection.rs").read_text()
+    for required in (
+        "SecureRoot::open",
+        "verify_path_binding",
+        "validate_regular_file",
+        "open_dir",
+        "explicit_component_normal_locator",
+    ):
+        if required not in projection:
+            fail(f"Projection lacks descriptor-root enforcement: {required}")
+    projection_production = projection.split("#[cfg(test)]", 1)[0]
+    if "canonicalize()" in projection_production or ".exists()" in projection_production:
+        fail("Projection reopens or probes repository state by pathname")
 
 
 def validate_parity() -> None:
     parity = load_json("tests/fixtures/vnext/stage10/trusted-host-parity.v1.json")
-    if parity["schema"] != "maestro.vnext.stage10.trusted-host-parity.v3":
+    if parity["schema"] != "maestro.vnext.stage10.trusted-host-parity.v4":
         fail("trusted-host parity schema drifted")
     if parity["protected_runtime_activation"] is not False or parity["ambient_fallback"] is not False:
         fail("trusted-host parity overclaims provider activation")
     for reference in parity["upstream_references"]:
-        if digest(ROOT / reference["path"]) != reference["sha256"]:
+        if digest(SNAPSHOT_ROOT / reference["path"]) != reference["sha256"]:
             fail(f"trusted-host upstream parity drifted: {reference['path']}")
     gap = load_json("tools/vnext_contracts/stage10/interface-gap.v2.json")
     if gap["status"] != "host-native-injection-seam-bound-with-inactive-profiles":
@@ -323,6 +430,22 @@ def validate_parity() -> None:
 
 
 def main() -> int:
+    global ANCESTRY_REPOSITORY, FINAL_REF, SNAPSHOT_ROOT
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ancestry-repository", type=Path, default=ROOT)
+    parser.add_argument("--snapshot-root", type=Path, default=ROOT)
+    parser.add_argument("--final-ref", default="HEAD")
+    args = parser.parse_args()
+    try:
+        ANCESTRY_REPOSITORY = args.ancestry_repository.resolve(strict=True)
+        SNAPSHOT_ROOT = args.snapshot_root.resolve(strict=True)
+    except OSError as error:
+        fail(f"invalid ancestry repository or snapshot root: {error}")
+    FINAL_REF = args.final_ref
+    if not ANCESTRY_REPOSITORY.is_dir() or not SNAPSHOT_ROOT.is_dir():
+        fail("ancestry repository and snapshot root must be directories")
+
     manifest = load_json("tools/vnext_contracts/stage10/path-manifest.v1.json")
     changed = validate_ownership(manifest)
     validate_v2_resources()
@@ -331,10 +454,13 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "schema": "maestro.external.stage12-product-validation.v3",
+                "schema": "maestro.external.stage12-product-validation.v4",
                 "base": manifest["base"],
                 "product_checkpoint": manifest["product_checkpoint"],
                 "affected_suffix_parent": manifest["affected_suffix_parent"],
+                "affected_suffix_checkpoint": manifest["affected_suffix_checkpoint"],
+                "affected_suffix_tree": manifest["affected_suffix_tree"],
+                "final_ref": run("git", "rev-parse", FINAL_REF).strip(),
                 "original_changed_path_count": 22,
                 "changed_path_count": len(changed),
                 "host_profiles": "v2-inactive",

@@ -664,16 +664,18 @@ pub(in crate::domain) fn execute_stage12_product_pruning(
     continuation: InstallationPhysicalPruningContinuationV2,
     effects: &mut dyn InstallationPhysicalPruningEffectPortV2,
 ) -> Result<CommittedLegacyPhysicalPruningV2, AgentResourceCutoverErrorV1> {
-    guard
-        .consume_for(&closure)
-        .map_err(|_| AgentResourceCutoverErrorV1::Stage12BindingMismatch)?;
+    let _non_authorizing_compatibility_entry = LegacyRemovalGuardV2::consume_for;
     if continuation.deletion_plan_id != closure.deletion_plan_id() {
         return Err(AgentResourceCutoverErrorV1::Stage12BindingMismatch);
     }
-    let effect_receipt_id = effects.compare_expected_old_and_prune(
-        continuation.deletion_plan_id,
-        continuation.expected_old_state_id,
-    )?;
+    let effect_receipt_id = guard
+        .consume_with_linearization(&closure, || {
+            effects.compare_expected_old_and_prune(
+                continuation.deletion_plan_id,
+                continuation.expected_old_state_id,
+            )
+        })
+        .map_err(|_| AgentResourceCutoverErrorV1::Stage12BindingMismatch)??;
     let identity = migration_commitment(
         b"maestro.vnext.committed-legacy-physical-pruning.v2",
         &[

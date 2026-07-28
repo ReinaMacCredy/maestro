@@ -1,7 +1,7 @@
 //! Read-only production projection over the current repository-local Maestro state.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -16,6 +16,7 @@ use crate::domain::integration::public_literals::{
 };
 use crate::domain::projection::{ProjectionErrorV1, ProjectionReadPortV1, ProjectionReadStateV1};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::secure_fs::{SecureFsError, SecureRoot};
 
 use super::Stage10AdapterError;
 
@@ -42,26 +43,52 @@ impl RunningBinaryIdentityV1 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct LiveProjectionReadProviderV1 {
-    paths: MaestroPaths,
+    repository_root: SecureRoot,
+    repository_locator: String,
     running_binary: RunningBinaryIdentityV1,
 }
 
 impl LiveProjectionReadProviderV1 {
-    pub(crate) fn load(paths: MaestroPaths) -> Result<Self, ProjectionErrorV1> {
+    pub(crate) fn open_explicit_repository(
+        repository_locator: &str,
+    ) -> Result<Self, ProjectionErrorV1> {
+        let root_path = explicit_component_normal_locator(repository_locator)?;
+        let repository_root =
+            SecureRoot::open(&root_path).map_err(|_| ProjectionErrorV1::InvalidProjection)?;
         Ok(Self {
-            paths,
+            repository_root,
+            repository_locator: repository_locator.to_owned(),
             running_binary: RunningBinaryIdentityV1::load()?,
         })
     }
 
+    #[allow(
+        dead_code,
+        reason = "MainIntegration still compiles against the pre-correction constructor until it adopts open_explicit_repository"
+    )]
+    pub(crate) fn load(paths: MaestroPaths) -> Result<Self, ProjectionErrorV1> {
+        let repository_locator = paths
+            .repo_root()
+            .to_str()
+            .ok_or(ProjectionErrorV1::InvalidProjection)?;
+        Self::open_explicit_repository(repository_locator)
+    }
+
     #[cfg(test)]
-    fn with_identity(paths: MaestroPaths, running_binary: RunningBinaryIdentityV1) -> Self {
-        Self {
-            paths,
+    fn with_identity(
+        repository_locator: &str,
+        running_binary: RunningBinaryIdentityV1,
+    ) -> Result<Self, ProjectionErrorV1> {
+        let root_path = explicit_component_normal_locator(repository_locator)?;
+        let repository_root =
+            SecureRoot::open(&root_path).map_err(|_| ProjectionErrorV1::InvalidProjection)?;
+        Ok(Self {
+            repository_root,
+            repository_locator: repository_locator.to_owned(),
             running_binary,
-        }
+        })
     }
 
     pub(crate) fn running_binary(&self) -> &RunningBinaryIdentityV1 {
@@ -84,16 +111,20 @@ impl ProjectionReadPortV1 for LiveProjectionReadProviderV1 {
                 reason_ref: "candidate:projection:running-release-mismatch:v1".to_owned(),
             });
         }
-        if !same_repository(&request.repository_locator, self.paths.repo_root()) {
+        if request.repository_locator != self.repository_locator {
             return Ok(ProjectionReadStateV1::Stale {
                 reason_ref: "candidate:projection:repository-locator-mismatch:v1".to_owned(),
             });
         }
+        self.repository_root
+            .verify_path_binding()
+            .map_err(|_| ProjectionErrorV1::InvalidProjection)?;
 
-        if !repository_state_is_present(&self.paths) {
+        if !repository_state_is_present(&self.repository_root)? {
             let bootstrap_route_fact_view =
-                matches!(request.read_mode, McpPacketReadModeV1::BootstrapNoRecipeV1)
-                    .then(|| bootstrap_fact_view(&self.paths, &self.running_binary.release_ref));
+                matches!(request.read_mode, McpPacketReadModeV1::BootstrapNoRecipeV1).then(|| {
+                    bootstrap_fact_view(&self.repository_locator, &self.running_binary.release_ref)
+                });
             return Ok(ProjectionReadStateV1::NoActiveStore {
                 bootstrap_route_fact_view,
             });
@@ -497,18 +528,57 @@ fn u64_field(object: &Map<String, Value>, name: &str) -> Result<u64, Stage10Adap
         .ok_or(Stage10AdapterError::InvalidFrame)
 }
 
-fn repository_state_is_present(paths: &MaestroPaths) -> bool {
-    [
-        paths.store_db_file(),
-        paths.cards_dir(),
-        paths.tasks_dir(),
-        paths.features_dir(),
-    ]
-    .into_iter()
-    .any(|path| path.exists())
+fn explicit_component_normal_locator(
+    repository_locator: &str,
+) -> Result<PathBuf, ProjectionErrorV1> {
+    let supplied = Path::new(repository_locator);
+    if !supplied.is_absolute()
+        || supplied
+            .components()
+            .any(|component| !matches!(component, Component::RootDir | Component::Normal(_)))
+    {
+        return Err(ProjectionErrorV1::InvalidProjection);
+    }
+    let normalized = supplied.components().collect::<PathBuf>();
+    if normalized.to_str() != Some(repository_locator) {
+        return Err(ProjectionErrorV1::InvalidProjection);
+    }
+    Ok(normalized)
 }
 
-fn bootstrap_fact_view(paths: &MaestroPaths, release_ref: &str) -> BootstrapRouteFactViewV1 {
+fn repository_state_is_present(root: &SecureRoot) -> Result<bool, ProjectionErrorV1> {
+    if secure_regular_file_exists(root, ".maestro/store.db")? {
+        return Ok(true);
+    }
+    for relative in [".maestro/cards", ".maestro/tasks", ".maestro/features"] {
+        match root.open_dir(relative) {
+            Ok(_) => return Ok(true),
+            Err(error) if secure_not_found(&error) => {}
+            Err(_) => return Err(ProjectionErrorV1::InvalidProjection),
+        }
+    }
+    Ok(false)
+}
+
+fn secure_regular_file_exists(
+    root: &SecureRoot,
+    relative: &str,
+) -> Result<bool, ProjectionErrorV1> {
+    match root.validate_regular_file(relative) {
+        Ok(()) => Ok(true),
+        Err(error) if secure_not_found(&error) => Ok(false),
+        Err(_) => Err(ProjectionErrorV1::InvalidProjection),
+    }
+}
+
+fn secure_not_found(error: &SecureFsError) -> bool {
+    matches!(
+        error,
+        SecureFsError::Io { source, .. } if source.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+fn bootstrap_fact_view(repository_locator: &str, release_ref: &str) -> BootstrapRouteFactViewV1 {
     let mut view = BootstrapRouteFactViewV1 {
         schema_version: 1,
         bootstrap_context: BootstrapContextV1::RepositoryBootstrap,
@@ -516,7 +586,7 @@ fn bootstrap_fact_view(paths: &MaestroPaths, release_ref: &str) -> BootstrapRout
         ordered_source_fact_commitments: vec![
             domain_ref(
                 "maestro.vnext.bootstrap.repository.v1",
-                paths.repo_root().display().to_string().as_bytes(),
+                repository_locator.as_bytes(),
             ),
             domain_ref("maestro.vnext.bootstrap.release.v1", release_ref.as_bytes()),
         ],
@@ -525,14 +595,6 @@ fn bootstrap_fact_view(paths: &MaestroPaths, release_ref: &str) -> BootstrapRout
     view.ordered_source_fact_commitments.sort();
     view.fact_view_hash = view.semantic_hash_without_hash();
     view
-}
-
-fn same_repository(locator: &str, repo_root: &Path) -> bool {
-    let requested = Path::new(locator);
-    match (requested.canonicalize(), repo_root.canonicalize()) {
-        (Ok(requested), Ok(actual)) => requested == actual,
-        _ => false,
-    }
 }
 
 fn domain_ref(domain: &str, bytes: &[u8]) -> String {
@@ -573,7 +635,7 @@ mod tests {
 
     impl TestDir {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = secure_test_temp_root().join(format!(
                 "maestro-v7-stage12-{label}-{}-{}",
                 std::process::id(),
                 NEXT_TEST_DIR.fetch_add(1, Ordering::Relaxed)
@@ -585,6 +647,20 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn secure_test_temp_root() -> PathBuf {
+        Path::new("/private").join(
+            std::env::temp_dir()
+                .strip_prefix("/")
+                .expect("absolute macOS temporary directory"),
+        )
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn secure_test_temp_root() -> PathBuf {
+        std::env::temp_dir()
     }
 
     impl Drop for TestDir {
@@ -614,6 +690,10 @@ mod tests {
             bounded_response_redaction_profile: "repository-local".to_owned(),
             read_mode: mode,
         }
+    }
+
+    fn locator(path: &Path) -> &str {
+        path.to_str().expect("UTF-8 test path")
     }
 
     #[test]
@@ -744,7 +824,8 @@ mod tests {
     fn absent_store_returns_bootstrap_fact_view_without_writing() {
         let temp = TestDir::new("absent-store");
         let provider =
-            LiveProjectionReadProviderV1::with_identity(MaestroPaths::new(temp.path()), identity());
+            LiveProjectionReadProviderV1::with_identity(locator(temp.path()), identity())
+                .expect("provider");
         let envelope = read_packet(
             &provider,
             &request(temp.path(), McpPacketReadModeV1::BootstrapNoRecipeV1),
@@ -764,7 +845,8 @@ mod tests {
         let temp = TestDir::new("legacy-state");
         fs::create_dir_all(temp.path().join(".maestro/cards")).expect("state");
         let provider =
-            LiveProjectionReadProviderV1::with_identity(MaestroPaths::new(temp.path()), identity());
+            LiveProjectionReadProviderV1::with_identity(locator(temp.path()), identity())
+                .expect("provider");
         let envelope = read_packet(
             &provider,
             &request(temp.path(), McpPacketReadModeV1::DiscoverSelectionContextV1),
@@ -783,10 +865,73 @@ mod tests {
         let mut request = request(temp.path(), McpPacketReadModeV1::DiscoverSelectionContextV1);
         request.expected_release_ref = "candidate:release:other".to_owned();
         let provider =
-            LiveProjectionReadProviderV1::with_identity(MaestroPaths::new(temp.path()), identity());
+            LiveProjectionReadProviderV1::with_identity(locator(temp.path()), identity())
+                .expect("provider");
         assert!(matches!(
             read_packet(&provider, &request).expect("read"),
             McpPacketReadEnvelopeV1::Stale { .. }
         ));
+    }
+
+    #[test]
+    fn repository_locator_rejects_dot_dotdot_and_textual_aliases() {
+        let temp = TestDir::new("alias-closed");
+        let root = locator(temp.path());
+        assert!(LiveProjectionReadProviderV1::with_identity(root, identity()).is_ok());
+        assert!(
+            LiveProjectionReadProviderV1::with_identity(&format!("{root}/."), identity()).is_err()
+        );
+        assert!(
+            LiveProjectionReadProviderV1::with_identity(&format!("{root}/child/.."), identity())
+                .is_err()
+        );
+        assert!(
+            LiveProjectionReadProviderV1::with_identity(&format!("{root}/"), identity()).is_err()
+        );
+        assert!(LiveProjectionReadProviderV1::with_identity(".", identity()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repository_locator_rejects_root_and_intermediate_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TestDir::new("symlink-root");
+        let actual = temp.path().join("actual");
+        fs::create_dir(&actual).expect("actual root");
+        let root_alias = temp.path().join("root-alias");
+        symlink(&actual, &root_alias).expect("root symlink");
+        assert!(
+            LiveProjectionReadProviderV1::with_identity(locator(&root_alias), identity()).is_err()
+        );
+
+        let intermediate = temp.path().join("intermediate");
+        symlink(temp.path(), &intermediate).expect("intermediate symlink");
+        let through_intermediate = intermediate.join("actual");
+        assert!(
+            LiveProjectionReadProviderV1::with_identity(locator(&through_intermediate), identity())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn retained_repository_descriptor_refuses_path_replacement() {
+        let temp = TestDir::new("root-replacement");
+        let root = temp.path().join("repository");
+        let displaced = temp.path().join("displaced");
+        fs::create_dir(&root).expect("repository root");
+        let provider = LiveProjectionReadProviderV1::with_identity(locator(&root), identity())
+            .expect("provider");
+        fs::rename(&root, &displaced).expect("displace admitted root");
+        fs::create_dir(&root).expect("replacement root");
+        fs::create_dir_all(root.join(".maestro/cards")).expect("replacement state");
+
+        assert!(
+            read_packet(
+                &provider,
+                &request(&root, McpPacketReadModeV1::DiscoverSelectionContextV1)
+            )
+            .is_err()
+        );
     }
 }

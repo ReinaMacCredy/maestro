@@ -104,6 +104,10 @@ fn protected_diagnostic_enters_through_the_authenticated_host_factory() {
     assert!(connectors.contains("supported_host_native_provider_unavailable"));
     assert!(connectors.contains("matches!("));
     assert!(connectors.contains("acquire_trusted_host_diagnostic_connection"));
+    assert!(
+        connectors.contains("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector")
+    );
+    assert!(!connectors.contains("acquire_from_authenticated_host"));
     assert!(connectors.contains("live_connection.profile_id() != descriptor.profile_id"));
     assert!(connectors.contains("agents-compatible-cli.v2.json"));
     assert!(connectors.contains("claude-code.v2.json"));
@@ -111,6 +115,25 @@ fn protected_diagnostic_enters_through_the_authenticated_host_factory() {
     assert!(!connectors.contains("claude-code.v1.json"));
     assert!(mcp.contains("acquire_trusted_host_diagnostic_connection("));
     assert!(mcp.contains("ok_or(Stage10AdapterError::TrustedHostAuthorityRejected)"));
+
+    let adapters = fs::read_to_string(workspace().join("src/operations/adapters/mod.rs")).unwrap();
+    assert!(adapters.contains("fn packet_read_with_protected_continuity("));
+    assert!(adapters.contains("connection: &mut dyn TrustedHostDiagnosticConnectionPortV1"));
+    assert!(
+        adapters
+            .contains("current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1")
+    );
+    let protected = adapters
+        .split("fn packet_read_with_protected_continuity(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(crate) fn packet_read(").next())
+        .expect("protected Packet adapter");
+    assert!(
+        protected
+            .find("read_protected_continuity_diagnostic(")
+            .unwrap()
+            < protected.find("packet_read(projection, request)").unwrap()
+    );
 }
 
 #[test]

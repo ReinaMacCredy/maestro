@@ -1,12 +1,10 @@
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
 
 use crate::domain::projection::{ProjectionReadPortV1, read_packet};
 use crate::domain::transport::{decode_packet_read_request, encode_packet_read_envelope};
-use crate::foundation::core::paths::MaestroPaths;
 use crate::operations::adapters::LiveProjectionReadProviderV1;
 
 const MAXIMUM_REQUEST_BYTES_V1: u64 = 262_144;
@@ -29,27 +27,13 @@ pub fn run(args: PacketArgs) -> Result<()> {
             let input = read_bounded_stdin()?;
             let request = decode_packet_read_request(&input)
                 .context("packet read requires one canonical JSON request document")?;
-            let root = explicit_repository_root(&request.repository_locator)?;
-            let provider = LiveProjectionReadProviderV1::load(MaestroPaths::new(root))
-                .context("failed to establish the running binary projection identity")?;
+            let provider =
+                LiveProjectionReadProviderV1::open_explicit_repository(&request.repository_locator)
+                    .context("repository_locator must identify one no-follow repository root")?;
             println!("{}", project_json(&provider, &request)?);
             Ok(())
         }
     }
-}
-
-fn explicit_repository_root(repository_locator: &str) -> Result<PathBuf> {
-    let supplied = Path::new(repository_locator);
-    if !supplied.is_absolute() {
-        bail!("repository_locator must be one explicit absolute path");
-    }
-    let canonical = supplied
-        .canonicalize()
-        .context("repository_locator must identify an existing repository root")?;
-    if canonical != supplied {
-        bail!("repository_locator must be alias-closed canonical path");
-    }
-    Ok(canonical)
 }
 
 fn project_json(
@@ -101,19 +85,5 @@ mod tests {
             project_json(&RefusingPort, &request).expect("envelope"),
             "{\"value\":{\"reason_ref\":\"candidate:projection:test-unavailable:v1\"},\"variant\":\"Unavailable\"}\n"
         );
-    }
-
-    #[test]
-    fn repository_locator_is_explicit_absolute_and_alias_closed() {
-        let canonical = std::env::current_dir()
-            .expect("current directory")
-            .canonicalize()
-            .expect("canonical current directory");
-        assert_eq!(
-            explicit_repository_root(canonical.to_str().expect("UTF-8 path")).unwrap(),
-            canonical
-        );
-        assert!(explicit_repository_root(".").is_err());
-        assert!(explicit_repository_root("/tmp/../tmp").is_err());
     }
 }
