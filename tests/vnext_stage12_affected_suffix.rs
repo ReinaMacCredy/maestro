@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::Value;
 
 static NEXT_TEST_DIR: AtomicU64 = AtomicU64::new(1);
+const HISTORICAL_STAGE12_VALIDATION_REF: &str = "bb7b1ee0e51fa591b21943e8c7d50844cb4d0b05";
 
 struct TestDir {
     path: PathBuf,
@@ -31,12 +32,12 @@ impl Drop for TestDir {
 
 fn run_validator(ancestry: &Path, snapshot: &Path) -> std::process::Output {
     Command::new("python3")
-        .arg(snapshot.join("tools/vnext_contracts/stage10/validate.py"))
+        .arg(ancestry.join("tools/vnext_contracts/stage10/validate.py"))
         .args(["--ancestry-repository"])
         .arg(ancestry)
         .args(["--snapshot-root"])
         .arg(snapshot)
-        .args(["--final-ref", "HEAD"])
+        .args(["--final-ref", HISTORICAL_STAGE12_VALIDATION_REF])
         .output()
         .expect("run Stage12 validator")
 }
@@ -52,7 +53,7 @@ fn affected_suffix_validator_accepts_gitless_snapshot_and_rejects_byte_drift() {
     let archived = Command::new("git")
         .args(["archive", "--format=tar", "--output"])
         .arg(&archive)
-        .arg("HEAD")
+        .arg(HISTORICAL_STAGE12_VALIDATION_REF)
         .current_dir(repository)
         .output()
         .expect("archive final ref");

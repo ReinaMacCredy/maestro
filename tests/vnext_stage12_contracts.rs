@@ -99,7 +99,7 @@ fn release_preflight_fails_closed_on_legacy_consumers_and_missing_seal_inputs() 
     assert_eq!(receipt["authority_state"], "none");
     assert_eq!(
         receipt["candidate_state"],
-        "canonical_namespace_promoted_legacy_pruning_blocked_unverified"
+        "v8_loss_root_guard_coordinator_bound_legacy_pruning_blocked_unverified"
     );
     assert_eq!(receipt["certification_claim"], false);
     assert_eq!(receipt["compile_lane_needed"], true);
@@ -131,6 +131,18 @@ fn release_preflight_fails_closed_on_legacy_consumers_and_missing_seal_inputs() 
     assert!(blockers.iter().any(|blocker| {
         blocker["id"] == "missing_external_input" && blocker["slot"] == "final_full_chain_seal"
     }));
+    for slot in [
+        "stage11_v4_loss_root_universe_contract",
+        "stage11_owner_history_currentness",
+        "stage11_complete_root_universe",
+        "stage11_foundation_v2_closure",
+        "stage12_legacy_removal_guard_v3",
+        "stage12_legacy_cut_coordinator_v3",
+    ] {
+        assert!(blockers.iter().any(|blocker| {
+            blocker["id"] == "missing_external_input" && blocker["slot"] == slot
+        }));
+    }
 }
 
 #[test]
@@ -153,4 +165,58 @@ fn negative_compatibility_and_positive_claim_mutants_are_rejected() {
     assert_eq!(receipt["accepted_mutants"], 0);
     assert_eq!(receipt["rejected_mutants"], 3);
     assert_eq!(receipt["authority_state"], "none");
+}
+
+#[test]
+fn v8_loss_root_and_cut_coordinator_contracts_are_effect_inert() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let architecture = run(
+        repo,
+        &["tools/vnext_contracts/stage12/architecture_guard.py"],
+    );
+    assert!(
+        architecture.status.success(),
+        "V8 architecture guard failed: {}",
+        String::from_utf8_lossy(&architecture.stderr)
+    );
+    let receipt = parse_stdout(&architecture);
+    assert_eq!(receipt["status"], "pass");
+    assert_eq!(receipt["authority_state"], "none");
+    assert_eq!(
+        receipt["candidate_state"],
+        "v8_loss_root_guard_coordinator_bound_legacy_pruning_blocked_unverified"
+    );
+    assert_eq!(receipt["release_evaluated"], false);
+
+    let loss = run(
+        repo,
+        &[
+            "tools/vnext_contracts/stage11/validate_v4.py",
+            "--mutant-suite",
+        ],
+    );
+    assert!(
+        loss.status.success(),
+        "V4 loss/root validator failed: {}",
+        String::from_utf8_lossy(&loss.stderr)
+    );
+    let loss_receipt = parse_stdout(&loss);
+    assert_eq!(loss_receipt["status"], "pass");
+    assert_eq!(loss_receipt["effect_state"], "read_only");
+    assert_eq!(loss_receipt["accepted_mutants"], 0);
+    assert_eq!(loss_receipt["rejected_mutants"], 39);
+
+    let coordinator = run(repo, &["tools/vnext_contracts/stage12/coordinator_v3.py"]);
+    assert!(
+        coordinator.status.success(),
+        "V3 coordinator contract failed: {}",
+        String::from_utf8_lossy(&coordinator.stderr)
+    );
+    let coordinator_receipt = parse_stdout(&coordinator);
+    assert_eq!(coordinator_receipt["status"], "pass");
+    assert_eq!(
+        coordinator_receipt["effect_state"],
+        "contract_validation_only"
+    );
+    assert_eq!(coordinator_receipt["authority_state"], "not_executed");
 }

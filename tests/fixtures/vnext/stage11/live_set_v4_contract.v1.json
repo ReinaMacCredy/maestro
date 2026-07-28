@@ -1,0 +1,181 @@
+{
+  "schema_version": "maestro.test-only.vnext-stage11-live-set-v4-contract.v1",
+  "state": "candidate_preparation_effect_inert_unintegrated",
+  "design": {
+    "commit": "bb7b1ee0e51fa591b21943e8c7d50844cb4d0b05",
+    "parent": "1685b39138a045bcd5e87744860d95eb589999d2",
+    "tree": "cb6b62cc187abdecebef8f621206289029fb590b"
+  },
+  "packet_sha256": "d0953ac33f361ccad2fe0c7844294324b7b33cb974e16a11639ad3aad19e40e2",
+  "public_delta": {
+    "installation_census_header_bytes_changed": false,
+    "installation_census_bytes_changed": false,
+    "packet_operation_result_action_scope_ceremony_changed": false,
+    "mcp_recipe_resource_bundle_release_catalog_wire_changed": false
+  },
+  "current_types": {
+    "foundation_closure": "FoundationLegacyQuarantineClosureV2",
+    "foundation_lease": "FoundationLegacyQuarantineLeaseV2",
+    "foundation_owner_evidence_mint": "FoundationOwnerEvidenceMintV1",
+    "loss": "UnavailablePreexistingLossV4",
+    "loss_manifest": "UnavailablePreexistingLossManifestV4",
+    "loss_audit_currentness": "UnavailablePreexistingLossAuditCurrentnessV4",
+    "loss_audit_gate": "UnavailablePreexistingLossAuditGateErrorV1",
+    "loss_audit_custody": "QuarantineCustodyLeaseV1",
+    "rollback": "LegacyRollbackAssessmentV4",
+    "epoch": "LegacyQuarantineEpochV4",
+    "guard": "LegacyRemovalGuardV3",
+    "guard_consumer_binding": "LegacyRemovalConsumerBindingV3",
+    "coordinator": "Stage12LegacyCutCoordinatorV3"
+  },
+  "unchanged_shape_types": [
+    "MembershipKeyV3",
+    "SourceCaseV3",
+    "Stage12SightingManifestV2",
+    "MigrationClassificationManifestV3",
+    "DeclaredOverlapManifestV2",
+    "SealedQuarantineManifestV3"
+  ],
+  "historical_current_authority_forbidden": [
+    "UnavailablePreexistingLossV3",
+    "UnavailablePreexistingLossManifestV3",
+    "LegacyRollbackAssessmentV3",
+    "LegacyQuarantineEpochV3",
+    "LegacyRemovalGuardV2",
+    "Stage12LegacyCutCoordinatorV2"
+  ],
+  "historical_immutable_files": {
+    "tests/fixtures/vnext/stage11/live_set_v3_contract.v1.json": "3ce733b5b13473c92b5aa78b507db51fc06507c258d0b20e7dccdda228b22c35",
+    "tools/vnext_contracts/stage11/validate_v3.py": "4b865ea300c79cfb6e95f554b2392443d91d12601d5109b4df3c04cd67df7c8f",
+    "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v2.json": "3a38959643425a8413c55edf899f046f147514375dead85ce3096f16c11f52ec",
+    "tools/vnext_contracts/stage12/coordinator.py": "0210ad3a2982ad6cf8b36f0f86bbeb52dbe59750863f0d0be8dbc849b4ce5a39"
+  },
+  "historical_evidence_fields": [
+    "history_snapshot_identity",
+    "history_owner",
+    "root_source_provenance",
+    "lossless_locator_commitment",
+    "object_kind",
+    "object_identity",
+    "byte_length",
+    "content_sha256",
+    "metadata_commitment",
+    "store_generation",
+    "store_head",
+    "namespace_epoch",
+    "trust_root",
+    "release",
+    "provider",
+    "mount",
+    "anchor",
+    "fence",
+    "currentness",
+    "revocation"
+  ],
+  "required_source_tokens": {
+    "src/domain/repository/legacy_source_history.rs": [
+      "LegacySourceHistorySnapshotV1",
+      "FoundationOwnerEvidenceMintV1",
+      "issue_bound_absent_sources"
+    ],
+    "src/domain/repository/root_universe.rs": [
+      "RepositoryDeclaredRootUniverseLeaseV1"
+    ],
+    "src/domain/installation/legacy_source_history.rs": [
+      "LegacySourceHistorySnapshotV1",
+      "FoundationOwnerEvidenceMintV1",
+      "issue_bound_absent_sources"
+    ],
+    "src/domain/installation/root_universe.rs": [
+      "InstallationDeclaredRootUniverseLeaseV1",
+      "COMPLETE_INSTALLATION_ROOT_ROLES_V1",
+      "census_comparison_identity",
+      "IncompleteRoleCoverage"
+    ],
+    "src/domain/persistence/legacy_source_history.rs": [
+      "ProtectedPrimaryHistoryJournalV1",
+      "FoundationOwnerEvidenceMintV1",
+      "record_unavailable_preexisting_loss",
+      "StoreLegacySourceProviderObservationV1"
+    ],
+    "src/foundation/core/legacy_loss_evidence.rs": [
+      "FoundationOwnerEvidenceMintV1",
+      "record_unavailable_preexisting_loss",
+      "pub(in crate::foundation::core) fn finish(",
+      "PhantomData<Rc<()>>",
+      "FoundationValidatedUnavailablePreexistingLossReceiptV1"
+    ],
+    "src/foundation/core/legacy_quarantine.rs": [
+      "FoundationLegacyQuarantineLeaseV2",
+      "FoundationLegacyQuarantineClosureV2"
+    ],
+    "src/domain/migration/runtime/live_set_v3.rs": [
+      "UnavailablePreexistingLossV4",
+      "UnavailablePreexistingLossManifestV4",
+      "UnavailablePreexistingLossAuditCurrentnessV4",
+      "encode_canonical_audit",
+      "decode_canonical_audit",
+      "LegacyRollbackAssessmentV4",
+      "LegacyQuarantineEpochV4"
+    ],
+    "src/operations/migration/live_set_v3.rs": [
+      "FoundationSourceCopyContinuationV2",
+      "UnavailablePreexistingLossAuditPersistencePortV1",
+      "for FoundationSourceCopyContinuationV2<P, Q>",
+      "persist_unavailable_preexisting_loss_audits_v4",
+      "&mut self.physical",
+      "UnavailablePreexistingLossAuditGateErrorV1",
+      "LossAuditRollbackFailed",
+      "audit_failure_after_rollback",
+      ".finish(self.quarantine.identity().into_bytes())?"
+    ],
+    "src/domain/persistence/legacy_quarantine.rs": [
+      "QuarantineCustodyLeaseV1",
+      "create_loss_audit_if_absent",
+      "read_loss_audit",
+      "recheck_loss_audit_custody",
+      "loss_audit_path",
+      "recovery/legacy-loss-audit-v4",
+      "create_file_if_absent",
+      "read_immutable"
+    ],
+    "src/domain/authority/legacy_removal_guard.rs": [
+      "LegacyRemovalGuardV3",
+      "LegacyRemovalConsumerBindingV3",
+      "expected_old_state",
+      "consume_bound_with_linearization",
+      "with_serialized_active_view"
+    ]
+  },
+  "forbidden_source_tokens": {
+    "src/domain/repository/legacy_source_history.rs": [
+      "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1"
+    ],
+    "src/domain/installation/legacy_source_history.rs": [
+      "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1"
+    ],
+    "src/domain/persistence/legacy_source_history.rs": [
+      "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1"
+    ],
+    "src/domain/persistence/mod.rs": [
+      "ImmutableRecoveryAuditPersistenceV1",
+      "IMMUTABLE_RECOVERY_AUDIT_DIRECTORY_V1"
+    ],
+    "src/operations/migration/mod.rs": [
+      "persistence_store",
+      "immutable_recovery_audit_persistence_v1",
+      "ImmutableRecoveryAuditPersistenceV1"
+    ],
+    "src/domain/migration/runtime/live_set_v3.rs": [
+      "PathBuf",
+      "LegacySourceHistorySnapshotV1",
+      "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1",
+      "FoundationValidatedUnavailablePreexistingLossReceiptV1::new"
+    ],
+    "src/domain/authority/legacy_removal_guard.rs": [
+      "LegacyRemovalGuardV2::",
+      "UnavailablePreexistingLossManifestV3",
+      "LegacyQuarantineEpochV3"
+    ]
+  }
+}

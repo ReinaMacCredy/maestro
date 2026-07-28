@@ -14,6 +14,182 @@
     "rollback_rehearsed": false,
     "sealed_reader_zero": false
   },
+  "v8_closure": {
+    "packet_sha256": "d0953ac33f361ccad2fe0c7844294324b7b33cb974e16a11639ad3aad19e40e2",
+    "design_commit": "bb7b1ee0e51fa591b21943e8c7d50844cb4d0b05",
+    "design_tree": "cb6b62cc187abdecebef8f621206289029fb590b",
+    "implementation_preimage_commit": "1685b39138a045bcd5e87744860d95eb589999d2",
+    "implementation_preimage_tree": "2daa5f8458411cf9e6d6288bf51606c98a4e31c9",
+    "primary_boundary_identity": "e5b4c0592b8cf373ea68fc5e0e3f84020c14f3f422c5779e8d4a423930aa6054",
+    "ownership_identity": "699c6b98c8e4f1c8d92bf3a7377759fcc65e685c4f59272c36f13b65b3dc9cfd",
+    "integration_plan_identity": "789cd36b82f4e6a0d534833446b9a2c35d6cfafcd96e1123fb9e3215a5df0f29",
+    "foundation_closure": "FoundationLegacyQuarantineClosureV2",
+    "foundation_owner_evidence_mint": "FoundationOwnerEvidenceMintV1",
+    "loss_manifest": "UnavailablePreexistingLossManifestV4",
+    "loss_audit_currentness": "UnavailablePreexistingLossAuditCurrentnessV4",
+    "loss_audit_custody": "QuarantineCustodyLeaseV1",
+    "loss_audit_gate": "UnavailablePreexistingLossAuditGateErrorV1",
+    "rollback": "LegacyRollbackAssessmentV4",
+    "epoch": "LegacyQuarantineEpochV4",
+    "guard": "LegacyRemovalGuardV3",
+    "guard_consumer_binding": "LegacyRemovalConsumerBindingV3",
+    "coordinator": "Stage12LegacyCutCoordinatorV3"
+  },
+  "v8_snapshot_materialization": {
+    "schema_version": "maestro.external.vnext-final-cumulative-closure-snapshot.v1",
+    "state": "provisional_static_known_prefix",
+    "known_first_parent_ledger": [
+      {
+        "commit": "bb7b1ee0e51fa591b21943e8c7d50844cb4d0b05",
+        "tree": "cb6b62cc187abdecebef8f621206289029fb590b"
+      },
+      {
+        "commit": "23c8689d0d6f14eb8a237481a1a64c83b42be996",
+        "tree": "462e63718d05e9ad8321f65c8bc035333c985cbe"
+      },
+      {
+        "commit": "5807457f5916e965bd53a1c0a8a9b12a6f4676e1",
+        "tree": "fe8d51d3ac7bce762dc45b14d8e149acfecd76a0"
+      },
+      {
+        "commit": "d004b05a6da118ba3709fbdb895655aae16d7bd1",
+        "tree": "0cf57a74e5e3c88f050f967142e3746cafc13f68"
+      },
+      {
+        "commit": "9f26743a52f02d1785a52d8cb3d13e3c3b4f31b9",
+        "tree": "a6672058e27d5fe6d8b46cc4b02b8f803253dc6f"
+      },
+      {
+        "commit": "80dd8de02d13e967b238c6fd3b82e9b72ea0f18b",
+        "tree": "ed56144d6d4eefd845ba7dbf074c56cfb79e1020"
+      },
+      {
+        "commit": "90beb203a5f8490e89a8fda07dbccd01cb947548",
+        "tree": "ebc94accd20ed82c5f9f27542ec29528bcdd343a"
+      },
+      {
+        "commit": "fb0a32426e34e60ca8849016173a906a0cfd7d7d",
+        "tree": "2789e39133be7ed1f22b94c827ca162a20f3fe6c"
+      },
+      {
+        "commit": "b97070f896b3b42a1db95fe9dcd9e952fdb2ca39",
+        "tree": "fb4abb918e52c831b795c6da9ea3a9a0441dc2e7"
+      },
+      {
+        "commit": "d14c3647af91ed2007aef250561e4956759f3565",
+        "tree": "4dfa3cdb8479c72e16ebb675e42e4d8b630f1520"
+      },
+      {
+        "commit": "ba1b8898b1292b53059819fe9f3d39e240b10dbc",
+        "tree": "a3babba26165c034725deb35f7520fb0ca3fc736"
+      },
+      {
+        "commit": "69c49d3f8a175d8f3506c48d0b390121a23767c8",
+        "tree": "3a51e2b148efce309ed9d5276119ead98c769ee5"
+      },
+      {
+        "commit": "2690ac5a243d6821c318b8985532aa514c400274",
+        "tree": "ba5cd56c0e8e402f5723feae72d8418831fd0823"
+      },
+      {
+        "commit": "97465f7121b629c5b898df4b11eb405032053f71",
+        "tree": "01b955c5210e06f58fd38164b5ddd95ab6705cba"
+      },
+      {
+        "commit": "92eb07a5a25f152688fda3d002c3ecf9bb916b82",
+        "tree": "f4bd8501f5b893726479cc2bdba8f93ffb189dbf"
+      },
+      {
+        "commit": "82cc9bec06a7185100a78162f74f8516fd45b2a1",
+        "tree": "a7aa1d40067df6c58225132a89976ec36fb08d4b"
+      },
+      {
+        "commit": "268f7decc2ba5478899d9a13dc500ccc4d9ea3d6",
+        "tree": "1c0a0dfc2474b5ff6519f8c28b54c9a7444d7cd9"
+      },
+      {
+        "commit": "7fcc67df28ed497d02d84dc21089c7bd775ffb68",
+        "tree": "f71254911acf909aea7141d3370a3af59380b6be"
+      },
+      {
+        "commit": "92e7b5dc55e9c24c815314540755aaed926050f7",
+        "tree": "6043ec96c2c5d31dd0a04cc71e1e721ed43b21d4"
+      },
+      {
+        "commit": "e627a62579308196e478c2ac28947eab862cbdc5",
+        "tree": "b9063b676e5b43d54f64fb5570970a21246c904b"
+      },
+      {
+        "commit": "a836a5f1d96c9de5c164df8f421d3bdaf03146e4",
+        "tree": "3d5e400981afe8b43ab890bbde5e6f26fe75c1e9"
+      },
+      {
+        "commit": "7d7f342883892e4a366b3cad645044fdecc29b70",
+        "tree": "8e40a9a467040fab9234161b05423c0483e14934"
+      },
+      {
+        "commit": "7ec45cd182488bec40ae96a5102f9ab4c3cb912b",
+        "tree": "1cf891dba13458f1cfb8fa55c498db2cbca48a0d"
+      },
+      {
+        "commit": "849a59d9c1290fbc0235b0c92fa1325923e65b08",
+        "tree": "fe7784dfa36763081104844ba87294e3daa51ed0"
+      }
+    ],
+    "known_logical_checkpoint_tips": [
+      {
+        "name": "V8Design",
+        "tip_commit": "bb7b1ee0e51fa591b21943e8c7d50844cb4d0b05",
+        "tip_tree": "cb6b62cc187abdecebef8f621206289029fb590b"
+      },
+      {
+        "name": "Stage11Owners",
+        "tip_commit": "d004b05a6da118ba3709fbdb895655aae16d7bd1",
+        "tip_tree": "0cf57a74e5e3c88f050f967142e3746cafc13f68"
+      },
+      {
+        "name": "MainIntegrationOwnerWiring",
+        "tip_commit": "9f26743a52f02d1785a52d8cb3d13e3c3b4f31b9",
+        "tip_tree": "a6672058e27d5fe6d8b46cc4b02b8f803253dc6f"
+      },
+      {
+        "name": "FoundationMigration",
+        "tip_commit": "d14c3647af91ed2007aef250561e4956759f3565",
+        "tip_tree": "4dfa3cdb8479c72e16ebb675e42e4d8b630f1520"
+      },
+      {
+        "name": "MainIntegrationFoundationV4Wiring",
+        "tip_commit": "ba1b8898b1292b53059819fe9f3d39e240b10dbc",
+        "tip_tree": "a3babba26165c034725deb35f7520fb0ca3fc736"
+      },
+      {
+        "name": "Stage12Dependency",
+        "tip_commit": "97465f7121b629c5b898df4b11eb405032053f71",
+        "tip_tree": "01b955c5210e06f58fd38164b5ddd95ab6705cba"
+      },
+      {
+        "name": "MainIntegrationGuardCoordinatorWiring",
+        "tip_commit": "92eb07a5a25f152688fda3d002c3ecf9bb916b82",
+        "tip_tree": "f4bd8501f5b893726479cc2bdba8f93ffb189dbf"
+      }
+    ],
+    "unmaterialized_logical_checkpoints": [
+      "ExternalProofControl",
+      "MainIntegrationFinalClosure"
+    ],
+    "canonical_regeneration": {
+      "count": 1,
+      "timing": "after_main_integration_final_closure_commit",
+      "artifact_state": "external_exact_frozen_snapshot",
+      "repository_correction_commit": false,
+      "algorithm": [
+        "enumerate_every_first_parent_commit_from_v8_design_through_final_integration",
+        "bind_each_commit_to_its_exact_tree",
+        "map_each_logical_checkpoint_to_one_ordered_non_overlapping_ledger_tip",
+        "validate_direct_single_parent_adjacency_and_complete_endpoint_coverage"
+      ]
+    }
+  },
   "design_sha256": "5092ff84ac3bca050802ea81858375d328e1d0ffe678a71ef2f8dae65ed00a18",
   "external_input_slots": [
     "stage6_integrated_unsealed_checkpoint",
@@ -93,5 +269,69 @@
     "dogfood_and_recovery_rehearsal",
     "final_edge_sweep"
   ],
-  "schema_version": "maestro.test-only.vnext-stage12-release-proof-inputs.v1"
+  "schema_version": "maestro.test-only.vnext-stage12-release-proof-inputs.v1",
+  "v8_external_input_slots": [
+    "stage6_integrated_unsealed_checkpoint",
+    "stage7_integrated_unsealed_checkpoint",
+    "stage8_integrated_unsealed_checkpoint",
+    "stage9_integrated_unsealed_checkpoint",
+    "stage10_integrated_unsealed_checkpoint",
+    "stage11_integrated_unsealed_checkpoint",
+    "stage6_through_stage11_ordered_integration_ancestry",
+    "stage11_migration_association_closure",
+    "stage11_active_consumer_closure",
+    "stage11_retained_reader_manifest",
+    "stage11_retention_hold_manifest",
+    "stage11_v4_loss_root_universe_contract",
+    "stage11_owner_history_currentness",
+    "stage11_complete_root_universe",
+    "stage11_foundation_v2_closure",
+    "stage11_foundation_owner_evidence_mint",
+    "stage11_custody_bound_loss_audit",
+    "stage12_candidate_ancestry_and_ownership",
+    "stage12_frozen_interface_readback",
+    "stage12_legacy_removal_guard_v3",
+    "stage12_expected_old_guard_binding",
+    "stage12_legacy_cut_coordinator_v3",
+    "post_promotion_namespace_census",
+    "source_move_identity_parity",
+    "negative_compatibility_execution",
+    "migration_rollback_rehearsal",
+    "fresh_removal_authority_receipt",
+    "dogfood_recovery_rehearsal",
+    "final_full_chain_seal"
+  ],
+  "v8_local_inputs": [
+    "tests/fixtures/vnext/stage11/live_set_v4_contract.v1.json",
+    "tests/fixtures/vnext/stage11/root-universe.v1.json",
+    "tools/vnext_contracts/stage11/validate_v4.py",
+    "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v3.json",
+    "tools/vnext_contracts/stage12/coordinator_v3.py"
+  ],
+  "v8_proof_obligations": [
+    "ordered_stage6_through_stage11_integration_ancestry",
+    "active_consumer_zero",
+    "sealed_reader_zero",
+    "retention_hold_zero",
+    "migration_association_and_finality_closure",
+    "authenticated_owner_history_and_v4_loss_closure",
+    "complete_owner_root_universe_and_two_pass_finality",
+    "foundation_v2_closure_and_v4_rollback_epoch",
+    "foundation_one_use_owner_evidence_mint",
+    "custody_bound_unavailable_preexisting_loss_audit_before_finality",
+    "legacy_removal_guard_v3_exact_v4_dependency",
+    "legacy_removal_guard_v3_expected_old_binding",
+    "stage12_legacy_cut_coordinator_v3_single_isolated_cas",
+    "proof_runner_effect_inert",
+    "candidate_ancestry_and_owned_path_closure",
+    "frozen_interface_byte_identity",
+    "temporary_namespace_zero",
+    "canonical_owner_facade_parity",
+    "content_identity_byte_parity",
+    "negative_compatibility_refusal",
+    "fresh_removal_authority",
+    "retained_audit_rollback_closure",
+    "dogfood_and_recovery_rehearsal",
+    "final_edge_sweep"
+  ]
 }
