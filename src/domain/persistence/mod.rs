@@ -16,6 +16,7 @@ mod export;
 mod generation;
 mod idempotency;
 pub(crate) mod legacy_quarantine;
+pub(in crate::domain) mod legacy_source_history;
 mod metadata;
 mod object;
 mod protected_diagnostic;
@@ -37,6 +38,7 @@ pub(in crate::domain) mod protected_locator_lease;
 )]
 mod protected_locator_stage9_seed;
 mod retention;
+pub(in crate::domain) mod root_universe;
 mod snapshot;
 mod snapshot_blocks;
 mod snapshot_export;
@@ -77,6 +79,13 @@ pub(crate) use protected_diagnostic::{
 pub use retention::{
     CollectionPlanV1, LogicalTombstoneV1, ReachabilitySnapshotV1, RetentionError, RetentionPinV1,
     RetentionRootKindV1, RetentionRootV1,
+};
+#[allow(
+    unused_imports,
+    reason = "V8 Persistence retained-root facts await Installation provider wiring"
+)]
+pub(crate) use root_universe::{
+    PersistenceRetainedStoreRootLeaseV1, PersistenceRootUniverseErrorV1,
 };
 pub use snapshot::{SnapshotError, StoreSnapshotRootV1};
 pub(crate) use store::{

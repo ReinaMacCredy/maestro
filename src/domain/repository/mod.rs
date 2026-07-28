@@ -2,6 +2,8 @@
 
 mod bootstrap;
 mod legacy_quarantine_admission;
+mod legacy_source_history;
+mod root_universe;
 
 pub(crate) use bootstrap::{
     CommittedRepositoryBootstrapV1, RepositoryBootstrapAdmissionV1,
@@ -16,6 +18,20 @@ pub(crate) use bootstrap::{
 pub(crate) use legacy_quarantine_admission::{
     RepositoryRootAdmissionErrorV3, RepositoryRootAdmissionV3,
 };
+#[allow(
+    unused_imports,
+    reason = "V8 Repository universe lease awaits Foundation aggregate wiring"
+)]
+pub(crate) use root_universe::{
+    RepositoryDeclaredRootUniverseLeaseV1, RepositoryRootUniverseErrorV1,
+};
+
+pub(crate) fn acquire_repository_declared_root_universe_v1(
+    store: &crate::domain::persistence::StoreV1,
+    operation_attempt: [u8; 32],
+) -> Result<RepositoryDeclaredRootUniverseLeaseV1, RepositoryRootUniverseErrorV1> {
+    legacy_quarantine_admission::acquire_declared_root_universe_v1(store, operation_attempt)
+}
 
 use std::collections::{BTreeMap, BTreeSet};
 

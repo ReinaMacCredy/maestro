@@ -69,6 +69,24 @@ const STAGE11_V3_INTERFACE_PRIVATE_SYMBOLS: &[&str] = &[
     "UnavailablePreexistingLossV3",
 ];
 
+const STAGE11_V8_INTERFACE_PRIVATE_SYMBOLS: &[&str] = &[
+    "FoundationOwnerEvidenceIssuanceBindingV1",
+    "InstallationDeclaredRootUniverseLeaseV1",
+    "InstallationRootUniverseObservationV1",
+    "InstallationRootUniverseProviderV1",
+    "InstallationUnavailablePreexistingLossEvidenceIssuerV1",
+    "IntegrationLegacyHostSlotSnapshotProviderV1",
+    "IntegrationLegacyHostSlotSnapshotV1",
+    "LegacySourceHistorySelectorV1",
+    "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1",
+    "OwnerUnavailablePreexistingLossEvidenceIssuerPortV1",
+    "PersistenceRetainedStoreRootLeaseV1",
+    "ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1",
+    "RepositoryDeclaredRootUniverseLeaseV1",
+    "RepositoryUnavailablePreexistingLossEvidenceIssuerV1",
+    "StoreLegacySourceCurrentViewV1",
+];
+
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
         "src/domain/harness/templates.rs",
@@ -4218,6 +4236,162 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
             assert!(
                 !source_mentions_identifier(&code, private_symbol),
                 "{} must not import or name private Stage 11 symbol {private_symbol} through a facade",
+                interface.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn stage11_v8_owner_wiring_is_private_complete_and_not_interface_reachable() {
+    let repository_mod = read_source_file(Path::new("src/domain/repository/mod.rs"));
+    let repository_history =
+        read_source_file(Path::new("src/domain/repository/legacy_source_history.rs"));
+    let repository_universe = read_source_file(Path::new("src/domain/repository/root_universe.rs"));
+    let installation_mod = read_source_file(Path::new("src/domain/installation/mod.rs"));
+    let installation_history = read_source_file(Path::new(
+        "src/domain/installation/legacy_source_history.rs",
+    ));
+    let installation_universe =
+        read_source_file(Path::new("src/domain/installation/root_universe.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let persistence_history =
+        read_source_file(Path::new("src/domain/persistence/legacy_source_history.rs"));
+    let integration_mod = read_source_file(Path::new("src/domain/integration/mod.rs"));
+    let host_slots = read_source_file(Path::new("src/domain/integration/legacy_host_slots.rs"));
+
+    assert!(repository_mod.contains("\nmod legacy_source_history;\n"));
+    assert!(repository_mod.contains("\nmod root_universe;\n"));
+    assert!(installation_mod.contains("\nmod legacy_source_history;\n"));
+    assert!(installation_mod.contains("\npub(in crate::domain) mod root_universe;\n"));
+    assert!(persistence_mod.contains("\npub(in crate::domain) mod legacy_source_history;\n"));
+    assert!(persistence_mod.contains("\npub(in crate::domain) mod root_universe;\n"));
+    assert!(integration_mod.contains("\nmod legacy_host_slots;\n"));
+
+    for source in [
+        repository_mod.as_str(),
+        installation_mod.as_str(),
+        persistence_mod.as_str(),
+        integration_mod.as_str(),
+    ] {
+        assert!(!source.contains("pub mod legacy_source_history"));
+        assert!(!source.contains("pub mod root_universe"));
+        assert!(!source.contains("pub mod legacy_host_slots"));
+    }
+
+    for (issuer, source) in [
+        (
+            "RepositoryUnavailablePreexistingLossEvidenceIssuerV1",
+            repository_history.as_str(),
+        ),
+        (
+            "InstallationUnavailablePreexistingLossEvidenceIssuerV1",
+            installation_history.as_str(),
+        ),
+        (
+            "ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1",
+            persistence_history.as_str(),
+        ),
+    ] {
+        assert!(
+            named_struct_body_contains(source, issuer, "_not_send_or_sync:"),
+            "{issuer} must retain its process-local Rc marker"
+        );
+        assert!(
+            source
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .contains(&format!(
+                    "OwnerUnavailablePreexistingLossEvidenceIssuerPortV1 for {issuer}"
+                )),
+            "{issuer} must implement the sealed consuming Foundation issuance port"
+        );
+    }
+
+    for (lease, source) in [
+        (
+            "RepositoryDeclaredRootUniverseLeaseV1",
+            repository_universe.as_str(),
+        ),
+        (
+            "InstallationDeclaredRootUniverseLeaseV1",
+            installation_universe.as_str(),
+        ),
+    ] {
+        assert!(
+            named_struct_body_contains(source, lease, "_not_send_or_sync:"),
+            "{lease} must retain its process-local Rc marker"
+        );
+    }
+
+    assert!(host_slots.contains("capture_complete_snapshot_no_io("));
+    assert!(host_slots.contains("recheck_complete_snapshot_no_io("));
+    assert!(host_slots.contains("visit_complete_slots("));
+    assert!(host_slots.contains("acquire_from_designated_registry("));
+    assert!(host_slots.contains("final_recheck_consumed: bool"));
+    assert!(host_slots.contains("FoundationDeclaredRootRoleV1::Host"));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::present("));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::declared_absent("));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::unsupported("));
+    assert!(!host_slots.contains("StoreRoleV1"));
+    for forbidden_surface in [
+        "\npub struct ",
+        "\npub enum ",
+        "\npub trait ",
+        "Serialize",
+        "Deserialize",
+        "ScopeAtom",
+        "ActionV1",
+    ] {
+        assert!(
+            !host_slots.contains(forbidden_surface),
+            "Integration host-slot snapshot must not add public or wire surface {forbidden_surface}"
+        );
+    }
+
+    let mut issuer_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .contains("OwnerUnavailablePreexistingLossEvidenceIssuerPortV1 for")
+        })
+        .collect::<Vec<_>>();
+    issuer_implementors.sort();
+    assert_eq!(
+        issuer_implementors,
+        [
+            PathBuf::from("src/domain/installation/legacy_source_history.rs"),
+            PathBuf::from("src/domain/persistence/legacy_source_history.rs"),
+            PathBuf::from("src/domain/repository/legacy_source_history.rs"),
+        ]
+    );
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = read_source_file(&interface);
+        let code = code_for_path_scan(&source);
+        for forbidden_leaf in [
+            "domain::integration::legacy_host_slots",
+            "domain::installation::legacy_source_history",
+            "domain::installation::root_universe",
+            "domain::persistence::legacy_source_history",
+            "domain::persistence::root_universe",
+            "domain::repository::legacy_source_history",
+            "domain::repository::root_universe",
+        ] {
+            assert!(
+                !code.contains(forbidden_leaf),
+                "{} must not import V8 owner leaf {forbidden_leaf}",
+                interface.display()
+            );
+        }
+        for private_symbol in STAGE11_V8_INTERFACE_PRIVATE_SYMBOLS {
+            assert!(
+                !source_mentions_identifier(&code, private_symbol),
+                "{} must not import or name private V8 symbol {private_symbol} through a facade",
                 interface.display()
             );
         }

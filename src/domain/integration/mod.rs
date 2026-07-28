@@ -8,9 +8,20 @@
 pub(in crate::domain) mod consumer_closure;
 pub mod public_literals;
 
+mod legacy_host_slots;
 mod trusted_host_diagnostic;
 mod trusted_host_diagnostic_stage10_seed;
 
+#[allow(
+    unused_imports,
+    reason = "V8 Installation owner wiring consumes the complete Integration host-slot snapshot"
+)]
+pub(in crate::domain) use legacy_host_slots::{
+    AuthenticatedLegacyHostSlotDispositionV1, AuthenticatedLegacyHostSlotRowV1,
+    AuthenticatedLegacyHostSlotSnapshotV1, IntegrationLegacyHostSlotSnapshotErrorV1,
+    IntegrationLegacyHostSlotSnapshotProviderV1, IntegrationLegacyHostSlotSnapshotV1,
+    LiveAuthenticatedLegacyHostSlotRegistryV1,
+};
 #[allow(
     unused_imports,
     reason = "Stage 5 freezes nominal trusted-host ports before the Stage 10 adapter"

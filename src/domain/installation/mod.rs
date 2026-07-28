@@ -49,7 +49,9 @@ mod durable_finality_stage11_seed;
     )
 )]
 mod durable_finality_stage9_seed;
+mod legacy_source_history;
 mod resource_cutover;
+pub(in crate::domain) mod root_universe;
 
 pub(crate) use crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceSetV3;
 pub use census::{
@@ -78,6 +80,26 @@ pub(crate) use resource_cutover::{
     InstallationLegacyDeletionPlanV2, Stage12ConsumerReaderHoldClosureV2,
     Stage12ReplacementActivationV2, Stage12RollbackRehearsalV2,
 };
+#[allow(
+    unused_imports,
+    reason = "V8 Installation universe lease awaits Foundation aggregate wiring"
+)]
+pub(crate) use root_universe::{
+    InstallationDeclaredRootUniverseLeaseV1, InstallationRootUniverseErrorV1,
+    InstallationRootUniverseProviderV1,
+};
+
+pub(crate) fn acquire_installation_declared_root_universe_v1(
+    census: &InstallationCensusV1,
+    provider: Box<dyn InstallationRootUniverseProviderV1>,
+    operation_attempt: [u8; 32],
+) -> Result<InstallationDeclaredRootUniverseLeaseV1, InstallationRootUniverseErrorV1> {
+    root_universe::InstallationDeclaredRootUniverseLeaseV1::acquire(
+        census,
+        provider,
+        operation_attempt,
+    )
+}
 
 pub(crate) struct Stage12ProductPruningCoordinatorV2<'coordinator, 'store> {
     authority: &'coordinator mut crate::domain::authority::AuthorityFacadeV1<'store>,
