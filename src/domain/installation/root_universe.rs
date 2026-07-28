@@ -106,10 +106,6 @@ pub(crate) struct InstallationRootUniverseObservationV1 {
 }
 
 impl InstallationRootUniverseObservationV1 {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the owner provider snapshot binds its complete currentness tuple"
-    )]
     pub(crate) fn from_owner_provider(
         declaration_set_revision: u64,
         realm: [u8; 32],
@@ -194,10 +190,6 @@ pub(crate) struct InstallationDeclaredRootV1 {
 }
 
 impl InstallationDeclaredRootV1 {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the declaration row binds its complete owner-controlled tuple"
-    )]
     pub(crate) fn present(
         declaration_id: [u8; 32],
         declaration_revision: u64,

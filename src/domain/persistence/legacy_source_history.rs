@@ -1203,10 +1203,9 @@ impl StoreLegacySourceHistoryProviderV1 {
             for object in objects {
                 if let Some(snapshot) =
                     StoreLegacySourceHistorySnapshotV1::from_store_object(&object)?
+                    && snapshot.owner == owner
                 {
-                    if snapshot.owner == owner {
-                        snapshots.push(snapshot);
-                    }
+                    snapshots.push(snapshot);
                 }
             }
             let Some(previous) = historical_generation.previous() else {
