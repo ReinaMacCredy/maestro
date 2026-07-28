@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const TARGET_MODULE_ROOTS: &[&str] = &[
     "src/interfaces/mod.rs",
@@ -5001,6 +5002,279 @@ fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
 
     let provider = read_source_file(Path::new("src/operations/adapters/live_projection.rs"));
     assert!(provider.contains("candidate:projection:canonical-store-locator-unavailable:v1"));
+}
+
+#[test]
+fn v8_terminal_closure_keeps_external_proof_exact_effect_inert_and_private() {
+    const EPC_COMMIT: &str = "6d3197833c1a10d102f42c70ebb3311e6a65da5b";
+    const EPC_TREE: &str = "eccece8f8e8b4698a5c2eae8438db2a443026ab1";
+    const PRODUCT_COMMIT: &str = "849a59d9c1290fbc0235b0c92fa1325923e65b08";
+    const PRODUCT_TREE: &str = "fe7784dfa36763081104844ba87294e3daa51ed0";
+
+    let identity = Command::new("git")
+        .args(["show", "-s", "--format=%P %T", EPC_COMMIT])
+        .output()
+        .expect("read EPC identity");
+    assert!(identity.status.success());
+    assert_eq!(
+        String::from_utf8(identity.stdout)
+            .expect("UTF-8 EPC identity")
+            .trim(),
+        format!("{PRODUCT_COMMIT} {EPC_TREE}")
+    );
+
+    let diff = Command::new("git")
+        .args([
+            "diff-tree",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            EPC_COMMIT,
+        ])
+        .output()
+        .expect("read EPC surface");
+    assert!(diff.status.success());
+    let observed_surface = String::from_utf8(diff.stdout)
+        .expect("UTF-8 EPC surface")
+        .lines()
+        .map(|line| {
+            let (status, path) = line.split_once('\t').expect("EPC status and path");
+            (status.to_string(), path.to_string())
+        })
+        .collect::<BTreeSet<_>>();
+    let expected_surface = BTreeSet::from([
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage11/live_set_v4_contract.v1.json".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage11/root-universe.v1.json".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/fixtures/vnext/stage12/release-proof-inputs.v1.json".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v3.json".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/vnext_stage12_affected_suffix.rs".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/vnext_stage12_contracts.rs".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/final_chain/stage12_product_proof.py".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/final_chain/test_stage12_product_proof.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage11/test_validate_v4.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage11/validate_v4.py".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/stage12/architecture_guard.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage12/coordinator_v3.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage12/test_coordinator_v3.py".to_string(),
+        ),
+    ]);
+    assert_eq!(observed_surface, expected_surface);
+    assert_eq!(observed_surface.len(), 13);
+    for (_, path) in &observed_surface {
+        assert!(
+            !path.starts_with("src/"),
+            "EPC must not change production {path}"
+        );
+        assert!(
+            Path::new(path).is_file(),
+            "EPC proof surface must retain {path}"
+        );
+    }
+
+    let fixture: serde_json::Value = serde_json::from_str(&read_source_file(Path::new(
+        "tests/fixtures/vnext/stage12/release-proof-inputs.v1.json",
+    )))
+    .expect("EPC release-proof fixture");
+    let materialization = fixture
+        .get("v8_snapshot_materialization")
+        .and_then(serde_json::Value::as_object)
+        .expect("provisional V8 snapshot materialization");
+    assert_eq!(
+        materialization
+            .get("state")
+            .and_then(serde_json::Value::as_str),
+        Some("provisional_static_known_prefix")
+    );
+    let predecessor = materialization
+        .get("known_first_parent_ledger")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|ledger| ledger.last())
+        .expect("known product predecessor");
+    assert_eq!(
+        predecessor
+            .get("commit")
+            .and_then(serde_json::Value::as_str),
+        Some(PRODUCT_COMMIT)
+    );
+    assert_eq!(
+        predecessor.get("tree").and_then(serde_json::Value::as_str),
+        Some(PRODUCT_TREE)
+    );
+    assert_eq!(
+        materialization.get("unmaterialized_logical_checkpoints"),
+        Some(&serde_json::json!([
+            "ExternalProofControl",
+            "MainIntegrationFinalClosure"
+        ]))
+    );
+    assert!(!materialization.contains_key("stage12_reviewed_candidate"));
+    assert!(!materialization.contains_key("final_integration"));
+    assert_eq!(
+        materialization
+            .get("canonical_regeneration")
+            .and_then(|value| value.get("repository_correction_commit"))
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let custody_trait = foundation
+        .split("pub(crate) trait QuarantineCustodyPortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[derive").next())
+        .expect("custody-bound audit port");
+    for required in ["create_loss_audit_if_absent", "read_loss_audit"] {
+        assert!(custody_trait.contains(required));
+    }
+    for obsolete in [
+        "StoreV1",
+        "persistence_store",
+        "ImmutableRecoveryAuditPersistenceV1",
+    ] {
+        assert!(!custody_trait.contains(obsolete));
+    }
+    let owner = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    let audit_owner = owner
+        .split("impl QuarantineCustodyLeaseV1<'_>")
+        .nth(1)
+        .and_then(|tail| tail.split("fn create_or_verify(").next())
+        .expect("custody audit owner");
+    assert!(audit_owner.contains("self.retained_root"));
+    assert!(audit_owner.contains("self.recheck_loss_audit_custody()?"));
+    assert!(!audit_owner.contains("legacy_quarantine_secure_root_v3"));
+    let operation = read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    assert!(operation.contains(
+        "persist_unavailable_preexisting_loss_audits_v4(&self.losses, &mut self.physical)"
+    ));
+    for obsolete in ["persistence_store", "ImmutableRecoveryAuditPersistenceV1"] {
+        assert!(!operation.contains(obsolete));
+        assert!(!foundation.contains(obsolete));
+        assert!(!owner.contains(obsolete));
+    }
+
+    let materializer = read_source_file(Path::new(
+        "tools/vnext_contracts/final_chain/stage12_product_proof.py",
+    ));
+    let materializer_main = materializer
+        .split("def main() -> int:")
+        .nth(1)
+        .and_then(|tail| tail.split("if __name__ == \"__main__\":").next())
+        .expect("external final materializer CLI");
+    assert_eq!(materializer_main.matches("parser.add_argument(").count(), 3);
+    for argument in [
+        "\"--ancestry-repository\"",
+        "\"--snapshot\"",
+        "\"--snapshot-root\"",
+    ] {
+        assert!(materializer_main.contains(argument));
+    }
+    for required in [
+        "\"live_installation_mutation\": False",
+        "\"primary_mutation\": False",
+        "\"proof_runner_effect_inert\": True",
+        "\"receipt_or_pointer_publication\": False",
+        "\"seal_execution\": False",
+    ] {
+        assert!(materializer.contains(required));
+    }
+    for forbidden in [
+        "update-ref",
+        "symbolic-ref",
+        "commit-tree",
+        "write-tree",
+        "hash-object",
+        ".write_text(",
+        ".write_bytes(",
+        "\"checkout\"",
+        "\"reset\"",
+        "\"branch\"",
+        "\"tag\"",
+        "\"push\"",
+    ] {
+        assert!(
+            !materializer.contains(forbidden),
+            "external final materializer must not gain {forbidden}"
+        );
+    }
+
+    let private_proof_capabilities = [
+        "ExternalProofControl",
+        "MainIntegrationFinalClosure",
+        "stage12_product_proof",
+        "run_v8_closure",
+        "v8_first_parent_ledger",
+        "v8_logical_checkpoints",
+    ];
+    for facade in [
+        "src/lib.rs",
+        "src/domain/mod.rs",
+        "src/operations/mod.rs",
+        "src/foundation/core/mod.rs",
+    ] {
+        let source = read_source_file(Path::new(facade));
+        for capability in private_proof_capabilities {
+            assert!(!source.contains(capability));
+        }
+    }
+    for root in [
+        "src/interfaces",
+        "embedded/vnext",
+        "embedded/schemas",
+        "tools/vnext_contracts/public",
+    ] {
+        for path in paths_under(Path::new(root))
+            .into_iter()
+            .filter(|path| path.is_file())
+        {
+            let bytes = fs::read(&path).expect("read public, interface, or wire surface");
+            let source = String::from_utf8_lossy(&bytes);
+            for capability in private_proof_capabilities {
+                assert!(
+                    !source.contains(capability),
+                    "{} must not expose private EPC capability {capability}",
+                    path.display()
+                );
+            }
+        }
+    }
 }
 
 fn source_implements_trait_for_type(source: &str, trait_name: &str, type_name: &str) -> bool {
