@@ -1748,6 +1748,201 @@ fn packet_cli_uses_only_the_explicit_locator_and_skips_passive_output() {
 }
 
 #[test]
+fn removed_legacy_mcp_cases_have_explicit_live_owner_coverage() {
+    let coverage = [
+        (
+            "mcp_serve_lists_tools_and_calls_status_over_stdio",
+            "tests/status_next_integration.rs",
+            "status_surfaces_active_progress_checklist",
+        ),
+        (
+            "mcp_task_done_forwards_required_proof_to_low_ceremony_completion",
+            "tests/task_commands_integration.rs",
+            "task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_completion",
+        ),
+        (
+            "mcp_lifecycle_tools_expose_schemas_and_blocked_envelope",
+            "tests/task_commands_integration.rs",
+            "ready_v2_projects_parallel_wave_serial_gates_and_blocked_next",
+        ),
+        (
+            "mcp_card_prepare_returns_card_shaped_lifecycle_envelope",
+            "tests/card_commands_integration.rs",
+            "custom_card_requires_kind_prepares_owned_tasks_and_closes_after_verification",
+        ),
+        (
+            "mcp_intake_lifecycle_tools_accept_and_prepare_feature",
+            "tests/feature_decision_commands_integration.rs",
+            "feature_prepare_accepts_task_plan_v1_and_stores_blocked_by_edges",
+        ),
+        (
+            "mcp_feature_accept_rejects_invalid_qa_shapes_before_cli",
+            "tests/feature_qa_gate_integration.rs",
+            "feature_accept_records_explicit_qa_surface",
+        ),
+        (
+            "mcp_qa_lifecycle_tools_require_observed_evidence",
+            "tests/feature_qa_gate_integration.rs",
+            "qa_baseline_stdin_accepts_full_contract_without_helper_nesting",
+        ),
+        (
+            "mcp_feature_gate_tools_verify_slice_and_close_without_autoclose",
+            "tests/feature_qa_gate_integration.rs",
+            "feature_qa_gates_via_cli",
+        ),
+        (
+            "mcp_task_tools_drive_normal_lifecycle_over_stdio",
+            "tests/task_commands_integration.rs",
+            "create_explore_accept_claim_complete_flow_updates_task_record",
+        ),
+        (
+            "mcp_card_tools_drive_lifecycle_ready_and_graph_over_stdio",
+            "tests/card_commands_integration.rs",
+            "link_add_show_graph_and_reverse_remove_round_trip",
+        ),
+        (
+            "mcp_decision_list_windows_by_default_and_all_reaches_full",
+            "tests/feature_decision_commands_integration.rs",
+            "decision_list_windows_to_recent_and_all_feature_restore",
+        ),
+        (
+            "mcp_decision_set_tools_draft_lock_and_show_with_cli_envelopes",
+            "tests/feature_decision_commands_integration.rs",
+            "decision_set_draft_lock_dry_run_and_show_round_trip",
+        ),
+        (
+            "mcp_tool_aliases_list_available_tools",
+            "tests/harness_integration.rs",
+            "mcp_cli_exposes_only_serve_and_tools_without_legacy_aliases",
+        ),
+        (
+            "mcp_stdio_alias_runs_server",
+            "tests/harness_integration.rs",
+            "mcp_cli_exposes_only_serve_and_tools_without_legacy_aliases",
+        ),
+        (
+            "mcp_serve_handles_json_rpc_batches_over_stdio_frames",
+            "tests/harness_integration.rs",
+            "mcp_transport_handles_json_rpc_batches",
+        ),
+        (
+            "mcp_serve_uses_content_length_framing",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_frame_parser_uses_content_length_as_bytes",
+            "tests/harness_integration.rs",
+            "mcp_content_length_counts_unicode_bytes",
+        ),
+        (
+            "mcp_serve_rejects_oversized_content_length_before_body_allocation",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_serve_accepts_newline_delimited_json_rpc",
+            "tests/harness_integration.rs",
+            "mcp_transport_accepts_newline_delimited_json_rpc",
+        ),
+        (
+            "mcp_serve_accepts_list_method_alias",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_serve_reports_invalid_requests_without_running_tools",
+            "tests/harness_integration.rs",
+            "mcp_invalid_or_missing_protocol_fields_never_dispatch",
+        ),
+    ];
+    assert_eq!(coverage.len(), 21);
+    let mut retired = std::collections::BTreeSet::new();
+    for (retired_test, owner_path, owner_test) in coverage {
+        assert!(
+            retired.insert(retired_test),
+            "duplicate retired test mapping"
+        );
+        let owner_source = fs::read_to_string(owner_path)
+            .unwrap_or_else(|error| panic!("failed to read {owner_path}: {error}"));
+        assert!(
+            owner_source.contains(&format!("fn {owner_test}(")),
+            "{retired_test} is mapped to missing owner {owner_path}::{owner_test}"
+        );
+    }
+}
+
+#[test]
+fn mcp_transport_handles_json_rpc_batches() {
+    let temp = TestTempDir::new("maestro-mcp-batch");
+    let batch = r#"[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","id":2,"method":"unknown"}]"#;
+    let responses = run_mcp_requests(temp.path(), &[batch]);
+    let batch_response = responses[0].as_array().expect("batch response");
+    assert_eq!(batch_response.len(), 2);
+    assert_eq!(batch_response[0]["id"], 1);
+    assert_eq!(
+        batch_response[0]["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(batch_response[1]["id"], 2);
+    assert_eq!(batch_response[1]["error"]["code"], -32601);
+}
+
+#[test]
+fn mcp_content_length_counts_unicode_bytes() {
+    let temp = TestTempDir::new("maestro-mcp-unicode-frame");
+    let request = r#"{"jsonrpc":"2.0","id":"雪","method":"tools/list"}"#;
+    assert_ne!(request.len(), request.chars().count());
+    let responses = run_mcp_requests(temp.path(), &[request]);
+    assert_eq!(responses[0]["id"], "雪");
+    assert_eq!(responses[0]["result"]["tools"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn mcp_transport_accepts_newline_delimited_json_rpc() {
+    let temp = TestTempDir::new("maestro-mcp-newline");
+    let output = run_mcp_bytes(
+        temp.path(),
+        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n",
+    );
+    let responses = parse_mcp_frames(&output.stdout);
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0]["result"]["tools"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn mcp_invalid_or_missing_protocol_fields_never_dispatch() {
+    let temp = TestTempDir::new("maestro-mcp-invalid-protocol");
+    let responses = run_mcp_requests(
+        temp.path(),
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"params":{"name":"maestro_packet","arguments":{"repository_locator":"/must-not-open"}}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call"}"#,
+            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":4,"method":7,"params":{"name":"maestro_packet"}}"#,
+        ],
+    );
+    assert_eq!(responses.len(), 4);
+    assert_eq!(responses[0]["error"]["code"], -32600);
+    assert_eq!(responses[0]["error"]["message"], "missing method");
+    for response in &responses[1..3] {
+        assert_eq!(response["error"]["code"], -32602);
+    }
+    assert_eq!(responses[3]["error"]["code"], -32600);
+    for response in responses {
+        let message = response["error"]["message"]
+            .as_str()
+            .expect("error message");
+        assert!(!message.contains("repository_locator"));
+        assert!(!message.contains("projection"));
+        assert!(!message.contains("provider"));
+    }
+}
+
+#[test]
 fn mcp_transport_is_framed_bounded_and_has_no_legacy_list_method() {
     let temp = TestTempDir::new("maestro-mcp-transport");
     let requests = [

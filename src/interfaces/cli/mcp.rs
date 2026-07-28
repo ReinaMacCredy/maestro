@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::interfaces::cli::{McpArgs, McpCommand};
 use crate::interfaces::mcp::server;
-use crate::interfaces::mcp::tools::tool_definitions;
+use crate::operations::adapters::GLOBAL_MCP_TOOLS_V1;
 
 /// Execute `maestro mcp`.
 pub fn run(args: McpArgs) -> Result<()> {
@@ -13,8 +13,8 @@ pub fn run(args: McpArgs) -> Result<()> {
 }
 
 fn list_tools() -> Result<()> {
-    for tool in tool_definitions() {
-        println!("{}", tool.name);
+    for definition in GLOBAL_MCP_TOOLS_V1 {
+        println!("{}", definition.name);
     }
     Ok(())
 }

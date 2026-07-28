@@ -10,6 +10,13 @@ mod effects;
 #[cfg(test)]
 mod prestore;
 
+#[allow(
+    unused_imports,
+    reason = "MainIntegration exposes the offline Stage 11 workflow without activating it"
+)]
+pub(crate) use crate::operations::migration::{
+    Stage11PhysicalClosureV3, execute_offline_live_set_v3,
+};
 pub use active::{
     ActiveDistributionTransactionV1, ActiveInstallationFacadeV1, ActivePublicationObjectsV1,
     InstallationOperationErrorV1,

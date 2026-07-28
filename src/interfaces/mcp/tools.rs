@@ -1,14 +1,12 @@
-use std::path::{Path, PathBuf};
-
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 
-use crate::domain::integration::LiveAuthenticatedHostConnectionV1;
 use crate::domain::transport::{decode_packet_read_request, encode_packet_read_envelope};
-use crate::foundation::core::paths::MaestroPaths;
+use crate::interfaces::mcp::ProtectedPacketRuntimeV1;
 use crate::operations::adapters::{
-    LiveProjectionReadProviderV1, RunningBinaryIdentityV1, cli_search, decode_cli_search_request,
-    encode_cli_search_envelope, packet_read,
+    GLOBAL_MCP_TOOLS_V1, GlobalMcpAdapterKindV1, LiveProjectionReadProviderV1,
+    RunningBinaryIdentityV1, cli_search, decode_cli_search_request, encode_cli_search_envelope,
+    global_mcp_adapter, packet_read,
 };
 
 /// MCP tool metadata.
@@ -21,42 +19,51 @@ pub struct ToolDefinition {
 
 /// Return the exact global read-only MCP registry.
 pub fn tool_definitions() -> Vec<ToolDefinition> {
-    vec![
-        tool(
-            "maestro_packet",
-            "Read one canonical bounded Packet projection from an explicit repository locator.",
-            packet_schema(),
-        ),
-        tool(
-            "maestro_cli_search",
-            "Search the running binary's frozen public operation catalog without repository state.",
-            cli_search_schema(),
-        ),
-    ]
+    GLOBAL_MCP_TOOLS_V1
+        .iter()
+        .map(|definition| ToolDefinition {
+            name: definition.name,
+            description: definition.description,
+            input_schema: match definition.kind {
+                GlobalMcpAdapterKindV1::Packet => packet_schema(),
+                GlobalMcpAdapterKindV1::CliSearch => cli_search_schema(),
+            },
+        })
+        .collect()
 }
 
 /// Dispatch one canonical MCP tool without ambient host or repository discovery.
 pub(crate) fn call_tool(
     name: &str,
     arguments: &Value,
-    _live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+    protected_packet: Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
 ) -> Result<String> {
-    match name {
-        "maestro_packet" => packet(arguments),
-        "maestro_cli_search" => search(arguments),
-        _ => bail!("unknown MCP tool: {name}"),
+    let adapter = global_mcp_adapter(name).ok_or_else(|| anyhow!("unknown MCP tool: {name}"))?;
+    match adapter.kind {
+        GlobalMcpAdapterKindV1::Packet => packet(arguments, protected_packet),
+        GlobalMcpAdapterKindV1::CliSearch => search(arguments),
     }
 }
 
-fn packet(arguments: &Value) -> Result<String> {
+fn packet(
+    arguments: &Value,
+    protected_packet: Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
+) -> Result<String> {
     let encoded = serde_json::to_string(arguments).context("failed to encode packet request")?;
     let request = decode_packet_read_request(&encoded)
         .context("maestro_packet requires one exact McpPacketReadRequestV1")?;
-    let root = explicit_repository_root(&request.repository_locator)?;
-    let provider = LiveProjectionReadProviderV1::load(MaestroPaths::new(root))
-        .map_err(|_| anyhow!("failed to establish the live projection provider"))?;
-    let envelope =
-        packet_read(&provider, &request).map_err(|_| anyhow!("packet projection was rejected"))?;
+    let envelope = match protected_packet {
+        Some(runtime) => runtime
+            .read_packet(&request)
+            .map_err(|_| anyhow!("packet projection was rejected"))?,
+        None => {
+            let provider =
+                LiveProjectionReadProviderV1::open_explicit_repository(&request.repository_locator)
+                    .map_err(|_| anyhow!("failed to establish the live projection provider"))?;
+            packet_read(&provider, &request)
+                .map_err(|_| anyhow!("packet projection was rejected"))?
+        }
+    };
     encode_packet_read_envelope(&envelope).map_err(Into::into)
 }
 
@@ -71,28 +78,6 @@ fn search(arguments: &Value) -> Result<String> {
         .map_err(|_| anyhow!("CLI catalog search was rejected"))?;
     encode_cli_search_envelope(&envelope, &request)
         .map_err(|_| anyhow!("CLI catalog search envelope was rejected"))
-}
-
-fn explicit_repository_root(repository_locator: &str) -> Result<PathBuf> {
-    let supplied = Path::new(repository_locator);
-    if !supplied.is_absolute() {
-        bail!("repository_locator must be one explicit absolute path");
-    }
-    let canonical = supplied
-        .canonicalize()
-        .context("repository_locator must identify an existing repository root")?;
-    if canonical != supplied {
-        bail!("repository_locator must be alias-closed canonical path");
-    }
-    Ok(canonical)
-}
-
-fn tool(name: &'static str, description: &'static str, input_schema: Value) -> ToolDefinition {
-    ToolDefinition {
-        name,
-        description,
-        input_schema,
-    }
 }
 
 fn packet_schema() -> Value {

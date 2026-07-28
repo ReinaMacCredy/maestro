@@ -3187,6 +3187,8 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
     ));
     let integration_module = read_source_file(Path::new("src/domain/integration/mod.rs"));
+    let connectors = read_source_file(Path::new("src/interfaces/connectors/mod.rs"));
+    let mcp = read_source_file(Path::new("src/interfaces/mcp/mod.rs"));
     let persistence_module = read_source_file(Path::new("src/domain/persistence/mod.rs"));
     let store = read_source_file(Path::new("src/domain/persistence/store.rs"));
     let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
@@ -3701,7 +3703,11 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     );
     assert!(stage10_seed.contains("claim_authenticated_invocation_no_io"));
     assert!(stage10_seed.contains("recheck_authenticated_invocation_no_io"));
-    assert!(stage10_seed.contains("acquire_from_authenticated_host"));
+    assert!(stage10_seed.contains("acquire_from_designated_connector"));
+    assert!(
+        connectors.contains("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector")
+    );
+    assert!(mcp.contains("acquire_trusted_host_diagnostic_connection("));
     assert!(!stage10_seed.contains("fixed_digest_getters"));
     assert!(!stage10_seed.contains("fixed_revision_getters"));
     assert!(
@@ -4050,12 +4056,12 @@ fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() 
     for required_route in [
         "pub(crate) fn from_live_owners(",
         "RepositoryRootAdmissionV3::mint_from_store",
-        "installation_census.admit_legacy_quarantine_roots_v3()",
+        "installation_census.admit_legacy_quarantine_roots_v3(installation_expected_sources)",
         "FoundationLegacyQuarantineLeaseV1::acquire(",
         "self.physical.copy_once(token)",
         "self.physical.rollback()",
         ".finish(self.quarantine.identity().into_bytes())",
-        "Stage11PhysicalClosureV3::new(",
+        "Ok(Stage11PhysicalClosureV3 {",
     ] {
         assert!(
             migration_operation.contains(required_route),
@@ -4329,6 +4335,9 @@ fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
     assert!(installation.contains("resource_cutover::execute_stage12_product_pruning("));
 
     let operations = read_source_file(Path::new("src/operations/installation/mod.rs"));
+    assert!(installation.contains("LegacyQuarantineExpectedSourceSetV3"));
+    assert!(operations.contains("execute_offline_live_set_v3"));
+    assert!(operations.contains("Stage11PhysicalClosureV3"));
     assert!(operations.contains("coordinate_stage12_product_pruning("));
     assert!(operations.contains("Stage12ProductPruningCoordinatorV2"));
     assert!(!operations.contains("LegacyRemovalGuardV2"));
@@ -4348,13 +4357,32 @@ fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
         "the sole operations coordinator must remain an uncalled definition"
     );
 
+    let adapters = read_source_file(Path::new("src/operations/adapters/mod.rs"));
+    let mcp_parent = read_source_file(Path::new("src/interfaces/mcp/mod.rs"));
     let mcp_tools = read_source_file(Path::new("src/interfaces/mcp/tools.rs"));
-    let packet_index = mcp_tools.find("\"maestro_packet\"").expect("packet tool");
-    let search_index = mcp_tools
-        .find("\"maestro_cli_search\"")
+    let packet_index = adapters
+        .find("name: \"maestro_packet\"")
+        .expect("packet tool");
+    let search_index = adapters
+        .find("name: \"maestro_cli_search\"")
         .expect("CLI search tool");
     assert!(packet_index < search_index);
-    assert_eq!(mcp_tools.matches("        tool(\n").count(), 2);
+    assert_eq!(
+        adapters
+            .matches("GlobalMcpAdapterDefinitionV1 {\n        kind:")
+            .count(),
+        2
+    );
+    assert!(mcp_tools.contains("GLOBAL_MCP_TOOLS_V1\n        .iter()"));
+    assert!(mcp_tools.contains("global_mcp_adapter(name)"));
+    assert!(mcp_tools.contains("match adapter.kind"));
+    assert!(mcp_tools.contains("GlobalMcpAdapterKindV1::Packet"));
+    assert!(mcp_tools.contains("GlobalMcpAdapterKindV1::CliSearch"));
+    assert!(!mcp_tools.contains("std::path"));
+    assert!(!mcp_tools.contains("PathBuf"));
+    assert!(!mcp_tools.contains("MaestroPaths"));
+    assert!(!mcp_tools.contains(".canonicalize()"));
+    assert!(mcp_tools.contains("LiveProjectionReadProviderV1::open_explicit_repository("));
     for legacy_name in [
         "\"maestro_status\"",
         "\"maestro_ready\"",
@@ -4372,27 +4400,74 @@ fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
         .nth(1)
         .expect("MCP dispatcher");
     let unknown_index = dispatch
-        .find("unknown MCP tool")
+        .find("global_mcp_adapter(name)")
         .expect("default-deny MCP refusal");
     assert!(
-        dispatch
-            .find("\"maestro_packet\"")
-            .expect("packet dispatch")
-            < unknown_index
-    );
-    assert!(
-        dispatch
-            .find("\"maestro_cli_search\"")
-            .expect("search dispatch")
-            < unknown_index
+        unknown_index
+            < dispatch
+                .find("serde_json::to_string(arguments)")
+                .expect("argument parsing")
     );
 
     let server = read_source_file(Path::new("src/interfaces/mcp/server.rs"));
     assert!(!server.contains("discover_repo_root"));
     assert!(!server.contains("MaestroPaths"));
-    assert!(server.contains("Option<&mut dyn LiveAuthenticatedHostConnectionV1>"));
-    assert!(server.contains("let mut live_host = None;"));
+    assert!(server.contains("serve_stdio(None)"));
+    assert!(server.contains("serve_with_protected_packet("));
+    assert!(!server.contains("acquire_trusted_host_diagnostic_connection"));
+    assert!(!server.contains("packet_read_with_protected_continuity"));
     assert!(!server.contains("\"list\" =>"));
+    assert!(mcp_parent.contains("pub(crate) fn serve_with_authenticated_host"));
+    assert!(mcp_parent.contains("acquire_trusted_host_diagnostic_connection("));
+    assert!(mcp_parent.contains("Stage10OwnerLocalConnectionSeedV1<'host>"));
+    assert!(mcp_parent.contains("LiveProjectionReadProviderV1::open_explicit_repository("));
+    assert!(mcp_parent.contains("packet_read_with_protected_continuity("));
+    assert!(
+        mcp_parent.contains("let _diagnostic_bytes = protected.protected_continuity_diagnostic;")
+    );
+    let protected_route = mcp_parent
+        .split("pub(crate) struct ProtectedPacketRuntimeV1")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(crate) const MCP_TOOL_SOURCE_JSON").next())
+        .expect("protected Packet route");
+    for forbidden in ["std::env", "OnceLock", "Mutex", "thread_local!", "serde"] {
+        assert!(
+            !protected_route.contains(forbidden),
+            "protected route must not acquire ambient authority through {forbidden}"
+        );
+    }
+
+    let connectors = read_source_file(Path::new("src/interfaces/connectors/mod.rs"));
+    assert_eq!(
+        connectors
+            .matches("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(")
+            .count(),
+        1
+    );
+    let constructor_external_callers = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            path != Path::new("src/interfaces/connectors/mod.rs")
+                && path
+                    != Path::new("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
+        })
+        .filter(|path| {
+            read_source_file(path)
+                .contains("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(")
+        })
+        .collect::<Vec<_>>();
+    assert!(constructor_external_callers.is_empty());
+    let connector_external_callers = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| path != Path::new("src/interfaces/connectors/mod.rs"))
+        .filter(|path| {
+            read_source_file(path).contains("acquire_trusted_host_diagnostic_connection(")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        connector_external_callers,
+        [PathBuf::from("src/interfaces/mcp/mod.rs")]
+    );
 
     let cli = read_source_file(Path::new("src/interfaces/cli/mod.rs"));
     let mcp_commands = cli

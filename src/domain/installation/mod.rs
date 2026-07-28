@@ -51,6 +51,7 @@ mod durable_finality_stage11_seed;
 mod durable_finality_stage9_seed;
 mod resource_cutover;
 
+pub(crate) use crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceSetV3;
 pub use census::{
     InstallationCensusClassV1, InstallationCensusEntryV1, InstallationCensusErrorV1,
     InstallationCensusHeaderV1, InstallationCensusV1,

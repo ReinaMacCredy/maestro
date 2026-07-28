@@ -3,20 +3,31 @@ use std::io::{self, BufRead, BufReader, Write};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
-use crate::domain::integration::LiveAuthenticatedHostConnectionV1;
+use crate::interfaces::mcp::ProtectedPacketRuntimeV1;
 use crate::interfaces::mcp::tools::{call_tool, tool_definitions};
 
 const MAX_MCP_FRAME_BYTES: usize = 1024 * 1024;
 
 /// Run the stdio MCP JSON-RPC server.
 pub fn serve() -> Result<()> {
-    let mut live_host = None;
+    serve_stdio(None)
+}
+
+pub(crate) fn serve_with_protected_packet(
+    runtime: &mut ProtectedPacketRuntimeV1<'_, '_, '_>,
+) -> Result<()> {
+    serve_stdio(Some(runtime))
+}
+
+fn serve_stdio(
+    mut protected_packet: Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
+) -> Result<()> {
     let stdin = io::stdin();
     let mut reader = BufReader::new(stdin.lock());
     let mut stdout = io::stdout();
 
     while let Some(body) = read_message(&mut reader)? {
-        let response = handle_request(&body, &mut live_host);
+        let response = handle_request(&body, &mut protected_packet);
         if let Some(response) = response {
             write_frame(&mut stdout, &response)?;
         }
@@ -94,7 +105,7 @@ fn write_frame(writer: &mut impl Write, response: &Value) -> Result<()> {
 
 fn handle_request(
     body: &str,
-    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+    protected_packet: &mut Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
 ) -> Option<Value> {
     let request = match serde_json::from_str::<Value>(body) {
         Ok(request) => request,
@@ -117,7 +128,7 @@ fn handle_request(
         }
         let responses = batch
             .iter()
-            .filter_map(|request| handle_request_value(request, live_host))
+            .filter_map(|request| handle_request_value(request, protected_packet))
             .collect::<Vec<_>>();
         return if responses.is_empty() {
             None
@@ -126,12 +137,12 @@ fn handle_request(
         };
     }
 
-    handle_request_value(&request, live_host)
+    handle_request_value(&request, protected_packet)
 }
 
 fn handle_request_value(
     request: &Value,
-    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+    protected_packet: &mut Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
 ) -> Option<Value> {
     let id = request.get("id").cloned();
     let Some(method) = request.get("method").and_then(Value::as_str) else {
@@ -164,7 +175,9 @@ fn handle_request_value(
                 "result": {"tools": tools_json()}
             })
         }),
-        "tools/call" => id.map(|id| tool_call_response(id, request.get("params"), live_host)),
+        "tools/call" => {
+            id.map(|id| tool_call_response(id, request.get("params"), protected_packet))
+        }
         _ => id.map(|id| {
             json!({
                 "jsonrpc": "2.0",
@@ -191,7 +204,7 @@ fn tools_json() -> Vec<Value> {
 fn tool_call_response(
     id: Value,
     params: Option<&Value>,
-    live_host: &mut Option<&mut dyn LiveAuthenticatedHostConnectionV1>,
+    protected_packet: &mut Option<&mut ProtectedPacketRuntimeV1<'_, '_, '_>>,
 ) -> Value {
     let Some(params) = params else {
         return invalid_params(id, "missing params");
@@ -204,7 +217,7 @@ fn tool_call_response(
         .cloned()
         .unwrap_or_else(|| json!({}));
 
-    match call_tool(name, &arguments, live_host) {
+    match call_tool(name, &arguments, protected_packet.as_deref_mut()) {
         Ok(text) => json!({
             "jsonrpc": "2.0",
             "id": id,
