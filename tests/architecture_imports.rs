@@ -4476,6 +4476,241 @@ fn stage11_v8_foundation_v4_wiring_is_private_current_and_not_interface_reachabl
 }
 
 #[test]
+fn stage11_v8_product_closure_binds_loss_audits_to_custody_and_expected_old() {
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let custody_trait = foundation
+        .split("pub(crate) trait QuarantineCustodyPortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[derive").next())
+        .expect("sealed custody trait");
+    let compact_custody_trait = custody_trait
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(compact_custody_trait.contains(
+        "fn create_loss_audit_if_absent( &mut self, audit_id: [u8; 32], canonical_bytes: &[u8], ) -> Result<(), FoundationLegacyQuarantineErrorV1>;"
+    ));
+    assert!(compact_custody_trait.contains(
+        "fn read_loss_audit( &self, audit_id: [u8; 32], ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1>;"
+    ));
+    assert!(!compact_custody_trait.contains("StoreV1"));
+    assert!(!compact_custody_trait.contains("persistence_store"));
+
+    let operation_leaf = read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    let v4_entry = operation_leaf
+        .split("pub(crate) fn execute_offline_live_set_v4")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) struct Stage11LiveSetContinuationV4")
+                .next()
+        })
+        .expect("V4 operation entry");
+    let v4_finish = operation_leaf
+        .split("impl<P, Q> Stage11SealedCopyContinuationV4<P, Q>")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) enum Stage11PhysicalClosureV4")
+                .next()
+        })
+        .expect("V4 custody-owned finish");
+    for (name, source) in [("entry", v4_entry), ("finish", v4_finish)] {
+        for forbidden in [
+            "persistence_store",
+            "StoreV1",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+        ] {
+            assert!(
+                !source_mentions_identifier(source, forbidden),
+                "V4 {name} must not accept external audit or Store authority through {forbidden}"
+            );
+        }
+    }
+    assert!(v4_entry.contains("custody: Q"));
+    assert!(!v4_entry.contains("audit:"));
+    assert!(v4_finish.contains("pub(crate) fn finish(\n        mut self,\n    )"));
+    assert!(v4_finish.contains(
+        "persist_unavailable_preexisting_loss_audits_v4(&self.losses, &mut self.physical)"
+    ));
+    assert!(
+        v4_finish
+            .find("persist_unavailable_preexisting_loss_audits_v4")
+            .unwrap()
+            < v4_finish
+                .find(".finish(self.quarantine.identity()")
+                .unwrap()
+    );
+
+    let owner = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    assert!(
+        owner.contains("\"recovery/legacy-loss-audit-v4/{}.cbor\",\n        hex_digest(audit_id)")
+    );
+    let audit_create = owner
+        .split("fn create_loss_audit_if_absent(\n        &mut self,")
+        .nth(2)
+        .and_then(|tail| tail.split("fn read_loss_audit(").next())
+        .expect("custody-bound audit create");
+    let audit_read = owner
+        .split("fn read_loss_audit(\n        &self,")
+        .nth(2)
+        .and_then(|tail| tail.split("fn recheck_loss_audit_custody(").next())
+        .expect("custody-bound audit read");
+    assert_eq!(
+        audit_create
+            .matches("self.recheck_loss_audit_custody()")
+            .count(),
+        4,
+        "directory creation, file creation, and exact readback retain pre/post custody checks"
+    );
+    assert_eq!(
+        audit_read
+            .matches("self.recheck_loss_audit_custody()?")
+            .count(),
+        2,
+        "immutable reads retain pre/post custody checks"
+    );
+    for source in [audit_create, audit_read] {
+        assert!(source.contains("self.retained_root"));
+        assert!(!source.contains("legacy_quarantine_secure_root_v3"));
+        for rollback_vector in ["created_files", "custody_files", "custody_records"] {
+            assert!(
+                !source_mentions_identifier(source, rollback_vector),
+                "durable non-bearer audit evidence must not enter rollback vector {rollback_vector}"
+            );
+        }
+    }
+    let custody_recheck = owner
+        .split("fn recheck_loss_audit_custody(")
+        .nth(1)
+        .and_then(|tail| tail.split("fn create_or_verify(").next())
+        .expect("custody currentness recheck");
+    for required in [
+        "StoreRoleV1::Installation",
+        "StoreStateV1::Inactive",
+        "revision != self.state_revision",
+        ".active_head()",
+        "self.retained_root.verify_path_binding()?",
+        "observed != self.facts",
+        "expected_old != self.expected_old",
+        "currentness != self.currentness",
+        "fence != self.fence",
+        "identity != self.identity",
+    ] {
+        assert!(
+            custody_recheck.contains(required),
+            "custody audit recheck must retain {required}"
+        );
+    }
+    let rollback = owner
+        .split("fn rollback_created_files(")
+        .nth(1)
+        .and_then(|tail| tail.split("impl Drop for QuarantineCustodyLeaseV1").next())
+        .expect("custody rollback implementation");
+    assert!(!rollback.contains("loss_audit"));
+    assert!(!rollback.contains("legacy-loss-audit-v4"));
+
+    for facade in [
+        "src/lib.rs",
+        "src/domain/mod.rs",
+        "src/domain/persistence/mod.rs",
+        "src/foundation/core/mod.rs",
+        "src/operations/mod.rs",
+        "src/operations/migration/mod.rs",
+    ] {
+        let source = code_for_path_scan(&read_source_file(Path::new(facade)));
+        for private_audit_surface in [
+            "QuarantineCustodyPortV1",
+            "create_loss_audit_if_absent",
+            "read_loss_audit",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, private_audit_surface),
+                "{facade} must not expose private custody audit surface {private_audit_surface}"
+            );
+        }
+    }
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = code_for_path_scan(&read_source_file(&interface));
+        for private_audit_surface in [
+            "QuarantineCustodyPortV1",
+            "create_loss_audit_if_absent",
+            "read_loss_audit",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+            "legacy-loss-audit-v4",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, private_audit_surface),
+                "{} must not make custody audit authority interface-reachable",
+                interface.display()
+            );
+        }
+    }
+    for wire_root in ["embedded/vnext", "embedded/schemas"] {
+        for path in paths_under(Path::new(wire_root))
+            .into_iter()
+            .filter(|path| path.is_file())
+        {
+            let wire_artifact = fs::read(&path).expect("read wire artifact");
+            let source = String::from_utf8_lossy(&wire_artifact);
+            for private_audit_surface in [
+                "QuarantineCustodyPortV1",
+                "create_loss_audit_if_absent",
+                "read_loss_audit",
+                "legacy-loss-audit-v4",
+            ] {
+                assert!(
+                    !source.contains(private_audit_surface),
+                    "{} must not make custody audit authority wire-reachable",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    let cutover = read_source_file(Path::new("src/domain/installation/resource_cutover.rs"));
+    for required in [
+        "stage12_deletion_plan_v3(",
+        "expected_old_state_id: MigrationDigestV1",
+        "*expected_old_state_id.as_bytes()",
+        "expected_old_state_id: deletion_plan.expected_old_state_id()",
+        "expected_old_state_id: closure.expected_old_state_id()",
+        "continuation.expected_old_state_id != closure.expected_old_state_id()",
+        "effects.compare_expected_old_and_prune(",
+        "closure.expected_old_state_id(),",
+    ] {
+        assert!(
+            cutover.contains(required),
+            "Stage12 expected-old chain must retain {required}"
+        );
+    }
+    let guard = read_source_file(Path::new("src/domain/authority/legacy_removal_guard.rs"));
+    for required in [
+        "_expected_old_state: [u8; 32]",
+        "expected_old_state: *closure.expected_old_state_id().as_bytes()",
+        "&self._expected_old_state",
+        "self._expected_old_state != consumer.expected_old_state",
+        "consume_with_linearization",
+    ] {
+        assert!(
+            guard.contains(required),
+            "Authority guard expected-old chain must retain {required}"
+        );
+    }
+    let authority = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    for required in [
+        "let expected_old_state_id = deletion_plan.expected_old_state_id();",
+        "consumer_reader_hold.expected_old_state_id() != expected_old_state_id",
+        "expected_old_state_id.as_bytes(),",
+        "*expected_old_state_id.as_bytes(),",
+    ] {
+        assert!(
+            authority.contains(required),
+            "Authority admission expected-old chain must retain {required}"
+        );
+    }
+}
+
+#[test]
 fn stage11_private_route_guard_rejects_generic_capability_trait_impls() {
     let mutation = r#"
         impl<P, Q> std::clone::Clone for FoundationLegacyQuarantineLeaseV1<P, Q> {
