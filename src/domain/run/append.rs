@@ -1,8 +1,11 @@
+#[cfg(unix)]
 use std::ffi::{CString, c_char};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
+#[cfg(unix)]
 use std::thread;
+#[cfg(unix)]
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -16,6 +19,7 @@ use crate::foundation::core::session::known_agent_runtime;
 
 use super::activity::append_activity_for_run_event;
 
+#[cfg(unix)]
 const OPEN_EVENT_FILE_RETRIES: usize = 8;
 
 pub(crate) fn append_normalized_event(paths: &MaestroPaths, event: &Value) -> Result<()> {
