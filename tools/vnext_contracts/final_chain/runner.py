@@ -64,6 +64,16 @@ STAGE12_CANONICAL_ANCESTRY = [
         "commit": "73e2d226f51ac55ee9a92b411fade9b7737fa567",
         "tree": "9bca7075c5255b9bb3eb757693c7f13b8d294b19",
     },
+    {
+        "lane": "AuthorityOwnerModulePlacementCorrection",
+        "commit": "acd2a469d058f5a17162d3f0a5a44fe394cf6676",
+        "tree": "b97282eadfc10ad552cdc5b46bef7b62454367ef",
+    },
+    {
+        "lane": "Stage12ProductAffectedSuffixRebind",
+        "commit": "e03d21b64995a20cfda3e90d706048ca79038f30",
+        "tree": "600171763b9e782d494fa0c04ba5de9a5d7fa5a4",
+    },
 ]
 STAGE12_GATE_ORDER = [
     ("legacy_source_case_manifest_v3", "current_complete"),

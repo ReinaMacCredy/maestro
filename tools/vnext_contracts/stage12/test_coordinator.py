@@ -184,7 +184,25 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
             ):
                 coordinator.validate_contract(mutant)
 
-    def test_exact_canonical_lane_ancestry_reaches_stage12_product(self) -> None:
+    def test_exact_canonical_lane_ancestry_reaches_affected_stage12_rebind(
+        self,
+    ) -> None:
+        self.assertEqual(
+            coordinator.CANONICAL_ANCESTRY[-2],
+            {
+                "lane": "AuthorityOwnerModulePlacementCorrection",
+                "commit": "acd2a469d058f5a17162d3f0a5a44fe394cf6676",
+                "tree": "b97282eadfc10ad552cdc5b46bef7b62454367ef",
+            },
+        )
+        self.assertEqual(
+            coordinator.CANONICAL_ANCESTRY[-1],
+            {
+                "lane": "Stage12ProductAffectedSuffixRebind",
+                "commit": "e03d21b64995a20cfda3e90d706048ca79038f30",
+                "tree": "600171763b9e782d494fa0c04ba5de9a5d7fa5a4",
+            },
+        )
         coordinator._validate_candidate_ancestry(
             REPOSITORY, coordinator.CANONICAL_ANCESTRY[-1]["commit"]
         )
