@@ -2,12 +2,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
-use crate::foundation::core::deterministic_cbor::{CborError, CborValue};
+use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 use crate::foundation::core::legacy_loss_evidence::FoundationValidatedUnavailablePreexistingLossReceiptV1;
 use crate::foundation::core::legacy_quarantine::{
-    FoundationLegacyPayloadStateV3, FoundationMigrationSourcePartsV1, LegacyQuarantineOwnerDomainV3,
+    FoundationLegacyPayloadStateV3, FoundationMigrationOverlapPairV1,
+    FoundationMigrationSourceCaseV1, LegacyQuarantineOwnerDomainV3,
 };
-use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
 
 use super::{MigrationDigestV1, MigrationIdentityErrorV1};
 
@@ -61,18 +61,25 @@ impl LegacyPayloadStateV3 {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct MembershipKeyV3 {
     identity: MigrationDigestV1,
     owner: LegacyOwnerDomainV3,
-    root_binding: MigrationDigestV1,
-    display_locator: Vec<u8>,
-    resolved_locator_commitment: MigrationDigestV1,
     object_identity: MigrationDigestV1,
-    node_kind: LegacyNodeKindV3,
     metadata_commitment: MigrationDigestV1,
     owner_currentness: MigrationDigestV1,
     owner_attestation: MigrationDigestV1,
+    canonical_value: CborValue,
+}
+
+impl std::fmt::Debug for MembershipKeyV3 {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MembershipKeyV3")
+            .field("identity", &self.identity)
+            .field("owner", &self.owner)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MembershipKeyV3 {
@@ -106,17 +113,26 @@ impl MembershipKeyV3 {
                 owner_attestation.canonical_value(),
             ]),
         )?;
+        let canonical_value = CborValue::Array(vec![
+            identity.canonical_value(),
+            CborValue::Unsigned(owner.tag()),
+            root_binding.canonical_value(),
+            CborValue::Bytes(display_locator),
+            resolved_locator_commitment.canonical_value(),
+            object_identity.canonical_value(),
+            CborValue::Unsigned(node_kind.tag()),
+            metadata_commitment.canonical_value(),
+            owner_currentness.canonical_value(),
+            owner_attestation.canonical_value(),
+        ]);
         Ok(Self {
             identity,
             owner,
-            root_binding,
-            display_locator,
-            resolved_locator_commitment,
             object_identity,
-            node_kind,
             metadata_commitment,
             owner_currentness,
             owner_attestation,
+            canonical_value,
         })
     }
 
@@ -124,59 +140,32 @@ impl MembershipKeyV3 {
         self.identity
     }
 
-    pub const fn owner(&self) -> LegacyOwnerDomainV3 {
+    const fn owner(&self) -> LegacyOwnerDomainV3 {
         self.owner
     }
 
-    pub const fn root_binding(&self) -> MigrationDigestV1 {
-        self.root_binding
-    }
-
-    pub fn display_locator(&self) -> &[u8] {
-        &self.display_locator
-    }
-
-    pub const fn resolved_locator_commitment(&self) -> MigrationDigestV1 {
-        self.resolved_locator_commitment
-    }
-
-    pub const fn object_identity(&self) -> MigrationDigestV1 {
+    const fn object_identity(&self) -> MigrationDigestV1 {
         self.object_identity
     }
 
-    pub const fn node_kind(&self) -> LegacyNodeKindV3 {
-        self.node_kind
-    }
-
-    pub const fn metadata_commitment(&self) -> MigrationDigestV1 {
+    const fn metadata_commitment(&self) -> MigrationDigestV1 {
         self.metadata_commitment
     }
 
-    pub const fn owner_currentness(&self) -> MigrationDigestV1 {
+    const fn owner_currentness(&self) -> MigrationDigestV1 {
         self.owner_currentness
     }
 
-    pub const fn owner_attestation(&self) -> MigrationDigestV1 {
+    const fn owner_attestation(&self) -> MigrationDigestV1 {
         self.owner_attestation
     }
 
     fn canonical_value(&self) -> CborValue {
-        CborValue::Array(vec![
-            self.identity.canonical_value(),
-            CborValue::Unsigned(self.owner.tag()),
-            self.root_binding.canonical_value(),
-            CborValue::Bytes(self.display_locator.clone()),
-            self.resolved_locator_commitment.canonical_value(),
-            self.object_identity.canonical_value(),
-            CborValue::Unsigned(self.node_kind.tag()),
-            self.metadata_commitment.canonical_value(),
-            self.owner_currentness.canonical_value(),
-            self.owner_attestation.canonical_value(),
-        ])
+        self.canonical_value.clone()
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct SourceCaseV3 {
     identity: MigrationDigestV1,
     membership: MembershipKeyV3,
@@ -185,6 +174,19 @@ pub struct SourceCaseV3 {
     logical_length: u64,
     content_sha256: MigrationDigestV1,
     metadata_commitment: MigrationDigestV1,
+    canonical_value: CborValue,
+}
+
+impl std::fmt::Debug for SourceCaseV3 {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SourceCaseV3")
+            .field("identity", &self.identity)
+            .field("membership_id", &self.membership.identity())
+            .field("payload_state", &self.payload_state)
+            .field("logical_length", &self.logical_length)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SourceCaseV3 {
@@ -210,6 +212,15 @@ impl SourceCaseV3 {
                 metadata_commitment.canonical_value(),
             ]),
         )?;
+        let canonical_value = CborValue::Array(vec![
+            identity.canonical_value(),
+            membership.canonical_value(),
+            foundation_invocation.canonical_value(),
+            CborValue::Unsigned(payload_state.tag()),
+            CborValue::Unsigned(logical_length),
+            content_sha256.canonical_value(),
+            metadata_commitment.canonical_value(),
+        ]);
         Ok(Self {
             identity,
             membership,
@@ -218,6 +229,7 @@ impl SourceCaseV3 {
             logical_length,
             content_sha256,
             metadata_commitment,
+            canonical_value,
         })
     }
 
@@ -229,7 +241,7 @@ impl SourceCaseV3 {
         self.membership.identity()
     }
 
-    pub const fn membership(&self) -> &MembershipKeyV3 {
+    const fn membership(&self) -> &MembershipKeyV3 {
         &self.membership
     }
 
@@ -254,33 +266,22 @@ impl SourceCaseV3 {
     }
 
     fn canonical_value(&self) -> CborValue {
-        CborValue::Array(vec![
-            self.identity.canonical_value(),
-            self.membership.canonical_value(),
-            self.foundation_invocation.canonical_value(),
-            CborValue::Unsigned(self.payload_state.tag()),
-            CborValue::Unsigned(self.logical_length),
-            self.content_sha256.canonical_value(),
-            self.metadata_commitment.canonical_value(),
-        ])
+        self.canonical_value.clone()
     }
 }
 
 pub(crate) struct FoundationMaterializedSourceCaseV3 {
     source_case: SourceCaseV3,
     source_token: [u8; 32],
-    mount_identity: MigrationDigestV1,
-    provider_identity: MigrationDigestV1,
-    anchor_identity: MigrationDigestV1,
-    fence_identity: MigrationDigestV1,
     loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
 }
 
 impl FoundationMaterializedSourceCaseV3 {
     pub(crate) fn from_foundation_v2(
-        parts: FoundationMigrationSourcePartsV1,
+        source: FoundationMigrationSourceCaseV1,
         foundation_invocation: MigrationDigestV1,
     ) -> Result<Self, LiveSetV3Error> {
+        let parts = source.into_semantic();
         let owner = match parts.owner {
             LegacyQuarantineOwnerDomainV3::Repository => LegacyOwnerDomainV3::Repository,
             LegacyQuarantineOwnerDomainV3::Installation => LegacyOwnerDomainV3::Installation,
@@ -288,69 +289,52 @@ impl FoundationMaterializedSourceCaseV3 {
                 LegacyOwnerDomainV3::ProtectedPrimary
             }
         };
-        let node_kind = match parts.kind {
-            DescriptorCensusObjectKindV1::RegularFile => LegacyNodeKindV3::RegularFile,
-            DescriptorCensusObjectKindV1::SymbolicLink => LegacyNodeKindV3::SymbolicLink,
-        };
-        let root_binding = MigrationDigestV1::from_digest(parts.root_binding)?;
-        let resolved_locator_commitment = MigrationDigestV1::identify(
-            b"maestro.migration.resolved-leaf-locator.v3\0",
-            &CborValue::Array(vec![
-                root_binding.canonical_value(),
-                CborValue::Bytes(parts.relative_locator.clone()),
-            ]),
-        )?;
         let object_identity = MigrationDigestV1::from_digest(parts.object_identity)?;
         let content_sha256 = MigrationDigestV1::from_digest(parts.content_identity)?;
-        let metadata_commitment = MigrationDigestV1::identify(
-            b"maestro.migration.source-metadata.v3\0",
-            &CborValue::Array(vec![
-                CborValue::Unsigned(node_kind.tag()),
-                CborValue::Unsigned(parts.logical_byte_length),
-                object_identity.canonical_value(),
-                content_sha256.canonical_value(),
-            ]),
-        )?;
-        if metadata_commitment.into_bytes() != parts.metadata_commitment {
-            return Err(LiveSetV3Error::MetadataMismatch);
-        }
-        let mut display_locator = parts.display_locator;
-        if !display_locator.ends_with(b"/") {
-            display_locator.push(b'/');
-        }
-        display_locator.extend_from_slice(&parts.relative_locator);
-        let membership = MembershipKeyV3::from_foundation(
+        let metadata_commitment = MigrationDigestV1::from_digest(parts.metadata_commitment)?;
+        let membership_identity = MigrationDigestV1::from_digest(parts.membership_identity)?;
+        let membership_value = deterministic_cbor::decode(&parts.membership_encoding)?;
+        validate_materialized_identity(&membership_value, membership_identity)?;
+        let membership = MembershipKeyV3 {
+            identity: membership_identity,
             owner,
-            root_binding,
-            display_locator,
-            resolved_locator_commitment,
             object_identity,
-            node_kind,
             metadata_commitment,
-            MigrationDigestV1::from_digest(parts.owner_currentness)?,
-            MigrationDigestV1::from_digest(parts.owner_attestation)?,
-        )?;
+            owner_currentness: MigrationDigestV1::from_digest(parts.owner_currentness)?,
+            owner_attestation: MigrationDigestV1::from_digest(parts.owner_attestation)?,
+            canonical_value: membership_value.clone(),
+        };
         let payload_state = match parts.payload_state {
             FoundationLegacyPayloadStateV3::Present => LegacyPayloadStateV3::Present,
             FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss => {
                 LegacyPayloadStateV3::UnavailablePreexistingLoss
             }
         };
-        let source_case = SourceCaseV3::from_foundation(
-            membership,
+        let source_case_identity = MigrationDigestV1::from_digest(parts.source_case_identity)?;
+        let source_case_value = deterministic_cbor::decode(&parts.source_case_encoding)?;
+        validate_materialized_source_case(
+            &source_case_value,
+            source_case_identity,
+            &membership_value,
             foundation_invocation,
             payload_state,
             parts.logical_byte_length,
             content_sha256,
             metadata_commitment,
         )?;
+        let source_case = SourceCaseV3 {
+            identity: source_case_identity,
+            membership,
+            foundation_invocation,
+            payload_state,
+            logical_length: parts.logical_byte_length,
+            content_sha256,
+            metadata_commitment,
+            canonical_value: source_case_value,
+        };
         Ok(Self {
             source_case,
             source_token: parts.source_token,
-            mount_identity: MigrationDigestV1::from_digest(parts.mount_identity)?,
-            provider_identity: MigrationDigestV1::from_digest(parts.provider_identity)?,
-            anchor_identity: MigrationDigestV1::from_digest(parts.anchor_identity)?,
-            fence_identity: MigrationDigestV1::from_digest(parts.fence_identity)?,
             loss_receipt: parts.loss_receipt,
         })
     }
@@ -363,22 +347,6 @@ impl FoundationMaterializedSourceCaseV3 {
         self.source_token
     }
 
-    pub(crate) const fn mount_identity(&self) -> MigrationDigestV1 {
-        self.mount_identity
-    }
-
-    pub(crate) const fn provider_identity(&self) -> MigrationDigestV1 {
-        self.provider_identity
-    }
-
-    pub(crate) const fn anchor_identity(&self) -> MigrationDigestV1 {
-        self.anchor_identity
-    }
-
-    pub(crate) const fn fence_identity(&self) -> MigrationDigestV1 {
-        self.fence_identity
-    }
-
     pub(crate) fn take_loss_receipt(
         &mut self,
     ) -> Option<FoundationValidatedUnavailablePreexistingLossReceiptV1> {
@@ -387,6 +355,23 @@ impl FoundationMaterializedSourceCaseV3 {
 
     pub(crate) fn into_source_case(self) -> SourceCaseV3 {
         self.source_case
+    }
+}
+
+impl ProtectedPrimaryOverlapPairV1 {
+    pub(crate) fn from_foundation_materialized(
+        pair: FoundationMigrationOverlapPairV1,
+    ) -> Result<Self, LiveSetV3Error> {
+        let pair = pair.into_semantic();
+        let identity = MigrationDigestV1::from_digest(pair.identity)?;
+        let canonical_value = deterministic_cbor::decode(&pair.canonical_encoding)?;
+        validate_materialized_identity(&canonical_value, identity)?;
+        Ok(Self {
+            identity,
+            owner_source_case_id: MigrationDigestV1::from_digest(pair.owner_source_case_id)?,
+            primary_source_case_id: MigrationDigestV1::from_digest(pair.primary_source_case_id)?,
+            canonical_value,
+        })
     }
 }
 
@@ -766,25 +751,23 @@ impl MigrationClassificationManifestV3 {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProtectedPrimaryOverlapPairV1 {
     identity: MigrationDigestV1,
     owner_source_case_id: MigrationDigestV1,
     primary_source_case_id: MigrationDigestV1,
-    owner_attestation: MigrationDigestV1,
-    primary_attestation: MigrationDigestV1,
-    owner_object_identity: MigrationDigestV1,
-    primary_object_identity: MigrationDigestV1,
-    owner_mount_identity: MigrationDigestV1,
-    primary_mount_identity: MigrationDigestV1,
-    owner_provider_identity: MigrationDigestV1,
-    primary_provider_identity: MigrationDigestV1,
-    owner_content_commitment: MigrationDigestV1,
-    primary_content_commitment: MigrationDigestV1,
-    owner_metadata_commitment: MigrationDigestV1,
-    primary_metadata_commitment: MigrationDigestV1,
-    owner_currentness: MigrationDigestV1,
-    primary_currentness: MigrationDigestV1,
+    canonical_value: CborValue,
+}
+
+impl std::fmt::Debug for ProtectedPrimaryOverlapPairV1 {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProtectedPrimaryOverlapPairV1")
+            .field("identity", &self.identity)
+            .field("owner_source_case_id", &self.owner_source_case_id)
+            .field("primary_source_case_id", &self.primary_source_case_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ProtectedPrimaryOverlapPairV1 {
@@ -845,24 +828,35 @@ impl ProtectedPrimaryOverlapPairV1 {
                 .collect(),
             ),
         )?;
+        let canonical_value = CborValue::Array(
+            [
+                identity,
+                owner_source_case_id,
+                primary_source_case_id,
+                owner_attestation,
+                primary_attestation,
+                owner_object_identity,
+                primary_object_identity,
+                owner_mount_identity,
+                primary_mount_identity,
+                owner_provider_identity,
+                primary_provider_identity,
+                owner_content_commitment,
+                primary_content_commitment,
+                owner_metadata_commitment,
+                primary_metadata_commitment,
+                owner_currentness,
+                primary_currentness,
+            ]
+            .into_iter()
+            .map(MigrationDigestV1::canonical_value)
+            .collect(),
+        );
         Ok(Self {
             identity,
             owner_source_case_id,
             primary_source_case_id,
-            owner_attestation,
-            primary_attestation,
-            owner_object_identity,
-            primary_object_identity,
-            owner_mount_identity,
-            primary_mount_identity,
-            owner_provider_identity,
-            primary_provider_identity,
-            owner_content_commitment,
-            primary_content_commitment,
-            owner_metadata_commitment,
-            primary_metadata_commitment,
-            owner_currentness,
-            primary_currentness,
+            canonical_value,
         })
     }
 
@@ -883,48 +877,10 @@ impl ProtectedPrimaryOverlapPairV1 {
             && primary.identity() == self.primary_source_case_id
             && owner.membership().owner() != LegacyOwnerDomainV3::ProtectedPrimary
             && primary.membership().owner() == LegacyOwnerDomainV3::ProtectedPrimary
-            && owner.membership().owner_attestation() == self.owner_attestation
-            && primary.membership().owner_attestation() == self.primary_attestation
-            && owner.membership().object_identity() == self.owner_object_identity
-            && primary.membership().object_identity() == self.primary_object_identity
-            && self.owner_object_identity == self.primary_object_identity
-            && self.owner_mount_identity == self.primary_mount_identity
-            && self.owner_provider_identity == self.primary_provider_identity
-            && owner.content_sha256() == self.owner_content_commitment
-            && primary.content_sha256() == self.primary_content_commitment
-            && self.owner_content_commitment == self.primary_content_commitment
-            && owner.metadata_commitment() == self.owner_metadata_commitment
-            && primary.metadata_commitment() == self.primary_metadata_commitment
-            && self.owner_metadata_commitment == self.primary_metadata_commitment
-            && owner.membership().owner_currentness() == self.owner_currentness
-            && primary.membership().owner_currentness() == self.primary_currentness
     }
 
     fn canonical_value(&self) -> CborValue {
-        CborValue::Array(
-            [
-                self.identity,
-                self.owner_source_case_id,
-                self.primary_source_case_id,
-                self.owner_attestation,
-                self.primary_attestation,
-                self.owner_object_identity,
-                self.primary_object_identity,
-                self.owner_mount_identity,
-                self.primary_mount_identity,
-                self.owner_provider_identity,
-                self.primary_provider_identity,
-                self.owner_content_commitment,
-                self.primary_content_commitment,
-                self.owner_metadata_commitment,
-                self.primary_metadata_commitment,
-                self.owner_currentness,
-                self.primary_currentness,
-            ]
-            .into_iter()
-            .map(MigrationDigestV1::canonical_value)
-            .collect(),
-        )
+        self.canonical_value.clone()
     }
 }
 
@@ -1193,6 +1149,98 @@ impl UnavailablePreexistingLossV4 {
         self.source_case_id
     }
 
+    pub(crate) fn audit_currentness(&self) -> UnavailablePreexistingLossAuditCurrentnessV4 {
+        UnavailablePreexistingLossAuditCurrentnessV4 {
+            source_case_id: self.source_case_id,
+            owner_currentness_id: self.owner_currentness_id,
+            foundation_loss_receipt_id: self.foundation_loss_receipt_id,
+            validation_invocation_id: self.validation_invocation_id,
+            pass_a_absence_id: self.pass_a_absence_id,
+            pass_b_absence_id: self.pass_b_absence_id,
+        }
+    }
+
+    pub(crate) fn encode_canonical_audit(&self) -> Result<Vec<u8>, LiveSetV3Error> {
+        Ok(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.migration.unavailable-preexisting-loss.audit.v4")?,
+            self.canonical_value(),
+        ]))?)
+    }
+
+    pub(crate) fn decode_canonical_audit(
+        bytes: &[u8],
+        expected_currentness: &UnavailablePreexistingLossAuditCurrentnessV4,
+    ) -> Result<Self, LiveSetV3Error> {
+        let decoded = deterministic_cbor::decode(bytes)?;
+        if deterministic_cbor::encode(&decoded)? != bytes {
+            return Err(LiveSetV3Error::InvalidLossAudit);
+        }
+        let CborValue::Array(envelope) = decoded else {
+            return Err(LiveSetV3Error::InvalidLossAudit);
+        };
+        let [CborValue::Text(schema), CborValue::Array(fields)] = envelope.as_slice() else {
+            return Err(LiveSetV3Error::InvalidLossAudit);
+        };
+        if schema != "maestro.migration.unavailable-preexisting-loss.audit.v4" || fields.len() != 13
+        {
+            return Err(LiveSetV3Error::InvalidLossAudit);
+        }
+        let identity = migration_digest_field(&fields[0])?;
+        let source_case_id = migration_digest_field(&fields[1])?;
+        let owner_snapshot_id = migration_digest_field(&fields[2])?;
+        let issuer_id = migration_digest_field(&fields[3])?;
+        let historical_tuple_id = migration_digest_field(&fields[4])?;
+        let owner_current_tuple_id = migration_digest_field(&fields[5])?;
+        let source_provenance_id = migration_digest_field(&fields[6])?;
+        let owner_admission_id = migration_digest_field(&fields[7])?;
+        let owner_currentness_id = migration_digest_field(&fields[8])?;
+        let foundation_loss_receipt_id = migration_digest_field(&fields[9])?;
+        let validation_invocation_id = migration_digest_field(&fields[10])?;
+        let pass_a_absence_id = migration_digest_field(&fields[11])?;
+        let pass_b_absence_id = migration_digest_field(&fields[12])?;
+        let recomputed = MigrationDigestV1::identify(
+            b"maestro.migration.unavailable-preexisting-loss.v4\0",
+            &CborValue::Array(
+                [
+                    source_case_id,
+                    owner_snapshot_id,
+                    issuer_id,
+                    historical_tuple_id,
+                    owner_current_tuple_id,
+                    source_provenance_id,
+                    owner_admission_id,
+                    owner_currentness_id,
+                    foundation_loss_receipt_id,
+                    validation_invocation_id,
+                    pass_a_absence_id,
+                    pass_b_absence_id,
+                ]
+                .into_iter()
+                .map(MigrationDigestV1::canonical_value)
+                .collect(),
+            ),
+        )?;
+        let decoded = Self {
+            identity,
+            source_case_id,
+            owner_snapshot_id,
+            issuer_id,
+            historical_tuple_id,
+            owner_current_tuple_id,
+            source_provenance_id,
+            owner_admission_id,
+            owner_currentness_id,
+            foundation_loss_receipt_id,
+            validation_invocation_id,
+            pass_a_absence_id,
+            pass_b_absence_id,
+        };
+        if recomputed != identity || decoded.audit_currentness() != *expected_currentness {
+            return Err(LiveSetV3Error::InvalidLossAudit);
+        }
+        Ok(decoded)
+    }
+
     fn canonical_value(&self) -> CborValue {
         CborValue::Array(vec![
             self.identity.canonical_value(),
@@ -1210,6 +1258,16 @@ impl UnavailablePreexistingLossV4 {
             self.pass_b_absence_id.canonical_value(),
         ])
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct UnavailablePreexistingLossAuditCurrentnessV4 {
+    source_case_id: MigrationDigestV1,
+    owner_currentness_id: MigrationDigestV1,
+    foundation_loss_receipt_id: MigrationDigestV1,
+    validation_invocation_id: MigrationDigestV1,
+    pass_a_absence_id: MigrationDigestV1,
+    pass_b_absence_id: MigrationDigestV1,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2271,6 +2329,57 @@ fn validate_locator(locator: &[u8]) -> Result<(), LiveSetV3Error> {
     Ok(())
 }
 
+fn validate_materialized_identity(
+    value: &CborValue,
+    expected: MigrationDigestV1,
+) -> Result<(), LiveSetV3Error> {
+    let CborValue::Array(fields) = value else {
+        return Err(LiveSetV3Error::InvalidFoundationMaterialization);
+    };
+    if fields.first() != Some(&expected.canonical_value()) {
+        return Err(LiveSetV3Error::InvalidFoundationMaterialization);
+    }
+    Ok(())
+}
+
+fn migration_digest_field(value: &CborValue) -> Result<MigrationDigestV1, LiveSetV3Error> {
+    let CborValue::Bytes(bytes) = value else {
+        return Err(LiveSetV3Error::InvalidLossAudit);
+    };
+    let digest =
+        <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| LiveSetV3Error::InvalidLossAudit)?;
+    Ok(MigrationDigestV1::from_digest(digest)?)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the opaque Foundation case is checked against every semantic field Migration may consume"
+)]
+fn validate_materialized_source_case(
+    value: &CborValue,
+    identity: MigrationDigestV1,
+    membership: &CborValue,
+    foundation_invocation: MigrationDigestV1,
+    payload_state: LegacyPayloadStateV3,
+    logical_length: u64,
+    content_sha256: MigrationDigestV1,
+    metadata_commitment: MigrationDigestV1,
+) -> Result<(), LiveSetV3Error> {
+    let expected = CborValue::Array(vec![
+        identity.canonical_value(),
+        membership.clone(),
+        foundation_invocation.canonical_value(),
+        CborValue::Unsigned(payload_state.tag()),
+        CborValue::Unsigned(logical_length),
+        content_sha256.canonical_value(),
+        metadata_commitment.canonical_value(),
+    ]);
+    if value != &expected {
+        return Err(LiveSetV3Error::InvalidFoundationMaterialization);
+    }
+    Ok(())
+}
+
 fn validate_row_count(count: usize) -> Result<(), LiveSetV3Error> {
     if count > MAX_ROWS_V3 {
         return Err(LiveSetV3Error::RowLimitExceeded);
@@ -2310,6 +2419,10 @@ pub enum LiveSetV3Error {
     RowLimitExceeded,
     #[error("V3 source byte length exceeds u64")]
     LengthOverflow,
+    #[error("Foundation materialized source or overlap encoding is malformed or inconsistent")]
+    InvalidFoundationMaterialization,
+    #[error("V4 unavailable-preexisting-loss audit is malformed, stale, or tampered")]
+    InvalidLossAudit,
     #[error(transparent)]
     Identity(#[from] MigrationIdentityErrorV1),
     #[error(transparent)]
@@ -2322,6 +2435,89 @@ mod tests {
 
     fn digest(label: &[u8]) -> MigrationDigestV1 {
         MigrationDigestV1::digest_bytes(label).expect("non-zero test digest")
+    }
+
+    fn loss_audit_fixture() -> UnavailablePreexistingLossV4 {
+        let source_case_id = digest(b"audit-source");
+        let owner_snapshot_id = digest(b"audit-snapshot");
+        let issuer_id = digest(b"audit-issuer");
+        let historical_tuple_id = digest(b"audit-history");
+        let owner_current_tuple_id = digest(b"audit-current-tuple");
+        let source_provenance_id = digest(b"audit-provenance");
+        let owner_admission_id = digest(b"audit-admission");
+        let owner_currentness_id = digest(b"audit-currentness");
+        let foundation_loss_receipt_id = digest(b"audit-foundation-receipt");
+        let validation_invocation_id = digest(b"audit-validation");
+        let pass_a_absence_id = digest(b"audit-pass-a");
+        let pass_b_absence_id = digest(b"audit-pass-b");
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.unavailable-preexisting-loss.v4\0",
+            &CborValue::Array(
+                [
+                    source_case_id,
+                    owner_snapshot_id,
+                    issuer_id,
+                    historical_tuple_id,
+                    owner_current_tuple_id,
+                    source_provenance_id,
+                    owner_admission_id,
+                    owner_currentness_id,
+                    foundation_loss_receipt_id,
+                    validation_invocation_id,
+                    pass_a_absence_id,
+                    pass_b_absence_id,
+                ]
+                .into_iter()
+                .map(MigrationDigestV1::canonical_value)
+                .collect(),
+            ),
+        )
+        .expect("loss identity");
+        UnavailablePreexistingLossV4 {
+            identity,
+            source_case_id,
+            owner_snapshot_id,
+            issuer_id,
+            historical_tuple_id,
+            owner_current_tuple_id,
+            source_provenance_id,
+            owner_admission_id,
+            owner_currentness_id,
+            foundation_loss_receipt_id,
+            validation_invocation_id,
+            pass_a_absence_id,
+            pass_b_absence_id,
+        }
+    }
+
+    #[test]
+    fn v4_loss_audit_survives_reload_and_rejects_tamper_or_stale_currentness() {
+        let loss = loss_audit_fixture();
+        let bytes = loss.encode_canonical_audit().expect("encode audit");
+        let reloaded =
+            UnavailablePreexistingLossV4::decode_canonical_audit(&bytes, &loss.audit_currentness())
+                .expect("decode current audit");
+        assert_eq!(reloaded, loss);
+
+        let mut tampered = bytes.clone();
+        let last = tampered.last_mut().expect("non-empty audit");
+        *last ^= 1;
+        assert!(matches!(
+            UnavailablePreexistingLossV4::decode_canonical_audit(
+                &tampered,
+                &loss.audit_currentness()
+            ),
+            Err(LiveSetV3Error::InvalidLossAudit)
+                | Err(LiveSetV3Error::CanonicalCbor(_))
+                | Err(LiveSetV3Error::Identity(_))
+        ));
+
+        let mut stale = loss.audit_currentness();
+        stale.owner_currentness_id = digest(b"stale-currentness");
+        assert!(matches!(
+            UnavailablePreexistingLossV4::decode_canonical_audit(&bytes, &stale),
+            Err(LiveSetV3Error::InvalidLossAudit)
+        ));
     }
 
     fn present_source_for(

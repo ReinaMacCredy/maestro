@@ -535,16 +535,19 @@ where
     ) -> Result<Self, Stage11LiveSetOperationErrorV4> {
         let foundation_invocation = MigrationDigestV1::from_digest(foundation.invocation())?;
         let admitted_set_id = MigrationDigestV1::from_digest(foundation.admitted_set())?;
-        let materialized = foundation
-            .take_migration_sources()
+        let materialization = foundation.take_migration_materialization()?;
+        let materialized = materialization
+            .sources
             .into_iter()
-            .map(|parts| {
-                FoundationMaterializedSourceCaseV3::from_foundation_v2(parts, foundation_invocation)
+            .map(|source| {
+                FoundationMaterializedSourceCaseV3::from_foundation_v2(
+                    source,
+                    foundation_invocation,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?;
         let mut rows = Vec::with_capacity(materialized.len());
         let mut source_tokens = BTreeMap::new();
-        let mut source_facts = BTreeMap::new();
         let mut loss_rows = Vec::new();
         for mut source in materialized {
             let source_case = source.source_case().clone();
@@ -568,42 +571,17 @@ where
                     receipt,
                 )?);
             }
-            source_facts.insert(
-                source.source_token(),
-                (
-                    source_case,
-                    source.mount_identity(),
-                    source.provider_identity(),
-                    source.anchor_identity(),
-                    source.fence_identity(),
-                ),
-            );
             rows.push(source.into_source_case());
         }
         let source_cases =
             LegacySourceCaseManifestV3::new(foundation_invocation, admitted_set_id, rows)?;
         let overlaps = DeclaredOverlapManifestV2::new(
             &source_cases,
-            foundation
-                .overlap_pairs()
-                .iter()
-                .map(|pair| {
-                    let (owner, owner_mount, owner_provider, _, _) = source_facts
-                        .get(&pair.owner_source_token())
-                        .ok_or(Stage11LiveSetOperationErrorV4::InvalidOverlap)?;
-                    let (primary, primary_mount, primary_provider, _, _) = source_facts
-                        .get(&pair.primary_source_token())
-                        .ok_or(Stage11LiveSetOperationErrorV4::InvalidOverlap)?;
-                    Ok(ProtectedPrimaryOverlapPairV1::from_foundation(
-                        owner,
-                        primary,
-                        *owner_mount,
-                        *primary_mount,
-                        *owner_provider,
-                        *primary_provider,
-                    )?)
-                })
-                .collect::<Result<Vec<_>, Stage11LiveSetOperationErrorV4>>()?,
+            materialization
+                .overlaps
+                .into_iter()
+                .map(ProtectedPrimaryOverlapPairV1::from_foundation_materialized)
+                .collect::<Result<Vec<_>, _>>()?,
         )?;
         Ok(Self {
             source_cases,
@@ -817,6 +795,75 @@ impl Stage11ClosedPhysicalClosureV4 {
     }
 }
 
+pub(crate) trait UnavailablePreexistingLossAuditPersistencePortV1 {
+    fn create_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), UnavailablePreexistingLossAuditPersistenceErrorV1>;
+
+    fn read_audit(
+        &mut self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, UnavailablePreexistingLossAuditPersistenceErrorV1>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct UnavailablePreexistingLossAuditPersistenceReceiptV1 {
+    loss_id: MigrationDigestV1,
+    persisted_bytes_sha256: MigrationDigestV1,
+}
+
+impl UnavailablePreexistingLossAuditPersistenceReceiptV1 {
+    pub(crate) const fn loss_id(&self) -> MigrationDigestV1 {
+        self.loss_id
+    }
+
+    pub(crate) const fn persisted_bytes_sha256(&self) -> MigrationDigestV1 {
+        self.persisted_bytes_sha256
+    }
+}
+
+#[expect(
+    dead_code,
+    reason = "Persistence must supply the owner-neutral adapter before Stage-11 V4 orchestration can wire durable loss audit storage"
+)]
+pub(crate) fn persist_unavailable_preexisting_loss_audits_v4<P>(
+    losses: &UnavailablePreexistingLossManifestV4,
+    persistence: &mut P,
+) -> Result<Vec<UnavailablePreexistingLossAuditPersistenceReceiptV1>, Stage11LiveSetOperationErrorV4>
+where
+    P: UnavailablePreexistingLossAuditPersistencePortV1,
+{
+    losses
+        .rows()
+        .iter()
+        .map(|loss| {
+            let canonical_bytes = loss.encode_canonical_audit()?;
+            persistence.create_audit_if_absent(loss.identity().into_bytes(), &canonical_bytes)?;
+            let reloaded = persistence.read_audit(loss.identity().into_bytes())?;
+            let currentness = loss.audit_currentness();
+            let decoded =
+                UnavailablePreexistingLossV4::decode_canonical_audit(&reloaded, &currentness)?;
+            if decoded != *loss {
+                return Err(Stage11LiveSetOperationErrorV4::LossAuditPersistenceMismatch);
+            }
+            Ok(UnavailablePreexistingLossAuditPersistenceReceiptV1 {
+                loss_id: loss.identity(),
+                persisted_bytes_sha256: MigrationDigestV1::digest_bytes(&reloaded)?,
+            })
+        })
+        .collect()
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum UnavailablePreexistingLossAuditPersistenceErrorV1 {
+    #[error("V4 loss audit persistence rejected create-if-absent")]
+    CreateRejected,
+    #[error("V4 loss audit persistence could not reload the exact durable bytes")]
+    ReadFailed,
+}
+
 #[derive(Debug, Error)]
 pub(crate) enum Stage11LiveSetOperationErrorV4 {
     #[error("Stage-11 V4 Foundation census contains a duplicate semantic source")]
@@ -829,6 +876,10 @@ pub(crate) enum Stage11LiveSetOperationErrorV4 {
     MissingLossReceipt,
     #[error("Stage-11 V4 present source carried a loss receipt")]
     UnexpectedLossReceipt,
+    #[error("Stage-11 V4 durable loss audit reload differed from the persisted loss")]
+    LossAuditPersistenceMismatch,
+    #[error(transparent)]
+    LossAuditPersistence(#[from] UnavailablePreexistingLossAuditPersistenceErrorV1),
     #[error(transparent)]
     Foundation(#[from] FoundationLegacyQuarantineErrorV1),
     #[error(transparent)]

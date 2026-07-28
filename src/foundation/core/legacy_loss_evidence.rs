@@ -70,7 +70,7 @@ impl LegacySourceHistoricalBindingV1 {
         clippy::too_many_arguments,
         reason = "owner history binds the complete immutable pre-loss tuple"
     )]
-    pub(crate) fn from_owner(
+    fn from_owner(
         owner: LegacyQuarantineOwnerDomainV3,
         history_kind: LegacySourceHistoryKindV1,
         snapshot_id: [u8; 32],
@@ -181,7 +181,7 @@ impl LegacySourceCurrentBindingV1 {
         clippy::too_many_arguments,
         reason = "fresh owner issuance binds the complete Store or journal currentness tuple"
     )]
-    pub(crate) fn from_owner(
+    fn from_owner(
         owner: LegacyQuarantineOwnerDomainV3,
         expected_source_set_id: [u8; 32],
         operation_attempt: [u8; 32],
@@ -262,7 +262,7 @@ pub(crate) struct OwnerUnavailablePreexistingLossWitnessV1 {
 }
 
 impl OwnerUnavailablePreexistingLossWitnessV1 {
-    pub(crate) fn from_owner(
+    fn from_owner(
         historical: LegacySourceHistoricalBindingV1,
         current: LegacySourceCurrentBindingV1,
     ) -> Result<Self, FoundationLegacyLossEvidenceErrorV1> {
@@ -357,7 +357,7 @@ impl OwnerUnavailablePreexistingLossWitnessV1 {
     }
 }
 
-pub(crate) struct OwnerIssuedUnavailablePreexistingLossEvidenceSetV1 {
+pub(in crate::foundation::core) struct OwnerIssuedUnavailablePreexistingLossEvidenceSetV1 {
     identity: [u8; 32],
     owner: LegacyQuarantineOwnerDomainV3,
     expected_source_set_id: [u8; 32],
@@ -414,25 +414,140 @@ impl FoundationOwnerEvidenceIssuanceBindingV1 {
             _not_send_or_sync: PhantomData,
         })
     }
+}
+
+pub(crate) struct FoundationOwnerEvidenceMintV1 {
+    binding: FoundationOwnerEvidenceIssuanceBindingV1,
+    witnesses: Vec<OwnerUnavailablePreexistingLossWitnessV1>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl FoundationOwnerEvidenceMintV1 {
+    pub(in crate::foundation::core) fn from_foundation(
+        binding: FoundationOwnerEvidenceIssuanceBindingV1,
+    ) -> Self {
+        Self {
+            binding,
+            witnesses: Vec::new(),
+            _not_send_or_sync: PhantomData,
+        }
+    }
 
     pub(crate) const fn owner(&self) -> LegacyQuarantineOwnerDomainV3 {
-        self.owner
+        self.binding.owner
     }
 
     pub(crate) const fn expected_source_set_id(&self) -> [u8; 32] {
-        self.expected_source_set_id
+        self.binding.expected_source_set_id
     }
 
     pub(crate) const fn operation_attempt(&self) -> [u8; 32] {
-        self.operation_attempt
+        self.binding.operation_attempt
     }
 
     pub(crate) const fn owner_admission_id(&self) -> [u8; 32] {
-        self.owner_admission_id
+        self.binding.owner_admission_id
     }
 
     pub(crate) const fn owner_currentness_id(&self) -> [u8; 32] {
-        self.owner_currentness_id
+        self.binding.owner_currentness_id
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the owner records one complete historical/current observation into a Foundation-bound one-use mint"
+    )]
+    pub(crate) fn record_unavailable_preexisting_loss(
+        &mut self,
+        history_kind: LegacySourceHistoryKindV1,
+        snapshot_id: [u8; 32],
+        issuer_id: [u8; 32],
+        history_instance_id: [u8; 32],
+        historical_head_id: [u8; 32],
+        historical_generation_id: [u8; 32],
+        historical_state_revision: u64,
+        namespace_epoch: u64,
+        trust_root_id: [u8; 32],
+        release_id: [u8; 32],
+        provider_revision: u64,
+        source_provenance_id: [u8; 32],
+        root_binding: [u8; 32],
+        relative_locator_commitment: [u8; 32],
+        object_kind: DescriptorCensusObjectKindV1,
+        object_identity: [u8; 32],
+        expected_length: u64,
+        content_sha256: [u8; 32],
+        metadata_commitment: [u8; 32],
+        current_head_id: [u8; 32],
+        current_generation_id: [u8; 32],
+        current_state_revision: u64,
+        provider_id: [u8; 32],
+        mount_id: [u8; 32],
+        anchor_id: [u8; 32],
+        fence_id: [u8; 32],
+        revocation_revision: u64,
+    ) -> Result<(), FoundationLegacyLossEvidenceErrorV1> {
+        let historical = LegacySourceHistoricalBindingV1::from_owner(
+            self.binding.owner,
+            history_kind,
+            snapshot_id,
+            issuer_id,
+            history_instance_id,
+            historical_head_id,
+            historical_generation_id,
+            historical_state_revision,
+            namespace_epoch,
+            trust_root_id,
+            release_id,
+            provider_revision,
+            source_provenance_id,
+            root_binding,
+            relative_locator_commitment,
+            object_kind,
+            object_identity,
+            expected_length,
+            content_sha256,
+            metadata_commitment,
+        )?;
+        let current = LegacySourceCurrentBindingV1::from_owner(
+            self.binding.owner,
+            self.binding.expected_source_set_id,
+            self.binding.operation_attempt,
+            self.binding.owner_admission_id,
+            self.binding.owner_currentness_id,
+            current_head_id,
+            current_generation_id,
+            current_state_revision,
+            namespace_epoch,
+            trust_root_id,
+            release_id,
+            provider_id,
+            mount_id,
+            anchor_id,
+            fence_id,
+            revocation_revision,
+        )?;
+        self.witnesses
+            .push(OwnerUnavailablePreexistingLossWitnessV1::from_owner(
+                historical, current,
+            )?);
+        Ok(())
+    }
+
+    pub(in crate::foundation::core) fn finish(
+        self,
+    ) -> Result<
+        OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
+        FoundationLegacyLossEvidenceErrorV1,
+    > {
+        OwnerIssuedUnavailablePreexistingLossEvidenceSetV1::from_owner(
+            self.binding.owner,
+            self.binding.expected_source_set_id,
+            self.binding.operation_attempt,
+            self.binding.owner_admission_id,
+            self.binding.owner_currentness_id,
+            self.witnesses,
+        )
     }
 }
 
@@ -445,15 +560,12 @@ pub(crate) trait OwnerUnavailablePreexistingLossEvidenceIssuerPortV1:
 {
     fn issue_for_foundation(
         self,
-        binding: FoundationOwnerEvidenceIssuanceBindingV1,
-    ) -> Result<
-        OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
-        FoundationLegacyLossEvidenceErrorV1,
-    >;
+        mint: &mut FoundationOwnerEvidenceMintV1,
+    ) -> Result<(), FoundationLegacyLossEvidenceErrorV1>;
 }
 
 impl OwnerIssuedUnavailablePreexistingLossEvidenceSetV1 {
-    pub(crate) fn from_owner(
+    fn from_owner(
         owner: LegacyQuarantineOwnerDomainV3,
         expected_source_set_id: [u8; 32],
         operation_attempt: [u8; 32],

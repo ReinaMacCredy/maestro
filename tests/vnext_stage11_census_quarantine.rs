@@ -207,3 +207,40 @@ fn v4_loss_evidence_is_owner_issued_move_only_and_consumed_once() {
         );
     }
 }
+
+#[test]
+fn v4_loss_evidence_can_only_be_recorded_through_a_foundation_one_use_mint() {
+    for required in [
+        "FoundationOwnerEvidenceMintV1",
+        "record_unavailable_preexisting_loss",
+        "issuer.issue_for_foundation(&mut mint)?",
+        "mint.finish()",
+        "MissingLossEvidence",
+        "UnexpectedLossEvidence",
+        "DuplicateWitness",
+    ] {
+        assert!(
+            FOUNDATION_LOSS_EVIDENCE_SOURCE.contains(required)
+                || FOUNDATION_QUARANTINE_V2_SOURCE.contains(required),
+            "missing one-use mint or over/under-recording rejection {required}"
+        );
+    }
+    for scalar_constructor in [
+        "pub(crate) fn from_owner(\n        owner: LegacyQuarantineOwnerDomainV3",
+        "pub(crate) fn from_owner(\n        historical: LegacySourceHistoricalBindingV1",
+    ] {
+        assert!(
+            !FOUNDATION_LOSS_EVIDENCE_SOURCE.contains(scalar_constructor),
+            "caller retained direct loss-evidence construction: {scalar_constructor}"
+        );
+    }
+    let issuer = FOUNDATION_LOSS_EVIDENCE_SOURCE
+        .split("pub(crate) trait OwnerUnavailablePreexistingLossEvidenceIssuerPortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("impl OwnerIssuedUnavailable").next())
+        .expect("owner issuer port");
+    assert!(issuer.contains("mint: &mut FoundationOwnerEvidenceMintV1"));
+    assert!(issuer.contains("Result<(), FoundationLegacyLossEvidenceErrorV1>"));
+    assert!(!issuer.contains("FoundationOwnerEvidenceIssuanceBindingV1"));
+    assert!(!issuer.contains("OwnerIssuedUnavailablePreexistingLossEvidenceSetV1"));
+}

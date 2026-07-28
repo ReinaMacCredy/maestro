@@ -14,9 +14,10 @@ use std::os::unix::ffi::OsStrExt;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use super::deterministic_cbor::{self, CborError, CborValue};
 use super::legacy_loss_evidence::{
     FoundationConsumedOwnerEvidenceSetV1, FoundationLegacyLossEvidenceErrorV1,
-    FoundationOwnerEvidenceIssuanceBindingV1,
+    FoundationOwnerEvidenceIssuanceBindingV1, FoundationOwnerEvidenceMintV1,
     FoundationValidatedUnavailablePreexistingLossReceiptV1,
     OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
     OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, OwnerUnavailablePreexistingLossWitnessV1,
@@ -1115,51 +1116,187 @@ impl FoundationSourceCaseV2 {
         self.payload_state
     }
 
-    fn take_migration_parts(&mut self) -> FoundationMigrationSourcePartsV1 {
-        FoundationMigrationSourcePartsV1 {
+    fn take_migration_case(
+        &mut self,
+        foundation_invocation: [u8; 32],
+    ) -> Result<FoundationMigrationSourceCaseV1, FoundationLegacyQuarantineErrorV1> {
+        let owner_tag = self.owner.tag() as u64;
+        let node_kind_tag = match self.kind {
+            DescriptorCensusObjectKindV1::RegularFile => 1,
+            DescriptorCensusObjectKindV1::SymbolicLink => 2,
+        };
+        let payload_state_tag = match self.payload_state {
+            FoundationLegacyPayloadStateV3::Present => 1,
+            FoundationLegacyPayloadStateV3::UnavailablePreexistingLoss => 2,
+        };
+        let root_binding = migration_digest_value(self.root_binding);
+        let resolved_locator_commitment = migration_identity(
+            b"maestro.migration.resolved-leaf-locator.v3\0",
+            &CborValue::Array(vec![
+                root_binding.clone(),
+                CborValue::Bytes(self.relative_locator.clone()),
+            ]),
+        )?;
+        let metadata_commitment = migration_identity(
+            b"maestro.migration.source-metadata.v3\0",
+            &CborValue::Array(vec![
+                CborValue::Unsigned(node_kind_tag),
+                CborValue::Unsigned(self.logical_byte_length),
+                migration_digest_value(self.object_identity),
+                migration_digest_value(self.content_identity),
+            ]),
+        )?;
+        if metadata_commitment != self.metadata_commitment {
+            return Err(FoundationLegacyQuarantineErrorV1::ExpectedSourceMismatch);
+        }
+        let mut display_locator = self.display_locator.clone();
+        if !display_locator.ends_with(b"/") {
+            display_locator.push(b'/');
+        }
+        display_locator.extend_from_slice(&self.relative_locator);
+        let membership_payload = CborValue::Array(vec![
+            CborValue::Unsigned(owner_tag),
+            root_binding,
+            CborValue::Bytes(display_locator),
+            migration_digest_value(resolved_locator_commitment),
+            migration_digest_value(self.object_identity),
+            CborValue::Unsigned(node_kind_tag),
+            migration_digest_value(metadata_commitment),
+            migration_digest_value(self.owner_currentness),
+            migration_digest_value(self.owner_attestation),
+        ]);
+        let membership_identity = migration_identity(
+            b"maestro.migration.membership-key.v3\0",
+            &membership_payload,
+        )?;
+        let membership_value = match membership_payload {
+            CborValue::Array(mut fields) => {
+                fields.insert(0, migration_digest_value(membership_identity));
+                CborValue::Array(fields)
+            }
+            _ => unreachable!("invariant: membership payload is an array"),
+        };
+        let source_payload = CborValue::Array(vec![
+            migration_digest_value(membership_identity),
+            migration_digest_value(foundation_invocation),
+            CborValue::Unsigned(payload_state_tag),
+            CborValue::Unsigned(self.logical_byte_length),
+            migration_digest_value(self.content_identity),
+            migration_digest_value(metadata_commitment),
+        ]);
+        let source_case_identity =
+            migration_identity(b"maestro.migration.source-case.v3\0", &source_payload)?;
+        let source_case_value = CborValue::Array(vec![
+            migration_digest_value(source_case_identity),
+            membership_value.clone(),
+            migration_digest_value(foundation_invocation),
+            CborValue::Unsigned(payload_state_tag),
+            CborValue::Unsigned(self.logical_byte_length),
+            migration_digest_value(self.content_identity),
+            migration_digest_value(metadata_commitment),
+        ]);
+        Ok(FoundationMigrationSourceCaseV1 {
             source_token: self.source_token,
+            source_case_identity,
+            membership_identity,
+            membership_encoding: deterministic_cbor::encode(&membership_value)?,
+            source_case_encoding: deterministic_cbor::encode(&source_case_value)?,
             owner: self.owner,
-            display_locator: self.display_locator.clone(),
-            root_binding: self.root_binding,
-            relative_locator: self.relative_locator.clone(),
-            payload_state: self.payload_state,
-            kind: self.kind,
-            logical_byte_length: self.logical_byte_length,
             object_identity: self.object_identity,
-            content_identity: self.content_identity,
-            metadata_commitment: self.metadata_commitment,
-            source_provenance_id: self.source_provenance_id,
-            mount_identity: self.mount_identity,
-            provider_identity: self.provider_identity,
-            anchor_identity: self.anchor_identity,
-            fence_identity: self.fence_identity,
             owner_currentness: self.owner_currentness,
             owner_attestation: self.owner_attestation,
+            payload_state: self.payload_state,
+            logical_byte_length: self.logical_byte_length,
+            content_identity: self.content_identity,
+            metadata_commitment,
             loss_receipt: self.loss_receipt.take(),
+        })
+    }
+}
+
+pub(crate) struct FoundationMigrationSourceCaseV1 {
+    source_token: [u8; 32],
+    source_case_identity: [u8; 32],
+    membership_identity: [u8; 32],
+    membership_encoding: Vec<u8>,
+    source_case_encoding: Vec<u8>,
+    owner: LegacyQuarantineOwnerDomainV3,
+    object_identity: [u8; 32],
+    owner_currentness: [u8; 32],
+    owner_attestation: [u8; 32],
+    payload_state: FoundationLegacyPayloadStateV3,
+    logical_byte_length: u64,
+    content_identity: [u8; 32],
+    metadata_commitment: [u8; 32],
+    loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+}
+
+pub(crate) struct FoundationMigrationSourceSemanticV1 {
+    pub(crate) source_token: [u8; 32],
+    pub(crate) source_case_identity: [u8; 32],
+    pub(crate) membership_identity: [u8; 32],
+    pub(crate) membership_encoding: Vec<u8>,
+    pub(crate) source_case_encoding: Vec<u8>,
+    pub(crate) owner: LegacyQuarantineOwnerDomainV3,
+    pub(crate) object_identity: [u8; 32],
+    pub(crate) owner_currentness: [u8; 32],
+    pub(crate) owner_attestation: [u8; 32],
+    pub(crate) payload_state: FoundationLegacyPayloadStateV3,
+    pub(crate) logical_byte_length: u64,
+    pub(crate) content_identity: [u8; 32],
+    pub(crate) metadata_commitment: [u8; 32],
+    pub(crate) loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+}
+
+impl FoundationMigrationSourceCaseV1 {
+    pub(crate) fn into_semantic(self) -> FoundationMigrationSourceSemanticV1 {
+        FoundationMigrationSourceSemanticV1 {
+            source_token: self.source_token,
+            source_case_identity: self.source_case_identity,
+            membership_identity: self.membership_identity,
+            membership_encoding: self.membership_encoding,
+            source_case_encoding: self.source_case_encoding,
+            owner: self.owner,
+            object_identity: self.object_identity,
+            owner_currentness: self.owner_currentness,
+            owner_attestation: self.owner_attestation,
+            payload_state: self.payload_state,
+            logical_byte_length: self.logical_byte_length,
+            content_identity: self.content_identity,
+            metadata_commitment: self.metadata_commitment,
+            loss_receipt: self.loss_receipt,
         }
     }
 }
 
-pub(crate) struct FoundationMigrationSourcePartsV1 {
-    pub(crate) source_token: [u8; 32],
-    pub(crate) owner: LegacyQuarantineOwnerDomainV3,
-    pub(crate) display_locator: Vec<u8>,
-    pub(crate) root_binding: [u8; 32],
-    pub(crate) relative_locator: Vec<u8>,
-    pub(crate) payload_state: FoundationLegacyPayloadStateV3,
-    pub(crate) kind: DescriptorCensusObjectKindV1,
-    pub(crate) logical_byte_length: u64,
-    pub(crate) object_identity: [u8; 32],
-    pub(crate) content_identity: [u8; 32],
-    pub(crate) metadata_commitment: [u8; 32],
-    pub(crate) source_provenance_id: [u8; 32],
-    pub(crate) mount_identity: [u8; 32],
-    pub(crate) provider_identity: [u8; 32],
-    pub(crate) anchor_identity: [u8; 32],
-    pub(crate) fence_identity: [u8; 32],
-    pub(crate) owner_currentness: [u8; 32],
-    pub(crate) owner_attestation: [u8; 32],
-    pub(crate) loss_receipt: Option<FoundationValidatedUnavailablePreexistingLossReceiptV1>,
+pub(crate) struct FoundationMigrationOverlapPairV1 {
+    identity: [u8; 32],
+    owner_source_case_id: [u8; 32],
+    primary_source_case_id: [u8; 32],
+    canonical_encoding: Vec<u8>,
+}
+
+pub(crate) struct FoundationMigrationOverlapSemanticV1 {
+    pub(crate) identity: [u8; 32],
+    pub(crate) owner_source_case_id: [u8; 32],
+    pub(crate) primary_source_case_id: [u8; 32],
+    pub(crate) canonical_encoding: Vec<u8>,
+}
+
+impl FoundationMigrationOverlapPairV1 {
+    pub(crate) fn into_semantic(self) -> FoundationMigrationOverlapSemanticV1 {
+        FoundationMigrationOverlapSemanticV1 {
+            identity: self.identity,
+            owner_source_case_id: self.owner_source_case_id,
+            primary_source_case_id: self.primary_source_case_id,
+            canonical_encoding: self.canonical_encoding,
+        }
+    }
+}
+
+pub(crate) struct FoundationMigrationMaterializationV1 {
+    pub(crate) sources: Vec<FoundationMigrationSourceCaseV1>,
+    pub(crate) overlaps: Vec<FoundationMigrationOverlapPairV1>,
 }
 
 pub(crate) struct FoundationLegacyQuarantineLeaseV2<P, Q> {
@@ -1340,7 +1477,8 @@ where
             &roots,
             expected_sources.identity(),
         );
-        let repository_evidence = repository_evidence_issuer.issue_for_foundation(
+        let repository_evidence = mint_owner_loss_evidence(
+            repository_evidence_issuer,
             FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
                 LegacyQuarantineOwnerDomainV3::Repository,
                 expected_sources.identity(),
@@ -1349,7 +1487,8 @@ where
                 repository_hold.expected.identity(),
             )?,
         )?;
-        let installation_evidence = installation_evidence_issuer.issue_for_foundation(
+        let installation_evidence = mint_owner_loss_evidence(
+            installation_evidence_issuer,
             FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
                 LegacyQuarantineOwnerDomainV3::Installation,
                 expected_sources.identity(),
@@ -1358,7 +1497,8 @@ where
                 installation_hold.expected.identity(),
             )?,
         )?;
-        let protected_primary_evidence = protected_primary_evidence_issuer.issue_for_foundation(
+        let protected_primary_evidence = mint_owner_loss_evidence(
+            protected_primary_evidence_issuer,
             FoundationOwnerEvidenceIssuanceBindingV1::from_foundation(
                 LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
                 expected_sources.identity(),
@@ -1437,15 +1577,82 @@ where
         self.invocation
     }
 
-    pub(crate) fn take_migration_sources(&mut self) -> Vec<FoundationMigrationSourcePartsV1> {
-        self.source_cases
+    pub(crate) fn take_migration_materialization(
+        &mut self,
+    ) -> Result<FoundationMigrationMaterializationV1, FoundationLegacyQuarantineErrorV1> {
+        let sources = self
+            .source_cases
             .iter_mut()
-            .map(FoundationSourceCaseV2::take_migration_parts)
-            .collect()
-    }
-
-    pub(crate) fn overlap_pairs(&self) -> &[FoundationProtectedPrimaryOverlapPairV1] {
-        &self.overlap_pairs
+            .map(|source| source.take_migration_case(self.invocation))
+            .collect::<Result<Vec<_>, _>>()?;
+        let source_id_by_token = sources
+            .iter()
+            .map(|source| (source.source_token, source.source_case_identity))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let source_by_token = self
+            .source_cases
+            .iter()
+            .map(|source| (source.source_token, source))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let overlaps = self
+            .overlap_pairs
+            .iter()
+            .map(|pair| {
+                let owner = source_by_token
+                    .get(&pair.owner_source_token)
+                    .ok_or(FoundationLegacyQuarantineErrorV1::DuplicateSource)?;
+                let primary = source_by_token
+                    .get(&pair.primary_source_token)
+                    .ok_or(FoundationLegacyQuarantineErrorV1::DuplicateSource)?;
+                let owner_source_case_id = *source_id_by_token
+                    .get(&pair.owner_source_token)
+                    .ok_or(FoundationLegacyQuarantineErrorV1::DuplicateSource)?;
+                let primary_source_case_id = *source_id_by_token
+                    .get(&pair.primary_source_token)
+                    .ok_or(FoundationLegacyQuarantineErrorV1::DuplicateSource)?;
+                let payload = CborValue::Array(
+                    [
+                        owner_source_case_id,
+                        primary_source_case_id,
+                        owner.owner_attestation,
+                        primary.owner_attestation,
+                        owner.object_identity,
+                        primary.object_identity,
+                        owner.mount_identity,
+                        primary.mount_identity,
+                        owner.provider_identity,
+                        primary.provider_identity,
+                        owner.content_identity,
+                        primary.content_identity,
+                        owner.metadata_commitment,
+                        primary.metadata_commitment,
+                        owner.owner_currentness,
+                        primary.owner_currentness,
+                    ]
+                    .into_iter()
+                    .map(migration_digest_value)
+                    .collect(),
+                );
+                let identity = migration_identity(
+                    b"maestro.migration.protected-primary-overlap-pair.v1\0",
+                    &payload,
+                )?;
+                let canonical_value = match payload {
+                    CborValue::Array(mut fields) => {
+                        fields.insert(0, migration_digest_value(identity));
+                        CborValue::Array(fields)
+                    }
+                    _ => unreachable!("invariant: overlap payload is an array"),
+                };
+                Ok(FoundationMigrationOverlapPairV1 {
+                    identity,
+                    owner_source_case_id,
+                    primary_source_case_id,
+                    canonical_encoding: deterministic_cbor::encode(&canonical_value)?,
+                })
+            })
+            .collect::<Result<Vec<_>, FoundationLegacyQuarantineErrorV1>>()?;
+        Ok(FoundationMigrationMaterializationV1 { sources, overlaps })
     }
 
     pub(crate) fn into_copy_continuation(self) -> FoundationSourceCopyContinuationV2<P, Q> {
@@ -1455,6 +1662,18 @@ where
             custody_records: Vec::new(),
         }
     }
+}
+
+fn mint_owner_loss_evidence<I>(
+    issuer: I,
+    binding: FoundationOwnerEvidenceIssuanceBindingV1,
+) -> Result<OwnerIssuedUnavailablePreexistingLossEvidenceSetV1, FoundationLegacyLossEvidenceErrorV1>
+where
+    I: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
+{
+    let mut mint = FoundationOwnerEvidenceMintV1::from_foundation(binding);
+    issuer.issue_for_foundation(&mut mint)?;
+    mint.finish()
 }
 
 pub(crate) struct FoundationSourceCopyContinuationV2<P, Q> {
@@ -2383,6 +2602,20 @@ fn commitment(namespace: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
+fn migration_digest_value(digest: [u8; 32]) -> CborValue {
+    CborValue::Bytes(digest.to_vec())
+}
+
+fn migration_identity(
+    domain: &[u8],
+    value: &CborValue,
+) -> Result<[u8; 32], FoundationLegacyQuarantineErrorV1> {
+    let mut hasher = Sha256::new();
+    hasher.update(domain);
+    hasher.update(deterministic_cbor::encode(value)?);
+    Ok(hasher.finalize().into())
+}
+
 #[derive(Debug, Error)]
 pub(crate) enum FoundationLegacyQuarantineErrorV1 {
     #[error("legacy quarantine owner admission is incomplete, unordered, or invalid")]
@@ -2427,6 +2660,8 @@ pub(crate) enum FoundationLegacyQuarantineErrorV1 {
     RootUniverse(#[from] FoundationRootUniverseErrorV1),
     #[error(transparent)]
     SecureFs(#[from] SecureFsError),
+    #[error(transparent)]
+    CanonicalCbor(#[from] CborError),
 }
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]

@@ -146,3 +146,122 @@ fn stage11_v4_operation_has_no_detached_store_census_or_limit_authority() {
         );
     }
 }
+
+#[test]
+fn stage11_v4_foundation_materializes_opaque_schema_identical_cases() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let foundation = fs::read_to_string(root.join("src/foundation/core/legacy_quarantine.rs"))
+        .expect("Foundation quarantine");
+    let runtime = fs::read_to_string(root.join("src/domain/migration/runtime/live_set_v3.rs"))
+        .expect("migration runtime");
+    let operation = fs::read_to_string(root.join("src/operations/migration/live_set_v3.rs"))
+        .expect("migration operation");
+
+    for required in [
+        "FoundationMigrationSourceCaseV1",
+        "FoundationMigrationMaterializationV1",
+        "membership_encoding",
+        "source_case_encoding",
+        "maestro.migration.membership-key.v3",
+        "maestro.migration.source-case.v3",
+    ] {
+        assert!(
+            foundation.contains(required),
+            "missing Foundation materialization contract {required}"
+        );
+    }
+    assert!(!foundation.contains("FoundationMigrationSourcePartsV1"));
+    for opaque_type in [
+        "pub(crate) struct FoundationMigrationSourceCaseV1",
+        "pub(crate) struct FoundationMigrationOverlapPairV1",
+    ] {
+        let body = foundation
+            .split(opaque_type)
+            .nth(1)
+            .and_then(|tail| tail.split('}').next())
+            .expect("opaque Foundation type");
+        assert!(
+            !body.contains("pub(crate) "),
+            "{opaque_type} exposed caller-constructible fields"
+        );
+    }
+
+    let materializer = runtime
+        .split("impl FoundationMaterializedSourceCaseV3")
+        .nth(1)
+        .and_then(|tail| tail.split("impl ProtectedPrimaryOverlapPairV1").next())
+        .expect("opaque Migration materializer");
+    for forbidden in [
+        "display_locator",
+        "relative_locator",
+        "root_binding",
+        "provider_identity",
+        "mount_identity",
+        "anchor_identity",
+        "fence_identity",
+        "resolved-leaf-locator",
+        "source-metadata.v3",
+    ] {
+        assert!(
+            !materializer.contains(forbidden),
+            "Migration rederived or received physical authority: {forbidden}"
+        );
+    }
+    assert!(operation.contains("take_migration_materialization"));
+    let v4_operation = operation
+        .split("pub(crate) struct Stage11LiveSetContinuationV4")
+        .nth(1)
+        .expect("V4 continuation");
+    assert!(!v4_operation.contains(".overlap_pairs()"));
+    for redacted in [
+        "impl std::fmt::Debug for MembershipKeyV3",
+        "impl std::fmt::Debug for SourceCaseV3",
+        "impl std::fmt::Debug for ProtectedPrimaryOverlapPairV1",
+    ] {
+        assert!(
+            runtime.contains(redacted),
+            "missing redacted Debug {redacted}"
+        );
+    }
+}
+
+#[test]
+fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let runtime = fs::read_to_string(root.join("src/domain/migration/runtime/live_set_v3.rs"))
+        .expect("migration runtime");
+    let operation = fs::read_to_string(root.join("src/operations/migration/live_set_v3.rs"))
+        .expect("migration operation");
+    for required in [
+        "encode_canonical_audit",
+        "decode_canonical_audit",
+        "UnavailablePreexistingLossAuditCurrentnessV4",
+        "InvalidLossAudit",
+        "v4_loss_audit_survives_reload_and_rejects_tamper_or_stale_currentness",
+    ] {
+        assert!(runtime.contains(required), "missing loss audit {required}");
+    }
+    for required in [
+        "UnavailablePreexistingLossAuditPersistencePortV1",
+        "create_audit_if_absent",
+        "read_audit",
+        "persist_unavailable_preexisting_loss_audits_v4",
+        "LossAuditPersistenceMismatch",
+    ] {
+        assert!(
+            operation.contains(required),
+            "missing owner-neutral persistence seam {required}"
+        );
+    }
+    let persistence = operation
+        .split("pub(crate) trait UnavailablePreexistingLossAuditPersistencePortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[derive(Debug, Error)]").next())
+        .expect("loss audit persistence section");
+    for forbidden in ["StoreV1", "PathBuf", "owner:", "provider", "mount"] {
+        assert!(
+            !persistence.contains(forbidden),
+            "loss audit persistence gained owner/bearer authority: {forbidden}"
+        );
+    }
+}
