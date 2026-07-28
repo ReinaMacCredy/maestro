@@ -386,6 +386,21 @@ impl QuarantineCustodyPortV1 for QuarantineCustodyLeaseV1<'_> {
         self.revocation_revision
     }
 
+    fn create_loss_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+        QuarantineCustodyLeaseV1::create_loss_audit_if_absent(self, audit_id, canonical_bytes)
+    }
+
+    fn read_loss_audit(
+        &self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1> {
+        QuarantineCustodyLeaseV1::read_loss_audit(self, audit_id)
+    }
+
     fn persist_source(
         &mut self,
         source_token: [u8; 32],
@@ -494,6 +509,105 @@ impl QuarantineCustodyPortV1 for QuarantineCustodyLeaseV1<'_> {
 }
 
 impl QuarantineCustodyLeaseV1<'_> {
+    fn create_loss_audit_if_absent(
+        &mut self,
+        audit_id: [u8; 32],
+        canonical_bytes: &[u8],
+    ) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+        let path = loss_audit_path(audit_id)?;
+        self.recheck_loss_audit_custody()?;
+        self.retained_root
+            .create_dir_all("recovery/legacy-loss-audit-v4")?;
+        self.recheck_loss_audit_custody()?;
+        self.retained_root
+            .create_file_if_absent(&path, canonical_bytes)?;
+        run_after_loss_audit_create_test_hook();
+        self.recheck_loss_audit_custody()?;
+        self.retained_root.read_exact(&path, canonical_bytes)?;
+        self.recheck_loss_audit_custody()
+    }
+
+    fn read_loss_audit(
+        &self,
+        audit_id: [u8; 32],
+    ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1> {
+        let path = loss_audit_path(audit_id)?;
+        self.recheck_loss_audit_custody()?;
+        let bytes = self.retained_root.read_immutable(&path)?;
+        self.recheck_loss_audit_custody()?;
+        Ok(bytes)
+    }
+
+    fn recheck_loss_audit_custody(&self) -> Result<(), FoundationLegacyQuarantineErrorV1> {
+        if self.store.role() != StoreRoleV1::Installation {
+            return Err(FoundationLegacyQuarantineErrorV1::SourceChanged);
+        }
+        let (state, revision) = self
+            .store
+            .state()
+            .map_err(|_| FoundationLegacyQuarantineErrorV1::SourceChanged)?;
+        if state != StoreStateV1::Inactive
+            || revision != self.state_revision
+            || self
+                .store
+                .active_head()
+                .map_err(|_| FoundationLegacyQuarantineErrorV1::SourceChanged)?
+                .is_some()
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::SourceChanged);
+        }
+        self.retained_root.verify_path_binding()?;
+        let observed = observe_physical_facts_v1(self.store.legacy_quarantine_root_path_v3())?;
+        let expected_old = commitment(
+            b"maestro.persistence.quarantine-custody.expected-old.v1\0",
+            &[
+                self.store.domain().id().as_bytes(),
+                &revision.to_be_bytes(),
+                &observed.object_identity(),
+                &observed.resolved_locator_commitment(),
+            ],
+        );
+        let currentness = commitment(
+            b"maestro.persistence.quarantine-custody.currentness.v1\0",
+            &[
+                &expected_old,
+                &self.manager_realm_identity,
+                &self.security_realm_identity,
+                &self.revocation_revision.to_be_bytes(),
+            ],
+        );
+        let fence = commitment(
+            b"maestro.persistence.quarantine-custody.fence.v1\0",
+            &[&observed.fence_identity(), &currentness],
+        );
+        let identity = commitment(
+            b"maestro.persistence.quarantine-custody-lease.v1\0",
+            &[
+                observed.display_locator(),
+                &observed.resolved_locator_commitment(),
+                &observed.object_identity(),
+                &observed.mount_identity(),
+                &observed.provider_identity(),
+                &observed.anchor_identity(),
+                &self.manager_realm_identity,
+                &self.security_realm_identity,
+                &expected_old,
+                &currentness,
+                &fence,
+                &self.revocation_revision.to_be_bytes(),
+            ],
+        );
+        if observed != self.facts
+            || expected_old != self.expected_old
+            || currentness != self.currentness
+            || fence != self.fence
+            || identity != self.identity
+        {
+            return Err(FoundationLegacyQuarantineErrorV1::SourceChanged);
+        }
+        Ok(())
+    }
+
     fn create_or_verify(
         &mut self,
         path: &Path,
@@ -581,6 +695,44 @@ fn hex_digest(digest: [u8; 32]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+fn loss_audit_path(audit_id: [u8; 32]) -> Result<PathBuf, FoundationLegacyQuarantineErrorV1> {
+    if audit_id == [0; 32] {
+        return Err(FoundationLegacyQuarantineErrorV1::CustodyWriteFailed);
+    }
+    Ok(PathBuf::from(format!(
+        "recovery/legacy-loss-audit-v4/{}.cbor",
+        hex_digest(audit_id)
+    )))
+}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_LOSS_AUDIT_CREATE_TEST_HOOK:
+        std::cell::RefCell<Option<Box<dyn FnOnce()>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+fn install_after_loss_audit_create_test_hook(hook: impl FnOnce() + 'static) {
+    AFTER_LOSS_AUDIT_CREATE_TEST_HOOK.with(|slot| {
+        assert!(
+            slot.borrow_mut().replace(Box::new(hook)).is_none(),
+            "loss-audit create hook must be exclusive"
+        );
+    });
+}
+
+#[cfg(test)]
+fn run_after_loss_audit_create_test_hook() {
+    AFTER_LOSS_AUDIT_CREATE_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+#[cfg(not(test))]
+fn run_after_loss_audit_create_test_hook() {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct PersistenceLegacyQuarantineReceiptV1 {
     identity: [u8; 32],
@@ -634,6 +786,8 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use rusqlite::Connection;
+
     use super::*;
     use crate::domain::persistence::{StoreDomainV1, StoreRoleV1, StoreV1};
     use crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceV3;
@@ -666,6 +820,162 @@ mod tests {
         let domain =
             StoreDomainV1::derive(StoreRoleV1::Installation, label).expect("Installation domain");
         StoreV1::create(&root.0, domain).expect("create inactive Installation Store")
+    }
+
+    fn update_store_state_for_test(root: &Path, state: &str, revision: u64) {
+        let connection = Connection::open(root.join("store.sqlite3")).expect("open Store metadata");
+        connection
+            .execute(
+                "UPDATE store_state SET state = ?1, state_revision = ?2 WHERE singleton = 1",
+                (
+                    state,
+                    i64::try_from(revision).expect("test revision fits SQLite INTEGER"),
+                ),
+            )
+            .expect("update Store state");
+    }
+
+    #[test]
+    fn loss_audit_is_durable_idempotent_conflict_checked_and_excluded_from_rollback() {
+        let root = TempRoot::new("loss-audit-durable");
+        let store = inactive_installation_store(&root, b"loss-audit-durable");
+        let mut custody =
+            QuarantineCustodyLeaseV1::acquire_from_inactive_store(&store, [41; 32], [42; 32], 8)
+                .expect("acquire custody");
+        let audit_id = [43; 32];
+        let canonical_bytes = b"canonical durable non-bearer loss audit";
+
+        custody
+            .create_loss_audit_if_absent(audit_id, canonical_bytes)
+            .expect("create loss audit");
+        custody
+            .create_loss_audit_if_absent(audit_id, canonical_bytes)
+            .expect("idempotent loss audit");
+        assert_eq!(
+            custody
+                .read_loss_audit(audit_id)
+                .expect("read immutable loss audit"),
+            canonical_bytes
+        );
+        assert!(
+            custody
+                .create_loss_audit_if_absent(audit_id, b"conflicting audit")
+                .is_err()
+        );
+        assert!(
+            custody
+                .create_loss_audit_if_absent([0; 32], canonical_bytes)
+                .is_err()
+        );
+        let path = root.0.join(loss_audit_path(audit_id).expect("audit path"));
+
+        custody.rollback_partial().expect("rollback custody");
+
+        assert_eq!(
+            fs::read(path).expect("durable audit survives rollback"),
+            canonical_bytes
+        );
+    }
+
+    #[test]
+    fn loss_audit_refuses_active_or_state_revision_drift() {
+        let active_root = TempRoot::new("loss-audit-active-drift");
+        let active_store = inactive_installation_store(&active_root, b"loss-audit-active-drift");
+        let mut active_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
+            &active_store,
+            [44; 32],
+            [45; 32],
+            9,
+        )
+        .expect("acquire active-drift custody");
+        let active_revision = active_custody.state_revision;
+        update_store_state_for_test(&active_root.0, "active", active_revision);
+        assert!(
+            active_custody
+                .create_loss_audit_if_absent([46; 32], b"must not persist")
+                .is_err()
+        );
+
+        let revision_root = TempRoot::new("loss-audit-revision-drift");
+        let revision_store =
+            inactive_installation_store(&revision_root, b"loss-audit-revision-drift");
+        let revision_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
+            &revision_store,
+            [47; 32],
+            [48; 32],
+            10,
+        )
+        .expect("acquire revision-drift custody");
+        update_store_state_for_test(
+            &revision_root.0,
+            "inactive",
+            revision_custody.state_revision + 1,
+        );
+        assert!(revision_custody.read_loss_audit([49; 32]).is_err());
+    }
+
+    #[test]
+    fn loss_audit_create_refuses_state_change_between_pre_and_post_rechecks() {
+        let root = TempRoot::new("loss-audit-create-race");
+        let store = inactive_installation_store(&root, b"loss-audit-create-race");
+        let mut custody =
+            QuarantineCustodyLeaseV1::acquire_from_inactive_store(&store, [53; 32], [54; 32], 12)
+                .expect("acquire custody");
+        let revision = custody.state_revision;
+        let root_path = root.0.clone();
+        install_after_loss_audit_create_test_hook(move || {
+            update_store_state_for_test(&root_path, "active", revision);
+        });
+        let audit_id = [55; 32];
+
+        assert!(
+            custody
+                .create_loss_audit_if_absent(audit_id, b"durable audit before drift refusal")
+                .is_err()
+        );
+        assert!(
+            root.0
+                .join(loss_audit_path(audit_id).expect("audit path"))
+                .is_file()
+        );
+    }
+
+    #[test]
+    fn loss_audit_is_not_reachable_through_a_distinct_store_custody() {
+        let first_root = TempRoot::new("loss-audit-first-store");
+        let second_root = TempRoot::new("loss-audit-second-store");
+        let first_store = inactive_installation_store(&first_root, b"loss-audit-first-store");
+        let second_store = inactive_installation_store(&second_root, b"loss-audit-second-store");
+        let mut first_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
+            &first_store,
+            [50; 32],
+            [51; 32],
+            11,
+        )
+        .expect("acquire first custody");
+        let second_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
+            &second_store,
+            [50; 32],
+            [51; 32],
+            11,
+        )
+        .expect("acquire second custody");
+        let audit_id = [52; 32];
+        first_custody
+            .create_loss_audit_if_absent(audit_id, b"first Store audit")
+            .expect("create first Store audit");
+
+        assert_ne!(
+            first_custody.retained_root.path(),
+            second_custody.retained_root.path()
+        );
+        assert!(second_custody.read_loss_audit(audit_id).is_err());
+        assert!(
+            !second_root
+                .0
+                .join(loss_audit_path(audit_id).expect("audit path"))
+                .exists()
+        );
     }
 
     #[test]
