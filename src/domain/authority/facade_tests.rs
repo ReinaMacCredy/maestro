@@ -1259,6 +1259,7 @@ fn removal_consumer_binding(seed: u8) -> LegacyRemovalConsumerBindingV3 {
         hold_closure: [seed + 13; 32],
         rollback_rehearsal: [seed + 14; 32],
         deletion_plan: [seed + 15; 32],
+        expected_old_state: [seed + 16; 32],
     }
 }
 
@@ -3413,6 +3414,7 @@ fn legacy_removal_guard_v3_rechecks_every_consumer_closure_binding() {
         "hold_closure",
         "rollback_rehearsal",
         "deletion_plan",
+        "expected_old_state",
     ];
     for (index, dimension) in dimensions.into_iter().enumerate() {
         let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
@@ -3435,6 +3437,7 @@ fn legacy_removal_guard_v3_rechecks_every_consumer_closure_binding() {
             13 => substituted.hold_closure[0] ^= 1,
             14 => substituted.rollback_rehearsal[0] ^= 1,
             15 => substituted.deletion_plan[0] ^= 1,
+            16 => substituted.expected_old_state[0] ^= 1,
             _ => unreachable!(),
         }
         let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
@@ -3692,6 +3695,9 @@ fn legacy_removal_guard_v3_validation_is_atomic_and_effect_inert() {
         "current.state.carrier_currentness()",
         "epoch.revocation_revision()",
         ".revocations()",
+        "let expected_old_state_id = deletion_plan.expected_old_state_id()",
+        "consumer_reader_hold.expected_old_state_id() != expected_old_state_id",
+        "expected_old_state_id.as_bytes()",
     ] {
         assert!(
             validation.contains(required_recheck),

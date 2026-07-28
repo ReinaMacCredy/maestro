@@ -3066,6 +3066,7 @@ fn validate_legacy_physical_pruning_admission_v3(
     let closure_id = consumer_reader_hold.identity();
     let rollback_id = rollback.identity();
     let deletion_plan_id = deletion_plan.identity();
+    let expected_old_state_id = deletion_plan.expected_old_state_id();
     let required_nonzero = [
         source_case_id.as_bytes(),
         sighting_id.as_bytes(),
@@ -3080,6 +3081,7 @@ fn validate_legacy_physical_pruning_admission_v3(
         closure_id.as_bytes(),
         rollback_id.as_bytes(),
         deletion_plan_id.as_bytes(),
+        expected_old_state_id.as_bytes(),
     ];
     if required_nonzero.contains(&&[0; 32])
         || epoch.source_case_manifest_id() != source_case_id
@@ -3121,6 +3123,7 @@ fn validate_legacy_physical_pruning_admission_v3(
         || consumer_reader_hold.replacement_activation_id() != activation_id
         || consumer_reader_hold.rollback_rehearsal_id() != rollback_id
         || consumer_reader_hold.deletion_plan_id() != deletion_plan_id
+        || consumer_reader_hold.expected_old_state_id() != expected_old_state_id
         || consumer_reader_hold
             .physical_pruning_reader_zero_id()
             .as_bytes()
@@ -3174,6 +3177,7 @@ fn validate_legacy_physical_pruning_admission_v3(
         epoch_id.as_bytes(),
         activation_id.as_bytes(),
         deletion_plan_id.as_bytes(),
+        expected_old_state_id.as_bytes(),
     )?;
     Ok(LegacyRemovalGuardBindingV3::new(
         *current_generation.domain().id().as_bytes(),
@@ -3200,6 +3204,7 @@ fn validate_legacy_physical_pruning_admission_v3(
             .as_bytes(),
         *rollback_id.as_bytes(),
         *deletion_plan_id.as_bytes(),
+        *expected_old_state_id.as_bytes(),
         *current.snapshot_object.id().as_bytes(),
         snapshot.authority_epoch,
         live_trust_root,
@@ -3559,6 +3564,10 @@ fn mint_legacy_removal_invocation(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the unique V3 invocation binds every current removal and expected-old identity"
+)]
 fn mint_legacy_removal_invocation_v3(
     current_head: &[u8; 32],
     loss_manifest: &[u8; 32],
@@ -3567,6 +3576,7 @@ fn mint_legacy_removal_invocation_v3(
     epoch: &[u8; 32],
     activation: &[u8; 32],
     deletion_plan: &[u8; 32],
+    expected_old_state: &[u8; 32],
 ) -> Result<LegacyRemovalInvocationBindingV3, LegacyRemovalGuardAdmissionErrorV3> {
     static PROCESS_INCARNATION: OnceLock<[u8; 32]> = OnceLock::new();
     static NEXT_INVOCATION: AtomicU64 = AtomicU64::new(1);
@@ -3594,6 +3604,7 @@ fn mint_legacy_removal_invocation_v3(
         epoch,
         activation,
         deletion_plan,
+        expected_old_state,
     )
 }
 
