@@ -789,7 +789,12 @@ mod tests {
     use rusqlite::Connection;
 
     use super::*;
-    use crate::domain::persistence::{StoreDomainV1, StoreRoleV1, StoreV1};
+    use crate::domain::identity::{ContractRootIdV1, SchemaIdV1};
+    use crate::domain::persistence::{
+        StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1, StoreObjectV1, StoreRoleV1,
+        StoreStateV1, StoreV1,
+    };
+    use crate::foundation::core::deterministic_cbor::CborValue;
     use crate::foundation::core::legacy_quarantine::LegacyQuarantineExpectedSourceV3;
 
     struct TempRoot(PathBuf);
@@ -822,17 +827,78 @@ mod tests {
         StoreV1::create(&root.0, domain).expect("create inactive Installation Store")
     }
 
-    fn update_store_state_for_test(root: &Path, state: &str, revision: u64) {
-        let connection = Connection::open(root.join("store.sqlite3")).expect("open Store metadata");
-        connection
+    fn rendered_identity(byte: u8) -> String {
+        format!("sha256:{}", format!("{byte:02x}").repeat(32))
+    }
+
+    fn prepare_activation(
+        root: &TempRoot,
+        domain: StoreDomainV1,
+        seed: u64,
+    ) -> (StoreV1, StoreGenerationV1) {
+        let mut activation_store =
+            StoreV1::open(&root.0, domain.clone()).expect("open activation Store handle");
+        let object = StoreObjectV1::new(
+            SchemaIdV1::parse(&rendered_identity(61)).expect("Schema identity"),
+            CborValue::Array(vec![CborValue::Unsigned(1), CborValue::Unsigned(seed)]),
+            vec![],
+        )
+        .expect("activation object");
+        activation_store
+            .put_object(&object)
+            .expect("persist activation object");
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered_identity(62)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![object.id()],
+        )
+        .expect("activation Generation");
+        (activation_store, generation)
+    }
+
+    fn activate_with_published_head(
+        activation_store: &mut StoreV1,
+        generation: &StoreGenerationV1,
+        root: &Path,
+    ) {
+        let head = activation_store
+            .publish_generation(generation, None)
+            .expect("publish activation Head through Store");
+        let mut connection =
+            Connection::open(root.join("store.sqlite3")).expect("open Store metadata");
+        let transaction = connection.transaction().expect("activation transaction");
+        let changed = transaction
             .execute(
-                "UPDATE store_state SET state = ?1, state_revision = ?2 WHERE singleton = 1",
-                (
-                    state,
-                    i64::try_from(revision).expect("test revision fits SQLite INTEGER"),
-                ),
+                "UPDATE store_state
+                 SET state = 'active', state_revision = state_revision + 1
+                 WHERE singleton = 1",
+                [],
             )
-            .expect("update Store state");
+            .expect("activate Store after Head publication");
+        assert_eq!(changed, 1);
+        transaction
+            .execute(
+                "UPDATE store_publication_clock
+                 SET publication_clock = publication_clock + 1
+                 WHERE singleton = 1",
+                [],
+            )
+            .expect("advance activation publication clock");
+        transaction.commit().expect("commit activation");
+        assert_eq!(
+            activation_store.state().expect("active Store state"),
+            (StoreStateV1::Active, 1)
+        );
+        assert_eq!(
+            activation_store
+                .active_head()
+                .expect("published active Head")
+                .expect("active Head"),
+            head
+        );
     }
 
     #[test]
@@ -878,9 +944,11 @@ mod tests {
     }
 
     #[test]
-    fn loss_audit_refuses_active_or_state_revision_drift() {
+    fn loss_audit_refuses_activation_drift_before_create_or_read() {
         let active_root = TempRoot::new("loss-audit-active-drift");
         let active_store = inactive_installation_store(&active_root, b"loss-audit-active-drift");
+        let (mut create_activation, create_generation) =
+            prepare_activation(&active_root, active_store.domain().clone(), 63);
         let mut active_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
             &active_store,
             [44; 32],
@@ -888,8 +956,7 @@ mod tests {
             9,
         )
         .expect("acquire active-drift custody");
-        let active_revision = active_custody.state_revision;
-        update_store_state_for_test(&active_root.0, "active", active_revision);
+        activate_with_published_head(&mut create_activation, &create_generation, &active_root.0);
         assert!(
             active_custody
                 .create_loss_audit_if_absent([46; 32], b"must not persist")
@@ -899,18 +966,19 @@ mod tests {
         let revision_root = TempRoot::new("loss-audit-revision-drift");
         let revision_store =
             inactive_installation_store(&revision_root, b"loss-audit-revision-drift");
-        let revision_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
+        let (mut read_activation, read_generation) =
+            prepare_activation(&revision_root, revision_store.domain().clone(), 64);
+        let mut revision_custody = QuarantineCustodyLeaseV1::acquire_from_inactive_store(
             &revision_store,
             [47; 32],
             [48; 32],
             10,
         )
         .expect("acquire revision-drift custody");
-        update_store_state_for_test(
-            &revision_root.0,
-            "inactive",
-            revision_custody.state_revision + 1,
-        );
+        revision_custody
+            .create_loss_audit_if_absent([49; 32], b"read refusal audit")
+            .expect("create audit before activation");
+        activate_with_published_head(&mut read_activation, &read_generation, &revision_root.0);
         assert!(revision_custody.read_loss_audit([49; 32]).is_err());
     }
 
@@ -918,13 +986,14 @@ mod tests {
     fn loss_audit_create_refuses_state_change_between_pre_and_post_rechecks() {
         let root = TempRoot::new("loss-audit-create-race");
         let store = inactive_installation_store(&root, b"loss-audit-create-race");
+        let (mut activation_store, generation) =
+            prepare_activation(&root, store.domain().clone(), 65);
         let mut custody =
             QuarantineCustodyLeaseV1::acquire_from_inactive_store(&store, [53; 32], [54; 32], 12)
                 .expect("acquire custody");
-        let revision = custody.state_revision;
         let root_path = root.0.clone();
         install_after_loss_audit_create_test_hook(move || {
-            update_store_state_for_test(&root_path, "active", revision);
+            activate_with_published_head(&mut activation_store, &generation, &root_path);
         });
         let audit_id = [55; 32];
 
