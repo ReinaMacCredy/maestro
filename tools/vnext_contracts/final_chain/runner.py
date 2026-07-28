@@ -12,9 +12,16 @@ import secrets
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
+
+if __package__:
+    from ..stage12 import protected_primary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "stage12"))
+    import protected_primary
 
 
 ENGINE_IDS = ("python", "rust", "ruby")
@@ -37,6 +44,9 @@ EFFECT_DENYLIST = [
 STAGE12_COORDINATOR_SCHEMA = "maestro.external.stage12-legacy-cut-coordinator.v2"
 STAGE12_PACKET_IDENTITY = (
     "sha256:171de6121c62f1c8af55e9e248da506ca96322cb5a588c75ee3762f7d8082472"
+)
+PROTECTED_PRIMARY_BINDING_IDENTITY = (
+    "bf5daf86bfdea2fed211da1b49abb51c62a17d08ade0b28eee0c4c8b68d0718e"
 )
 STAGE12_CANONICAL_ANCESTRY = [
     {
@@ -698,7 +708,39 @@ def validate_stage12_coordinator(
         raise FinalChainError(
             "Stage 12 V7 packet, source Git, or protected-primary binding differs"
         )
+    binding_path = closure.joinpath(*protected_primary.BINDING_RELATIVE_PATH.parts)
+    try:
+        currentness_binding = protected_primary.load_binding(binding_path)
+    except protected_primary.ProtectedPrimaryError as error:
+        raise FinalChainError(
+            f"Stage 12 V7.1 protected-primary binding refused: {error}"
+        ) from error
+    if (
+        currentness_binding.get("identity_sha256")
+        != PROTECTED_PRIMARY_BINDING_IDENTITY
+        or currentness_binding.get("repository_realpath")
+        != primary.get("checkout_realpath")
+        or currentness_binding.get("commit") != primary.get("commit")
+        or currentness_binding.get("tree") != primary.get("tree")
+        or f"sha256:{currentness_binding.get('boundary_identity')}"
+        != primary.get("boundary_identity")
+        or currentness_binding.get("boundary_file_sha256")
+        != str(primary.get("boundary", {}).get("sha256", "")).removeprefix("sha256:")
+    ):
+        raise FinalChainError(
+            "Stage 12 V7.1 protected-primary binding differs from coordinator"
+        )
     return value
+
+
+def verify_protected_primary_currentness(
+    binding_path: Path, protected_checkout: Path
+) -> dict[str, Any]:
+    try:
+        binding = protected_primary.load_binding(binding_path)
+        return protected_primary.verify_currentness(binding, protected_checkout)
+    except protected_primary.ProtectedPrimaryError as error:
+        raise FinalChainError(f"protected-primary currentness refused: {error}") from error
 
 
 def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
@@ -773,6 +815,9 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         "Stage 12 legacy-cut coordinator",
     )
     validate_stage12_coordinator(closure, coordinator_path, commit, tree)
+    protected_primary_binding_path = closure.joinpath(
+        *protected_primary.BINDING_RELATIVE_PATH.parts
+    )
     promotion_path = bound_file(
         closure,
         snapshot.get("promotion_prerequisites"),
@@ -862,6 +907,7 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         "toolchain": bound_file(closure, snapshot.get("toolchain"), "toolchain"),
         "overlay": overlay_path,
         "stage12_coordinator": coordinator_path,
+        "protected_primary_binding": protected_primary_binding_path,
         "ancestry_pack": bound_file(
             closure, snapshot.get("ancestry_pack"), "ancestry object pack"
         ),
@@ -1664,12 +1710,14 @@ def main() -> int:
             for other in roots[index + 1 :]
         ):
             raise FinalChainError("closure, run, and publication roots are not disjoint")
+    verify_protected_primary_currentness(paths["protected_primary_binding"], protected)
     run_root.mkdir(parents=True)
     verify_sandbox(args.sandbox_exec.resolve(), run_root, protected)
     toolchain = validate_toolchain(paths["toolchain"], closure / "source")
     proofs = validate_ledger(
         paths["ledger"], closure / "source", snapshot["final_integration"]["commit"]
     )
+    verify_protected_primary_currentness(paths["protected_primary_binding"], protected)
     receipts = [
         run_engine(
             engine,
@@ -1682,6 +1730,7 @@ def main() -> int:
         for engine in ENGINE_IDS
     ]
     receipt = consensus(snapshot, paths, proofs, receipts)
+    verify_protected_primary_currentness(paths["protected_primary_binding"], protected)
     release_identity = publish(
         receipt,
         paths,

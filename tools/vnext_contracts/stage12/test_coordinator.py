@@ -27,6 +27,9 @@ SCHEMA = (
 PACKET_ROOT = Path(
     "/private/tmp/maestro-vnext-host-injection-successor-packet-v7"
 )
+CORRECTION_PACKET_ROOT = Path(
+    "/private/tmp/maestro-vnext-v7.1-ownership-correction-final.qwYoUp"
+)
 sys.path.insert(0, str(ROOT))
 
 import coordinator  # type: ignore[import-not-found]  # noqa: E402
@@ -61,6 +64,14 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
             raw = path.read_bytes()
             self.assertEqual(binding["byte_length"], len(raw))
             self.assertEqual(binding["sha256"], coordinator.digest(raw))
+        currentness = root.joinpath(
+            *coordinator.protected_primary.BINDING_RELATIVE_PATH.parts
+        )
+        currentness.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(
+            CORRECTION_PACKET_ROOT / "protected-primary-binding.v7.1.json",
+            currentness,
+        )
         for index, binding in enumerate(
             gate["evidence"] for gate in value["retained_inputs"]
         ):
@@ -222,6 +233,19 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
                 "V7 packet, source Git, or protected-primary binding differs",
             ):
                 coordinator.validate_bound_artifacts(source_mutant, root)
+            currentness = root.joinpath(
+                *coordinator.protected_primary.BINDING_RELATIVE_PATH.parts
+            )
+            currentness.write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                coordinator.CoordinatorError,
+                "V7.1 protected-primary binding refused",
+            ):
+                coordinator.validate_bound_artifacts(value, root)
+            shutil.copyfile(
+                CORRECTION_PACKET_ROOT / "protected-primary-binding.v7.1.json",
+                currentness,
+            )
             target = root / value["retained_inputs"][4]["evidence"]["path"]
             target.write_text("drift\n", encoding="utf-8")
             with self.assertRaisesRegex(coordinator.CoordinatorError, "bytes differ"):
@@ -242,6 +266,8 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
             ) as artifact_validation, mock.patch.object(
                 coordinator, "_validate_candidate_ancestry"
             ) as ancestry_validation, mock.patch.object(
+                coordinator, "verify_protected_primary_currentness"
+            ) as currentness_validation, mock.patch.object(
                 coordinator, "_git", wraps=coordinator._git
             ) as git_call:
                 result = coordinator.execute_isolated_candidate_ref_cas(
@@ -249,6 +275,12 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
                 )
             artifact_validation.assert_called()
             ancestry_validation.assert_called()
+            currentness_validation.assert_called_once()
+            self.assertEqual(
+                currentness_validation.call_args.args[0]["cas_observation"]["state"],
+                "exact_expected_preimage",
+            )
+            self.assertEqual(currentness_validation.call_args.args[1], artifacts)
             updates = [
                 call
                 for call in git_call.call_args_list
@@ -276,7 +308,9 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
                 coordinator, "validate_bound_artifacts"
             ) as artifact_validation, mock.patch.object(
                 coordinator, "_validate_candidate_ancestry"
-            ) as ancestry_validation:
+            ) as ancestry_validation, mock.patch.object(
+                coordinator, "verify_protected_primary_currentness"
+            ) as currentness_validation:
                 first = coordinator.execute_isolated_candidate_ref_cas(
                     value, artifacts, repo
                 )
@@ -288,6 +322,12 @@ class Stage12LegacyCutCoordinatorTests(unittest.TestCase):
                     )
             artifact_validation.assert_called()
             ancestry_validation.assert_called()
+            currentness_validation.assert_called_once()
+            self.assertEqual(
+                currentness_validation.call_args.args[0]["cas_observation"]["state"],
+                "exact_expected_preimage",
+            )
+            self.assertEqual(currentness_validation.call_args.args[1], artifacts)
             self.assertFalse(
                 any(
                     len(call.args) > 1 and call.args[1] == "update-ref"

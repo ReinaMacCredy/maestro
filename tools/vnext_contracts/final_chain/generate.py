@@ -19,8 +19,10 @@ from typing import Any, Iterable, Mapping
 
 if __package__:
     from . import runner
+    from ..stage12 import protected_primary
 else:
     import runner
+    import protected_primary
 
 
 SCHEMA = "maestro.external.vnext-final-cumulative-closure-snapshot.v1"
@@ -212,6 +214,22 @@ def materialize_stage12_coordinator(
         or not isinstance(retained, list)
     ):
         raise GenerationError("Stage 12 coordinator structure differs")
+    currentness_relative = protected_primary.BINDING_RELATIVE_PATH
+    currentness_source = source_root.joinpath(*currentness_relative.parts)
+    try:
+        currentness_binding = protected_primary.load_binding(currentness_source)
+    except protected_primary.ProtectedPrimaryError as error:
+        raise GenerationError(
+            f"Stage 12 V7.1 protected-primary binding refused: {error}"
+        ) from error
+    if (
+        currentness_binding.get("identity_sha256")
+        != runner.PROTECTED_PRIMARY_BINDING_IDENTITY
+    ):
+        raise GenerationError("Stage 12 V7.1 protected-primary identity differs")
+    currentness_target = closure.joinpath(*currentness_relative.parts)
+    currentness_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(currentness_source, currentness_target)
     bindings = [
         value.get("approved_packet"),
         primary.get("boundary"),

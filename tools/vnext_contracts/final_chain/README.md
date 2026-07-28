@@ -41,9 +41,19 @@ post-promotion receipt proves the exact zero-legacy, zero-consumer, zero-reader,
 and zero-hold closure.
 
 The Stage 10 ownership proof runs `stage12_product_proof.py` against the frozen
-source snapshot and isolated ancestry repository. It binds the exact
-Stage12Product correction checkpoint as an ancestor of the final commit before
-validating that the frozen Stage12-owned bytes still match that checkpoint.
+source snapshot and isolated ancestry repository. It proves the exact
+Stage12Product correction checkpoint is an ancestor of the reviewed candidate,
+proves that candidate is the final integration's direct second parent with the
+same tree, and validates the complete reviewed-candidate history rather than
+truncating proof at the correction checkpoint.
+
+The Stage 12 coordinator root must carry the approved packet-closure file
+`control/stage12/packet/protected-primary-binding.v7.1.json`. Generation copies
+and identity-checks that file into the frozen closure. The runner independently
+reconstructs the protected primary's commit, tree, ordered dirty-path manifest,
+tracked binary diff, and untracked regular-file path/mode/length/SHA manifest
+before creating the run root, immediately before engines, and immediately
+before publication. Engines never receive protected-primary filesystem access.
 
 ```text
 python3 tools/vnext_contracts/final_chain/generate.py \

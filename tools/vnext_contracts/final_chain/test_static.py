@@ -22,6 +22,9 @@ PACKET = Path("/private/tmp/maestro-vnext-final-closure-successor-packet-v4")
 STAGE12_PACKET = Path(
     "/private/tmp/maestro-vnext-host-injection-successor-packet-v7"
 )
+STAGE12_CORRECTION_PACKET = Path(
+    "/private/tmp/maestro-vnext-v7.1-ownership-correction-final.qwYoUp"
+)
 sys.path.insert(0, str(ROOT))
 
 import generate  # type: ignore[import-not-found]  # noqa: E402
@@ -65,6 +68,14 @@ class FinalChainStaticTests(unittest.TestCase):
             raw = path.read_bytes()
             self.assertEqual(binding["byte_length"], len(raw))
             self.assertEqual(binding["sha256"], runner.digest(raw))
+        currentness = root.joinpath(
+            *runner.protected_primary.BINDING_RELATIVE_PATH.parts
+        )
+        currentness.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(
+            STAGE12_CORRECTION_PACKET / "protected-primary-binding.v7.1.json",
+            currentness,
+        )
         for index, binding in enumerate(
             row["evidence"] for row in value["retained_inputs"]
         ):
@@ -342,21 +353,33 @@ class FinalChainStaticTests(unittest.TestCase):
         valid_snapshot = {
             "schema_version": stage12_product_proof.SNAPSHOT_SCHEMA,
             "state": "frozen",
+            "stage12_reviewed_candidate": {
+                "commit": "e" * 40,
+                "tree": "c" * 40,
+            },
             "final_integration": {
-                "commit": stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT
+                "commit": "f" * 40,
+                "tree": "c" * 40,
             },
         }
         self.assertEqual(
-            stage12_product_proof.final_commit(valid_snapshot),
-            stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+            stage12_product_proof.proof_commits(valid_snapshot),
+            ("e" * 40, "f" * 40),
         )
         invalid_snapshot = copy.deepcopy(valid_snapshot)
         invalid_snapshot["state"] = "open"
         with self.assertRaisesRegex(
             stage12_product_proof.ProofError,
-            "does not bind one frozen final commit",
+            "does not bind one frozen reviewed candidate",
         ):
-            stage12_product_proof.final_commit(invalid_snapshot)
+            stage12_product_proof.proof_commits(invalid_snapshot)
+        tree_mutant = copy.deepcopy(valid_snapshot)
+        tree_mutant["stage12_reviewed_candidate"]["tree"] = "d" * 40
+        with self.assertRaisesRegex(
+            stage12_product_proof.ProofError,
+            "does not bind one frozen reviewed candidate",
+        ):
+            stage12_product_proof.proof_commits(tree_mutant)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -394,7 +417,7 @@ class FinalChainStaticTests(unittest.TestCase):
             ]
             with mock.patch.object(
                 stage12_product_proof,
-                "require_stage12_ancestor",
+                "require_stage12_ancestry",
             ) as ancestor_check, mock.patch.object(
                 stage12_product_proof.subprocess,
                 "run",
@@ -403,12 +426,13 @@ class FinalChainStaticTests(unittest.TestCase):
                 self.assertEqual(stage12_product_proof.main(), 7)
             ancestor_check.assert_called_once_with(
                 ancestry.resolve(),
-                stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+                "e" * 40,
+                "f" * 40,
             )
             child_argv = run_child.call_args.args[0]
             self.assertEqual(
                 child_argv[-1],
-                stage12_product_proof.STAGE12_PRODUCT_CORRECTION_COMMIT,
+                "e" * 40,
             )
 
         refused = mock.Mock(returncode=1, stdout=b"", stderr=b"not ancestor")
@@ -420,8 +444,9 @@ class FinalChainStaticTests(unittest.TestCase):
             stage12_product_proof.ProofError,
             "not an ancestor",
         ):
-            stage12_product_proof.require_stage12_ancestor(
+            stage12_product_proof.require_stage12_ancestry(
                 Path("."),
+                "e" * 40,
                 "f" * 40,
             )
 
@@ -924,6 +949,20 @@ class FinalChainStaticTests(unittest.TestCase):
             runner.validate_stage12_coordinator(
                 closure, path, declared["commit"], declared["tree"]
             )
+            currentness_path = closure.joinpath(
+                *runner.protected_primary.BINDING_RELATIVE_PATH.parts
+            )
+            currentness_binding = runner.protected_primary.load_binding(
+                currentness_path
+            )
+            self.assertEqual(
+                currentness_binding["dirty_path_manifest_sha256"],
+                "a25912f9899851cc72b39254d62e1c71e289f43b775b7b0d236b7315129d0e83",
+            )
+            self.assertEqual(
+                currentness_binding["untracked_regular_file_manifest_identity"],
+                "b9e865f6f51cfabe1a92c8a7b4c629590a5c2065384ebf441bf00f2e2abfd047",
+            )
             binding_mutant = copy.deepcopy(value)
             binding_mutant["source_git_binding"][
                 "git_common_dir_realpath"
@@ -986,6 +1025,11 @@ class FinalChainStaticTests(unittest.TestCase):
                 binding["path"],
                 "control/stage12-legacy-cut-coordinator.v2.json",
             )
+            self.assertTrue(
+                closure.joinpath(
+                    *runner.protected_primary.BINDING_RELATIVE_PATH.parts
+                ).is_file()
+            )
             last_binding = value["retained_inputs"][-1]["evidence"]
             (source / last_binding["path"]).write_text("drift\n", encoding="utf-8")
             with self.assertRaisesRegex(
@@ -998,6 +1042,25 @@ class FinalChainStaticTests(unittest.TestCase):
                     declared["commit"],
                     declared["tree"],
                 )
+
+    def test_runner_rechecks_protected_primary_before_engines_and_publication(
+        self,
+    ) -> None:
+        source = (ROOT / "runner.py").read_text(encoding="utf-8")
+        call = (
+            'verify_protected_primary_currentness('
+            'paths["protected_primary_binding"], protected)'
+        )
+        self.assertEqual(source.count(call), 3)
+        first = source.index(call)
+        second = source.index(call, first + len(call))
+        engines = source.index("receipts = [", second)
+        third = source.index(call, second + len(call))
+        publication = source.index("release_identity = publish(", third)
+        self.assertLess(first, source.index("run_root.mkdir(", first))
+        self.assertLess(second, engines)
+        self.assertLess(engines, third)
+        self.assertLess(third, publication)
 
 
 if __name__ == "__main__":

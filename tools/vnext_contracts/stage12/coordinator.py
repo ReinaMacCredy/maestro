@@ -13,6 +13,11 @@ import subprocess
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
+if __package__:
+    from . import protected_primary
+else:
+    import protected_primary
+
 
 SCHEMA = "maestro.external.stage12-legacy-cut-coordinator.v2"
 PACKET_IDENTITY = (
@@ -23,6 +28,9 @@ SOURCE_BINDING_IDENTITY = (
 )
 PRIMARY_BOUNDARY_IDENTITY = (
     "sha256:e5b4c0592b8cf373ea68fc5e0e3f84020c14f3f422c5779e8d4a423930aa6054"
+)
+PROTECTED_PRIMARY_BINDING_IDENTITY = (
+    "bf5daf86bfdea2fed211da1b49abb51c62a17d08ade0b28eee0c4c8b68d0718e"
 )
 CLEAN_SUCCESSOR = {
     "commit": "e69295329c29c1c75901315a56e947b85b7a69cf",
@@ -511,6 +519,49 @@ def validate_bound_artifacts(value: Mapping[str, Any], artifact_root: Path) -> N
         != V7_DESIGN
     ):
         raise CoordinatorError("V7 packet, source Git, or protected-primary binding differs")
+    binding_path = root.joinpath(*protected_primary.BINDING_RELATIVE_PATH.parts)
+    try:
+        currentness_binding = protected_primary.load_binding(binding_path)
+    except protected_primary.ProtectedPrimaryError as error:
+        raise CoordinatorError(
+            f"V7.1 protected-primary binding refused: {error}"
+        ) from error
+    if (
+        currentness_binding.get("identity_sha256")
+        != PROTECTED_PRIMARY_BINDING_IDENTITY
+        or currentness_binding.get("repository_realpath")
+        != primary["checkout_realpath"]
+        or {
+            "commit": currentness_binding.get("commit"),
+            "tree": currentness_binding.get("tree"),
+        }
+        != PRIMARY_IDENTITY
+        or f"sha256:{currentness_binding.get('boundary_identity')}"
+        != PRIMARY_BOUNDARY_IDENTITY
+        or currentness_binding.get("boundary_file_sha256")
+        != str(primary["boundary"]["sha256"]).removeprefix("sha256:")
+    ):
+        raise CoordinatorError(
+            "V7.1 protected-primary binding differs from coordinator"
+        )
+
+
+def verify_protected_primary_currentness(
+    value: Mapping[str, Any], artifact_root: Path
+) -> dict[str, Any]:
+    path = artifact_root.resolve(strict=True).joinpath(
+        *protected_primary.BINDING_RELATIVE_PATH.parts
+    )
+    try:
+        binding = protected_primary.load_binding(path)
+        return protected_primary.verify_currentness(
+            binding,
+            Path(str(value["protected_primary"]["checkout_realpath"])),
+        )
+    except (OSError, protected_primary.ProtectedPrimaryError) as error:
+        raise CoordinatorError(
+            f"protected-primary currentness refused: {error}"
+        ) from error
 
 
 def _git(repo: Path, *arguments: str) -> str:
@@ -648,6 +699,7 @@ def execute_isolated_candidate_ref_cas(
         return observed
     repository = _validated_candidate_repository(observed, candidate_repository)
     candidate = observed["candidate_ref"]
+    verify_protected_primary_currentness(observed, artifact_root)
     _git(
         repository,
         "update-ref",
