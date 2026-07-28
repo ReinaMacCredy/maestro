@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1238,6 +1239,74 @@ fn put_objects_in_reference_order(store: &mut StoreV1, objects: Vec<StoreObjectV
         store.put_object(&object).unwrap();
         inserted.insert(object.id());
     }
+}
+
+fn removal_consumer_binding(seed: u8) -> LegacyRemovalConsumerBindingV2 {
+    LegacyRemovalConsumerBindingV2 {
+        consumer_closure: [seed; 32],
+        release: [seed + 1; 32],
+        quarantine_epoch: [seed + 2; 32],
+        sighting_manifest: [seed + 3; 32],
+        replacement_activation: [seed + 4; 32],
+        reader_closure: [seed + 5; 32],
+        hold_closure: [seed + 6; 32],
+        rollback_rehearsal: [seed + 7; 32],
+        deletion_plan: [seed + 8; 32],
+    }
+}
+
+fn seeded_installation_removal_store() -> (
+    std::path::PathBuf,
+    StoreDomainV1,
+    StoreV1,
+    StoreGenerationV1,
+    StoreHeadV1,
+    StoreObjectIdV1,
+    ContractRootIdV1,
+    LegacyRemovalGuardCurrentnessV2,
+) {
+    use super::test_support::{AuthorityFixtureModeV1, installation_authority_fixture};
+
+    let fixture = installation_authority_fixture(vec![], AuthorityFixtureModeV1::Valid);
+    let authority_root = fixture.authority_root_id;
+    let root = test_root();
+    let domain =
+        StoreDomainV1::derive(StoreRoleV1::Installation, b"legacy-removal-currentness").unwrap();
+    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+    put_objects_in_reference_order(&mut store, fixture.objects);
+    let contract_root =
+        ContractRootIdV1::from_digest(digest("legacy-removal-currentness-contract"));
+    let generation = StoreGenerationV1::new(
+        domain.clone(),
+        1,
+        None,
+        contract_root,
+        StoreCompatibilityV1::stage0_successor().unwrap(),
+        vec![authority_root],
+    )
+    .unwrap();
+    let head = store.publish_generation(&generation, None).unwrap();
+    Connection::open(root.join("store.sqlite3"))
+        .unwrap()
+        .execute(
+            "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
+             WHERE singleton = 1",
+            [],
+        )
+        .unwrap();
+    let currentness = store
+        .with_serialized_active_view(observe_legacy_removal_guard_currentness)
+        .unwrap();
+    (
+        root,
+        domain,
+        store,
+        generation,
+        head,
+        authority_root,
+        contract_root,
+        currentness,
+    )
 }
 
 #[test]
@@ -3226,6 +3295,249 @@ fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
 }
 
 #[test]
+fn legacy_removal_guard_v2_rechecks_every_live_authority_binding() {
+    let dimensions = [
+        "realm",
+        "store_generation",
+        "store_head",
+        "authority_snapshot",
+        "authority_epoch",
+        "trust_root",
+        "authority_fence",
+        "state_token",
+        "authority_currentness",
+        "revocation_revision",
+        "revocation_state",
+    ];
+    for (index, dimension) in dimensions.into_iter().enumerate() {
+        let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+        let consumer = removal_consumer_binding(40);
+        let mut stale = currentness;
+        match index {
+            0 => stale.realm[0] ^= 1,
+            1 => stale.store_generation[0] ^= 1,
+            2 => stale.store_head[0] ^= 1,
+            3 => stale.authority_snapshot[0] ^= 1,
+            4 => stale.authority_epoch += 1,
+            5 => stale.trust_root[0] ^= 1,
+            6 => stale.authority_fence[0] ^= 1,
+            7 => stale.state_token[0] ^= 1,
+            8 => stale.authority_currentness[0] ^= 1,
+            9 => stale.revocation_revision += 1,
+            10 => stale.revocation_state[0] ^= 1,
+            _ => unreachable!(),
+        }
+        let binding = LegacyRemovalGuardBindingV2::test_from_currentness(stale, consumer);
+        let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+        let callback_invocations = Cell::new(0_u8);
+        assert_eq!(
+            guard.consume_for_test(consumer, || {
+                callback_invocations.set(callback_invocations.get() + 1);
+                Ok::<_, ()>(())
+            }),
+            Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift),
+            "live Authority drift must refuse {dimension}"
+        );
+        assert_eq!(callback_invocations.get(), 0, "{dimension}");
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn legacy_removal_guard_v2_recomputes_revocation_state_before_linearization() {
+    let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+    let consumer = removal_consumer_binding(60);
+    let mut stale = currentness;
+    stale.revocation_state[31] ^= 1;
+    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(stale, consumer);
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let callback_invocations = Cell::new(0_u8);
+
+    assert_eq!(
+        guard.consume_for_test(consumer, || {
+            callback_invocations.set(callback_invocations.get() + 1);
+            Ok::<_, ()>(())
+        }),
+        Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)
+    );
+    assert_eq!(callback_invocations.get(), 0);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn legacy_removal_guard_v2_rederives_the_unique_invocation_before_linearization() {
+    let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+    let consumer = removal_consumer_binding(70);
+    let mut binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    binding.corrupt_invocation_for_test();
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let callback_invocations = Cell::new(0_u8);
+
+    assert_eq!(
+        guard.consume_for_test(consumer, || {
+            callback_invocations.set(callback_invocations.get() + 1);
+            Ok::<_, ()>(())
+        }),
+        Err(LegacyRemovalGuardAdmissionErrorV2::InvocationUnavailable)
+    );
+    assert_eq!(callback_invocations.get(), 0);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn legacy_removal_guard_v2_rechecks_every_consumer_closure_binding() {
+    let dimensions = [
+        "consumer_closure",
+        "release",
+        "quarantine_epoch",
+        "sighting_manifest",
+        "replacement_activation",
+        "reader_closure",
+        "hold_closure",
+        "rollback_rehearsal",
+        "deletion_plan",
+    ];
+    for (index, dimension) in dimensions.into_iter().enumerate() {
+        let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+        let consumer = removal_consumer_binding(80);
+        let mut substituted = consumer;
+        match index {
+            0 => substituted.consumer_closure[0] ^= 1,
+            1 => substituted.release[0] ^= 1,
+            2 => substituted.quarantine_epoch[0] ^= 1,
+            3 => substituted.sighting_manifest[0] ^= 1,
+            4 => substituted.replacement_activation[0] ^= 1,
+            5 => substituted.reader_closure[0] ^= 1,
+            6 => substituted.hold_closure[0] ^= 1,
+            7 => substituted.rollback_rehearsal[0] ^= 1,
+            8 => substituted.deletion_plan[0] ^= 1,
+            _ => unreachable!(),
+        }
+        let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+        let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+        let callback_invocations = Cell::new(0_u8);
+        assert_eq!(
+            guard.consume_for_test(substituted, || {
+                callback_invocations.set(callback_invocations.get() + 1);
+                Ok::<_, ()>(())
+            }),
+            Err(LegacyRemovalGuardAdmissionErrorV2::OwnerFactsMismatch),
+            "consumer substitution must refuse {dimension}"
+        );
+        assert_eq!(callback_invocations.get(), 0, "{dimension}");
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn legacy_removal_guard_v2_invokes_linearization_once_and_preserves_callback_error() {
+    let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+    let consumer = removal_consumer_binding(100);
+    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let callback_invocations = Cell::new(0_u8);
+    assert_eq!(
+        guard.consume_for_test(consumer, || {
+            callback_invocations.set(callback_invocations.get() + 1);
+            Ok::<_, &'static str>(91_u8)
+        }),
+        Ok(Ok(91))
+    );
+    assert_eq!(callback_invocations.get(), 1);
+
+    let currentness = store
+        .with_serialized_active_view(observe_legacy_removal_guard_currentness)
+        .unwrap();
+    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    assert_eq!(
+        guard.consume_for_test(consumer, || Err::<(), _>("expected-old refused")),
+        Ok(Err("expected-old refused"))
+    );
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn legacy_removal_guard_v2_refuses_a_reopened_store_publication_after_mint() {
+    let (root, domain, mut store, generation, head, authority_root, contract_root, currentness) =
+        seeded_installation_removal_store();
+    let consumer = removal_consumer_binding(120);
+    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+
+    let mut racing_store = StoreV1::open(&root, domain.clone()).unwrap();
+    let successor = StoreGenerationV1::new(
+        domain,
+        2,
+        Some(generation.id()),
+        contract_root,
+        StoreCompatibilityV1::stage0_successor().unwrap(),
+        vec![authority_root],
+    )
+    .unwrap();
+    racing_store
+        .publish_generation(&successor, Some(head.id()))
+        .unwrap();
+    let callback_invocations = Cell::new(0_u8);
+    assert_eq!(
+        guard.consume_for_test(consumer, || {
+            callback_invocations.set(callback_invocations.get() + 1);
+            Ok::<_, ()>(())
+        }),
+        Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)
+    );
+    assert_eq!(callback_invocations.get(), 0);
+    drop(racing_store);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn legacy_removal_guard_v2_holds_the_store_write_fence_through_linearization() {
+    let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
+    let consumer = removal_consumer_binding(140);
+    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let database_path = root.join("store.sqlite3");
+
+    assert_eq!(
+        guard.consume_for_test(consumer, || {
+            let racing_connection = Connection::open(&database_path).unwrap();
+            racing_connection
+                .busy_timeout(std::time::Duration::ZERO)
+                .unwrap();
+            let error = racing_connection
+                .execute_batch("BEGIN IMMEDIATE")
+                .expect_err("a second writer must not cross the retained fence");
+            assert!(matches!(
+                error,
+                rusqlite::Error::SqliteFailure(ref failure, _)
+                    if matches!(
+                        failure.code,
+                        rusqlite::ErrorCode::DatabaseBusy
+                            | rusqlite::ErrorCode::DatabaseLocked
+                    )
+            ));
+            Ok::<_, ()>(77_u8)
+        }),
+        Ok(Ok(77))
+    );
+
+    let released_connection = Connection::open(database_path).unwrap();
+    released_connection
+        .execute_batch("BEGIN IMMEDIATE")
+        .unwrap();
+    released_connection.execute_batch("ROLLBACK").unwrap();
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape() {
     let source = include_str!("legacy_removal_guard.rs");
     let guard = source
@@ -3233,11 +3545,15 @@ fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape()
         .nth(1)
         .expect("guard definition must remain present");
 
-    assert!(guard.contains("_cut: PhantomData<&'cut mut AuthorityRemovalCutLifetimeV2>"));
+    assert!(guard.contains("_store: &'cut mut StoreV1"));
     assert!(guard.contains("_not_send_or_sync: PhantomData<Rc<()>>"));
     assert!(guard.contains("pub(super) const fn mint("));
+    assert!(guard.contains("store: &'cut mut StoreV1"));
     assert!(guard.contains("pub(in crate::domain) fn consume_for("));
-    assert!(guard.contains("self,\n        closure: &Stage12ConsumerReaderHoldClosureV2"));
+    assert!(guard.contains("pub(in crate::domain) fn consume_with_linearization<"));
+    assert!(guard.contains("linearize_expected_old: impl FnOnce() -> Result<T, E>"));
+    assert!(guard.contains("with_serialized_active_view"));
+    assert!(guard.contains("LinearizationRequired"));
     assert!(guard.contains("Result<(), LegacyRemovalGuardAdmissionErrorV2>"));
     for closure_binding in [
         "closure.identity()",
@@ -3251,13 +3567,13 @@ fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape()
         "closure.deletion_plan_id()",
     ] {
         assert!(
-            guard.contains(closure_binding),
+            source.contains(closure_binding),
             "missing consumption recheck {closure_binding}"
         );
     }
     assert!(!guard.contains("pub fn new("));
     assert!(!guard.contains("pub(crate) fn"));
-    assert_eq!(guard.matches("pub(in crate::domain) fn").count(), 1);
+    assert_eq!(guard.matches("pub(in crate::domain) fn").count(), 2);
     assert!(!guard.contains("impl Clone"));
     assert!(!guard.contains("impl Debug"));
     assert!(!guard.contains("Serialize"));

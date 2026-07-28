@@ -47,8 +47,11 @@ use super::governance_attestation::{
 use super::governance_floor::{
     RepositoryGovernanceAuthorityCurrentnessV1, resolve_repository_governance_floor_current_view,
 };
+#[cfg(test)]
+use super::legacy_removal_guard::LegacyRemovalConsumerBindingV2;
 use super::legacy_removal_guard::{
-    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardBindingV2, LegacyRemovalGuardV2,
+    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardBindingV2,
+    LegacyRemovalGuardCurrentnessV2, LegacyRemovalGuardV2, LegacyRemovalInvocationBindingV2,
 };
 use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
@@ -1284,7 +1287,7 @@ impl<'store> AuthorityFacadeV1<'store> {
             )
         });
         match binding {
-            Ok(binding) => Ok(LegacyRemovalGuardV2::mint(binding)),
+            Ok(binding) => Ok(LegacyRemovalGuardV2::mint(binding, self.store)),
             Err(PreparedPublicationError::Store(_)) => {
                 Err(LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)
             }
@@ -3084,7 +3087,7 @@ fn validate_legacy_physical_pruning_admission(
         b"maestro.authority.legacy-removal-revocation-state.v2\0",
         &[&revocation_bytes],
     );
-    let invocation = legacy_removal_invocation_commitment(
+    let invocation = mint_legacy_removal_invocation(
         current_head.id().as_bytes(),
         epoch_id.as_bytes(),
         activation_id.as_bytes(),
@@ -3124,12 +3127,80 @@ fn validate_legacy_physical_pruning_admission(
     ))
 }
 
-fn legacy_removal_invocation_commitment(
+pub(super) fn observe_legacy_removal_guard_currentness(
+    view: &StorePublicationViewV1<'_>,
+) -> Result<LegacyRemovalGuardCurrentnessV2, LegacyRemovalGuardAdmissionErrorV2> {
+    if view.role() != StoreRoleV1::Installation {
+        return Err(LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState);
+    }
+    let current_head = view
+        .active_head()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?;
+    let current_generation = view
+        .active_generation()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?;
+    let active_objects = view
+        .active_generation_objects()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?;
+    let authority_root = select_current_authority_root(&current_generation, &active_objects)
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::InvalidAuthorityState)?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        authority_root,
+        &active_objects,
+    )
+    .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)?;
+    let context = current.facts.context();
+    let snapshot = current.facts.snapshot();
+    if context.kind() != AuthorityContextKindV1::InstallationAuthorityContext
+        || context.store_generation() != current_generation.ordinal()
+        || snapshot.store_generation != current_generation.ordinal()
+        || context.authority_epoch() != snapshot.authority_epoch
+        || current.state.authority_epoch() != snapshot.authority_epoch
+    {
+        return Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift);
+    }
+    let trust_root = materialization_commitment(
+        b"maestro.authority.legacy-removal-trust-root.v2\0",
+        &[
+            context.context_id().as_bytes(),
+            &context.trust_root_revision().to_be_bytes(),
+        ],
+    );
+    let revocation_bytes = current
+        .facts
+        .revocations()
+        .canonical_bytes()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)?;
+    let revocation_state = materialization_commitment(
+        b"maestro.authority.legacy-removal-revocation-state.v2\0",
+        &[&revocation_bytes],
+    );
+    Ok(LegacyRemovalGuardCurrentnessV2 {
+        realm: *current_generation.domain().id().as_bytes(),
+        store_generation: *current_generation.id().as_bytes(),
+        store_head: *current_head.id().as_bytes(),
+        authority_snapshot: *current.snapshot_object.id().as_bytes(),
+        authority_epoch: snapshot.authority_epoch,
+        trust_root,
+        authority_fence: *current.state.carrier_fence().as_bytes(),
+        state_token: *current.state.state_token().as_bytes(),
+        authority_currentness: *current.state.carrier_currentness().as_bytes(),
+        revocation_revision: snapshot.authority_epoch,
+        revocation_state,
+    })
+}
+
+fn mint_legacy_removal_invocation(
     current_head: &[u8; 32],
     epoch: &[u8; 32],
     activation: &[u8; 32],
     deletion_plan: &[u8; 32],
-) -> Result<[u8; 32], LegacyRemovalGuardAdmissionErrorV2> {
+) -> Result<LegacyRemovalInvocationBindingV2, LegacyRemovalGuardAdmissionErrorV2> {
     static PROCESS_INCARNATION: OnceLock<[u8; 32]> = OnceLock::new();
     static NEXT_INVOCATION: AtomicU64 = AtomicU64::new(1);
 
@@ -3145,21 +3216,15 @@ fn legacy_removal_invocation_commitment(
     let entropy = protected_diagnostic_random_entropy(
         b"maestro.authority.legacy-removal-invocation-entropy.v2\0",
     );
-    if process_incarnation == [0; 32] || entropy == [0; 32] {
-        return Err(LegacyRemovalGuardAdmissionErrorV2::InvocationUnavailable);
-    }
-    Ok(materialization_commitment(
-        b"maestro.authority.legacy-removal-invocation.v2\0",
-        &[
-            &process_incarnation,
-            &entropy,
-            &sequence.to_be_bytes(),
-            current_head,
-            epoch,
-            activation,
-            deletion_plan,
-        ],
-    ))
+    LegacyRemovalInvocationBindingV2::mint(
+        process_incarnation,
+        entropy,
+        sequence,
+        current_head,
+        epoch,
+        activation,
+        deletion_plan,
+    )
 }
 
 struct CurrentAuthorityV1 {
