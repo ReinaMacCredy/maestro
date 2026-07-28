@@ -1069,6 +1069,7 @@ struct RetainedRootV2 {
     fence_identity: [u8; 32],
     universe_identity: [u8; 32],
     owner_currentness: [u8; 32],
+    owner_attestation: [u8; 32],
     lease: RetainedDescriptorCensusLeaseV3,
 }
 
@@ -1304,6 +1305,7 @@ where
                             LegacyQuarantineOwnerDomainV3::ProtectedPrimary => unreachable!(),
                         },
                         owner_currentness,
+                        owner_attestation,
                         lease,
                     });
                 }
@@ -1880,6 +1882,7 @@ fn admitted_set_identity_v4(
             root.fence_identity.as_slice(),
             root.universe_identity.as_slice(),
             root.owner_currentness.as_slice(),
+            root.owner_attestation.as_slice(),
         ]);
     }
     commitment(ADMITTED_SET_DOMAIN_V4, &parts)
@@ -2001,7 +2004,7 @@ fn reconcile_expected_sources_v4(
             anchor_identity: root.anchor_identity,
             fence_identity: root.fence_identity,
             owner_currentness: root.owner_currentness,
-            owner_attestation: root.universe_identity,
+            owner_attestation: root.owner_attestation,
             loss_receipt,
         });
     }
