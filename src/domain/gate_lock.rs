@@ -14,25 +14,33 @@
 //! Only the close-gate full suite is serialized. The per-task narrow falsifier is
 //! not -- concurrent slice verifications must stay independent.
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+#[cfg(unix)]
+use std::fs::OpenOptions;
+#[cfg(unix)]
 use std::io::Read;
+#[cfg(unix)]
 use std::path::PathBuf;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 use anyhow::Context;
+#[cfg(unix)]
 use anyhow::Result;
 
+#[cfg(unix)]
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Name of the full-suite advisory lockfile placed in the Git common dir (or,
 /// with no Git, under `.maestro/`).
+#[cfg(unix)]
 const GATE_LOCK_FILE_NAME: &str = "maestro-gate.lock";
 
 /// Name of the merge-back advisory lockfile, also in the Git common dir so every
 /// sibling worktree sees the same critical section.
+#[cfg(unix)]
 const MERGE_LOCK_FILE_NAME: &str = "maestro-merge.lock";
 
 #[derive(Clone, Copy, Debug)]
@@ -42,6 +50,7 @@ enum LockKind {
 }
 
 impl LockKind {
+    #[cfg(unix)]
     fn file_name(self) -> &'static str {
         match self {
             Self::Gate => GATE_LOCK_FILE_NAME,
@@ -272,6 +281,7 @@ fn write_holder(file: &File, holder: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn read_holder(path: &std::path::Path) -> Option<String> {
     let mut contents = String::new();
     File::open(path).ok()?.read_to_string(&mut contents).ok()?;
@@ -285,6 +295,7 @@ fn read_holder(path: &std::path::Path) -> Option<String> {
 
 /// The lockfile path: the Git common dir when in a repo (shared across every
 /// worktree), else `.maestro/` for a non-Git tree.
+#[cfg(unix)]
 fn lock_path(paths: &MaestroPaths, kind: LockKind) -> PathBuf {
     match git::common_dir(paths.repo_root()) {
         Ok(common) => common.join(kind.file_name()),
