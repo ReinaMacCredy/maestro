@@ -1,0 +1,32 @@
+{
+  "schema": "maestro.vnext.external-pattern.v2",
+  "pattern_id": "trusted-host-diagnostic",
+  "applies_to": [
+    "agents-compatible-cli",
+    "claude-code"
+  ],
+  "host_descriptor_schema": "maestro.vnext.host-descriptor.v2",
+  "activation_binding": "ProtectedRuntimeActivationBindingV2",
+  "trusted_host_port": "LiveAuthenticatedHostConnectionV1",
+  "host_owned_injection_entry": "crate::interfaces::connectors::acquire_trusted_host_diagnostic_connection",
+  "authority_continuation": "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
+  "current_profiles": {
+    "variant": "Inactive",
+    "reason_code": "supported_host_native_provider_unavailable"
+  },
+  "active_requires": [
+    "provider_implementation_identity",
+    "provider_revision",
+    "host_owned_injection_entry",
+    "production_conformance_proof_identity",
+    "production_negative_proof_identity",
+    "binary_identity",
+    "release_id"
+  ],
+  "mcp_tools": [
+    "maestro_packet",
+    "maestro_cli_search"
+  ],
+  "ambient_fallback": false,
+  "runtime_activation": false
+}

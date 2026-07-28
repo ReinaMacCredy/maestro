@@ -1,49 +1,58 @@
 {
-  "schema": "maestro.vnext.stage10.path-manifest.v1",
-  "base": "89b29639c75d1d83f58b33489320ec690af6b845",
-  "modified": [
-    "src/interfaces/vnext/connectors/mod.rs",
-    "src/interfaces/vnext/hooks/mod.rs",
-    "src/interfaces/vnext/mcp/mod.rs",
-    "src/interfaces/vnext/shell/mod.rs",
-    "src/interfaces/vnext/tui/mod.rs",
-    "src/operations/vnext/adapters/mod.rs"
-  ],
-  "added": [
-    "embedded/vnext/bootstrap/wiring.v1.json",
-    "embedded/vnext/connectors/installation-bound-cli.v1.json",
-    "embedded/vnext/connectors/read-only-global-mcp.v1.json",
-    "embedded/vnext/hosts/agents-compatible-cli.v1.json",
-    "embedded/vnext/hosts/claude-code.v1.json",
-    "embedded/vnext/patterns/adapter-parity.v1.json",
-    "embedded/vnext/patterns/offline-tui.v1.json",
-    "embedded/vnext/patterns/read-only-global-mcp.v1.json",
-    "embedded/vnext/patterns/trusted-host-diagnostic.v1.json",
-    "embedded/vnext/schemas/adapter-rendering.v1.json",
-    "embedded/vnext/schemas/bootstrap-wiring.v1.json",
-    "embedded/vnext/schemas/connector-descriptor.v1.json",
-    "embedded/vnext/schemas/external-pattern.v1.json",
-    "embedded/vnext/schemas/host-descriptor.v1.json",
+  "schema": "maestro.vnext.stage12-product-path-manifest.v2",
+  "base": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
+  "owner": "Stage12Product",
+  "default_deny_unowned": true,
+  "existing_exact_files": [
+    "embedded/vnext/adapter/mcp-tools.v1.json",
+    "src/domain/installation/consumer_snapshot.rs",
+    "src/domain/installation/resource_cutover.rs",
+    "src/domain/integration/trusted_host_diagnostic_stage10_seed.rs",
+    "src/interfaces/cli/adapter.rs",
+    "src/interfaces/cli/card.rs",
+    "src/interfaces/cli/loop_recipes.rs",
+    "src/interfaces/cli/status.rs",
+    "src/interfaces/cli/task.rs",
+    "src/interfaces/connectors/mod.rs",
+    "src/operations/adapters/mod.rs",
+    "src/operations/installation/active.rs",
+    "src/operations/installation/agent_resource_release.rs",
+    "src/operations/installation/effects.rs",
     "tests/fixtures/vnext/stage10/adapter-parity.v1.json",
     "tests/fixtures/vnext/stage10/host-skew.v1.json",
     "tests/fixtures/vnext/stage10/trusted-host-parity.v1.json",
     "tests/vnext_stage10_adapters.rs",
+    "tests/vnext_stage10_legacy_route_refusal.rs",
     "tests/vnext_stage10_resources.rs",
     "tools/vnext_contracts/stage10/interface-gap.v2.json",
     "tools/vnext_contracts/stage10/path-manifest.v1.json",
     "tools/vnext_contracts/stage10/proof-matrix.v1.json",
     "tools/vnext_contracts/stage10/validate.py"
   ],
-  "denylist": [
-    "src/domain/vnext/integration/mod.rs",
-    "src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs",
-    "src/interfaces/vnext/cli/",
-    "src/domain/vnext/installation/",
-    "src/domain/vnext/authority/",
-    "src/domain/vnext/persistence/",
-    "tests/vnext_stage11_",
-    "tests/vnext_stage12_",
-    "tools/vnext_contracts/stage11/",
-    "tools/vnext_contracts/stage12/"
+  "planned_new_exact_files": [
+    "embedded/vnext/hosts/agents-compatible-cli.v2.json",
+    "embedded/vnext/hosts/claude-code.v2.json",
+    "embedded/vnext/patterns/trusted-host-diagnostic.v2.json",
+    "embedded/vnext/schemas/host-descriptor.v2.json",
+    "src/interfaces/cli/packet.rs",
+    "src/operations/adapters/live_projection.rs",
+    "tests/vnext_stage10_host_native_runtime.rs"
+  ],
+  "path_prefixes": [
+    "tests/vnext_stage12_"
+  ],
+  "explicit_deny_files": {
+    "embedded/vnext/hosts/agents-compatible-cli.v1.json": "ac9b0bbd4c632716c472199271e3c27540f76a252a63079bd3f5e44da9ce1740",
+    "embedded/vnext/hosts/claude-code.v1.json": "bb46c3279b7ffbc0991cb99d9a2842a98fad69b0f39092c46958bd9a312a4593",
+    "embedded/vnext/patterns/trusted-host-diagnostic.v1.json": "eb21da71907db3d6ae126e5cc12f525ece6d3c718869ca823596a46a791d7e0d",
+    "embedded/vnext/schemas/host-descriptor.v1.json": "83ede4b3f4e2f325d513a4f73d8deb1a7df418b7443d4ff76989f4882df37c60"
+  },
+  "forbidden_change_shape": [
+    "deletion",
+    "rename",
+    "mode_change",
+    "symlink",
+    "gitlink",
+    "unowned_path_write"
   ]
 }

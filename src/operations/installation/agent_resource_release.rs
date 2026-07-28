@@ -8,8 +8,10 @@ use crate::domain::execution::EffectIntentIdV1;
 use crate::domain::installation::{
     AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1,
     AgentResourceReleaseConsumerSealV1, AgentResourceReleaseOwnerFactsV1,
-    CommittedAgentResourceReleaseV1, ObservedInstallationClosureV1, UserAgentInstallationClosureV1,
+    CommittedAgentResourceReleaseV1, InstallationLegacyDeletionPlanV2,
+    ObservedInstallationClosureV1, Stage12RollbackRehearsalV2, UserAgentInstallationClosureV1,
 };
+use crate::domain::migration::runtime::LegacyQuarantineEpochV3;
 use crate::domain::persistence::StorePublicationOutcomeV1;
 
 use super::{
@@ -196,6 +198,27 @@ impl ActiveInstallationFacadeV1<'_> {
     ) -> Result<(), AgentResourceReleaseOperationErrorV1> {
         self.restore_from_captures(&mut active.transaction, effects)?;
         Ok(())
+    }
+
+    pub(crate) fn rehearse_stage12_agent_resource_rollback(
+        &mut self,
+        active: &mut ActiveAgentResourceReleaseV1,
+        effects: &mut impl DistributionEffectPortV1,
+        epoch: &LegacyQuarantineEpochV3,
+    ) -> Result<
+        (Stage12RollbackRehearsalV2, InstallationLegacyDeletionPlanV2),
+        AgentResourceReleaseOperationErrorV1,
+    > {
+        self.restore_from_captures(&mut active.transaction, effects)?;
+        let rollback = Stage12RollbackRehearsalV2::confirm(
+            active.admission.release_id(),
+            epoch,
+            active.transaction.transaction(),
+        )?;
+        let deletion_plan = active
+            .admission
+            .stage12_deletion_plan_v2(epoch, &rollback)?;
+        Ok((rollback, deletion_plan))
     }
 
     pub(crate) fn publish_agent_resource_release(

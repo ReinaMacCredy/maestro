@@ -1,19 +1,33 @@
 {
-  "schema": "maestro.vnext.stage10.interface-gap.v2",
-  "status": "stage9-currentness-provider-bound",
-  "stage5_checkpoint": "8434c33837d59abb00fb0e4a3e987fb9fe0843d6",
-  "stage9_checkpoint": "89b29639c75d1d83f58b33489320ec690af6b845",
+  "schema": "maestro.vnext.stage10.interface-gap.v3",
+  "status": "host-native-injection-seam-bound-with-inactive-profiles",
+  "v7_design_commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
   "satisfied_by_upstream": [
     "TrustedHostDiagnosticConnectionPortV1",
     "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
-    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1"
-  ],
-  "required_before_runtime_activation": [],
-  "runtime_activation": false,
-  "prohibited": [
-    "trusted_host_diagnostic_stage10_seed",
+    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1",
     "LiveAuthenticatedHostConnectionV1",
+    "Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host"
+  ],
+  "required_before_runtime_activation": [
+    "provider_implementation_identity",
+    "provider_revision",
+    "host_owned_injection_entry",
+    "production_conformance_and_negative_proof_identities",
+    "binary_identity",
+    "release_id"
+  ],
+  "protected_runtime_activation": false,
+  "inactive_reason_code": "supported_host_native_provider_unavailable",
+  "prohibited": [
+    "ambient_registry",
+    "global_lookup",
+    "credential_parser",
+    "wire_bearer",
+    "serialized_connection",
+    "cached_connection",
+    "replayed_connection",
     "caller_supplied_safety_floor"
   ],
-  "owner": "Stage10-adapter-integration"
+  "owner": "Stage12Product"
 }

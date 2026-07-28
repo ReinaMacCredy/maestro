@@ -43,6 +43,13 @@ pub(crate) trait AuthenticatedHostConnectionSnapshotV1 {
 
 pub(crate) trait LiveAuthenticatedHostConnectionV1 {
     fn profile_id(&self) -> &str;
+    fn provider_implementation_identity(&self) -> &str;
+    fn provider_revision(&self) -> u64;
+    fn host_owned_injection_entry(&self) -> &str;
+    fn production_conformance_proof_identity(&self) -> &str;
+    fn production_negative_proof_identity(&self) -> &str;
+    fn binary_identity(&self) -> &str;
+    fn release_id(&self) -> &str;
 
     fn claim_authenticated_invocation_no_io(
         &mut self,
@@ -527,6 +534,34 @@ mod production_factory_tests {
     impl LiveAuthenticatedHostConnectionV1 for AuthenticatedHost {
         fn profile_id(&self) -> &str {
             self.profile_id
+        }
+
+        fn provider_implementation_identity(&self) -> &str {
+            "candidate:provider:test:v1"
+        }
+
+        fn provider_revision(&self) -> u64 {
+            1
+        }
+
+        fn host_owned_injection_entry(&self) -> &str {
+            "candidate:injection:test:v1"
+        }
+
+        fn production_conformance_proof_identity(&self) -> &str {
+            "sha256:test-conformance"
+        }
+
+        fn production_negative_proof_identity(&self) -> &str {
+            "sha256:test-negative"
+        }
+
+        fn binary_identity(&self) -> &str {
+            "sha256:test-binary"
+        }
+
+        fn release_id(&self) -> &str {
+            "candidate:release:test:v1"
         }
 
         fn claim_authenticated_invocation_no_io(

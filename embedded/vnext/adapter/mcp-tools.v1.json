@@ -1,8 +1,8 @@
 {
   "schema": "maestro.vnext.mcp-tool-source.v1",
-  "candidate_only": true,
-  "runtime_activation": false,
-  "runtime_registration": false,
+  "candidate_only": false,
+  "runtime_activation": true,
+  "runtime_registration": true,
   "scope": "global-user-agent-installation",
   "tools": [
     {

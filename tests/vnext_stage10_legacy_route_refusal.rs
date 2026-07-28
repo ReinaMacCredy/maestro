@@ -71,6 +71,10 @@ fn public_legacy_successor_routes_refuse_before_repository_state_reads() {
             !stderr.contains("repo root not found"),
             "{arguments:?} consulted repository state before refusing: {stderr}"
         );
+        assert!(
+            !stderr.contains("packet projection"),
+            "{arguments:?} entered Projection before refusing: {stderr}"
+        );
     }
 }
 
@@ -132,6 +136,10 @@ fn every_legacy_recipe_route_refuses_before_repository_or_recipe_reads() {
             assert!(
                 !stderr.contains("repo root not found") && !stderr.contains("unknown loop recipe"),
                 "{recipe:?} read legacy repository or recipe state before refusing: {stderr}"
+            );
+            assert!(
+                !stderr.contains("packet projection"),
+                "{recipe:?} entered Projection before refusing: {stderr}"
             );
         }
     }

@@ -1,32 +1,41 @@
 {
-  "schema": "maestro.vnext.stage10.trusted-host-parity.v2",
+  "schema": "maestro.vnext.stage10.trusted-host-parity.v3",
+  "v7_design_commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
   "required_ports": [
     "TrustedHostDiagnosticConnectionPortV1",
     "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
-    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1"
+    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1",
+    "LiveAuthenticatedHostConnectionV1",
+    "Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host"
   ],
   "upstream_references": [
     {
       "owner": "Stage5 Integration",
-      "path": "src/domain/vnext/integration/trusted_host_diagnostic.rs",
-      "sha256": "d372280711e2b0b03fdae318c16a2b894525724e67b08aaa203e40a9ff3221eb"
+      "path": "src/domain/integration/trusted_host_diagnostic.rs",
+      "sha256": "72f0fe908d08f2edadc1e20a22fe3db8bf330bf44713f43296d879a090833ddc"
     },
     {
       "owner": "Stage5 Authority",
-      "path": "src/domain/vnext/authority/facade.rs",
-      "sha256": "2204b8c23cfb272e5beff129612e8712df7208ada3d028db376a8d92c159547c"
+      "path": "src/domain/authority/facade.rs",
+      "sha256": "6982c14d2d6e04bef463f99a38e99a605afdbebbb7fa29504aaca14765d2133e"
     },
     {
       "owner": "Stage8 Authority consumer",
-      "path": "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
-      "sha256": "7cb91a1d1c0adb7ef8250495be4868d634a1639ca8c3c13d9f4442b1afece7a8"
+      "path": "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+      "sha256": "f3054d1a1b4b062c7058a05b6e4cdea6851fcec9927255136ee2246438961378"
     },
     {
       "owner": "Stage9 Persistence provider",
-      "path": "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs",
-      "sha256": "ef681071a4da1de138460144b604f696ec16ae3967d056ba3df52dac33d99c4d"
+      "path": "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
+      "sha256": "12fae00cbb1d7f324edb1d91954b3d4eeda1cb098087dbd2a9ec390ae3b4f9dd"
     }
   ],
-  "forbidden": ["trusted_host_diagnostic_stage10_seed", "LiveAuthenticatedHostConnectionV1"],
-  "runtime_activation": false
+  "activation_binding": "ProtectedRuntimeActivationBindingV2",
+  "current_profiles": [
+    "agents-compatible-cli",
+    "claude-code"
+  ],
+  "inactive_reason_code": "supported_host_native_provider_unavailable",
+  "protected_runtime_activation": false,
+  "ambient_fallback": false
 }

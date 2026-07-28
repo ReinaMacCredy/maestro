@@ -46,14 +46,22 @@ fn protected_diagnostic_enters_through_the_authenticated_host_factory() {
     }
     assert!(!seed.contains("fixed_digest_getters"));
     assert!(!seed.contains("fixed_revision_getters"));
+    assert!(connectors.contains("HostDescriptorV2"));
+    assert!(connectors.contains("ProtectedRuntimeActivationBindingV2"));
+    assert!(connectors.contains("supported_host_native_provider_unavailable"));
+    assert!(connectors.contains("matches!("));
     assert!(connectors.contains("acquire_trusted_host_diagnostic_connection"));
-    assert!(connectors.contains("live_connection.profile_id() != profile_id"));
+    assert!(connectors.contains("live_connection.profile_id() != descriptor.profile_id"));
+    assert!(connectors.contains("agents-compatible-cli.v2.json"));
+    assert!(connectors.contains("claude-code.v2.json"));
+    assert!(!connectors.contains("agents-compatible-cli.v1.json"));
+    assert!(!connectors.contains("claude-code.v1.json"));
     assert!(mcp.contains("acquire_trusted_host_diagnostic_connection("));
     assert!(mcp.contains("ok_or(Stage10AdapterError::TrustedHostAuthorityRejected)"));
 }
 
 #[test]
-fn interface_gap_records_the_real_stage9_provider_binding_without_activation_claims() {
+fn interface_gap_records_host_native_injection_and_truthful_inactive_profiles() {
     let gap: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(
             workspace().join("tools/vnext_contracts/stage10/interface-gap.v2.json"),
@@ -61,14 +69,21 @@ fn interface_gap_records_the_real_stage9_provider_binding_without_activation_cla
         .unwrap(),
     )
     .unwrap();
-    assert_eq!(gap["status"], "stage9-currentness-provider-bound");
-    assert_eq!(gap["satisfied_by_upstream"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        gap["status"],
+        "host-native-injection-seam-bound-with-inactive-profiles"
+    );
+    assert_eq!(gap["satisfied_by_upstream"].as_array().unwrap().len(), 5);
     assert_eq!(
         gap["required_before_runtime_activation"]
             .as_array()
             .unwrap()
             .len(),
-        0
+        6
     );
-    assert_eq!(gap["runtime_activation"], false);
+    assert_eq!(gap["protected_runtime_activation"], false);
+    assert_eq!(
+        gap["inactive_reason_code"],
+        "supported_host_native_provider_unavailable"
+    );
 }
