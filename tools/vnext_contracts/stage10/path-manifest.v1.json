@@ -1,6 +1,6 @@
 {
   "schema": "maestro.vnext.stage12-product-path-manifest.v2",
-  "base": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
+  "base": "fc190ce78d940475073b0451c349f52016380d3c",
   "owner": "Stage12Product",
   "default_deny_unowned": true,
   "existing_exact_files": [

@@ -17,7 +17,7 @@
     {
       "owner": "Stage5 Authority",
       "path": "src/domain/authority/facade.rs",
-      "sha256": "6982c14d2d6e04bef463f99a38e99a605afdbebbb7fa29504aaca14765d2133e"
+      "sha256": "301d7ebed9b7251505d8a4ba108262d420208caedd5a6c69ac6ebbc2cc310c6e"
     },
     {
       "owner": "Stage8 Authority consumer",
