@@ -21,7 +21,7 @@ use crate::domain::migration::runtime::{
     MigrationDigestV1, SealedQuarantineManifestV3, Stage12SightingManifestV2,
     UnavailablePreexistingLossManifestV4,
 };
-use crate::foundation::core::FoundationLegacyQuarantineClosureV2;
+use crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2;
 
 use super::consumer_snapshot::{
     AgentResourceReleaseConsumerSealV1, ConsumerClosureReceiptV1, PhysicalPruningConsumerStageV1,

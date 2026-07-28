@@ -13,7 +13,7 @@ use crate::domain::installation::{
 };
 use crate::domain::migration::runtime::{LegacyQuarantineEpochV4, LegacyRollbackAssessmentV4};
 use crate::domain::persistence::StorePublicationOutcomeV1;
-use crate::foundation::core::FoundationLegacyQuarantineClosureV2;
+use crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2;
 
 use super::{
     ActiveDistributionTransactionV1, ActiveInstallationFacadeV1, ActivePublicationObjectsV1,
