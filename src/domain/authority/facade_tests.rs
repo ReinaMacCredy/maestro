@@ -1241,17 +1241,24 @@ fn put_objects_in_reference_order(store: &mut StoreV1, objects: Vec<StoreObjectV
     }
 }
 
-fn removal_consumer_binding(seed: u8) -> LegacyRemovalConsumerBindingV2 {
-    LegacyRemovalConsumerBindingV2 {
+fn removal_consumer_binding(seed: u8) -> LegacyRemovalConsumerBindingV3 {
+    LegacyRemovalConsumerBindingV3 {
         consumer_closure: [seed; 32],
         release: [seed + 1; 32],
-        quarantine_epoch: [seed + 2; 32],
+        source_case_manifest: [seed + 2; 32],
         sighting_manifest: [seed + 3; 32],
-        replacement_activation: [seed + 4; 32],
-        reader_closure: [seed + 5; 32],
-        hold_closure: [seed + 6; 32],
-        rollback_rehearsal: [seed + 7; 32],
-        deletion_plan: [seed + 8; 32],
+        classification_manifest: [seed + 4; 32],
+        overlap_manifest: [seed + 5; 32],
+        loss_manifest: [seed + 6; 32],
+        quarantine_manifest: [seed + 7; 32],
+        foundation_closure: [seed + 8; 32],
+        rollback_assessment: [seed + 9; 32],
+        quarantine_epoch: [seed + 10; 32],
+        replacement_activation: [seed + 11; 32],
+        reader_closure: [seed + 12; 32],
+        hold_closure: [seed + 13; 32],
+        rollback_rehearsal: [seed + 14; 32],
+        deletion_plan: [seed + 15; 32],
     }
 }
 
@@ -1263,7 +1270,7 @@ fn seeded_installation_removal_store() -> (
     StoreHeadV1,
     StoreObjectIdV1,
     ContractRootIdV1,
-    LegacyRemovalGuardCurrentnessV2,
+    LegacyRemovalGuardCurrentnessV3,
 ) {
     use super::test_support::{AuthorityFixtureModeV1, installation_authority_fixture};
 
@@ -1295,7 +1302,7 @@ fn seeded_installation_removal_store() -> (
         )
         .unwrap();
     let currentness = store
-        .with_serialized_active_view(observe_legacy_removal_guard_currentness)
+        .with_serialized_active_view(observe_legacy_removal_guard_currentness_v3)
         .unwrap();
     (
         root,
@@ -3295,7 +3302,7 @@ fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_rechecks_every_live_authority_binding() {
+fn legacy_removal_guard_v3_rechecks_every_live_authority_binding() {
     let dimensions = [
         "realm",
         "store_generation",
@@ -3327,15 +3334,15 @@ fn legacy_removal_guard_v2_rechecks_every_live_authority_binding() {
             10 => stale.revocation_state[0] ^= 1,
             _ => unreachable!(),
         }
-        let binding = LegacyRemovalGuardBindingV2::test_from_currentness(stale, consumer);
-        let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+        let binding = LegacyRemovalGuardBindingV3::test_from_currentness(stale, consumer);
+        let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
         let callback_invocations = Cell::new(0_u8);
         assert_eq!(
             guard.consume_for_test(consumer, || {
                 callback_invocations.set(callback_invocations.get() + 1);
                 Ok::<_, ()>(())
             }),
-            Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift),
+            Err(LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift),
             "live Authority drift must refuse {dimension}"
         );
         assert_eq!(callback_invocations.get(), 0, "{dimension}");
@@ -3345,13 +3352,13 @@ fn legacy_removal_guard_v2_rechecks_every_live_authority_binding() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_recomputes_revocation_state_before_linearization() {
+fn legacy_removal_guard_v3_recomputes_revocation_state_before_linearization() {
     let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
     let consumer = removal_consumer_binding(60);
     let mut stale = currentness;
     stale.revocation_state[31] ^= 1;
-    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(stale, consumer);
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let binding = LegacyRemovalGuardBindingV3::test_from_currentness(stale, consumer);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
     let callback_invocations = Cell::new(0_u8);
 
     assert_eq!(
@@ -3359,7 +3366,7 @@ fn legacy_removal_guard_v2_recomputes_revocation_state_before_linearization() {
             callback_invocations.set(callback_invocations.get() + 1);
             Ok::<_, ()>(())
         }),
-        Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)
+        Err(LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift)
     );
     assert_eq!(callback_invocations.get(), 0);
     drop(store);
@@ -3367,12 +3374,12 @@ fn legacy_removal_guard_v2_recomputes_revocation_state_before_linearization() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_rederives_the_unique_invocation_before_linearization() {
+fn legacy_removal_guard_v3_rederives_the_unique_invocation_before_linearization() {
     let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
     let consumer = removal_consumer_binding(70);
-    let mut binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
+    let mut binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
     binding.corrupt_invocation_for_test();
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
     let callback_invocations = Cell::new(0_u8);
 
     assert_eq!(
@@ -3380,7 +3387,7 @@ fn legacy_removal_guard_v2_rederives_the_unique_invocation_before_linearization(
             callback_invocations.set(callback_invocations.get() + 1);
             Ok::<_, ()>(())
         }),
-        Err(LegacyRemovalGuardAdmissionErrorV2::InvocationUnavailable)
+        Err(LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable)
     );
     assert_eq!(callback_invocations.get(), 0);
     drop(store);
@@ -3388,12 +3395,19 @@ fn legacy_removal_guard_v2_rederives_the_unique_invocation_before_linearization(
 }
 
 #[test]
-fn legacy_removal_guard_v2_rechecks_every_consumer_closure_binding() {
+fn legacy_removal_guard_v3_rechecks_every_consumer_closure_binding() {
     let dimensions = [
         "consumer_closure",
         "release",
-        "quarantine_epoch",
+        "source_case_manifest",
         "sighting_manifest",
+        "classification_manifest",
+        "overlap_manifest",
+        "loss_manifest",
+        "quarantine_manifest",
+        "foundation_closure",
+        "rollback_assessment",
+        "quarantine_epoch",
         "replacement_activation",
         "reader_closure",
         "hold_closure",
@@ -3407,24 +3421,31 @@ fn legacy_removal_guard_v2_rechecks_every_consumer_closure_binding() {
         match index {
             0 => substituted.consumer_closure[0] ^= 1,
             1 => substituted.release[0] ^= 1,
-            2 => substituted.quarantine_epoch[0] ^= 1,
+            2 => substituted.source_case_manifest[0] ^= 1,
             3 => substituted.sighting_manifest[0] ^= 1,
-            4 => substituted.replacement_activation[0] ^= 1,
-            5 => substituted.reader_closure[0] ^= 1,
-            6 => substituted.hold_closure[0] ^= 1,
-            7 => substituted.rollback_rehearsal[0] ^= 1,
-            8 => substituted.deletion_plan[0] ^= 1,
+            4 => substituted.classification_manifest[0] ^= 1,
+            5 => substituted.overlap_manifest[0] ^= 1,
+            6 => substituted.loss_manifest[0] ^= 1,
+            7 => substituted.quarantine_manifest[0] ^= 1,
+            8 => substituted.foundation_closure[0] ^= 1,
+            9 => substituted.rollback_assessment[0] ^= 1,
+            10 => substituted.quarantine_epoch[0] ^= 1,
+            11 => substituted.replacement_activation[0] ^= 1,
+            12 => substituted.reader_closure[0] ^= 1,
+            13 => substituted.hold_closure[0] ^= 1,
+            14 => substituted.rollback_rehearsal[0] ^= 1,
+            15 => substituted.deletion_plan[0] ^= 1,
             _ => unreachable!(),
         }
-        let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
-        let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+        let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+        let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
         let callback_invocations = Cell::new(0_u8);
         assert_eq!(
             guard.consume_for_test(substituted, || {
                 callback_invocations.set(callback_invocations.get() + 1);
                 Ok::<_, ()>(())
             }),
-            Err(LegacyRemovalGuardAdmissionErrorV2::OwnerFactsMismatch),
+            Err(LegacyRemovalGuardAdmissionErrorV3::OwnerFactsMismatch),
             "consumer substitution must refuse {dimension}"
         );
         assert_eq!(callback_invocations.get(), 0, "{dimension}");
@@ -3434,11 +3455,11 @@ fn legacy_removal_guard_v2_rechecks_every_consumer_closure_binding() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_invokes_linearization_once_and_preserves_callback_error() {
+fn legacy_removal_guard_v3_invokes_linearization_once_and_preserves_callback_error() {
     let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
     let consumer = removal_consumer_binding(100);
-    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
     let callback_invocations = Cell::new(0_u8);
     assert_eq!(
         guard.consume_for_test(consumer, || {
@@ -3450,10 +3471,10 @@ fn legacy_removal_guard_v2_invokes_linearization_once_and_preserves_callback_err
     assert_eq!(callback_invocations.get(), 1);
 
     let currentness = store
-        .with_serialized_active_view(observe_legacy_removal_guard_currentness)
+        .with_serialized_active_view(observe_legacy_removal_guard_currentness_v3)
         .unwrap();
-    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
     assert_eq!(
         guard.consume_for_test(consumer, || Err::<(), _>("expected-old refused")),
         Ok(Err("expected-old refused"))
@@ -3463,12 +3484,12 @@ fn legacy_removal_guard_v2_invokes_linearization_once_and_preserves_callback_err
 }
 
 #[test]
-fn legacy_removal_guard_v2_refuses_a_reopened_store_publication_after_mint() {
+fn legacy_removal_guard_v3_refuses_a_reopened_store_publication_after_mint() {
     let (root, domain, mut store, generation, head, authority_root, contract_root, currentness) =
         seeded_installation_removal_store();
     let consumer = removal_consumer_binding(120);
-    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
 
     let mut racing_store = StoreV1::open(&root, domain.clone()).unwrap();
     let successor = StoreGenerationV1::new(
@@ -3489,7 +3510,7 @@ fn legacy_removal_guard_v2_refuses_a_reopened_store_publication_after_mint() {
             callback_invocations.set(callback_invocations.get() + 1);
             Ok::<_, ()>(())
         }),
-        Err(LegacyRemovalGuardAdmissionErrorV2::AuthorityCurrentnessDrift)
+        Err(LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift)
     );
     assert_eq!(callback_invocations.get(), 0);
     drop(racing_store);
@@ -3498,11 +3519,11 @@ fn legacy_removal_guard_v2_refuses_a_reopened_store_publication_after_mint() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_holds_the_store_write_fence_through_linearization() {
+fn legacy_removal_guard_v3_holds_the_store_write_fence_through_linearization() {
     let (root, _, mut store, _, _, _, _, currentness) = seeded_installation_removal_store();
     let consumer = removal_consumer_binding(140);
-    let binding = LegacyRemovalGuardBindingV2::test_from_currentness(currentness, consumer);
-    let guard = LegacyRemovalGuardV2::mint(binding, &mut store);
+    let binding = LegacyRemovalGuardBindingV3::test_from_currentness(currentness, consumer);
+    let guard = LegacyRemovalGuardV3::mint(binding, &mut store);
     let database_path = root.join("store.sqlite3");
 
     assert_eq!(
@@ -3538,10 +3559,10 @@ fn legacy_removal_guard_v2_holds_the_store_write_fence_through_linearization() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape() {
+fn legacy_removal_guard_v3_has_only_the_private_process_local_capability_shape() {
     let source = include_str!("legacy_removal_guard.rs");
     let guard = source
-        .split("pub(in crate::domain) struct LegacyRemovalGuardV2")
+        .split("pub(in crate::domain) struct LegacyRemovalGuardV3")
         .nth(1)
         .expect("guard definition must remain present");
 
@@ -3554,12 +3575,19 @@ fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape()
     assert!(guard.contains("linearize_expected_old: impl FnOnce() -> Result<T, E>"));
     assert!(guard.contains("with_serialized_active_view"));
     assert!(guard.contains("LinearizationRequired"));
-    assert!(guard.contains("Result<(), LegacyRemovalGuardAdmissionErrorV2>"));
+    assert!(guard.contains("Result<(), LegacyRemovalGuardAdmissionErrorV3>"));
     for closure_binding in [
         "closure.identity()",
         "closure.release_id()",
-        "closure.legacy_quarantine_epoch_id()",
+        "closure.source_case_manifest_id()",
         "closure.sighting_manifest_id()",
+        "closure.classification_manifest_id()",
+        "closure.overlap_manifest_id()",
+        "closure.loss_manifest_id()",
+        "closure.quarantine_manifest_id()",
+        "closure.foundation_closure_id()",
+        "closure.rollback_assessment_id()",
+        "closure.legacy_quarantine_epoch_id()",
         "closure.replacement_activation_id()",
         "closure.physical_pruning_reader_zero_id()",
         "closure.physical_pruning_hold_zero_id()",
@@ -3587,12 +3615,17 @@ fn legacy_removal_guard_v2_has_only_the_private_process_local_capability_shape()
 }
 
 #[test]
-fn legacy_removal_guard_v2_admission_requires_exact_owner_issued_facts() {
+fn legacy_removal_guard_v3_admission_requires_exact_owner_issued_facts() {
     let source = include_str!("facade.rs");
     let admission = source
-        .split("pub(in crate::domain) fn admit_legacy_physical_pruning")
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning<")
         .nth(1)
-        .and_then(|tail| tail.split("pub(in crate::domain::authority) fn").next())
+        .and_then(|tail| {
+            tail.split(
+                "reason = \"the V2 pruning admission remains historical while V3 is the sole current path\"",
+            )
+                .next()
+        })
         .expect("named pruning admission must remain present");
 
     for owner_fact in [
@@ -3600,13 +3633,15 @@ fn legacy_removal_guard_v2_admission_requires_exact_owner_issued_facts() {
         "&Stage12SightingManifestV2",
         "&MigrationClassificationManifestV3",
         "&DeclaredOverlapManifestV2",
-        "&UnavailablePreexistingLossManifestV3",
+        "&UnavailablePreexistingLossManifestV4",
         "&SealedQuarantineManifestV3",
-        "&LegacyQuarantineEpochV3",
-        "&Stage12ReplacementActivationV2",
-        "&Stage12ConsumerReaderHoldClosureV2",
-        "&Stage12RollbackRehearsalV2",
-        "&InstallationLegacyDeletionPlanV2",
+        "&FoundationLegacyQuarantineClosureV2",
+        "&LegacyRollbackAssessmentV4",
+        "&LegacyQuarantineEpochV4",
+        "&Stage12ReplacementActivationV3",
+        "&Stage12ConsumerReaderHoldClosureV3",
+        "&Stage12RollbackRehearsalV3",
+        "&InstallationLegacyDeletionPlanV3",
     ] {
         assert!(
             admission.contains(owner_fact),
@@ -3622,18 +3657,26 @@ fn legacy_removal_guard_v2_admission_requires_exact_owner_issued_facts() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_validation_is_atomic_and_effect_inert() {
+fn legacy_removal_guard_v3_validation_is_atomic_and_effect_inert() {
     let source = include_str!("facade.rs");
     let validation = source
-        .split("fn validate_legacy_physical_pruning_admission")
+        .split("fn validate_legacy_physical_pruning_admission_v3")
         .nth(1)
-        .and_then(|tail| tail.split("struct CurrentAuthorityV1").next())
+        .and_then(|tail| {
+            tail.split("fn validate_legacy_physical_pruning_admission_v2")
+                .next()
+        })
         .expect("guard validation must remain present");
 
     let admission = source
-        .split("pub(in crate::domain) fn admit_legacy_physical_pruning")
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning<")
         .nth(1)
-        .and_then(|tail| tail.split("pub(in crate::domain::authority) fn").next())
+        .and_then(|tail| {
+            tail.split(
+                "reason = \"the V2 pruning admission remains historical while V3 is the sole current path\"",
+            )
+                .next()
+        })
         .expect("named pruning admission must remain present");
     assert!(admission.contains("with_serialized_active_view"));
     for required_recheck in [
@@ -3672,7 +3715,7 @@ fn legacy_removal_guard_v2_validation_is_atomic_and_effect_inert() {
 }
 
 #[test]
-fn legacy_removal_guard_v2_is_not_a_wire_resource_action_or_scope_atom() {
+fn legacy_removal_guard_v3_is_not_a_wire_resource_action_or_scope_atom() {
     let forbidden_surfaces = [
         include_str!("action_basis.rs"),
         include_str!("context.rs"),
@@ -3682,6 +3725,6 @@ fn legacy_removal_guard_v2_is_not_a_wire_resource_action_or_scope_atom() {
     assert!(
         forbidden_surfaces
             .iter()
-            .all(|source| !source.contains("LegacyRemovalGuardV2"))
+            .all(|source| !source.contains("LegacyRemovalGuardV3"))
     );
 }

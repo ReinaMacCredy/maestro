@@ -25,6 +25,10 @@ pub(in crate::domain) mod governance_attestation_stage7_seed;
 mod governance_floor;
 mod grant;
 mod identity;
+#[allow(
+    dead_code,
+    reason = "the historical V2 guard and current V3 capability remain dormant until the sole coordinator is activated"
+)]
 mod legacy_removal_guard;
 mod mandate;
 pub(crate) mod materialization;
@@ -142,7 +146,7 @@ pub use identity::{
     unused_imports,
     reason = "MainIntegration keeps the exact removal capability domain-only"
 )]
-pub(in crate::domain) use legacy_removal_guard::LegacyRemovalGuardV2;
+pub(in crate::domain) use legacy_removal_guard::{LegacyRemovalGuardV2, LegacyRemovalGuardV3};
 pub use mandate::{
     AuthorityMandateV1, BootstrapMandateEvaluationV1, BootstrapMandateIssuanceBindingV1,
     BootstrapMandateIssuanceV1, ConsentRequirementMemberV1, ConsentRoleV1,

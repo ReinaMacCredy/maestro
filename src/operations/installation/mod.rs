@@ -15,7 +15,7 @@ mod prestore;
     reason = "MainIntegration exposes the offline Stage 11 workflow without activating it"
 )]
 pub(crate) use crate::operations::migration::{
-    Stage11PhysicalClosureV3, execute_offline_live_set_v3,
+    Stage11PhysicalClosureV4, execute_offline_live_set_v4,
 };
 pub use active::{
     ActiveDistributionTransactionV1, ActiveInstallationFacadeV1, ActivePublicationObjectsV1,
@@ -39,7 +39,7 @@ pub use prestore::{
     reason = "MainIntegration freezes the sole opaque Stage 12 pruning coordinator without activating it"
 )]
 pub(crate) fn coordinate_stage12_product_pruning(
-    coordinator: crate::domain::installation::Stage12ProductPruningCoordinatorV2<'_, '_>,
+    coordinator: crate::domain::installation::Stage12ProductPruningCoordinatorV3<'_, '_>,
 ) -> Result<(), crate::domain::installation::AgentResourceCutoverErrorV1> {
     crate::domain::installation::coordinate_authority_admitted_stage12_pruning(coordinator)
 }

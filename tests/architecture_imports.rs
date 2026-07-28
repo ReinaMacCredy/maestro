@@ -4566,33 +4566,59 @@ fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
     let authority = read_source_file(Path::new("src/domain/authority/mod.rs"));
     assert_eq!(authority.matches("mod legacy_removal_guard;").count(), 1);
     assert!(
-        authority.contains("pub(in crate::domain) use legacy_removal_guard::LegacyRemovalGuardV2;")
+        authority.contains(
+            "pub(in crate::domain) use legacy_removal_guard::{LegacyRemovalGuardV2, LegacyRemovalGuardV3};"
+        )
     );
 
     let installation = read_source_file(Path::new("src/domain/installation/mod.rs"));
     for owner_fact in [
-        "InstallationLegacyDeletionPlanV2",
-        "Stage12ConsumerReaderHoldClosureV2",
-        "Stage12ReplacementActivationV2",
-        "Stage12RollbackRehearsalV2",
+        "InstallationLegacyDeletionPlanV3",
+        "Stage12ConsumerReaderHoldClosureV3",
+        "Stage12ReplacementActivationV3",
+        "Stage12RollbackRehearsalV3",
+        "InstallationPhysicalPruningContinuationV3",
+        "InstallationPhysicalPruningEffectPortV3",
     ] {
         assert!(
             installation.contains(owner_fact),
             "Installation must reexport {owner_fact}"
         );
     }
-    assert!(installation.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(installation.contains("Stage12ProductPruningCoordinatorV3"));
+    assert!(installation.contains("UnavailablePreexistingLossManifestV4"));
+    assert!(installation.contains("FoundationLegacyQuarantineClosureV2"));
+    assert!(installation.contains("LegacyRollbackAssessmentV4"));
+    assert!(installation.contains("LegacyQuarantineEpochV4"));
     assert!(installation.contains("admit_legacy_physical_pruning("));
+    assert!(!installation.contains("admit_legacy_physical_pruning_v2("));
     assert!(installation.contains("resource_cutover::execute_stage12_product_pruning("));
 
     let operations = read_source_file(Path::new("src/operations/installation/mod.rs"));
     assert!(installation.contains("LegacyQuarantineExpectedSourceSetV3"));
-    assert!(operations.contains("execute_offline_live_set_v3"));
-    assert!(operations.contains("Stage11PhysicalClosureV3"));
+    assert!(operations.contains("execute_offline_live_set_v4"));
+    assert!(operations.contains("Stage11PhysicalClosureV4"));
     assert!(operations.contains("coordinate_stage12_product_pruning("));
-    assert!(operations.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(operations.contains("Stage12ProductPruningCoordinatorV3"));
     assert!(!operations.contains("LegacyRemovalGuardV2"));
+    assert!(!operations.contains("LegacyRemovalGuardV3"));
+    assert!(!operations.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(!operations.contains("execute_offline_live_set_v3"));
     assert!(!operations.contains("execute_stage12_product_pruning"));
+
+    let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    let current_admission = facade
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning<")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(in crate::domain) fn admit_legacy_physical_pruning_v2")
+                .next()
+        })
+        .expect("current pruning admission");
+    assert!(current_admission.contains("LegacyRemovalGuardV3"));
+    assert!(current_admission.contains("validate_legacy_physical_pruning_admission_v3"));
+    assert!(facade.contains("fn admit_legacy_physical_pruning_v2"));
+    assert!(facade.contains("observe_legacy_removal_guard_currentness_v3"));
 
     let live_pruning_calls = rust_files_under(Path::new("src"))
         .iter()

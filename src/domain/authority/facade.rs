@@ -8,8 +8,10 @@ use thiserror::Error;
 
 use crate::domain::identity::StoreObjectIdV1;
 use crate::domain::installation::{
-    InstallationLegacyDeletionPlanV2, Stage12ConsumerReaderHoldClosureV2,
-    Stage12ReplacementActivationV2, Stage12RollbackRehearsalV2,
+    InstallationLegacyDeletionPlanV2, InstallationLegacyDeletionPlanV3,
+    Stage12ConsumerReaderHoldClosureV2, Stage12ConsumerReaderHoldClosureV3,
+    Stage12ReplacementActivationV2, Stage12ReplacementActivationV3, Stage12RollbackRehearsalV2,
+    Stage12RollbackRehearsalV3,
 };
 #[cfg(test)]
 use crate::domain::integration::TrustedHostDiagnosticTestConnectionV1;
@@ -17,9 +19,10 @@ use crate::domain::integration::{
     TrustedHostDiagnosticConnectionPortV1, TrustedHostDiagnosticPresentationPortV1,
 };
 use crate::domain::migration::runtime::{
-    DeclaredOverlapManifestV2, LegacyQuarantineEpochV3, LegacySourceCaseManifestV3,
-    MigrationClassificationManifestV3, SealedQuarantineManifestV3, Stage12SightingManifestV2,
-    UnavailablePreexistingLossManifestV3,
+    DeclaredOverlapManifestV2, LegacyQuarantineEpochV3, LegacyQuarantineEpochV4,
+    LegacyRollbackAssessmentV4, LegacySourceCaseManifestV3, MigrationClassificationManifestV3,
+    SealedQuarantineManifestV3, Stage12SightingManifestV2, UnavailablePreexistingLossManifestV3,
+    UnavailablePreexistingLossManifestV4,
 };
 use crate::domain::persistence::ProtectedDiagnosticCurrentViewAnchorV1;
 #[cfg(test)]
@@ -37,6 +40,7 @@ pub(in crate::domain) use crate::domain::persistence::{
     StoreIdempotencyProbeV1, StorePublicationOutcomeV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
+use crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2;
 
 mod repository_admission;
 mod repository_leaf_authority;
@@ -48,10 +52,12 @@ use super::governance_floor::{
     RepositoryGovernanceAuthorityCurrentnessV1, resolve_repository_governance_floor_current_view,
 };
 #[cfg(test)]
-use super::legacy_removal_guard::LegacyRemovalConsumerBindingV2;
+use super::legacy_removal_guard::LegacyRemovalConsumerBindingV3;
 use super::legacy_removal_guard::{
-    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardBindingV2,
-    LegacyRemovalGuardCurrentnessV2, LegacyRemovalGuardV2, LegacyRemovalInvocationBindingV2,
+    LegacyRemovalGuardAdmissionErrorV2, LegacyRemovalGuardAdmissionErrorV3,
+    LegacyRemovalGuardBindingV2, LegacyRemovalGuardBindingV3, LegacyRemovalGuardCurrentnessV2,
+    LegacyRemovalGuardCurrentnessV3, LegacyRemovalGuardV2, LegacyRemovalGuardV3,
+    LegacyRemovalInvocationBindingV2, LegacyRemovalInvocationBindingV3,
 };
 use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
@@ -1262,6 +1268,57 @@ impl<'store> AuthorityFacadeV1<'store> {
         sightings: &Stage12SightingManifestV2,
         classifications: &MigrationClassificationManifestV3,
         overlaps: &DeclaredOverlapManifestV2,
+        losses: &UnavailablePreexistingLossManifestV4,
+        quarantine: &SealedQuarantineManifestV3,
+        foundation: &FoundationLegacyQuarantineClosureV2,
+        rollback_assessment: &LegacyRollbackAssessmentV4,
+        epoch: &LegacyQuarantineEpochV4,
+        activation: &Stage12ReplacementActivationV3,
+        consumer_reader_hold: &Stage12ConsumerReaderHoldClosureV3,
+        rollback: &Stage12RollbackRehearsalV3,
+        deletion_plan: &InstallationLegacyDeletionPlanV3,
+    ) -> Result<LegacyRemovalGuardV3<'cut>, LegacyRemovalGuardAdmissionErrorV3> {
+        let binding = self.store.with_serialized_active_view(|view| {
+            validate_legacy_physical_pruning_admission_v3(
+                view,
+                source_cases,
+                sightings,
+                classifications,
+                overlaps,
+                losses,
+                quarantine,
+                foundation,
+                rollback_assessment,
+                epoch,
+                activation,
+                consumer_reader_hold,
+                rollback,
+                deletion_plan,
+            )
+        });
+        match binding {
+            Ok(binding) => Ok(LegacyRemovalGuardV3::mint(binding, self.store)),
+            Err(PreparedPublicationError::Store(_)) => {
+                Err(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)
+            }
+            Err(PreparedPublicationError::Prepare(error)) => Err(error),
+        }
+    }
+
+    #[allow(
+        dead_code,
+        reason = "the V2 pruning admission remains historical while V3 is the sole current path"
+    )]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the historical pruning admission accepts each independently owner-issued manifest"
+    )]
+    pub(in crate::domain) fn admit_legacy_physical_pruning_v2<'cut>(
+        &'cut mut self,
+        source_cases: &LegacySourceCaseManifestV3,
+        sightings: &Stage12SightingManifestV2,
+        classifications: &MigrationClassificationManifestV3,
+        overlaps: &DeclaredOverlapManifestV2,
         losses: &UnavailablePreexistingLossManifestV3,
         quarantine: &SealedQuarantineManifestV3,
         epoch: &LegacyQuarantineEpochV3,
@@ -1271,7 +1328,7 @@ impl<'store> AuthorityFacadeV1<'store> {
         deletion_plan: &InstallationLegacyDeletionPlanV2,
     ) -> Result<LegacyRemovalGuardV2<'cut>, LegacyRemovalGuardAdmissionErrorV2> {
         let binding = self.store.with_serialized_active_view(|view| {
-            validate_legacy_physical_pruning_admission(
+            validate_legacy_physical_pruning_admission_v2(
                 view,
                 source_cases,
                 sightings,
@@ -2953,9 +3010,212 @@ impl PreparedBootstrapRequestV1 {
 
 #[expect(
     clippy::too_many_arguments,
+    reason = "the V3 admission rechecks each independently owner-issued V4 removal fact"
+)]
+fn validate_legacy_physical_pruning_admission_v3(
+    view: &StorePublicationViewV1<'_>,
+    source_cases: &LegacySourceCaseManifestV3,
+    sightings: &Stage12SightingManifestV2,
+    classifications: &MigrationClassificationManifestV3,
+    overlaps: &DeclaredOverlapManifestV2,
+    losses: &UnavailablePreexistingLossManifestV4,
+    quarantine: &SealedQuarantineManifestV3,
+    foundation: &FoundationLegacyQuarantineClosureV2,
+    rollback_assessment: &LegacyRollbackAssessmentV4,
+    epoch: &LegacyQuarantineEpochV4,
+    activation: &Stage12ReplacementActivationV3,
+    consumer_reader_hold: &Stage12ConsumerReaderHoldClosureV3,
+    rollback: &Stage12RollbackRehearsalV3,
+    deletion_plan: &InstallationLegacyDeletionPlanV3,
+) -> Result<LegacyRemovalGuardBindingV3, LegacyRemovalGuardAdmissionErrorV3> {
+    if view.role() != StoreRoleV1::Installation {
+        return Err(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState);
+    }
+    let current_head = view
+        .active_head()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let current_generation = view
+        .active_generation()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let active_objects = view
+        .active_generation_objects()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let authority_root = select_current_authority_root(&current_generation, &active_objects)
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        authority_root,
+        &active_objects,
+    )
+    .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+
+    let source_case_id = source_cases.identity();
+    let sighting_id = sightings.identity();
+    let classification_id = classifications.identity();
+    let overlap_id = overlaps.identity();
+    let loss_id = losses.identity();
+    let quarantine_id = quarantine.identity();
+    let foundation_id = foundation.identity();
+    let rollback_assessment_id = rollback_assessment.identity();
+    let epoch_id = epoch.identity();
+    let activation_id = activation.identity();
+    let closure_id = consumer_reader_hold.identity();
+    let rollback_id = rollback.identity();
+    let deletion_plan_id = deletion_plan.identity();
+    let required_nonzero = [
+        source_case_id.as_bytes(),
+        sighting_id.as_bytes(),
+        classification_id.as_bytes(),
+        overlap_id.as_bytes(),
+        loss_id.as_bytes(),
+        quarantine_id.as_bytes(),
+        &foundation_id,
+        rollback_assessment_id.as_bytes(),
+        epoch_id.as_bytes(),
+        activation_id.as_bytes(),
+        closure_id.as_bytes(),
+        rollback_id.as_bytes(),
+        deletion_plan_id.as_bytes(),
+    ];
+    if required_nonzero.contains(&&[0; 32])
+        || epoch.source_case_manifest_id() != source_case_id
+        || epoch.sighting_manifest_id() != sighting_id
+        || epoch.classification_manifest_id() != classification_id
+        || epoch.overlap_manifest_id() != overlap_id
+        || epoch.loss_manifest_id() != loss_id
+        || epoch.quarantine_manifest_id() != quarantine_id
+        || epoch.foundation_closure_id().as_bytes() != &foundation_id
+        || epoch.persistence_receipt_id().as_bytes() != &foundation.persistence_receipt()
+        || epoch.rollback_plan_id() != rollback_assessment_id
+        || sightings.source_case_manifest_id() != source_case_id
+        || sightings.candidate_commit_id() != epoch.candidate_commit_id()
+        || sightings.candidate_tree_id() != epoch.candidate_tree_id()
+        || activation.release_id() != epoch.release_id()
+        || activation.legacy_quarantine_epoch_id() != epoch_id
+        || activation.sighting_manifest_id() != sighting_id
+        || activation.foundation_closure_id().as_bytes() != &foundation_id
+        || activation.rollback_assessment_id() != rollback_assessment_id
+        || rollback.release_id() != epoch.release_id()
+        || rollback.legacy_quarantine_epoch_id() != epoch_id
+        || rollback.foundation_closure_id().as_bytes() != &foundation_id
+        || rollback.rollback_assessment_id() != rollback_assessment_id
+        || deletion_plan.release_id() != epoch.release_id()
+        || deletion_plan.legacy_quarantine_epoch_id() != epoch_id
+        || deletion_plan.foundation_closure_id().as_bytes() != &foundation_id
+        || deletion_plan.rollback_assessment_id() != rollback_assessment_id
+        || deletion_plan.rollback_rehearsal_id() != rollback_id
+        || consumer_reader_hold.release_id() != epoch.release_id()
+        || consumer_reader_hold.source_case_manifest_id() != source_case_id
+        || consumer_reader_hold.sighting_manifest_id() != sighting_id
+        || consumer_reader_hold.classification_manifest_id() != classification_id
+        || consumer_reader_hold.overlap_manifest_id() != overlap_id
+        || consumer_reader_hold.loss_manifest_id() != loss_id
+        || consumer_reader_hold.quarantine_manifest_id() != quarantine_id
+        || consumer_reader_hold.foundation_closure_id().as_bytes() != &foundation_id
+        || consumer_reader_hold.rollback_assessment_id() != rollback_assessment_id
+        || consumer_reader_hold.legacy_quarantine_epoch_id() != epoch_id
+        || consumer_reader_hold.replacement_activation_id() != activation_id
+        || consumer_reader_hold.rollback_rehearsal_id() != rollback_id
+        || consumer_reader_hold.deletion_plan_id() != deletion_plan_id
+        || consumer_reader_hold
+            .physical_pruning_reader_zero_id()
+            .as_bytes()
+            == &[0; 32]
+        || consumer_reader_hold
+            .physical_pruning_hold_zero_id()
+            .as_bytes()
+            == &[0; 32]
+    {
+        return Err(LegacyRemovalGuardAdmissionErrorV3::OwnerFactsMismatch);
+    }
+
+    let context = current.facts.context();
+    let snapshot = current.facts.snapshot();
+    let live_trust_root = materialization_commitment(
+        b"maestro.authority.legacy-removal-trust-root.v3\0",
+        &[
+            context.context_id().as_bytes(),
+            &context.trust_root_revision().to_be_bytes(),
+        ],
+    );
+    if context.kind() != AuthorityContextKindV1::InstallationAuthorityContext
+        || context.store_generation() != current_generation.ordinal()
+        || snapshot.store_generation != current_generation.ordinal()
+        || context.authority_epoch() != snapshot.authority_epoch
+        || current.state.authority_epoch() != snapshot.authority_epoch
+        || epoch.revocation_revision() != snapshot.authority_epoch
+        || epoch.store_generation_id().as_bytes() != current_generation.id().as_bytes()
+        || epoch.store_head_id().as_bytes() != current_head.id().as_bytes()
+        || epoch.trust_root_id().as_bytes() != &live_trust_root
+        || epoch.fence_id().as_bytes() != current.state.carrier_fence().as_bytes()
+        || epoch.currentness_id().as_bytes() != current.state.carrier_currentness().as_bytes()
+    {
+        return Err(LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift);
+    }
+
+    let revocation_bytes = current
+        .facts
+        .revocations()
+        .canonical_bytes()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift)?;
+    let revocation_state = materialization_commitment(
+        b"maestro.authority.legacy-removal-revocation-state.v3\0",
+        &[&revocation_bytes],
+    );
+    let invocation = mint_legacy_removal_invocation_v3(
+        current_head.id().as_bytes(),
+        loss_id.as_bytes(),
+        &foundation_id,
+        rollback_assessment_id.as_bytes(),
+        epoch_id.as_bytes(),
+        activation_id.as_bytes(),
+        deletion_plan_id.as_bytes(),
+    )?;
+    Ok(LegacyRemovalGuardBindingV3::new(
+        *current_generation.domain().id().as_bytes(),
+        *epoch.release_id().as_bytes(),
+        *current_generation.id().as_bytes(),
+        *current_head.id().as_bytes(),
+        invocation,
+        *source_case_id.as_bytes(),
+        *sighting_id.as_bytes(),
+        *classification_id.as_bytes(),
+        *overlap_id.as_bytes(),
+        *loss_id.as_bytes(),
+        *quarantine_id.as_bytes(),
+        foundation_id,
+        *rollback_assessment_id.as_bytes(),
+        *epoch_id.as_bytes(),
+        *activation_id.as_bytes(),
+        *closure_id.as_bytes(),
+        *consumer_reader_hold
+            .physical_pruning_reader_zero_id()
+            .as_bytes(),
+        *consumer_reader_hold
+            .physical_pruning_hold_zero_id()
+            .as_bytes(),
+        *rollback_id.as_bytes(),
+        *deletion_plan_id.as_bytes(),
+        *current.snapshot_object.id().as_bytes(),
+        snapshot.authority_epoch,
+        live_trust_root,
+        *current.state.carrier_fence().as_bytes(),
+        *current.state.state_token().as_bytes(),
+        *current.state.carrier_currentness().as_bytes(),
+        epoch.revocation_revision(),
+        revocation_state,
+    ))
+}
+
+#[expect(
+    clippy::too_many_arguments,
     reason = "the admission rechecks each independently owner-issued removal fact"
 )]
-fn validate_legacy_physical_pruning_admission(
+fn validate_legacy_physical_pruning_admission_v2(
     view: &StorePublicationViewV1<'_>,
     source_cases: &LegacySourceCaseManifestV3,
     sightings: &Stage12SightingManifestV2,
@@ -3127,6 +3387,10 @@ fn validate_legacy_physical_pruning_admission(
     ))
 }
 
+#[allow(
+    dead_code,
+    reason = "the V2 currentness observer remains only for the historical V2 guard"
+)]
 pub(super) fn observe_legacy_removal_guard_currentness(
     view: &StorePublicationViewV1<'_>,
 ) -> Result<LegacyRemovalGuardCurrentnessV2, LegacyRemovalGuardAdmissionErrorV2> {
@@ -3195,6 +3459,74 @@ pub(super) fn observe_legacy_removal_guard_currentness(
     })
 }
 
+pub(super) fn observe_legacy_removal_guard_currentness_v3(
+    view: &StorePublicationViewV1<'_>,
+) -> Result<LegacyRemovalGuardCurrentnessV3, LegacyRemovalGuardAdmissionErrorV3> {
+    if view.role() != StoreRoleV1::Installation {
+        return Err(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState);
+    }
+    let current_head = view
+        .active_head()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let current_generation = view
+        .active_generation()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?
+        .ok_or(LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let active_objects = view
+        .active_generation_objects()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let authority_root = select_current_authority_root(&current_generation, &active_objects)
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvalidAuthorityState)?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        authority_root,
+        &active_objects,
+    )
+    .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift)?;
+    let context = current.facts.context();
+    let snapshot = current.facts.snapshot();
+    if context.kind() != AuthorityContextKindV1::InstallationAuthorityContext
+        || context.store_generation() != current_generation.ordinal()
+        || snapshot.store_generation != current_generation.ordinal()
+        || context.authority_epoch() != snapshot.authority_epoch
+        || current.state.authority_epoch() != snapshot.authority_epoch
+    {
+        return Err(LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift);
+    }
+    let trust_root = materialization_commitment(
+        b"maestro.authority.legacy-removal-trust-root.v3\0",
+        &[
+            context.context_id().as_bytes(),
+            &context.trust_root_revision().to_be_bytes(),
+        ],
+    );
+    let revocation_bytes = current
+        .facts
+        .revocations()
+        .canonical_bytes()
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::AuthorityCurrentnessDrift)?;
+    let revocation_state = materialization_commitment(
+        b"maestro.authority.legacy-removal-revocation-state.v3\0",
+        &[&revocation_bytes],
+    );
+    Ok(LegacyRemovalGuardCurrentnessV3 {
+        realm: *current_generation.domain().id().as_bytes(),
+        store_generation: *current_generation.id().as_bytes(),
+        store_head: *current_head.id().as_bytes(),
+        authority_snapshot: *current.snapshot_object.id().as_bytes(),
+        authority_epoch: snapshot.authority_epoch,
+        trust_root,
+        authority_fence: *current.state.carrier_fence().as_bytes(),
+        state_token: *current.state.state_token().as_bytes(),
+        authority_currentness: *current.state.carrier_currentness().as_bytes(),
+        revocation_revision: snapshot.authority_epoch,
+        revocation_state,
+    })
+}
+
 fn mint_legacy_removal_invocation(
     current_head: &[u8; 32],
     epoch: &[u8; 32],
@@ -3221,6 +3553,44 @@ fn mint_legacy_removal_invocation(
         entropy,
         sequence,
         current_head,
+        epoch,
+        activation,
+        deletion_plan,
+    )
+}
+
+fn mint_legacy_removal_invocation_v3(
+    current_head: &[u8; 32],
+    loss_manifest: &[u8; 32],
+    foundation_closure: &[u8; 32],
+    rollback_assessment: &[u8; 32],
+    epoch: &[u8; 32],
+    activation: &[u8; 32],
+    deletion_plan: &[u8; 32],
+) -> Result<LegacyRemovalInvocationBindingV3, LegacyRemovalGuardAdmissionErrorV3> {
+    static PROCESS_INCARNATION: OnceLock<[u8; 32]> = OnceLock::new();
+    static NEXT_INVOCATION: AtomicU64 = AtomicU64::new(1);
+
+    let candidate = protected_diagnostic_random_entropy(
+        b"maestro.authority.legacy-removal-process-incarnation.v3\0",
+    );
+    let process_incarnation = *PROCESS_INCARNATION.get_or_init(|| candidate);
+    let sequence = NEXT_INVOCATION
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .map_err(|_| LegacyRemovalGuardAdmissionErrorV3::InvocationUnavailable)?;
+    let entropy = protected_diagnostic_random_entropy(
+        b"maestro.authority.legacy-removal-invocation-entropy.v3\0",
+    );
+    LegacyRemovalInvocationBindingV3::mint(
+        process_incarnation,
+        entropy,
+        sequence,
+        current_head,
+        loss_manifest,
+        foundation_closure,
+        rollback_assessment,
         epoch,
         activation,
         deletion_plan,

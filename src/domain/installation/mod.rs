@@ -77,8 +77,19 @@ pub use cutover::{
 pub(crate) use resource_cutover::{
     AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1, AgentResourceReleaseOwnerFactsV1,
     AgentResourceTargetOwnerFactsV1, CommittedAgentResourceReleaseV1,
+    InstallationLegacyDeletionPlanV3, Stage12ConsumerReaderHoldClosureV3,
+    Stage12ReplacementActivationV3, Stage12RollbackRehearsalV3,
+};
+#[allow(
+    unused_imports,
+    reason = "the V2 Stage 12 owner facts remain domain-only for historical admission"
+)]
+pub(in crate::domain) use resource_cutover::{
     InstallationLegacyDeletionPlanV2, Stage12ConsumerReaderHoldClosureV2,
     Stage12ReplacementActivationV2, Stage12RollbackRehearsalV2,
+};
+pub(in crate::domain) use resource_cutover::{
+    InstallationPhysicalPruningContinuationV3, InstallationPhysicalPruningEffectPortV3,
 };
 #[allow(
     unused_imports,
@@ -101,22 +112,26 @@ pub(crate) fn acquire_installation_declared_root_universe_v1(
     )
 }
 
-pub(crate) struct Stage12ProductPruningCoordinatorV2<'coordinator, 'store> {
+pub(crate) struct Stage12ProductPruningCoordinatorV3<'coordinator, 'store> {
     authority: &'coordinator mut crate::domain::authority::AuthorityFacadeV1<'store>,
     source_cases: &'coordinator crate::domain::migration::runtime::LegacySourceCaseManifestV3,
     sightings: &'coordinator crate::domain::migration::runtime::Stage12SightingManifestV2,
     classifications:
         &'coordinator crate::domain::migration::runtime::MigrationClassificationManifestV3,
     overlaps: &'coordinator crate::domain::migration::runtime::DeclaredOverlapManifestV2,
-    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV3,
+    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV4,
     quarantine: &'coordinator crate::domain::migration::runtime::SealedQuarantineManifestV3,
-    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV3,
-    activation: &'coordinator Stage12ReplacementActivationV2,
-    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV2,
-    rollback: &'coordinator Stage12RollbackRehearsalV2,
-    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV2,
-    continuation: resource_cutover::InstallationPhysicalPruningContinuationV2,
-    effects: &'coordinator mut dyn resource_cutover::InstallationPhysicalPruningEffectPortV2,
+    foundation:
+        &'coordinator crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2,
+    rollback_assessment:
+        &'coordinator crate::domain::migration::runtime::LegacyRollbackAssessmentV4,
+    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV4,
+    activation: &'coordinator Stage12ReplacementActivationV3,
+    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV3,
+    rollback: &'coordinator Stage12RollbackRehearsalV3,
+    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV3,
+    continuation: InstallationPhysicalPruningContinuationV3,
+    effects: &'coordinator mut dyn InstallationPhysicalPruningEffectPortV3,
 }
 
 #[expect(
@@ -130,17 +145,20 @@ pub(in crate::domain) fn prepare_stage12_product_pruning_coordinator<'coordinato
     classifications:
         &'coordinator crate::domain::migration::runtime::MigrationClassificationManifestV3,
     overlaps: &'coordinator crate::domain::migration::runtime::DeclaredOverlapManifestV2,
-    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV3,
+    losses: &'coordinator crate::domain::migration::runtime::UnavailablePreexistingLossManifestV4,
     quarantine: &'coordinator crate::domain::migration::runtime::SealedQuarantineManifestV3,
-    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV3,
-    activation: &'coordinator Stage12ReplacementActivationV2,
-    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV2,
-    rollback: &'coordinator Stage12RollbackRehearsalV2,
-    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV2,
-    continuation: resource_cutover::InstallationPhysicalPruningContinuationV2,
-    effects: &'coordinator mut dyn resource_cutover::InstallationPhysicalPruningEffectPortV2,
-) -> Stage12ProductPruningCoordinatorV2<'coordinator, 'store> {
-    Stage12ProductPruningCoordinatorV2 {
+    foundation: &'coordinator crate::foundation::core::legacy_quarantine::FoundationLegacyQuarantineClosureV2,
+    rollback_assessment:
+        &'coordinator crate::domain::migration::runtime::LegacyRollbackAssessmentV4,
+    epoch: &'coordinator crate::domain::migration::runtime::LegacyQuarantineEpochV4,
+    activation: &'coordinator Stage12ReplacementActivationV3,
+    consumer_reader_hold: Stage12ConsumerReaderHoldClosureV3,
+    rollback: &'coordinator Stage12RollbackRehearsalV3,
+    deletion_plan: &'coordinator InstallationLegacyDeletionPlanV3,
+    continuation: InstallationPhysicalPruningContinuationV3,
+    effects: &'coordinator mut dyn InstallationPhysicalPruningEffectPortV3,
+) -> Stage12ProductPruningCoordinatorV3<'coordinator, 'store> {
+    Stage12ProductPruningCoordinatorV3 {
         authority,
         source_cases,
         sightings,
@@ -148,6 +166,8 @@ pub(in crate::domain) fn prepare_stage12_product_pruning_coordinator<'coordinato
         overlaps,
         losses,
         quarantine,
+        foundation,
+        rollback_assessment,
         epoch,
         activation,
         consumer_reader_hold,
@@ -159,7 +179,7 @@ pub(in crate::domain) fn prepare_stage12_product_pruning_coordinator<'coordinato
 }
 
 pub(crate) fn coordinate_authority_admitted_stage12_pruning(
-    coordinator: Stage12ProductPruningCoordinatorV2<'_, '_>,
+    coordinator: Stage12ProductPruningCoordinatorV3<'_, '_>,
 ) -> Result<(), AgentResourceCutoverErrorV1> {
     let guard = coordinator
         .authority
@@ -170,6 +190,8 @@ pub(crate) fn coordinate_authority_admitted_stage12_pruning(
             coordinator.overlaps,
             coordinator.losses,
             coordinator.quarantine,
+            coordinator.foundation,
+            coordinator.rollback_assessment,
             coordinator.epoch,
             coordinator.activation,
             &coordinator.consumer_reader_hold,
