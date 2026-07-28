@@ -7,9 +7,8 @@ use crate::domain::persistence::{
     StoreRoleV1, StoreV1,
     legacy_source_history::{
         LegacySourceHistorySelectorV1, StoreLegacySourceCurrentViewV1,
-        StoreLegacySourceHistoryContextV1,
-        StoreLegacySourceHistoryErrorV1, StoreLegacySourceHistoryProviderV1,
-        StoreLegacySourceHistorySnapshotV1,
+        StoreLegacySourceHistoryContextV1, StoreLegacySourceHistoryErrorV1,
+        StoreLegacySourceHistoryProviderV1, StoreLegacySourceHistorySnapshotV1,
     },
 };
 use crate::foundation::core::legacy_loss_evidence::{
@@ -96,12 +95,10 @@ impl OwnerUnavailablePreexistingLossEvidenceIssuerPortV1
         OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
         FoundationLegacyLossEvidenceErrorV1,
     > {
-        let currentness = self.current_view.bind_foundation_issuance(
-            &binding,
-            LegacyQuarantineOwnerDomainV3::Repository,
-        )?;
-        self
-            .provider
+        let currentness = self
+            .current_view
+            .bind_foundation_issuance(&binding, LegacyQuarantineOwnerDomainV3::Repository)?;
+        self.provider
             .issue_bound_absent_sources(self.store, currentness, &self.absent_sources)
             .map_err(|_| FoundationLegacyLossEvidenceErrorV1::InvalidEvidenceSet)
     }

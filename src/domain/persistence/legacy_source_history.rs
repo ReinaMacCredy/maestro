@@ -21,8 +21,8 @@ use crate::foundation::core::legacy_loss_evidence::{
     FoundationLegacyLossEvidenceErrorV1, FoundationOwnerEvidenceIssuanceBindingV1,
     LegacySourceCurrentBindingV1, LegacySourceHistoricalBindingV1, LegacySourceHistoryKindV1,
     OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
-    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
-    OwnerUnavailablePreexistingLossWitnessV1, owner_loss_evidence_issuer_sealed,
+    OwnerUnavailablePreexistingLossEvidenceIssuerPortV1, OwnerUnavailablePreexistingLossWitnessV1,
+    owner_loss_evidence_issuer_sealed,
 };
 use crate::foundation::core::legacy_quarantine::LegacyQuarantineOwnerDomainV3;
 use crate::foundation::core::secure_fs::DescriptorCensusObjectKindV1;
@@ -669,10 +669,9 @@ impl OwnerUnavailablePreexistingLossEvidenceIssuerPortV1
         OwnerIssuedUnavailablePreexistingLossEvidenceSetV1,
         FoundationLegacyLossEvidenceErrorV1,
     > {
-        let currentness = self.current_view.bind_foundation_issuance(
-            &binding,
-            LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
-        )?;
+        let currentness = self
+            .current_view
+            .bind_foundation_issuance(&binding, LegacyQuarantineOwnerDomainV3::ProtectedPrimary)?;
         self.journal
             .issue_bound_absent_sources(self.boundary, currentness, &self.absent_sources)
             .map_err(|_| FoundationLegacyLossEvidenceErrorV1::InvalidEvidenceSet)
