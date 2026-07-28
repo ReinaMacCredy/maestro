@@ -1149,6 +1149,63 @@ impl UnavailablePreexistingLossV4 {
         self.source_case_id
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_only_audit_fixture() -> Self {
+        let digest = |label: &[u8]| {
+            MigrationDigestV1::digest_bytes(label).expect("non-zero test audit digest")
+        };
+        let source_case_id = digest(b"audit-source");
+        let owner_snapshot_id = digest(b"audit-snapshot");
+        let issuer_id = digest(b"audit-issuer");
+        let historical_tuple_id = digest(b"audit-history");
+        let owner_current_tuple_id = digest(b"audit-current-tuple");
+        let source_provenance_id = digest(b"audit-provenance");
+        let owner_admission_id = digest(b"audit-admission");
+        let owner_currentness_id = digest(b"audit-currentness");
+        let foundation_loss_receipt_id = digest(b"audit-foundation-receipt");
+        let validation_invocation_id = digest(b"audit-validation");
+        let pass_a_absence_id = digest(b"audit-pass-a");
+        let pass_b_absence_id = digest(b"audit-pass-b");
+        let identity = MigrationDigestV1::identify(
+            b"maestro.migration.unavailable-preexisting-loss.v4\0",
+            &CborValue::Array(
+                [
+                    source_case_id,
+                    owner_snapshot_id,
+                    issuer_id,
+                    historical_tuple_id,
+                    owner_current_tuple_id,
+                    source_provenance_id,
+                    owner_admission_id,
+                    owner_currentness_id,
+                    foundation_loss_receipt_id,
+                    validation_invocation_id,
+                    pass_a_absence_id,
+                    pass_b_absence_id,
+                ]
+                .into_iter()
+                .map(MigrationDigestV1::canonical_value)
+                .collect(),
+            ),
+        )
+        .expect("test audit identity");
+        Self {
+            identity,
+            source_case_id,
+            owner_snapshot_id,
+            issuer_id,
+            historical_tuple_id,
+            owner_current_tuple_id,
+            source_provenance_id,
+            owner_admission_id,
+            owner_currentness_id,
+            foundation_loss_receipt_id,
+            validation_invocation_id,
+            pass_a_absence_id,
+            pass_b_absence_id,
+        }
+    }
+
     pub(crate) fn audit_currentness(&self) -> UnavailablePreexistingLossAuditCurrentnessV4 {
         UnavailablePreexistingLossAuditCurrentnessV4 {
             source_case_id: self.source_case_id,
@@ -1328,6 +1385,22 @@ impl UnavailablePreexistingLossManifestV4 {
 
     pub fn rows(&self) -> &[UnavailablePreexistingLossV4] {
         &self.rows
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_only_audit_fixture() -> Self {
+        let loss = UnavailablePreexistingLossV4::test_only_audit_fixture();
+        Self {
+            identity: MigrationDigestV1::digest_bytes(b"audit-manifest")
+                .expect("test audit manifest identity"),
+            source_case_manifest_id: MigrationDigestV1::digest_bytes(b"audit-source-manifest")
+                .expect("test source manifest identity"),
+            classification_manifest_id: MigrationDigestV1::digest_bytes(
+                b"audit-classification-manifest",
+            )
+            .expect("test classification manifest identity"),
+            rows: vec![loss],
+        }
     }
 }
 

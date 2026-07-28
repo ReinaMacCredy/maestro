@@ -246,7 +246,8 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
         "create_audit_if_absent",
         "read_audit",
         "persist_unavailable_preexisting_loss_audits_v4",
-        "LossAuditPersistenceMismatch",
+        "LossAuditRollbackFailed",
+        "audit_failure_after_rollback",
     ] {
         assert!(
             operation.contains(required),
@@ -264,4 +265,45 @@ fn stage11_v4_loss_audit_has_canonical_reload_currentness_and_persistence_port()
             "loss audit persistence gained owner/bearer authority: {forbidden}"
         );
     }
+
+    let execute = operation
+        .split("pub(crate) fn execute_offline_live_set_v4")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) struct Stage11LiveSetContinuationV4")
+                .next()
+        })
+        .expect("V4 execution gate");
+    for required in [
+        "A: UnavailablePreexistingLossAuditPersistencePortV1",
+        "persistence: &mut A",
+        ".finish(persistence)",
+    ] {
+        assert!(
+            execute.contains(required),
+            "execute path does not require audit persistence: {required}"
+        );
+    }
+
+    let finish = operation
+        .split("pub(crate) fn finish<A>(")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) enum Stage11PhysicalClosureV4")
+                .next()
+        })
+        .expect("V4 finality audit gate");
+    let persist = finish
+        .find("persist_unavailable_preexisting_loss_audits_v4")
+        .expect("persist loss audits");
+    let rollback = finish
+        .find("self.physical.rollback()")
+        .expect("rollback on audit failure");
+    let physical_finish = finish
+        .find(".physical\n            .finish")
+        .expect("physical finality");
+    assert!(
+        persist < rollback && rollback < physical_finish,
+        "audit persistence and rollback must gate physical finality"
+    );
 }

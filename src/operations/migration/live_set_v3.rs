@@ -439,7 +439,7 @@ impl Stage11PhysicalClosureV3 {
     clippy::too_many_arguments,
     reason = "V4 consumes both nominal owner universes and all three complete evidence sets"
 )]
-pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, F>(
+pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, A, F>(
     repository: R,
     installation: I,
     protected_primary: P,
@@ -451,6 +451,7 @@ pub(crate) fn execute_offline_live_set_v4<R, I, RE, IE, PE, P, Q, F>(
     invocation: [u8; 32],
     custody_lease_id: MigrationDigestV1,
     expected_old_id: MigrationDigestV1,
+    persistence: &mut A,
     classify: F,
 ) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4>
 where
@@ -461,6 +462,7 @@ where
     PE: OwnerUnavailablePreexistingLossEvidenceIssuerPortV1,
     P: ProtectedPrimaryBoundaryPortV1,
     Q: QuarantineCustodyPortV1,
+    A: UnavailablePreexistingLossAuditPersistencePortV1,
     F: FnOnce(
         &LegacySourceCaseManifestV3,
     ) -> Result<MigrationClassificationManifestV3, Stage11LiveSetOperationErrorV4>,
@@ -478,7 +480,7 @@ where
     )?;
     let classifications = classify(live.source_cases())?;
     live.copy_present_sources(classifications, custody_lease_id, expected_old_id)?
-        .finish()
+        .finish(persistence)
 }
 
 pub(crate) struct Stage11LiveSetContinuationV4<P, Q> {
@@ -694,13 +696,26 @@ where
         &self.losses
     }
 
-    pub(crate) fn finish(self) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4> {
+    pub(crate) fn finish<A>(
+        self,
+        persistence: &mut A,
+    ) -> Result<Stage11PhysicalClosureV4, Stage11LiveSetOperationErrorV4>
+    where
+        A: UnavailablePreexistingLossAuditPersistencePortV1,
+    {
         let rollback = LegacyRollbackAssessmentV4::assess(
             &self.source_cases,
             &self.classifications,
             &self.losses,
             &self.quarantine,
         )?;
+        if let Err(audit_error) =
+            persist_unavailable_preexisting_loss_audits_v4(&self.losses, persistence)
+        {
+            return Err(audit_failure_after_rollback(audit_error, || {
+                self.physical.rollback()
+            }));
+        }
         match self
             .physical
             .finish(self.quarantine.identity().into_bytes())?
@@ -824,14 +839,13 @@ impl UnavailablePreexistingLossAuditPersistenceReceiptV1 {
     }
 }
 
-#[expect(
-    dead_code,
-    reason = "Persistence must supply the owner-neutral adapter before Stage-11 V4 orchestration can wire durable loss audit storage"
-)]
 pub(crate) fn persist_unavailable_preexisting_loss_audits_v4<P>(
     losses: &UnavailablePreexistingLossManifestV4,
     persistence: &mut P,
-) -> Result<Vec<UnavailablePreexistingLossAuditPersistenceReceiptV1>, Stage11LiveSetOperationErrorV4>
+) -> Result<
+    Vec<UnavailablePreexistingLossAuditPersistenceReceiptV1>,
+    UnavailablePreexistingLossAuditGateErrorV1,
+>
 where
     P: UnavailablePreexistingLossAuditPersistencePortV1,
 {
@@ -846,7 +860,7 @@ where
             let decoded =
                 UnavailablePreexistingLossV4::decode_canonical_audit(&reloaded, &currentness)?;
             if decoded != *loss {
-                return Err(Stage11LiveSetOperationErrorV4::LossAuditPersistenceMismatch);
+                return Err(UnavailablePreexistingLossAuditGateErrorV1::PersistenceMismatch);
             }
             Ok(UnavailablePreexistingLossAuditPersistenceReceiptV1 {
                 loss_id: loss.identity(),
@@ -856,12 +870,40 @@ where
         .collect()
 }
 
+fn audit_failure_after_rollback<R>(
+    audit_error: UnavailablePreexistingLossAuditGateErrorV1,
+    rollback: R,
+) -> Stage11LiveSetOperationErrorV4
+where
+    R: FnOnce() -> Result<[u8; 32], FoundationLegacyQuarantineErrorV1>,
+{
+    match rollback() {
+        Ok(_) => Stage11LiveSetOperationErrorV4::LossAudit(audit_error),
+        Err(rollback_error) => Stage11LiveSetOperationErrorV4::LossAuditRollbackFailed {
+            audit: Box::new(audit_error),
+            rollback: Box::new(rollback_error),
+        },
+    }
+}
+
 #[derive(Debug, Error)]
 pub(crate) enum UnavailablePreexistingLossAuditPersistenceErrorV1 {
     #[error("V4 loss audit persistence rejected create-if-absent")]
     CreateRejected,
     #[error("V4 loss audit persistence could not reload the exact durable bytes")]
     ReadFailed,
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum UnavailablePreexistingLossAuditGateErrorV1 {
+    #[error("V4 durable loss audit reload differed from the persisted loss")]
+    PersistenceMismatch,
+    #[error(transparent)]
+    Persistence(#[from] UnavailablePreexistingLossAuditPersistenceErrorV1),
+    #[error(transparent)]
+    LiveSet(#[from] LiveSetV3Error),
+    #[error(transparent)]
+    Identity(#[from] MigrationIdentityErrorV1),
 }
 
 #[derive(Debug, Error)]
@@ -876,10 +918,16 @@ pub(crate) enum Stage11LiveSetOperationErrorV4 {
     MissingLossReceipt,
     #[error("Stage-11 V4 present source carried a loss receipt")]
     UnexpectedLossReceipt,
-    #[error("Stage-11 V4 durable loss audit reload differed from the persisted loss")]
-    LossAuditPersistenceMismatch,
     #[error(transparent)]
-    LossAuditPersistence(#[from] UnavailablePreexistingLossAuditPersistenceErrorV1),
+    LossAudit(#[from] UnavailablePreexistingLossAuditGateErrorV1),
+    #[error(
+        "Stage-11 V4 loss-audit persistence failed ({audit}) and physical rollback also failed ({rollback})"
+    )]
+    LossAuditRollbackFailed {
+        #[source]
+        audit: Box<UnavailablePreexistingLossAuditGateErrorV1>,
+        rollback: Box<FoundationLegacyQuarantineErrorV1>,
+    },
     #[error(transparent)]
     Foundation(#[from] FoundationLegacyQuarantineErrorV1),
     #[error(transparent)]
@@ -908,4 +956,138 @@ pub(crate) enum Stage11LiveSetOperationErrorV3 {
     RepositoryAdmission(#[from] crate::domain::repository::RepositoryRootAdmissionErrorV3),
     #[error(transparent)]
     InstallationAdmission(#[from] crate::domain::installation::InstallationCensusErrorV1),
+}
+
+#[cfg(test)]
+mod audit_gate_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct MemoryAuditPersistenceV1 {
+        rows: BTreeMap<[u8; 32], Vec<u8>>,
+        fail_next_read: bool,
+        tamper_reads: bool,
+    }
+
+    impl UnavailablePreexistingLossAuditPersistencePortV1 for MemoryAuditPersistenceV1 {
+        fn create_audit_if_absent(
+            &mut self,
+            audit_id: [u8; 32],
+            canonical_bytes: &[u8],
+        ) -> Result<(), UnavailablePreexistingLossAuditPersistenceErrorV1> {
+            match self.rows.get(&audit_id) {
+                Some(existing) if existing == canonical_bytes => Ok(()),
+                Some(_) => Err(UnavailablePreexistingLossAuditPersistenceErrorV1::CreateRejected),
+                None => {
+                    self.rows.insert(audit_id, canonical_bytes.to_vec());
+                    Ok(())
+                }
+            }
+        }
+
+        fn read_audit(
+            &mut self,
+            audit_id: [u8; 32],
+        ) -> Result<Vec<u8>, UnavailablePreexistingLossAuditPersistenceErrorV1> {
+            if std::mem::take(&mut self.fail_next_read) {
+                return Err(UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed);
+            }
+            let mut bytes = self
+                .rows
+                .get(&audit_id)
+                .cloned()
+                .ok_or(UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed)?;
+            if self.tamper_reads {
+                let last = bytes
+                    .last_mut()
+                    .ok_or(UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed)?;
+                *last ^= 1;
+            }
+            Ok(bytes)
+        }
+    }
+
+    #[test]
+    fn loss_audit_crash_after_create_replays_without_replacement() {
+        let losses = UnavailablePreexistingLossManifestV4::test_only_audit_fixture();
+        let mut persistence = MemoryAuditPersistenceV1 {
+            fail_next_read: true,
+            ..MemoryAuditPersistenceV1::default()
+        };
+
+        assert!(matches!(
+            persist_unavailable_preexisting_loss_audits_v4(&losses, &mut persistence),
+            Err(UnavailablePreexistingLossAuditGateErrorV1::Persistence(
+                UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed
+            ))
+        ));
+        assert_eq!(persistence.rows.len(), 1);
+
+        let replay = persist_unavailable_preexisting_loss_audits_v4(&losses, &mut persistence)
+            .expect("replay exact audit");
+        let repeated = persist_unavailable_preexisting_loss_audits_v4(&losses, &mut persistence)
+            .expect("repeat exact audit");
+        assert_eq!(replay, repeated);
+        assert_eq!(persistence.rows.len(), 1);
+    }
+
+    #[test]
+    fn loss_audit_tamper_fails_before_finality() {
+        let losses = UnavailablePreexistingLossManifestV4::test_only_audit_fixture();
+        let mut persistence = MemoryAuditPersistenceV1::default();
+        persist_unavailable_preexisting_loss_audits_v4(&losses, &mut persistence)
+            .expect("persist exact audit");
+        persistence.tamper_reads = true;
+
+        assert!(matches!(
+            persist_unavailable_preexisting_loss_audits_v4(&losses, &mut persistence),
+            Err(UnavailablePreexistingLossAuditGateErrorV1::LiveSet(
+                LiveSetV3Error::InvalidLossAudit
+            )) | Err(UnavailablePreexistingLossAuditGateErrorV1::LiveSet(
+                LiveSetV3Error::CanonicalCbor(_)
+            )) | Err(UnavailablePreexistingLossAuditGateErrorV1::LiveSet(
+                LiveSetV3Error::Identity(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn audit_failure_preserves_original_error_and_reports_rollback_failure() {
+        let original = audit_failure_after_rollback(
+            UnavailablePreexistingLossAuditGateErrorV1::Persistence(
+                UnavailablePreexistingLossAuditPersistenceErrorV1::CreateRejected,
+            ),
+            || Ok([7; 32]),
+        );
+        assert!(matches!(
+            original,
+            Stage11LiveSetOperationErrorV4::LossAudit(
+                UnavailablePreexistingLossAuditGateErrorV1::Persistence(
+                    UnavailablePreexistingLossAuditPersistenceErrorV1::CreateRejected
+                )
+            )
+        ));
+
+        let rollback_failed = audit_failure_after_rollback(
+            UnavailablePreexistingLossAuditGateErrorV1::Persistence(
+                UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed,
+            ),
+            || Err(FoundationLegacyQuarantineErrorV1::InvalidInvocation),
+        );
+        assert!(matches!(
+            rollback_failed,
+            Stage11LiveSetOperationErrorV4::LossAuditRollbackFailed {
+                audit,
+                rollback,
+            } if matches!(
+                *audit,
+                UnavailablePreexistingLossAuditGateErrorV1::Persistence(
+                    UnavailablePreexistingLossAuditPersistenceErrorV1::ReadFailed
+                )
+            ) && matches!(
+                *rollback,
+                FoundationLegacyQuarantineErrorV1::InvalidInvocation
+            )
+        ));
+    }
 }

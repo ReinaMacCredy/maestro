@@ -2607,11 +2607,11 @@ fn migration_digest_value(digest: [u8; 32]) -> CborValue {
 }
 
 fn migration_identity(
-    domain: &[u8],
+    identity_namespace: &[u8],
     value: &CborValue,
 ) -> Result<[u8; 32], FoundationLegacyQuarantineErrorV1> {
     let mut hasher = Sha256::new();
-    hasher.update(domain);
+    hasher.update(identity_namespace);
     hasher.update(deterministic_cbor::encode(value)?);
     Ok(hasher.finalize().into())
 }
