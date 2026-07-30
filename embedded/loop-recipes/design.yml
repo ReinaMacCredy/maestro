@@ -1,4 +1,5 @@
-schema_version: maestro.recipe.v2
+schema_version: maestro.recipe.v3
+profile: maestro.standard-six-phase.v1
 id: design
 kind:
   category: lifecycle
@@ -6,36 +7,18 @@ kind:
 title: Design loop
 summary: Turn an unsettled request into a locked Maestro feature contract through real context, one fork at a time.
 progress_tasks:
-  - id: anchor-scope
+  anchor-scope:
     title: Anchor design scope and authority
-    phase: perceive
-    required: true
-    done_check: scope, authority, and hard stops are known
-  - id: choose-next
+  choose-next:
     title: Choose next design move
-    phase: choose
-    required: true
-    done_check: next move is selected from recipe rules
-  - id: execute-move
+  execute-move:
     title: Execute bounded design move
-    phase: act
-    required: true
-    done_check: bounded recipe action is complete or blocked
-  - id: observe-evidence
+  observe-evidence:
     title: Observe design evidence
-    phase: observe
-    required: true
-    done_check: evidence, result, or blocker is recorded
-  - id: record-learning
+  record-learning:
     title: Record reusable design learning when needed
-    phase: learn
-    required: true
-    done_check: durable learning is recorded or explicitly unnecessary
-  - id: return-next-gate
+  return-next-gate:
     title: Return next design gate
-    phase: continue
-    required: true
-    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - read current feature, decisions, artifacts, and precedent
   - write only design decisions, notes, and feature contract fields before build approval

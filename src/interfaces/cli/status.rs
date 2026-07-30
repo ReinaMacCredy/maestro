@@ -1207,6 +1207,28 @@ fn choose_next_task_action(
     Ok(None)
 }
 
+pub(crate) fn loop_task_action_for_id(
+    paths: &MaestroPaths,
+    entries: &[task::TaskEntry],
+    selected_id: &str,
+) -> Result<Option<LoopTaskAction>> {
+    let tasks = entries
+        .iter()
+        .map(|entry| entry.task.clone())
+        .collect::<Vec<_>>();
+    let Some(selected) = tasks
+        .iter()
+        .find(|task| task.id == selected_id && task.state.is_live())
+    else {
+        return Ok(None);
+    };
+    let action = task_action(paths, selected, &tasks)?.or_else(|| {
+        (!task::remaining_start_blockers_from_records(selected, &tasks).is_empty())
+            .then(|| blocked_action(selected))
+    });
+    Ok(action.map(LoopTaskAction::from))
+}
+
 fn task_action(
     paths: &MaestroPaths,
     task: &TaskRecord,
@@ -2054,6 +2076,33 @@ struct NextAction {
     requires_input: bool,
     reason: String,
     inspect: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct LoopTaskAction {
+    pub(crate) kind: String,
+    pub(crate) display: String,
+    pub(crate) argv: Option<Vec<String>>,
+    pub(crate) argv_template: Option<Vec<String>>,
+    pub(crate) required_input: Option<String>,
+}
+
+impl From<NextAction> for LoopTaskAction {
+    fn from(action: NextAction) -> Self {
+        let CommandJson {
+            display,
+            argv,
+            argv_template,
+            requires_input,
+        } = action.command;
+        Self {
+            kind: action.kind,
+            display,
+            argv,
+            argv_template,
+            required_input: requires_input.into_iter().next().map(|input| input.name),
+        }
+    }
 }
 
 impl NextAction {

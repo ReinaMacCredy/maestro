@@ -800,13 +800,16 @@ pub enum LoopCommand {
         /// Recipe name (e.g. feature-fanout); run `maestro loop` for the list.
         #[arg(value_name = "NAME")]
         name: String,
-        /// Print one compact execution packet instead of the full recipe.
+        /// Print the compact recipe card (accepted for explicitness; this is the default).
         #[arg(long)]
         compact: bool,
-        /// Select the compact packet phase; defaults to perceive for show.
+        /// Print the complete resolved recipe contract.
+        #[arg(long, conflicts_with = "compact")]
+        full: bool,
+        /// Select a legacy compact packet phase. Not valid for the bounded recipe card.
         #[arg(long, value_name = "PHASE")]
         phase: Option<String>,
-        /// Print compact packet JSON.
+        /// Print JSON for the selected compact or full view.
         #[arg(long)]
         json: bool,
     },
@@ -838,9 +841,12 @@ pub struct LoopNextArgs {
     /// Print the receipt-backed chain read model for the next route.
     #[arg(long)]
     pub chain: bool,
-    /// Print a compact execution packet for the recommended recipe.
+    /// Print the compact action card (accepted for explicitness; this is the text default).
     #[arg(long)]
     pub compact: bool,
+    /// Print the complete router report.
+    #[arg(long, conflicts_with = "compact")]
+    pub full: bool,
     /// Override the compact packet phase selected from current status.
     #[arg(long, value_name = "PHASE")]
     pub phase: Option<String>,

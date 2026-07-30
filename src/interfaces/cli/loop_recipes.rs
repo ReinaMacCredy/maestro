@@ -22,6 +22,10 @@ use crate::operations::memory::{
 };
 
 const LOOP_OUTCOME_SCHEMA: &str = "maestro.loop_outcome.v1";
+const LOOP_RECIPE_CARD_SCHEMA: &str = "maestro.loop_recipe_card.v1";
+const LOOP_ACTION_CARD_SCHEMA: &str = "maestro.loop_action_card.v1";
+const LOOP_ACTION_CARD_MAX_BYTES: usize = 512;
+const LOOP_ACTION_CARD_MAX_TEXT_BYTES: usize = 400;
 const LOOP_READINESS_SCHEMA: &str = "maestro.loop_readiness.v1";
 const LOOP_TRACE_SCHEMA: &str = "maestro.loop_trace.v1";
 const LOOP_TRACE_RECENT_LIMIT: usize = 5;
@@ -34,6 +38,129 @@ const DEFAULT_HARD_STOPS: &[&str] = &[
     "platform/tool approval failure",
     "hand-editing card.yaml or guarded sidecars",
 ];
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopRecipeCard {
+    schema: &'static str,
+    recipe: String,
+    kind: String,
+    enter: &'static str,
+    full: String,
+}
+
+impl LoopRecipeCard {
+    fn render(&self) -> String {
+        format!(
+            "{} · {}\nenter: {}\nfull: {}\n",
+            self.recipe, self.kind, self.enter, self.full
+        )
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopActionCard {
+    schema: &'static str,
+    status: String,
+    recipe: String,
+    phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task: Option<LoopActionTask>,
+    action: LoopCardAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal: Option<LoopCardSignal>,
+    #[serde(skip_serializing_if = "is_zero")]
+    omitted: usize,
+    full: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopActionTask {
+    id: String,
+    state: String,
+    #[serde(skip_serializing_if = "is_false")]
+    progress: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopCardAction {
+    kind: String,
+    #[serde(skip_serializing)]
+    display: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    argv: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    argv_template: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopCardSignal {
+    kind: &'static str,
+    text: String,
+}
+
+impl LoopActionCard {
+    fn render(&self) -> String {
+        let mut lines = Vec::with_capacity(5);
+        if let Some(task) = &self.task {
+            lines.push(format!(
+                "{}/{} · {} [{}]",
+                self.recipe, self.phase, task.id, task.state
+            ));
+        } else {
+            lines.push(format!("{}/{} · {}", self.recipe, self.phase, self.status));
+        }
+        lines.push(format!("do: {}", self.action.display));
+        if let Some(signal) = &self.signal {
+            let label = if signal.kind == "need" {
+                "needs"
+            } else {
+                signal.kind
+            };
+            lines.push(format!("{label}: {}", signal.text));
+        }
+        if self.omitted > 0 {
+            lines.push(format!("omitted: {} lower-priority signals", self.omitted));
+        }
+        lines.push(format!("full: {}", self.full));
+        format!("{}\n", lines.join("\n"))
+    }
+
+    fn overflow() -> Self {
+        Self {
+            schema: LOOP_ACTION_CARD_SCHEMA,
+            status: "blocked".to_string(),
+            recipe: "inspect".to_string(),
+            phase: "perceive".to_string(),
+            task: None,
+            action: LoopCardAction::runnable(
+                "inspect_overflow",
+                ["maestro", "loop", "next", "--json"],
+            ),
+            signal: Some(LoopCardSignal {
+                kind: "stop",
+                text: "bounded card overflow; inspect the complete router report".to_string(),
+            }),
+            omitted: 0,
+            full: "maestro loop next --full",
+        }
+    }
+}
+
+impl LoopCardAction {
+    fn runnable<const N: usize>(kind: &str, argv: [&str; N]) -> Self {
+        let argv = argv.into_iter().map(str::to_string).collect::<Vec<_>>();
+        Self {
+            kind: kind.to_string(),
+            display: argv.join(" "),
+            argv: Some(argv),
+            argv_template: None,
+        }
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
+}
 const FOLLOW_UP_VERBS: &[&str] = &[
     "maestro card show <id> --json",
     "maestro status --json",
@@ -147,32 +274,34 @@ pub fn run(args: LoopArgs) -> Result<()> {
         }
         Some(LoopCommand::Show {
             name,
-            compact,
+            compact: _,
+            full,
             phase,
             json,
         }) => {
-            if compact {
-                let packet = loop_recipes::compact_packet_with_custom_dir(
-                    &name,
-                    custom_dir.as_deref(),
-                    phase.as_deref(),
-                )?;
+            if phase.is_some() {
+                bail!("--phase is not supported by the bounded recipe card; use --full");
+            }
+            if full {
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&packet)?);
+                    if loop_recipes::pattern_pack(&name).is_some() {
+                        bail!("--full --json is available for resolved recipes, not pattern packs");
+                    }
+                    let contract = loop_chain_contract(&name, custom_dir.as_deref())?;
+                    println!("{}", serde_json::to_string_pretty(&contract)?);
                 } else {
-                    print!("{}", loop_recipes::render_compact_packet(&packet));
+                    print!(
+                        "{}",
+                        loop_recipes::show_with_custom_dir(&name, custom_dir.as_deref())?
+                    );
                 }
             } else {
-                if phase.is_some() {
-                    bail!("--phase requires --compact");
-                }
+                let card = build_loop_recipe_card(&name, custom_dir.as_deref())?;
                 if json {
-                    bail!("--json requires --compact for `maestro loop show`");
+                    println!("{}", serde_json::to_string(&card)?);
+                } else {
+                    print!("{}", card.render());
                 }
-                print!(
-                    "{}",
-                    loop_recipes::show_with_custom_dir(&name, custom_dir.as_deref())?
-                );
             }
         }
         Some(LoopCommand::Validate { name }) => {
@@ -209,6 +338,31 @@ fn custom_recipe_dir() -> Option<PathBuf> {
     let repo_root = discover_repo_root().ok()?;
     let paths = MaestroPaths::new(repo_root);
     Some(paths.loop_recipes_dir())
+}
+
+fn build_loop_recipe_card(
+    name: &str,
+    custom_dir: Option<&std::path::Path>,
+) -> Result<LoopRecipeCard> {
+    let kind = if loop_recipes::pattern_pack(name).is_some() {
+        loop_recipes::show_with_custom_dir(name, custom_dir)?;
+        "pattern".to_string()
+    } else {
+        let contract = loop_chain_contract(name, custom_dir)?;
+        contract
+            .kind
+            .tags
+            .first()
+            .cloned()
+            .unwrap_or_else(|| contract.kind.category.clone())
+    };
+    Ok(LoopRecipeCard {
+        schema: LOOP_RECIPE_CARD_SCHEMA,
+        recipe: name.to_string(),
+        kind,
+        enter: "maestro loop next --compact",
+        full: format!("maestro loop show {name} --full"),
+    })
 }
 
 pub(crate) fn build_loop_readiness_packet_for_status(
@@ -810,18 +964,7 @@ fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<
             bail!("--phase requires --compact");
         }
         if args.compact {
-            let state = build_loop_next_state()?;
-            let packet = loop_recipes::compact_packet_for_next_state(
-                Some(&state.input),
-                &state.report,
-                custom_dir,
-                args.phase.as_deref(),
-            )?;
-            if args.json {
-                println!("{}", serde_json::to_string_pretty(&packet)?);
-            } else {
-                print!("{}", loop_recipes::render_compact_packet(&packet));
-            }
+            emit_loop_action_card(args.json, args.phase.as_deref())?;
             return Ok(());
         }
         let chain = build_loop_chain_report(custom_dir)?;
@@ -834,28 +977,247 @@ fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<
     }
 
     if args.compact {
-        let state = build_loop_next_state()?;
-        let packet = loop_recipes::compact_packet_for_next_state(
-            Some(&state.input),
-            &state.report,
-            custom_dir,
-            args.phase.as_deref(),
-        )?;
-        if args.json {
-            println!("{}", serde_json::to_string_pretty(&packet)?);
-        } else {
-            print!("{}", loop_recipes::render_compact_packet(&packet));
-        }
+        emit_loop_action_card(args.json, args.phase.as_deref())?;
     } else if args.phase.is_some() {
-        bail!("--phase requires --compact");
+        if args.json || args.full {
+            bail!("--phase requires --compact");
+        }
+        emit_loop_action_card(false, args.phase.as_deref())?;
     } else if args.json {
         let report = build_loop_next_report()?;
         println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
+    } else if args.full {
         let report = build_loop_next_report()?;
         print_loop_next(&report);
+    } else {
+        emit_loop_action_card(false, None)?;
     }
     Ok(())
+}
+
+fn emit_loop_action_card(json: bool, phase: Option<&str>) -> Result<()> {
+    let state = build_loop_next_state()?;
+    let card = build_loop_action_card(&state, phase)?;
+    if json {
+        print!("{}", bounded_action_card_json(&card)?);
+    } else {
+        let rendered = card.render();
+        if rendered.len() <= LOOP_ACTION_CARD_MAX_TEXT_BYTES && rendered.lines().count() <= 6 {
+            print!("{rendered}");
+        } else {
+            print!("{}", LoopActionCard::overflow().render());
+        }
+    }
+    Ok(())
+}
+
+fn build_loop_action_card(
+    state: &LoopNextRouteState,
+    phase: Option<&str>,
+) -> Result<LoopActionCard> {
+    let recipe = state
+        .report
+        .recommended_recipe
+        .clone()
+        .unwrap_or_else(|| "inspect".to_string());
+    let phase = match phase {
+        Some(phase) => {
+            let contract = loop_recipes::contract(&recipe)?;
+            ensure!(
+                contract.phases.contains_key(phase),
+                "recipe {recipe} has no phase {phase:?}"
+            );
+            phase.to_string()
+        }
+        None => state
+            .report
+            .recommended_phase
+            .clone()
+            .unwrap_or_else(|| "perceive".to_string()),
+    };
+    let mut signals = loop_card_signals(&state.report, state.action.as_ref());
+    let has_stop = signals.iter().any(|signal| signal.kind == "stop");
+
+    let (status, task, action) = if recipe == "feature-fanout" {
+        signals.insert(
+            0,
+            LoopCardSignal {
+                kind: "stop",
+                text: "parallel work requires an explicit readiness selection".to_string(),
+            },
+        );
+        (
+            "blocked".to_string(),
+            None,
+            LoopCardAction::runnable("inspect_fanout", ["maestro", "ready", "--json"]),
+        )
+    } else if state.report.status == "uncertain" {
+        let blocked = state
+            .action
+            .as_ref()
+            .is_some_and(|action| action.kind == "inspect_blocker");
+        let action = state
+            .action
+            .as_ref()
+            .filter(|action| action.kind == "inspect_blocker")
+            .map(loop_card_action_from_status)
+            .unwrap_or_else(|| {
+                LoopCardAction::runnable("inspect_uncertain", ["maestro", "status", "--json"])
+            });
+        (
+            if blocked { "blocked" } else { "uncertain" }.to_string(),
+            state.task.clone(),
+            action,
+        )
+    } else if has_stop {
+        let action = loop_card_constraint_inspection(&state.report).unwrap_or_else(|| {
+            state.task.as_ref().map_or_else(
+                || {
+                    LoopCardAction::runnable(
+                        "inspect_safety",
+                        ["maestro", "loop", "next", "--json"],
+                    )
+                },
+                |task| {
+                    LoopCardAction::runnable(
+                        "inspect_safety",
+                        ["maestro", "task", "show", task.id.as_str()],
+                    )
+                },
+            )
+        });
+        ("blocked".to_string(), state.task.clone(), action)
+    } else if recipe == "work" {
+        match state.action.as_ref() {
+            Some(action) => (
+                if action.kind == "inspect_blocker" {
+                    "blocked"
+                } else {
+                    "ready"
+                }
+                .to_string(),
+                state.task.clone(),
+                loop_card_action_from_status(action),
+            ),
+            None => (
+                "blocked".to_string(),
+                None,
+                LoopCardAction::runnable("inspect_route", ["maestro", "loop", "next", "--json"]),
+            ),
+        }
+    } else {
+        signals.insert(
+            0,
+            LoopCardSignal {
+                kind: "stop",
+                text: "route needs explicit inspection before an executable action".to_string(),
+            },
+        );
+        (
+            "blocked".to_string(),
+            None,
+            LoopCardAction::runnable("inspect_route", ["maestro", "loop", "next", "--json"]),
+        )
+    };
+
+    let omitted = signals.len().saturating_sub(1);
+    Ok(LoopActionCard {
+        schema: LOOP_ACTION_CARD_SCHEMA,
+        status,
+        recipe,
+        phase,
+        task,
+        action,
+        signal: signals.into_iter().next(),
+        omitted,
+        full: "maestro loop next --full",
+    })
+}
+
+fn loop_card_signals(
+    report: &loop_recipes::LoopNextReport,
+    action: Option<&super::status::LoopTaskAction>,
+) -> Vec<LoopCardSignal> {
+    let mut signals = report
+        .constraints
+        .iter()
+        .filter_map(|constraint| {
+            if loop_constraint_stops_action(constraint) {
+                return Some(LoopCardSignal {
+                    kind: "stop",
+                    text: constraint.id.clone(),
+                });
+            }
+            (constraint.status == loop_recipes::LoopConstraintStatus::Warn).then(|| {
+                LoopCardSignal {
+                    kind: "guard",
+                    text: constraint.id.clone(),
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    if let Some(input) = action.and_then(|action| action.required_input.clone()) {
+        signals.push(LoopCardSignal {
+            kind: "need",
+            text: input,
+        });
+    }
+    signals.sort_by_key(|signal| match signal.kind {
+        "stop" => 0,
+        "need" => 1,
+        _ => 2,
+    });
+    signals
+}
+
+fn loop_constraint_stops_action(constraint: &loop_recipes::LoopConstraint) -> bool {
+    constraint.status == loop_recipes::LoopConstraintStatus::Fail
+        || (constraint.status == loop_recipes::LoopConstraintStatus::Unknown
+            && constraint.severity != loop_recipes::LoopConstraintSeverity::Info)
+}
+
+fn loop_card_constraint_inspection(
+    report: &loop_recipes::LoopNextReport,
+) -> Option<LoopCardAction> {
+    let command = report
+        .constraints
+        .iter()
+        .find(|constraint| loop_constraint_stops_action(constraint))?
+        .unblocks_with
+        .first()?;
+    match command.as_str() {
+        "git status --short --branch" => Some(LoopCardAction::runnable(
+            "inspect_safety",
+            ["git", "status", "--short", "--branch"],
+        )),
+        "maestro active" => Some(LoopCardAction::runnable(
+            "inspect_safety",
+            ["maestro", "active"],
+        )),
+        _ => None,
+    }
+}
+
+fn loop_card_action_from_status(action: &super::status::LoopTaskAction) -> LoopCardAction {
+    LoopCardAction {
+        kind: action.kind.clone(),
+        display: action.display.clone(),
+        argv: action.argv.clone(),
+        argv_template: action.argv_template.clone(),
+    }
+}
+
+fn bounded_action_card_json(card: &LoopActionCard) -> Result<String> {
+    let encoded = serde_json::to_string(card)?;
+    if encoded.len() < LOOP_ACTION_CARD_MAX_BYTES {
+        return Ok(format!("{encoded}\n"));
+    }
+    let fallback = serde_json::to_string(&LoopActionCard::overflow())?;
+    ensure!(
+        fallback.len() < LOOP_ACTION_CARD_MAX_BYTES,
+        "invariant: overflow action card exceeds its JSON budget"
+    );
+    Ok(format!("{fallback}\n"))
 }
 
 fn run_improve(args: LoopImproveArgs) -> Result<()> {
@@ -1363,6 +1725,8 @@ fn loop_outcome_route(failure_class: &str) -> Result<LoopOutcomeRoute> {
 struct LoopNextRouteState {
     input: loop_recipes::LoopRouterInput,
     report: loop_recipes::LoopNextReport,
+    action: Option<super::status::LoopTaskAction>,
+    task: Option<LoopActionTask>,
 }
 
 fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
@@ -1383,7 +1747,12 @@ fn build_loop_next_state_for_paths(paths: &MaestroPaths) -> Result<LoopNextRoute
             ..loop_recipes::LoopRouterInput::default()
         };
         let report = loop_recipes::route_next(input.clone())?;
-        return Ok(LoopNextRouteState { input, report });
+        return Ok(LoopNextRouteState {
+            input,
+            report,
+            action: None,
+            task: None,
+        });
     }
 
     let mut warnings = Vec::new();
@@ -1474,7 +1843,7 @@ fn build_loop_next_state_from_snapshot(
         }
     };
 
-    let mut input = loop_recipes::LoopRouterInput {
+    let input = loop_recipes::LoopRouterInput {
         repo: paths.repo_root().display().to_string(),
         initialized: true,
         current_task,
@@ -1502,14 +1871,47 @@ fn build_loop_next_state_from_snapshot(
         }),
         warnings,
     };
-    let report = loop_recipes::route_next(input.clone())?;
-    let memory_hits = loop_memory_preflight_hits(paths, &input, &report);
-    if memory_hits.is_empty() {
-        return Ok(LoopNextRouteState { input, report });
-    }
-    input.memory_hits = memory_hits;
-    let report = loop_recipes::route_next(input.clone())?;
-    Ok(LoopNextRouteState { input, report })
+    let (input, report) = route_loop_input_once(input, |input| {
+        loop_recipes::route_next_with_preflight(input, |route_input, recipe| {
+            loop_memory_preflight_hits(paths, route_input, recipe)
+        })
+    })?;
+    let selected_task_id = report.selected_task_id.as_deref().or_else(|| {
+        input
+            .current_task
+            .as_ref()
+            .filter(|task| task.blocked)
+            .map(|task| task.id.as_str())
+    });
+    let action = selected_task_id
+        .map(|id| super::status::loop_task_action_for_id(paths, task_entries, id))
+        .transpose()?
+        .flatten();
+    let task = selected_task_id
+        .and_then(|id| task_entries.iter().find(|entry| entry.task.id == id))
+        .map(|entry| LoopActionTask {
+            id: entry.task.id.clone(),
+            state: entry.task.state.as_str().to_string(),
+            progress: entry.task.progress_backed,
+        });
+    Ok(LoopNextRouteState {
+        input,
+        report,
+        action,
+        task,
+    })
+}
+
+fn route_loop_input_once<F>(
+    input: loop_recipes::LoopRouterInput,
+    router: F,
+) -> Result<(loop_recipes::LoopRouterInput, loop_recipes::LoopNextReport)>
+where
+    F: FnOnce(
+        loop_recipes::LoopRouterInput,
+    ) -> Result<(loop_recipes::LoopRouterInput, loop_recipes::LoopNextReport)>,
+{
+    router(input)
 }
 
 fn build_loop_chain_report(
@@ -1588,27 +1990,21 @@ fn recent_transition_outcomes(
 fn loop_chain_contract(
     recipe: &str,
     custom_dir: Option<&std::path::Path>,
-) -> Result<loop_recipes::RecipeContract> {
-    if loop_recipes::contract_names().contains(&recipe) {
-        return loop_recipes::contract(recipe);
-    }
-    if let Some(custom_dir) = custom_dir {
-        return loop_recipes::custom_contract(custom_dir, recipe);
-    }
-    bail!("loop chain cannot load recipe {recipe:?}");
+) -> Result<loop_recipes::ResolvedRecipeContract> {
+    loop_recipes::resolved_contract_with_custom_dir(recipe, custom_dir)
 }
 
 fn loop_memory_preflight_hits(
     paths: &MaestroPaths,
     input: &loop_recipes::LoopRouterInput,
-    report: &loop_recipes::LoopNextReport,
+    recipe: Option<&str>,
 ) -> Vec<loop_recipes::LoopMemoryHit> {
     let base_scope = loop_memory_scope(input, None);
     let mut hits = Vec::new();
     if let Ok(set) = memory::approved_memory(paths, MemoryReadSurface::Status, base_scope.clone()) {
         hits.extend(set.memories.into_iter().map(approved_memory_hit));
     }
-    if let Some(recipe) = report.recommended_recipe.as_deref() {
+    if let Some(recipe) = recipe {
         let route_scope = loop_memory_scope(input, Some(recipe));
         if let Ok(set) = memory::approved_memory(paths, MemoryReadSurface::Status, route_scope) {
             hits.extend(set.memories.into_iter().map(approved_memory_hit));
@@ -2897,4 +3293,96 @@ fn worker_prompt(
 
 fn is_zero(value: &usize) -> bool {
     *value == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn bounded_action_json_fails_closed_without_truncating_overflow() {
+        let oversized_id = format!("task-{}", "x".repeat(600));
+        let card = LoopActionCard {
+            schema: LOOP_ACTION_CARD_SCHEMA,
+            status: "ready".to_string(),
+            recipe: "work".to_string(),
+            phase: "act".to_string(),
+            task: Some(LoopActionTask {
+                id: oversized_id.clone(),
+                state: "in_progress".to_string(),
+                progress: true,
+            }),
+            action: LoopCardAction {
+                kind: "done_task".to_string(),
+                display: format!("maestro task done {oversized_id} --proof <evidence>"),
+                argv: None,
+                argv_template: Some(vec![
+                    "maestro".to_string(),
+                    "task".to_string(),
+                    "done".to_string(),
+                    oversized_id.clone(),
+                    "--proof".to_string(),
+                    "<evidence>".to_string(),
+                ]),
+            },
+            signal: Some(LoopCardSignal {
+                kind: "need",
+                text: "proof".to_string(),
+            }),
+            omitted: 0,
+            full: "maestro loop next --full",
+        };
+
+        let encoded = bounded_action_card_json(&card).expect("overflow fallback should encode");
+        let value: Value = serde_json::from_str(&encoded).expect("fallback JSON should parse");
+
+        assert!(encoded.ends_with('\n'));
+        assert!(encoded.len() <= LOOP_ACTION_CARD_MAX_BYTES);
+        assert!(!encoded.contains(&oversized_id));
+        assert_eq!(value["status"], "blocked");
+        assert_eq!(value["action"]["kind"], "inspect_overflow");
+        assert_eq!(
+            value["action"]["argv"],
+            serde_json::json!(["maestro", "loop", "next", "--json"])
+        );
+    }
+
+    #[test]
+    fn route_wrapper_calls_router_and_memory_preflight_once() {
+        let router_calls = Cell::new(0);
+        let preflight_calls = Cell::new(0);
+        let input = loop_recipes::LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            tasks: vec![loop_recipes::LoopTaskInput {
+                id: "task-ready".to_string(),
+                title: "Ready task".to_string(),
+                state: "ready".to_string(),
+                feature_id: None,
+                blocked: false,
+                ready_startable: true,
+                gate: false,
+                gate_kind: None,
+                lane: Some("general".to_string()),
+                remaining_blockers: Vec::new(),
+            }],
+            ..loop_recipes::LoopRouterInput::default()
+        };
+
+        let (_, report) = route_loop_input_once(input, |input| {
+            router_calls.set(router_calls.get() + 1);
+            loop_recipes::route_next_with_preflight(input, |_, recipe| {
+                preflight_calls.set(preflight_calls.get() + 1);
+                assert_eq!(recipe, Some("work"));
+                Vec::new()
+            })
+        })
+        .expect("single router call should produce a report");
+
+        assert_eq!(router_calls.get(), 1);
+        assert_eq!(preflight_calls.get(), 1);
+        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
+    }
 }

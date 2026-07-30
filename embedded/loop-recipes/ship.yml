@@ -1,4 +1,5 @@
-schema_version: maestro.recipe.v2
+schema_version: maestro.recipe.v3
+profile: maestro.standard-six-phase.v1
 id: ship
 kind:
   category: lifecycle
@@ -6,36 +7,18 @@ kind:
 title: Ship loop
 summary: Cross close, commit, install, push, release, or archive gates only when explicit authority and evidence allow it.
 progress_tasks:
-  - id: anchor-scope
+  anchor-scope:
     title: Anchor ship scope and authority
-    phase: perceive
-    required: true
-    done_check: scope, authority, and hard stops are known
-  - id: choose-next
+  choose-next:
     title: Choose next ship move
-    phase: choose
-    required: true
-    done_check: next move is selected from recipe rules
-  - id: execute-move
+  execute-move:
     title: Execute bounded ship move
-    phase: act
-    required: true
-    done_check: bounded recipe action is complete or blocked
-  - id: observe-evidence
+  observe-evidence:
     title: Observe ship evidence
-    phase: observe
-    required: true
-    done_check: evidence, result, or blocker is recorded
-  - id: record-learning
+  record-learning:
     title: Record reusable ship learning when needed
-    phase: learn
-    required: true
-    done_check: durable learning is recorded or explicitly unnecessary
-  - id: return-next-gate
+  return-next-gate:
     title: Return next ship gate
-    phase: continue
-    required: true
-    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - verified feature or task evidence
   - explicit bounded local or external ship authority

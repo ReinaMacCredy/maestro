@@ -701,6 +701,39 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 }
 
 #[test]
+fn shipped_loop_guidance_uses_one_compact_router_call_per_changed_state() {
+    let skill_names = [
+        "ask-maestro",
+        "maestro-audit",
+        "maestro-card",
+        "maestro-design",
+        "maestro-setup",
+    ];
+    let mut bodies = vec![("HARNESS.md", HARNESS_MD.to_string())];
+    for name in skill_names {
+        let body = skills()
+            .iter()
+            .find(|skill| skill.name == name)
+            .unwrap_or_else(|| panic!("{name} should ship"))
+            .skill_md()
+            .to_string();
+        bodies.push((name, body));
+    }
+    for (name, body) in bodies {
+        for phrase in [
+            "compact default",
+            "--full",
+            "once after a state change",
+            "Do not probe `--help`",
+            "maestro loop next --json",
+            "--compact --json",
+        ] {
+            assert!(body.contains(phrase), "{name} is missing {phrase:?}");
+        }
+    }
+}
+
+#[test]
 fn native_layer_guidance_lives_in_targeted_teaching_surfaces() {
     let harness = normalize_markdown(HARNESS_MD);
     let design = normalize_markdown(&shipped_skill_md("maestro-design"));

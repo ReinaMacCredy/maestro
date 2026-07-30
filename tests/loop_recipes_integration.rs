@@ -7,6 +7,7 @@ use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use maestro::domain::loop_recipes::{self, LoopChainFacts, LoopChainSelectedUnit};
+use maestro::foundation::core::hash::sha256_hex;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
 
@@ -57,12 +58,189 @@ fn stderr(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
 }
 
+fn assert_bounded_text(output: &str, max_lines: usize) {
+    assert!(
+        output.lines().count() <= max_lines,
+        "expected at most {max_lines} lines, got {}:\n{output}",
+        output.lines().count()
+    );
+}
+
+const SHIPPED_RECIPE_PARITY: [(&str, &str, &str, &str); 15] = [
+    (
+        "adversarial-review",
+        "ba675cbe7063b2fa9f06ab6068a3c92154b6ef0c4320923d1a9d19aed64df1d1",
+        "ee95b9cf38c40084dd8ca59d6815c7b8e94b752405e12bb1588073a74bc9281c",
+        "e27bd1a428253765597208651e0fb49a4e922f7d7ff3b8a2fab68057edd6b86b",
+    ),
+    (
+        "audit",
+        "4b445fed94188e9fb2ba445702ce49c01249666eda6d621a918ecc50bdf1db6e",
+        "55b2c5a67a3aed8b73a2a7151d0fd75598a74cadbf328ee743cc21e2709b4aff",
+        "b84b90b07097f1a491f5e9881b80b3baf910dcf113df76eb8bcd08f9248766d3",
+    ),
+    (
+        "conflict-handoff",
+        "e68ab6120afd87c3835769bd2c78da1accc44f4d8b31b6e7ab82459c623e3f50",
+        "0c04670390de1bc11050c4e760106bebf1e3a6cb9d8b8a49d501370e7c01a59b",
+        "bd0540b40ef33459bb07652d85df5504c51327cd1c731e06ea06465b7ea65fc2",
+    ),
+    (
+        "design",
+        "9a2b4bb4a8ded6d7245d16cb97e1ae72b293abcf17f9ce401789b14ab1fedfc3",
+        "6c3affd6edca9713933ca04729a84d95d5226d408079e42ae5ae205b26ebe7ac",
+        "ab89d9ac9499d7e4b27985cec5a51dc954d6f3736bd18ff9a46b682ec7a71c63",
+    ),
+    (
+        "design-relay",
+        "ed451e49791789ed2d084cb9f84618814a0fe71d5456934d125ae287a32dc5ea",
+        "4d8051110bf97b172298ddbda9228d650ebd0188cbf914e8c98f5434ff11b458",
+        "c0aa535d345871f2235d972351a9de670fb5fef257542b8ac07ff280d427bef8",
+    ),
+    (
+        "feature-fanout",
+        "40fbf1726875a7fb2239d0293686589c60bbe1a6bdff7d89e6e12d5406b6129a",
+        "ff4740796a2f7be2d68f71695ad6820db7b58887e49a2058dbb5e34a09bbfbe6",
+        "546659205efd634037c7c7db6f3db41113072f9281ab10ffeef7a7bfd6edd3dc",
+    ),
+    (
+        "generate-filter",
+        "6db9bfa174a8641adf7eed422e0f768036dfbc6865cf94cdee59c95119b60a0a",
+        "7c6ce983b707f8113858b24fa35a8b9297352ea21cdafde5a50d64bcb4996e7d",
+        "ac0b794987c593b03a6824020e2a984084c83e705035b96b564d2a145e469f5f",
+    ),
+    (
+        "intake-triage",
+        "9e21676f7605106adc2199d9df6b91ad705176e047f4b201c5c612f76e0f4181",
+        "133d920d918ced438d0dcd13bbbba051f13ebc4c0223c27ef94a663b23c59ba3",
+        "ee777ae8884ca64405767ce0995abf33b40b144b2b6ad3f25e5e2c54f08fa502",
+    ),
+    (
+        "learning",
+        "e95ea2de142f6f315f63aa55795c285e86799b0ee3059e22954a34746c6b2d81",
+        "90308cdfc646f008914e6d4e0c42194617770efbd3d2c1664484864b9078ac93",
+        "51fdaaf59540d356c4652ecdc0d1989d2409db00b3daa5c12e95506482bd8f01",
+    ),
+    (
+        "loop-until-done",
+        "84e2a583455b0ffcbf0723e125460a9116ee7b111476521450f78552785fc7a7",
+        "2a59b00f9ebbe53034cb7a7914abb0867672cba6a7519fdcf0dfccd34ac9bbf9",
+        "a9797f7710c188ec9a692509f3000066a1c60b414e2228944e0a29b9a1d7aca9",
+    ),
+    (
+        "progress",
+        "61c1d0031cd720a41c6e8690f2e64d64ba97cbe1cfad389fb4521318185e9185",
+        "7f8a1200665b6c997dc6c76956615f3d99af2a6b06dfe40b3533c45b7d776e2b",
+        "7445eb7bec581e151dde8e71b05c6731c914006dc2075584622ed97dca35dde7",
+    ),
+    (
+        "ship",
+        "51c6880598417dcdf2e93839eaa820725fdeeb124c9babc80fb7a0a7e7fc93fe",
+        "43cd6d90bd94257040fe8d269adaaa24059464194f7bd7243f1abaace859ef04",
+        "6e4fddca3bb04ff8d6924512f19da47d9c0e05c1d0151ceb79609073c48d8fc6",
+    ),
+    (
+        "synthesize",
+        "8e242846e03134f6c1e902b478f34db035688c244d73f84f7767ac36be2e30d8",
+        "5f645a2d2821c4e8f0797061fb4379aa811068bdc7efdf76c4eeee8003355ff5",
+        "13f4bc8eac884d26da61a9413c6676be0fec114842471bb8551786a65373db43",
+    ),
+    (
+        "unattended",
+        "45eb5a0a70c557a61336e48c67c0c2baf5ea190a698b9e2d1085694deb54d9ec",
+        "ebbfaba2889ae7c2ab91feac0b838dec260d1bfedc5fd2c849b7e1cbcfce5ef1",
+        "93d9f439444f33d970d6ae1ec40781240e9a5f2de6323c101324105c62f5724e",
+    ),
+    (
+        "work",
+        "a11a217b1980d877889a304fe88848f47771815770166fe32e6a0cc738fb9f1c",
+        "8b8e1324b7ad60ce73748ccbde0334cb3a1b5cd047f2c69dca4a479e81c14ad5",
+        "c70d8b224c9ad0375921a2d2fb900e38c57f82fbe77a45bf699e61360e78e4a2",
+    ),
+];
+
+#[test]
+fn shipped_v3_profiles_preserve_complete_v2_normalized_semantics() {
+    assert_eq!(
+        loop_recipes::contract_names(),
+        SHIPPED_RECIPE_PARITY
+            .iter()
+            .map(|(name, _, _, _)| *name)
+            .collect::<Vec<_>>()
+    );
+    for (name, expected_effective, expected_full, expected_compact) in SHIPPED_RECIPE_PARITY {
+        let contract = loop_recipes::contract(name).expect("shipped v3 recipe should resolve");
+        assert_eq!(
+            contract.provenance.source_schema, "maestro.recipe.v3",
+            "{name}"
+        );
+        assert_eq!(
+            contract.provenance.profile, "maestro.standard-six-phase.v1",
+            "{name}"
+        );
+        assert!(
+            contract
+                .invariant_ids
+                .iter()
+                .any(|id| id == "standard-progress-structure"),
+            "{name}"
+        );
+        let actual = normalized_recipe_hashes(name);
+        assert_eq!(actual.0, expected_effective, "{name} effective contract");
+        assert_eq!(actual.1, expected_full, "{name} full rendering");
+        assert_eq!(actual.2, expected_compact, "{name} compact phase packets");
+    }
+}
+
 fn first_id(output: &str, prefix: &str) -> String {
     output
         .split_whitespace()
         .find(|word| word.starts_with(prefix))
         .unwrap_or_else(|| panic!("no {prefix} id in output:\n{output}"))
         .to_string()
+}
+
+fn normalized_recipe_hashes(name: &str) -> (String, String, String) {
+    let contract = loop_recipes::contract(name).expect("shipped recipe should resolve");
+    let mut effective =
+        serde_json::to_value(contract.effective()).expect("effective recipe should serialize");
+    effective
+        .as_object_mut()
+        .expect("effective recipe should be an object")
+        .remove("schema_version");
+    let effective_hash = sha256_hex(
+        &serde_json::to_vec(&effective).expect("normalized effective recipe should serialize"),
+    );
+
+    let full = loop_recipes::show(name).expect("full recipe should render");
+    let normalized_full = full
+        .lines()
+        .filter(|line| {
+            ![
+                "resolved_schema:",
+                "schema_version:",
+                "profile:",
+                "resolver:",
+                "source:",
+                "contract_hash_schema:",
+                "contract_hash:",
+            ]
+            .iter()
+            .any(|prefix| line.starts_with(prefix))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let full_hash = sha256_hex(normalized_full.as_bytes());
+
+    let mut compact = Vec::new();
+    for phase in ["perceive", "choose", "act", "observe", "learn", "continue"] {
+        let packet = loop_recipes::compact_packet_with_custom_dir(name, None, Some(phase))
+            .expect("compact phase packet should render");
+        let encoded = serde_json::to_vec(&packet).expect("compact phase packet should serialize");
+        compact.extend_from_slice(&(encoded.len() as u64).to_le_bytes());
+        compact.extend_from_slice(&encoded);
+    }
+    (effective_hash, full_hash, sha256_hex(&compact))
 }
 
 fn ready_loop_task(id: &str) -> loop_recipes::LoopTaskInput {
@@ -86,8 +264,40 @@ fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
     fs::write(dir.join(format!("{name}.yml")), body).expect("custom recipe should be writable");
 }
 
+fn profiled_custom_recipe() -> String {
+    let body = CUSTOM_RECIPE.replacen(
+        "schema_version: maestro.recipe.v2",
+        "schema_version: maestro.recipe.v3\nprofile: maestro.standard-six-phase.v1",
+        1,
+    );
+    let start = body
+        .find("progress_tasks:")
+        .expect("custom recipe fixture should declare progress tasks");
+    let end = body
+        .find("authority_scope:")
+        .expect("custom recipe fixture should declare authority scope");
+    format!(
+        "{}progress_tasks:\n  anchor-scope:\n    title: Anchor support brief scope\n    done_check: support brief and selected card are visible\n  return-next-gate:\n    title: Finish selected brief card\n    done_check: next step or hard stop is returned\n{}",
+        &body[..start],
+        &body[end..]
+    )
+}
+
 fn init_git_marker(repo: &Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+fn init_git_repo(repo: &Path) {
+    let output = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(repo)
+        .output()
+        .expect("invariant: git init should run in test fixture");
+    assert!(
+        output.status.success(),
+        "git init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn ts_minutes_ago(minutes: u64) -> String {
@@ -176,7 +386,7 @@ fn loop_index_lists_unified_structured_recipe_catalog() {
 fn loop_show_and_validate_render_recipe_native_pattern_packs() {
     let temp = TestTempDir::new("maestro-loop-pattern-packs");
 
-    let shown = stdout(temp.path(), &["loop", "show", "pr-babysitter"]);
+    let shown = stdout(temp.path(), &["loop", "show", "pr-babysitter", "--full"]);
     assert!(
         shown.contains("schema_version: maestro.recipe_pattern.v1"),
         "{shown}"
@@ -274,7 +484,7 @@ fn loop_next_json_exposes_grounded_unknown_gap_for_ready_work() {
 }
 
 #[test]
-fn loop_next_text_renders_compact_unknown_gap_for_ready_work() {
+fn loop_next_full_text_preserves_unknown_gap_for_ready_work() {
     let temp = TestTempDir::new("maestro-loop-next-unknown-gap-text");
     init_git_marker(temp.path());
     stdout(temp.path(), &["init", "--yes"]);
@@ -283,7 +493,7 @@ fn loop_next_text_renders_compact_unknown_gap_for_ready_work() {
         &["task", "add", "--id-only", "Render unknown gap"],
     );
 
-    let out = stdout(temp.path(), &["loop", "next"]);
+    let out = stdout(temp.path(), &["loop", "next", "--full"]);
 
     assert!(out.contains("unknown_gap:"), "{out}");
     assert!(out.contains("  action: probe"), "{out}");
@@ -393,7 +603,7 @@ fn loop_next_unknown_gap_action_probes_for_warn_constraints() {
 #[test]
 fn loop_show_renders_design_relay_recipe() {
     let temp = TestTempDir::new("maestro-loop-show-design-relay");
-    let out = stdout(temp.path(), &["loop", "show", "design-relay"]);
+    let out = stdout(temp.path(), &["loop", "show", "design-relay", "--full"]);
 
     assert!(out.contains("# Design relay"), "{out}");
     assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
@@ -411,21 +621,18 @@ fn loop_show_renders_design_relay_recipe() {
 #[test]
 fn loop_show_design_continue_waits_for_build_approval_before_finalize() {
     let temp = TestTempDir::new("maestro-loop-show-design-continue");
-    let out = stdout(
-        temp.path(),
-        &["loop", "show", "design", "--compact", "--phase", "continue"],
-    );
+    let out = stdout(temp.path(), &["loop", "show", "design", "--full"]);
 
     assert!(
         out.contains("await explicit build approval before reconcile/finalize"),
         "{out}"
     );
     assert!(
-        !out.contains("allowed_verbs:\n  - maestro feature finalize <id>"),
+        !out.contains("Allowed verbs\n\n- `maestro feature finalize <id>`"),
         "{out}"
     );
     assert!(
-        !out.contains("next:\n  - maestro feature finalize <id>"),
+        !out.contains("Next\n\n- `maestro feature finalize <id>`"),
         "{out}"
     );
     assert!(
@@ -433,17 +640,16 @@ fn loop_show_design_continue_waits_for_build_approval_before_finalize() {
         "{out}"
     );
 
-    let full = stdout(temp.path(), &["loop", "show", "design"]);
     assert!(
-        full.contains("design.continue -> work.perceive")
-            && full.contains("trigger: work_ready.design_locked"),
-        "{full}"
+        out.contains("design.continue -> work.perceive")
+            && out.contains("trigger: work_ready.design_locked"),
+        "{out}"
     );
-    assert!(full.contains("maestro feature finalize <id>"), "{full}");
+    assert!(out.contains("maestro feature finalize <id>"), "{out}");
 }
 
 #[test]
-fn loop_validate_and_compact_render_design_relay_packet() {
+fn loop_validate_and_compact_render_design_relay_card() {
     let temp = TestTempDir::new("maestro-loop-design-relay-packet");
     let valid = stdout(temp.path(), &["loop", "validate", "design-relay"]);
     assert!(
@@ -451,28 +657,22 @@ fn loop_validate_and_compact_render_design_relay_packet() {
         "{valid}"
     );
 
-    let out = stdout(
-        temp.path(),
-        &[
-            "loop",
-            "show",
-            "design-relay",
-            "--compact",
-            "--phase",
-            "act",
-        ],
+    let card = stdout(temp.path(), &["loop", "show", "design-relay", "--compact"]);
+    assert_bounded_text(&card, 6);
+    assert!(card.contains("design-relay · design"), "{card}");
+    assert!(
+        card.contains("enter: maestro loop next --compact"),
+        "{card}"
+    );
+    assert!(
+        card.contains("full: maestro loop show design-relay --full"),
+        "{card}"
     );
 
-    assert!(
-        out.contains("schema: maestro.loop_compact_packet.v1"),
-        "{out}"
-    );
-    assert!(out.contains("recipe: design-relay"), "{out}");
-    assert!(out.contains("phase: act"), "{out}");
-    assert!(out.contains("progress_task: execute-move"), "{out}");
-    assert!(out.contains("maestro msg send <card> <text>"), "{out}");
-    assert!(out.contains("feature accept"), "{out}");
-    assert!(out.contains("no recorded mandate_ref"), "{out}");
+    let full = stdout(temp.path(), &["loop", "show", "design-relay", "--full"]);
+    assert!(full.contains("maestro msg send <card> <text>"), "{full}");
+    assert!(full.contains("feature accept"), "{full}");
+    assert!(full.contains("no recorded mandate_ref"), "{full}");
 }
 
 #[test]
@@ -700,16 +900,27 @@ fn loop_chain_matcher_selects_registered_transition_from_typed_facts() {
 
 #[test]
 fn loop_chain_matcher_uses_recipe_order_for_multiple_matching_triggers() {
-    let mut contract =
-        loop_recipes::contract("unattended").expect("unattended recipe should validate");
-    contract.transitions[1].from = "unattended.choose".to_string();
+    let temp = TestTempDir::new("maestro-loop-transition-order");
+    let body = include_str!("../embedded/loop-recipes/unattended.yml")
+        .replace("id: unattended", "id: transition-order")
+        .replace("unattended.", "transition-order.")
+        .replace(
+            "from: transition-order.continue",
+            "from: transition-order.choose",
+        );
+    write_custom_recipe(temp.path(), "transition-order", &body);
+    let contract = loop_recipes::custom_contract(
+        &temp.path().join(".maestro/loop-recipes"),
+        "transition-order",
+    )
+    .expect("custom transition-order recipe should validate");
     let facts = LoopChainFacts {
         selected_unit: Some(LoopChainSelectedUnit {
             kind: "task".to_string(),
             id: "task-ready".to_string(),
             title: None,
         }),
-        current_recipe: "unattended".to_string(),
+        current_recipe: "transition-order".to_string(),
         current_phase: "choose".to_string(),
         open_decisions: vec!["dec-scope".to_string()],
         handoff_fresh: false,
@@ -719,7 +930,7 @@ fn loop_chain_matcher_uses_recipe_order_for_multiple_matching_triggers() {
 
     let selected = loop_recipes::match_chain_transition(&facts, &contract)
         .expect("matcher should evaluate")
-        .expect("unattended should select a transition");
+        .expect("custom recipe should select a transition");
 
     assert_eq!(
         selected.trigger, "work_ready.selected_unit",
@@ -774,7 +985,7 @@ fn loop_next_routes_ready_v2_parallel_wave_as_feature_fanout() {
 }
 
 #[test]
-fn loop_next_compact_chain_json_renders_feature_fanout_conductor_packet() {
+fn loop_next_compact_fanout_fails_closed_to_one_ready_inspection() {
     let temp = TestTempDir::new("maestro-loop-next-fanout-packet-json");
     init_git_marker(temp.path());
     stdout(temp.path(), &["init", "--yes"]);
@@ -795,89 +1006,28 @@ fn loop_next_compact_chain_json_renders_feature_fanout_conductor_packet() {
     );
     let before = snapshot_dir(&temp.path().join(".maestro"));
 
-    let out = stdout(
-        temp.path(),
-        &["loop", "next", "--compact", "--chain", "--json"],
-    );
+    let out = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
     let after = snapshot_dir(&temp.path().join(".maestro"));
     let value: Value = serde_json::from_str(&out).expect("fanout packet JSON should parse");
 
-    assert_eq!(
-        before, after,
-        "loop next --compact --chain must stay read-only"
-    );
-    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert_eq!(before, after, "loop next --compact must stay read-only");
+    assert!(out.ends_with('\n'));
+    assert!(out.len() <= 512, "{} bytes: {out}", out.len());
+    assert_eq!(value["schema"], "maestro.loop_action_card.v1");
+    assert_eq!(value["status"], "blocked");
     assert_eq!(value["recipe"], "feature-fanout");
     assert_eq!(value["phase"], "perceive");
-    assert_eq!(value["transition"]["trigger"], "ready.parallel_wave");
-    assert_eq!(value["transition"]["from"], "work.choose");
-    assert_eq!(value["transition"]["to"], "feature-fanout.perceive");
-    let units = value["selected_units"]
-        .as_array()
-        .expect("selected_units should be an array");
-    assert_eq!(units.len(), 2, "{value}");
-    assert!(
-        units.iter().any(|unit| {
-            unit["title"] == "Build API"
-                && unit["lane"] == "backend"
-                && unit["command"]
-                    .as_str()
-                    .is_some_and(|command| command.starts_with("maestro task start task-"))
-        }),
-        "{value}"
-    );
-    assert!(
-        units.iter().any(|unit| {
-            unit["title"] == "Build UI"
-                && unit["lane"] == "frontend"
-                && unit["command"]
-                    .as_str()
-                    .is_some_and(|command| command.starts_with("maestro task start task-"))
-        }),
-        "{value}"
-    );
-    assert!(
-        value["conductor"]["owns"]
-            .as_array()
-            .expect("conductor owns should be an array")
-            .iter()
-            .any(|item| item.as_str() == Some("shared Maestro store writes")),
-        "{value}"
-    );
-    assert!(
-        value["workers"]["may_not"]
-            .as_array()
-            .expect("worker forbidden verbs should be an array")
-            .iter()
-            .any(|item| item.as_str() == Some("feature close")),
-        "{value}"
-    );
-    assert!(
-        value["proof_collection"]
-            .as_array()
-            .expect("proof_collection should be an array")
-            .iter()
-            .any(|item| item.as_str() == Some("conductor runs maestro task verify <id>")),
-        "{value}"
-    );
-    assert!(
-        value["return_conditions"]
-            .as_array()
-            .expect("return_conditions should be an array")
-            .iter()
-            .any(
-                |item| item.as_str() == Some("all selected units verified, blocked, or superseded")
-            ),
-        "{value}"
-    );
+    assert_eq!(value["action"]["kind"], "inspect_fanout");
     assert_eq!(
-        value["read_only"],
-        "loop next recommends only; task/proof/feature verbs perform writes"
+        value["action"]["argv"],
+        serde_json::json!(["maestro", "ready", "--json"])
     );
+    assert_eq!(value["signal"]["kind"], "stop");
+    assert!(value.get("selected_units").is_none(), "{value}");
 }
 
 #[test]
-fn loop_next_compact_chain_text_renders_feature_fanout_conductor_packet() {
+fn loop_next_compact_chain_text_uses_the_same_bounded_fanout_card() {
     let temp = TestTempDir::new("maestro-loop-next-fanout-packet-text");
     init_git_marker(temp.path());
     stdout(temp.path(), &["init", "--yes"]);
@@ -899,20 +1049,13 @@ fn loop_next_compact_chain_text_renders_feature_fanout_conductor_packet() {
 
     let out = stdout(temp.path(), &["loop", "next", "--compact", "--chain"]);
 
-    assert!(out.contains("recipe: feature-fanout"), "{out}");
-    assert!(out.contains("transition:"), "{out}");
-    assert!(out.contains("trigger: ready.parallel_wave"), "{out}");
-    assert!(out.contains("selected_units:"), "{out}");
-    assert!(out.contains("Build API"), "{out}");
-    assert!(out.contains("lane: backend"), "{out}");
-    assert!(out.contains("conductor:"), "{out}");
-    assert!(out.contains("shared Maestro store writes"), "{out}");
-    assert!(out.contains("workers:"), "{out}");
-    assert!(out.contains("feature close"), "{out}");
-    assert!(
-        out.contains("loop next recommends only; task/proof/feature verbs perform writes"),
-        "{out}"
-    );
+    assert_bounded_text(&out, 6);
+    assert!(out.contains("feature-fanout/perceive"), "{out}");
+    assert!(out.contains("do: maestro ready --json"), "{out}");
+    assert!(out.contains("stop:"), "{out}");
+    assert!(out.contains("full: maestro loop next --full"), "{out}");
+    assert!(!out.contains("Build API"), "{out}");
+    assert!(!out.contains("Build UI"), "{out}");
 }
 
 #[test]
@@ -951,7 +1094,7 @@ fn loop_next_routes_ready_v2_serial_and_ship_gates() {
     let ship = TestTempDir::new("maestro-loop-next-ready-v2-ship-gate");
     init_git_marker(ship.path());
     stdout(ship.path(), &["init", "--yes"]);
-    stdout(
+    let ship_setup = stdout(
         ship.path(),
         &[
             "task",
@@ -967,6 +1110,7 @@ fn loop_next_routes_ready_v2_serial_and_ship_gates() {
             "single ship gate fixture",
         ],
     );
+    let ship_task = first_id(&ship_setup, "task-");
 
     let ship_out = stdout(ship.path(), &["loop", "next", "--json"]);
     let ship_value: Value =
@@ -978,6 +1122,20 @@ fn loop_next_routes_ready_v2_serial_and_ship_gates() {
             .as_str()
             .is_some_and(|reason| reason.contains("ship gate")),
         "{ship_value}"
+    );
+
+    let compact = stdout(ship.path(), &["loop", "next", "--compact", "--json"]);
+    let compact_value: Value =
+        serde_json::from_str(&compact).expect("ship safety card should parse");
+    assert!(compact.len() <= 512, "{} bytes: {compact}", compact.len());
+    assert_eq!(compact_value["status"], "blocked");
+    assert_eq!(compact_value["recipe"], "ship");
+    assert_eq!(compact_value["signal"]["kind"], "stop");
+    assert_eq!(compact_value["signal"]["text"], "proof_ready");
+    assert!(compact_value["omitted"].as_u64().unwrap_or_default() >= 2);
+    assert_eq!(
+        compact_value["action"]["argv"],
+        serde_json::json!(["maestro", "task", "show", ship_task])
     );
 }
 
@@ -1609,7 +1767,7 @@ fn loop_next_human_output_names_score_phase_and_blocked_alternatives() {
 
     let output = maestro_with_env(
         temp.path(),
-        &["loop", "next"],
+        &["loop", "next", "--full"],
         &[("MAESTRO_SESSION_ID", "me")],
     );
     assert!(
@@ -1630,7 +1788,7 @@ fn loop_next_human_output_names_score_phase_and_blocked_alternatives() {
 #[test]
 fn loop_show_renders_structured_contracts_from_yaml() {
     let temp = TestTempDir::new("maestro-loop-show-contract");
-    let out = stdout(temp.path(), &["loop", "show", "unattended"]);
+    let out = stdout(temp.path(), &["loop", "show", "unattended", "--full"]);
 
     assert!(out.contains("# Unattended loop"), "{out}");
     assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
@@ -1658,7 +1816,7 @@ fn loop_show_renders_structured_contracts_from_yaml() {
 #[test]
 fn loop_show_renders_progress_recipe() {
     let temp = TestTempDir::new("maestro-loop-show-progress");
-    let out = stdout(temp.path(), &["loop", "show", "progress"]);
+    let out = stdout(temp.path(), &["loop", "show", "progress", "--full"]);
 
     assert!(out.contains("# Progress loop"), "{out}");
     assert!(out.contains("maestro task setup --task"), "{out}");
@@ -1671,67 +1829,60 @@ fn loop_show_renders_progress_recipe() {
 }
 
 #[test]
-fn loop_show_compact_renders_one_phase_execution_packet() {
-    let temp = TestTempDir::new("maestro-loop-show-compact");
-    let out = stdout(temp.path(), &["loop", "show", "work", "--compact"]);
+fn loop_show_defaults_to_bounded_recipe_card_and_full_is_explicit() {
+    let temp = TestTempDir::new("maestro-loop-show-compact-json");
+    let default = stdout(temp.path(), &["loop", "show", "work"]);
+    let compact = stdout(temp.path(), &["loop", "show", "work", "--compact"]);
 
-    assert!(
-        out.contains("schema: maestro.loop_compact_packet.v1"),
-        "{out}"
+    assert_eq!(default, compact);
+    assert_bounded_text(&default, 6);
+    assert_eq!(
+        default,
+        "work · implementation\nenter: maestro loop next --compact\nfull: maestro loop show work --full\n"
     );
-    assert!(out.contains("recipe: work"), "{out}");
-    assert!(out.contains("phase: perceive"), "{out}");
-    assert!(out.contains("progress_task: anchor-scope"), "{out}");
-    assert!(out.contains("reads:"), "{out}");
-    assert!(out.contains("allowed_verbs:"), "{out}");
-    assert!(out.contains("forbidden_verbs:"), "{out}");
-    assert!(out.contains("checks:"), "{out}");
-    assert!(out.contains("hard_stops:"), "{out}");
-    assert!(out.contains("next:"), "{out}");
-    assert!(
-        !out.contains("progress_task: record-learning"),
-        "compact output should not render every phase: {out}"
-    );
+
+    let full = stdout(temp.path(), &["loop", "show", "work", "--full"]);
+    assert!(full.contains("# Work loop"), "{full}");
+    assert!(full.contains("## Progress Tasks"), "{full}");
+    assert!(full.contains("contract_hash: sha256:"), "{full}");
 }
 
 #[test]
-fn loop_show_compact_json_uses_shared_packet_schema() {
+fn loop_show_compact_json_is_bounded_and_full_json_is_resolved() {
     let temp = TestTempDir::new("maestro-loop-show-compact-json");
     let out = stdout(
         temp.path(),
-        &[
-            "loop",
-            "show",
-            "work",
-            "--compact",
-            "--phase",
-            "observe",
-            "--json",
-        ],
+        &["loop", "show", "work", "--compact", "--json"],
     );
-    let value: Value = serde_json::from_str(&out).expect("compact packet JSON should parse");
+    let value: Value = serde_json::from_str(&out).expect("compact recipe JSON should parse");
 
-    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert!(out.len() <= 512, "{} bytes: {out}", out.len());
+    assert_eq!(value["schema"], "maestro.loop_recipe_card.v1");
     assert_eq!(value["recipe"], "work");
-    assert_eq!(value["phase"], "observe");
-    assert_eq!(value["progress_task"], "observe-evidence");
-    assert!(value["reads"].is_array(), "{value}");
-    assert!(value["allowed_verbs"].is_array(), "{value}");
-    assert!(value["forbidden_verbs"].is_array(), "{value}");
-    assert!(value["checks"].is_array(), "{value}");
-    assert!(value["hard_stops"].is_array(), "{value}");
-    assert!(value["next"].is_array(), "{value}");
+    assert_eq!(value["kind"], "implementation");
+    assert_eq!(value["enter"], "maestro loop next --compact");
+    assert_eq!(value["full"], "maestro loop show work --full");
+
+    let full = stdout(temp.path(), &["loop", "show", "work", "--full", "--json"]);
+    let full: Value = serde_json::from_str(&full).expect("resolved recipe JSON should parse");
+    assert_eq!(full["schema"], "maestro.resolved_recipe.v1");
+    assert_eq!(full["contract"]["id"], "work");
+    assert_eq!(
+        full["contract_hash_schema"],
+        "maestro.recipe-contract-hash.v1"
+    );
 }
 
 #[test]
 fn loop_next_compact_json_routes_ready_task_without_mutating_store() {
     let temp = TestTempDir::new("maestro-loop-next-compact-json");
-    init_git_marker(temp.path());
+    init_git_repo(temp.path());
     stdout(temp.path(), &["init", "--yes"]);
-    stdout(
+    let task_id = stdout(
         temp.path(),
         &["task", "add", "--id-only", "Implement compact packet"],
     );
+    let task_id = task_id.trim();
     let before = snapshot_dir(&temp.path().join(".maestro"));
 
     let out = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
@@ -1739,18 +1890,288 @@ fn loop_next_compact_json_routes_ready_task_without_mutating_store() {
     let value: Value = serde_json::from_str(&out).expect("compact next JSON should parse");
 
     assert_eq!(before, after, "loop next --compact must stay read-only");
-    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert!(out.len() <= 512, "{} bytes: {out}", out.len());
+    assert_eq!(value["schema"], "maestro.loop_action_card.v1");
+    assert_eq!(value["status"], "ready");
     assert_eq!(value["recipe"], "work");
     assert_eq!(value["phase"], "perceive");
-    assert_eq!(value["progress_task"], "anchor-scope");
-    assert!(value["reads"].is_array(), "{value}");
-    assert!(value["next"].is_array(), "{value}");
+    assert_eq!(value["task"]["id"], task_id);
+    assert_eq!(value["task"]["state"], "ready");
+    assert_eq!(value["action"]["kind"], "claim_task");
+    assert_eq!(
+        value["action"]["argv"],
+        serde_json::json!(["maestro", "task", "claim", task_id])
+    );
+    assert!(value["action"].get("argv_template").is_none(), "{value}");
+    assert_eq!(value["full"], "maestro loop next --full");
+
+    let default = stdout(temp.path(), &["loop", "next"]);
+    let compact = stdout(temp.path(), &["loop", "next", "--compact"]);
+    assert_eq!(default, compact);
+    assert_bounded_text(&default, 6);
+    assert!(
+        default.contains(&format!("work/perceive · {task_id} [ready]")),
+        "{default}"
+    );
+    assert!(
+        default.contains(&format!("do: maestro task claim {task_id}")),
+        "{default}"
+    );
+    assert!(
+        default.contains("full: maestro loop next --full"),
+        "{default}"
+    );
+}
+
+#[test]
+fn loop_next_compact_grounds_route_and_action_in_the_same_mixed_state_task() {
+    let temp = TestTempDir::new("maestro-loop-next-compact-mixed-task-state");
+    init_git_repo(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let verify_id = stdout(
+        temp.path(),
+        &[
+            "task",
+            "create",
+            "Recover proof before continuing",
+            "--check",
+            "observable proof exists",
+            "--id-only",
+        ],
+    );
+    let verify_id = verify_id.trim();
+    stdout(temp.path(), &["task", "explore", verify_id]);
+    stdout(temp.path(), &["task", "accept", verify_id]);
+    stdout(temp.path(), &["task", "claim", verify_id]);
+    stderr(
+        temp.path(),
+        &[
+            "task",
+            "complete",
+            verify_id,
+            "--summary",
+            "done",
+            "--claim",
+            "observable proof exists",
+        ],
+    );
+    let active_id = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Continue active implementation"],
+    );
+    let active_id = active_id.trim();
+    stdout(temp.path(), &["task", "claim", active_id]);
+
+    let out = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("mixed-state card JSON should parse");
+
+    assert_eq!(value["recipe"], "work");
+    assert_eq!(value["phase"], "observe");
+    assert_eq!(value["task"]["id"], verify_id);
+    assert_eq!(value["task"]["state"], "needs_verification");
+    assert_eq!(value["action"]["kind"], "proof_recovery");
+    assert_eq!(
+        value["action"]["argv"],
+        serde_json::json!(["maestro", "task", "verify", verify_id])
+    );
+}
+
+#[test]
+fn loop_next_compact_uses_the_unknown_safety_constraints_exact_inspection() {
+    let temp = TestTempDir::new("maestro-loop-next-compact-unknown-safety");
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Inspect unknown git safety"],
+    );
+
+    let out = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("unknown-safety card JSON should parse");
+
+    assert_eq!(value["status"], "blocked");
+    assert_eq!(value["signal"]["kind"], "stop");
+    assert_eq!(value["signal"]["text"], "dirty_tree_risk");
+    assert_eq!(value["action"]["kind"], "inspect_safety");
+    assert_eq!(
+        value["action"]["argv"],
+        serde_json::json!(["git", "status", "--short", "--branch"])
+    );
+}
+
+#[test]
+fn loop_next_progress_replay_returns_the_exact_done_template_without_help_probes() {
+    let temp = TestTempDir::new("maestro-loop-next-progress-replay");
+    init_git_repo(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let setup = stdout(
+        temp.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "Implement compact replay",
+            "--task",
+            "Verify compact replay",
+            "--start",
+        ],
+    );
+    let first_task = first_id(&setup, "task-");
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+    let mut invocations = Vec::new();
+
+    invocations.push(vec!["loop", "next", "--compact", "--json"]);
+    let first = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    assert_eq!(before, after, "the compact router must remain read-only");
+    let first: Value = serde_json::from_str(&first).expect("first action card should parse");
+    assert_eq!(first["task"]["id"], first_task);
+    assert_eq!(first["task"]["progress"], true);
+    assert_eq!(first["action"]["kind"], "done_task");
+    assert_eq!(
+        first["action"]["argv_template"],
+        serde_json::json!([
+            "maestro",
+            "task",
+            "done",
+            first_task,
+            "--proof",
+            "<evidence>"
+        ])
+    );
+
+    invocations.push(vec![
+        "task",
+        "done",
+        first_task.as_str(),
+        "--proof",
+        "observed",
+    ]);
+    stdout(
+        temp.path(),
+        &["task", "done", &first_task, "--proof", "observed"],
+    );
+    invocations.push(vec!["loop", "next", "--compact", "--json"]);
+    let second = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let second: Value = serde_json::from_str(&second).expect("second action card should parse");
+    let second_task = second["task"]["id"]
+        .as_str()
+        .expect("second Progress task id should be grounded")
+        .to_string();
+    assert_eq!(second["action"]["kind"], "claim_task");
+    assert_eq!(
+        second["action"]["argv"],
+        serde_json::json!(["maestro", "task", "claim", second_task])
+    );
+
+    invocations.push(vec!["task", "claim", second_task.as_str()]);
+    stdout(temp.path(), &["task", "claim", &second_task]);
+    invocations.push(vec!["loop", "next", "--compact", "--json"]);
+    let third = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let third: Value = serde_json::from_str(&third).expect("third action card should parse");
+    assert_eq!(third["task"]["id"], second_task);
+    assert_eq!(third["action"]["kind"], "done_task");
+    assert_eq!(
+        third["action"]["argv_template"],
+        serde_json::json!([
+            "maestro",
+            "task",
+            "done",
+            second_task,
+            "--proof",
+            "<evidence>"
+        ])
+    );
+    assert_eq!(
+        invocations
+            .iter()
+            .filter(|args| args.starts_with(&["loop", "next"]))
+            .count(),
+        3,
+        "each observed state should use one router call"
+    );
+    assert!(
+        invocations.iter().flatten().all(|arg| *arg != "--help"),
+        "replay must not probe help: {invocations:?}"
+    );
+}
+
+#[test]
+fn loop_next_compact_missing_repo_fails_closed_to_one_inspection() {
+    let temp = TestTempDir::new("maestro-loop-next-compact-uncertain");
+    let out = stdout(temp.path(), &["loop", "next"]);
+
+    assert_bounded_text(&out, 6);
+    assert!(out.contains("intake-triage/perceive"), "{out}");
+    assert!(out.contains("do: maestro status --json"), "{out}");
+    assert!(out.contains("stop:"), "{out}");
+    assert!(!temp.path().join(".maestro").exists());
+
+    let json = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let value: Value = serde_json::from_str(&json).expect("uncertain card JSON should parse");
+    assert!(json.len() <= 512, "{} bytes: {json}", json.len());
+    assert_eq!(value["schema"], "maestro.loop_action_card.v1");
+    assert_eq!(value["status"], "uncertain");
+    assert_eq!(
+        value["action"]["argv"],
+        serde_json::json!(["maestro", "status", "--json"])
+    );
+}
+
+#[test]
+fn loop_next_compact_blocked_task_exposes_only_exact_inspection() {
+    let temp = TestTempDir::new("maestro-loop-next-compact-blocked");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let blocker = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Unblock dependency"],
+    );
+    let blocker = blocker.trim();
+    let target = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Blocked compact task"],
+    );
+    let target = target.trim();
+    stdout(
+        temp.path(),
+        &[
+            "task",
+            "block",
+            target,
+            "--reason",
+            "dependency is open",
+            "--by",
+            blocker,
+        ],
+    );
+
+    let output = maestro_with_env(
+        temp.path(),
+        &["loop", "next", "--compact", "--json"],
+        &[("MAESTRO_CURRENT_TASK", target)],
+    );
+    assert!(
+        output.status.success(),
+        "blocked compact route failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = String::from_utf8(output.stdout).expect("blocked card stdout should be UTF-8");
+    let value: Value = serde_json::from_str(&json).expect("blocked card JSON should parse");
+    assert!(json.len() <= 512, "{} bytes: {json}", json.len());
+    assert_eq!(value["status"], "blocked");
+    assert_eq!(value["task"]["id"], target);
+    assert_eq!(value["action"]["kind"], "inspect_blocker");
+    assert_eq!(
+        value["action"]["argv"],
+        serde_json::json!(["maestro", "task", "show", target])
+    );
+    assert!(value["action"].get("argv_template").is_none(), "{value}");
 }
 
 #[test]
 fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
     let temp = TestTempDir::new("maestro-loop-show-migrated");
-    let out = stdout(temp.path(), &["loop", "show", "conflict-handoff"]);
+    let out = stdout(temp.path(), &["loop", "show", "conflict-handoff", "--full"]);
 
     assert!(out.contains("# Conflict handoff"), "{out}");
     assert!(out.contains("git worktree add"), "{out}");
@@ -1760,7 +2181,7 @@ fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
 #[test]
 fn loop_show_renders_synthesize_recipe() {
     let temp = TestTempDir::new("maestro-loop-show-synthesize");
-    let out = stdout(temp.path(), &["loop", "show", "synthesize"]);
+    let out = stdout(temp.path(), &["loop", "show", "synthesize", "--full"]);
 
     assert!(out.contains("# Synthesize loop"), "{out}");
     assert!(out.contains("maestro synthesize claim"), "{out}");
@@ -1797,7 +2218,7 @@ fn loop_lists_shows_and_validates_project_custom_recipes() {
         "{index}"
     );
 
-    let shown = stdout(temp.path(), &["loop", "show", "brief"]);
+    let shown = stdout(temp.path(), &["loop", "show", "brief", "--full"]);
     assert!(shown.contains("# Support brief loop"), "{shown}");
     assert!(
         shown.contains("schema_version: maestro.recipe.v2"),
@@ -1820,6 +2241,97 @@ fn loop_lists_shows_and_validates_project_custom_recipes() {
 }
 
 #[test]
+fn mixed_custom_catalog_isolates_invalid_sources_and_keeps_valid_routes_visible() {
+    let temp = TestTempDir::new("maestro-loop-custom-mixed-catalog");
+    write_custom_recipe(temp.path(), "brief", CUSTOM_RECIPE);
+    write_custom_recipe(
+        temp.path(),
+        "profiled",
+        &profiled_custom_recipe()
+            .replace("id: brief", "id: profiled")
+            .replace("brief.", "profiled."),
+    );
+    write_custom_recipe(
+        temp.path(),
+        "bad-profile",
+        &profiled_custom_recipe()
+            .replace("id: brief", "id: bad-profile")
+            .replace(
+                "maestro.standard-six-phase.v1",
+                "maestro.standard-six-phase.v2",
+            ),
+    );
+    write_custom_recipe(
+        temp.path(),
+        "bad-override",
+        &profiled_custom_recipe()
+            .replace("id: brief", "id: bad-override")
+            .replace(
+                "title: Anchor support brief scope",
+                "title: Anchor support brief scope\n    phase: act",
+            ),
+    );
+    write_custom_recipe(
+        temp.path(),
+        "bad-effective",
+        "schema_version: maestro.recipe.v2\nid: bad-effective\n",
+    );
+    let dependent = include_str!("../embedded/loop-recipes/unattended.yml")
+        .replace("id: unattended", "id: depends-invalid")
+        .replace("unattended.", "depends-invalid.")
+        .replacen("to: work.perceive", "to: bad-effective.perceive", 1);
+    write_custom_recipe(temp.path(), "depends-invalid", &dependent);
+    write_custom_recipe(temp.path(), "work", CUSTOM_RECIPE);
+    let external = temp.path().join("external-bad-link.yml");
+    fs::write(&external, CUSTOM_RECIPE).expect("external recipe should be writable");
+    unix_fs::symlink(
+        &external,
+        temp.path().join(".maestro/loop-recipes/bad-link.yml"),
+    )
+    .expect("recipe symlink should be creatable");
+
+    let index = stdout(temp.path(), &["loop"]);
+    assert!(index.contains("    work  [lifecycle]"), "{index}");
+    assert!(index.contains("    brief  --"), "{index}");
+    assert!(index.contains("    profiled  --"), "{index}");
+    assert!(!index.contains("    depends-invalid  --"), "{index}");
+    assert!(
+        index.contains("## Invalid Project Custom Recipes"),
+        "{index}"
+    );
+    for (name, category) in [
+        ("bad-profile", "profile"),
+        ("bad-override", "override"),
+        ("bad-effective", "contract"),
+        ("depends-invalid", "edge"),
+        ("work", "collision"),
+        ("bad-link", "symlink"),
+    ] {
+        assert!(
+            index.contains(&format!("{name}  [{category}]")),
+            "missing {name}/{category}: {index}"
+        );
+    }
+
+    assert_eq!(
+        loop_recipes::custom_contract_names(&temp.path().join(".maestro/loop-recipes"))
+            .expect("valid custom names should remain readable"),
+        vec!["brief".to_string(), "profiled".to_string()]
+    );
+    assert!(stdout(temp.path(), &["loop", "show", "work", "--full"]).contains("# Work loop"));
+    assert!(
+        stdout(temp.path(), &["loop", "validate", "profiled"])
+            .contains("valid project custom loop recipe: profiled")
+    );
+    let invalid = stderr(temp.path(), &["loop", "validate", "bad-profile"]);
+    assert!(invalid.contains("bad-profile.yml"), "{invalid}");
+    assert!(invalid.contains("[profile]"), "{invalid}");
+    let dependent = stderr(temp.path(), &["loop", "validate", "depends-invalid"]);
+    assert!(dependent.contains("[edge]"), "{dependent}");
+    assert!(dependent.contains("bad-effective"), "{dependent}");
+}
+
+#[test]
 fn loop_template_custom_prints_valid_non_mutating_recipe() {
     let temp = TestTempDir::new("maestro-loop-template-custom");
 
@@ -1839,6 +2351,183 @@ fn loop_template_custom_prints_valid_non_mutating_recipe() {
     assert!(
         validated.contains("valid project custom loop recipe: custom"),
         "{validated}"
+    );
+}
+
+#[test]
+fn v3_profile_none_resolves_as_explicit_self_contained_contract() {
+    let temp = TestTempDir::new("maestro-loop-v3-profile-none");
+    let body = CUSTOM_RECIPE.replacen(
+        "schema_version: maestro.recipe.v2",
+        "schema_version: maestro.recipe.v3\nprofile: none",
+        1,
+    );
+    write_custom_recipe(temp.path(), "brief", &body);
+
+    let contract =
+        loop_recipes::custom_contract(&temp.path().join(".maestro/loop-recipes"), "brief")
+            .expect("profile none should resolve a self-contained v3 recipe");
+
+    assert_eq!(contract.effective().schema_version, "maestro.recipe.v3");
+    assert_eq!(contract.provenance.profile, "none");
+    assert_eq!(contract.provenance.source_schema, "maestro.recipe.v3");
+    assert!(
+        contract.contract_hash.starts_with("sha256:"),
+        "{}",
+        contract.contract_hash
+    );
+}
+
+#[test]
+fn v3_exact_profile_resolves_immutable_progress_shape() {
+    let temp = TestTempDir::new("maestro-loop-v3-exact-profile");
+    write_custom_recipe(temp.path(), "brief", &profiled_custom_recipe());
+
+    let contract =
+        loop_recipes::custom_contract(&temp.path().join(".maestro/loop-recipes"), "brief")
+            .expect("the exact embedded standard profile should resolve");
+
+    assert_eq!(contract.provenance.profile, "maestro.standard-six-phase.v1");
+    assert_eq!(contract.effective().progress_tasks.len(), 6);
+    assert_eq!(contract.effective().progress_tasks[0].id, "anchor-scope");
+    assert_eq!(contract.effective().progress_tasks[0].phase, "perceive");
+    assert!(contract.effective().progress_tasks[0].required);
+    assert_eq!(
+        contract.effective().progress_tasks[0].title,
+        "Anchor support brief scope"
+    );
+    assert_eq!(
+        contract.effective().progress_tasks[5].id,
+        "return-next-gate"
+    );
+    let shown = stdout(temp.path(), &["loop", "show", "brief", "--full"]);
+    assert!(
+        shown.contains("resolved_schema: maestro.resolved_recipe.v1"),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("profile: maestro.standard-six-phase.v1"),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("contract_hash_schema: maestro.recipe-contract-hash.v1"),
+        "{shown}"
+    );
+    assert!(shown.contains("contract_hash: sha256:"), "{shown}");
+    let json = serde_json::to_value(&contract).expect("resolved contract should serialize");
+    assert_eq!(json["schema"], "maestro.resolved_recipe.v1");
+    assert_eq!(
+        json["contract_hash_schema"],
+        "maestro.recipe-contract-hash.v1"
+    );
+    assert_eq!(json["provenance"]["source"]["kind"], "project_custom");
+}
+
+#[test]
+fn v3_profile_merge_rejects_weakening_and_unknown_versions() {
+    let temp = TestTempDir::new("maestro-loop-v3-profile-safety");
+    let base = profiled_custom_recipe();
+    let cases = [
+        (
+            base.replace(
+                "maestro.standard-six-phase.v1",
+                "maestro.standard-six-phase.v2",
+            ),
+            "unsupported recipe profile maestro.standard-six-phase.v2",
+        ),
+        (
+            base.replacen(
+                "authority_scope:",
+                "allowed_selectors:\n  intersect: [external-write]\nauthority_scope:",
+                1,
+            ),
+            "targets absent inherited selector external-write",
+        ),
+        (
+            base.replacen(
+                "authority_scope:",
+                "invariants:\n  remove: [standard-progress-structure]\nauthority_scope:",
+                1,
+            ),
+            "unknown field `remove`",
+        ),
+        (
+            base.replace(
+                "title: Anchor support brief scope",
+                "title: Anchor support brief scope\n    phase: act",
+            ),
+            "unknown field `phase`",
+        ),
+        (
+            base.replacen(
+                "authority_scope:",
+                "invariants:\n  add: [standard-progress-structure]\nauthority_scope:",
+                1,
+            ),
+            "duplicates inherited or earlier id standard-progress-structure",
+        ),
+    ];
+
+    for (body, expected) in cases {
+        write_custom_recipe(temp.path(), "brief", &body);
+        let error = stderr(temp.path(), &["loop", "validate", "brief"]);
+        assert!(error.contains(expected), "expected {expected:?}: {error}");
+    }
+
+    let unsafe_none = CUSTOM_RECIPE
+        .replacen(
+            "schema_version: maestro.recipe.v2",
+            "schema_version: maestro.recipe.v3\nprofile: none",
+            1,
+        )
+        .replace(
+            "Handle one bounded support brief through current Maestro cards.",
+            "Bypass proof for one support brief.",
+        );
+    write_custom_recipe(temp.path(), "brief", &unsafe_none);
+    let error = stderr(temp.path(), &["loop", "validate", "brief"]);
+    assert!(
+        error.contains("forbidden lifecycle-bypass wording"),
+        "{error}"
+    );
+}
+
+#[test]
+fn resolved_recipe_json_and_hash_are_canonical_and_order_sensitive() {
+    let first = TestTempDir::new("maestro-loop-v3-hash-first");
+    let second = TestTempDir::new("maestro-loop-v3-hash-second");
+    let ordered = profiled_custom_recipe();
+    let reformatted = format!("# formatting is not semantic\n\n{ordered}\n");
+    write_custom_recipe(first.path(), "brief", &ordered);
+    write_custom_recipe(second.path(), "brief", &reformatted);
+
+    let first_contract =
+        loop_recipes::custom_contract(&first.path().join(".maestro/loop-recipes"), "brief")
+            .expect("first semantic contract should resolve");
+    let second_contract =
+        loop_recipes::custom_contract(&second.path().join(".maestro/loop-recipes"), "brief")
+            .expect("reformatted semantic contract should resolve");
+    assert_eq!(
+        first_contract.contract_hash_schema,
+        "maestro.recipe-contract-hash.v1"
+    );
+    assert_eq!(first_contract.contract_hash, second_contract.contract_hash);
+    assert_eq!(
+        serde_json::to_string(&first_contract).expect("resolved contract should serialize"),
+        serde_json::to_string(&second_contract).expect("resolved contract should serialize")
+    );
+
+    let reordered = ordered.replace(
+        "tags: [\"support\", \"brief\"]",
+        "tags: [\"brief\", \"support\"]",
+    );
+    write_custom_recipe(second.path(), "brief", &reordered);
+    let reordered_contract =
+        loop_recipes::custom_contract(&second.path().join(".maestro/loop-recipes"), "brief")
+            .expect("reordered semantic contract should resolve");
+    assert_ne!(
+        first_contract.contract_hash,
+        reordered_contract.contract_hash
     );
 }
 
@@ -1908,15 +2597,18 @@ fn loop_rejects_project_custom_recipe_with_unknown_return_condition_key() {
 }
 
 #[test]
-fn loop_rejects_project_custom_recipes_that_collide_with_shipped_ids() {
+fn loop_isolates_custom_recipe_collisions_without_hiding_the_shipped_recipe() {
     let temp = TestTempDir::new("maestro-loop-custom-id-collision");
     write_custom_recipe(temp.path(), "work", CUSTOM_RECIPE);
 
-    let error = stderr(temp.path(), &["loop"]);
+    let index = stdout(temp.path(), &["loop"]);
     assert!(
-        error.contains("collides with a shipped or legacy recipe id"),
-        "{error}"
+        index.contains("work  [collision]")
+            && index.contains("collides with a shipped or legacy recipe id"),
+        "{index}"
     );
+    let shown = stdout(temp.path(), &["loop", "show", "work", "--full"]);
+    assert!(shown.contains("# Work loop"), "{shown}");
 }
 
 #[test]

@@ -1,4 +1,5 @@
-schema_version: maestro.recipe.v2
+schema_version: maestro.recipe.v3
+profile: maestro.standard-six-phase.v1
 id: synthesize
 kind:
   category: orchestration
@@ -6,35 +7,22 @@ kind:
 title: Synthesize loop
 summary: Claim one pending worktree synthesis handoff, verify it, merge it, run checks, close/archive when applicable, and clean it up one lane at a time.
 progress_tasks:
-  - id: anchor-scope
+  anchor-scope:
     title: Anchor synthesis scope and authority
-    phase: perceive
-    required: true
     done_check: pending handoff, target branch, and hard stops are known
-  - id: choose-next
+  choose-next:
     title: Choose one synthesis handoff
-    phase: choose
-    required: true
     done_check: exactly one pending lane is selected or a blocker is recorded
-  - id: execute-move
+  execute-move:
     title: Execute bounded synthesis move
-    phase: act
-    required: true
     done_check: claim, merge, check, close/archive, or cleanup action is complete or blocked
-  - id: observe-evidence
+  observe-evidence:
     title: Observe synthesis evidence
-    phase: observe
-    required: true
     done_check: merge/check/cleanup evidence or blocker is recorded
-  - id: record-learning
+  record-learning:
     title: Record reusable synthesis learning when needed
-    phase: learn
-    required: true
-    done_check: durable learning is recorded or explicitly unnecessary
-  - id: return-next-gate
+  return-next-gate:
     title: Return next synthesis gate
-    phase: continue
-    required: true
     done_check: next pending handoff, work gate, ship gate, or hard stop is visible
 authority_scope:
   - pending worktree synthesis handoff in the current repo

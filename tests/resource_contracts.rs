@@ -110,6 +110,19 @@ fn shipped_resource_families_cover_locked_architecture_families() {
     );
     assert_eq!(loop_recipes.parser.owner, "src/domain/loop_recipes.rs");
     assert_eq!(loop_recipes.validator.owner, "src/domain/loop_recipes.rs");
+    assert!(loop_recipes.has_generated_output(GeneratedOutput::ResourceGuardRows));
+    assert!(
+        loop_recipes
+            .parser
+            .responsibility
+            .contains("v2/v3 plus exact embedded profiles")
+    );
+    assert!(
+        loop_recipes
+            .validator
+            .responsibility
+            .contains("typed profile composition and safety monotonicity")
+    );
 
     let hooks = families
         .iter()

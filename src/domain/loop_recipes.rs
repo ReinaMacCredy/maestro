@@ -4,29 +4,72 @@
 //! when it applies, what authority it has, how it maps current bricks into the
 //! six loop phases, and where it may transition or invoke helpers. The
 //! authoritative shipped catalog lives in `embedded/loop-recipes/` as
-//! `maestro.recipe.v2` YAML. `maestro loop show <name>` renders readable docs
-//! from that structure, so human output cannot drift from the contract.
+//! versioned YAML. `maestro loop show <name>` renders readable docs from the
+//! resolved contract, so human output cannot drift from runtime behavior.
 //!
 //! The module is named `loop_recipes` rather than `loop` because `loop` is a
 //! reserved Rust keyword; the CLI subcommand is still `maestro loop`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 
+use crate::foundation::core::hash::sha256_prefixed;
+
 /// The structured recipe contract tree, embedded at build time.
 static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/embedded/loop-recipes");
 
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
+const CONTRACT_SCHEMA_VERSION_V3: &str = "maestro.recipe.v3";
+const PROFILE_SCHEMA_VERSION: &str = "maestro.recipe_profile.v1";
+const STANDARD_PROFILE: &str = "maestro.standard-six-phase.v1";
+const RESOLVED_RECIPE_SCHEMA: &str = "maestro.resolved_recipe.v1";
+const RECIPE_CONTRACT_HASH_SCHEMA: &str = "maestro.recipe-contract-hash.v1";
+const RECIPE_RESOLVER_VERSION: &str = "maestro.recipe-resolver.v1";
 const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
 const LOOP_CHAIN_SCHEMA: &str = "maestro.loop_chain.v1";
 const LOOP_IMPROVE_SCHEMA: &str = "maestro.loop_improve.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
+const KERNEL_INVARIANT_IDS: [&str; 6] = [
+    "canonical-six-phase",
+    "authority-required",
+    "proof-required",
+    "qa-required",
+    "human-approval-required",
+    "no-hidden-lifecycle",
+];
+const KNOWN_INVARIANT_IDS: [&str; 7] = [
+    "canonical-six-phase",
+    "authority-required",
+    "proof-required",
+    "qa-required",
+    "human-approval-required",
+    "no-hidden-lifecycle",
+    "standard-progress-structure",
+];
+const KERNEL_ALLOWED_SELECTORS: [&str; 5] = [
+    "maestro-read",
+    "maestro-write",
+    "local-read",
+    "local-write",
+    "git-read",
+];
+const KERNEL_FORBIDDEN_SELECTORS: [&str; 2] = ["external-write", "hidden-lifecycle"];
+const KNOWN_SELECTORS: [&str; 7] = [
+    "maestro-read",
+    "maestro-write",
+    "local-read",
+    "local-write",
+    "git-read",
+    "external-write",
+    "hidden-lifecycle",
+];
 const CANONICAL_RECIPE_IDS: [&str; 15] = [
     "adversarial-review",
     "audit",
@@ -53,7 +96,7 @@ const LEGACY_RECIPE_IDS: [&str; 4] = [
 const CUSTOM_RECIPE_POLICY: [&str; 4] = [
     "Evaluate shipped applies_when rules first.",
     "Use a run-scoped or card-scoped custom recipe only when no shipped recipe fits.",
-    "Custom recipes must use maestro.recipe.v2, six phases, current Maestro verbs, hard stops, and continue output.",
+    "Custom recipes use self-contained maestro.recipe.v2 or explicit maestro.recipe.v3 profiles, six phases, current Maestro verbs, hard stops, and continue output.",
     "Custom recipes cannot add non-Maestro write surfaces or skip proof, QA, authority, or human approval gates.",
 ];
 const FORBIDDEN_BYPASS_PHRASES: [&str; 10] = [
@@ -113,9 +156,9 @@ const RETURN_CONDITION_KEYS: &[&str] = &[
     "work.verified_blocked_or_superseded",
 ];
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct RecipeContract {
+pub struct RecipeContractData {
     pub schema_version: String,
     pub id: String,
     pub kind: RecipeKind,
@@ -133,14 +176,539 @@ pub struct RecipeContract {
     pub phases: BTreeMap<String, PhaseContract>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct ResolvedRecipeContract {
+    pub schema: &'static str,
+    pub contract_hash_schema: &'static str,
+    pub provenance: RecipeProvenance,
+    pub contract_hash: String,
+    pub invariant_ids: Vec<String>,
+    pub allowed_selectors: Vec<String>,
+    pub forbidden_selectors: Vec<String>,
+    contract: RecipeContractData,
+}
+
+impl Deref for ResolvedRecipeContract {
+    type Target = RecipeContractData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.contract
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RecipeProvenance {
+    pub source: RecipeSourceIdentity,
+    pub source_schema: String,
+    pub profile: String,
+    pub resolver: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RecipeSourceIdentity {
+    pub kind: RecipeSourceKind,
+    pub id: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecipeSourceKind {
+    Embedded,
+    ProjectCustom,
+}
+
+impl RecipeSourceKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Embedded => "embedded",
+            Self::ProjectCustom => "project_custom",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedRecipePolicy {
+    invariant_ids: Vec<String>,
+    allowed_selectors: Vec<String>,
+    forbidden_selectors: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct RecipeHashInput<'a> {
+    schema: &'static str,
+    contract_hash_schema: &'static str,
+    source: &'a RecipeSourceIdentity,
+    source_schema: &'a str,
+    profile: &'a str,
+    resolver: &'static str,
+    invariant_ids: &'a [String],
+    allowed_selectors: &'a [String],
+    forbidden_selectors: &'a [String],
+    contract: &'a RecipeContractData,
+}
+
+impl ResolvedRecipeContract {
+    fn new(
+        contract: RecipeContractData,
+        source: RecipeSourceIdentity,
+        profile: String,
+        policy: ResolvedRecipePolicy,
+        allowed_edge_targets: &BTreeSet<String>,
+    ) -> Result<Self> {
+        validate_contract_data(&contract)?;
+        validate_edge_targets(&contract, allowed_edge_targets)?;
+        validate_policy(
+            &policy.invariant_ids,
+            &policy.allowed_selectors,
+            &policy.forbidden_selectors,
+        )?;
+        ensure!(
+            contract.id == source.id,
+            "recipe source {} id mismatch: {}",
+            source.id,
+            contract.id
+        );
+        let provenance = RecipeProvenance {
+            source,
+            source_schema: contract.schema_version.clone(),
+            profile,
+            resolver: RECIPE_RESOLVER_VERSION,
+        };
+        let canonical = serde_json::to_vec(&RecipeHashInput {
+            schema: RESOLVED_RECIPE_SCHEMA,
+            contract_hash_schema: RECIPE_CONTRACT_HASH_SCHEMA,
+            source: &provenance.source,
+            source_schema: &provenance.source_schema,
+            profile: &provenance.profile,
+            resolver: provenance.resolver,
+            invariant_ids: &policy.invariant_ids,
+            allowed_selectors: &policy.allowed_selectors,
+            forbidden_selectors: &policy.forbidden_selectors,
+            contract: &contract,
+        })
+        .context("failed to canonicalize resolved loop recipe")?;
+        Ok(Self {
+            schema: RESOLVED_RECIPE_SCHEMA,
+            contract_hash_schema: RECIPE_CONTRACT_HASH_SCHEMA,
+            provenance,
+            contract_hash: sha256_prefixed(&canonical),
+            invariant_ids: policy.invariant_ids,
+            allowed_selectors: policy.allowed_selectors,
+            forbidden_selectors: policy.forbidden_selectors,
+            contract,
+        })
+    }
+
+    pub fn effective(&self) -> &RecipeContractData {
+        &self.contract
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecipeSourceV3 {
+    schema_version: String,
+    profile: String,
+    id: String,
+    kind: RecipeKind,
+    title: String,
+    summary: String,
+    progress_tasks: serde_yaml::Value,
+    applies_when: Vec<String>,
+    authority_scope: Vec<String>,
+    autonomy: Vec<String>,
+    hard_stops: Vec<String>,
+    transitions: Vec<RecipeEdge>,
+    invocations: Vec<RecipeEdge>,
+    outputs: Vec<String>,
+    router: RouterMetadata,
+    phases: BTreeMap<String, PhaseContract>,
+    #[serde(default)]
+    invariants: AdditiveIds,
+    #[serde(default)]
+    allowed_selectors: IntersectingIds,
+    #[serde(default)]
+    forbidden_selectors: AdditiveIds,
+}
+
+impl RecipeSourceV3 {
+    fn resolve(
+        self,
+        source: RecipeSourceIdentity,
+        allowed_edge_targets: &BTreeSet<String>,
+    ) -> Result<ResolvedRecipeContract> {
+        let (progress_tasks, policy) = if self.profile == "none" {
+            let tasks: Vec<ProgressTaskContract> = serde_yaml::from_value(self.progress_tasks)
+                .context("profile none requires explicit progress_tasks sequence")?;
+            (
+                tasks,
+                resolve_policy(
+                    None,
+                    self.invariants,
+                    self.allowed_selectors,
+                    self.forbidden_selectors,
+                )?,
+            )
+        } else {
+            let profile = recipe_profile(&self.profile)?;
+            let overrides: BTreeMap<String, ProfileProgressTaskOverride> =
+                serde_yaml::from_value(self.progress_tasks).with_context(|| {
+                    format!(
+                        "profile {} requires progress_tasks keyed overrides",
+                        self.profile
+                    )
+                })?;
+            let progress_tasks = resolve_profile_progress_tasks(&profile, overrides)?;
+            let policy = resolve_policy(
+                Some(&profile),
+                self.invariants,
+                self.allowed_selectors,
+                self.forbidden_selectors,
+            )?;
+            (progress_tasks, policy)
+        };
+        ResolvedRecipeContract::new(
+            RecipeContractData {
+                schema_version: self.schema_version,
+                id: self.id,
+                kind: self.kind,
+                title: self.title,
+                summary: self.summary,
+                progress_tasks,
+                applies_when: self.applies_when,
+                authority_scope: self.authority_scope,
+                autonomy: self.autonomy,
+                hard_stops: self.hard_stops,
+                transitions: self.transitions,
+                invocations: self.invocations,
+                outputs: self.outputs,
+                router: self.router,
+                phases: self.phases,
+            },
+            source,
+            self.profile,
+            policy,
+            allowed_edge_targets,
+        )
+    }
+}
+
+enum RecipeSource {
+    LegacySelfContainedV2(RecipeContractData),
+    ProfiledV3(RecipeSourceV3),
+}
+
+impl RecipeSource {
+    fn resolve(
+        self,
+        source: RecipeSourceIdentity,
+        allowed_edge_targets: &BTreeSet<String>,
+    ) -> Result<ResolvedRecipeContract> {
+        match self {
+            Self::LegacySelfContainedV2(contract) => ResolvedRecipeContract::new(
+                contract,
+                source,
+                "legacy-self-contained-v2".to_string(),
+                kernel_policy(),
+                allowed_edge_targets,
+            ),
+            Self::ProfiledV3(recipe) => recipe.resolve(source, allowed_edge_targets),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProfileProgressTaskOverride {
+    title: Option<String>,
+    done_check: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdditiveIds {
+    #[serde(default)]
+    add: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IntersectingIds {
+    #[serde(default)]
+    intersect: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecipeProfile {
+    schema_version: String,
+    id: String,
+    progress_tasks: Vec<ProgressTaskContract>,
+    invariant_ids: Vec<String>,
+    allowed_selectors: Vec<String>,
+    forbidden_selectors: Vec<String>,
+}
+
+fn recipe_source(kind: RecipeSourceKind, id: &str) -> RecipeSourceIdentity {
+    RecipeSourceIdentity {
+        kind,
+        id: id.to_string(),
+    }
+}
+
+fn kernel_policy() -> ResolvedRecipePolicy {
+    ResolvedRecipePolicy {
+        invariant_ids: KERNEL_INVARIANT_IDS
+            .iter()
+            .map(|value| (*value).to_string())
+            .collect(),
+        allowed_selectors: KERNEL_ALLOWED_SELECTORS
+            .iter()
+            .map(|value| (*value).to_string())
+            .collect(),
+        forbidden_selectors: KERNEL_FORBIDDEN_SELECTORS
+            .iter()
+            .map(|value| (*value).to_string())
+            .collect(),
+    }
+}
+
+fn recipe_profile(id: &str) -> Result<RecipeProfile> {
+    ensure!(
+        id == STANDARD_PROFILE,
+        "unsupported recipe profile {id}; available: {STANDARD_PROFILE}, none"
+    );
+    let file_name = format!("{id}.yml");
+    let body = LOOP_RECIPE_CONTRACTS_DIR
+        .get_file(
+            LOOP_RECIPE_CONTRACTS_DIR
+                .path()
+                .join("profiles")
+                .join(&file_name),
+        )
+        .and_then(|file| file.contents_utf8())
+        .with_context(|| format!("embedded recipe profile {file_name} is missing"))?;
+    let profile: RecipeProfile = serde_yaml::from_str(body)
+        .with_context(|| format!("failed to parse embedded recipe profile {file_name}"))?;
+    validate_profile(&profile)?;
+    Ok(profile)
+}
+
+fn validate_profile(profile: &RecipeProfile) -> Result<()> {
+    ensure!(
+        profile.schema_version == PROFILE_SCHEMA_VERSION,
+        "recipe profile {} uses schema_version {}, expected {PROFILE_SCHEMA_VERSION}",
+        profile.id,
+        profile.schema_version
+    );
+    ensure!(
+        profile.id == STANDARD_PROFILE,
+        "embedded recipe profile id {} does not match {STANDARD_PROFILE}",
+        profile.id
+    );
+    validate_progress_tasks(&profile.id, &profile.progress_tasks)?;
+    ensure!(
+        profile.progress_tasks.len() == REQUIRED_PHASES.len(),
+        "recipe profile {} must define exactly one Progress task per canonical phase",
+        profile.id
+    );
+    let phases = profile
+        .progress_tasks
+        .iter()
+        .map(|task| task.phase.as_str())
+        .collect::<BTreeSet<_>>();
+    ensure!(
+        phases == REQUIRED_PHASES.into_iter().collect(),
+        "recipe profile {} Progress phases must match the canonical six-phase grammar",
+        profile.id
+    );
+    ensure!(
+        profile.progress_tasks.iter().all(|task| task.required),
+        "recipe profile {} Progress required flags are immutable and must be true",
+        profile.id
+    );
+    validate_registered_ids(
+        "profile invariant_ids",
+        &profile.invariant_ids,
+        &KNOWN_INVARIANT_IDS,
+    )?;
+    validate_registered_ids(
+        "profile allowed_selectors",
+        &profile.allowed_selectors,
+        &KNOWN_SELECTORS,
+    )?;
+    validate_registered_ids(
+        "profile forbidden_selectors",
+        &profile.forbidden_selectors,
+        &KNOWN_SELECTORS,
+    )?;
+    for selector in &profile.allowed_selectors {
+        ensure!(
+            KERNEL_ALLOWED_SELECTORS.contains(&selector.as_str()),
+            "profile allowed selector {selector} widens the Rust-owned selector set"
+        );
+    }
+    Ok(())
+}
+
+fn resolve_profile_progress_tasks(
+    profile: &RecipeProfile,
+    mut overrides: BTreeMap<String, ProfileProgressTaskOverride>,
+) -> Result<Vec<ProgressTaskContract>> {
+    let mut tasks = Vec::with_capacity(profile.progress_tasks.len());
+    for inherited in &profile.progress_tasks {
+        let delta = overrides.remove(&inherited.id).unwrap_or_default();
+        let mut task = inherited.clone();
+        if let Some(title) = delta.title {
+            task.title = title;
+        }
+        if let Some(done_check) = delta.done_check {
+            task.done_check = done_check;
+        }
+        tasks.push(task);
+    }
+    if let Some(target) = overrides.keys().next() {
+        bail!(
+            "profile {} progress_tasks override targets absent inherited task {target}",
+            profile.id
+        );
+    }
+    Ok(tasks)
+}
+
+fn resolve_policy(
+    profile: Option<&RecipeProfile>,
+    invariants: AdditiveIds,
+    allowed: IntersectingIds,
+    forbidden: AdditiveIds,
+) -> Result<ResolvedRecipePolicy> {
+    let mut policy = kernel_policy();
+    if let Some(profile) = profile {
+        append_unique_registered(
+            "profile invariant_ids",
+            &mut policy.invariant_ids,
+            &profile.invariant_ids,
+            &KNOWN_INVARIANT_IDS,
+        )?;
+        append_unique_registered(
+            "profile forbidden_selectors",
+            &mut policy.forbidden_selectors,
+            &profile.forbidden_selectors,
+            &KNOWN_SELECTORS,
+        )?;
+        policy.allowed_selectors = profile.allowed_selectors.clone();
+    }
+    append_unique_registered(
+        "recipe invariants.add",
+        &mut policy.invariant_ids,
+        &invariants.add,
+        &KNOWN_INVARIANT_IDS,
+    )?;
+    append_unique_registered(
+        "recipe forbidden_selectors.add",
+        &mut policy.forbidden_selectors,
+        &forbidden.add,
+        &KNOWN_SELECTORS,
+    )?;
+    if !allowed.intersect.is_empty() {
+        validate_registered_ids(
+            "recipe allowed_selectors.intersect",
+            &allowed.intersect,
+            &KNOWN_SELECTORS,
+        )?;
+        let inherited = policy
+            .allowed_selectors
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let requested = allowed
+            .intersect
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        if let Some(selector) = requested.difference(&inherited).next() {
+            bail!(
+                "recipe allowed_selectors.intersect targets absent inherited selector {selector}"
+            );
+        }
+        policy
+            .allowed_selectors
+            .retain(|selector| requested.contains(selector.as_str()));
+    }
+    Ok(policy)
+}
+
+fn append_unique_registered(
+    field: &str,
+    target: &mut Vec<String>,
+    values: &[String],
+    known: &[&str],
+) -> Result<()> {
+    let mut seen = target.iter().cloned().collect::<BTreeSet<_>>();
+    validate_registered_ids(field, values, known)?;
+    for value in values {
+        ensure!(
+            seen.insert(value.clone()),
+            "{field} duplicates inherited or earlier id {value}"
+        );
+        target.push(value.clone());
+    }
+    Ok(())
+}
+
+fn validate_registered_ids<T: AsRef<str>>(field: &str, values: &[T], known: &[&str]) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        let value = value.as_ref();
+        ensure!(known.contains(&value), "{field} uses unknown id {value}");
+        ensure!(seen.insert(value), "{field} contains duplicate id {value}");
+    }
+    Ok(())
+}
+
+fn validate_policy(
+    invariant_ids: &[String],
+    allowed_selectors: &[String],
+    forbidden_selectors: &[String],
+) -> Result<()> {
+    validate_registered_ids(
+        "resolved invariant_ids",
+        invariant_ids,
+        &KNOWN_INVARIANT_IDS,
+    )?;
+    validate_registered_ids(
+        "resolved allowed_selectors",
+        allowed_selectors,
+        &KNOWN_SELECTORS,
+    )?;
+    validate_registered_ids(
+        "resolved forbidden_selectors",
+        forbidden_selectors,
+        &KNOWN_SELECTORS,
+    )?;
+    for required in KERNEL_INVARIANT_IDS {
+        ensure!(
+            invariant_ids.iter().any(|id| id == required),
+            "resolved recipe is missing Rust-owned invariant {required}"
+        );
+    }
+    for required in KERNEL_FORBIDDEN_SELECTORS {
+        ensure!(
+            forbidden_selectors.iter().any(|id| id == required),
+            "resolved recipe is missing Rust-owned forbidden selector {required}"
+        );
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecipeKind {
     pub category: String,
     pub tags: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProgressTaskContract {
     pub id: String,
@@ -150,7 +718,7 @@ pub struct ProgressTaskContract {
     pub done_check: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RouterMetadata {
     pub status: String,
@@ -158,7 +726,7 @@ pub struct RouterMetadata {
     pub confidence: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecipeEdge {
     pub trigger: String,
@@ -171,7 +739,7 @@ pub struct RecipeEdge {
     pub return_condition: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PhaseContract {
     pub goal: String,
@@ -188,13 +756,13 @@ pub struct PhaseContract {
     pub helper_contract: Option<HelperContract>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HelperContract {
     pub work_lease: Option<WorkLeaseHelperContract>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkLeaseHelperContract {
     pub selected_unit: Vec<String>,
@@ -515,6 +1083,8 @@ pub struct LoopNextReport {
     pub recommended_status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recommended_phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_task_id: Option<String>,
     pub reason: String,
     pub confidence: String,
     pub priority: u16,
@@ -832,6 +1402,8 @@ const LOOP_PATTERN_PACKS: &[LoopPatternPack] = &[
 #[derive(Clone, Debug)]
 struct RouterCandidate {
     recipe: &'static str,
+    selected_task_id: Option<String>,
+    selection_rank: u8,
     reason: String,
     inspect: Vec<String>,
     next_verbs: Vec<String>,
@@ -843,37 +1415,57 @@ struct RouterCandidate {
 /// not inspect the filesystem, run git, execute tests, mutate Maestro artifacts,
 /// dispatch workers, or call back into the CLI.
 pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
+    Ok(route_next_with_preflight(input, |input, _| input.memory_hits.clone())?.1)
+}
+
+pub(crate) fn route_next_with_preflight<F>(
+    input: LoopRouterInput,
+    preflight: F,
+) -> Result<(LoopRouterInput, LoopNextReport)>
+where
+    F: FnOnce(&LoopRouterInput, Option<&str>) -> Vec<LoopMemoryHit>,
+{
     let mut candidates = Vec::new();
     if !input.initialized {
-        return report_for_candidate(
-            &input,
-            RouterCandidate {
-                recipe: "intake-triage",
-                reason: ".maestro is missing; route through setup/intake before choosing an executable recipe".to_string(),
-                inspect: vec![
-                    "maestro status --json".to_string(),
-                    "maestro init --dry-run".to_string(),
-                ],
-                next_verbs: vec![
-                    "maestro init --dry-run".to_string(),
-                    "maestro init --yes".to_string(),
-                ],
-            },
+        let candidate = RouterCandidate {
+            recipe: "intake-triage",
+            selected_task_id: None,
+            selection_rank: 0,
+            reason: ".maestro is missing; route through setup/intake before choosing an executable recipe".to_string(),
+            inspect: vec![
+                "maestro status --json".to_string(),
+                "maestro init --dry-run".to_string(),
+            ],
+            next_verbs: vec![
+                "maestro init --dry-run".to_string(),
+                "maestro init --yes".to_string(),
+            ],
+        };
+        let contracts = resolve_candidate_contracts([candidate.recipe])?;
+        return finish_candidate_route(
+            input,
+            candidate,
             "uncertain",
             Vec::new(),
+            &contracts,
+            preflight,
         );
     }
 
     if !input.warnings.is_empty() {
-        return uncertain_report(
-            &input,
+        return finish_uncertain_route(
+            input,
             "local state had unreadable or incomplete evidence; inspect before choosing a recipe",
+            None,
+            preflight,
         );
     }
 
     if input.active_conflicts > 0 {
         candidates.push(RouterCandidate {
             recipe: "conflict-handoff",
+            selected_task_id: None,
+            selection_rank: 0,
             reason: format!(
                 "{} active session overlap{} visible; check overlap before implementation or merge-back",
                 input.active_conflicts,
@@ -894,6 +1486,8 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     if input.git.as_ref().is_some_and(|git| git.behind > 0) {
         candidates.push(RouterCandidate {
             recipe: "conflict-handoff",
+            selected_task_id: None,
+            selection_rank: 0,
             reason: "shared branch moved since this worktree forked; rebase or merge-back safety must be resolved".to_string(),
             inspect: vec![
                 "maestro status --json".to_string(),
@@ -909,6 +1503,8 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     if input.pending_synthesis > 0 {
         candidates.push(RouterCandidate {
             recipe: "synthesize",
+            selected_task_id: None,
+            selection_rank: 0,
             reason: format!(
                 "{} pending worktree synthesis handoff{} need root/main merge ownership",
                 input.pending_synthesis,
@@ -932,26 +1528,32 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     if let Some(task) = input.current_task.as_ref() {
         if task.blocked {
             if candidates.is_empty() {
-                return uncertain_report_with_actions(
-                    &input,
-                    &format!(
+                let task_id = task.id.clone();
+                return finish_uncertain_route(
+                    input,
+                    format!(
                         "current task {} is blocked; inspect blockers before choosing a recipe",
-                        task.id
+                        task_id
                     ),
-                    vec![
-                        format!("maestro task show {}", task.id),
-                        "maestro status --json".to_string(),
-                    ],
-                    vec![
-                        format!("maestro task show {}", task.id),
-                        "maestro task unblock <blocker-id> --reason \"<why>\"".to_string(),
-                    ],
+                    Some((
+                        vec![
+                            format!("maestro task show {task_id}"),
+                            "maestro status --json".to_string(),
+                        ],
+                        vec![
+                            format!("maestro task show {task_id}"),
+                            "maestro task unblock <blocker-id> --reason \"<why>\"".to_string(),
+                        ],
+                    )),
+                    preflight,
                 );
             }
         } else if is_ship_gate(task) && matches!(task.state.as_str(), "ready" | "in_progress") {
             candidates.push(ship_gate_candidate(task));
         } else {
-            candidates.push(work_candidate(task, "current task is live"));
+            let mut candidate = work_candidate(task, "current task is live");
+            candidate.selection_rank = u8::MAX;
+            candidates.push(candidate);
         }
     }
 
@@ -1017,6 +1619,8 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     }) {
         candidates.push(RouterCandidate {
             recipe: "ship",
+            selected_task_id: None,
+            selection_rank: 0,
             reason: format!(
                 "feature {} has all child tasks verified ({}/{})",
                 feature.id, feature.verified_tasks, feature.total_tasks
@@ -1042,6 +1646,8 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     {
         candidates.push(RouterCandidate {
             recipe: "design",
+            selected_task_id: None,
+            selection_rank: 0,
             reason: format!(
                 "feature {} still needs design or contract clarification",
                 feature.id
@@ -1057,13 +1663,59 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
         });
     }
 
-    let Some(candidate) = best_candidate(&candidates)? else {
-        return uncertain_report(
-            &input,
+    let contracts =
+        resolve_candidate_contracts(candidates.iter().map(|candidate| candidate.recipe))?;
+    let Some(candidate) = best_candidate(&candidates, &contracts)? else {
+        return finish_uncertain_route(
+            input,
             "no confident recipe matched the current local Maestro state",
+            None,
+            preflight,
         );
     };
-    report_for_candidate(&input, candidate, "recommended", candidates)
+    finish_candidate_route(
+        input,
+        candidate,
+        "recommended",
+        candidates,
+        &contracts,
+        preflight,
+    )
+}
+
+fn finish_candidate_route<F>(
+    mut input: LoopRouterInput,
+    candidate: RouterCandidate,
+    status: &str,
+    candidates: Vec<RouterCandidate>,
+    contracts: &BTreeMap<&'static str, ResolvedRecipeContract>,
+    preflight: F,
+) -> Result<(LoopRouterInput, LoopNextReport)>
+where
+    F: FnOnce(&LoopRouterInput, Option<&str>) -> Vec<LoopMemoryHit>,
+{
+    input.memory_hits = preflight(&input, Some(candidate.recipe));
+    let report = report_for_candidate(&input, candidate, status, candidates, contracts)?;
+    Ok((input, report))
+}
+
+fn finish_uncertain_route<F>(
+    mut input: LoopRouterInput,
+    reason: impl AsRef<str>,
+    actions: Option<(Vec<String>, Vec<String>)>,
+    preflight: F,
+) -> Result<(LoopRouterInput, LoopNextReport)>
+where
+    F: FnOnce(&LoopRouterInput, Option<&str>) -> Vec<LoopMemoryHit>,
+{
+    input.memory_hits = preflight(&input, None);
+    let report = match actions {
+        Some((inspect, next_verbs)) => {
+            uncertain_report_with_actions(&input, reason.as_ref(), inspect, next_verbs)?
+        }
+        None => uncertain_report(&input, reason.as_ref())?,
+    };
+    Ok((input, report))
 }
 
 fn report_for_candidate(
@@ -1071,19 +1723,21 @@ fn report_for_candidate(
     candidate: RouterCandidate,
     status: &str,
     candidates: Vec<RouterCandidate>,
+    contracts: &BTreeMap<&'static str, ResolvedRecipeContract>,
 ) -> Result<LoopNextReport> {
-    let contract = contract(candidate.recipe)?;
+    let selected_task_id = candidate.selected_task_id.clone();
+    let contract = candidate_contract(contracts, candidate.recipe)?;
     let context = LoopContext::from_input(input);
-    let constraints = evaluate_base_constraints(&context, Some(&contract), Some(&candidate));
-    let score = score_candidate(&contract, &constraints);
+    let constraints = evaluate_base_constraints(&context, Some(contract), Some(&candidate));
+    let score = score_candidate(contract, &constraints);
     let recommended_phase = default_phase_for_next(&contract.id, &candidate.reason).to_string();
-    let why_not = why_not_candidates(&context, &candidate, &candidates)?;
+    let why_not = why_not_candidates(&context, &candidate, &candidates, contracts)?;
     let attempt_policy = attempt_policy_for(&contract.id, &constraints);
     let unknown_gap = unknown_gap_for(&context, Some(&candidate), Some(&constraints), status);
     let candidates = if candidates.is_empty() {
-        vec![candidate_report(&contract, &candidate)]
+        vec![candidate_report(contract, &candidate)]
     } else {
-        candidate_reports(candidates)?
+        candidate_reports(candidates, contracts)?
     };
     Ok(LoopNextReport {
         schema: "maestro.loop_next.v1",
@@ -1092,13 +1746,14 @@ fn report_for_candidate(
         recommended_recipe: Some(contract.id.clone()),
         recommended_status: contract.router.status.clone(),
         recommended_phase: Some(recommended_phase),
+        selected_task_id,
         reason: candidate.reason,
         confidence: contract.router.confidence.clone(),
         priority: contract.router.priority,
         score: Some(score),
         authority_scope: contract.authority_scope.clone(),
         autonomy: contract.autonomy.clone(),
-        edges: edge_reports(&contract),
+        edges: edge_reports(contract),
         hard_stops: contract.hard_stops.clone(),
         inspect: candidate.inspect,
         next_verbs: candidate.next_verbs,
@@ -1144,6 +1799,7 @@ fn uncertain_report_with_actions(
         recommended_recipe: None,
         recommended_status: "uncertain".to_string(),
         recommended_phase: None,
+        selected_task_id: None,
         reason: reason.to_string(),
         confidence: "low".to_string(),
         priority: 0,
@@ -1721,7 +2377,7 @@ fn context_ref_sort_key(reference: &LoopContextRef) -> (String, String, String, 
 
 fn evaluate_base_constraints(
     context: &LoopContext,
-    contract: Option<&RecipeContract>,
+    contract: Option<&ResolvedRecipeContract>,
     candidate: Option<&RouterCandidate>,
 ) -> Vec<LoopConstraint> {
     let recipe = contract
@@ -2034,7 +2690,7 @@ fn selected_unit_refs(
         .collect()
 }
 
-fn authority_status(contract: Option<&RecipeContract>) -> LoopConstraintStatus {
+fn authority_status(contract: Option<&ResolvedRecipeContract>) -> LoopConstraintStatus {
     if contract.is_some() {
         LoopConstraintStatus::Pass
     } else {
@@ -2042,7 +2698,7 @@ fn authority_status(contract: Option<&RecipeContract>) -> LoopConstraintStatus {
     }
 }
 
-fn authority_severity(contract: Option<&RecipeContract>) -> LoopConstraintSeverity {
+fn authority_severity(contract: Option<&ResolvedRecipeContract>) -> LoopConstraintSeverity {
     if contract.is_some() {
         LoopConstraintSeverity::Info
     } else {
@@ -2050,7 +2706,7 @@ fn authority_severity(contract: Option<&RecipeContract>) -> LoopConstraintSeveri
     }
 }
 
-fn authority_reason(contract: Option<&RecipeContract>) -> &'static str {
+fn authority_reason(contract: Option<&ResolvedRecipeContract>) -> &'static str {
     if contract.is_some() {
         "recommended recipe carries an explicit authority scope"
     } else {
@@ -2142,7 +2798,7 @@ fn dirty_tree_blocks(recipe: &str, context: &LoopContext) -> Vec<String> {
     }
 }
 
-fn route_confidence_status(contract: Option<&RecipeContract>) -> LoopConstraintStatus {
+fn route_confidence_status(contract: Option<&ResolvedRecipeContract>) -> LoopConstraintStatus {
     match contract.map(|contract| contract.router.confidence.as_str()) {
         Some("high") => LoopConstraintStatus::Pass,
         Some("medium") => LoopConstraintStatus::Warn,
@@ -2151,7 +2807,7 @@ fn route_confidence_status(contract: Option<&RecipeContract>) -> LoopConstraintS
     }
 }
 
-fn route_confidence_severity(contract: Option<&RecipeContract>) -> LoopConstraintSeverity {
+fn route_confidence_severity(contract: Option<&ResolvedRecipeContract>) -> LoopConstraintSeverity {
     match route_confidence_status(contract) {
         LoopConstraintStatus::Pass => LoopConstraintSeverity::Info,
         LoopConstraintStatus::Warn => LoopConstraintSeverity::Warning,
@@ -2159,7 +2815,7 @@ fn route_confidence_severity(contract: Option<&RecipeContract>) -> LoopConstrain
     }
 }
 
-fn route_confidence_reason(contract: Option<&RecipeContract>) -> &'static str {
+fn route_confidence_reason(contract: Option<&ResolvedRecipeContract>) -> &'static str {
     match contract.map(|contract| contract.router.confidence.as_str()) {
         Some("high") => "recipe router metadata confidence is high",
         Some("medium") => "recipe router metadata confidence is medium",
@@ -2193,7 +2849,7 @@ fn ship_gate_reason(recipe: &str) -> &'static str {
     }
 }
 
-fn score_candidate(contract: &RecipeContract, constraints: &[LoopConstraint]) -> u8 {
+fn score_candidate(contract: &ResolvedRecipeContract, constraints: &[LoopConstraint]) -> u8 {
     let confidence_bonus = match contract.router.confidence.as_str() {
         "high" => 20,
         "medium" => 10,
@@ -2220,16 +2876,17 @@ fn why_not_candidates(
     context: &LoopContext,
     selected: &RouterCandidate,
     candidates: &[RouterCandidate],
+    contracts: &BTreeMap<&'static str, ResolvedRecipeContract>,
 ) -> Result<Vec<LoopWhyNot>> {
-    let selected_contract = contract(selected.recipe)?;
+    let selected_contract = candidate_contract(contracts, selected.recipe)?;
     let mut reports = Vec::new();
     for candidate in candidates
         .iter()
         .filter(|candidate| candidate.recipe != selected.recipe)
     {
-        let candidate_contract = contract(candidate.recipe)?;
+        let candidate_contract = candidate_contract(contracts, candidate.recipe)?;
         let candidate_constraints =
-            evaluate_base_constraints(context, Some(&candidate_contract), Some(candidate));
+            evaluate_base_constraints(context, Some(candidate_contract), Some(candidate));
         let mut blocked_by = blocked_by_for_candidate(candidate.recipe, &candidate_constraints);
         let reason = if blocked_by.is_empty() {
             blocked_by.push("lower_priority_than_selected_recipe".to_string());
@@ -2247,7 +2904,7 @@ fn why_not_candidates(
             )
         };
         reports.push(LoopWhyNot {
-            recipe: candidate_contract.id,
+            recipe: candidate_contract.id.clone(),
             blocked_by,
             reason,
             source_refs: selected_unit_refs(context, Some(candidate)),
@@ -2295,10 +2952,34 @@ fn attempt_policy_for(recipe: &str, constraints: &[LoopConstraint]) -> LoopAttem
     }
 }
 
-fn best_candidate(candidates: &[RouterCandidate]) -> Result<Option<RouterCandidate>> {
+fn resolve_candidate_contracts(
+    recipes: impl IntoIterator<Item = &'static str>,
+) -> Result<BTreeMap<&'static str, ResolvedRecipeContract>> {
+    let mut contracts = BTreeMap::new();
+    for recipe in recipes {
+        if !contracts.contains_key(recipe) {
+            contracts.insert(recipe, contract(recipe)?);
+        }
+    }
+    Ok(contracts)
+}
+
+fn candidate_contract<'a>(
+    contracts: &'a BTreeMap<&'static str, ResolvedRecipeContract>,
+    recipe: &'static str,
+) -> Result<&'a ResolvedRecipeContract> {
+    contracts
+        .get(recipe)
+        .with_context(|| format!("resolved candidate contract {recipe} is missing"))
+}
+
+fn best_candidate(
+    candidates: &[RouterCandidate],
+    contracts: &BTreeMap<&'static str, ResolvedRecipeContract>,
+) -> Result<Option<RouterCandidate>> {
     let mut ranked = candidates
         .iter()
-        .map(|candidate| Ok((contract(candidate.recipe)?, candidate)))
+        .map(|candidate| Ok((candidate_contract(contracts, candidate.recipe)?, candidate)))
         .collect::<Result<Vec<_>>>()?;
     ranked.sort_by(
         |(left_contract, left_candidate), (right_contract, right_candidate)| {
@@ -2307,18 +2988,26 @@ fn best_candidate(candidates: &[RouterCandidate]) -> Result<Option<RouterCandida
                 .priority
                 .cmp(&left_contract.router.priority)
                 .then_with(|| left_candidate.recipe.cmp(right_candidate.recipe))
+                .then_with(|| {
+                    right_candidate
+                        .selection_rank
+                        .cmp(&left_candidate.selection_rank)
+                })
                 .then_with(|| left_candidate.reason.cmp(&right_candidate.reason))
         },
     );
     Ok(ranked.first().map(|(_, candidate)| (*candidate).clone()))
 }
 
-fn candidate_reports(candidates: Vec<RouterCandidate>) -> Result<Vec<LoopNextCandidate>> {
+fn candidate_reports(
+    candidates: Vec<RouterCandidate>,
+    contracts: &BTreeMap<&'static str, ResolvedRecipeContract>,
+) -> Result<Vec<LoopNextCandidate>> {
     let mut reports = candidates
         .into_iter()
         .map(|candidate| {
-            let contract = contract(candidate.recipe)?;
-            Ok(candidate_report(&contract, &candidate))
+            let contract = candidate_contract(contracts, candidate.recipe)?;
+            Ok(candidate_report(contract, &candidate))
         })
         .collect::<Result<Vec<_>>>()?;
     reports.sort_by(|left, right| {
@@ -2332,7 +3021,10 @@ fn candidate_reports(candidates: Vec<RouterCandidate>) -> Result<Vec<LoopNextCan
     Ok(reports)
 }
 
-fn candidate_report(contract: &RecipeContract, candidate: &RouterCandidate) -> LoopNextCandidate {
+fn candidate_report(
+    contract: &ResolvedRecipeContract,
+    candidate: &RouterCandidate,
+) -> LoopNextCandidate {
     LoopNextCandidate {
         recipe: contract.id.clone(),
         status: contract.router.status.clone(),
@@ -2342,7 +3034,7 @@ fn candidate_report(contract: &RecipeContract, candidate: &RouterCandidate) -> L
     }
 }
 
-fn edge_reports(contract: &RecipeContract) -> Vec<LoopNextEdge> {
+fn edge_reports(contract: &ResolvedRecipeContract) -> Vec<LoopNextEdge> {
     contract
         .transitions
         .iter()
@@ -2358,7 +3050,7 @@ fn edge_reports(contract: &RecipeContract) -> Vec<LoopNextEdge> {
 
 pub fn match_chain_transition(
     facts: &LoopChainFacts,
-    contract: &RecipeContract,
+    contract: &ResolvedRecipeContract,
 ) -> Result<Option<LoopChainTransitionMatch>> {
     let current = facts.current_endpoint();
     for edge in &contract.transitions {
@@ -2375,7 +3067,7 @@ pub fn match_chain_transition(
 
 pub fn chain_report_from_facts(
     facts: LoopChainFacts,
-    contract: Option<&RecipeContract>,
+    contract: Option<&ResolvedRecipeContract>,
 ) -> Result<LoopChainReport> {
     let transition = match contract {
         Some(contract) => match_chain_transition(&facts, contract)?,
@@ -2542,7 +3234,7 @@ pub fn validate_recipe_phase_endpoint(endpoint: &str, allowed: &BTreeSet<String>
 }
 
 pub fn validate_transition_receipt_edge(
-    contract: &RecipeContract,
+    contract: &ResolvedRecipeContract,
     phase: &str,
     transition_to: &str,
     trigger: &str,
@@ -2746,6 +3438,15 @@ fn edge_report(kind: &'static str, edge: &RecipeEdge) -> LoopNextEdge {
 fn work_candidate(task: &LoopTaskInput, reason: &str) -> RouterCandidate {
     RouterCandidate {
         recipe: "work",
+        selected_task_id: Some(task.id.clone()),
+        selection_rank: match task.state.as_str() {
+            "needs_verification" => 5,
+            "ready" => 4,
+            "in_progress" => 3,
+            "draft" => 2,
+            "exploring" => 1,
+            _ => 0,
+        },
         reason: format!("{reason}: {} ({})", task.id, task.state),
         inspect: vec![
             format!("maestro task show {}", task.id),
@@ -2763,6 +3464,8 @@ fn feature_fanout_candidate(tasks: &[&LoopTaskInput]) -> RouterCandidate {
     let lanes = ready_lane_count(tasks);
     RouterCandidate {
         recipe: "feature-fanout",
+        selected_task_id: None,
+        selection_rank: 0,
         reason: format!(
             "{} executable task{} ready for fanout now across {} lane{}",
             tasks.len(),
@@ -2786,6 +3489,8 @@ fn serial_gate_candidate(task: &LoopTaskInput) -> RouterCandidate {
     let kind = task.gate_kind.as_deref().unwrap_or("integration");
     RouterCandidate {
         recipe: "work",
+        selected_task_id: Some(task.id.clone()),
+        selection_rank: 4,
         reason: format!("{kind} gate {} is ready and must run serially", task.id),
         inspect: vec![
             "maestro ready".to_string(),
@@ -2801,6 +3506,8 @@ fn serial_gate_candidate(task: &LoopTaskInput) -> RouterCandidate {
 fn ship_gate_candidate(task: &LoopTaskInput) -> RouterCandidate {
     RouterCandidate {
         recipe: "ship",
+        selected_task_id: Some(task.id.clone()),
+        selection_rank: 4,
         reason: format!("ship gate {} is ready", task.id),
         inspect: vec![
             "maestro ready".to_string(),
@@ -2822,6 +3529,8 @@ fn blocked_ready_candidate(task: &LoopTaskInput) -> RouterCandidate {
     };
     RouterCandidate {
         recipe: "work",
+        selected_task_id: Some(task.id.clone()),
+        selection_rank: 0,
         reason: format!("ready graph is blocked; {} waits on {blockers}", task.id),
         inspect: vec![
             "maestro ready".to_string(),
@@ -2902,11 +3611,17 @@ pub fn index() -> String {
 pub fn index_with_custom_dir(custom_dir: Option<&Path>) -> Result<String> {
     let mut out = index();
     if let Some(custom_dir) = custom_dir {
-        let contracts = custom_contracts(custom_dir)?;
-        if !contracts.is_empty() {
+        let catalog = custom_recipe_catalog(custom_dir)?;
+        if !catalog.contracts.is_empty() {
             out.push_str("\n\n## Project Custom Recipes\n\n");
-            for contract in contracts {
+            for contract in catalog.contracts.values() {
                 out.push_str(&format!("    {}  --  {}\n", contract.id, contract.summary));
+            }
+        }
+        if !catalog.diagnostics.is_empty() {
+            out.push_str("\n\n## Invalid Project Custom Recipes\n\n");
+            for diagnostic in catalog.diagnostics.values() {
+                out.push_str(&diagnostic.render());
             }
         }
     }
@@ -2928,10 +3643,6 @@ pub fn show(name: &str) -> Result<String> {
 }
 
 pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
-    let custom_names = match custom_dir {
-        Some(custom_dir) => custom_contract_names(custom_dir)?,
-        None => Vec::new(),
-    };
     if contract_names().contains(&name) {
         return show(name);
     }
@@ -2939,9 +3650,9 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
         return Ok(render_pattern_pack(pattern));
     }
     if let Some(custom_dir) = custom_dir
-        && custom_names.iter().any(|custom| custom == name)
+        && let Some(contract) = custom_catalog_contract(custom_dir, name)?
     {
-        return Ok(render_contract(&custom_contract_known(custom_dir, name)?));
+        return Ok(render_contract(&contract));
     }
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
@@ -2949,22 +3660,36 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
     );
 }
 
+pub fn resolved_contract_with_custom_dir(
+    name: &str,
+    custom_dir: Option<&Path>,
+) -> Result<ResolvedRecipeContract> {
+    if contract_names().contains(&name) {
+        return contract(name);
+    }
+    if let Some(custom_dir) = custom_dir
+        && let Some(contract) = custom_catalog_contract(custom_dir, name)?
+    {
+        return Ok(contract);
+    }
+    bail!(
+        "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
+        available_names_with_custom(custom_dir)?.join(", ")
+    )
+}
+
 pub fn compact_packet_with_custom_dir(
     name: &str,
     custom_dir: Option<&Path>,
     phase: Option<&str>,
 ) -> Result<LoopCompactPacket> {
-    let custom_names = match custom_dir {
-        Some(custom_dir) => custom_contract_names(custom_dir)?,
-        None => Vec::new(),
-    };
     if contract_names().contains(&name) {
         return compact_packet_for_contract(&contract(name)?, phase);
     }
     if let Some(custom_dir) = custom_dir
-        && custom_names.iter().any(|custom| custom == name)
+        && let Some(contract) = custom_catalog_contract(custom_dir, name)?
     {
-        return compact_packet_for_contract(&custom_contract_known(custom_dir, name)?, phase);
+        return compact_packet_for_contract(&contract, phase);
     }
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
@@ -3102,10 +3827,6 @@ fn feature_fanout_selected_units(input: &LoopRouterInput) -> Vec<LoopCompactSele
 }
 
 pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
-    let custom_names = match custom_dir {
-        Some(custom_dir) => custom_contract_names(custom_dir)?,
-        None => Vec::new(),
-    };
     if contract_names().contains(&name) {
         contract(name)?;
         return Ok(format!("valid shipped loop recipe: {name}\n"));
@@ -3114,9 +3835,8 @@ pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result
         return Ok(render_pattern_validation(pattern));
     }
     if let Some(custom_dir) = custom_dir
-        && custom_names.iter().any(|custom| custom == name)
+        && custom_catalog_contract(custom_dir, name)?.is_some()
     {
-        custom_contract_known(custom_dir, name)?;
         return Ok(format!("valid project custom loop recipe: {name}\n"));
     }
     bail!(
@@ -3258,7 +3978,7 @@ pub fn contract_names() -> Vec<&'static str> {
 }
 
 /// Parse and validate every shipped structured lifecycle recipe contract.
-pub fn contracts() -> Result<Vec<RecipeContract>> {
+pub fn contracts() -> Result<Vec<ResolvedRecipeContract>> {
     let contracts = contract_names()
         .into_iter()
         .map(contract)
@@ -3268,7 +3988,7 @@ pub fn contracts() -> Result<Vec<RecipeContract>> {
 }
 
 /// Parse and validate one shipped structured lifecycle recipe contract.
-pub fn contract(name: &str) -> Result<RecipeContract> {
+pub fn contract(name: &str) -> Result<ResolvedRecipeContract> {
     let file_name = format!("{name}.yml");
     let body = LOOP_RECIPE_CONTRACTS_DIR
         .get_file(LOOP_RECIPE_CONTRACTS_DIR.path().join(&file_name))
@@ -3279,32 +3999,79 @@ pub fn contract(name: &str) -> Result<RecipeContract> {
                 contract_names().join(", ")
             )
         })?;
-    let contract = parse_contract_body(name, body)?;
-    validate_edge_targets(&contract, &allowed_edge_targets(&[]))?;
-    ensure!(
-        contract.id == name,
-        "recipe contract {name} id mismatch: {}",
-        contract.id
-    );
-    Ok(contract)
+    parse_contract_body(
+        name,
+        body,
+        RecipeSourceKind::Embedded,
+        &allowed_edge_targets(&[]),
+    )
 }
 
-pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<RecipeContract>> {
-    let names = custom_contract_names(custom_dir)?;
-    names
-        .iter()
-        .map(|name| custom_contract_known_with_names(custom_dir, name, &names))
-        .collect()
+#[derive(Default)]
+struct CustomRecipeCatalog {
+    contracts: BTreeMap<String, ResolvedRecipeContract>,
+    diagnostics: BTreeMap<String, CustomRecipeDiagnostic>,
 }
 
-pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
+struct CustomRecipeDiagnostic {
+    name: String,
+    path: PathBuf,
+    category: &'static str,
+    message: String,
+}
+
+impl CustomRecipeDiagnostic {
+    fn new(
+        name: impl Into<String>,
+        path: PathBuf,
+        category: &'static str,
+        message: impl AsRef<str>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            path,
+            category,
+            message: message
+                .as_ref()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        }
+    }
+
+    fn render(&self) -> String {
+        format!(
+            "    {}  [{}]  {}  --  {}\n",
+            self.name,
+            self.category,
+            self.path.display(),
+            self.message
+        )
+    }
+
+    fn error(&self) -> String {
+        format!(
+            "invalid custom loop recipe {}.yml [{}] at {}: {}",
+            self.name,
+            self.category,
+            self.path.display(),
+            self.message
+        )
+    }
+}
+
+fn custom_recipe_catalog(custom_dir: &Path) -> Result<CustomRecipeCatalog> {
     let Some(metadata) = custom_recipe_dir_metadata(custom_dir)? else {
-        return Ok(Vec::new());
+        return Ok(CustomRecipeCatalog::default());
     };
     if !metadata.is_dir() {
-        return Ok(Vec::new());
+        return Ok(CustomRecipeCatalog::default());
     }
-    let mut names = Vec::new();
+    let mut catalog = CustomRecipeCatalog::default();
+    let mut sources = BTreeMap::new();
+    let mut discovered_names = BTreeSet::new();
     for entry in fs::read_dir(custom_dir).with_context(|| {
         format!(
             "failed to read custom loop recipe dir {}",
@@ -3318,58 +4085,164 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
             )
         })?;
         let path = entry.path();
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
-        ensure!(
-            !file_type.is_symlink(),
-            "custom loop recipe {} is a symlink; refusing to read it",
-            path.display()
-        );
-        if !file_type.is_file() {
-            continue;
-        }
         if path.extension().and_then(|extension| extension.to_str()) != Some("yml") {
             continue;
         }
-        let Some(name) = path.file_stem().and_then(|name| name.to_str()) else {
+        let Some(name) = path
+            .file_stem()
+            .map(|name| name.to_string_lossy().into_owned())
+        else {
             continue;
         };
-        ensure!(
-            !CANONICAL_RECIPE_IDS.contains(&name) && !LEGACY_RECIPE_IDS.contains(&name),
-            "custom loop recipe {name}.yml collides with a shipped or legacy recipe id"
-        );
-        names.push(name.to_string());
+        discovered_names.insert(name.clone());
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(error) => {
+                catalog.diagnostics.insert(
+                    name.clone(),
+                    CustomRecipeDiagnostic::new(name, path, "inspect", error.to_string()),
+                );
+                continue;
+            }
+        };
+        if file_type.is_symlink() {
+            catalog.diagnostics.insert(
+                name.clone(),
+                CustomRecipeDiagnostic::new(
+                    name,
+                    path,
+                    "symlink",
+                    "entry is a symlink; refusing to read it",
+                ),
+            );
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+        if CANONICAL_RECIPE_IDS.contains(&name.as_str())
+            || LEGACY_RECIPE_IDS.contains(&name.as_str())
+        {
+            catalog.diagnostics.insert(
+                name.clone(),
+                CustomRecipeDiagnostic::new(
+                    name,
+                    path,
+                    "collision",
+                    "collides with a shipped or legacy recipe id",
+                ),
+            );
+            continue;
+        }
+        sources.insert(name, path);
     }
-    names.sort();
-    Ok(names)
+
+    let discovered_names = discovered_names.into_iter().collect::<Vec<_>>();
+    for (name, path) in sources {
+        match read_custom_contract(&path, &name, &discovered_names) {
+            Ok(contract) => {
+                catalog.contracts.insert(name, contract);
+            }
+            Err(error) => {
+                let category = custom_recipe_error_category(&error);
+                catalog.diagnostics.insert(
+                    name.clone(),
+                    CustomRecipeDiagnostic::new(name, path, category, format!("{error:#}")),
+                );
+            }
+        }
+    }
+
+    loop {
+        let valid_names = catalog.contracts.keys().cloned().collect::<Vec<_>>();
+        let allowed = allowed_edge_targets(&valid_names);
+        let invalid = catalog
+            .contracts
+            .iter()
+            .filter_map(|(name, contract)| {
+                validate_edge_targets(contract.effective(), &allowed)
+                    .err()
+                    .map(|error| (name.clone(), error))
+            })
+            .collect::<Vec<_>>();
+        if invalid.is_empty() {
+            break;
+        }
+        for (name, error) in invalid {
+            catalog.contracts.remove(&name);
+            catalog.diagnostics.insert(
+                name.clone(),
+                CustomRecipeDiagnostic::new(
+                    name.clone(),
+                    custom_dir.join(format!("{name}.yml")),
+                    "edge",
+                    error.to_string(),
+                ),
+            );
+        }
+    }
+
+    Ok(catalog)
 }
 
-pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
-    let path = custom_contract_path(custom_dir, name)?;
-    let names = custom_contract_names(custom_dir)?;
-    read_custom_contract(&path, name, &names)
+fn custom_recipe_error_category(error: &anyhow::Error) -> &'static str {
+    let message = format!("{error:#}");
+    if message.contains("unsupported recipe profile") {
+        "profile"
+    } else if message.contains("override")
+        || message.contains("targets absent inherited selector")
+        || message.contains("duplicates inherited")
+        || message.contains("unknown field")
+    {
+        "override"
+    } else {
+        "contract"
+    }
 }
 
-fn custom_contract_known(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
-    let names = custom_contract_names(custom_dir)?;
-    custom_contract_known_with_names(custom_dir, name, &names)
-}
-
-fn custom_contract_known_with_names(
+fn custom_catalog_contract(
     custom_dir: &Path,
     name: &str,
-    custom_names: &[String],
-) -> Result<RecipeContract> {
-    let path = custom_contract_file_path(custom_dir, name)?;
-    read_custom_contract(&path, name, custom_names)
+) -> Result<Option<ResolvedRecipeContract>> {
+    custom_contract_file_path(custom_dir, name)?;
+    let catalog = custom_recipe_catalog(custom_dir)?;
+    if let Some(contract) = catalog.contracts.get(name) {
+        return Ok(Some(contract.clone()));
+    }
+    if let Some(diagnostic) = catalog.diagnostics.get(name) {
+        bail!(diagnostic.error());
+    }
+    Ok(None)
+}
+
+pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<ResolvedRecipeContract>> {
+    Ok(custom_recipe_catalog(custom_dir)?
+        .contracts
+        .into_values()
+        .collect())
+}
+
+pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
+    Ok(custom_recipe_catalog(custom_dir)?
+        .contracts
+        .into_keys()
+        .collect())
+}
+
+pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<ResolvedRecipeContract> {
+    custom_catalog_contract(custom_dir, name)?.with_context(|| {
+        format!(
+            "unknown custom loop recipe \"{name}\" in {}",
+            custom_dir.display()
+        )
+    })
 }
 
 fn read_custom_contract(
     path: &Path,
     name: &str,
     custom_names: &[String],
-) -> Result<RecipeContract> {
+) -> Result<ResolvedRecipeContract> {
     let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
     ensure!(
@@ -3384,16 +4257,13 @@ fn read_custom_contract(
     );
     let body = fs::read_to_string(path)
         .with_context(|| format!("failed to read custom loop recipe {}", path.display()))?;
-    let contract = parse_contract_body(name, &body)
-        .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
-    validate_edge_targets(&contract, &allowed_edge_targets(custom_names))
-        .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
-    ensure!(
-        contract.id == name,
-        "custom loop recipe {name} id mismatch: {}",
-        contract.id
-    );
-    Ok(contract)
+    parse_contract_body(
+        name,
+        &body,
+        RecipeSourceKind::ProjectCustom,
+        &allowed_edge_targets(custom_names),
+    )
+    .with_context(|| format!("invalid custom loop recipe {name}.yml"))
 }
 
 fn custom_recipe_dir_metadata(custom_dir: &Path) -> Result<Option<fs::Metadata>> {
@@ -3413,10 +4283,20 @@ fn custom_recipe_dir_metadata(custom_dir: &Path) -> Result<Option<fs::Metadata>>
     Ok(Some(metadata))
 }
 
-pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
+pub fn validate_contract(contract: &ResolvedRecipeContract) -> Result<()> {
+    validate_contract_data(contract.effective())?;
+    validate_policy(
+        &contract.invariant_ids,
+        &contract.allowed_selectors,
+        &contract.forbidden_selectors,
+    )
+}
+
+fn validate_contract_data(contract: &RecipeContractData) -> Result<()> {
     ensure!(
-        contract.schema_version == CONTRACT_SCHEMA_VERSION,
-        "recipe {} uses schema_version {}, expected {CONTRACT_SCHEMA_VERSION}",
+        contract.schema_version == CONTRACT_SCHEMA_VERSION
+            || contract.schema_version == CONTRACT_SCHEMA_VERSION_V3,
+        "recipe {} uses unsupported schema_version {}; expected {CONTRACT_SCHEMA_VERSION} or {CONTRACT_SCHEMA_VERSION_V3}",
         contract.id,
         contract.schema_version
     );
@@ -3466,12 +4346,19 @@ pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
     Ok(())
 }
 
-fn render_contract(contract: &RecipeContract) -> String {
+fn render_contract(contract: &ResolvedRecipeContract) -> String {
     let mut out = format!(
-        "# {}\n\nschema_version: {}\nid: {}\nkind: {}\ntags: {}\n\n{}\n\n",
+        "# {}\n\nresolved_schema: {}\nschema_version: {}\nid: {}\nprofile: {}\nresolver: {}\nsource: {}:{}\ncontract_hash_schema: {}\ncontract_hash: {}\nkind: {}\ntags: {}\n\n{}\n\n",
         contract.title,
+        contract.schema,
         contract.schema_version,
         contract.id,
+        contract.provenance.profile,
+        contract.provenance.resolver,
+        contract.provenance.source.kind.as_str(),
+        contract.provenance.source.id,
+        contract.contract_hash_schema,
+        contract.contract_hash,
         contract.kind.category,
         contract.kind.tags.join(", "),
         contract.summary
@@ -3511,7 +4398,7 @@ fn render_contract(contract: &RecipeContract) -> String {
 }
 
 fn compact_packet_for_contract(
-    contract: &RecipeContract,
+    contract: &ResolvedRecipeContract,
     phase: Option<&str>,
 ) -> Result<LoopCompactPacket> {
     let phase_name = phase.unwrap_or("perceive");
@@ -3719,15 +4606,39 @@ fn render_pattern_validation(pattern: &LoopPatternPack) -> String {
     out
 }
 
-fn parse_contract_body(name: &str, body: &str) -> Result<RecipeContract> {
-    let contract: RecipeContract = serde_yaml::from_str(body)
+fn parse_contract_body(
+    name: &str,
+    body: &str,
+    source_kind: RecipeSourceKind,
+    allowed_edge_targets: &BTreeSet<String>,
+) -> Result<ResolvedRecipeContract> {
+    let document: serde_yaml::Value = serde_yaml::from_str(body)
         .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?;
-    validate_contract(&contract)
-        .with_context(|| format!("invalid loop recipe contract {name}.yml"))?;
-    Ok(contract)
+    let schema_version = document
+        .get("schema_version")
+        .and_then(serde_yaml::Value::as_str)
+        .with_context(|| format!("loop recipe contract {name}.yml is missing schema_version"))?
+        .to_string();
+    let source = recipe_source(source_kind, name);
+    let recipe = match schema_version.as_str() {
+        CONTRACT_SCHEMA_VERSION => RecipeSource::LegacySelfContainedV2(
+            serde_yaml::from_value(document)
+                .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?,
+        ),
+        CONTRACT_SCHEMA_VERSION_V3 => RecipeSource::ProfiledV3(
+            serde_yaml::from_value(document)
+                .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?,
+        ),
+        other => bail!(
+            "unsupported loop recipe schema_version {other}; expected {CONTRACT_SCHEMA_VERSION} or {CONTRACT_SCHEMA_VERSION_V3}"
+        ),
+    };
+    recipe
+        .resolve(source, allowed_edge_targets)
+        .with_context(|| format!("invalid loop recipe contract {name}.yml"))
 }
 
-fn ensure_contract_set(contracts: &[RecipeContract]) -> Result<()> {
+fn ensure_contract_set(contracts: &[ResolvedRecipeContract]) -> Result<()> {
     let names: BTreeSet<&str> = contracts
         .iter()
         .map(|contract| contract.id.as_str())
@@ -3777,17 +4688,6 @@ fn available_names_with_custom(custom_dir: Option<&Path>) -> Result<Vec<String>>
     Ok(names)
 }
 
-fn custom_contract_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
-    let path = custom_contract_file_path(custom_dir, name)?;
-    let names = custom_contract_names(custom_dir)?;
-    ensure!(
-        names.iter().any(|custom| custom == name),
-        "unknown custom loop recipe \"{name}\" in {}",
-        custom_dir.display()
-    );
-    Ok(path)
-}
-
 fn custom_contract_file_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
     ensure!(
         !name.contains('/') && !name.contains('\\') && name != "." && name != "..",
@@ -3796,7 +4696,7 @@ fn custom_contract_file_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
     Ok(custom_dir.join(format!("{name}.yml")))
 }
 
-fn contract_supports_work_lease(contract: &RecipeContract) -> bool {
+fn contract_supports_work_lease(contract: &ResolvedRecipeContract) -> bool {
     contract
         .phases
         .get("choose")
@@ -3957,7 +4857,7 @@ fn allowed_edge_targets(custom_names: &[String]) -> BTreeSet<String> {
     names
 }
 
-fn validate_edge_targets(contract: &RecipeContract, allowed: &BTreeSet<String>) -> Result<()> {
+fn validate_edge_targets(contract: &RecipeContractData, allowed: &BTreeSet<String>) -> Result<()> {
     for (field, edges) in [
         ("transitions", contract.transitions.as_slice()),
         ("invocations", contract.invocations.as_slice()),
@@ -4014,7 +4914,7 @@ fn require_non_empty_list(field: &str, values: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn reject_forbidden_text(contract: &RecipeContract) -> Result<()> {
+fn reject_forbidden_text(contract: &RecipeContractData) -> Result<()> {
     let mut values = Vec::new();
     values.extend([
         contract.id.as_str(),
@@ -4132,58 +5032,82 @@ mod tests {
     #[test]
     fn rejects_contract_with_missing_required_field() {
         let body = "schema_version: maestro.recipe.v2\nid: broken\n";
-        let error = parse_contract_body("broken", body).unwrap_err().to_string();
+        let error = parse_contract_body(
+            "broken",
+            body,
+            RecipeSourceKind::ProjectCustom,
+            &allowed_edge_targets(&[]),
+        )
+        .unwrap_err()
+        .to_string();
         assert!(error.contains("failed to parse"), "{error}");
     }
 
     #[test]
     fn rejects_legacy_recipe_id_as_alias() {
-        let mut contract =
-            contract("feature-fanout").expect("feature-fanout contract should validate");
+        let mut contract = contract("feature-fanout")
+            .expect("feature-fanout contract should validate")
+            .effective()
+            .clone();
         contract.id = "feature-fan-out".to_string();
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("legacy id"), "{error}");
     }
 
     #[test]
     fn rejects_contract_with_missing_phase() {
-        let mut contract = contract("work").expect("work contract should validate");
+        let mut contract = contract("work")
+            .expect("work contract should validate")
+            .effective()
+            .clone();
         contract.phases.remove("learn");
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("phases must be exactly"), "{error}");
     }
 
     #[test]
     fn rejects_progress_task_duplicate_ids() {
-        let mut contract = contract("work").expect("work contract should validate");
+        let mut contract = contract("work")
+            .expect("work contract should validate")
+            .effective()
+            .clone();
         contract.progress_tasks[1].id = contract.progress_tasks[0].id.clone();
 
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("duplicates progress task id"), "{error}");
     }
 
     #[test]
     fn rejects_progress_task_unknown_phase() {
-        let mut contract = contract("work").expect("work contract should validate");
+        let mut contract = contract("work")
+            .expect("work contract should validate")
+            .effective()
+            .clone();
         contract.progress_tasks[0].phase = "invalid-phase".to_string();
 
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("invalid-phase"), "{error}");
         assert!(error.contains("progress_tasks"), "{error}");
     }
 
     #[test]
     fn rejects_progress_task_blank_done_check() {
-        let mut contract = contract("work").expect("work contract should validate");
+        let mut contract = contract("work")
+            .expect("work contract should validate")
+            .effective()
+            .clone();
         contract.progress_tasks[0].done_check.clear();
 
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("done_check must not be empty"), "{error}");
     }
 
     #[test]
     fn rejects_work_lease_helper_missing_required_fields() {
-        let mut contract = contract("unattended").expect("unattended contract should validate");
+        let mut contract = contract("unattended")
+            .expect("unattended contract should validate")
+            .effective()
+            .clone();
         let helper = contract
             .phases
             .get_mut("choose")
@@ -4192,15 +5116,18 @@ mod tests {
             .expect("unattended choose phase should declare work lease helper");
         helper.reconcile_handles.clear();
 
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(error.contains("reconcile_handles"), "{error}");
     }
 
     #[test]
     fn rejects_forbidden_lifecycle_bypass_wording() {
-        let mut contract = contract("design").expect("design contract should validate");
+        let mut contract = contract("design")
+            .expect("design contract should validate")
+            .effective()
+            .clone();
         contract.summary = "agent may bypass acceptance when convenient".to_string();
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(
             error.contains("forbidden lifecycle-bypass wording"),
             "{error}"
@@ -4209,7 +5136,10 @@ mod tests {
 
     #[test]
     fn rejects_forbidden_work_lease_helper_wording() {
-        let mut contract = contract("unattended").expect("unattended contract should validate");
+        let mut contract = contract("unattended")
+            .expect("unattended contract should validate")
+            .effective()
+            .clone();
         let helper = contract
             .phases
             .get_mut("choose")
@@ -4220,7 +5150,7 @@ mod tests {
             .allowed_follow_up_verbs
             .push("launch workers from this contract".to_string());
 
-        let error = validate_contract(&contract).unwrap_err().to_string();
+        let error = validate_contract_data(&contract).unwrap_err().to_string();
         assert!(
             error.contains("forbidden lifecycle-bypass wording"),
             "{error}"
@@ -4694,7 +5624,10 @@ mod tests {
 
     #[test]
     fn rejects_edge_targets_that_do_not_name_known_recipes() {
-        let mut contract = contract("work").expect("work contract should validate");
+        let mut contract = contract("work")
+            .expect("work contract should validate")
+            .effective()
+            .clone();
         contract.transitions[0].to = "typo-recipe.choose".to_string();
         let error = validate_edge_targets(&contract, &allowed_edge_targets(&[]))
             .unwrap_err()

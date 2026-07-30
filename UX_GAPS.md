@@ -300,3 +300,15 @@ and why it is not part of the current fix.
   Fix in this session: locked low-ceremony proof failures now point at
   `maestro task done --proof`, and simple-done proof records the same contract
   hash and commit freshness fields used by normal task verification.
+
+## 2026-07-11 same-card design-session continuity
+
+- Surface: `maestro active` across consecutive turns of one Codex design
+  conversation.
+  Observed friction: Maestro retained both same-owner session records as active
+  and labeled them `[CONFLICT]`, even though the older session had no continuing
+  worker or command activity. The warning is indistinguishable from a real
+  concurrent same-card writer and forces an unnecessary session audit before a
+  safe design write.
+  Why not part of the current fix: this session is defining the vNext whole-flow
+  architecture, not changing current session freshness or ownership semantics.

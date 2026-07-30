@@ -1,4 +1,5 @@
-schema_version: maestro.recipe.v2
+schema_version: maestro.recipe.v3
+profile: maestro.standard-six-phase.v1
 id: design-relay
 kind:
   category: orchestration
@@ -6,35 +7,23 @@ kind:
 title: Design relay
 summary: Relay one design fork to an advisor or subagent under a recorded mandate, then return the normalized result to design.
 progress_tasks:
-  - id: anchor-scope
+  anchor-scope:
     title: Anchor design-relay mandate and fork
-    phase: perceive
-    required: true
     done_check: feature, fork, mandate_ref, and hard stops are known
-  - id: choose-next
+  choose-next:
     title: Choose relay role and authority fit
-    phase: choose
-    required: true
     done_check: one advisor role is selected and the fork is inside mandate bounds
-  - id: execute-move
+  execute-move:
     title: Send bounded relay packet
-    phase: act
-    required: true
     done_check: advisor or subagent received one bounded packet or the relay stopped
-  - id: observe-evidence
+  observe-evidence:
     title: Normalize relay response
-    phase: observe
-    required: true
     done_check: options, recommendation, risks, evidence, confidence, and out-of-scope flags are known
-  - id: record-learning
+  record-learning:
     title: Record relay result when useful
-    phase: learn
-    required: true
     done_check: advisor input and safety rationale are recorded or explicitly unnecessary
-  - id: return-next-gate
+  return-next-gate:
     title: Return to design authority
-    phase: continue
-    required: true
     done_check: next design fork, draft decision, locked decision, or user blocker is visible
 authority_scope:
   - one current feature and one design fork or loose question
