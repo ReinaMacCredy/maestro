@@ -2,7 +2,7 @@ mod support;
 
 use std::fs;
 
-use maestro::domain::vnext::authority::{
+use maestro::domain::authority::{
     ActionRequestIdV1, AuthorityContextIdV1, AuthorityFacadeV1, AuthorityPublicationError,
     AuthorityPublicationLineageV1, AuthorityPublicationPlanError, BootstrapMandateTargetV1,
     ConsentSlotEvaluationFactsV1, HalfOpenValidityV1, IdempotencyKeyIdV1,
@@ -11,10 +11,10 @@ use maestro::domain::vnext::authority::{
     StateTokenIdV1, TargetActionEffectKindV1, TargetActionOwnerV1, TargetActionProjectionV1,
     TargetActionProtocolV1, TargetExpectedHeadsV1,
 };
-use maestro::domain::vnext::identity::{
+use maestro::domain::identity::{
     ContractRootIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1,
 };
-use maestro::domain::vnext::persistence::{StoreDomainV1, StoreRoleV1, StoreV1};
+use maestro::domain::persistence::{StoreDomainV1, StoreRoleV1, StoreV1};
 use rusqlite::Connection;
 
 use support::TestTempDir;

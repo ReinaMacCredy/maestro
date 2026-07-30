@@ -1,0 +1,65 @@
+{
+  "schema": "maestro.vnext.stage11.live-set-v3-contract.v1",
+  "status": "stage11_corrected_focused_verified_awaiting_main_integration",
+  "immutable_v2_sources": {
+    "src/foundation/core/aggregate_census.rs": "194f5e4361b5bc171f4382e952196eba25b47b18a5343f07b94d8533942f1f3b",
+    "src/foundation/core/aggregate_census_stage11_seed.rs": "a7675fcd6d59651ee1f78b5b0db296dffada7601334cccb7012660dd84f75873"
+  },
+  "required_sources": {
+    "src/domain/migration/runtime/live_set_v3.rs": [
+      "pub struct MembershipKeyV3",
+      "pub struct SourceCaseV3",
+      "pub struct Stage12SightingV2",
+      "pub struct LegacyQuarantineEpochV3",
+      "pub struct UnavailablePreexistingLossManifestV3",
+      "pub struct ProtectedPrimaryOverlapPairV1",
+      "pub struct LegacyRollbackAssessmentV3",
+      "from_final_owner_recheck"
+    ],
+    "src/foundation/core/legacy_quarantine.rs": [
+      "pub(crate) struct FoundationLegacyQuarantineLeaseV1",
+      "pub(crate) struct FoundationSourceCopyContinuationV1",
+      "SourceTokenReused",
+      "persist_source",
+      "rollback_partial",
+      "consume_final_recheck"
+    ],
+    "src/operations/migration/live_set_v3.rs": [
+      "execute_offline_live_set_v3",
+      "from_live_owners",
+      "copy_present_sources",
+      "UnavailablePreexistingLossV3::new",
+      "UnavailablePreexistingLossManifestV3::new",
+      "LegacyRollbackAssessmentV3::assess",
+      "finish"
+    ],
+    "src/domain/persistence/legacy_quarantine.rs": [
+      "pub(crate) struct ProtectedPrimaryBoundaryLeaseV1",
+      "pub(crate) struct QuarantineCustodyLeaseV1",
+      "persist_source",
+      "rollback_created_files",
+      "seal_expected_old"
+    ],
+    "src/domain/repository/legacy_quarantine_admission.rs": [
+      "pub(crate) struct RepositoryRootAdmissionV3",
+      "mint_from_store"
+    ],
+    "src/domain/installation/legacy_quarantine.rs": [
+      "pub(crate) struct InstallationRootAdmissionV3",
+      "mint_from_live_registry"
+    ],
+    "src/domain/installation/census.rs": [
+      "admit_legacy_quarantine_roots_v3"
+    ]
+  },
+  "forbidden_in_v3_sources": [
+    "LegacyQuarantineEpochV2",
+    "AggregatePhysicalCensusV2",
+    "Stage11CensusContinuationV2"
+  ],
+  "forbidden_claims": [
+    "certified_current",
+    "stage11_sealed",
+    "production_ready"
+  ]
+}

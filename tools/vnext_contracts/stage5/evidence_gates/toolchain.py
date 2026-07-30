@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 TARGET = re.compile(r"[a-z0-9_]+(?:-[a-z0-9_]+)+")
+DRIVER_NAME = re.compile(r"librustc_driver-[0-9a-f]{16}\.dylib")
 
 
 def sha256(data: bytes) -> str:
@@ -126,13 +127,14 @@ def main() -> int:
     parser.add_argument("--lib-lto", type=Path, required=True)
     parser.add_argument("--git", type=Path, required=True)
     parser.add_argument("--driver", type=Path, required=True)
+    parser.add_argument("--driver-name", required=True)
     parser.add_argument("--target-lib", type=Path, required=True)
     parser.add_argument("--target", required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     args = parser.parse_args()
     if TARGET.fullmatch(args.target) is None:
         raise RuntimeError("Rust target triple is invalid")
-    if not args.driver.name.startswith("librustc_driver-") or args.driver.suffix != ".dylib":
+    if DRIVER_NAME.fullmatch(args.driver_name) is None:
         raise RuntimeError("Rust compiler driver identity is invalid")
     toolchain = args.output_root / "toolchain"
     if toolchain.exists() or toolchain.is_symlink():
@@ -148,7 +150,7 @@ def main() -> int:
         copy_exact(args.ranlib, toolchain / "bin/ranlib", executable=True),
         copy_exact(args.lib_lto, toolchain / "lib/libLTO.dylib", executable=False),
         copy_exact(args.git, toolchain / "bin/git", executable=True),
-        copy_exact(args.driver, toolchain / "lib" / args.driver.name, executable=False),
+        copy_exact(args.driver, toolchain / "lib" / args.driver_name, executable=False),
     ]
     for source in target_library_sources(args.target_lib):
         rows.append(

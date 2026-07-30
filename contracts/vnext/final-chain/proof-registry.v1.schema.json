@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-proof-registry.v1",
+  "type": "object",
+  "required": ["schema_version", "registry_identity_policy", "proofs"],
+  "properties": {
+    "schema_version": {
+      "const": "maestro.external.vnext-final-proof-registry.v1"
+    },
+    "registry_identity_policy": {
+      "const": "canonical-bytes-bound-no-inference-no-reassignment"
+    },
+    "proofs": {
+      "type": "array",
+      "minItems": 25,
+      "items": {
+        "type": "object",
+        "required": [
+          "proof_id",
+          "stage",
+          "kind",
+          "expected_outcome",
+          "engines",
+          "harness"
+        ],
+        "properties": {
+          "proof_id": {
+            "type": "string",
+            "pattern": "^s(0|[1-9]|1[0-2])-[a-z0-9][a-z0-9-]*$"
+          },
+          "stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "kind": {
+            "enum": [
+              "behavior",
+              "negative",
+              "mutant",
+              "authority",
+              "race",
+              "crash_replay",
+              "idempotency",
+              "migration",
+              "rollback",
+              "adapter",
+              "identity",
+              "removal",
+              "ancestry",
+              "closure"
+            ]
+          },
+          "expected_outcome": {
+            "enum": ["pass", "refuse"]
+          },
+          "engines": {
+            "const": ["python", "rust", "ruby"]
+          },
+          "command": {
+            "type": "object",
+            "required": ["argv", "expected_exit_code"],
+            "properties": {
+              "argv": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "expected_exit_code": {"type": "integer"}
+            },
+            "additionalProperties": false
+          },
+          "rotation_slot": {
+            "type": "object",
+            "required": [
+              "state",
+              "slot_id",
+              "command_shape",
+              "source_namespace",
+              "required_semantics"
+            ],
+            "properties": {
+              "state": {
+                "const": "awaiting-promotion"
+              },
+              "slot_id": {
+                "type": "string",
+                "pattern": "^stage(11|12)-[a-z0-9-]+-lib-filter$"
+              },
+              "command_shape": {
+                "const": "cargo-lib-exact-test"
+              },
+              "source_namespace": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provisional_8edd591b_filter": {
+                "type": "string",
+                "pattern": "^domain::vnext::migration::runtime::cohort_observation::tests::[a-z0-9_]+$"
+              },
+              "required_semantics": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "input_paths": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"
+            },
+            "uniqueItems": true
+          },
+          "harness": {
+            "type": "object",
+            "required": ["protocol", "required_receipt"],
+            "properties": {
+              "protocol": {
+                "enum": [
+                  "command-exit-v1",
+                  "fault-observation-v1",
+                  "cohort-observation-v1",
+                  "fanout-edge-sweep-v1",
+                  "semantic-receipt-v1"
+                ]
+              },
+              "required_receipt": {
+                "type": "string",
+                "pattern": "^(none|fault-observation\\.v1\\.json|cohort-observation\\.v1\\.json|fanout-edge-sweep\\.v1\\.json|semantic-artifact-readback\\.v1\\.json)$"
+              },
+              "fault_schedule_path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"
+              },
+              "cohort_path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "command",
+              "input_paths"
+            ],
+            "not": {
+              "required": [
+                "rotation_slot"
+              ]
+            }
+          },
+          {
+            "required": [
+              "rotation_slot"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "command"
+                  ]
+                },
+                {
+                  "required": [
+                    "input_paths"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

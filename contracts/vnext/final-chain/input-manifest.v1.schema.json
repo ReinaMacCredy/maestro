@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-input-manifest.v1",
+  "type": "object",
+  "required": ["schema_version", "commit", "tree", "entry_count", "byte_length", "entries"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-input-manifest.v1"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "entry_count": {"type": "integer", "minimum": 1},
+    "byte_length": {"type": "integer", "minimum": 1},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "mode", "byte_length", "sha256"],
+        "properties": {
+          "kind": {"enum": ["source", "test", "validator", "fixture", "mutation", "crash_schedule", "migration", "rollback", "adapter", "removal", "consumer_manifest", "reader_manifest", "hold_manifest", "predecessor", "lockfile", "packet", "proof_control"]},
+          "path": {"type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"},
+          "mode": {"enum": ["100644", "100755"]},
+          "byte_length": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

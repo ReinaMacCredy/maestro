@@ -1,0 +1,1 @@
+{"case":"semantic-readback-false-success","expected":"refuse","mutation":{"consumer_count":1,"status":"pass"}}

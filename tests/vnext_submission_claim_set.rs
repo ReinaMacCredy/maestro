@@ -1,8 +1,8 @@
-use maestro::domain::vnext::evidence::{
+use maestro::domain::evidence::{
     ClaimEntryV1, SUBMISSION_CLAIM_SET_DOMAIN_V1, SubmissionClaimSetError, SubmissionClaimSetV1,
     submission_claim_set_schema_v1,
 };
-use maestro::domain::vnext::identity::{SchemaClosureV1, SchemaError};
+use maestro::domain::identity::{SchemaClosureV1, SchemaError};
 use maestro::foundation::core::deterministic_cbor::CborValue;
 use serde_json::Value;
 use sha2::{Digest, Sha256};

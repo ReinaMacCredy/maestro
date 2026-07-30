@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const TARGET_MODULE_ROOTS: &[&str] = &[
     "src/interfaces/mod.rs",
@@ -42,6 +43,51 @@ const DOMAIN_FACADES: &[&str] = &[
 
 const OPERATION_FACADES: &[&str] = &["harness", "init", "sync", "update"];
 
+const STAGE11_V3_INTERFACE_PRIVATE_SYMBOLS: &[&str] = &[
+    "DeclaredOverlapManifestV2",
+    "LegacyNodeKindV3",
+    "LegacyOwnerDomainV3",
+    "LegacyPayloadStateV3",
+    "LegacyQuarantineEpochV3",
+    "LegacyRollbackAssessmentV3",
+    "LegacySourceCaseManifestV3",
+    "LiveSetV3Error",
+    "MembershipKeyV3",
+    "MigrationClassificationManifestV3",
+    "MigrationClassificationV3",
+    "MigrationDispositionV3",
+    "ProtectedPrimaryOverlapPairV1",
+    "SealedQuarantineEntryV3",
+    "SealedQuarantineManifestV3",
+    "SourceCaseV3",
+    "Stage11LiveSetContinuationV3",
+    "Stage11LiveSetOperationErrorV3",
+    "Stage11PhysicalClosureV3",
+    "Stage11SealedCopyContinuationV3",
+    "Stage12SightingManifestV2",
+    "Stage12SightingV2",
+    "UnavailablePreexistingLossManifestV3",
+    "UnavailablePreexistingLossV3",
+];
+
+const STAGE11_V8_INTERFACE_PRIVATE_SYMBOLS: &[&str] = &[
+    "FoundationOwnerEvidenceIssuanceBindingV1",
+    "InstallationDeclaredRootUniverseLeaseV1",
+    "InstallationRootUniverseObservationV1",
+    "InstallationRootUniverseProviderV1",
+    "InstallationUnavailablePreexistingLossEvidenceIssuerV1",
+    "IntegrationLegacyHostSlotSnapshotProviderV1",
+    "IntegrationLegacyHostSlotSnapshotV1",
+    "LegacySourceHistorySelectorV1",
+    "OwnerIssuedUnavailablePreexistingLossEvidenceSetV1",
+    "OwnerUnavailablePreexistingLossEvidenceIssuerPortV1",
+    "PersistenceRetainedStoreRootLeaseV1",
+    "ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1",
+    "RepositoryDeclaredRootUniverseLeaseV1",
+    "RepositoryUnavailablePreexistingLossEvidenceIssuerV1",
+    "StoreLegacySourceCurrentViewV1",
+];
+
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
         "src/domain/harness/templates.rs",
@@ -56,14 +102,33 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/hooks/record.sh"],
     ),
     ("src/domain/playbook.rs", &["embedded/playbook"]),
-    ("src/domain/design.rs", &["embedded/design"]),
+    ("src/domain/design/legacy.rs", &["embedded/design"]),
     ("src/domain/loop_recipes.rs", &["embedded/loop-recipes"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
         "src/domain/schema_contracts/catalog.rs",
         &["embedded/schemas"],
     ),
+    (
+        "src/domain/orchestration/runtime/catalog.rs",
+        &[
+            "embedded/vnext/orchestration/recipe-catalog.v1.json",
+            "embedded/vnext/orchestration/profiles/bounded-continuation/",
+            "embedded/vnext/orchestration/recipes/",
+        ],
+    ),
     ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
+    (
+        "src/interfaces/connectors/mod.rs",
+        &[
+            "embedded/vnext/hosts/",
+            "embedded/vnext/bootstrap/wiring.v1.json",
+        ],
+    ),
+    (
+        "src/interfaces/mcp/mod.rs",
+        &["embedded/vnext/adapter/mcp-tools.v1.json"],
+    ),
 ];
 
 #[test]
@@ -640,7 +705,7 @@ fn update_operation_owns_implementation() {
 
     let mut violations = Vec::new();
     for file in rust_files_under(Path::new("src")) {
-        let source = read_source_file(&file);
+        let source = source_without_test_modules(&read_source_file(&file));
         let code = code_for_path_scan(&source);
         if code.contains("crate::update::") {
             violations.push(format!("{} imports legacy crate::update", file.display()));
@@ -658,7 +723,6 @@ fn update_operation_owns_implementation() {
             }
         }
     }
-
     assert!(
         violations.is_empty(),
         "production code should use operations::update instead of the legacy shim:\n{}",
@@ -823,7 +887,7 @@ fn domain_does_not_depend_on_interfaces_or_operations() {
     let mut violations = Vec::new();
 
     for file in rust_files_under(Path::new("src/domain")) {
-        let source = read_source_file(&file);
+        let source = source_without_test_modules(&read_source_file(&file));
         let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
         for upstream in ["interfaces", "operations"] {
             if code.contains(&format!("crate::{upstream}")) {
@@ -1380,31 +1444,44 @@ fn transitional_public_surfaces_match_phase_policy() {
         Path::new("src/domain/mod.rs"),
         &[
             "capability",
+            "authority",
             "card",
             "channel",
             "conflict",
+            "contract",
             "decisions",
             "design",
+            "distribution",
+            "evidence",
+            "execution",
             "extraction",
             "feature",
+            "gate",
             "gate_lock",
             "harness",
+            "identity",
             "install",
             "intake",
+            "integration",
             "lean",
             "loop_recipes",
             "maturity",
             "memory",
+            "migration",
+            "orchestration",
+            "persistence",
             "playbook",
             "proof",
+            "repository",
             "research",
             "resource_contracts",
             "run",
             "schema_contracts",
             "search",
             "skills",
+            "step",
             "task",
-            "vnext",
+            "work",
         ],
         &[],
     );
@@ -1429,6 +1506,165 @@ fn transitional_public_surfaces_match_phase_policy() {
             "update",
         ],
         &[],
+    );
+}
+
+#[test]
+fn canonical_refoundation_facades_have_exact_visibility() {
+    assert_module_visibility(
+        Path::new("src/domain/mod.rs"),
+        &[
+            "authority",
+            "capability",
+            "card",
+            "channel",
+            "conflict",
+            "contract",
+            "decisions",
+            "design",
+            "distribution",
+            "evidence",
+            "execution",
+            "extraction",
+            "feature",
+            "gate",
+            "gate_lock",
+            "harness",
+            "identity",
+            "install",
+            "intake",
+            "integration",
+            "lean",
+            "loop_recipes",
+            "maturity",
+            "memory",
+            "migration",
+            "orchestration",
+            "persistence",
+            "playbook",
+            "proof",
+            "repository",
+            "research",
+            "resource_contracts",
+            "run",
+            "schema_contracts",
+            "search",
+            "skills",
+            "step",
+            "task",
+            "work",
+        ],
+        &[
+            "coordination",
+            "installation",
+            "planning",
+            "projection",
+            "transport",
+        ],
+    );
+    assert_module_visibility(
+        Path::new("src/interfaces/mod.rs"),
+        &["cli", "hooks", "mcp", "shell", "tui"],
+        &["connectors"],
+    );
+    assert_module_visibility(
+        Path::new("src/operations/mod.rs"),
+        &[
+            "card_migrate",
+            "container_migrate",
+            "feature_close",
+            "feature_prepare",
+            "harness",
+            "init",
+            "memory",
+            "migrate",
+            "sync",
+            "update",
+        ],
+        &[
+            "action",
+            "adapters",
+            "installation",
+            "migration",
+            "observation",
+            "orchestration",
+        ],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/capability/mod.rs"),
+        &["literals"],
+        &["generated_catalog", "runtime"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/distribution/mod.rs"),
+        &[],
+        &["runtime"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/evidence/mod.rs"),
+        &["submission_claim"],
+        &["diagnostics"],
+    );
+    assert_module_visibility(Path::new("src/domain/migration/mod.rs"), &[], &["runtime"]);
+    assert_module_visibility(
+        Path::new("src/domain/orchestration/mod.rs"),
+        &["literals"],
+        &["runtime"],
+    );
+
+    for path in [
+        "src/domain/capability/generated_catalog/mod.rs",
+        "src/domain/capability/runtime/mod.rs",
+        "src/domain/coordination/mod.rs",
+        "src/domain/distribution/runtime/mod.rs",
+        "src/domain/evidence/diagnostics/mod.rs",
+        "src/domain/installation/mod.rs",
+        "src/domain/intake/mod.rs",
+        "src/domain/maturity/mod.rs",
+        "src/domain/memory/mod.rs",
+        "src/domain/migration/runtime/mod.rs",
+        "src/domain/orchestration/runtime/mod.rs",
+        "src/domain/planning/mod.rs",
+        "src/domain/projection/mod.rs",
+        "src/domain/research/mod.rs",
+        "src/domain/transport/mod.rs",
+        "src/interfaces/connectors/mod.rs",
+        "src/operations/action/mod.rs",
+        "src/operations/adapters/mod.rs",
+        "src/operations/installation/mod.rs",
+        "src/operations/migration/mod.rs",
+        "src/operations/observation/mod.rs",
+        "src/operations/orchestration/mod.rs",
+    ] {
+        assert!(
+            public_modules(&read_source_file(Path::new(path))).is_empty(),
+            "canonical facade {path} must keep implementation children private"
+        );
+    }
+
+    let mut violations = Vec::new();
+    for file in rust_files_under(Path::new("src/domain")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        if source.contains("crate::interfaces") || source.contains("crate::operations") {
+            violations.push(format!(
+                "{} imports a higher canonical layer from the domain layer",
+                file.display()
+            ));
+        }
+    }
+    for file in rust_files_under(Path::new("src/operations")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        if source.contains("crate::interfaces") {
+            violations.push(format!(
+                "{} imports the canonical interface layer from operations",
+                file.display()
+            ));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "canonical imports must preserve interfaces -> operations -> domain:\n{}",
+        violations.join("\n")
     );
 }
 
@@ -1994,6 +2230,34 @@ fn assert_public_modules(path: &Path, expected_modules: &[&str], expected_reexpo
     );
 }
 
+fn assert_module_visibility(
+    path: &Path,
+    expected_public: &[&str],
+    expected_crate_visible: &[&str],
+) {
+    let source = read_source_file(path);
+    let expected_public = expected_public
+        .iter()
+        .map(|module| module.to_string())
+        .collect::<BTreeSet<_>>();
+    let expected_crate_visible = expected_crate_visible
+        .iter()
+        .map(|module| module.to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        public_modules(&source),
+        expected_public,
+        "{} must expose exactly the approved public modules",
+        path.display()
+    );
+    assert_eq!(
+        crate_visible_modules(&source),
+        expected_crate_visible,
+        "{} must expose exactly the approved crate-internal modules",
+        path.display()
+    );
+}
+
 fn crate_reexports(source: &str) -> BTreeSet<String> {
     source
         .lines()
@@ -2081,6 +2345,20 @@ fn public_modules(source: &str) -> BTreeSet<String> {
         .filter_map(|line| {
             let line = line.trim();
             let module = line.strip_prefix("pub mod ")?;
+            module
+                .strip_suffix(';')
+                .or_else(|| module.strip_suffix(" {"))
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+fn crate_visible_modules(source: &str) -> BTreeSet<String> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            let module = line.strip_prefix("pub(crate) mod ")?;
             module
                 .strip_suffix(';')
                 .or_else(|| module.strip_suffix(" {"))
@@ -2600,7 +2878,10 @@ fn skip_braced_item(lines: &[&str], start: usize) -> usize {
 fn source_without_pub_mod_statements(source: &str) -> String {
     source
         .lines()
-        .filter(|line| !line.trim_start().starts_with("pub mod "))
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with("pub mod ") && !line.starts_with("pub(crate) mod ")
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -2849,7 +3130,7 @@ fn module_reference_scanners_only_match_at_a_module_boundary() {
 fn vnext_authority_and_store_keep_one_directional_ownership() {
     let mut violations = Vec::new();
 
-    for file in rust_files_under(Path::new("src/domain/vnext/persistence")) {
+    for file in rust_files_under(Path::new("src/domain/persistence")) {
         let source = source_without_test_modules(&read_source_file(&file));
         if source.contains("domain::vnext::authority")
             || source.contains("super::super::authority")
@@ -2862,8 +3143,8 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
         }
     }
 
-    for file in rust_files_under(Path::new("src/domain/vnext/authority")) {
-        let relative = file.strip_prefix("src/domain/vnext/authority").unwrap();
+    for file in rust_files_under(Path::new("src/domain/authority")) {
+        let relative = file.strip_prefix("src/domain/authority").unwrap();
         if relative == Path::new("facade_tests.rs") {
             continue;
         }
@@ -2904,6 +3185,2176 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
         "vNext Authority owns semantics and only its publication facade boundary may call the canonical Store:\n{}",
         violations.join("\n")
     );
+}
+
+#[test]
+fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
+    let integration = read_source_file(Path::new(
+        "src/domain/integration/trusted_host_diagnostic.rs",
+    ));
+    let persistence = read_source_file(Path::new("src/domain/persistence/protected_diagnostic.rs"));
+    let stage10_seed = read_source_file(Path::new(
+        "src/domain/integration/trusted_host_diagnostic_stage10_seed.rs",
+    ));
+    let stage9_seed = read_source_file(Path::new(
+        "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
+    ));
+    let envelope = read_source_file(Path::new(
+        "src/domain/authority/protected_diagnostic_envelope.rs",
+    ));
+    let stage8_seed = read_source_file(Path::new(
+        "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    ));
+    let integration_module = read_source_file(Path::new("src/domain/integration/mod.rs"));
+    let connectors = read_source_file(Path::new("src/interfaces/connectors/mod.rs"));
+    let mcp = read_source_file(Path::new("src/interfaces/mcp/mod.rs"));
+    let persistence_module = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let store = read_source_file(Path::new("src/domain/persistence/store.rs"));
+    let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    let diagnostic_entry = facade
+        .split("pub(crate) fn protected_continuity_diagnostic_with_ports")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("fn protected_continuity_diagnostic_with_mode")
+                .next()
+        })
+        .expect("Stage 5 diagnostic entry must remain a bounded production-neutral facade seam");
+    let diagnostic_entry_and_mode = facade
+        .split("pub(crate) fn protected_continuity_diagnostic_with_ports")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("fn build_protected_continuity_diagnostic")
+                .next()
+        })
+        .expect("Stage 5 diagnostic entry and closed mode must remain locally reviewable");
+    let diagnostic_kernel = facade
+        .split("fn build_protected_continuity_diagnostic")
+        .nth(1)
+        .and_then(|tail| tail.split("fn validate_post_cut_current_authority").next())
+        .expect("Stage 5 diagnostic kernel must remain locally reviewable");
+    let diagnostic_operation = diagnostic_kernel
+        .split("fn protected_diagnostic_invocation_nonce")
+        .next()
+        .expect("diagnostic operation must precede its private nonce helpers");
+    let issuer_before_view = diagnostic_entry_and_mode
+        .find("ProtectedDiagnosticInvocationIssuerV1::fresh()")
+        .expect("process and invocation entropy must be acquired before the Store view");
+    let serialized_view = diagnostic_entry_and_mode
+        .find("with_serialized_active_view")
+        .expect("diagnostic must execute inside one serialized Store view");
+    assert!(issuer_before_view < serialized_view);
+    assert!(!diagnostic_operation.contains("RandomState::new()"));
+
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticConnectionPortV1"));
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticAttestationPortV1"));
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticPresentationPortV1"));
+    assert!(integration.contains("pub(in crate::domain::integration) mod sealed"));
+    assert!(!integration_module.contains("PortSealedV1"));
+    assert!(stage10_seed.contains("impl sealed::Connection"));
+    assert!(stage10_seed.contains("impl sealed::Attestation"));
+    assert!(stage10_seed.contains("impl sealed::Presentation"));
+    assert!(
+        stage10_seed
+            .contains("connection: &'connection mut Stage10OwnerLocalConnectionSeedV1<'host>")
+    );
+    assert!(stage10_seed.contains("challenge: TrustedHostDiagnosticChallengeV1"));
+    assert!(integration.contains(
+        "#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>"
+    ));
+    assert!(!integration.contains("TrustedHostDiagnosticTestInvocationV1"));
+    assert!(!integration.contains("begin_invocation"));
+    assert!(integration.contains("fn attest_in_current_view<'scope, 'view>"));
+    assert!(!integration.contains("AtomicU64"));
+    assert!(
+        integration.contains(
+            "current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>"
+        )
+    );
+    assert!(!integration.contains("operator_mapping_commitment"));
+    assert!(!integration.contains("request_commitment"));
+    assert!(!integration.contains("fn matches_operator"));
+    assert!(!integration.contains("challenge.protected_subject_commitment() == [0; 32]"));
+    assert!(!integration.contains("challenge.anchor_commitment() !="));
+    assert!(!integration.contains("challenge.authority_commitment() == [0; 32]"));
+    assert!(!integration.contains("identity.principal_identity =="));
+    assert!(!integration.contains("identity.binding_identity =="));
+    assert!(!integration.contains("identity.session_identity =="));
+    assert!(!integration.contains("identity.domain_role =="));
+    assert!(!integration.contains("operator_identity =="));
+    assert!(!integration.contains("pub(crate) fn binds"));
+    assert!(integration.contains("pub(crate) fn present_once"));
+    assert!(
+        integration
+            .contains("#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticTestConnectionV1")
+    );
+    assert!(
+        persistence
+            .contains("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed")
+    );
+    assert!(persistence.contains("pub(in crate::domain::persistence) mod sealed"));
+    assert!(!persistence_module.contains("ProviderSealedV1"));
+    assert!(persistence.contains("pub(in crate::domain::persistence) fn from_live_provider"));
+    assert!(stage9_seed.contains("impl sealed::Sealed"));
+    assert!(stage9_seed.contains("ProtectedDiagnosticProviderCurrentnessV1::from_live_provider"));
+    assert!(
+        persistence
+            .contains("provider: Option<&'view mut dyn ProtectedDiagnosticCurrentViewProviderV1>")
+    );
+    assert!(persistence.contains("provider_binding: Option<ProtectedDiagnosticProviderBindingV1>"));
+    assert!(persistence.contains("fn final_recheck_current_view("));
+    assert!(persistence.contains("fn abandon_current_view(&mut self)"));
+    assert!(persistence.contains("provider_currentness_revision"));
+    assert!(!persistence.contains("PhantomData"));
+    let provider_trait = persistence
+        .split("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[cfg(test)]").next())
+        .expect("sealed current-view provider trait must remain locally reviewable");
+    assert!(!provider_trait.contains("Option<[u8; 32]>"));
+    assert!(store.contains(
+        "ProtectedDiagnosticCurrentViewAnchorV1::bind(provider, &observed, self.root.path())"
+    ));
+    assert!(store.contains("consume_protected_diagnostic_current_view_anchor"));
+    assert!(store.contains("anchor.consume_final_recheck(&observed)"));
+    assert!(
+        persistence.contains(
+            "#[cfg(test)]\npub(crate) struct ProtectedDiagnosticTestCurrentViewProviderV1"
+        )
+    );
+    assert!(facade.contains(
+        "#[cfg(test)]\n    pub(crate) fn protected_continuity_diagnostic_reference_envelope"
+    ));
+    assert!(
+        !facade
+            .contains("#[cfg(test)]\n    pub(crate) fn protected_continuity_diagnostic_with_ports")
+    );
+    assert!(
+        diagnostic_entry.contains("connection: &mut dyn TrustedHostDiagnosticConnectionPortV1")
+    );
+    assert!(
+        diagnostic_entry
+            .contains("current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1")
+    );
+    assert!(!diagnostic_entry.contains("envelope_builder"));
+    assert!(!facade.contains("ProtectedContinuityDiagnosticEnvelopeBuilderV1"));
+    assert!(!facade.contains("ProtectedContinuityDiagnosticPreparedEnvelopeV1"));
+    assert!(envelope.contains("pub(crate) struct ProtectedContinuityDiagnosticReleasedEnvelopeV1"));
+    assert!(envelope.contains("struct ProtectedContinuityDiagnosticCandidateEnvelopeV1"));
+    assert!(envelope.contains("pub(super) struct ProtectedContinuityDiagnosticPreparedCarrierV1"));
+    assert!(envelope.contains("const MAX_ENVELOPE_BYTES_V1: usize = 1024"));
+    assert!(envelope.contains("struct BoundedEnvelopeWriterV1"));
+    assert!(
+        envelope.contains("candidate.bytes[..candidate.len] != expected.bytes[..expected.len]")
+    );
+    assert!(!envelope.contains("Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1"));
+    assert!(!envelope.contains("fn into_bytes(self: Box<Self>) -> Vec<u8>"));
+    assert!(envelope.contains("ProtectedContinuityDiagnosticEnvelopeInputV1"));
+    for getter in [
+        "admission_ref",
+        "attempt_ref",
+        "generation_ref",
+        "reason_class",
+        "expected_carrier_state",
+        "observed_carrier_state",
+        "freshness_class",
+        "remediation_class",
+        "fence_subject_ref",
+        "fence_carrier_ref",
+        "semantic_point_ref",
+        "covered_closure_ref",
+        "conservative_point_envelope_ref",
+        "carrier_revision_ref",
+        "current_view_anchor_ref",
+        "authority_snapshot_ref",
+        "attestation_carrier_ref",
+    ] {
+        assert!(envelope.contains(&format!("fn {getter}")));
+    }
+    assert!(diagnostic_kernel.contains("ProtectedContinuityDiagnosticEnvelopeInputV1::new("));
+    assert!(diagnostic_kernel.contains("prepare_current_protected_snapshot("));
+    assert!(stage8_seed.contains("encode_canonical_envelope(input)?"));
+    assert!(
+        stage8_seed.contains("ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission")
+    );
+    assert!(stage8_seed.contains("ProtectedContinuityDiagnosticAssemblerModeV1::IgnoreInput"));
+    assert!(
+        stage8_seed
+            .contains("fn stage8_owner_local_descendant_is_the_only_concrete_assembler_seed")
+    );
+    assert!(stage8_seed.contains("const _: () = {"));
+    assert!(stage8_seed.contains("protected_continuity_diagnostic_with_ports("));
+    assert!(stage8_seed.contains(".map(|released| released.into_bytes())"));
+
+    for forbidden in [
+        "RepositoryAuthenticatedHumanV1",
+        "request_commitment",
+        "authenticated_host_connection_context_ref",
+        "ScopeAtomV1",
+        "ActionRequestIdV1",
+        "AuthorizationReceiptV1",
+        "FnOnce",
+        "println!",
+        "eprintln!",
+        "panic!",
+        "tracing::",
+        "log::",
+    ] {
+        assert!(
+            !diagnostic_entry.contains(forbidden) && !diagnostic_kernel.contains(forbidden),
+            "protected diagnostic entry must not derive authority from {forbidden}"
+        );
+    }
+    for forbidden in [
+        "Assessment",
+        "Gate",
+        "Evidence",
+        "Audit",
+        "ScopeAtom",
+        "ActionRequest",
+        "AuthorizationReceipt",
+        "ActionResult",
+        "Idempotency",
+    ] {
+        assert!(
+            !diagnostic_kernel.contains(forbidden),
+            "protected diagnostic kernel must not introduce {forbidden} authority or effects"
+        );
+    }
+    let attestation_definition = integration
+        .split("pub(crate) struct TrustedHostDiagnosticAttestationV1")
+        .nth(1)
+        .expect("attestation port must exist");
+    let prefix = integration
+        .split("pub(crate) struct TrustedHostDiagnosticAttestationV1")
+        .next()
+        .unwrap();
+    let nearby_prefix = &prefix[prefix.len().saturating_sub(160)..];
+    assert!(!nearby_prefix.contains("derive("));
+    for forbidden in [
+        "Serialize",
+        "Default",
+        "canonical_bytes",
+        "pub fn new",
+        "pub(crate) fn new",
+        "impl From",
+        "impl TryFrom",
+    ] {
+        assert!(
+            !attestation_definition
+                .lines()
+                .take(80)
+                .any(|line| line.contains(forbidden)),
+            "attestation must not expose {forbidden}"
+        );
+    }
+    assert!(!integration.contains("pub mod trusted_host_diagnostic"));
+    assert!(!persistence.contains("pub mod protected_diagnostic"));
+    assert!(integration_module.contains("TrustedHostDiagnosticConnectionPortV1"));
+    assert!(integration_module.contains(
+        "#[cfg(test)]\npub(crate) use trusted_host_diagnostic::{\n    TrustedHostDiagnosticTestClaimsV1"
+    ));
+    assert!(persistence_module.contains("ProtectedDiagnosticCurrentViewProviderV1"));
+    assert!(persistence_module.contains(
+        "#[cfg(test)]\npub(crate) use protected_diagnostic::{\n    ProtectedDiagnosticTestAnchorMutationV1"
+    ));
+    assert!(!integration_module.contains("pub use trusted_host_diagnostic"));
+    assert!(!integration_module.contains("TrustedHostDiagnosticChallengeV1"));
+    assert!(!persistence_module.contains("pub use protected_diagnostic"));
+    assert!(!diagnostic_entry.contains("pub(crate) const fn witness"));
+    assert!(!diagnostic_entry.contains("ProtectedContinuityDiagnosticReadGuardV1<'view>"));
+    assert!(!diagnostic_kernel.contains("operator_mapping_commitment"));
+    assert!(!integration.contains("claims_commitment"));
+    assert!(!integration.contains("witness_carrier_commitment"));
+    assert!(integration.contains("fn attestation_commitment(&self) -> [u8; 32]"));
+    assert!(facade.contains("struct ProtectedDiagnosticPresentedHostFactsV1"));
+    assert!(
+        diagnostic_kernel
+            .contains("ProtectedDiagnosticPresentedHostFactsV1::capture(presentation)")
+    );
+    let diagnostic_build = diagnostic_kernel
+        .split("struct ProtectedDiagnosticPresentedHostFactsV1")
+        .next()
+        .expect("the Authority build must precede its private captured host-facts carrier");
+    assert_eq!(
+        diagnostic_build
+            .matches("ProtectedDiagnosticPresentedHostFactsV1::capture(presentation)")
+            .count(),
+        1
+    );
+    assert_eq!(diagnostic_build.matches("presentation.").count(), 0);
+    let host_fact_capture = facade
+        .split("fn capture(presentation: &dyn TrustedHostDiagnosticPresentationPortV1)")
+        .nth(1)
+        .and_then(|tail| tail.split("fn attestation_commitment(&self)").next())
+        .expect("Authority must snapshot every presented host fact exactly once");
+    for getter in [
+        "anchor_commitment",
+        "authority_commitment",
+        "protected_subject_commitment",
+        "invocation_nonce",
+        "challenge_commitment",
+        "attestation_commitment",
+        "provider_identity",
+        "profile_identity",
+        "profile_revision",
+        "process_incarnation",
+        "connection_incarnation",
+        "channel_incarnation",
+        "issuer_identity",
+        "realm_identity",
+        "audience_identity",
+        "authentication_event_identity",
+        "host_currentness_revision",
+        "revocation_revision",
+        "freshness_identity",
+        "carrier_commitment",
+        "principal_identity",
+        "binding_identity",
+        "session_identity",
+        "context_identity",
+        "trust_root_revision",
+        "assurance_revision",
+        "human_capable",
+        "binding_not_before",
+        "binding_expires_at",
+        "session_not_before",
+        "session_expires_at",
+        "store_generation",
+        "authority_epoch",
+        "domain_identity",
+        "domain_role",
+        "incarnation_revision",
+    ] {
+        assert_eq!(
+            host_fact_capture
+                .matches(&format!("presentation.{getter}()"))
+                .count(),
+            1,
+            "Authority must capture {getter} exactly once"
+        );
+    }
+    assert!(diagnostic_kernel.contains("presented_host_facts.presented_attestation_commitment"));
+    assert!(diagnostic_kernel.contains("!= recomputed_attestation_commitment"));
+    assert!(
+        diagnostic_kernel
+            .contains("final_attestation_commitment != verified_attestation_commitment")
+    );
+    assert!(
+        diagnostic_kernel
+            .contains("ContinuityReferenceV1::from_digest(verified_attestation_commitment)")
+    );
+    let active_anchor = diagnostic_kernel
+        .find("protected_diagnostic_current_view_anchor")
+        .expect("Active current-view anchor must be established");
+    let issuance = diagnostic_kernel
+        .find("protected_diagnostic_invocation_nonce(")
+        .expect("Authority must mint the invocation identity in the current view");
+    let challenge = diagnostic_kernel
+        .find("TrustedHostDiagnosticChallengeV1::from_authority_issuance(")
+        .expect("Authority must construct the same-view challenge");
+    let attestation = diagnostic_kernel
+        .find(".attest_in_current_view(")
+        .expect("Integration must answer the Authority-issued invocation in the same view");
+    assert!(active_anchor < issuance && issuance < challenge && challenge < attestation);
+    let prepared_freeze = diagnostic_kernel
+        .find("prepare_current_protected_snapshot(&envelope_input, assembler_mode)")
+        .expect("Authority must prepare and validate the fixed envelope before final rechecks");
+    let host_final_recheck = diagnostic_kernel
+        .find(".final_recheck()")
+        .expect("host currentness must be rechecked before diagnostic return");
+    let store_final_recheck = diagnostic_kernel
+        .find("consume_protected_diagnostic_current_view_anchor(current_view_anchor)")
+        .expect("Persistence currentness lease must be consumed before diagnostic return");
+    assert!(
+        attestation < prepared_freeze
+            && prepared_freeze < host_final_recheck
+            && host_final_recheck < store_final_recheck
+    );
+    let authority_release = diagnostic_kernel
+        .find("Ok(prepared.release())")
+        .expect("only Authority may release the prepared envelope");
+    assert!(store_final_recheck < authority_release);
+    assert!(facade.contains("AtomicU64"));
+    assert!(facade.contains("invocation_entropy"));
+    assert!(facade.contains("process_incarnation"));
+    assert!(facade.contains("sequence.checked_add(1)"));
+    assert!(!facade.contains("ISSUED_INVOCATIONS"));
+    assert!(facade.contains("ProtectedDiagnosticInvocationIssuerV1"));
+    assert!(facade.contains("RandomState::new()"));
+    assert!(facade.contains("protected_diagnostic_process_incarnation"));
+    assert!(facade.contains("protected_diagnostic_invocation_sequence"));
+    assert!(
+        facade.contains(
+            "_current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>"
+        )
+    );
+    assert!(!facade.contains("PhantomData<&'view ()>"));
+    assert!(!integration.contains("struct TrustedHostDiagnosticChallengeV1"));
+    assert!(!integration.contains("from_authority_issuance"));
+
+    let connection_port_prefix = integration
+        .split("pub(crate) trait TrustedHostDiagnosticConnectionPortV1")
+        .next()
+        .expect("trusted-host port prefix must exist");
+    assert!(!connection_port_prefix.ends_with("#[cfg(test)]\n"));
+    let provider_port_prefix = persistence
+        .split("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1")
+        .next()
+        .expect("current-view provider prefix must exist");
+    assert!(!provider_port_prefix.ends_with("#[cfg(test)]\n"));
+    assert!(
+        !store.contains("#[cfg(test)]\n    pub(crate) fn protected_diagnostic_current_view_anchor")
+    );
+    assert!(!store.contains(
+        "#[cfg(test)]\n    pub(crate) fn consume_protected_diagnostic_current_view_anchor"
+    ));
+    assert!(integration.contains("pub(in crate::domain::integration) mod sealed"));
+    assert!(!integration_module.contains("PortSealedV1"));
+    assert!(!persistence_module.contains("ProviderSealedV1"));
+    assert!(persistence_module.contains("ProtectedDiagnosticObservedCurrentViewV1"));
+    assert!(persistence_module.contains("ProtectedDiagnosticProviderCurrentnessV1"));
+    assert!(persistence.contains("pub(in crate::domain::persistence) fn from_live_provider"));
+    assert!(!persistence.contains("provider_currentness_commitment: [u8; 32]"));
+
+    let mut challenge_constructors = Vec::new();
+    let mut presentation_consumers = Vec::new();
+    let mut connection_port_implementors = Vec::new();
+    let mut current_view_provider_implementors = Vec::new();
+    let mut integration_seal_implementors = Vec::new();
+    let mut persistence_seal_implementors = Vec::new();
+    let mut obsolete_builder_contracts = Vec::new();
+    let mut released_envelope_constructors = Vec::new();
+    for file in rust_files_under(Path::new("src")) {
+        let source = read_source_file(&file);
+        if source.contains("TrustedHostDiagnosticChallengeV1::from_authority_issuance(") {
+            challenge_constructors.push(file.clone());
+        }
+        if source.contains(".present_once(") {
+            presentation_consumers.push(file.clone());
+        }
+        if source.contains("impl TrustedHostDiagnosticConnectionPortV1 for") {
+            connection_port_implementors.push(file.clone());
+        }
+        if source.contains("impl ProtectedDiagnosticCurrentViewProviderV1 for") {
+            current_view_provider_implementors.push(file.clone());
+        }
+        if source.contains("impl sealed::Connection")
+            || source.contains("impl sealed::Attestation")
+            || source.contains("impl sealed::Presentation")
+        {
+            integration_seal_implementors.push(file.clone());
+        }
+        if source.contains("impl sealed::Sealed") {
+            persistence_seal_implementors.push(file.clone());
+        }
+        if source.contains("ProtectedContinuityDiagnosticEnvelopeBuilderV1")
+            || source.contains("ProtectedContinuityDiagnosticPreparedEnvelopeV1")
+        {
+            obsolete_builder_contracts.push(file.clone());
+        }
+        if source.contains("ProtectedContinuityDiagnosticReleasedEnvelopeV1 { prepared }") {
+            released_envelope_constructors.push(file);
+        }
+    }
+    connection_port_implementors.sort();
+    current_view_provider_implementors.sort();
+    integration_seal_implementors.sort();
+    persistence_seal_implementors.sort();
+    obsolete_builder_contracts.sort();
+    released_envelope_constructors.sort();
+    assert_eq!(
+        challenge_constructors,
+        [PathBuf::from("src/domain/authority/facade.rs")]
+    );
+    assert_eq!(
+        presentation_consumers,
+        [PathBuf::from("src/domain/authority/facade.rs")]
+    );
+    assert_eq!(
+        connection_port_implementors,
+        [
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic.rs"),
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
+        ]
+    );
+    assert_eq!(
+        current_view_provider_implementors,
+        [
+            PathBuf::from("src/domain/persistence/protected_diagnostic.rs"),
+            PathBuf::from("src/domain/persistence/protected_diagnostic_stage9_seed.rs")
+        ]
+    );
+    assert_eq!(
+        integration_seal_implementors,
+        [
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic.rs"),
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
+        ]
+    );
+    assert_eq!(
+        persistence_seal_implementors,
+        [
+            PathBuf::from("src/domain/persistence/protected_diagnostic.rs"),
+            PathBuf::from("src/domain/persistence/protected_diagnostic_stage9_seed.rs")
+        ]
+    );
+    assert!(obsolete_builder_contracts.is_empty());
+    assert_eq!(
+        released_envelope_constructors,
+        [PathBuf::from(
+            "src/domain/authority/protected_diagnostic_envelope.rs"
+        )]
+    );
+    assert!(integration.contains(
+        "#[cfg(test)]\nimpl TrustedHostDiagnosticConnectionPortV1 for TrustedHostDiagnosticTestConnectionV1"
+    ));
+    assert!(persistence.contains(
+        "#[cfg(test)]\nimpl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrentViewProviderV1"
+    ));
+    let vnext_module = read_source_file(Path::new("src/domain/mod.rs"));
+    assert!(!vnext_module.contains("protected_diagnostic_sibling_port_compile_probe"));
+    assert!(!vnext_module.contains("impl TrustedHostDiagnosticConnectionPortV1"));
+    assert!(!vnext_module.contains("impl ProtectedDiagnosticCurrentViewProviderV1"));
+    assert!(!vnext_module.contains("from_live_provider"));
+    assert!(
+        stage10_seed
+            .contains("fn stage10_owner_local_descendant_can_implement_the_sealed_host_ports")
+    );
+    assert!(stage10_seed.contains("claim_authenticated_invocation_no_io"));
+    assert!(stage10_seed.contains("recheck_authenticated_invocation_no_io"));
+    assert!(stage10_seed.contains("acquire_from_designated_connector"));
+    assert!(
+        connectors.contains("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector")
+    );
+    assert!(mcp.contains("acquire_trusted_host_diagnostic_connection("));
+    assert!(!stage10_seed.contains("fixed_digest_getters"));
+    assert!(!stage10_seed.contains("fixed_revision_getters"));
+    assert!(
+        stage9_seed
+            .contains("fn stage9_owner_local_descendant_can_mint_only_structured_live_currentness")
+    );
+}
+
+#[test]
+fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
+    let authority_facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    let authority = read_source_file(Path::new("src/domain/authority/governance_attestation.rs"));
+    let materialization = read_source_file(Path::new("src/domain/authority/materialization.rs"));
+    let governance_floor = read_source_file(Path::new("src/domain/authority/governance_floor.rs"));
+    let publication = read_source_file(Path::new("src/domain/authority/publication.rs"));
+    let authority_seed = read_source_file(Path::new(
+        "src/domain/authority/governance_attestation_stage7_seed.rs",
+    ));
+    let persistence = read_source_file(Path::new(
+        "src/domain/persistence/protected_locator_lease.rs",
+    ));
+    let persistence_stage9 = read_source_file(Path::new(
+        "src/domain/persistence/protected_locator_stage9_seed.rs",
+    ));
+    let foundation = read_source_file(Path::new("src/foundation/core/aggregate_census.rs"));
+    let foundation_seed = read_source_file(Path::new(
+        "src/foundation/core/aggregate_census_stage11_seed.rs",
+    ));
+    let installation = read_source_file(Path::new("src/domain/installation/durable_finality.rs"));
+    let installation_stage9 = read_source_file(Path::new(
+        "src/domain/installation/durable_finality_stage9_seed.rs",
+    ));
+    let installation_stage11 = read_source_file(Path::new(
+        "src/domain/installation/durable_finality_stage11_seed.rs",
+    ));
+    let authority_mod = read_source_file(Path::new("src/domain/authority/mod.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let installation_mod = read_source_file(Path::new("src/domain/installation/mod.rs"));
+    let singular = read_source_file(Path::new(
+        "src/foundation/core/descriptor_census_platform.rs",
+    ));
+    let vnext_module = read_source_file(Path::new("src/domain/mod.rs"));
+
+    assert!(authority.contains("GovernanceAttestationV1<'tx"));
+    assert!(authority.contains("RepositoryGovernanceFloorCurrentViewV1<'tx>"));
+    assert!(materialization.contains("VerifiedSchedulingPolicyDowngradeMandateUseV1"));
+    assert!(materialization.contains("AdmittedRepositoryActionBindingV1"));
+    assert!(!authority.contains("supplemental_mandate_present: bool"));
+    assert!(!authority.contains("governance_floor: [u64; 4]"));
+    assert!(!authority.contains("classifier_result"));
+    assert!(!authority.contains("safety_floor: [u64; 4]"));
+    assert!(!governance_floor.contains("AUTHORITY_PINNED_SCHEDULING_SAFETY_FLOOR_V1"));
+    assert!(!governance_floor.contains("= [1; 4]"));
+    assert!(governance_floor.contains("AUTHORITY_SCHEDULING_SAFETY_MAXIMUMS_V1"));
+    assert!(governance_floor.contains("checked_sub(maximum)"));
+    assert!(governance_floor.contains("AuthoritySchedulingSafetyStateV1"));
+    assert!(governance_floor.contains("floor_identity"));
+    assert!(governance_floor.contains("floor_semantic_hash"));
+    assert!(governance_floor.contains("classifier_semantic_hash"));
+    assert!(governance_floor.contains("scheduling_safety.currentness"));
+    assert!(governance_floor.contains("resolve_authority_scheduling_safety_state"));
+    assert!(governance_floor.contains("REPOSITORY_GOVERNANCE_FLOOR_SCHEMA_TAG_V1: usize = 25"));
+    assert!(governance_floor.contains("\"maestro.vnext.repository-governance-floor-snapshot.v1\""));
+    assert!(governance_floor.contains("restore_requires_exact_same_domain_chain"));
+    assert!(publication.contains("RepositoryGovernanceFloorSnapshot"));
+    assert!(!authority.contains("pub struct GovernanceAttestationV1"));
+    assert!(authority_seed.contains("publish_scheduling_policy_from_stage7"));
+    assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1"));
+    assert!(authority_seed.contains("PlanningSchedulingPolicyInputV1"));
+    assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1::new"));
+    assert!(authority_seed.contains("const _: fn() = ||"));
+    assert!(!authority_seed.contains("#[expect(\n    dead_code,"));
+    assert!(authority_facade.contains("pub(super) struct SchedulingPolicyPublicationInputV1"));
+    assert!(
+        !authority_facade
+            .contains("pub(in crate::domain) struct SchedulingPolicyPublicationInputV1")
+    );
+    assert!(authority_facade.contains("pub(super) fn new("));
+    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy("));
+    assert!(
+        !authority_facade.contains("pub(super) fn publish_scheduling_policy_without_downgrade")
+    );
+    assert!(!authority_facade.contains("pub(super) fn publish_scheduling_policy_with_downgrade"));
+    assert!(vnext_module.contains("stage7_governance_seed_compile_probe"));
+    assert!(vnext_module.contains("stage7_sibling_can_name_and_call_only_the_seed_owned_entry"));
+
+    assert!(persistence.contains("ProtectedLocatorLeaseV1<'locator>"));
+    assert!(persistence.contains("ProtectedLocatorAcquisitionRequestV2"));
+    assert!(persistence.contains("ProtectedLocatorLeaseV2<'locator>"));
+    assert!(persistence.contains("ProtectedLocatorCandidateTransitionV2<'locator>"));
+    assert!(persistence.contains("acquire_pre_candidate"));
+    assert!(persistence.contains("bind_inert_candidate"));
+    assert!(persistence.contains("dispatch_exact_transition"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorAcquisitionRequestV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorObservedStateV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorCandidateInputV2"));
+    assert!(!persistence.contains("impl Clone for ProtectedLocatorLeaseV2"));
+    assert!(!persistence.contains("impl Copy for ProtectedLocatorLeaseV2"));
+    assert!(persistence.contains("begin_pre_store"));
+    assert!(persistence.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
+    assert!(persistence.contains("dispatch_expected_old"));
+    assert!(
+        !persistence.contains(
+            "#[derive(Clone, Copy)]\npub(in crate::domain) struct ProtectedLocatorLeaseV1"
+        )
+    );
+    assert!(!persistence.contains("pub struct ProtectedLocatorLeaseV1"));
+
+    assert!(foundation.contains("AggregateCensusLeaseV1<'scan"));
+    assert!(foundation.contains("RepositoryRootAdmissionV2"));
+    assert!(foundation.contains("InstallationRootAdmissionV2"));
+    assert!(foundation.contains("CensusInvocationV2"));
+    assert!(foundation.contains("FoundationAdmittedRootSourceV2"));
+    assert!(foundation.contains("AggregateCensusLeaseV2<'scan>"));
+    assert!(foundation.contains("AggregateCensusResultV2<'scan>"));
+    assert!(foundation.contains("MigrationClassificationContinuationV2<'scan>"));
+    assert!(foundation.contains("acquire_complete_admitted_root_source"));
+    assert!(!foundation.contains("impl Clone for AggregateCensusLeaseV2"));
+    assert!(!foundation.contains("impl Copy for AggregateCensusLeaseV2"));
+    assert!(foundation.contains("acquire_complete_root_set"));
+    assert!(foundation.contains("final_root_set_recheck"));
+    assert!(foundation_seed.contains("Stage11AggregateCensusBackendSeedV1"));
+    assert!(foundation_seed.contains("Stage11AggregateCensusOutputV1<'scan>"));
+    assert!(foundation_seed.contains("pub(crate) struct Stage11AggregateCensusBackendSeedV1"));
+    assert!(foundation_seed.contains("pub(crate) fn test_unavailable()"));
+    assert!(foundation_seed.contains("pub(super) fn census_from_stage11_owner"));
+    assert!(foundation_seed.contains("pub(super) fn into_parts"));
+    assert!(!foundation_seed.contains("pub(super) fn acquire()"));
+    assert!(!foundation_seed.contains("pub fn census_from_stage11_owner"));
+    assert!(!foundation_seed.contains("#[derive(Clone"));
+    assert!(singular.contains("singular-root production route is intentionally retired"));
+    assert!(!foundation.contains("pub struct AggregateCensusLeaseV1"));
+
+    assert!(installation.contains("DurableInstallationFinalityBackendV1<'effect"));
+    assert!(installation.contains("DurableInstallationFinalityBackendV2<'effect"));
+    assert!(installation.contains("ActiveStoreFinalityRequestV2"));
+    assert!(installation.contains("PreStoreFinalityRequestV2"));
+    assert!(installation.contains("ProtectedLocatorLeaseV2<'_>"));
+    assert!(installation.contains("validate_inert_candidate"));
+    assert!(!installation.contains("impl Clone for DurableInstallationFinalityBackendV2"));
+    assert!(!installation.contains("impl Copy for DurableInstallationFinalityBackendV2"));
+    assert!(installation.contains("ProtectedLocatorLeaseV1<'locator>"));
+    assert!(installation.contains("ActiveStoreDecisionTupleV1"));
+    assert!(installation.contains("PreStoreDecisionTupleV1"));
+    assert!(installation.contains("commit_and_readback"));
+    assert!(installation.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
+    assert!(installation_stage9.contains("impl ActiveStoreFinalityOwnerV1"));
+    assert!(installation_stage11.contains("impl PreStoreFinalityOwnerV1"));
+    assert!(
+        installation_stage9
+            .contains("pub(in crate::domain) struct Stage9ActiveStoreFinalitySeedV1")
+    );
+    assert!(
+        installation_stage11.contains("pub(in crate::domain) struct Stage11PreStoreFinalitySeedV1")
+    );
+    assert!(!installation_stage9.contains("pub(super) fn acquire()"));
+    assert!(!installation_stage11.contains("pub(super) fn acquire()"));
+    assert!(installation.contains("Stage11PreStoreFinalityOperationV1<'effect>"));
+    assert!(installation.contains("Stage9ActiveStoreFinalityOperationV1<'effect>"));
+    assert!(installation.contains("prepare_active_from_stage9_owner"));
+    assert!(installation.contains("prepare_pre_store_from_stage11_owner"));
+    assert!(installation.contains("execute_pre_store_from_stage11_owner"));
+    assert!(!installation.contains("pub struct Stage11PreStoreFinalityOperationV1"));
+    assert!(!installation.contains(
+        "#[derive(Clone, Copy)]\npub(in crate::domain) struct Stage11PreStoreFinalityOperationV1"
+    ));
+    assert!(!installation.contains("impl FnOnce"));
+    assert!(!installation.contains("pub struct DurableInstallationFinalityBackendV1"));
+
+    assert!(!authority_mod.contains("pub mod governance_attestation"));
+    assert!(!persistence_mod.contains("pub mod protected_locator_lease"));
+    assert!(foundation_mod.contains("\nmod aggregate_census;\n"));
+    assert!(!foundation_mod.contains("pub mod aggregate_census"));
+    assert!(!foundation_mod.contains("pub(crate) mod aggregate_census"));
+    assert!(!foundation_mod.contains("pub(in "));
+    assert!(!foundation_mod.contains("pub(crate) mod aggregate_census_stage11_seed"));
+    assert!(installation_mod.contains("\nmod durable_finality;\n"));
+    assert!(!installation_mod.contains("pub mod durable_finality"));
+    assert!(!installation_mod.contains("pub(crate) mod durable_finality"));
+    assert!(!installation_mod.contains("pub(in crate::domain) mod durable_finality_stage11_seed"));
+    assert!(!installation_mod.contains("pub(in crate::domain) mod durable_finality_stage9_seed"));
+    assert!(foundation_mod.contains("pub(crate) mod stage11_aggregate_census"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV2"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusComponentV2"));
+    assert!(foundation_mod.contains("bind_owner_provider_v2"));
+    assert!(foundation_mod.contains("census_from_stage11_owner_v2"));
+    assert!(foundation_mod.contains("Vec<InventoryRowV1>"));
+    assert!(foundation_mod.contains("pub(crate) fn bind_owner_provider"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV1"));
+    assert!(foundation_mod.contains("pub(crate) fn census_from_stage11_owner"));
+    assert!(foundation_mod.contains("pub(crate) fn into_parts"));
+    assert!(!foundation_mod.contains("pub(crate) fn acquire_seed()"));
+    assert!(!foundation_mod.contains("fn test_census_provider()"));
+    assert!(!foundation_mod.contains("StoreV1"));
+    assert!(!foundation_mod.contains("impl FnOnce"));
+    assert!(!foundation_mod.contains("OnceLock"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage9_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage11_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage9_finality_v2"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage11_finality_v2"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV2"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV2"));
+    assert!(persistence_mod.contains("pub(in crate::domain) mod protected_locator_v2"));
+    assert!(persistence_mod.contains("pub(in crate::domain) fn capture_pre_candidate"));
+    assert!(persistence_mod.contains("pub(in crate::domain) fn acquire_pre_candidate"));
+    assert!(
+        persistence_mod.contains("pub(in crate::domain) type Stage9ProtectedLocatorProviderSeedV2")
+    );
+    assert!(persistence.contains("pub(super) mod v2_owner_sealed"));
+    assert!(
+        persistence_stage9
+            .contains("impl v2_owner_sealed::Sealed for Stage9ProtectedLocatorBackendSeedV2")
+    );
+    assert!(persistence_mod.contains("\nmod protected_locator_stage9_seed;\n"));
+    assert!(!persistence_mod.contains("bind_stage9_owner_provider"));
+    assert_eq!(
+        installation_mod
+            .matches("fn bind_finality_provider")
+            .count(),
+        2
+    );
+    assert!(!installation_mod.contains("fn acquire_finality_seed()"));
+    assert!(!installation_mod.contains("fn test_finality_provider()"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderBindingV1<'effect>"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderBindingV1<'effect>"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV1"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV1"));
+    assert!(!installation_mod.contains("StoreV1"));
+    assert!(!installation_mod.contains("AtomicGenerationPublicationV1"));
+    assert!(!installation_mod.contains("impl FnOnce"));
+    assert!(!installation_mod.contains("OnceLock"));
+    assert!(!installation_mod.contains(
+        "#[derive(Clone)]\n    pub(in crate::domain) struct Stage9ActiveStoreFinalityProviderBindingV1"
+    ));
+    assert!(!installation_mod.contains(
+        "#[derive(Clone)]\n    pub(in crate::domain) struct Stage11PreStoreFinalityProviderBindingV1"
+    ));
+    assert!(installation_mod.contains("pub(in crate::domain) fn prepare_active_from_stage9_owner"));
+    assert!(
+        installation_mod.contains("backend: Stage9ActiveStoreFinalityProviderBindingV1<'effect>,")
+    );
+    assert!(
+        !installation_mod
+            .contains("backend: &'borrow mut Stage9ActiveStoreFinalityProviderBindingV1")
+    );
+    assert!(
+        installation_mod.contains("pub(in crate::domain) fn prepare_pre_store_from_stage11_owner")
+    );
+    assert!(
+        installation_mod.contains("backend: Stage11PreStoreFinalityProviderBindingV1<'effect>,")
+    );
+    assert!(
+        !installation_mod
+            .contains("backend: &'borrow mut Stage11PreStoreFinalityProviderBindingV1")
+    );
+    assert!(vnext_module.contains("stage11_frozen_owner_seed_compile_probe"));
+    assert!(vnext_module.contains("Stage11AggregateCensusProviderSeedV1::test_unavailable()"));
+    assert!(vnext_module.contains("Stage11PreStoreFinalityProviderSeedV1::test_unavailable()"));
+    assert!(
+        vnext_module.contains("stage11_sibling_can_name_and_call_only_the_frozen_owner_entries")
+    );
+    assert!(vnext_module.contains("stage9_frozen_owner_seed_compile_probe"));
+    assert!(vnext_module.contains("Stage9ActiveStoreFinalityProviderSeedV1::test_unavailable()"));
+    assert!(vnext_module.contains("stage9_sibling_can_name_and_call_only_the_frozen_owner_entry"));
+
+    let all_production_source = rust_files_under(Path::new("src"))
+        .into_iter()
+        .map(|path| read_source_file(&path))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for provider in [
+        "Stage9ActiveStoreFinalityProviderBindingV1",
+        "Stage11PreStoreFinalityProviderBindingV1",
+        "Stage11AggregateCensusProviderBindingV1",
+    ] {
+        for forbidden_trait in ["Clone", "Copy", "Debug", "Serialize"] {
+            assert!(
+                !all_production_source.contains(&format!("{forbidden_trait} for {provider}")),
+                "{provider} must not gain a manual {forbidden_trait} implementation"
+            );
+        }
+    }
+
+    let mut finality_owner_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            let source = read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            source.contains("ActiveStoreFinalityOwnerV1 for")
+                || source.contains("PreStoreFinalityOwnerV1 for")
+        })
+        .collect::<Vec<_>>();
+    finality_owner_implementors.sort();
+    assert_eq!(
+        finality_owner_implementors,
+        [
+            PathBuf::from("src/domain/installation/durable_finality.rs"),
+            PathBuf::from("src/domain/installation/durable_finality_stage11_seed.rs"),
+            PathBuf::from("src/domain/installation/durable_finality_stage9_seed.rs")
+        ]
+    );
+
+    let mut aggregate_owner_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            let source = read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            source.contains("AggregateCensusBackendV1 for")
+        })
+        .collect::<Vec<_>>();
+    aggregate_owner_implementors.sort();
+    assert_eq!(
+        aggregate_owner_implementors,
+        [
+            PathBuf::from("src/foundation/core/aggregate_census.rs"),
+            PathBuf::from("src/foundation/core/aggregate_census_stage11_seed.rs")
+        ]
+    );
+}
+
+#[test]
+fn stage11_v3_quarantine_route_is_current_owner_private_and_does_not_adapt_v2() {
+    let installation_census = read_source_file(Path::new("src/domain/installation/census.rs"));
+    let installation_admission =
+        read_source_file(Path::new("src/domain/installation/legacy_quarantine.rs"));
+    let migration_runtime =
+        read_source_file(Path::new("src/domain/migration/runtime/live_set_v3.rs"));
+    let migration_runtime_mod = read_source_file(Path::new("src/domain/migration/runtime/mod.rs"));
+    let persistence = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let repository = read_source_file(Path::new(
+        "src/domain/repository/legacy_quarantine_admission.rs",
+    ));
+    let repository_mod = read_source_file(Path::new("src/domain/repository/mod.rs"));
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let migration_operation =
+        read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    let migration_operation_mod = read_source_file(Path::new("src/operations/migration/mod.rs"));
+
+    for required_route in [
+        "pub(crate) fn from_live_owners(",
+        "RepositoryRootAdmissionV3::mint_from_store",
+        "installation_census.admit_legacy_quarantine_roots_v3(installation_expected_sources)",
+        "FoundationLegacyQuarantineLeaseV1::acquire(",
+        "self.physical.copy_once(token)",
+        "self.physical.rollback()",
+        ".finish(self.quarantine.identity().into_bytes())",
+        "Ok(Stage11PhysicalClosureV3 {",
+    ] {
+        assert!(
+            migration_operation.contains(required_route),
+            "Stage 11 V3 route is missing {required_route}"
+        );
+    }
+    assert!(
+        installation_census.contains("#[path = \"legacy_quarantine.rs\"]\nmod legacy_quarantine;")
+    );
+    assert!(installation_admission.contains("pub(crate) struct InstallationRootAdmissionV3"));
+    assert!(repository.contains("pub(crate) struct RepositoryRootAdmissionV3"));
+    assert!(repository_mod.contains("\nmod legacy_quarantine_admission;\n"));
+    assert!(repository_mod.contains("pub(crate) use legacy_quarantine_admission::{"));
+    assert!(persistence_mod.contains("\npub(crate) mod legacy_quarantine;\n"));
+    assert!(foundation_mod.contains("\npub(crate) mod legacy_quarantine;\n"));
+    assert!(migration_runtime_mod.contains("\nmod live_set_v3;\n"));
+    assert!(migration_runtime_mod.contains("pub use live_set_v3::{"));
+    assert!(migration_operation_mod.contains("\nmod live_set_v3;\n"));
+    assert!(migration_operation_mod.contains("pub(crate) use live_set_v3::{"));
+    assert!(!repository_mod.contains("pub mod legacy_quarantine_admission"));
+    assert!(!persistence_mod.contains("pub mod legacy_quarantine"));
+    assert!(!foundation_mod.contains("pub mod legacy_quarantine"));
+    assert!(!migration_runtime_mod.contains("pub mod live_set_v3"));
+    assert!(!migration_operation_mod.contains("pub mod live_set_v3"));
+
+    let v3_sources = [
+        installation_admission.as_str(),
+        migration_runtime.as_str(),
+        persistence.as_str(),
+        repository.as_str(),
+        foundation.as_str(),
+        migration_operation.as_str(),
+    ];
+    let production_sources = rust_files_under(Path::new("src"))
+        .into_iter()
+        .map(|path| {
+            let source = read_source_file(&path);
+            (path, source)
+        })
+        .collect::<Vec<_>>();
+    for historical_authority in [
+        "LegacyQuarantineEpochV2",
+        "AggregatePhysicalCensusV2",
+        "Stage11CensusContinuationV2",
+        "stage11_aggregate_census",
+    ] {
+        assert!(
+            v3_sources
+                .iter()
+                .all(|source| !source.contains(historical_authority)),
+            "current Stage 11 V3 code must not import or adapt {historical_authority}"
+        );
+    }
+    for historical in [
+        "src/foundation/core/aggregate_census.rs",
+        "src/foundation/core/aggregate_census_stage11_seed.rs",
+    ] {
+        let source = read_source_file(Path::new(historical));
+        assert!(source.contains("AggregateCensus"));
+        assert!(!source.contains("FoundationLegacyQuarantineLeaseV1"));
+        assert!(!source.contains("LegacyQuarantineEpochV3"));
+    }
+
+    for owner_issued in [
+        "LegacyQuarantineRootAdmissionFactsV3",
+        "FoundationLegacyQuarantineLeaseV1",
+    ] {
+        assert!(
+            named_struct_body_contains(
+                &foundation,
+                owner_issued,
+                "_not_send_or_sync: PhantomData<Rc<()>>"
+            ),
+            "{owner_issued} must retain its Rc ownership marker"
+        );
+    }
+    for (continuation, source, retained_owner) in [
+        (
+            "FoundationSourceCopyContinuationV1",
+            foundation.as_str(),
+            "FoundationLegacyQuarantineLeaseV1",
+        ),
+        (
+            "Stage11LiveSetContinuationV3",
+            migration_operation.as_str(),
+            "FoundationSourceCopyContinuationV1",
+        ),
+        (
+            "Stage11SealedCopyContinuationV3",
+            migration_operation.as_str(),
+            "FoundationSourceCopyContinuationV1",
+        ),
+    ] {
+        let body = named_struct_body(source, continuation)
+            .unwrap_or_else(|| panic!("missing continuation declaration {continuation}"));
+        assert!(
+            source_mentions_identifier(&body, retained_owner),
+            "{continuation} must retain non-Send/non-Sync owner {retained_owner} by value"
+        );
+    }
+
+    for (move_only, source) in [
+        ("FoundationLegacyQuarantineLeaseV1", foundation.as_str()),
+        ("FoundationSourceCopyContinuationV1", foundation.as_str()),
+        ("Stage11LiveSetContinuationV3", migration_operation.as_str()),
+        (
+            "Stage11SealedCopyContinuationV3",
+            migration_operation.as_str(),
+        ),
+    ] {
+        let declaration = format!("pub(crate) struct {move_only}");
+        let declaration_offset = source
+            .find(&declaration)
+            .unwrap_or_else(|| panic!("missing move-only declaration {declaration}"));
+        let attributes = source[..declaration_offset]
+            .rsplit_once("\n\n")
+            .map_or("", |(_, attributes)| attributes);
+        for forbidden_trait in ["Clone", "Copy", "Serialize", "Deserialize", "Send", "Sync"] {
+            assert!(
+                !attributes.contains(forbidden_trait),
+                "{move_only} must not derive {forbidden_trait}"
+            );
+            let implementor = production_sources.iter().find(|(_, source)| {
+                source.contains(forbidden_trait)
+                    && source.contains(move_only)
+                    && source_implements_trait_for_type(source, forbidden_trait, move_only)
+            });
+            if let Some((path, _)) = implementor {
+                panic!(
+                    "{move_only} must not gain {forbidden_trait}; implementation found in {}",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = read_source_file(&interface);
+        let code = code_for_path_scan(&source);
+        for forbidden_leaf in [
+            "foundation::core::legacy_quarantine",
+            "domain::persistence::legacy_quarantine",
+            "domain::repository::legacy_quarantine_admission",
+            "domain::installation::legacy_quarantine",
+            "operations::migration::live_set_v3",
+        ] {
+            assert!(
+                !code.contains(forbidden_leaf),
+                "{} must not import Stage 11 leaf {forbidden_leaf}",
+                interface.display()
+            );
+        }
+        for private_symbol in STAGE11_V3_INTERFACE_PRIVATE_SYMBOLS {
+            assert!(
+                !source_mentions_identifier(&code, private_symbol),
+                "{} must not import or name private Stage 11 symbol {private_symbol} through a facade",
+                interface.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn stage11_v8_owner_wiring_is_private_complete_and_not_interface_reachable() {
+    let repository_mod = read_source_file(Path::new("src/domain/repository/mod.rs"));
+    let repository_history =
+        read_source_file(Path::new("src/domain/repository/legacy_source_history.rs"));
+    let repository_universe = read_source_file(Path::new("src/domain/repository/root_universe.rs"));
+    let installation_mod = read_source_file(Path::new("src/domain/installation/mod.rs"));
+    let installation_history = read_source_file(Path::new(
+        "src/domain/installation/legacy_source_history.rs",
+    ));
+    let installation_universe =
+        read_source_file(Path::new("src/domain/installation/root_universe.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let persistence_history =
+        read_source_file(Path::new("src/domain/persistence/legacy_source_history.rs"));
+    let integration_mod = read_source_file(Path::new("src/domain/integration/mod.rs"));
+    let host_slots = read_source_file(Path::new("src/domain/integration/legacy_host_slots.rs"));
+
+    assert!(repository_mod.contains("\nmod legacy_source_history;\n"));
+    assert!(repository_mod.contains("\nmod root_universe;\n"));
+    assert!(installation_mod.contains("\nmod legacy_source_history;\n"));
+    assert!(installation_mod.contains("\npub(in crate::domain) mod root_universe;\n"));
+    assert!(persistence_mod.contains("\npub(in crate::domain) mod legacy_source_history;\n"));
+    assert!(persistence_mod.contains("\npub(in crate::domain) mod root_universe;\n"));
+    assert!(integration_mod.contains("\nmod legacy_host_slots;\n"));
+
+    for source in [
+        repository_mod.as_str(),
+        installation_mod.as_str(),
+        persistence_mod.as_str(),
+        integration_mod.as_str(),
+    ] {
+        assert!(!source.contains("pub mod legacy_source_history"));
+        assert!(!source.contains("pub mod root_universe"));
+        assert!(!source.contains("pub mod legacy_host_slots"));
+    }
+
+    for (issuer, source) in [
+        (
+            "RepositoryUnavailablePreexistingLossEvidenceIssuerV1",
+            repository_history.as_str(),
+        ),
+        (
+            "InstallationUnavailablePreexistingLossEvidenceIssuerV1",
+            installation_history.as_str(),
+        ),
+        (
+            "ProtectedPrimaryUnavailablePreexistingLossEvidenceIssuerV1",
+            persistence_history.as_str(),
+        ),
+    ] {
+        assert!(
+            named_struct_body_contains(source, issuer, "_not_send_or_sync:"),
+            "{issuer} must retain its process-local Rc marker"
+        );
+        assert!(
+            source
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .contains(&format!(
+                    "OwnerUnavailablePreexistingLossEvidenceIssuerPortV1 for {issuer}"
+                )),
+            "{issuer} must implement the sealed consuming Foundation issuance port"
+        );
+    }
+
+    for (lease, source) in [
+        (
+            "RepositoryDeclaredRootUniverseLeaseV1",
+            repository_universe.as_str(),
+        ),
+        (
+            "InstallationDeclaredRootUniverseLeaseV1",
+            installation_universe.as_str(),
+        ),
+    ] {
+        assert!(
+            named_struct_body_contains(source, lease, "_not_send_or_sync:"),
+            "{lease} must retain its process-local Rc marker"
+        );
+    }
+
+    assert!(host_slots.contains("capture_complete_snapshot_no_io("));
+    assert!(host_slots.contains("recheck_complete_snapshot_no_io("));
+    assert!(host_slots.contains("visit_complete_slots("));
+    assert!(host_slots.contains("acquire_from_designated_registry("));
+    assert!(host_slots.contains("final_recheck_consumed: bool"));
+    assert!(host_slots.contains("FoundationDeclaredRootRoleV1::Host"));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::present("));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::declared_absent("));
+    assert!(host_slots.contains("InstallationDeclaredRootV1::unsupported("));
+    assert!(!host_slots.contains("StoreRoleV1"));
+    for forbidden_surface in [
+        "\npub struct ",
+        "\npub enum ",
+        "\npub trait ",
+        "Serialize",
+        "Deserialize",
+        "ScopeAtom",
+        "ActionV1",
+    ] {
+        assert!(
+            !host_slots.contains(forbidden_surface),
+            "Integration host-slot snapshot must not add public or wire surface {forbidden_surface}"
+        );
+    }
+
+    let mut issuer_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .contains("OwnerUnavailablePreexistingLossEvidenceIssuerPortV1 for")
+        })
+        .collect::<Vec<_>>();
+    issuer_implementors.sort();
+    assert_eq!(
+        issuer_implementors,
+        [
+            PathBuf::from("src/domain/installation/legacy_source_history.rs"),
+            PathBuf::from("src/domain/persistence/legacy_source_history.rs"),
+            PathBuf::from("src/domain/repository/legacy_source_history.rs"),
+        ]
+    );
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = read_source_file(&interface);
+        let code = code_for_path_scan(&source);
+        for forbidden_leaf in [
+            "domain::integration::legacy_host_slots",
+            "domain::installation::legacy_source_history",
+            "domain::installation::root_universe",
+            "domain::persistence::legacy_source_history",
+            "domain::persistence::root_universe",
+            "domain::repository::legacy_source_history",
+            "domain::repository::root_universe",
+        ] {
+            assert!(
+                !code.contains(forbidden_leaf),
+                "{} must not import V8 owner leaf {forbidden_leaf}",
+                interface.display()
+            );
+        }
+        for private_symbol in STAGE11_V8_INTERFACE_PRIVATE_SYMBOLS {
+            assert!(
+                !source_mentions_identifier(&code, private_symbol),
+                "{} must not import or name private V8 symbol {private_symbol} through a facade",
+                interface.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn stage11_v8_foundation_v4_wiring_is_private_current_and_not_interface_reachable() {
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let migration_runtime_mod = read_source_file(Path::new("src/domain/migration/runtime/mod.rs"));
+    let migration_operation_mod = read_source_file(Path::new("src/operations/migration/mod.rs"));
+
+    assert!(foundation_mod.contains("\npub(crate) mod legacy_loss_evidence;\n"));
+    assert!(foundation_mod.contains("\npub(crate) mod root_universe;\n"));
+    assert!(!foundation_mod.contains("\npub mod legacy_loss_evidence;\n"));
+    assert!(!foundation_mod.contains("\npub mod root_universe;\n"));
+    assert!(!foundation_mod.contains("pub use legacy_loss_evidence"));
+    assert!(!foundation_mod.contains("pub use root_universe"));
+
+    let runtime_facade = migration_runtime_mod
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for required in [
+        "pub(crate) use live_set_v3::{FoundationMaterializedSourceCaseV3, LegacyQuarantineEpochBasisV4};",
+        "LegacyQuarantineEpochV4",
+        "LegacyRollbackAssessmentV4",
+        "UnavailablePreexistingLossManifestV4",
+        "UnavailablePreexistingLossV4",
+    ] {
+        assert!(
+            runtime_facade.contains(required),
+            "Migration runtime facade is missing current V4 export {required}"
+        );
+    }
+    assert!(
+        migration_runtime_mod.contains(
+            "the V3 live-set facade remains exported only for historical contract coverage"
+        )
+    );
+
+    let operation_facade = migration_operation_mod
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for required in [
+        "Stage11ClosedPhysicalClosureV4",
+        "Stage11LiveSetContinuationV4",
+        "Stage11LiveSetOperationErrorV4",
+        "Stage11PhysicalClosureV4",
+        "Stage11SealedCopyContinuationV4",
+        "execute_offline_live_set_v4",
+    ] {
+        assert!(
+            operation_facade.contains(required),
+            "Migration operation facade is missing current V4 export {required}"
+        );
+    }
+    assert!(migration_operation_mod.contains(
+        "the V3 continuation facade remains exported only for historical contract coverage"
+    ));
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = code_for_path_scan(&read_source_file(&interface));
+        for forbidden in [
+            "FoundationMaterializedSourceCaseV3",
+            "LegacyQuarantineEpochBasisV4",
+            "Stage11ClosedPhysicalClosureV4",
+            "Stage11LiveSetContinuationV4",
+            "Stage11LiveSetOperationErrorV4",
+            "Stage11PhysicalClosureV4",
+            "Stage11SealedCopyContinuationV4",
+            "execute_offline_live_set_v4",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, forbidden),
+                "{} must not import or name private V4 migration symbol {forbidden}",
+                interface.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn stage11_v8_product_closure_binds_loss_audits_to_custody_and_expected_old() {
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let custody_trait = foundation
+        .split("pub(crate) trait QuarantineCustodyPortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[derive").next())
+        .expect("sealed custody trait");
+    let compact_custody_trait = custody_trait
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(compact_custody_trait.contains(
+        "fn create_loss_audit_if_absent( &mut self, audit_id: [u8; 32], canonical_bytes: &[u8], ) -> Result<(), FoundationLegacyQuarantineErrorV1>;"
+    ));
+    assert!(compact_custody_trait.contains(
+        "fn read_loss_audit( &self, audit_id: [u8; 32], ) -> Result<Vec<u8>, FoundationLegacyQuarantineErrorV1>;"
+    ));
+    assert!(!compact_custody_trait.contains("StoreV1"));
+    assert!(!compact_custody_trait.contains("persistence_store"));
+
+    let operation_leaf = read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    let v4_entry = operation_leaf
+        .split("pub(crate) fn execute_offline_live_set_v4")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) struct Stage11LiveSetContinuationV4")
+                .next()
+        })
+        .expect("V4 operation entry");
+    let v4_finish = operation_leaf
+        .split("impl<P, Q> Stage11SealedCopyContinuationV4<P, Q>")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(crate) enum Stage11PhysicalClosureV4")
+                .next()
+        })
+        .expect("V4 custody-owned finish");
+    for (name, source) in [("entry", v4_entry), ("finish", v4_finish)] {
+        for forbidden in [
+            "persistence_store",
+            "StoreV1",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+        ] {
+            assert!(
+                !source_mentions_identifier(source, forbidden),
+                "V4 {name} must not accept external audit or Store authority through {forbidden}"
+            );
+        }
+    }
+    assert!(v4_entry.contains("custody: Q"));
+    assert!(!v4_entry.contains("audit:"));
+    assert!(v4_finish.contains("pub(crate) fn finish(\n        mut self,\n    )"));
+    assert!(v4_finish.contains(
+        "persist_unavailable_preexisting_loss_audits_v4(&self.losses, &mut self.physical)"
+    ));
+    assert!(
+        v4_finish
+            .find("persist_unavailable_preexisting_loss_audits_v4")
+            .unwrap()
+            < v4_finish
+                .find(".finish(self.quarantine.identity()")
+                .unwrap()
+    );
+
+    let owner = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    assert!(
+        owner.contains("\"recovery/legacy-loss-audit-v4/{}.cbor\",\n        hex_digest(audit_id)")
+    );
+    let audit_create = owner
+        .split("fn create_loss_audit_if_absent(\n        &mut self,")
+        .nth(2)
+        .and_then(|tail| tail.split("fn read_loss_audit(").next())
+        .expect("custody-bound audit create");
+    let audit_read = owner
+        .split("fn read_loss_audit(\n        &self,")
+        .nth(2)
+        .and_then(|tail| tail.split("fn recheck_loss_audit_custody(").next())
+        .expect("custody-bound audit read");
+    assert_eq!(
+        audit_create
+            .matches("self.recheck_loss_audit_custody()")
+            .count(),
+        4,
+        "directory creation, file creation, and exact readback retain pre/post custody checks"
+    );
+    assert_eq!(
+        audit_read
+            .matches("self.recheck_loss_audit_custody()?")
+            .count(),
+        2,
+        "immutable reads retain pre/post custody checks"
+    );
+    for source in [audit_create, audit_read] {
+        assert!(source.contains("self.retained_root"));
+        assert!(!source.contains("legacy_quarantine_secure_root_v3"));
+        for rollback_vector in ["created_files", "custody_files", "custody_records"] {
+            assert!(
+                !source_mentions_identifier(source, rollback_vector),
+                "durable non-bearer audit evidence must not enter rollback vector {rollback_vector}"
+            );
+        }
+    }
+    let custody_recheck = owner
+        .split("fn recheck_loss_audit_custody(")
+        .nth(1)
+        .and_then(|tail| tail.split("fn create_or_verify(").next())
+        .expect("custody currentness recheck");
+    for required in [
+        "StoreRoleV1::Installation",
+        "StoreStateV1::Inactive",
+        "revision != self.state_revision",
+        ".active_head()",
+        "self.retained_root.verify_path_binding()?",
+        "observed != self.facts",
+        "expected_old != self.expected_old",
+        "currentness != self.currentness",
+        "fence != self.fence",
+        "identity != self.identity",
+    ] {
+        assert!(
+            custody_recheck.contains(required),
+            "custody audit recheck must retain {required}"
+        );
+    }
+    let rollback = owner
+        .split("fn rollback_created_files(")
+        .nth(1)
+        .and_then(|tail| tail.split("impl Drop for QuarantineCustodyLeaseV1").next())
+        .expect("custody rollback implementation");
+    assert!(!rollback.contains("loss_audit"));
+    assert!(!rollback.contains("legacy-loss-audit-v4"));
+
+    for facade in [
+        "src/lib.rs",
+        "src/domain/mod.rs",
+        "src/domain/persistence/mod.rs",
+        "src/foundation/core/mod.rs",
+        "src/operations/mod.rs",
+        "src/operations/migration/mod.rs",
+    ] {
+        let source = code_for_path_scan(&read_source_file(Path::new(facade)));
+        for private_audit_surface in [
+            "QuarantineCustodyPortV1",
+            "create_loss_audit_if_absent",
+            "read_loss_audit",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, private_audit_surface),
+                "{facade} must not expose private custody audit surface {private_audit_surface}"
+            );
+        }
+    }
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = code_for_path_scan(&read_source_file(&interface));
+        for private_audit_surface in [
+            "QuarantineCustodyPortV1",
+            "create_loss_audit_if_absent",
+            "read_loss_audit",
+            "UnavailablePreexistingLossAuditPersistencePortV1",
+            "legacy-loss-audit-v4",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, private_audit_surface),
+                "{} must not make custody audit authority interface-reachable",
+                interface.display()
+            );
+        }
+    }
+    for wire_root in ["embedded/vnext", "embedded/schemas"] {
+        for path in paths_under(Path::new(wire_root))
+            .into_iter()
+            .filter(|path| path.is_file())
+        {
+            let wire_artifact = fs::read(&path).expect("read wire artifact");
+            let source = String::from_utf8_lossy(&wire_artifact);
+            for private_audit_surface in [
+                "QuarantineCustodyPortV1",
+                "create_loss_audit_if_absent",
+                "read_loss_audit",
+                "legacy-loss-audit-v4",
+            ] {
+                assert!(
+                    !source.contains(private_audit_surface),
+                    "{} must not make custody audit authority wire-reachable",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    let cutover = read_source_file(Path::new("src/domain/installation/resource_cutover.rs"));
+    for required in [
+        "stage12_deletion_plan_v3(",
+        "expected_old_state_id: MigrationDigestV1",
+        "*expected_old_state_id.as_bytes()",
+        "expected_old_state_id: deletion_plan.expected_old_state_id()",
+        "expected_old_state_id: closure.expected_old_state_id()",
+        "continuation.expected_old_state_id != closure.expected_old_state_id()",
+        "effects.compare_expected_old_and_prune(",
+        "closure.expected_old_state_id(),",
+    ] {
+        assert!(
+            cutover.contains(required),
+            "Stage12 expected-old chain must retain {required}"
+        );
+    }
+    let guard = read_source_file(Path::new("src/domain/authority/legacy_removal_guard.rs"));
+    for required in [
+        "_expected_old_state: [u8; 32]",
+        "expected_old_state: *closure.expected_old_state_id().as_bytes()",
+        "&self._expected_old_state",
+        "self._expected_old_state != consumer.expected_old_state",
+        "consume_with_linearization",
+    ] {
+        assert!(
+            guard.contains(required),
+            "Authority guard expected-old chain must retain {required}"
+        );
+    }
+    let authority = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    for required in [
+        "let expected_old_state_id = deletion_plan.expected_old_state_id();",
+        "consumer_reader_hold.expected_old_state_id() != expected_old_state_id",
+        "expected_old_state_id.as_bytes(),",
+        "*expected_old_state_id.as_bytes(),",
+    ] {
+        assert!(
+            authority.contains(required),
+            "Authority admission expected-old chain must retain {required}"
+        );
+    }
+}
+
+#[test]
+fn stage11_private_route_guard_rejects_generic_capability_trait_impls() {
+    let mutation = r#"
+        impl<P, Q> std::clone::Clone for FoundationLegacyQuarantineLeaseV1<P, Q> {
+            fn clone(&self) -> Self {
+                todo!()
+            }
+        }
+    "#;
+
+    assert!(source_implements_trait_for_type(
+        mutation,
+        "Clone",
+        "FoundationLegacyQuarantineLeaseV1"
+    ));
+    assert!(!source_implements_trait_for_type(
+        mutation,
+        "Clone",
+        "FoundationSourceCopyContinuationV1"
+    ));
+}
+
+#[test]
+fn stage11_private_route_guard_rejects_facade_imports_without_matching_noise() {
+    let mutation = r#"
+        use crate::operations::migration::Stage11LiveSetContinuationV3;
+        use crate::domain::migration::runtime::{LegacySourceCaseManifestV3, SourceCaseV3};
+        // Stage11SealedCopyContinuationV3 is only documentation here.
+        const MESSAGE: &str = "SealedQuarantineManifestV3";
+        struct Stage11LiveSetContinuationV3Fixture;
+    "#;
+
+    assert!(source_mentions_identifier(
+        mutation,
+        "Stage11LiveSetContinuationV3"
+    ));
+    assert!(source_mentions_identifier(
+        mutation,
+        "LegacySourceCaseManifestV3"
+    ));
+    assert!(!source_mentions_identifier(
+        mutation,
+        "Stage11SealedCopyContinuationV3"
+    ));
+    assert!(!source_mentions_identifier(
+        mutation,
+        "SealedQuarantineManifestV3"
+    ));
+    assert!(!source_mentions_identifier(
+        "struct Stage11LiveSetContinuationV3Fixture;",
+        "Stage11LiveSetContinuationV3"
+    ));
+}
+
+#[test]
+fn stage11_private_route_guard_requires_transitive_rc_ownership() {
+    let protected = r#"
+        pub(crate) struct OwnerLease<P> {
+            owner: P,
+            _not_send_or_sync: PhantomData<Rc<()>>,
+        }
+    "#;
+    let weakened = r#"
+        pub(crate) struct OwnerLease<P> {
+            owner: P,
+        }
+        unsafe impl<P> Send for OwnerLease<P> {}
+    "#;
+
+    assert!(named_struct_body_contains(
+        protected,
+        "OwnerLease",
+        "_not_send_or_sync: PhantomData<Rc<()>>"
+    ));
+    assert!(!named_struct_body_contains(
+        weakened,
+        "OwnerLease",
+        "_not_send_or_sync: PhantomData<Rc<()>>"
+    ));
+    assert!(source_implements_trait_for_type(
+        weakened,
+        "Send",
+        "OwnerLease"
+    ));
+}
+
+#[test]
+fn stage12_mainintegration_keeps_pruning_and_mcp_authority_narrow() {
+    let authority = read_source_file(Path::new("src/domain/authority/mod.rs"));
+    assert_eq!(authority.matches("mod legacy_removal_guard;").count(), 1);
+    assert!(
+        authority.contains(
+            "pub(in crate::domain) use legacy_removal_guard::{LegacyRemovalGuardV2, LegacyRemovalGuardV3};"
+        )
+    );
+
+    let installation = read_source_file(Path::new("src/domain/installation/mod.rs"));
+    for owner_fact in [
+        "InstallationLegacyDeletionPlanV3",
+        "Stage12ConsumerReaderHoldClosureV3",
+        "Stage12ReplacementActivationV3",
+        "Stage12RollbackRehearsalV3",
+        "InstallationPhysicalPruningContinuationV3",
+        "InstallationPhysicalPruningEffectPortV3",
+    ] {
+        assert!(
+            installation.contains(owner_fact),
+            "Installation must reexport {owner_fact}"
+        );
+    }
+    assert!(installation.contains("Stage12ProductPruningCoordinatorV3"));
+    assert!(installation.contains("UnavailablePreexistingLossManifestV4"));
+    assert!(installation.contains("FoundationLegacyQuarantineClosureV2"));
+    assert!(installation.contains("LegacyRollbackAssessmentV4"));
+    assert!(installation.contains("LegacyQuarantineEpochV4"));
+    assert!(installation.contains("admit_legacy_physical_pruning("));
+    assert!(!installation.contains("admit_legacy_physical_pruning_v2("));
+    assert!(installation.contains("resource_cutover::execute_stage12_product_pruning("));
+
+    let operations = read_source_file(Path::new("src/operations/installation/mod.rs"));
+    assert!(installation.contains("LegacyQuarantineExpectedSourceSetV3"));
+    assert!(operations.contains("execute_offline_live_set_v4"));
+    assert!(operations.contains("Stage11PhysicalClosureV4"));
+    assert!(operations.contains("coordinate_stage12_product_pruning("));
+    assert!(operations.contains("Stage12ProductPruningCoordinatorV3"));
+    assert!(!operations.contains("LegacyRemovalGuardV2"));
+    assert!(!operations.contains("LegacyRemovalGuardV3"));
+    assert!(!operations.contains("Stage12ProductPruningCoordinatorV2"));
+    assert!(!operations.contains("execute_offline_live_set_v3"));
+    assert!(!operations.contains("execute_stage12_product_pruning"));
+
+    let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    let current_admission = facade
+        .split("pub(in crate::domain) fn admit_legacy_physical_pruning<")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("pub(in crate::domain) fn admit_legacy_physical_pruning_v2")
+                .next()
+        })
+        .expect("current pruning admission");
+    assert!(current_admission.contains("LegacyRemovalGuardV3"));
+    assert!(current_admission.contains("validate_legacy_physical_pruning_admission_v3"));
+    assert!(facade.contains("fn admit_legacy_physical_pruning_v2"));
+    assert!(facade.contains("observe_legacy_removal_guard_currentness_v3"));
+
+    let live_pruning_calls = rust_files_under(Path::new("src"))
+        .iter()
+        .map(|path| read_source_file(path))
+        .map(|source| {
+            source
+                .matches("coordinate_stage12_product_pruning(")
+                .count()
+        })
+        .sum::<usize>();
+    assert_eq!(
+        live_pruning_calls, 1,
+        "the sole operations coordinator must remain an uncalled definition"
+    );
+
+    let adapters = read_source_file(Path::new("src/operations/adapters/mod.rs"));
+    let mcp_parent = read_source_file(Path::new("src/interfaces/mcp/mod.rs"));
+    let mcp_tools = read_source_file(Path::new("src/interfaces/mcp/tools.rs"));
+    let packet_index = adapters
+        .find("name: \"maestro_packet\"")
+        .expect("packet tool");
+    let search_index = adapters
+        .find("name: \"maestro_cli_search\"")
+        .expect("CLI search tool");
+    assert!(packet_index < search_index);
+    assert_eq!(
+        adapters
+            .matches("GlobalMcpAdapterDefinitionV1 {\n        kind:")
+            .count(),
+        2
+    );
+    assert!(mcp_tools.contains("GLOBAL_MCP_TOOLS_V1\n        .iter()"));
+    assert!(mcp_tools.contains("global_mcp_adapter(name)"));
+    assert!(mcp_tools.contains("match adapter.kind"));
+    assert!(mcp_tools.contains("GlobalMcpAdapterKindV1::Packet"));
+    assert!(mcp_tools.contains("GlobalMcpAdapterKindV1::CliSearch"));
+    assert!(!mcp_tools.contains("std::path"));
+    assert!(!mcp_tools.contains("PathBuf"));
+    assert!(!mcp_tools.contains("MaestroPaths"));
+    assert!(!mcp_tools.contains(".canonicalize()"));
+    assert!(mcp_tools.contains("LiveProjectionReadProviderV1::open_explicit_repository("));
+    for legacy_name in [
+        "\"maestro_status\"",
+        "\"maestro_ready\"",
+        "\"maestro_query\"",
+        "\"maestro_card_get\"",
+        "\"maestro_task_show\"",
+    ] {
+        assert!(
+            !mcp_tools.contains(legacy_name),
+            "legacy MCP tool must stay refused: {legacy_name}"
+        );
+    }
+    let dispatch = mcp_tools
+        .split("pub(crate) fn call_tool")
+        .nth(1)
+        .expect("MCP dispatcher");
+    let unknown_index = dispatch
+        .find("global_mcp_adapter(name)")
+        .expect("default-deny MCP refusal");
+    assert!(
+        unknown_index
+            < dispatch
+                .find("serde_json::to_string(arguments)")
+                .expect("argument parsing")
+    );
+
+    let server = read_source_file(Path::new("src/interfaces/mcp/server.rs"));
+    assert!(!server.contains("discover_repo_root"));
+    assert!(!server.contains("MaestroPaths"));
+    assert!(server.contains("serve_stdio(None)"));
+    assert!(server.contains("serve_with_protected_packet("));
+    assert!(!server.contains("acquire_trusted_host_diagnostic_connection"));
+    assert!(!server.contains("packet_read_with_protected_continuity"));
+    assert!(!server.contains("\"list\" =>"));
+    assert!(mcp_parent.contains("pub(crate) fn serve_with_authenticated_host"));
+    assert!(mcp_parent.contains("acquire_trusted_host_diagnostic_connection("));
+    assert!(mcp_parent.contains("Stage10OwnerLocalConnectionSeedV1<'host>"));
+    assert!(mcp_parent.contains("LiveProjectionReadProviderV1::open_explicit_repository("));
+    assert!(mcp_parent.contains("packet_read_with_protected_continuity("));
+    assert!(
+        mcp_parent.contains("let _diagnostic_bytes = protected.protected_continuity_diagnostic;")
+    );
+    let protected_route = mcp_parent
+        .split("pub(crate) struct ProtectedPacketRuntimeV1")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(crate) const MCP_TOOL_SOURCE_JSON").next())
+        .expect("protected Packet route");
+    for forbidden in ["std::env", "OnceLock", "Mutex", "thread_local!", "serde"] {
+        assert!(
+            !protected_route.contains(forbidden),
+            "protected route must not acquire ambient authority through {forbidden}"
+        );
+    }
+
+    let connectors = read_source_file(Path::new("src/interfaces/connectors/mod.rs"));
+    assert_eq!(
+        connectors
+            .matches("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(")
+            .count(),
+        1
+    );
+    let constructor_external_callers = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            path != Path::new("src/interfaces/connectors/mod.rs")
+                && path
+                    != Path::new("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
+        })
+        .filter(|path| {
+            read_source_file(path)
+                .contains("Stage10OwnerLocalConnectionSeedV1::acquire_from_designated_connector(")
+        })
+        .collect::<Vec<_>>();
+    assert!(constructor_external_callers.is_empty());
+    let connector_external_callers = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| path != Path::new("src/interfaces/connectors/mod.rs"))
+        .filter(|path| {
+            read_source_file(path).contains("acquire_trusted_host_diagnostic_connection(")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        connector_external_callers,
+        [PathBuf::from("src/interfaces/mcp/mod.rs")]
+    );
+
+    let cli = read_source_file(Path::new("src/interfaces/cli/mod.rs"));
+    let mcp_commands = cli
+        .split("pub enum McpCommand")
+        .nth(1)
+        .expect("MCP command enum")
+        .split_once('}')
+        .expect("MCP command enum body")
+        .0;
+    assert!(mcp_commands.contains("Serve"));
+    assert!(mcp_commands.contains("Tools"));
+    assert!(!source_mentions_identifier(mcp_commands, "Stdin"));
+    assert!(!source_mentions_identifier(mcp_commands, "List"));
+    assert!(!source_mentions_identifier(mcp_commands, "stdio"));
+    assert!(cli.contains("RootCommand::Packet"));
+
+    let main = read_source_file(Path::new("src/main.rs"));
+    assert!(main.contains("RootCommand::Packet"));
+
+    let provider = read_source_file(Path::new("src/operations/adapters/live_projection.rs"));
+    assert!(provider.contains("candidate:projection:canonical-store-locator-unavailable:v1"));
+}
+
+#[test]
+fn v8_terminal_closure_keeps_external_proof_exact_effect_inert_and_private() {
+    const EPC_COMMIT: &str = "6d3197833c1a10d102f42c70ebb3311e6a65da5b";
+    const EPC_TREE: &str = "eccece8f8e8b4698a5c2eae8438db2a443026ab1";
+    const PRODUCT_COMMIT: &str = "849a59d9c1290fbc0235b0c92fa1325923e65b08";
+    const PRODUCT_TREE: &str = "fe7784dfa36763081104844ba87294e3daa51ed0";
+
+    let identity = Command::new("git")
+        .args(["show", "-s", "--format=%P %T", EPC_COMMIT])
+        .output()
+        .expect("read EPC identity");
+    assert!(identity.status.success());
+    assert_eq!(
+        String::from_utf8(identity.stdout)
+            .expect("UTF-8 EPC identity")
+            .trim(),
+        format!("{PRODUCT_COMMIT} {EPC_TREE}")
+    );
+
+    let diff = Command::new("git")
+        .args([
+            "diff-tree",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            EPC_COMMIT,
+        ])
+        .output()
+        .expect("read EPC surface");
+    assert!(diff.status.success());
+    let observed_surface = String::from_utf8(diff.stdout)
+        .expect("UTF-8 EPC surface")
+        .lines()
+        .map(|line| {
+            let (status, path) = line.split_once('\t').expect("EPC status and path");
+            (status.to_string(), path.to_string())
+        })
+        .collect::<BTreeSet<_>>();
+    let expected_surface = BTreeSet::from([
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage11/live_set_v4_contract.v1.json".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage11/root-universe.v1.json".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/fixtures/vnext/stage12/release-proof-inputs.v1.json".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tests/fixtures/vnext/stage12/stage12-legacy-cut-coordinator.v3.json".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/vnext_stage12_affected_suffix.rs".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tests/vnext_stage12_contracts.rs".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/final_chain/stage12_product_proof.py".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/final_chain/test_stage12_product_proof.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage11/test_validate_v4.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage11/validate_v4.py".to_string(),
+        ),
+        (
+            "M".to_string(),
+            "tools/vnext_contracts/stage12/architecture_guard.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage12/coordinator_v3.py".to_string(),
+        ),
+        (
+            "A".to_string(),
+            "tools/vnext_contracts/stage12/test_coordinator_v3.py".to_string(),
+        ),
+    ]);
+    assert_eq!(observed_surface, expected_surface);
+    assert_eq!(observed_surface.len(), 13);
+    for (_, path) in &observed_surface {
+        assert!(
+            !path.starts_with("src/"),
+            "EPC must not change production {path}"
+        );
+        assert!(
+            Path::new(path).is_file(),
+            "EPC proof surface must retain {path}"
+        );
+    }
+
+    let fixture: serde_json::Value = serde_json::from_str(&read_source_file(Path::new(
+        "tests/fixtures/vnext/stage12/release-proof-inputs.v1.json",
+    )))
+    .expect("EPC release-proof fixture");
+    let materialization = fixture
+        .get("v8_snapshot_materialization")
+        .and_then(serde_json::Value::as_object)
+        .expect("provisional V8 snapshot materialization");
+    assert_eq!(
+        materialization
+            .get("state")
+            .and_then(serde_json::Value::as_str),
+        Some("provisional_static_known_prefix")
+    );
+    let predecessor = materialization
+        .get("known_first_parent_ledger")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|ledger| ledger.last())
+        .expect("known product predecessor");
+    assert_eq!(
+        predecessor
+            .get("commit")
+            .and_then(serde_json::Value::as_str),
+        Some(PRODUCT_COMMIT)
+    );
+    assert_eq!(
+        predecessor.get("tree").and_then(serde_json::Value::as_str),
+        Some(PRODUCT_TREE)
+    );
+    assert_eq!(
+        materialization.get("unmaterialized_logical_checkpoints"),
+        Some(&serde_json::json!([
+            "ExternalProofControl",
+            "MainIntegrationFinalClosure"
+        ]))
+    );
+    assert!(!materialization.contains_key("stage12_reviewed_candidate"));
+    assert!(!materialization.contains_key("final_integration"));
+    assert_eq!(
+        materialization
+            .get("canonical_regeneration")
+            .and_then(|value| value.get("repository_correction_commit"))
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+
+    let foundation = read_source_file(Path::new("src/foundation/core/legacy_quarantine.rs"));
+    let custody_trait = foundation
+        .split("pub(crate) trait QuarantineCustodyPortV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[derive").next())
+        .expect("custody-bound audit port");
+    for required in ["create_loss_audit_if_absent", "read_loss_audit"] {
+        assert!(custody_trait.contains(required));
+    }
+    for obsolete in [
+        "StoreV1",
+        "persistence_store",
+        "ImmutableRecoveryAuditPersistenceV1",
+    ] {
+        assert!(!custody_trait.contains(obsolete));
+    }
+    let owner = read_source_file(Path::new("src/domain/persistence/legacy_quarantine.rs"));
+    let audit_owner = owner
+        .split("impl QuarantineCustodyLeaseV1<'_>")
+        .nth(1)
+        .and_then(|tail| tail.split("fn create_or_verify(").next())
+        .expect("custody audit owner");
+    assert!(audit_owner.contains("self.retained_root"));
+    assert!(audit_owner.contains("self.recheck_loss_audit_custody()?"));
+    assert!(!audit_owner.contains("legacy_quarantine_secure_root_v3"));
+    let operation = read_source_file(Path::new("src/operations/migration/live_set_v3.rs"));
+    assert!(operation.contains(
+        "persist_unavailable_preexisting_loss_audits_v4(&self.losses, &mut self.physical)"
+    ));
+    for obsolete in ["persistence_store", "ImmutableRecoveryAuditPersistenceV1"] {
+        assert!(!operation.contains(obsolete));
+        assert!(!foundation.contains(obsolete));
+        assert!(!owner.contains(obsolete));
+    }
+
+    let materializer = read_source_file(Path::new(
+        "tools/vnext_contracts/final_chain/stage12_product_proof.py",
+    ));
+    let materializer_main = materializer
+        .split("def main() -> int:")
+        .nth(1)
+        .and_then(|tail| tail.split("if __name__ == \"__main__\":").next())
+        .expect("external final materializer CLI");
+    assert_eq!(materializer_main.matches("parser.add_argument(").count(), 3);
+    for argument in [
+        "\"--ancestry-repository\"",
+        "\"--snapshot\"",
+        "\"--snapshot-root\"",
+    ] {
+        assert!(materializer_main.contains(argument));
+    }
+    for required in [
+        "\"live_installation_mutation\": False",
+        "\"primary_mutation\": False",
+        "\"proof_runner_effect_inert\": True",
+        "\"receipt_or_pointer_publication\": False",
+        "\"seal_execution\": False",
+    ] {
+        assert!(materializer.contains(required));
+    }
+    for forbidden in [
+        "update-ref",
+        "symbolic-ref",
+        "commit-tree",
+        "write-tree",
+        "hash-object",
+        ".write_text(",
+        ".write_bytes(",
+        "\"checkout\"",
+        "\"reset\"",
+        "\"branch\"",
+        "\"tag\"",
+        "\"push\"",
+    ] {
+        assert!(
+            !materializer.contains(forbidden),
+            "external final materializer must not gain {forbidden}"
+        );
+    }
+
+    let private_proof_capabilities = [
+        "ExternalProofControl",
+        "MainIntegrationFinalClosure",
+        "stage12_product_proof",
+        "run_v8_closure",
+        "v8_first_parent_ledger",
+        "v8_logical_checkpoints",
+    ];
+    for facade in [
+        "src/lib.rs",
+        "src/domain/mod.rs",
+        "src/operations/mod.rs",
+        "src/foundation/core/mod.rs",
+    ] {
+        let source = read_source_file(Path::new(facade));
+        for capability in private_proof_capabilities {
+            assert!(!source.contains(capability));
+        }
+    }
+    for root in [
+        "src/interfaces",
+        "embedded/vnext",
+        "embedded/schemas",
+        "tools/vnext_contracts/public",
+    ] {
+        for path in paths_under(Path::new(root))
+            .into_iter()
+            .filter(|path| path.is_file())
+        {
+            let bytes = fs::read(&path).expect("read public, interface, or wire surface");
+            let source = String::from_utf8_lossy(&bytes);
+            for capability in private_proof_capabilities {
+                assert!(
+                    !source.contains(capability),
+                    "{} must not expose private EPC capability {capability}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+fn source_implements_trait_for_type(source: &str, trait_name: &str, type_name: &str) -> bool {
+    let code = code_for_path_scan(source);
+    let compact = code.split_whitespace().collect::<Vec<_>>().join(" ");
+    let needle = format!("{trait_name} for ");
+
+    compact.match_indices(&needle).any(|(index, _)| {
+        let previous = compact[..index].chars().next_back();
+        if previous.is_some_and(is_path_identifier_character) {
+            return false;
+        }
+
+        let implementation = &compact[index + needle.len()..];
+        let header = implementation
+            .split_once('{')
+            .map_or(implementation, |(header, _)| header);
+        source_mentions_identifier(header, type_name)
+    })
+}
+
+fn source_mentions_identifier(source: &str, identifier: &str) -> bool {
+    let code = code_for_path_scan(source);
+    code.match_indices(identifier).any(|(index, _)| {
+        let previous = code[..index].chars().next_back();
+        let next = code[index + identifier.len()..].chars().next();
+        previous.is_none_or(|character| !is_path_identifier_character(character))
+            && next.is_none_or(|character| !is_path_identifier_character(character))
+    })
+}
+
+fn named_struct_body_contains(source: &str, struct_name: &str, expected: &str) -> bool {
+    let Some(body) = named_struct_body(source, struct_name) else {
+        return false;
+    };
+    let body = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
+    body.contains(&expected)
+}
+
+fn named_struct_body(source: &str, struct_name: &str) -> Option<String> {
+    let code = code_for_path_scan(source);
+    let name_offset = code.match_indices(struct_name).find_map(|(index, _)| {
+        let previous = code[..index].chars().next_back();
+        let next = code[index + struct_name.len()..].chars().next();
+        if previous.is_some_and(is_path_identifier_character)
+            || next.is_some_and(is_path_identifier_character)
+        {
+            return None;
+        }
+
+        let prefix = code[..index].trim_end();
+        prefix
+            .strip_suffix("struct")
+            .filter(|before| {
+                before
+                    .chars()
+                    .next_back()
+                    .is_none_or(|character| !is_path_identifier_character(character))
+            })
+            .map(|_| index)
+    })?;
+    let open_offset =
+        code[name_offset + struct_name.len()..].find('{')? + name_offset + struct_name.len();
+    let mut depth = 0_usize;
+
+    for (relative, character) in code[open_offset..].char_indices() {
+        match character {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(code[open_offset + 1..open_offset + relative].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

@@ -1,12 +1,10 @@
-use maestro::domain::vnext::evidence::{
+use maestro::domain::evidence::{
     ClaimError, ClaimSubjectV1, ClaimV1, EvidenceIdentityError, ObservationRecordIdV1,
     SubmissionRefV1,
 };
-use maestro::domain::vnext::evidence::{SubmissionClaimSetError, SubmissionClaimSetV1};
-use maestro::domain::vnext::identity::ContractRootIdV1;
-use maestro::domain::vnext::work::{
-    WorkIdV1, WorkRecordWriterV1, WorkSubmissionIdV1, WorkSubmissionV1,
-};
+use maestro::domain::evidence::{SubmissionClaimSetError, SubmissionClaimSetV1};
+use maestro::domain::identity::ContractRootIdV1;
+use maestro::domain::work::{WorkIdV1, WorkRecordWriterV1, WorkSubmissionIdV1, WorkSubmissionV1};
 use sha2::{Digest, Sha256};
 
 fn hash(byte: u8) -> [u8; 32] {

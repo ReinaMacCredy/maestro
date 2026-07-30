@@ -1,6 +1,5 @@
 pub mod card_support;
 mod support;
-mod witness_support;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,11 +11,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id, task_record};
-use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
+use sha2::{Digest, Sha256};
 use support::TestTempDir;
-use witness_support::write_valid_witness;
 
 const BASE_HARNESS_YAML: &str = concat!(
     "schema_version: maestro.harness.v1\n",
@@ -90,10 +88,6 @@ fn write_harness_yaml(repo: &Path, extra: &str) {
         format!("{BASE_HARNESS_YAML}{extra}"),
     )
     .expect("invariant: harness should be writable");
-}
-
-fn write_claims_only_harness(repo: &Path) {
-    write_harness_yaml(repo, "claims_only_verification: true\n");
 }
 
 fn write_enabled_harness(repo: &Path) {
@@ -1596,1074 +1590,455 @@ fn harness_ignores_legacy_verification_attempts_path_file() {
 }
 
 #[test]
-fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
-    let temp = setup_repo("maestro-mcp-serve");
-    let repo = temp.path();
-    create_task(repo, "MCP visible task");
-
-    let lines = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_status","arguments":{}}}"#,
-        ],
-    );
-    let tools = lines[1]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 42);
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_ready"));
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_next"));
-    assert!(
-        tools
+fn mcp_registry_dispatches_exact_packet_and_search_surface_before_legacy_refusal() {
+    let temp = TestTempDir::new("maestro-mcp-exact-surface");
+    let repo = temp.path().canonicalize().expect("canonical repository");
+    let binary = fs::read(env!("CARGO_BIN_EXE_maestro")).expect("compiled maestro binary");
+    let release = format!(
+        "sha256:{}",
+        Sha256::digest(binary)
             .iter()
-            .any(|tool| tool["name"] == "maestro_task_create")
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
     );
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_add"));
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_task_start")
-    );
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_done"));
-    let task_done_tool = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_task_done")
-        .expect("invariant: maestro_task_done should be listed");
-    assert!(
-        task_done_tool["inputSchema"]["required"]
-            .as_array()
-            .expect("task_done required fields should be listed")
-            .contains(&JsonValue::String("proof".to_string())),
-        "maestro_task_done must require proof in its MCP schema"
-    );
-    assert_eq!(
-        task_done_tool["inputSchema"]["properties"]["proof"]["minItems"],
-        JsonValue::from(1)
-    );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_task_update")
-    );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_feature_start")
-    );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_feature_close")
-    );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_task_claim")
-    );
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_status"));
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_card_ready")
-    );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_card_graph")
-    );
-    let task_complete_tool = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_task_complete")
-        .expect("invariant: maestro_task_complete should be listed");
-    assert!(
-        !task_complete_tool["inputSchema"]["anyOf"].is_null(),
-        "maestro_task_complete schema requires claim or claims:\n{task_complete_tool}"
-    );
-    let card_create_tool = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_card_create")
-        .expect("invariant: maestro_card_create should be listed");
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_card_prepare")
-    );
-    let card_create_intents = card_create_tool["inputSchema"]["properties"]["intent"]["enum"]
-        .as_array()
-        .expect("invariant: card_create intent enum should be listed");
-    assert!(
-        card_create_intents.iter().any(|intent| intent == "idea")
-            && !card_create_intents
-                .iter()
-                .any(|intent| intent == "followup"),
-        "maestro_card_create schema advertises actual card types:\n{card_create_tool}"
-    );
-    assert!(tools.iter().any(|tool| tool["name"] == "maestro_sync"));
-    assert!(
-        lines[2]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: tool response should contain text")
-            .contains("Tasks: 1")
-    );
-    assert!(
-        lines[2]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: tool response should contain text")
-            .contains("MCP workflow guidance")
-    );
-}
-
-#[test]
-fn mcp_task_done_forwards_required_proof_to_low_ceremony_completion() {
-    let temp = setup_repo("maestro-mcp-task-done-proof");
-    let repo = temp.path();
-    let id = run_success(repo, &["task", "add", "MCP done task", "--id-only"])
-        .trim()
-        .to_string();
-    let requests = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#.to_string(),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"maestro_task_start","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"maestro_task_done","arguments":{{"id":"{id}","summary":"missing proof is rejected"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"maestro_task_done","arguments":{{"id":"{id}","summary":"done through MCP task_done","proof":["observed MCP completion proof"]}}}}}}"#
-        ),
-    ];
-    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &request_refs);
-
-    let task_done = frames[0]["result"]["tools"]
-        .as_array()
-        .expect("tools/list should return tools")
-        .iter()
-        .find(|tool| tool["name"] == "maestro_task_done")
-        .expect("maestro_task_done should be listed")
-        .clone();
-    assert!(
-        task_done["inputSchema"]["required"]
-            .as_array()
-            .expect("task_done required fields should be listed")
-            .contains(&JsonValue::String("proof".to_string())),
-        "maestro_task_done must advertise required proof"
-    );
-    assert!(
-        frames[2]["error"]["message"]
-            .as_str()
-            .expect("missing proof should produce an MCP error")
-            .contains("--proof"),
-        "{}",
-        frames[2]
-    );
-    assert!(
-        frames[3]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("task_done returns text")
-            .contains(&format!("done {id} -> verified"))
-    );
-
-    let show = run_success(repo, &["task", "show", &id]);
-    assert!(show.contains("state: verified"), "{show}");
-    assert!(show.contains("observed MCP completion proof"), "{show}");
-}
-
-#[test]
-fn mcp_lifecycle_tools_expose_schemas_and_blocked_envelope() {
-    let temp = setup_repo("maestro-mcp-lifecycle-envelope");
-    let repo = temp.path();
-    run_success(
-        repo,
-        &[
-            "feature",
-            "new",
-            "MCP envelope feature",
-            "--description",
-            "feature for MCP envelope test",
-        ],
-    );
-
-    let frames = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-envelope-feature","tasks":[{"title":"work","checks":["done"],"covers":["ac-1"]}]}}}"#,
-        ],
-    );
-    let tools = frames[0]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools/list should return tools");
-    for name in [
-        "maestro_qa_baseline",
-        "maestro_feature_accept",
-        "maestro_feature_prepare",
-        "maestro_feature_verify",
-        "maestro_qa_slice",
-        "maestro_feature_close",
-    ] {
-        assert!(
-            tools.iter().any(|tool| tool["name"] == name),
-            "{name} should be listed"
-        );
-    }
-
-    let accept_schema = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_feature_accept")
-        .expect("invariant: accept tool should be listed")["inputSchema"]
-        .clone();
-    assert_eq!(
-        accept_schema["properties"]["qa"]["oneOf"][0]["properties"]["mode"]["const"],
-        "recorded_baseline"
-    );
-    assert_eq!(
-        accept_schema["properties"]["qa"]["oneOf"][1]["properties"]["mode"]["const"],
-        "none"
-    );
-    assert!(
-        accept_schema["properties"]["qa"]["oneOf"][1]["required"]
-            .as_array()
-            .expect("invariant: required should be an array")
-            .iter()
-            .any(|item| item == "reason")
-    );
-
-    let text = frames[1]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: blocked lifecycle result should be text");
-    let envelope: JsonValue =
-        serde_json::from_str(text).expect("blocked lifecycle result should be JSON");
-    assert_eq!(envelope["ok"], false);
-    assert_eq!(envelope["changed"], false);
-    assert_eq!(envelope["tool"], "maestro_feature_prepare");
-    assert_eq!(envelope["target"]["id"], "mcp-envelope-feature");
-    assert_eq!(envelope["state_before"], "proposed");
-    assert_eq!(envelope["state_after"], "proposed");
-    assert_eq!(envelope["blocked"], true);
-    assert!(envelope["reason_code"].as_str().is_some());
-    assert!(envelope["message"].as_str().is_some());
-    assert!(envelope["prerequisites"].is_array());
-    assert!(envelope["valid_next"].is_array());
-    assert!(envelope["raw"].as_str().is_some());
-}
-
-#[test]
-fn mcp_card_prepare_returns_card_shaped_lifecycle_envelope() {
-    let temp = setup_repo("maestro-mcp-card-prepare-envelope");
-    let repo = temp.path();
-    let card_id = run_success(
-        repo,
-        &["create", "-t", "bug", "MCP card prepare bug", "--id-only"],
-    )
-    .trim()
+    let catalog = "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1";
+    let packet = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_packet",
+            "arguments": {
+                "schema_version": 1,
+                "request_id": "packet-stale",
+                "repository_locator": repo,
+                "authenticated_host_connection_context_ref": "candidate:host:test:v1",
+                "projection_scope": {"variant": "Repository"},
+                "expected_release_ref": "candidate:release:known-stale:v1",
+                "expected_public_catalog_ref": catalog,
+                "bounded_response_redaction_profile": "repository-local",
+                "read_mode": {"variant": "DiscoverSelectionContextV1"}
+            }
+        }
+    })
     .to_string();
-    let request = format!(
-        r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"maestro_card_prepare","arguments":{{"card_id":"{card_id}","tasks":[{{"title":"Fix bug","checks":["bug is fixed"]}}]}}}}}}"#
-    );
-
-    let frames = run_mcp_requests(repo, &[&request]);
-    let text = frames[0]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: card prepare response should be text");
-    let envelope: JsonValue =
-        serde_json::from_str(text).expect("card prepare result should be JSON");
-
-    assert_eq!(envelope["ok"], true, "{text}");
-    assert_eq!(envelope["tool"], "maestro_card_prepare");
-    assert_eq!(envelope["target"]["type"], "card");
-    assert_eq!(envelope["target"]["id"], card_id);
-    assert_ne!(envelope["state_before"], "unknown");
-    assert_eq!(
-        envelope["valid_next"]
-            .as_array()
-            .expect("valid_next should be an array")
-            .len(),
-        0,
-        "card prepare must not return feature-specific next actions: {text}"
-    );
-}
-
-#[test]
-fn mcp_intake_lifecycle_tools_accept_and_prepare_feature() {
-    let temp = setup_repo("maestro-mcp-intake-lifecycle");
-    let repo = temp.path();
-    run_success(
-        repo,
-        &[
-            "feature",
-            "new",
-            "MCP intake feature",
-            "--description",
-            "feature for MCP intake test",
-        ],
-    );
-    run_success(
-        repo,
-        &[
-            "feature",
-            "set",
-            "mcp-intake-feature",
-            "--acceptance",
-            "MCP intake AC is covered",
-            "--area",
-            "src/interfaces/mcp/tools.rs",
-        ],
-    );
-    run_success(repo, &["feature", "reconcile", "mcp-intake-feature"]);
-    run_success(repo, &["feature", "finalize", "mcp-intake-feature"]);
-
-    let requests = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-intake-feature","observed":"[bl-001] current intake behavior is raw CLI only"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-intake-feature","qa":{"mode":"recorded_baseline"}}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-intake-feature","tasks":[{"title":"MCP intake task","checks":["MCP intake AC is covered"],"covers":["ac-1"]}]}}}"#.to_string(),
-    ];
-    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &request_refs);
-
-    for frame in &frames {
-        let text = frame["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: lifecycle tool should return text");
-        let envelope: JsonValue =
-            serde_json::from_str(text).expect("lifecycle tool should return JSON");
-        assert_eq!(envelope["ok"], true, "{text}");
-        assert_eq!(envelope["blocked"], false, "{text}");
-        assert_eq!(envelope["changed"], true, "{text}");
-    }
-
-    let feature = read_card(repo, "mcp-intake-feature");
-    assert_eq!(
-        feature["status"],
-        YamlValue::String("in_progress".to_string())
-    );
-    let task_id = id_by_title(repo, "MCP intake task");
-    let task = task_record(repo, &task_id);
-    assert_eq!(task["state"], YamlValue::String("ready".to_string()));
-    assert_eq!(
-        task["covers"],
-        YamlValue::Sequence(vec![YamlValue::String("ac-1".to_string())])
-    );
-}
-
-#[test]
-fn mcp_feature_accept_rejects_invalid_qa_shapes_before_cli() {
-    let temp = setup_repo("maestro-mcp-invalid-qa");
-    let repo = temp.path();
-    run_success(repo, &["feature", "new", "MCP invalid QA"]);
-
-    let frames = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-invalid-qa","qa":"free text"}}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-invalid-qa","qa":{"mode":"recorded_baseline","reason":"not allowed"}}}}"#,
-        ],
-    );
-
-    assert!(
-        frames[0]["error"]["message"]
-            .as_str()
-            .expect("invariant: invalid QA shape should be an MCP error")
-            .contains("qa.mode")
-    );
-    assert!(
-        frames[1]["error"]["message"]
-            .as_str()
-            .expect("invariant: invalid QA reason should be an MCP error")
-            .contains("qa.reason is only valid when qa.mode is none")
-    );
-    let feature = read_card(repo, "mcp-invalid-qa");
-    assert_eq!(feature["status"], YamlValue::String("proposed".to_string()));
-}
-
-#[test]
-fn mcp_qa_lifecycle_tools_require_observed_evidence() {
-    let temp = setup_repo("maestro-mcp-qa-evidence");
-    let repo = temp.path();
-    run_success(repo, &["feature", "new", "MCP QA evidence"]);
-
-    let frames = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-qa-evidence","observed":""}}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-qa-evidence","scenarios":["bl-001"]}}}"#,
-        ],
-    );
-
-    assert!(
-        frames[0]["error"]["message"]
-            .as_str()
-            .expect("invariant: empty observed should be an MCP error")
-            .contains("observed must not be empty")
-    );
-    assert!(
-        frames[1]["error"]["message"]
-            .as_str()
-            .expect("invariant: missing observed should be an MCP error")
-            .contains("missing required argument: observed")
-    );
-}
-
-#[test]
-fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
-    let temp = setup_repo("maestro-mcp-feature-gate");
-    let repo = temp.path();
-    write_claims_only_harness(repo);
-    run_success(
-        repo,
-        &[
-            "feature",
-            "new",
-            "MCP feature gate",
-            "--description",
-            "feature for MCP feature gate test",
-        ],
-    );
-    run_success(
-        repo,
-        &[
-            "feature",
-            "set",
-            "mcp-feature-gate",
-            "--acceptance",
-            "MCP feature gate AC is covered",
-            "--area",
-            "src/interfaces/mcp/tools.rs",
-        ],
-    );
-    run_success(repo, &["feature", "reconcile", "mcp-feature-gate"]);
-    run_success(repo, &["feature", "finalize", "mcp-feature-gate"]);
-    let intake_requests = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-feature-gate","observed":"[bl-001] feature gate currently closes only through CLI"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-feature-gate","qa":{"mode":"recorded_baseline"}}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-feature-gate","tasks":[{"title":"MCP feature gate task","checks":["MCP feature gate AC is covered"],"covers":["ac-1"]}]}}}"#.to_string(),
-    ];
-    let intake_refs = intake_requests
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    run_mcp_requests(repo, &intake_refs);
-
-    let task_id = id_by_title(repo, "MCP feature gate task");
-    run_success(repo, &["task", "claim", &task_id]);
-    run_success(
-        repo,
-        &[
-            "task",
-            "complete",
-            &task_id,
-            "--summary",
-            "done",
-            "--claim",
-            "MCP feature gate AC is covered",
-            "--proof",
-            "MCP feature gate AC is covered",
-        ],
-    );
-
-    let proof_requests = [
-        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_feature_verify","arguments":{"feature_id":"mcp-feature-gate","prove":["ac-1"],"evidence":["MCP feature gate AC is covered"]}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-feature-gate","scenarios":["bl-001"],"observed":"MCP feature gate scenario still passes"}}}"#.to_string(),
-    ];
-    let proof_refs = proof_requests
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let proof_frames = run_mcp_requests(repo, &proof_refs);
-
-    let verify_text = proof_frames[0]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: verify should return text");
-    let verify_envelope: JsonValue =
-        serde_json::from_str(verify_text).expect("verify should return envelope JSON");
-    assert_eq!(verify_envelope["ok"], true, "{verify_text}");
-    assert_eq!(
-        verify_envelope["state_after"], "in_progress",
-        "{verify_text}"
-    );
-    assert!(
-        verify_envelope["valid_next"]
-            .as_array()
-            .expect("invariant: valid_next should be an array")
-            .iter()
-            .any(|entry| entry["tool"] == "maestro_feature_close"),
-        "{verify_text}"
-    );
-
-    let slice_text = proof_frames[1]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: qa slice should return text");
-    let slice_envelope: JsonValue =
-        serde_json::from_str(slice_text).expect("qa slice should return envelope JSON");
-    assert_eq!(slice_envelope["ok"], true, "{slice_text}");
-    write_valid_witness(&MaestroPaths::new(repo), "mcp-feature-gate");
-
-    let close_requests = [
-        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","dry_run":true}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
-    ];
-    let close_refs = close_requests
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &close_refs);
-
-    let dry_run_text = frames[0]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: dry-run close should return text");
-    let dry_run_envelope: JsonValue =
-        serde_json::from_str(dry_run_text).expect("dry-run close should return envelope JSON");
-    assert_eq!(dry_run_envelope["ok"], true, "{dry_run_text}");
-    assert_eq!(dry_run_envelope["changed"], false, "{dry_run_text}");
-    assert_eq!(
-        dry_run_envelope["state_after"], "in_progress",
-        "{dry_run_text}"
-    );
-
-    let close_text = frames[1]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: close should return text");
-    let close_envelope: JsonValue =
-        serde_json::from_str(close_text).expect("close should return envelope JSON");
-    assert_eq!(close_envelope["ok"], true, "{close_text}");
-    assert_eq!(close_envelope["state_after"], "closed", "{close_text}");
-    let feature = read_card(repo, "mcp-feature-gate");
-    assert_eq!(feature["status"], YamlValue::String("closed".to_string()));
-}
-
-#[test]
-fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
-    let temp = setup_repo("maestro-mcp-task-lifecycle");
-    let repo = temp.path();
-    write_claims_only_harness(repo);
-
-    let first_frames = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_task_create","arguments":{"title":"MCP normal task","lane":"normal","risk":"low","checks":["first claim passed","second claim passed"]}}}"#,
-        ],
-    );
-    let tools = first_frames[0]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools/list should return tools");
-    for name in [
-        "maestro_task_next",
-        "maestro_ready",
-        "maestro_task_create",
-        "maestro_task_explore",
-        "maestro_task_accept",
-        "maestro_task_update",
-    ] {
-        assert!(
-            tools.iter().any(|tool| tool["name"] == name),
-            "{name} should be listed"
-        );
-    }
-    assert!(
-        first_frames[1]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: create returns text")
-            .contains("created")
-    );
-
-    let id = id_by_title(repo, "MCP normal task");
-    let requests = [
-        format!(
-            r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"maestro_task_explore","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"maestro_task_accept","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_ready","arguments":{}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_task_next","arguments":{}}}"#.to_string(),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{{"name":"maestro_task_claim","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{{"name":"maestro_task_update","arguments":{{"id":"{id}","summary":"progress checkpoint","claims":["first claim passed","second claim passed"]}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"maestro_task_complete","arguments":{{"id":"{id}","summary":"done through MCP","claims":["first claim passed","second claim passed"],"proof":["first claim passed","second claim passed"]}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{{"name":"maestro_verify","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-    ];
-    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &request_refs);
-
-    let ready_text = frames[2]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: ready returns text");
-    let ready_json: JsonValue = serde_json::from_str(ready_text).expect("ready returns JSON text");
-    assert_eq!(
-        ready_json["schema"],
-        JsonValue::String("maestro.ready.v2".to_string())
-    );
-    assert!(
-        ready_json["parallel_wave"]
-            .as_array()
-            .expect("parallel_wave should be an array")
-            .iter()
-            .any(|row| row["id"] == id),
-        "ready includes accepted task:\n{ready_text}"
-    );
-
-    let next_text = frames[3]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: task_next returns text");
-    let next_json: JsonValue =
-        serde_json::from_str(next_text).expect("task_next returns JSON text");
-    assert!(
-        !next_json["structured"].is_null(),
-        "task_next includes structured output:\n{next_text}"
-    );
-    assert!(
-        next_json["raw"].as_str().is_some(),
-        "task_next includes raw output:\n{next_text}"
-    );
-    assert!(
-        frames[6]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: complete returns text")
-            .contains("verification passed")
-    );
-
-    let doc = task_record(repo, &id);
-    assert_eq!(doc["state"], YamlValue::String("verified".to_string()));
-}
-
-#[test]
-fn mcp_card_tools_drive_lifecycle_ready_and_graph_over_stdio() {
-    let temp = setup_repo("maestro-mcp-card-lifecycle");
-    let repo = temp.path();
-
-    let first_requests = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_card_create","arguments":{"intent":"feature","title":"MCP Parent","problem":"parent feature"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_card_create","arguments":{"intent":"task","title":"MCP Card Task","parent":"mcp-parent","problem":"work item","acceptance":"ship it"}}}"#.to_string(),
-    ];
-    let first_refs = first_requests
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let first_frames = run_mcp_requests(repo, &first_refs);
-    let tools = first_frames[0]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools/list should return tools");
-    for name in [
-        "maestro_card_create",
-        "maestro_card_list",
-        "maestro_card_show",
-        "maestro_card_ready",
-        "maestro_card_claim",
-        "maestro_card_update",
-        "maestro_card_close",
-        "maestro_card_graph",
-    ] {
-        assert!(
-            tools.iter().any(|tool| tool["name"] == name),
-            "{name} should be listed"
-        );
-    }
-
-    let id = id_by_title(repo, "MCP Card Task");
-    let requests = [
-        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_card_ready","arguments":{"feature":"mcp-parent"}}}"#.to_string(),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{{"name":"maestro_card_show","arguments":{{"id":"{id}","json":true}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{{"name":"maestro_card_graph","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{{"name":"maestro_card_claim","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{{"name":"maestro_card_update","arguments":{{"id":"{id}","progress":"half done","claim":true}}}}}}"#
-        ),
-        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"maestro_card_list","arguments":{"type":"task","json":true}}}"#.to_string(),
-        format!(
-            r#"{{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{{"name":"maestro_card_close","arguments":{{"id":"{id}"}}}}}}"#
-        ),
-    ];
-    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &request_refs);
-    assert!(
-        frames[0]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: ready returns text")
-            .contains(&id)
-    );
-    assert!(
-        frames[2]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: graph returns text")
-            .contains("mcp-parent")
-    );
-    assert!(
-        frames[5]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("invariant: list returns text")
-            .contains(&id)
-    );
-    assert_eq!(
-        card_doc(repo, &id)["status"],
-        YamlValue::String("closed".to_string())
-    );
-}
-
-#[test]
-fn mcp_decision_list_windows_by_default_and_all_reaches_full() {
-    let temp = setup_repo("maestro-mcp-decision-all");
-    let repo = temp.path();
-    for i in 1..=21 {
-        run_success(repo, &["decision", "new", &format!("MCP decision {i:02}")]);
-    }
-
-    let lines = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{}}}"#,
-            r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{"all":true}}}"#,
-        ],
-    );
-
-    // ac-5: the tool advertises the `all` boolean param.
-    let tools = lines[1]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools/list should return an array");
-    let decision_tool = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_decision_list")
-        .expect("invariant: maestro_decision_list should be listed");
-    assert!(
-        !decision_tool["inputSchema"]["properties"]["all"].is_null(),
-        "maestro_decision_list advertises the all param:\n{decision_tool}"
-    );
-
-    let default_text = lines[2]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: default call returns text");
-    assert!(
-        default_text.contains("20 of 21 recent"),
-        "default MCP decision_list inherits the recent-20 window:\n{default_text}"
-    );
-
-    let all_text = lines[3]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: all call returns text");
-    assert!(
-        !all_text.contains("recent") && all_text.matches("open").count() == 21,
-        "all=true reaches the full decision history:\n{all_text}"
-    );
-}
-
-#[test]
-fn mcp_decision_set_tools_draft_lock_and_show_with_cli_envelopes() {
-    let temp = setup_repo("maestro-mcp-decision-set");
-    let repo = temp.path();
-    let yaml = r#"
-title: MCP DecisionSet
-children:
-  - key: first
-    title: First MCP child
-    decision: Keep first child separate.
-  - key: second
-    title: Second MCP child
-    decision: Keep second child separate.
-"#;
-    let draft_request = serde_json::json!({
+    let search = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "maestro_decision_set_draft",
-            "arguments": {"yaml": yaml}
+            "name": "maestro_cli_search",
+            "arguments": {
+                "schema_version": 1,
+                "request_id": "search-packet",
+                "query": {"variant": "ExactCommandId", "value": "maestro packet read"},
+                "finite_bound": 5,
+                "expected_release_ref": release,
+                "expected_public_catalog_ref": catalog
+            }
         }
     })
     .to_string();
-    let dry_run_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 4,
-        "method": "tools/call",
-        "params": {
-            "name": "maestro_decision_set_lock",
-            "arguments": {"yaml": yaml, "dry_run": true}
-        }
-    })
-    .to_string();
-    let lock_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 5,
-        "method": "tools/call",
-        "params": {
-            "name": "maestro_decision_set_lock",
-            "arguments": {"yaml": yaml}
-        }
-    })
-    .to_string();
+    let responses = run_mcp_requests(
+        &repo,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+            &packet,
+            &search,
+            r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_status","arguments":{"repository_locator":"."}}}"#,
+        ],
+    );
 
-    let initial_refs = [
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-        draft_request.as_str(),
-        dry_run_request.as_str(),
-        lock_request.as_str(),
-    ];
-    let initial = run_mcp_requests(repo, &initial_refs);
-    let tools = initial[1]["result"]["tools"]
+    let names = responses[0]["result"]["tools"]
         .as_array()
-        .expect("invariant: tools/list should return tools");
-    for name in [
-        "maestro_decision_set_draft",
-        "maestro_decision_set_lock",
-        "maestro_decision_set_show",
-    ] {
+        .expect("tools")
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("tool name"))
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["maestro_packet", "maestro_cli_search"]);
+
+    let packet_text = responses[1]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("packet content");
+    let packet_envelope: JsonValue =
+        serde_json::from_str(packet_text).expect("packet response envelope");
+    assert_eq!(packet_envelope["variant"], "Stale");
+
+    let search_text = responses[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("search content");
+    let search_envelope: JsonValue =
+        serde_json::from_str(search_text).expect("search response envelope");
+    assert_eq!(search_envelope["request_id"], "search-packet");
+    assert_eq!(search_envelope["hits"][0]["variant"], "PureRead");
+
+    let refusal = responses[3]["error"]["message"]
+        .as_str()
+        .expect("legacy refusal");
+    assert_eq!(refusal, "unknown MCP tool: maestro_status");
+    assert!(!refusal.contains("repository_locator"));
+    assert!(!refusal.contains("provider"));
+    assert!(!refusal.contains("state"));
+}
+
+#[test]
+fn mcp_cli_exposes_only_serve_and_tools_without_legacy_aliases() {
+    let temp = TestTempDir::new("maestro-mcp-cli-surface");
+    let repo = temp.path();
+    let tools = maestro(repo, &["mcp", "tools"]);
+    assert_success(&tools, &["mcp", "tools"]);
+    assert_eq!(
+        String::from_utf8_lossy(&tools.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        ["maestro_packet", "maestro_cli_search"]
+    );
+
+    for legacy in ["stdin", "list", "stdio"] {
+        let output = maestro(repo, &["mcp", legacy]);
+        assert_eq!(output.status.code(), Some(2), "{legacy}");
         assert!(
-            tools.iter().any(|tool| tool["name"] == name),
-            "{name} should be listed: {tools:#?}"
+            String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"),
+            "{legacy}: {}",
+            String::from_utf8_lossy(&output.stderr)
         );
     }
-    let lock_tool = tools
-        .iter()
-        .find(|tool| tool["name"] == "maestro_decision_set_lock")
-        .expect("lock tool should exist");
-    assert!(
-        !lock_tool["inputSchema"]["properties"]["dry_run"].is_null(),
-        "lock schema should advertise dry_run:\n{lock_tool}"
-    );
+}
 
-    let draft: JsonValue = serde_json::from_str(
-        initial[2]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("draft returns text"),
-    )
-    .expect("draft envelope parses");
-    assert_eq!(draft["ok"], JsonValue::Bool(true));
-    assert_eq!(draft["changed"], JsonValue::Bool(false));
-    let set_id = draft["result"]["set_id"]
-        .as_str()
-        .expect("set_id should be present")
-        .to_string();
-    assert!(set_id.starts_with("decset-mcp-decisionset-"));
-
-    let dry_run: JsonValue = serde_json::from_str(
-        initial[3]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("dry-run returns text"),
-    )
-    .expect("dry-run envelope parses");
-    assert_eq!(dry_run["ok"], JsonValue::Bool(true));
-    assert_eq!(dry_run["changed"], JsonValue::Bool(false));
-    assert_eq!(dry_run["result"]["dry_run"], JsonValue::Bool(true));
-
-    let lock: JsonValue = serde_json::from_str(
-        initial[4]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("lock returns text"),
-    )
-    .expect("lock envelope parses");
-    assert_eq!(lock["ok"], JsonValue::Bool(true));
-    assert_eq!(lock["changed"], JsonValue::Bool(true));
-    assert_eq!(lock["result"]["id"], JsonValue::String(set_id.clone()));
-
-    let show_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 6,
-        "method": "tools/call",
-        "params": {
-            "name": "maestro_decision_set_show",
-            "arguments": {"id": set_id}
-        }
+#[test]
+fn packet_cli_uses_only_the_explicit_locator_and_skips_passive_output() {
+    let temp = TestTempDir::new("maestro-packet-explicit-repository");
+    let repo = temp.path().canonicalize().expect("canonical repository");
+    let request = serde_json::json!({
+        "schema_version": 1,
+        "request_id": "packet-cli",
+        "repository_locator": repo,
+        "authenticated_host_connection_context_ref": "candidate:host:test:v1",
+        "projection_scope": {"variant": "Repository"},
+        "expected_release_ref": "candidate:release:known-stale:v1",
+        "expected_public_catalog_ref": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+        "bounded_response_redaction_profile": "repository-local",
+        "read_mode": {"variant": "DiscoverSelectionContextV1"}
     })
     .to_string();
-    let show_refs = [show_request.as_str()];
-    let show_frames = run_mcp_requests(repo, &show_refs);
-    let show: JsonValue = serde_json::from_str(
-        show_frames[0]["result"]["content"][0]["text"]
-            .as_str()
-            .expect("show returns text"),
-    )
-    .expect("show envelope parses");
-    assert_eq!(show["ok"], JsonValue::Bool(true));
-    assert_eq!(show["changed"], JsonValue::Bool(false));
-    assert_eq!(
-        show["result"]["kind"],
-        JsonValue::String("decision_set".into())
+    let outside_repo = TestTempDir::new("maestro-packet-outside-repository");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["packet", "read"])
+        .current_dir(outside_repo.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("compiled maestro packet command");
+    child
+        .stdin
+        .take()
+        .expect("packet stdin")
+        .write_all(request.as_bytes())
+        .expect("packet request");
+    let output = child.wait_with_output().expect("packet output");
+    assert_success(&output, &["packet", "read"]);
+    let envelope: JsonValue =
+        serde_json::from_slice(&output.stdout).expect("packet CLI response envelope");
+    assert_eq!(envelope["variant"], "Stale");
+    assert!(
+        output.stderr.is_empty(),
+        "passive stderr must stay excluded"
     );
+}
+
+#[test]
+fn removed_legacy_mcp_cases_have_explicit_live_owner_coverage() {
+    let coverage = [
+        (
+            "mcp_serve_lists_tools_and_calls_status_over_stdio",
+            "tests/status_next_integration.rs",
+            "status_surfaces_active_progress_checklist",
+        ),
+        (
+            "mcp_task_done_forwards_required_proof_to_low_ceremony_completion",
+            "tests/task_commands_integration.rs",
+            "task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_completion",
+        ),
+        (
+            "mcp_lifecycle_tools_expose_schemas_and_blocked_envelope",
+            "tests/task_commands_integration.rs",
+            "ready_v2_projects_parallel_wave_serial_gates_and_blocked_next",
+        ),
+        (
+            "mcp_card_prepare_returns_card_shaped_lifecycle_envelope",
+            "tests/card_commands_integration.rs",
+            "custom_card_requires_kind_prepares_owned_tasks_and_closes_after_verification",
+        ),
+        (
+            "mcp_intake_lifecycle_tools_accept_and_prepare_feature",
+            "tests/feature_decision_commands_integration.rs",
+            "feature_prepare_accepts_task_plan_v1_and_stores_blocked_by_edges",
+        ),
+        (
+            "mcp_feature_accept_rejects_invalid_qa_shapes_before_cli",
+            "tests/feature_qa_gate_integration.rs",
+            "feature_accept_records_explicit_qa_surface",
+        ),
+        (
+            "mcp_qa_lifecycle_tools_require_observed_evidence",
+            "tests/feature_qa_gate_integration.rs",
+            "qa_baseline_stdin_accepts_full_contract_without_helper_nesting",
+        ),
+        (
+            "mcp_feature_gate_tools_verify_slice_and_close_without_autoclose",
+            "tests/feature_qa_gate_integration.rs",
+            "feature_qa_gates_via_cli",
+        ),
+        (
+            "mcp_task_tools_drive_normal_lifecycle_over_stdio",
+            "tests/task_commands_integration.rs",
+            "create_explore_accept_claim_complete_flow_updates_task_record",
+        ),
+        (
+            "mcp_card_tools_drive_lifecycle_ready_and_graph_over_stdio",
+            "tests/card_commands_integration.rs",
+            "link_add_show_graph_and_reverse_remove_round_trip",
+        ),
+        (
+            "mcp_decision_list_windows_by_default_and_all_reaches_full",
+            "tests/feature_decision_commands_integration.rs",
+            "decision_list_windows_to_recent_and_all_feature_restore",
+        ),
+        (
+            "mcp_decision_set_tools_draft_lock_and_show_with_cli_envelopes",
+            "tests/feature_decision_commands_integration.rs",
+            "decision_set_draft_lock_dry_run_and_show_round_trip",
+        ),
+        (
+            "mcp_tool_aliases_list_available_tools",
+            "tests/harness_integration.rs",
+            "mcp_cli_exposes_only_serve_and_tools_without_legacy_aliases",
+        ),
+        (
+            "mcp_stdio_alias_runs_server",
+            "tests/harness_integration.rs",
+            "mcp_cli_exposes_only_serve_and_tools_without_legacy_aliases",
+        ),
+        (
+            "mcp_serve_handles_json_rpc_batches_over_stdio_frames",
+            "tests/harness_integration.rs",
+            "mcp_transport_handles_json_rpc_batches",
+        ),
+        (
+            "mcp_serve_uses_content_length_framing",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_frame_parser_uses_content_length_as_bytes",
+            "tests/harness_integration.rs",
+            "mcp_content_length_counts_unicode_bytes",
+        ),
+        (
+            "mcp_serve_rejects_oversized_content_length_before_body_allocation",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_serve_accepts_newline_delimited_json_rpc",
+            "tests/harness_integration.rs",
+            "mcp_transport_accepts_newline_delimited_json_rpc",
+        ),
+        (
+            "mcp_serve_accepts_list_method_alias",
+            "tests/harness_integration.rs",
+            "mcp_transport_is_framed_bounded_and_has_no_legacy_list_method",
+        ),
+        (
+            "mcp_serve_reports_invalid_requests_without_running_tools",
+            "tests/harness_integration.rs",
+            "mcp_invalid_or_missing_protocol_fields_never_dispatch",
+        ),
+    ];
+    assert_eq!(coverage.len(), 21);
+    let mut retired = std::collections::BTreeSet::new();
+    for (retired_test, owner_path, owner_test) in coverage {
+        assert!(
+            retired.insert(retired_test),
+            "duplicate retired test mapping"
+        );
+        let owner_source = fs::read_to_string(owner_path)
+            .unwrap_or_else(|error| panic!("failed to read {owner_path}: {error}"));
+        assert!(
+            owner_source.contains(&format!("fn {owner_test}(")),
+            "{retired_test} is mapped to missing owner {owner_path}::{owner_test}"
+        );
+    }
+}
+
+#[test]
+fn mcp_transport_handles_json_rpc_batches() {
+    let temp = TestTempDir::new("maestro-mcp-batch");
+    let batch = r#"[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","id":2,"method":"unknown"}]"#;
+    let responses = run_mcp_requests(temp.path(), &[batch]);
+    let batch_response = responses[0].as_array().expect("batch response");
+    assert_eq!(batch_response.len(), 2);
+    assert_eq!(batch_response[0]["id"], 1);
     assert_eq!(
-        show["result"]["children"]
+        batch_response[0]["result"]["tools"]
             .as_array()
-            .expect("children")
+            .unwrap()
             .len(),
         2
     );
+    assert_eq!(batch_response[1]["id"], 2);
+    assert_eq!(batch_response[1]["error"]["code"], -32601);
 }
 
 #[test]
-fn mcp_tool_aliases_list_available_tools() {
-    let temp = setup_repo("maestro-mcp-aliases");
-    let repo = temp.path();
+fn mcp_content_length_counts_unicode_bytes() {
+    let temp = TestTempDir::new("maestro-mcp-unicode-frame");
+    let request = r#"{"jsonrpc":"2.0","id":"雪","method":"tools/list"}"#;
+    assert_ne!(request.len(), request.chars().count());
+    let responses = run_mcp_requests(temp.path(), &[request]);
+    assert_eq!(responses[0]["id"], "雪");
+    assert_eq!(responses[0]["result"]["tools"].as_array().unwrap().len(), 2);
+}
 
-    for args in [["mcp", "tools"], ["mcp", "list"]] {
-        let output = run_success(repo, &args);
-        assert!(output.contains("maestro_status"));
-        assert!(output.contains("maestro_task_list"));
+#[test]
+fn mcp_transport_accepts_newline_delimited_json_rpc() {
+    let temp = TestTempDir::new("maestro-mcp-newline");
+    let output = run_mcp_bytes(
+        temp.path(),
+        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n",
+    );
+    let responses = parse_mcp_frames(&output.stdout);
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0]["result"]["tools"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn mcp_invalid_or_missing_protocol_fields_never_dispatch() {
+    let temp = TestTempDir::new("maestro-mcp-invalid-protocol");
+    let repo = temp.path().canonicalize().expect("canonical repository");
+    let packet_arguments = serde_json::json!({
+        "schema_version": 1,
+        "request_id": "invalid-envelope-must-not-dispatch",
+        "repository_locator": repo,
+        "authenticated_host_connection_context_ref": "candidate:host:test:v1",
+        "projection_scope": {"variant": "Repository"},
+        "expected_release_ref": "candidate:release:known-stale:v1",
+        "expected_public_catalog_ref": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+        "bounded_response_redaction_profile": "repository-local",
+        "read_mode": {"variant": "DiscoverSelectionContextV1"}
+    });
+    let missing_version = serde_json::json!({
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_packet",
+            "arguments": packet_arguments.clone()
+        }
+    })
+    .to_string();
+    let wrong_version = serde_json::json!({
+        "jsonrpc": "1.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_packet",
+            "arguments": packet_arguments
+        }
+    })
+    .to_string();
+    let responses = run_mcp_requests(
+        temp.path(),
+        &[
+            &missing_version,
+            &wrong_version,
+            r#"7"#,
+            r#"{"jsonrpc":"2.0","id":4,"params":{"name":"maestro_packet"}}"#,
+            r#"{"jsonrpc":"2.0","id":5,"method":7,"params":{"name":"maestro_packet"}}"#,
+            r#"{"jsonrpc":"2.0","id":6,"method":"tools/call"}"#,
+            r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":[]}"#,
+            r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{}}"#,
+        ],
+    );
+    assert_eq!(responses.len(), 8);
+    for response in responses {
+        assert_eq!(response["error"]["code"], -32600);
+        assert_eq!(response["error"]["message"], "invalid request");
+        let message = response["error"]["message"]
+            .as_str()
+            .expect("error message");
+        assert!(!message.contains("repository_locator"));
+        assert!(!message.contains("projection"));
+        assert!(!message.contains("provider"));
     }
 }
 
 #[test]
-fn mcp_stdio_alias_runs_server() {
-    let temp = setup_repo("maestro-mcp-stdio-alias");
-    let repo = temp.path();
-    run_success(repo, &["mcp", "stdin"]);
-    run_success(repo, &["mcp", "stdio"]);
-}
+fn mcp_transport_is_framed_bounded_and_has_no_legacy_list_method() {
+    const MAX_FRAME_BYTES: usize = 1024 * 1024;
+    const MAX_HEADER_BYTES: usize = 8 * 1024;
+    const MAX_HEADER_COUNT: usize = 32;
 
-#[test]
-fn mcp_serve_handles_json_rpc_batches_over_stdio_frames() {
-    let temp = setup_repo("maestro-mcp-batch");
-    let repo = temp.path();
-    create_task(repo, "MCP batch task");
+    let temp = TestTempDir::new("maestro-mcp-transport");
+    let requests = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"list"}"#,
+    ];
+    let output = run_mcp_bytes(temp.path(), &mcp_frames(&requests));
+    let responses = parse_mcp_frames(&output.stdout);
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0]["result"]["tools"][0]["name"], "maestro_packet");
+    assert_eq!(responses[1]["error"]["code"], -32601);
+    assert_eq!(responses[1]["error"]["message"], "unknown method: list");
 
-    let frames = run_mcp_requests(
-        repo,
-        &[concat!(
-            "[",
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}},",
-            "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}},",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"maestro_status\",\"arguments\":{}}}",
-            "]"
-        )],
-    );
-    assert_eq!(frames.len(), 1);
-    let batch = frames[0]
-        .as_array()
-        .expect("invariant: batch response should be an array");
-    assert_eq!(batch.len(), 2);
-    assert_eq!(batch[0]["id"], 1);
-    assert_eq!(batch[1]["id"], 2);
-}
-
-#[test]
-fn mcp_serve_uses_content_length_framing() {
-    let temp = setup_repo("maestro-mcp-serve");
-    let repo = temp.path();
-    create_task(repo, "MCP visible task");
-
-    let output = run_mcp_bytes(
-        repo,
-        &mcp_frames(&[r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#]),
-    );
+    let oversized = run_mcp_bytes_raw(temp.path(), b"Content-Length: 1048577\r\n\r\n");
+    assert!(!oversized.status.success());
     assert!(
-        String::from_utf8(output.stdout.clone())
-            .expect("invariant: MCP output should be UTF-8")
-            .starts_with("Content-Length: ")
+        String::from_utf8_lossy(&oversized.stderr)
+            .contains("MCP frame exceeds maximum size of 1048576 bytes")
     );
-    let frames = parse_mcp_frames(&output.stdout);
-    assert_eq!(frames[0]["id"], 1);
-}
 
-#[test]
-fn mcp_frame_parser_uses_content_length_as_bytes() {
-    let frames = parse_mcp_frames(&mcp_frames(&[r#"{"message":"déjà vu"}"#]));
-
-    assert_eq!(frames[0]["message"], "déjà vu");
-}
-
-#[test]
-fn mcp_serve_rejects_oversized_content_length_before_body_allocation() {
-    let temp = setup_repo("maestro-mcp-oversized-frame");
-    let repo = temp.path();
-    let oversized = format!("Content-Length: {}\r\n\r\n", 1024 * 1024 + 1);
-
-    let output = run_mcp_bytes_raw(repo, oversized.as_bytes());
-
-    assert!(!output.status.success(), "oversized MCP frame should fail");
+    let oversized_newline = run_mcp_bytes_raw(temp.path(), &vec![b' '; MAX_FRAME_BYTES + 1]);
+    assert!(!oversized_newline.status.success());
     assert!(
-        stderr(&output).contains("MCP frame exceeds maximum size"),
-        "stderr should explain the frame limit:\n{}",
-        stderr(&output)
+        String::from_utf8_lossy(&oversized_newline.stderr)
+            .contains("MCP newline frame exceeds maximum size of 1048576 bytes")
     );
-}
 
-#[test]
-fn mcp_serve_accepts_newline_delimited_json_rpc() {
-    let temp = setup_repo("maestro-mcp-line-json");
-    let repo = temp.path();
-
-    let output = run_mcp_bytes(
-        repo,
-        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}\n",
-    );
-    let frames = parse_mcp_frames(&output.stdout);
+    let mut oversized_single_header = b"Content-Length: 0".to_vec();
+    oversized_single_header.resize(MAX_HEADER_BYTES + 1, b' ');
+    oversized_single_header.extend_from_slice(b"\r\n\r\n");
+    let oversized_single_header = run_mcp_bytes_raw(temp.path(), &oversized_single_header);
+    assert!(!oversized_single_header.status.success());
     assert!(
-        frames[0]["result"]["tools"]
-            .as_array()
-            .expect("invariant: tools should be an array")
-            .iter()
-            .any(|tool| tool["name"] == "maestro_status")
+        String::from_utf8_lossy(&oversized_single_header.stderr)
+            .contains("MCP frame header exceeds maximum size of 8192 bytes")
     );
-}
 
-#[test]
-fn mcp_serve_accepts_list_method_alias() {
-    let temp = setup_repo("maestro-mcp-list-method");
-    let repo = temp.path();
+    let mut excessive_header_count = b"Content-Length: 0\r\n".to_vec();
+    for _ in 0..MAX_HEADER_COUNT {
+        excessive_header_count.extend_from_slice(b"X-Maestro-Test: value\r\n");
+    }
+    excessive_header_count.extend_from_slice(b"\r\n");
+    let excessive_header_count = run_mcp_bytes_raw(temp.path(), &excessive_header_count);
+    assert!(!excessive_header_count.status.success());
+    assert!(
+        String::from_utf8_lossy(&excessive_header_count.stderr)
+            .contains("MCP frame exceeds maximum header count of 32")
+    );
 
-    let output = run_mcp_bytes(
-        repo,
-        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"list\",\"params\":{}}\n",
-    );
-    let frames = parse_mcp_frames(&output.stdout);
+    let mut excessive_header_bytes = b"Content-Length: 0\r\n".to_vec();
+    for name in ["X-Maestro-A: ", "X-Maestro-B: "] {
+        excessive_header_bytes.extend_from_slice(name.as_bytes());
+        excessive_header_bytes.extend(std::iter::repeat_n(b'x', MAX_HEADER_BYTES / 2));
+        excessive_header_bytes.extend_from_slice(b"\r\n");
+    }
+    excessive_header_bytes.extend_from_slice(b"\r\n");
+    let excessive_header_bytes = run_mcp_bytes_raw(temp.path(), &excessive_header_bytes);
+    assert!(!excessive_header_bytes.status.success());
     assert!(
-        frames[0]["result"]["tools"]
-            .as_array()
-            .expect("invariant: tools should be an array")
-            .iter()
-            .any(|tool| tool["name"] == "maestro_status")
-    );
-}
-
-#[test]
-fn mcp_serve_reports_invalid_requests_without_running_tools() {
-    let temp = setup_repo("maestro-mcp-invalid");
-    let repo = temp.path();
-
-    let lines = run_mcp_requests(
-        repo,
-        &[
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"missing_tool","arguments":{}}}"#,
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_task_complete","arguments":{"id":"task-001","summary":"done","claims":["one",2]}}}"#,
-            r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}"#,
-        ],
-    );
-    assert_eq!(lines.len(), 3);
-    assert_eq!(lines[0]["error"]["code"], -32602);
-    assert!(
-        lines[0]["error"]["message"]
-            .as_str()
-            .expect("invariant: error message should be a string")
-            .contains("missing tool name")
-    );
-    assert!(
-        lines[1]["error"]["message"]
-            .as_str()
-            .expect("invariant: error message should be a string")
-            .contains("unknown MCP tool")
-    );
-    assert!(
-        lines[2]["error"]["message"]
-            .as_str()
-            .expect("invariant: error message should be a string")
-            .contains("claims[1] must be a string")
+        String::from_utf8_lossy(&excessive_header_bytes.stderr)
+            .contains("MCP frame headers exceed maximum total size of 8192 bytes")
     );
 }
 

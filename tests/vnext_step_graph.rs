@@ -1,10 +1,10 @@
-use maestro::domain::vnext::contract::runtime::ContractGenerationIdV1;
-use maestro::domain::vnext::identity::{ContractRootIdV1, StoreDomainIdV1};
-use maestro::domain::vnext::step::{
+use maestro::domain::contract::runtime::ContractGenerationIdV1;
+use maestro::domain::identity::{ContractRootIdV1, StoreDomainIdV1};
+use maestro::domain::step::{
     StepBindingV1, StepGraphEdgeV1, StepGraphError, StepGraphNodeV1, StepGraphSnapshotV1, StepIdV1,
     StepIdentityError, StepRevisionIdV1, StepScopeV1,
 };
-use maestro::domain::vnext::work::WorkIdV1;
+use maestro::domain::work::WorkIdV1;
 
 fn hash(byte: u8) -> [u8; 32] {
     [byte; 32]

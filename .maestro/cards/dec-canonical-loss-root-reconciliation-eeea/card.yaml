@@ -1,0 +1,33 @@
+schema_version: maestro.card.v1
+id: dec-canonical-loss-root-reconciliation-eeea
+type: decision
+title: Canonical authenticated loss and declared-root reconciliation closure
+status: locked
+parent: maestro-whole-flow-architecture-refoundation
+created_at: '2026-07-28T10:28:54.000Z'
+updated_at: '2026-07-28T10:28:54.000Z'
+description: Adversarial review of the two first V8 successors found two missing joins.
+  Protected-primary history has no Repository or Installation Store role, and a
+  packet-expected source under a DeclaredAbsent root could otherwise be confused
+  with authenticated leaf loss. The current typed closure also needs exact V4
+  dependent names rather than an open-ended identity rotation.
+extra:
+  locked_at: '2026-07-28T10:28:54.000Z'
+  decision: |-
+    Supersede dec-canonical-owner-issued-loss-evidence-0e5b and dec-canonical-owner-resolved-root-universe-fabd only to close their protected-primary history, root-disposition reconciliation and exact dependent-version gaps. Incorporate every other ownership, retained history, complete-universe, descriptor, two-pass census, custody, rollback, currentness, recovery and no-public-surface law from both Decisions.
+
+    Repository and Installation history remain reachable through their matching owner Store generation/history graphs. Persistence instead owns one internal ProtectedPrimaryHistoryJournalV1 in the real protected-boundary backend. It is not a new StoreRoleV1 and does not enter Repository or Installation Store schemas. While protected-primary bytes are present, Persistence atomically appends an immutable canonical record bound to ProtectedPrimaryBoundaryLeaseV1 identity, locator and root commitments, object kind and identity, length, digest, metadata, source provenance, backend implementation/revision, provider, mount, anchor, fence, realm, Release, journal head/revision, currentness and revocation. A current protected-primary provider validates that retained journal record and mints only the Persistence-owned portion of OwnerIssuedUnavailablePreexistingLossEvidenceSetV1. Detached files, packet rows, Git objects and a record not reachable from the current journal head authenticate nothing. The journal is internal persisted audit state and grants no reader, locator, mutation or execution authority.
+
+    Unavailable-preexisting-loss evidence is admissible only for a source whose owner-universe row is Present and whose retained root capability was acquired before pass A and remains held through finalization. If a packet-expected source maps beneath a DeclaredAbsent or Unsupported root, cannot map to exactly one Present owner row, or appears under a changed requiredness/disposition, Foundation refuses the entire attempt before consuming historical evidence or writing custody. DeclaredAbsent proves only the current absence of an optional declaration under an owner fence; it never proves historical leaf membership or loss. A stale, foreign, replayed or mismatched absence fence refuses. Packet expected-source equality is checked against the complete Present physical case set plus explicit absence/unsupported refusal rows, never against display paths or header references.
+
+    The exact current typed closure is FoundationLegacyQuarantineLeaseV2 plus FoundationLegacyQuarantineClosureV2, UnavailablePreexistingLossV4, UnavailablePreexistingLossManifestV4, LegacyRollbackAssessmentV4 and LegacyQuarantineEpochV4. MembershipKeyV3, SourceCaseV3, Stage12SightingManifestV2, MigrationClassificationManifestV3, DeclaredOverlapManifestV2 and SealedQuarantineManifestV3 keep their persisted field shapes but rotate their authority dependency and final joined identity where they bind the V4 closure. V3 loss, rollback and epoch values are historical candidate evidence only; no conversion, upgrade, coexistence or fallback can produce current authority.
+
+    Production proof must include a Repository Store witness, Installation Store witness and Persistence protected-boundary journal witness; Present-with-history, absent-with-valid-history, post-admission disappearance, no-history, orphan-history, wrong owner, wrong root and replay cases; expected-source-under-DeclaredAbsent and Unsupported refusal; requiredness and disposition flips; stale and foreign absence fences; every Store/journal/provider/currentness/revocation race; and recovery from exact restored bytes. This Decision changes no public Packet, Operation, Result, Action, ScopeAtom, Ceremony, MCP Tool, Recipe, Resource, Bundle, Release, catalog, wire member, InstallationCensusHeaderV1 or InstallationCensusV1 bytes.
+  supersedes:
+  - dec-canonical-owner-issued-loss-evidence-0e5b
+  - dec-canonical-owner-resolved-root-universe-fabd
+  preview: owner Store history or protected-primary journal + Present retained root -> Foundation exact absence receipt -> V4 loss/rollback/epoch; DeclaredAbsent, Unsupported or missing history -> whole-attempt refusal
+  rejected:
+  - 'Add a third StoreRoleV1 for protected primary: it would silently change an existing persisted Store schema and collapse Persistence with Repository or Installation.'
+  - 'Allow DeclaredAbsent plus historical leaf evidence: no retained root exists to bind exact pass-A/pass-B physical non-membership.'
+  - 'Leave dependent versions implicit: a frozen typed guard or coordinator could otherwise accept the wrong epoch family.'

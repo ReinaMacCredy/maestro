@@ -12,11 +12,13 @@ from typing import Any
 
 
 REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO / "tools/vnext_contracts/stage0"))
+from verify_input_bindings import descriptor_capture
 DEFAULT_ARTIFACT_ROOT = REPO / "contracts/vnext/stage0/public-identity"
 AUTHORITATIVE_ENV = "MAESTRO_AUTHORITATIVE_SOURCE"
 EXPECTED_AUTHORITATIVE_HASHES = {
-    ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md": "16a2f079f6ebf3dd3a2fb1a171cd0c6811203fe5f84dda73a7e2e91f67d6f9f7",
-    ".maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
+    ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md": "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b",
+    ".maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
     ".maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
 }
 PUBLIC_ARTIFACTS = [
@@ -149,7 +151,11 @@ def expected_source_rows() -> list[dict[str, str]]:
     authoritative = authoritative_root()
     rows: list[dict[str, str]] = []
     for relative, expected in EXPECTED_AUTHORITATIVE_HASHES.items():
-        actual = sha256((authoritative / relative).read_bytes())
+        override = os.environ.get(
+            "MAESTRO_AUTHORITATIVE_" + Path(relative).name.split(".")[0].upper()
+        )
+        source = Path(override).expanduser().resolve(strict=True) if override else authoritative / relative
+        actual = sha256(descriptor_capture(source, allow_root_owner=True))
         require(actual == expected, f"authoritative source drift: {relative}")
         rows.append({"path": f"authoritative:{relative}", "sha256": actual})
     require(len(REQUIRED_SOURCES) == len(set(REQUIRED_SOURCES)), "duplicate required source")

@@ -1856,7 +1856,7 @@ def parity_receipt_row(document: Mapping[str, Any], raw: bytes) -> dict[str, Any
 
 def independent_ruby_receipt(documents: Mapping[str, Any]) -> dict[str, Any]:
     process = subprocess.run(
-        ["ruby", "tools/vnext_contracts/stage0/resource_release/verify.rb"],
+        ["/usr/bin/ruby", "tools/vnext_contracts/stage0/resource_release/verify.rb"],
         cwd=ROOT,
         check=True,
         capture_output=True,

@@ -2,54 +2,54 @@
   "artifacts": [
     [
       "domain-kernel.v1.cbor",
-      22422,
-      "03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9"
+      23643,
+      "09202f1c7c5281e7d9bde694d7fa7f328eab88e64fb9bc1d0732cbef66530ef4"
     ],
     [
       "domain-kernel.v1.json",
-      34293,
-      "d1eb06cec4be508b44829accfc6e68506dfddc4fb7e09b2a8ee1f48520c850a9"
+      35979,
+      "ea6f85a5cb89fae1c163d9c8630c6d7b63aaf2697c84faef72530db9aa1edf1b"
     ]
   ],
   "encoder": "python-stdlib-plus-frozen-cbor-subset",
-  "identity": "sha256:03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9",
+  "identity": "sha256:09202f1c7c5281e7d9bde694d7fa7f328eab88e64fb9bc1d0732cbef66530ef4",
   "predecessor_chain": {
     "mode": "full_chain",
     "stage0": {
       "proof_receipts": [
         {
-          "byte_length": 393839,
+          "byte_length": 396415,
           "path": "contracts/vnext/stage0/effect-home/encoder-receipt.json",
-          "sha256": "79ba10484f84816acaac881024ba2bab9508214bf21ec6785e0e5e9af1b565c7"
+          "sha256": "a24e38bc6bba4bee17bf03ad940ce84639c76c3747b474a1bf1d58b30d8cd891"
         },
         {
           "byte_length": 2570,
           "path": "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
-          "sha256": "6026229515ed622e64c9e4012575043223dbf245d500bfdf9271d29f19c7bba0"
+          "sha256": "7e608e1e9a6cda039bbb20c0b762dd17dcd6906827f90d79cbf364b4b8e0d9be"
         }
       ],
-      "semantic_root": "sha256:22f58983311b9088a53a40341dd2d79a3be17d4fb08d73742934fba6c22db802",
-      "source_tree_root": "sha256:ff5b8b9be04ca7b5863acfe89de5c193798c56af6f472781f37266d6ff77a4e5"
+      "semantic_root": "sha256:c8c51a348faa0293f63fa15a6da2d2baf0315f3c985529a96ed0b860b9bae8ce",
+      "source_tree_root": "sha256:bf57b39a0ca99e73b14e941eca41e7077631f7a9de0618449e1066ad5b827544"
     },
     "stage2": {
       "proof_receipts": [
         {
           "byte_length": 5249,
           "path": "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
-          "sha256": "4b39f06bba5befa0506246cc40af239a66bf93ada52d9dfb08c17cfdb12b5bf8"
+          "sha256": "fd0df1c6465eac5281845451c171fc0e4b56926814c558e580f659d38269edcb"
         },
         {
           "byte_length": 1965,
           "path": "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
-          "sha256": "fa703e2f46f1065780205540bd9c2312618812b13b13596039e15f985c958c37"
+          "sha256": "a2bff49c26297919480029261a981886c212b9da34e9739cddc4d0a64d5334b5"
         },
         {
           "byte_length": 1791,
           "path": "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
-          "sha256": "80c9ffcc259896e7ca58f7ff8509dfc02195e2cde26523753962bb9045b90074"
+          "sha256": "804c9fadc69764f48c9bb5f52c0f4d3ffeb59b3ee819a4570ee73ce28b7156b2"
         }
       ],
-      "semantic_root": "sha256:b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce"
+      "semantic_root": "sha256:120d7e2a998a885ab8242655eee781df759c106ffaee3e2e5d2a81056151474c"
     }
   },
   "schema_version": "maestro.vnext.stage3.domain-kernel.encoder-receipt.v1",

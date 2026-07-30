@@ -1,0 +1,5 @@
+{
+  "$id": "maestro.vnext.host-descriptor.v1",
+  "type": "object",
+  "required": ["profile_id", "installation_scope", "trusted_host_diagnostic"]
+}

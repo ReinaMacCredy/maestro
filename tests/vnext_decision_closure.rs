@@ -1,5 +1,5 @@
-use maestro::domain::vnext::contract::component_kind::ContractComponentKindV1;
-use maestro::domain::vnext::contract::decision_closure::{
+use maestro::domain::contract::component_kind::ContractComponentKindV1;
+use maestro::domain::contract::decision_closure::{
     DecisionClosureError, DecisionClosureV1, DecisionConsequenceClassificationV1,
     DecisionMaterializationSourceV1, DerivedDecisionEffectStatusV1,
     ExternalDecisionClosureRecordV1, ExternalDesignAuthorityClosureV1,

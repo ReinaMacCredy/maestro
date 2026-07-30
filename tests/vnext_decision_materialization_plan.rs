@@ -1,16 +1,16 @@
-use maestro::domain::vnext::contract::assembly::{
+use maestro::domain::contract::assembly::{
     candidate_root_schema_closure_v1, facet_schema_id_v1, fixture_facet_value_v1,
     normative_inputs_schema_id_v1,
 };
-use maestro::domain::vnext::contract::component::CandidateContractComponentV1;
-use maestro::domain::vnext::contract::component_kind::ContractComponentKindV1;
-use maestro::domain::vnext::contract::materialization::{
+use maestro::domain::contract::component::CandidateContractComponentV1;
+use maestro::domain::contract::component_kind::ContractComponentKindV1;
+use maestro::domain::contract::materialization::{
     ContractConsequencePlanV1, PlannedContractComponentV1, PlannedContractDependencyV1,
     PlannedContractSlotV1,
 };
-use maestro::domain::vnext::contract::provenance::ComponentProvenanceV1;
-use maestro::domain::vnext::contract::root::CandidateContractRootV1;
-use maestro::domain::vnext::identity::{
+use maestro::domain::contract::provenance::ComponentProvenanceV1;
+use maestro::domain::contract::root::CandidateContractRootV1;
+use maestro::domain::identity::{
     ContractComponentIdV1, DesignRevisionIdV1, DesignSourceBindingIdV1,
 };
 use maestro::foundation::core::deterministic_cbor::CborValue;

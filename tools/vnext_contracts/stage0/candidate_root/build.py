@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,12 @@ FINALIZATION_DOMAIN = "maestro.vnext.design-finalization-manifest.v1"
 HANDOFF_DOMAIN = "maestro.vnext.build-handoff-projection.v1"
 CANDIDATE_SCHEMA_CLOSURE_DOMAIN = "maestro.vnext.candidate-root-schema-closure.v1"
 STAGE0_PROOF_MANIFEST_DOMAIN = "maestro.vnext.stage0-proof-manifest.v1"
+SUCCESSOR_DECISION_STORE_MANIFEST_SHA256 = (
+    "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
+)
+SUCCESSOR_PACKET_SHA256 = (
+    "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5"
+)
 
 NORMATIVE_INPUTS_KIND = 12
 REQUIRED_PROOF_GATES = (
@@ -667,6 +674,22 @@ def stage0_proof_manifest(forbidden: set[str]) -> tuple[dict[str, Any], bytes, b
     return document, proof_id, exact_hash(artifact_hash(PROOF_MANIFEST)), len(gates)
 
 
+def validate_successor_decision_manifest(decision: dict[str, Any]) -> None:
+    provenance = decision.get("source_provenance_excluded_from_identity", {})
+    if provenance.get("decisions_sha256") != SUCCESSOR_DECISION_STORE_MANIFEST_SHA256:
+        raise ValueError("candidate root is not bound to the successor Decision store")
+    records = decision.get("records")
+    if not isinstance(records, list) or len(records) != 213:
+        raise ValueError("candidate root lacks the exact successor Decision closure")
+    manifest = "".join(
+        f"{item['id']}\t{item['terminal_status']}\t"
+        f"{item['raw_record_sha256']}\t{item['raw_body_sha256']}\n"
+        for item in records
+    ).encode("ascii")
+    if hashlib.sha256(manifest).hexdigest() != SUCCESSOR_DECISION_STORE_MANIFEST_SHA256:
+        raise ValueError("candidate root successor Decision manifest reconstruction mismatch")
+
+
 def input_sources() -> dict[str, Any]:
     bindings = load(INPUT_BINDINGS)
     forbidden = forbidden_promotion_values(
@@ -677,6 +700,8 @@ def input_sources() -> dict[str, Any]:
     effect, effect_id, effect_finalization = final_effect_home()
     resource_release, resource_release_id = final_resource_release(effect_id, effect_finalization)
     decision = load(DECISION)
+    if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
+        validate_successor_decision_manifest(decision)
     decision_id = immutable_artifact(DECISION, decision, require_candidate=False)
     materials = decision.get("materializations")
     base = {
@@ -731,13 +756,31 @@ def input_sources() -> dict[str, Any]:
     )
     for source in (effect, resource_release, load(EFFECT_FINALIZATION), proof_manifest):
         scan_forbidden(source, forbidden)
-    verify_closed_sources()
     source_inputs = bindings["canonical_source_inputs"]
     current_source_inputs = bindings["current_source_inputs"]
-    source_card = Path(bindings["source_repository_realpath"]) / ".maestro/cards" / bindings["feature_id"]
-    for filename, expected_key in (("design.md", "design_sha256"), ("card.yaml", "card_sha256")):
-        if artifact_hash(source_card / filename) != current_source_inputs[expected_key]:
-            raise ValueError(f"current {filename} content drifted from its attested source commitment")
+    if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
+        if source_inputs != current_source_inputs:
+            raise ValueError("successor canonical and current source inputs diverged")
+        tracked_design = (
+            WORKSPACE
+            / ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md"
+        )
+        if artifact_hash(tracked_design) != current_source_inputs["design_sha256"]:
+            raise ValueError("successor tracked design drifted from its packet-bound commitment")
+    else:
+        source_card = (
+            Path(bindings["source_repository_realpath"])
+            / ".maestro/cards"
+            / bindings["feature_id"]
+        )
+        for filename, expected_key in (
+            ("design.md", "design_sha256"),
+            ("card.yaml", "card_sha256"),
+        ):
+            if artifact_hash(source_card / filename) != current_source_inputs[expected_key]:
+                raise ValueError(
+                    f"current {filename} content drifted from its attested source commitment"
+                )
     return {
         "decision": decision,
         "decision_id": decision_id,
@@ -762,19 +805,40 @@ def input_sources() -> dict[str, Any]:
     }
 
 
-def verify_closed_sources() -> None:
+def proof_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
     env = {
-        **os.environ,
-        "MAESTRO_AUTHORITATIVE_SOURCE": load(INPUT_BINDINGS)[
-            "source_repository_realpath"
-        ],
+        "HOME": tempfile.gettempdir(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYOPT": "",
+        "RUBYLIB": "",
     }
+    if extra:
+        env.update(extra)
+    return env
+
+
+def verify_closed_sources(check: bool = False) -> None:
+    env = proof_environment(
+        {
+            "MAESTRO_AUTHORITATIVE_SOURCE": load(INPUT_BINDINGS)[
+                "source_repository_realpath"
+            ]
+        }
+    )
     commands = (
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/verify_input_bindings.py")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/decision_closure/validate.py")],
-        [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/public_identity/verify.py")],
+        [
+            sys.executable,
+            str(WORKSPACE / "tools/vnext_contracts/stage0/public_identity/verify.py"),
+            *(["--check"] if check else []),
+        ],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/effect_home/validate.py")],
-        ["ruby", str(WORKSPACE / "tools/vnext_contracts/stage0/submission_claim/verify.rb")],
+        ["/usr/bin/ruby", str(WORKSPACE / "tools/vnext_contracts/stage0/submission_claim/verify.rb")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/proof_matrix/validate.py")],
     )
     for command in commands:
@@ -1058,7 +1122,8 @@ def write_artifact(path: Path, document: dict[str, Any], canonical: Any) -> None
     path.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def build() -> dict[str, Any]:
+def build(check: bool = False) -> dict[str, Any]:
+    verify_closed_sources(check=check)
     sources = input_sources()
     schemas = candidate_schema_descriptors()
     design_id, design_value = design_revision(sources, schemas)
@@ -1174,7 +1239,7 @@ def scan_forbidden(document: Any, forbidden: set[str]) -> None:
 
 def execute(check: bool) -> None:
     try:
-        result = build()
+        result = build(check=check)
     except Blocked as error:
         print(json.dumps({"status": "blocked", "reason": str(error)}))
         raise SystemExit(2) from error

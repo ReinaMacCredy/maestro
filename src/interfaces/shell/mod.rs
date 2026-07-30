@@ -53,3 +53,17 @@ pub fn render_shell_init(shell: Shell) -> &'static str {
 
 const POSIX_INIT: &str = include_str!("../../../embedded/shell/posix.sh");
 const FISH_INIT: &str = include_str!("../../../embedded/shell/fish.fish");
+
+use crate::operations::adapters::{AdapterFrameV1, Stage10AdapterError};
+
+#[allow(
+    dead_code,
+    reason = "the canonical rendering entrypoint is exercised by adapter contract tests"
+)]
+pub fn render(frame: &AdapterFrameV1) -> Result<String, Stage10AdapterError> {
+    frame.validate()?;
+    Ok(format!(
+        "{{\"schema\":\"maestro.vnext.adapter-rendering.v1\",\"outcome\":\"{}\"}}",
+        frame.outcome
+    ))
+}

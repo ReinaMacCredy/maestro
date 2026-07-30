@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -296,7 +297,15 @@ def command(args: list[str], contract: Path) -> subprocess.CompletedProcess[str]
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "STAGE0_DISPATCH_CUTOVER_ROOT": str(contract)},
+        env={
+            "HOME": tempfile.gettempdir(),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "RUBYOPT": "",
+            "STAGE0_DISPATCH_CUTOVER_ROOT": str(contract),
+        },
     )
 
 
@@ -346,8 +355,8 @@ def run_mutants(contract: Path) -> dict[str, Any]:
             mutant_documents = copy.deepcopy(documents)
             mutate(name, mutant_documents)
             rewrite_artifacts(mutant_root, mutant_documents)
-            python = command(["python3", str(Path(__file__)), "--root", str(mutant_root)], mutant_root)
-            ruby = command(["ruby", str(RUBY_VALIDATOR)], mutant_root)
+            python = command([sys.executable, str(Path(__file__)), "--root", str(mutant_root)], mutant_root)
+            ruby = command(["/usr/bin/ruby", str(RUBY_VALIDATOR)], mutant_root)
             for label, result in (("python", python), ("ruby", ruby)):
                 if result.returncode == 0:
                     escaped.append(f"{label}:{name}")
@@ -362,6 +371,7 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--mutant-suite", action="store_true")
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     contract = args.root.resolve()
     try:
@@ -373,7 +383,7 @@ def main() -> int:
         print(json.dumps(python_receipt, sort_keys=True, separators=(",", ":")))
         return 0
 
-    ruby = command(["ruby", str(RUBY_VALIDATOR)], contract)
+    ruby = command(["/usr/bin/ruby", str(RUBY_VALIDATOR)], contract)
     require(ruby.returncode == 0, f"Ruby baseline failed: {ruby.stderr}")
     ruby_receipt = json.loads(ruby.stdout)
     require(ruby_receipt["artifact_ids"] == python_receipt["artifact_ids"], "independent encoders disagree")
@@ -393,8 +403,14 @@ def main() -> int:
         },
     }
     output = json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
-    if not args.no_write:
-        (contract / "validation-receipt.v1.json").write_text(output, encoding="ascii")
+    receipt_path = contract / "validation-receipt.v1.json"
+    if args.check:
+        require(
+            receipt_path.is_file() and receipt_path.read_bytes() == output.encode("ascii"),
+            "dispatch-cutover validation receipt drifted or is missing",
+        )
+    elif not args.no_write:
+        receipt_path.write_text(output, encoding="ascii")
     print(output, end="")
     return 0
 

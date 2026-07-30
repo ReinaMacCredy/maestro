@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::{Command, Output};
 
-use maestro::domain::vnext::distribution::{
+use maestro::domain::distribution::{
     BundleKindV1, BundleManifestInputV1, BundleManifestV1, CommitmentV1, ContentEncodingV1,
     DirectConsumerInputV1, DirectConsumerKindV1, DirectConsumerV1, OwnerRefV1,
     ReleaseResourceCensusInputV1, ReleaseResourceCensusV1, ResourceDescriptorInputV1,

@@ -12,6 +12,15 @@ from pathlib import Path
 
 EXTERNAL_DOMAIN = "maestro.vnext.external-design-authority-closure.v1"
 DECISION_DOMAIN = "maestro.vnext.decision-closure.v1"
+SUCCESSOR_DECISION_STORE = "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
+SUCCESSOR_HEADS = {
+    "dec-canonical-authority-materialization-df3b": ("locked", "0d7c406f68f04fdf47ce00d56e8189b54159f164323c9511504790b941f715d0", "624f81c44b1a6459bc13472df05f547276d694e0f38c7216bb8df732aa3418cf"),
+    "dec-canonical-execution-h3-verified-0939": ("locked", "b5935c389182a7f3ec6447fb2a13dcb70e912108b399d0b1d25fee5f132186a7", "a98f1fdb95fcb3f2604936f50e9aa6661ad75bd51469d576e49239c5a6138307"),
+    "dec-canonical-foundation-descriptor-a128": ("locked", "17fb79ef9bc74cf3838d869bf5fb3b0ae0e9ae017670ca7cb207aeb8105c234e", "59fc4db26ec24f2f2ddc2df5cd70462f767e5d7e2d81644edc11a61c7fb7b26c"),
+    "dec-canonical-installation-consumer-c1fe": ("locked", "aaba56a8f34fb293a68f26743fbf4ef879d9f5a399a4eb45da74eed70a509e53", "5f35840fed183b406baab4cf9044ab05e3677f7061798c7949e80a868d2cd466"),
+    "dec-canonical-non-action-protected-90a9": ("locked", "8c6be56db78d8695b4e85e09fc4217257fee0b2dce0f5b5be8ef10230f24c20e", "7f0ea93dddef6354183b48cec27f6dee47f802688956bf552e3cb64ecca88f81"),
+    "dec-canonical-trusted-host-protected-1fbc": ("locked", "e572dc28e0c811c81207558e64b0372f757a873122b7f537f6354af819f118d8", "e6e84dea058097be48312ef98154958246763bac7f38d877ea04aee4af030d99"),
+}
 
 
 def head(major: int, value: int) -> bytes:
@@ -100,14 +109,52 @@ def value(document: dict[str, object], external: bool) -> list[object]:
 def validate(document: dict[str, object], external: bool) -> tuple[str, bytes]:
     summary = document["summary"]
     records = document["records"]
+    provenance = document["source_provenance_excluded_from_identity"]
+    decisions_sha256 = provenance["decisions_sha256"]
+    if decisions_sha256 == "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd":
+        expected = {"total": 207, "locked": 112, "superseded": 95, "open": 0, "material": 204, "rationale_only": 3, "unresolved_mappings": 0, "pending_component_slots": 109, "normalized_one_to_one_edges": 23}
+    elif decisions_sha256 == SUCCESSOR_DECISION_STORE:
+        expected = {"total": 213, "locked": 117, "superseded": 96, "open": 0, "material": 210, "rationale_only": 3, "unresolved_mappings": 0, "pending_component_slots": 114, "normalized_one_to_one_edges": 24}
+    else:
+        raise ValueError("unknown Decision-store provenance")
     if document["closure_state"] != "closed":
         raise ValueError("closure is not closed")
     if [item["id"] for item in records] != sorted(item["id"] for item in records):
         raise ValueError("records are not sorted")
-    if len({item["id"] for item in records}) != 207:
+    if len({item["id"] for item in records}) != expected["total"]:
         raise ValueError("omitted or duplicate Decision record")
-    if summary != {"total": 207, "locked": 112, "superseded": 95, "open": 0, "material": 204, "rationale_only": 3, "unresolved_mappings": 0, "pending_component_slots": 109, "normalized_one_to_one_edges": 23}:
+    if summary != expected:
         raise ValueError("summary drift")
+    if decisions_sha256 == SUCCESSOR_DECISION_STORE:
+        manifest_bytes = (
+            "".join(
+                f"{item['id']}\t{item['terminal_status']}\t"
+                f"{item['raw_record_sha256']}\t{item['raw_body_sha256']}\n"
+                for item in records
+            )
+        ).encode("ascii")
+        if hashlib.sha256(manifest_bytes).hexdigest() != SUCCESSOR_DECISION_STORE:
+            raise ValueError("all-Decision successor manifest reconstruction mismatch")
+        index = {item["id"]: item for item in records}
+        for decision_id, (status, record_sha, body_sha) in SUCCESSOR_HEADS.items():
+            item = index.get(decision_id)
+            if item is None:
+                raise ValueError(f"missing successor Decision head: {decision_id}")
+            if (
+                item["terminal_status"] != status
+                or item["raw_record_sha256"] != record_sha
+                or item["raw_body_sha256"] != body_sha
+            ):
+                raise ValueError(f"substituted successor Decision head: {decision_id}")
+        ignored = {
+            (item["source"], item["claimed_predecessor"])
+            for item in document["lineage"]["ignored_unilateral_claims"]
+        }
+        if (
+            "dec-canonical-non-action-protected-90a9",
+            "dec-canonical-trusted-host-protected-1fbc",
+        ) not in ignored:
+            raise ValueError("missing protected-diagnostic unilateral-claim refusal")
     materialization_base = {
         "kind": "initial_external_design_closure",
         "decision_closure_id": document["decision_closure_reference"] if external else document["identity"],

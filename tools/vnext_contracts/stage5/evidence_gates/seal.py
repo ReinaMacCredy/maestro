@@ -50,6 +50,20 @@ STAGE4_SOURCE_ARCHIVE_SHA256 = (
 )
 MAX_LOGICAL_WORKERS = 6
 MAX_COMPILE_WORKERS = 2
+DEVELOPER_TOOLCHAIN_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TZ": "UTC",
+}
+DEVELOPER_LINKER_PATHS = (
+    "usr/bin/ld",
+    "usr/lib/libcodedirectory.dylib",
+    "usr/lib/libLTO.dylib",
+    "usr/lib/libswiftDemangle.dylib",
+    "usr/lib/libtapi.dylib",
+)
 
 
 def canonical_json(value: object) -> bytes:
@@ -480,28 +494,218 @@ def xcrun_tool(name: str) -> Path:
     return Path(completed.stdout.strip()).resolve(strict=True)
 
 
+def clang_resource_directory(clang: Path) -> tuple[Path, Path]:
+    before = read_regular_file(clang)
+    completed = subprocess.run(
+        [str(clang), "-print-resource-dir"],
+        capture_output=True,
+        check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+        text=True,
+    )
+    after = read_regular_file(clang)
+    if before != after:
+        raise RuntimeError("exact clang changed while its resource directory was probed")
+    lines = completed.stdout.splitlines()
+    if completed.returncode != 0 or len(lines) != 1 or not lines[0]:
+        raise RuntimeError("exact clang resource directory is unavailable")
+    candidate = Path(lines[0])
+    if not candidate.is_absolute() or candidate.is_symlink() or not candidate.is_dir():
+        raise RuntimeError("exact clang resource directory is absent or unsafe")
+    resource = candidate.resolve(strict=True)
+    toolchain_usr = clang.parent.parent.resolve(strict=True)
+    try:
+        relative = resource.relative_to(toolchain_usr)
+    except ValueError as error:
+        raise RuntimeError(
+            "exact clang resource directory is outside its exact toolchain root"
+        ) from error
+    if (
+        len(relative.parts) != 3
+        or relative.parts[:2] != ("lib", "clang")
+        or re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", relative.parts[2]) is None
+    ):
+        raise RuntimeError("exact clang resource directory has an invalid relative identity")
+    current = toolchain_usr
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink() or not current.is_dir():
+            raise RuntimeError("exact clang resource directory contains an unsafe parent")
+    return resource, Path("usr") / relative
+
+
+def developer_resource_sources(resource: Path, relative: Path) -> dict[str, Path]:
+    if relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError("developer resource destination is unsafe")
+    sources: dict[str, Path] = {}
+    for selected in (Path("include"), Path("lib/darwin")):
+        selected_root = resource / selected
+        if selected_root.is_symlink() or not selected_root.is_dir():
+            raise RuntimeError("developer resource tree is absent or unsafe")
+        for child in sorted(selected_root.rglob("*")):
+            if child.is_symlink():
+                raise RuntimeError(
+                    f"developer resource tree contains an unsafe entry: {child}"
+                )
+            if child.is_dir():
+                continue
+            if not child.is_file():
+                raise RuntimeError(
+                    f"developer resource tree contains an unsafe entry: {child}"
+                )
+            destination = relative / selected / child.relative_to(selected_root)
+            sources[destination.as_posix()] = child
+    if not sources:
+        raise RuntimeError("developer resource tree is empty")
+    return sources
+
+
+def require_unchanged_developer_resource_sources(
+    resource: Path, relative: Path, expected: dict[str, Path]
+) -> None:
+    if developer_resource_sources(resource, relative) != expected:
+        raise RuntimeError("developer resource tree changed while it was copied")
+
+
+def developer_linker_sources(clang: Path) -> dict[str, Path]:
+    linker = xcrun_tool("ld")
+    if linker.name != "ld" or linker.parent != clang.parent:
+        raise RuntimeError("exact developer linker is outside the exact clang toolchain")
+    toolchain = clang.parent.parent
+    sources = {
+        relative: toolchain / Path(relative).relative_to("usr")
+        for relative in DEVELOPER_LINKER_PATHS
+    }
+    for relative, source in sources.items():
+        _, executable = read_regular_file(source)
+        if relative == "usr/bin/ld" and not executable:
+            raise RuntimeError("exact developer linker is not executable")
+    return sources
+
+
+def copy_developer_toolchain_sources(
+    sources: dict[str, Path], destination_root: Path
+) -> list[list[object]]:
+    bound: list[tuple[str, Path, int, str, bool]] = []
+    for relative, source in sorted(sources.items()):
+        destination = Path(relative)
+        if destination.is_absolute() or ".." in destination.parts or relative in {"", "."}:
+            raise RuntimeError("developer toolchain destination is unsafe")
+        data, executable = read_regular_file(source)
+        bound.append((relative, source, len(data), sha256(data), executable))
+    rows: list[list[object]] = []
+    for relative, source, length, digest, executable in bound:
+        data, current_executable = read_regular_file(source)
+        if (
+            len(data) != length
+            or sha256(data) != digest
+            or current_executable != executable
+        ):
+            raise RuntimeError(f"developer toolchain source changed before it was copied: {source}")
+        destination = destination_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("xb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        destination.chmod(0o755 if executable else 0o644)
+        source_after = read_regular_file(source)
+        destination_after = read_regular_file(destination)
+        if source_after != (data, executable) or destination_after != (data, executable):
+            raise RuntimeError(f"developer toolchain source changed while it was copied: {source}")
+        rows.append([relative, length, digest, executable])
+    return rows
+
+
 def developer_toolchain_rows(root: Path) -> list[list[object]]:
     rows = snapshot_tree_rows(root)
     return [row for row in rows if row[0] != "developer-toolchain-manifest.v1.json"]
 
 
-def verify_developer_toolchain_execution(root: Path) -> None:
+def verify_developer_toolchain_execution(root: Path, sdk_root: Path | None = None) -> None:
     clang = root / "usr/bin/clang"
+    linker = root / "usr/bin/ld"
     ar = root / "usr/bin/ar"
     ranlib = root / "usr/bin/ranlib"
+    resource, _ = clang_resource_directory(clang)
+    resource_sources = developer_resource_sources(resource, Path("usr/lib/clang/probe"))
+    if not (resource / "include/arm_neon.h").is_file() or not any(
+        "/lib/darwin/" in f"/{name}" for name in resource_sources
+    ):
+        raise RuntimeError("relocated developer toolchain resource closure is incomplete")
+    sdk = macos_sdk_root() if sdk_root is None else sdk_root.resolve(strict=True)
+    if sdk.is_symlink() or not sdk.is_dir():
+        raise RuntimeError("the exact macOS SDK root is absent or unsafe")
+    target_probe = subprocess.run(
+        [str(clang), "-print-target-triple"],
+        capture_output=True,
+        check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+        text=True,
+    )
+    target = target_probe.stdout.strip()
+    if target_probe.returncode != 0 or re.fullmatch(r"arm64-apple-darwin[0-9.]+", target) is None:
+        raise RuntimeError("relocated developer toolchain target is not the exact native target")
+    linker_probe = subprocess.run(
+        [str(clang), "-print-prog-name=ld"],
+        capture_output=True,
+        check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+        text=True,
+    )
+    linker_lines = linker_probe.stdout.splitlines()
+    reported_linker = Path(linker_lines[0]) if len(linker_lines) == 1 else None
+    resolved_linker = (
+        reported_linker.resolve(strict=True)
+        if reported_linker is not None and reported_linker.is_absolute()
+        else None
+    )
+    if (
+        linker_probe.returncode != 0
+        or len(linker_lines) != 1
+        or reported_linker is None
+        or not reported_linker.is_absolute()
+        or resolved_linker != linker.resolve(strict=True)
+    ):
+        raise RuntimeError("relocated clang does not resolve its exact bound linker")
+    _, linker_executable = read_regular_file(linker)
+    if not linker_executable:
+        raise RuntimeError("relocated developer linker is not executable")
     with tempfile.TemporaryDirectory(prefix="maestro-stage5-clt-probe-") as directory:
         probe_root = Path(directory)
         source = probe_root / "probe.c"
+        main = probe_root / "main.c"
         object_file = probe_root / "probe.o"
         archive = probe_root / "libprobe.a"
-        source.write_text("int maestro_stage5_probe(void) { return 5; }\n", encoding="ascii")
+        executable = probe_root / "probe"
+        source.write_text(
+            "#include <arm_neon.h>\n"
+            "int maestro_stage5_probe(void) {\n"
+            "    uint8x8_t value = vdup_n_u8(5);\n"
+            "    return vget_lane_u8(value, 0);\n"
+            "}\n",
+            encoding="ascii",
+        )
+        main.write_text(
+            "int maestro_stage5_probe(void);\n"
+            "int main(void) { return maestro_stage5_probe() == 5 ? 0 : 1; }\n",
+            encoding="ascii",
+        )
+        clang_arguments = [str(clang), "-target", target, "-isysroot", str(sdk)]
         commands = (
-            [str(clang), "-c", str(source), "-o", str(object_file)],
+            [*clang_arguments, "-c", str(source), "-o", str(object_file)],
             [str(ar), "rcs", str(archive), str(object_file)],
             [str(ranlib), str(archive)],
+            [*clang_arguments, str(main), str(archive), "-o", str(executable)],
+            [str(executable)],
         )
         for command in commands:
-            completed = subprocess.run(command, capture_output=True, check=False)
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                check=False,
+                env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+            )
             if completed.returncode != 0:
                 raise RuntimeError(
                     "relocated developer toolchain is not executable: "
@@ -510,13 +714,21 @@ def verify_developer_toolchain_execution(root: Path) -> None:
 
 
 def build_developer_toolchain_closure(cache_root: Path) -> Path:
+    clang = xcrun_tool("clang")
     sources = {
-        "usr/bin/clang": xcrun_tool("clang"),
+        "usr/bin/clang": clang,
         "usr/bin/ar": xcrun_tool("ar"),
         "usr/bin/ranlib": xcrun_tool("ranlib"),
     }
-    ranlib_root = sources["usr/bin/ranlib"].parent.parent
-    sources["usr/lib/libLTO.dylib"] = (ranlib_root / "lib/libLTO.dylib").resolve(strict=True)
+    linker_sources = developer_linker_sources(clang)
+    if set(sources).intersection(linker_sources):
+        raise RuntimeError("developer linker destination collides with a tool")
+    sources.update(linker_sources)
+    resource, resource_relative = clang_resource_directory(clang)
+    resource_sources = developer_resource_sources(resource, resource_relative)
+    if set(sources).intersection(resource_sources):
+        raise RuntimeError("developer toolchain resource destination collides with a tool")
+    sources.update(resource_sources)
     if cache_root.is_symlink() or (cache_root.exists() and not cache_root.is_dir()):
         raise RuntimeError(f"developer toolchain cache root is unsafe: {cache_root}")
     objects = cache_root / "objects"
@@ -527,19 +739,13 @@ def build_developer_toolchain_closure(cache_root: Path) -> Path:
         raise RuntimeError("developer toolchain object root is unsafe")
     temporary = Path(tempfile.mkdtemp(prefix=".developer-toolchain-", dir=objects))
     try:
-        source_rows: list[list[object]] = []
-        for relative, source in sorted(sources.items()):
-            data, executable = read_regular_file(source)
-            source_rows.append([relative, len(data), sha256(data), executable])
-            destination = temporary / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with destination.open("xb") as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-            destination.chmod(0o755 if executable else 0o644)
+        source_rows = copy_developer_toolchain_sources(sources, temporary)
+        require_unchanged_developer_resource_sources(
+            resource, resource_relative, resource_sources
+        )
         (temporary / "usr/bin/clang++").hardlink_to(temporary / "usr/bin/clang")
-        verify_developer_toolchain_execution(temporary)
+        sdk_root = macos_sdk_root()
+        verify_developer_toolchain_execution(temporary, sdk_root)
         rows = developer_toolchain_rows(temporary)
         identity = f"sha256:{sha256(canonical_json(rows))}"
         manifest = {
@@ -562,7 +768,7 @@ def build_developer_toolchain_closure(cache_root: Path) -> Path:
         else:
             freeze_tree(temporary)
             os.rename(temporary, target)
-        verify_developer_toolchain_execution(target)
+        verify_developer_toolchain_execution(target, sdk_root)
         return target
     finally:
         if temporary.exists():
@@ -744,6 +950,7 @@ def main() -> int:
         InputBinding.file("cargo-bin", cargo),
         InputBinding.file("rustc-bin", rustc),
         InputBinding.file("rustc-driver", rustc_driver),
+        InputBinding.literal("rustc-driver-name", rustc_driver.name),
         InputBinding.tree("rust-target-lib", rust_target_lib),
         InputBinding.tree("developer-toolchain", developer_toolchain),
         InputBinding.file("git-bin", git),
@@ -810,6 +1017,8 @@ def main() -> int:
                             "{input:git-bin}",
                             "--driver",
                             "{input:rustc-driver}",
+                            "--driver-name",
+                            rustc_driver.name,
                             "--target-lib",
                             "{input:rust-target-lib}",
                             "--target",
@@ -827,6 +1036,7 @@ def main() -> int:
                     "ruby-bin",
                     "rustc-bin",
                     "rustc-driver",
+                    "rustc-driver-name",
                     "rust-target-lib",
                     "cargo-bin",
                     "developer-toolchain",

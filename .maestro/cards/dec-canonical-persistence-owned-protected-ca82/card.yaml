@@ -1,0 +1,31 @@
+schema_version: maestro.card.v1
+id: dec-canonical-persistence-owned-protected-ca82
+type: decision
+title: Canonical Persistence-owned Protected Locator Lease
+status: locked
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-26T03:39:32.050Z
+updated_at: 2026-07-26T03:39:32.053Z
+extra:
+  locked_at: 2026-07-26T03:39:32.053Z
+  decision: |-
+    Persistence owns the nominal ProtectedLocatorLeaseV1<'locator>; Installation owns the context-specific acquisition operation that requests it from the exact protected-locator backend. The backend is the only production minter. Acquisition performs a no-follow read of the real protected locator and retains the exact owner-controlled backend handle and external anchor required to reread and CAS that same locator through finality. The lease binds the exact protected facility instance and provider incarnation; InstallationId, Realm and InstallationDomain; locator identity, slot and custody class; protected root identity; real observed expected-old CAS token, version and incarnation; source carrier and candidate carrier identity and commitment; CeremonySpec, Attempt and unique invocation; candidate association meaning; publication and restore incarnation; carrier currentness, anti-rollback epoch, state token, fence and revocation state; and the exact target identity used by final readback.
+
+    No caller, Migration record, candidate material, adapter or test fixture may supply a root, path, count, empty-set or absence claim, raw CAS, digest standing in for the locator, latest selector, final candidate root or seal, currentness assertion or parsed backend state as evidence. A caller may identify the nominal installation and requested operation, but the owner resolves and proves the real protected locator. The expected-old value used by the existing protected CAS is derived only from the retained lease. Any persisted field that records a CAS remains a consequence or idempotency input after owner validation, never proof that the live locator has that value. Final candidate root and seal are derived only after the inert association is materialized and therefore are not bound at lease acquisition.
+
+    The lease remains live across the exact PreStore consumer-closure validation, inert association materialization, final candidate-root computation, candidate seal construction and the protected-CAS finality cut. Persistence/Installation rereads the same real locator through the retained owner capability at acquisition, immediately before dispatch and during final readback, comparing the complete facility, provider, Realm, locator, root, CAS, Ceremony, Attempt, carrier, incarnation, currentness, anti-rollback, fence and revocation tuple. Any change, replacement, symlink or alias substitution, ABA, restore, activation, mount or custody drift, stale Attempt, wrong carrier, unavailable reread or ambiguous identity fails closed before dispatch with no protected CAS and no currentness.
+
+    Only the exact owning PreStore finality continuation may consume the lease, once, for the same Ceremony and Attempt. After exactly one expected-old protected CAS dispatch, same-locator readback resolves: exact candidate root and carrier with a verified seal is committed; exact old root with carrier-native proof of definite non-occurrence and no late apply is recovery_required; unknown occurrence is in_doubt; a third value, wrong Realm, Attempt or carrier, or invalid seal is integrity-blocked. Known partial inert candidate material remains non-authoritative and recovery_required. Unknown occurrence is resolved only by exact same-Ceremony, same-Attempt readback under fresh branch authority; it is never asserted absent, blindly retried or converted into success from the lease. Same-key completed replay returns the already established durable Result and performs no lease mint or I/O.
+
+    ProtectedLocatorLeaseV1 is process-local, owner-minted, move-only, non-cloneable, non-serializable, non-cacheable, non-replayable and non-transferable. It has private fields, a private constructor and a non-static lifetime; no public or crate-wide constructor, Copy, Clone, Default, Debug, Send, Sync, 'static escape, accessor, raw-CAS projection, downcast or conversion, canonical bytes, persistence, registry, cache, log form, Resource identity, wire representation, restart reconstruction or hidden global lookup exists. Drop destroys the capability and grants no retry right. Stage 5 freezes the Persistence/Installation owner ports and test conformance seam; Stage 9 implements the real provider and Stage 11 consumes it only through the already frozen owner operation. Proof covers caller-supplied CAS/root/count/absence, alias and symlink substitution, locator replacement and ABA, mount/provider drift, restore/activation races, wrong Attempt/carrier, revocation, double consumption, serialization, replay and every pre/post-CAS crash cut.
+  preview: |-
+    real protected locator
+      -> owner no-follow acquisition + retained current-view capability
+      -> move-only ProtectedLocatorLeaseV1<'locator>
+      -> candidate association + seal
+      -> same-locator final reread + exact protected CAS or fail closed
+  rejected:
+  - 'Treat InstallationLocatorCandidateV1, expected_old_cas or a stored digest as proof of the live locator: the candidate would attest its own currentness.'
+  - 'Reread by path without retaining the owner identity and no-follow current-view capability: replacement, alias and ABA races could validate a different locator.'
+  - 'Expose a raw CAS accessor or serialize the lease across restart: a stale expected-old value would become replay evidence.'
+  - 'Infer absence, root closure or currentness from caller counts or empty vectors: callers do not own protected-locator observation.'

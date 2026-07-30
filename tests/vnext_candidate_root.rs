@@ -1,25 +1,25 @@
-use maestro::domain::vnext::contract::assembly::{
+use maestro::domain::contract::assembly::{
     candidate_root_schema_closure_v1, facet_schema_id_v1, finalization_facet_kinds_v1,
     finalization_input_schema_id_v1, fixture_facet_value_v1, normative_inputs_schema_id_v1,
 };
-use maestro::domain::vnext::contract::component::CandidateContractComponentV1;
-use maestro::domain::vnext::contract::component_kind::ContractComponentKindV1;
-use maestro::domain::vnext::contract::decision_closure::{
+use maestro::domain::contract::component::CandidateContractComponentV1;
+use maestro::domain::contract::component_kind::ContractComponentKindV1;
+use maestro::domain::contract::decision_closure::{
     DecisionClosureV1, DecisionConsequenceClassificationV1, DecisionMaterializationSourceV1,
     ExternalDecisionClosureRecordV1, ExternalDesignAuthorityClosureV1,
     ExternalLineageDispositionV1, RawExternalDecisionRecordV1, RequiredDecisionMaterializationV1,
     TerminalDecisionStatusV1,
 };
-use maestro::domain::vnext::contract::finalization::{
+use maestro::domain::contract::finalization::{
     DesignBasisV1, DesignFinalizationManifestV1, FinalizationInputKindV1, PinnedFinalizationInputV1,
 };
-use maestro::domain::vnext::contract::handoff::CanonicalBuildHandoffV1;
-use maestro::domain::vnext::contract::materialization::{
+use maestro::domain::contract::handoff::CanonicalBuildHandoffV1;
+use maestro::domain::contract::materialization::{
     DecisionMaterializationResolutionV1, MaterializationBaseV1, MaterializationError,
 };
-use maestro::domain::vnext::contract::provenance::ComponentProvenanceV1;
-use maestro::domain::vnext::contract::root::{CandidateContractRootV1, ContractRootError};
-use maestro::domain::vnext::identity::{
+use maestro::domain::contract::provenance::ComponentProvenanceV1;
+use maestro::domain::contract::root::{CandidateContractRootV1, ContractRootError};
+use maestro::domain::identity::{
     ContractComponentIdV1, DecisionClosureIdV1, DecisionMaterializationIdV1,
     DecisionResolutionIdV1, DesignRevisionIdV1, DesignSourceBindingIdV1, SchemaClosureV1,
     SchemaIdV1, decision_closure_identity, decision_materialization_identity,
@@ -31,12 +31,12 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-fn closure_id(seed: u64) -> maestro::domain::vnext::identity::DecisionClosureIdV1 {
+fn closure_id(seed: u64) -> maestro::domain::identity::DecisionClosureIdV1 {
     decision_closure_identity(&CborValue::Array(vec![CborValue::Unsigned(seed)]))
         .expect("closure identity")
 }
 
-fn materialization_id(seed: u64) -> maestro::domain::vnext::identity::DecisionMaterializationIdV1 {
+fn materialization_id(seed: u64) -> maestro::domain::identity::DecisionMaterializationIdV1 {
     decision_materialization_identity(&CborValue::Array(vec![CborValue::Unsigned(seed)]))
         .expect("materialization identity")
 }
@@ -494,7 +494,7 @@ fn emitted_candidate_root_has_canonical_identities_without_minting_provenance() 
 }
 
 fn validate_emitted_components(
-    schemas: &maestro::domain::vnext::identity::SchemaClosureV1,
+    schemas: &maestro::domain::identity::SchemaClosureV1,
     document: &Value,
 ) -> Vec<ContractComponentIdV1> {
     json_array(document, "components")
@@ -589,7 +589,7 @@ fn validate_decision_materialization_provenance(value: &Value, canonical: &CborV
 }
 
 fn reconstruct_pinned_input(
-    schemas: &maestro::domain::vnext::identity::SchemaClosureV1,
+    schemas: &maestro::domain::identity::SchemaClosureV1,
     row: &Value,
 ) -> PinnedFinalizationInputV1 {
     let kind = FinalizationInputKindV1::try_from(json_u64(row, "kind_tag"))

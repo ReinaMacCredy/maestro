@@ -1,4 +1,4 @@
-use maestro::domain::vnext::work::{
+use maestro::domain::work::{
     WorkIdV1, WorkIdentityError, WorkRelationIdV1, WorkRequirementIdV1, WorkSubmissionIdV1,
 };
 

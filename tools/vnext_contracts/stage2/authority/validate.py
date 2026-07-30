@@ -151,6 +151,9 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = list(dict.fromkeys([
     "EffectWithdrawal", "WithdrawEffectIntent", "RecoverReserved", "ControlHead", "ControlRevision", "WriterTerm",
     "PublishBootstrapMandateInteractionOutcome", *CMA_OBSERVATION_PUBLICATION_PURPOSES,
     *CMA_EFFECT_WITHDRAWAL_SLOT_FAMILIES, *TRANSITION_GUARD_KINDS,
+    "RepositoryGovernanceFloorSnapshotV1",
+    "maestro.vnext.repository-governance-floor-snapshot.v1",
+    "maestro.vnext.repository-governance-head-class-8.v1",
 ]))
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
     "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
@@ -159,7 +162,9 @@ STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
     "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
     "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
     "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
+    "src/domain/vnext/authority/governance_floor.rs": ("Authority", "candidate_contract_definition", "exact_internal_append_only_authority_schema_tag_25"),
     "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/vnext/authority/publication.rs": ("Authority", "candidate_contract_definition", "exact_internal_authority_schema_registry_prefix_and_tag_25"),
     "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
     "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
     "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
@@ -171,6 +176,38 @@ STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
     "tools/vnext_contracts/stage2/authority/validate.py": ("Stage2Proof", "candidate_proof_reader", "independent_stage2_semantic_reconstruction"),
     "tools/vnext_contracts/stage2/authority/verify.rb": ("Stage2Proof", "candidate_proof_reader", "independent_stage2_ruby_reconstruction"),
 }
+STAGE2_REQUIRED_LITERALS_BY_SOURCE = {
+    "src/domain/vnext/authority/governance_floor.rs": (
+        "RepositoryGovernanceFloorSnapshotV1",
+        "maestro.vnext.repository-governance-floor-snapshot.v1",
+        "maestro.vnext.repository-governance-head-class-8.v1",
+    ),
+}
+GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS = (
+    "pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+    "let snapshot = RepositoryGovernanceFloorSnapshotV1::decode_object(direct_object)?;",
+    (
+        "let history = validate_history(*direct_root, &by_id)?; "
+        "let class_root = hash_value(&CborValue::Array(vec![ "
+        'CborValue::text("maestro.vnext.repository-governance-head-class-8.v1")?,'
+    ),
+    (
+        "let commitment = current_view_commitment( view, head, generation, &snapshot, "
+        "*direct_root, class_root,"
+    ),
+)
+GOVERNANCE_FLOOR_SOURCE_MUTANTS = (
+    (
+        b"pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+        b"pub(super) struct RepositoryGovernanceFloorSnapshotMutantV1 {",
+    ),
+    (b"decode_object(direct_object)?", b"decode_object(mutant_object)?"),
+    (
+        b"maestro.vnext.repository-governance-head-class-8.v1",
+        b"maestro.vnext.repository-governance-head-class-mutant.v1",
+    ),
+    (b"class_root,\n        authority,", b"[0; 32],\n        authority,"),
+)
 
 
 class ValidationError(RuntimeError):
@@ -268,19 +305,76 @@ def load(root: Path, relative: str) -> dict[str, Any]:
     return value
 
 
-def semantic_delta() -> dict[str, Any]:
-    delta = json.loads(STAGE2_DELTA_PATH.read_text(encoding="ascii"))
+def semantic_source_rows(source_overrides: dict[str, bytes] | None = None) -> list[dict[str, Any]]:
+    source_overrides = source_overrides or {}
+    require(
+        set(source_overrides).issubset(STAGE2_SEMANTIC_SOURCE_DECLARATIONS),
+        "Stage 2 semantic source override is undeclared",
+    )
     expected_rows = []
     for path, (owner, disposition, proof) in sorted(STAGE2_SEMANTIC_SOURCE_DECLARATIONS.items()):
         source = WORKSPACE / path
-        contents = source.read_text(encoding="utf-8", errors="ignore")
+        source_bytes = source_overrides[path] if path in source_overrides else source.read_bytes()
+        contents = source_bytes.decode("utf-8", errors="ignore")
         matched = [literal for literal in STAGE2_SEMANTIC_LITERAL_PATTERNS if literal in contents]
         require(bool(matched), f"Stage 2 semantic consumer has no literal: {path}")
-        digest = sha256_bytes(source.read_bytes())
+        required_literals = STAGE2_REQUIRED_LITERALS_BY_SOURCE.get(path, ())
+        missing = [literal for literal in required_literals if literal not in contents]
+        require(
+            not missing,
+            f"Stage 2 semantic consumer is missing exact literals: {path}: {', '.join(missing)}",
+        )
+        if path == "src/domain/vnext/authority/governance_floor.rs":
+            normalized = " ".join(contents.split())
+            require(
+                all(
+                    fragment in normalized
+                    for fragment in GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS
+                ),
+                "Stage 2 governance-floor source is missing causal persistence/current-head binding",
+            )
+        digest = sha256_bytes(source_bytes)
         expected_rows.append({
             "path": path, "resource_identity": f"sha256:{digest}", "worktree_sha256": digest,
             "matched_literals": matched, "owner": owner, "consumer_disposition": disposition, "proof": proof,
         })
+    return expected_rows
+
+
+def semantic_source_identity(rows: list[dict[str, Any]]) -> str:
+    canonical_rows = [
+        [
+            row["path"],
+            row["resource_identity"],
+            row["worktree_sha256"],
+            row["matched_literals"],
+            row["owner"],
+            row["consumer_disposition"],
+            row["proof"],
+        ]
+        for row in rows
+    ]
+    digest, _ = identity(["maestro.vnext.stage2.authority.semantic-source-closure.v1", canonical_rows])
+    return f"sha256:{digest}"
+
+
+def self_test_semantic_sources() -> None:
+    semantic_source_rows()
+    path = "src/domain/vnext/authority/governance_floor.rs"
+    source = (WORKSPACE / path).read_bytes()
+    for target, replacement in GOVERNANCE_FLOOR_SOURCE_MUTANTS:
+        require(target in source, f"governance-floor mutant target is absent: {target!r}")
+        mutated = source.replace(target, replacement)
+        try:
+            semantic_source_rows({path: mutated})
+        except ValidationError:
+            continue
+        raise ValidationError(f"governance-floor causal mutant was accepted: {target!r}")
+
+
+def semantic_delta() -> dict[str, Any]:
+    delta = json.loads(STAGE2_DELTA_PATH.read_text(encoding="ascii"))
+    expected_rows = semantic_source_rows()
     require(delta.get("consumer_rows") == expected_rows, "Stage 2 semantic-consumer delta rows drifted")
     encoded = encode([STAGE0_EFFECT_HOME_DOMAIN, delta["canonical_value"]])
     require(delta.get("identity") == f"sha256:{sha256_bytes(encoded)}", "Stage 2 semantic-consumer delta identity drifted")
@@ -523,8 +617,22 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--mutants", action="store_true")
     parser.add_argument("--emit", action="store_true")
+    parser.add_argument("--source-only", action="store_true")
+    parser.add_argument("--self-test-source-only", action="store_true")
     args = parser.parse_args()
     try:
+        if args.source_only:
+            rows = semantic_source_rows()
+            print(json.dumps(
+                {"consumer_count": len(rows), "source_identity": semantic_source_identity(rows)},
+                sort_keys=True,
+                separators=(",", ":"),
+            ))
+            return 0
+        if args.self_test_source_only:
+            self_test_semantic_sources()
+            print("Stage 2 Authority source-only mutants rejected")
+            return 0
         documents = load_documents(args.root)
         validate_semantics(documents)
         validate_physical(args.root)

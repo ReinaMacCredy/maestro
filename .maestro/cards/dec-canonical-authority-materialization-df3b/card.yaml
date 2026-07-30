@@ -1,0 +1,40 @@
+schema_version: maestro.card.v1
+id: dec-canonical-authority-materialization-df3b
+type: decision
+title: Canonical Authority materialization carriers for scheduling downgrade and repository Action admission
+status: locked
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-23T17:53:40.911Z
+updated_at: 2026-07-23T17:53:40.945Z
+extra:
+  locked_at: 2026-07-23T17:53:40.945Z
+  decision: |-
+    This additive materialization Decision incorporates without supersession every unaffected law of dec-canonical-planning-proposal-and-b5e8, dec-canonical-authority-transition-guard-618b, dec-canonical-authority-use-capacity-mode-1c5a and effective dec-close-lifecycle-to-action-totality-and-efa0. It changes no authority meaning, Action, owner, subject, public or persistent wire schema, catalog, Resource, Bundle or Release.
+
+    Authority defines two sealed internal non-static linear types. VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> is minted only inside the canonical Repository Store transaction for Planning-owned Action 105 PublishSchedulingPolicyBinding, whose fixed participants are Planning owner tag 12, Authority and Persistence. It supplements ordinary Action-105 authority and possession alone authorizes nothing. It binds the exact Mandate id, body hash, schema and version, carrier, nonce, not-before, expiry and unconsumed atom; repository, Store instance, Generation and Head; exact expected-old Binding and owner revision or state; current and candidate policy and evaluator commitments; complete diff, classifier result and revision, and Safety Floor hash and version; active Repository Governance Floor id, revision and requirement; request, payload, idempotency meaning and transaction-local invocation; Principal, human Binding and Session; Authority Context, snapshot, fence, state token, Trust Root, Epoch, revocation and trusted time; the complete normalized Authority witness and DebitMapV1 with every applicable root-use atom; the separate one-use Mandate atom; and the exact successor capacity state. Weakening and incomparable paths require it. Equivalent and strengthening paths publish through a distinct nominal no-downgrade path with no optional or default Mandate. Invalid, unknown or floor-violating paths reject.
+
+    Scheduling remains outside TransitionGuardKindV1. No Scheduling guard variant, persisted TransitionGuardEvaluationV1::Satisfied value, or Repository Contract floor, outgoing and incoming term formula may substitute for the dedicated b5e8 repository-governance, classifier and supplemental-Mandate path. SchedulingPolicyBindingV1 contains no downgrade_mandate_consumption_ref or other authority material; consumption exists only in Authority consumption, Receipt and Result records that reference the committed Binding.
+
+    AdmittedRepositoryActionBindingV1<'tx,K> is returned only by successful Authority admission inside that same canonical transaction, where sealed type-level K fixes the exact owner and Action at compile time. It binds the exact request and payload; ActionSpec, leaf, tag, owner and family; closed subject and subject basis; repository and Store instance, Generation, Head and snapshot; expected-old owner revision or state; fixed participant set; exact owner publication, write-set and output commitments; Authority basis, snapshot, fence, state token, currentness, revocation and trusted time; required Principal, Binding and Session; the complete normalized witness and DebitMapV1 root-use atoms; the supplemental Mandate atom when required; planned debit and consumption; planned Authorization Receipt, Action Result, successor capacity snapshot and idempotency mapping; and a unique transaction-local invocation or occurrence. Receipt, Result, successor and idempotency values are precommit commitments until the one commit makes their exact durable objects visible. Owner-specific sealed consumption rechecks every fact and makes commit impossible unless the value is consumed exactly once; drop or unconsumed aborts with zero writes and zero spend.
+
+    Both types have private fields, non-static transaction lifetimes, are not Send or Sync, and have no public or crate-wide constructor, Copy, Clone, Default, Debug, accessor or inspection API, runtime-tag downcast, serialization, canonical bytes, persistence, cache, log form, wire form, Resource identity, conversion or independently replayable durable bearer path. Raw constructors, digest accessors and non-consuming issue helpers are Authority-private or removed. Test adapters implement only sealed conformance ports. Stage 5 freezes these internal Authority seams; Stage 7 consumes the Scheduling path; Stage 8 replaces its raw Action-binding adapter and parity-proves each owner path.
+
+    One canonical commit atomically rechecks expected-old, currentness, policy, classifier, governance, complete Authority witness and DebitMap, Mandate and idempotency meaning; consumes the applicable debit and separate Mandate atom; and publishes the Planning Binding, Authority consumption, Authorization Receipt, Action Result, successor capacity state and idempotency result. Same key plus byte- and semantic-identical sealed K, request, payload, expected-old, candidate-output commitments and complete meaning returns only the exact committed Result without minting either type or spending again. The same key with any different bound semantic value conflicts with zero writes and zero spend. Invocation or occurrence is an unpredictable transaction-local anti-substitution nonce, excluded from durable and idempotency semantic identity, never persisted and destroyed with the transaction.
+
+    Proof covers every wrong, missing, zero, stale, expired or revoked bound value; equivalent and strengthening without Mandate spend; weakening and incomparable without the exact Mandate; singular-root or scalar-debit substitution; wrong-owner, output or write-set substitution; Send, Sync, escape and drop; two-call admission then publication; replay, crash and concurrency; absence of Option<String> consumption references and raw helpers in production; exact atomic success; zero-write refusal; and unchanged 145-Action, 444-row and public catalog closure.
+  preview: |-
+    Planning-owned action 105 or another sealed owner Action
+      -> canonical Repository Store transaction
+      -> Authority complete witness, DebitMap and ordinary authority
+      -> supplemental linear downgrade Mandate use only when required
+      -> sealed AdmittedRepositoryActionBindingV1<'tx,K>
+      -> one owner publication commit or zero-write refusal
+  rejected:
+  - 'Expose either type publicly or crate-wide, or expose raw digest constructors, accessors or non-consuming issue helpers: this permits fabrication, substitution and replay.'
+  - 'Represent downgrade authority as Option<String>, an optional or default Mandate, or a persisted Binding field: policy material would contain authority and equivalent or strengthening replacement could be blocked or overspent.'
+  - 'Bind one capacity root or scalar debit: effective 1c5a requires the complete normalized witness, DebitMapV1 and every applicable root-use atom.'
+  - 'Reuse a Contract transition guard, add a Scheduling TransitionGuardKindV1 variant, or accept persisted Satisfied evaluation: b5e8 deliberately owns a distinct repository-governance and classifier path.'
+  - 'Allow a token to be static, Send, Sync, cloneable, serializable, cached or restart-surviving: the precheck could escape its transaction and become replay authority.'
+  - 'Dispatch owners by runtime tag or downcast, or let an owner select its basis, output or write set: this defeats type-level ownership and fixed participant closure.'
+  - 'Split admission, Mandate spend and Binding publication into two calls or commits: a crash or race could consume without publication or publish without consumption.'
+  - 'Treat the supplemental downgrade use as ordinary authority, or require it for equivalent or strengthening replacement: both contradict the locked Scheduling policy law.'

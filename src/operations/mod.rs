@@ -58,3 +58,20 @@ pub(crate) fn verify_task(
 ) -> Result<task_verify::TaskVerifyResult> {
     task_verify::verify_task(paths, task_id, actor)
 }
+pub(crate) mod action;
+pub(crate) mod adapters;
+pub(crate) mod installation;
+pub(crate) mod migration;
+pub(crate) mod observation;
+pub(crate) mod orchestration;
+mod repository;
+
+#[allow(
+    unused_imports,
+    reason = "crate-owned governed Operation entrypoints consume the concrete cutover facade"
+)]
+pub(crate) use repository::{
+    CutoverGovernedOperationAssemblyV1, CutoverGovernedOperationPortV1,
+    RepositoryBootstrapBackupPortV1, RepositoryBootstrapCeremonyV1,
+    RepositoryBootstrapDescriptorPortV1,
+};

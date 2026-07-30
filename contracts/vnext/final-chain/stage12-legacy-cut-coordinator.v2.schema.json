@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.stage12-legacy-cut-coordinator.v2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "authority_scope",
+    "approved_packet_identity",
+    "approved_packet",
+    "protected_primary",
+    "source_git_binding",
+    "canonical_ancestry",
+    "clean_successor_preimage",
+    "candidate_ref",
+    "retained_inputs",
+    "cas_observation",
+    "effect_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "maestro.external.stage12-legacy-cut-coordinator.v2"
+    },
+    "authority_scope": {
+      "const": "one_expected_preimage_isolated_candidate_ref_cas_only"
+    },
+    "approved_packet_identity": {
+      "const": "sha256:171de6121c62f1c8af55e9e248da506ca96322cb5a588c75ee3762f7d8082472"
+    },
+    "approved_packet": {
+      "$ref": "#/$defs/approved_packet"
+    },
+    "protected_primary": {
+      "type": "object",
+      "required": [
+        "checkout_realpath",
+        "ref",
+        "commit",
+        "tree",
+        "boundary_identity",
+        "boundary",
+        "candidate_target"
+      ],
+      "properties": {
+        "checkout_realpath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "commit": {
+          "const": "13b9a5e9b5ec67e7086b0b21992a207d2e4cde94"
+        },
+        "tree": {
+          "const": "97e08a00f8a721318cda13241129a3b06651accc"
+        },
+        "boundary_identity": {
+          "const": "sha256:e5b4c0592b8cf373ea68fc5e0e3f84020c14f3f422c5779e8d4a423930aa6054"
+        },
+        "boundary": {
+          "$ref": "#/$defs/primary_boundary"
+        },
+        "candidate_target": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_git_binding": {
+      "type": "object",
+      "required": [
+        "identity",
+        "repository_realpath",
+        "git_common_dir_realpath",
+        "object_format",
+        "artifact"
+      ],
+      "properties": {
+        "identity": {
+          "const": "sha256:1099c62b3c9a333da68733a098ceece9e6754f28f1ea53f30b4b8dfcc6ae92d7"
+        },
+        "repository_realpath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "git_common_dir_realpath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "object_format": {
+          "const": "sha1"
+        },
+        "artifact": {
+          "$ref": "#/$defs/source_binding"
+        }
+      },
+      "additionalProperties": false
+    },
+    "canonical_ancestry": {
+      "const": [
+        {
+          "commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
+          "lane": "V7Design",
+          "tree": "bd2c08f87809d5093252943f2fd04a5be551aa13"
+        },
+        {
+          "commit": "66ba4bf8470ee63b81a77bddc0f9d83e6cc4961c",
+          "lane": "Stage11",
+          "tree": "f697a328de1b0271bcc266f9cb12a7d1c9ef24a3"
+        },
+        {
+          "commit": "0c27ccfe2c939b50ac2f99a9349d0aa56d065ff7",
+          "lane": "MainIntegrationStage11Wiring",
+          "tree": "4ed2c96e071532d275088d9b8089cccaebec0de9"
+        },
+        {
+          "commit": "fc190ce78d940475073b0451c349f52016380d3c",
+          "lane": "AuthorityOwner",
+          "tree": "e32bcc029e96cfbcb0f805527c19bc1efbf964af"
+        },
+        {
+          "commit": "73e2d226f51ac55ee9a92b411fade9b7737fa567",
+          "lane": "Stage12Product",
+          "tree": "9bca7075c5255b9bb3eb757693c7f13b8d294b19"
+        },
+        {
+          "commit": "acd2a469d058f5a17162d3f0a5a44fe394cf6676",
+          "lane": "AuthorityOwnerModulePlacementCorrection",
+          "tree": "b97282eadfc10ad552cdc5b46bef7b62454367ef"
+        },
+        {
+          "commit": "e03d21b64995a20cfda3e90d706048ca79038f30",
+          "lane": "Stage12ProductAffectedSuffixRebind",
+          "tree": "600171763b9e782d494fa0c04ba5de9a5d7fa5a4"
+        }
+      ]
+    },
+    "clean_successor_preimage": {
+      "type": "object",
+      "required": [
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "commit": {
+          "const": "e69295329c29c1c75901315a56e947b85b7a69cf"
+        },
+        "tree": {
+          "const": "cd36cbb2963a264cb67a834bb38c709c0ea144ae"
+        }
+      },
+      "additionalProperties": false
+    },
+    "candidate_ref": {
+      "type": "object",
+      "required": [
+        "repository_realpath",
+        "git_common_dir_realpath",
+        "ref",
+        "expected_preimage",
+        "declared_postimage",
+        "declared_postimage_parent",
+        "ref_update_algorithm",
+        "crash_states"
+      ],
+      "properties": {
+        "repository_realpath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "git_common_dir_realpath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "expected_preimage": {
+          "$ref": "#/$defs/identity"
+        },
+        "declared_postimage": {
+          "$ref": "#/$defs/identity"
+        },
+        "declared_postimage_parent": {
+          "$ref": "#/$defs/sha1"
+        },
+        "ref_update_algorithm": {
+          "const": "git-update-ref-no-deref-new-old"
+        },
+        "crash_states": {
+          "const": [
+            "exact_expected_preimage",
+            "exact_declared_postimage"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "retained_inputs": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/source_cases"
+        },
+        {
+          "$ref": "#/$defs/sightings"
+        },
+        {
+          "$ref": "#/$defs/classifications"
+        },
+        {
+          "$ref": "#/$defs/overlaps"
+        },
+        {
+          "$ref": "#/$defs/loss"
+        },
+        {
+          "$ref": "#/$defs/quarantine"
+        },
+        {
+          "$ref": "#/$defs/epoch"
+        },
+        {
+          "$ref": "#/$defs/activation"
+        },
+        {
+          "$ref": "#/$defs/parity"
+        },
+        {
+          "$ref": "#/$defs/consumer_zero"
+        },
+        {
+          "$ref": "#/$defs/reader_zero"
+        },
+        {
+          "$ref": "#/$defs/hold_zero"
+        },
+        {
+          "$ref": "#/$defs/rollback"
+        },
+        {
+          "$ref": "#/$defs/namespace"
+        },
+        {
+          "$ref": "#/$defs/release"
+        },
+        {
+          "$ref": "#/$defs/proof_registry"
+        }
+      ],
+      "items": false
+    },
+    "cas_observation": {
+      "type": "object",
+      "required": [
+        "state",
+        "observed_commit",
+        "observed_tree"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not_executed",
+            "exact_expected_preimage",
+            "exact_declared_postimage"
+          ]
+        },
+        "observed_commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "observed_tree": {
+          "$ref": "#/$defs/sha1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "effect_boundary": {
+      "type": "object",
+      "required": [
+        "primary_never_target",
+        "authority_guard_mint_or_reconstruction",
+        "live_product_path_pruning",
+        "adapter_activation",
+        "installation",
+        "publication",
+        "release",
+        "final_runner_candidate_ref_write"
+      ],
+      "properties": {
+        "primary_never_target": {
+          "const": true
+        },
+        "authority_guard_mint_or_reconstruction": {
+          "const": false
+        },
+        "live_product_path_pruning": {
+          "const": false
+        },
+        "adapter_activation": {
+          "const": false
+        },
+        "installation": {
+          "const": false
+        },
+        "publication": {
+          "const": false
+        },
+        "release": {
+          "const": false
+        },
+        "final_runner_candidate_ref_write": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "tree": {
+          "$ref": "#/$defs/sha1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bound_file": {
+      "type": "object",
+      "required": [
+        "path",
+        "byte_length",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^control/stage12/(?!.*\\\\)(?!.*\\.\\.).+$"
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
+    },
+    "approved_packet": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bound_file"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "control/stage12/packet/replacement-build-approval-packet.v7.json"
+            },
+            "byte_length": {
+              "const": 10927
+            },
+            "sha256": {
+              "const": "sha256:0c525951a49c7406d1008c64a3ad328505777c09cb7388b11a5db8634c3f4f65"
+            }
+          }
+        }
+      ]
+    },
+    "primary_boundary": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bound_file"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "control/stage12/packet/primary-dirty-boundary.v7.json"
+            },
+            "byte_length": {
+              "const": 1126
+            },
+            "sha256": {
+              "const": "sha256:4f4ec8207a5f5824c9113cca1a3b04cf390f2bf731f1188e399ba56d8ad6c26a"
+            }
+          }
+        }
+      ]
+    },
+    "source_binding": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/bound_file"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "control/stage12/packet/source-git-control-binding.v7.json"
+            },
+            "byte_length": {
+              "const": 1706
+            },
+            "sha256": {
+              "const": "sha256:7d73e0746497566712a1c6782c8d3435627aa2c7b997e59ceaea1b32756e792d"
+            }
+          }
+        }
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "required": [
+        "kind",
+        "state",
+        "identity",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence": {
+          "$ref": "#/$defs/bound_file"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mismatch_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_cases": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "legacy_source_case_manifest_v3"
+            },
+            "state": {
+              "const": "current_complete"
+            }
+          }
+        }
+      ]
+    },
+    "sightings": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "stage12_sighting_manifest_v2"
+            },
+            "state": {
+              "const": "current_complete"
+            }
+          }
+        }
+      ]
+    },
+    "classifications": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "migration_classification_manifest_v3"
+            },
+            "state": {
+              "const": "closed"
+            }
+          }
+        }
+      ]
+    },
+    "overlaps": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "declared_overlap_manifest_v2"
+            },
+            "state": {
+              "const": "closed_current"
+            }
+          }
+        }
+      ]
+    },
+    "loss": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "unavailable_preexisting_loss_manifest_v3"
+            },
+            "state": {
+              "const": "closed_current"
+            }
+          }
+        }
+      ]
+    },
+    "quarantine": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "sealed_quarantine_manifest_v3"
+            },
+            "state": {
+              "const": "sealed_current"
+            }
+          }
+        }
+      ]
+    },
+    "epoch": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "legacy_quarantine_epoch_v3"
+            },
+            "state": {
+              "const": "sealed_current"
+            }
+          }
+        }
+      ]
+    },
+    "activation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "replacement_activation"
+            },
+            "state": {
+              "const": "active_current"
+            }
+          }
+        }
+      ]
+    },
+    "parity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "adapter_parity"
+            },
+            "state": {
+              "const": "exact"
+            }
+          }
+        }
+      ]
+    },
+    "consumer_zero": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "consumer_manifest"
+            },
+            "state": {
+              "const": "zero_current"
+            },
+            "count": {
+              "const": 0
+            }
+          },
+          "required": [
+            "count"
+          ]
+        }
+      ]
+    },
+    "reader_zero": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "reader_manifest"
+            },
+            "state": {
+              "const": "zero_current"
+            },
+            "count": {
+              "const": 0
+            }
+          },
+          "required": [
+            "count"
+          ]
+        }
+      ]
+    },
+    "hold_zero": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "hold_manifest"
+            },
+            "state": {
+              "const": "zero_current"
+            },
+            "count": {
+              "const": 0
+            }
+          },
+          "required": [
+            "count"
+          ]
+        }
+      ]
+    },
+    "rollback": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "rollback_rehearsal"
+            },
+            "state": {
+              "const": "rehearsed_current"
+            }
+          }
+        }
+      ]
+    },
+    "namespace": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "namespace_promotion_manifest"
+            },
+            "state": {
+              "const": "exact"
+            },
+            "entry_count": {
+              "const": 210
+            },
+            "mismatch_count": {
+              "const": 0
+            }
+          },
+          "required": [
+            "entry_count",
+            "mismatch_count"
+          ]
+        }
+      ]
+    },
+    "release": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "release_currentness"
+            },
+            "state": {
+              "const": "current"
+            }
+          }
+        }
+      ]
+    },
+    "proof_registry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "proof_registry_currentness"
+            },
+            "state": {
+              "const": "current"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -17,7 +17,7 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 | Layer | Path | Owns |
 |---|---|---|
 | foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, descriptor-anchored Store filesystem access, id-reservation markers, hashing, slugs, time, managed blocks, deterministic bounded CBOR, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; vNext identity, Contract, canonical Store persistence, execution, distribution, migration, Integration, Orchestration, and capability contracts live under `domain::vnext` |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; canonical identity, Contract, Store persistence, execution, distribution, migration, Integration, Orchestration, and capability contracts live directly under their `domain::*` owner facades |
 | operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate, Memory suggestion/scorer/promotion/maintenance |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
@@ -31,9 +31,9 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 - `deterministic_cbor` — bounded closed CBOR subset and canonical shortest-form validation for vNext content identities — `deterministic_cbor.rs`
 - `secure_fs` — descriptor-anchored, owner/mode/link-checked immutable Store object publication, exact-byte reads, and digest-addressed crash-recoverable removal that fail closed on root substitution or surviving hard-link aliases — `secure_fs.rs`
 
-### vNext foundation boundary
+### Canonical refoundation boundary
 
-`src/domain/vnext/` owns the typed deterministic vNext foundation. Stage 0
+`src/domain/` owns the typed deterministic refoundation. Stage 0
 contracts remain inert: importing them does not publish a Contract Root,
 activate runtime behavior, migrate state, or grant authority. `identity/` owns
 the one domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
@@ -42,6 +42,69 @@ Handoff, and proof contracts. `evidence/` owns Claim and SubmissionClaimSet
 semantics. The remaining Stage 0 children
 hold frozen literal contracts for later stages and contain no adapter-private
 state or write path.
+
+#### vNext fanout history and canonical promotion
+
+The certified Stage-5 commit is the immutable predecessor of one externally
+integrated fanout base. `tools/vnext_contracts/fanout/fanout-base.v1.json`
+freezes the certified commit, tree, publication pointer, release, proof-plan,
+and workspace-snapshot identities; the external-orchestrator authority and
+scheduling policy; every shared path/status owned by that orchestrator; and
+the non-overlapping Stage 6-12 write prefixes, fanout-added mutable seeds, and
+exact inherited mutable seeds. The fanout base may change only that exact
+orchestrator-owned set plus every fanout-added mutable seed. Its orchestrator
+additions include the canonical tracked Feature `design.md` and both successor
+Decision `card.yaml` inputs at their deterministic `.maestro/cards/...` paths.
+Each must be a Git `100644` blob with the exact bound byte length and SHA-256;
+missing, substituted, relocated, or mode-changed input bytes fail closed.
+
+An inherited seed must remain byte- and mode-identical between certified Stage
+5 and the fanout base; only its named Stage owner may later modify it, with Git
+status `M` and unchanged ordinary-blob mode. Stage 8 owns exactly
+`authority/protected_diagnostic_envelope_stage8_seed.rs`; Stage 9 owns exactly
+`persistence/mod.rs` and
+`persistence/protected_diagnostic_stage9_seed.rs`; Stage 10 owns exactly
+`integration/mod.rs` and `integration/trusted_host_diagnostic_stage10_seed.rs`
+for the production trusted-host acquisition/presentation adapter and Stage 5/8
+parity proof. Those exact exceptions override their shared Authority,
+Persistence, or Integration deny prefix only for the named owner; every sibling
+path remains frozen. Worker candidates cannot change other shared files,
+predecessor contracts, an existing non-seed file, object type, or executable
+policy.
+
+Stage 12 promoted the reviewed 210-file Rust surface into the direct
+`domain::*`, `interfaces::*`, and `operations::*` owner facades and removed the
+three temporary source roots. The exact promotion manifest binds 186 Domain,
+8 Interface, and 16 Operation source preimages, their canonical destinations,
+and the ten facade collisions. This source move does not authorize legacy
+Skill, `next`, or Harness pruning: those resources remain live until their
+byte-total replacement, consumer, sealed-reader, retention, and rollback
+closures are independently proven.
+
+The external validator authenticates the manifest blob from the fanout commit,
+requires the fanout base to be the sole direct child of the certified commit,
+and preflights the resolved Git common directory and object store before reading
+objects. Replacement refs, optional locks, lazy fetch, inherited Git controls,
+global/system config, grafts, shallow metadata, alternates, promisor packs and
+config, symlinked or hardlinked object storage, and external config includes
+fail closed. Every loose object is decompressed and rehashed against its object
+path, every pack/index pair is strictly verified, and each commit, tree, or blob
+read is rehashed before use;
+ordinary linked worktrees remain valid because their local common object store
+is authenticated explicitly. Parentage comes only from raw commit objects, and
+the fanout-to-comparison walk is capped to the exact expected Stage count rather
+than trusting graft-sensitive revision-graph accelerators. The validator checks
+every authenticated tree for control names, reserved `.git` components, and
+case/Unicode filesystem aliases before validating the complete
+certified-to-fanout delta, every canonical comparison checkpoint, and the
+candidate's own direct-child diff. This prevents a valid final-stage diff from
+hiding an earlier shared, frozen, cross-stage, added, deleted, or aliased path.
+
+Certified Stage-5 readback binds the exact commit, tree, path set, blob bytes,
+and Git `100644`/`100755` mode with the same replacement/lazy-fetch and config
+isolation. Checkout write bits are intentionally not a proof input because they
+are platform and checkout-policy dependent; executable semantics come from the
+certified Git tree and are compared with the live release files.
 
 Stage 0 generators under `tools/vnext_contracts/` produce the checked-in
 candidate artifacts in `contracts/vnext/`. Python and Ruby independently encode
@@ -165,6 +228,50 @@ mutation edge. Persistence enforces physical closure, CAS, idempotency, token
 allocation, and durability without importing Authority semantics. Inactive
 restore preserves immutable history and replay facts but activates no bearer or
 Authority currentness.
+
+Stage 5 also freezes a non-Action protected-continuity diagnostic seam without
+making a production authentication claim. Integration exposes production-neutral,
+owner-subtree-sealed connection, attestation, and presentation ports;
+Persistence exposes a production-neutral owner-subtree-sealed current-view
+provider and lifetime-bound anchor; and Authority exposes the sole fixed
+diagnostic entry. Authority passes its closed typed admission, attempt,
+generation, reason, carrier-state, freshness, remediation, witness, Store-view,
+Authority-snapshot, and attestation references to one concrete owner-local
+Stage-8 assembler seed. Authority independently re-encodes and exact-validates
+the result into a private fixed-capacity carrier; there is no generic builder,
+unbounded adapter byte return, or adapter-selected digest. Both final currentness
+rechecks must pass before Authority releases the carrier. Concrete Stage-5 host,
+Store-currentness, and assembler implementations remain `cfg(test)` fixtures;
+the owner-local Stage-8, Stage-9, and Stage-10 seed modules are the only nominal
+later implementation routes.
+The Authority facade first establishes one lifetime-bound active Store-view
+anchor, then mints and consumes the challenge and invocation inside that
+unchanged view. It field-by-field joins exactly one independently attested host
+identity, role, assurance, Binding, and Session to canonical Authority facts;
+Authority recomputes one versioned attestation commitment from every presented
+dimension, uses that exact commitment as the witness carrier, and requires the
+live connection to return the same commitment at final recheck. No caller-supplied
+composite commitment participates. Challenge, attestation, witness, guard, and
+prepared envelope are move-only, view-bound, and non-escaping;
+only one bounded reference envelope may be returned after final host and
+Persistence currentness rechecks.
+Every refusal is coarse and zero-write. No later adapter can bypass Authority or
+replace the stable Store-view interval with a detached digest. `RepositoryAuthenticatedHumanV1`,
+`SessionV1::request_commitment`, and the public host-context reference are not
+authentication inputs. Production entry remains unreachable until Stages 8,
+9, and 10 supply their separately owned envelope, Store-currentness, and host
+adapters behind these nominal ports. Replacement Stage-5 proof therefore has
+the exact closed claim
+`test_adapter_only`; additive or nested production-host-authenticity and
+production-restore-currentness claims are rejected.
+
+The Repository Action boundary is total without pre-authorizing future owners.
+The historical 38 Stage-5-admitted leaves retain their specialized carriers;
+the exact tags 94–145 retain their frozen descriptor and owner metadata but
+dispatch as typed `OwnerUnavailable` with no basis, capacity mapping, debit,
+write, or mutation path. Later owner stages may add only their specialized
+carriers behind that closed owner-local boundary; they cannot change the frozen
+public Action schemas.
 
 Stage 3 adds the canonical Repository-domain Work, Step, Design, Decision,
 Evidence Claim, and Contract publication kernels. Work owns its identity,

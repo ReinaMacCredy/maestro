@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import copy
+import argparse
 import hashlib
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
@@ -261,14 +263,30 @@ def materialize_mutant(root: Path, value: dict[str, Any]) -> None:
 
 
 def main() -> int:
-    env = os.environ.copy()
-    if not env.get("MAESTRO_AUTHORITATIVE_SOURCE"):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    authoritative = {
+        key: value
+        for key, value in os.environ.items()
+        if key.startswith("MAESTRO_AUTHORITATIVE_")
+    }
+    if not authoritative.get("MAESTRO_AUTHORITATIVE_SOURCE"):
         raise SystemExit("MAESTRO_AUTHORITATIVE_SOURCE is required")
-    run(["python3", str(TOOLS / "build.py"), "--check"], env)
-    validation = json.loads(run(["python3", str(TOOLS / "validate.py")], env))
+    env = {
+        **authoritative,
+        "HOME": tempfile.gettempdir(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "RUBYOPT": "",
+    }
+    run([sys.executable, str(TOOLS / "build.py"), "--check"], env)
+    validation = json.loads(run([sys.executable, str(TOOLS / "validate.py")], env))
     ruby = json.loads(
         run(
-            ["ruby", str(TOOLS / "encode.rb"), str(ARTIFACT / "public-identity-closure-input.v1.json")],
+            ["/usr/bin/ruby", str(TOOLS / "encode.rb"), str(ARTIFACT / "public-identity-closure-input.v1.json")],
             env,
         )
     )
@@ -287,7 +305,7 @@ def main() -> int:
             mutate(value)
             materialize_mutant(temp_root, value)
             result = subprocess.run(
-                ["python3", str(TOOLS / "validate.py")],
+                [sys.executable, str(TOOLS / "validate.py")],
                 text=True,
                 capture_output=True,
                 env={**env, "PUBLIC_IDENTITY_ARTIFACT_ROOT": str(temp_root)},
@@ -312,9 +330,13 @@ def main() -> int:
         "current_live_equality": validation["current_live_equality"],
         "stage11_recensus_required": validation["stage11_recensus_required"],
     }
-    (ARTIFACT / "encoder-receipt.v1.json").write_text(
-        json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    receipt_bytes = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+    receipt_path = ARTIFACT / "encoder-receipt.v1.json"
+    if args.check:
+        if not receipt_path.is_file() or receipt_path.read_bytes() != receipt_bytes:
+            raise SystemExit("public-identity encoder receipt drifted or is missing")
+    else:
+        receipt_path.write_bytes(receipt_bytes)
     print(json.dumps(receipt, sort_keys=True))
     return 0
 

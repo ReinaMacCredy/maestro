@@ -1,10 +1,10 @@
-use maestro::domain::vnext::design::{
+use maestro::domain::design::{
     AppendixRootV1, DesignAppendEligibilityV1, DesignClosureRequirementSnapshotV1,
     DesignReconciliationSnapshotV1, DesignSlotDispositionV1, DesignSlotEntryV1, DesignSlotIdV1,
     DesignSlotManifestV1, DesignSourceBindingV1, DesignSourceClassificationV1, DesignSourceKindV1,
     DesignStreamV1, DesignV1Error, ExactRecordRefV1, WorkIdV1,
 };
-use maestro::domain::vnext::identity::{ContractRootIdV1, DecisionClosureIdV1, StoreDomainIdV1};
+use maestro::domain::identity::{ContractRootIdV1, DecisionClosureIdV1, StoreDomainIdV1};
 
 fn exact(seed: u8) -> ExactRecordRefV1 {
     ExactRecordRefV1::from_digest([seed; 32])
@@ -92,7 +92,7 @@ fn revision_manifest_is_total_and_appendices_cannot_close_missing_slots() {
         ],
     )
     .expect("total manifest with explicit missing disposition");
-    let revision = maestro::domain::vnext::design::DesignRevisionV1::new(
+    let revision = maestro::domain::design::DesignRevisionV1::new(
         repository(),
         work(),
         None,
@@ -136,7 +136,7 @@ fn design_stream_append_is_cas_guarded_immutable_and_terminal_closed() {
         )],
     )
     .expect("manifest");
-    let genesis = maestro::domain::vnext::design::DesignRevisionV1::new(
+    let genesis = maestro::domain::design::DesignRevisionV1::new(
         repository(),
         work(),
         None,
@@ -159,7 +159,7 @@ fn design_stream_append_is_cas_guarded_immutable_and_terminal_closed() {
         )],
     )
     .expect("manifest");
-    let second = maestro::domain::vnext::design::DesignRevisionV1::new(
+    let second = maestro::domain::design::DesignRevisionV1::new(
         repository(),
         work(),
         Some(*genesis.revision_id()),
@@ -212,7 +212,7 @@ fn reconciliation_is_pure_and_only_clean_exact_snapshots_feed_finalization() {
         )],
     )
     .expect("manifest");
-    let revision = maestro::domain::vnext::design::DesignRevisionV1::new(
+    let revision = maestro::domain::design::DesignRevisionV1::new(
         repository(),
         work(),
         None,

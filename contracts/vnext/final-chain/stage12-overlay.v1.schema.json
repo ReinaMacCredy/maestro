@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-stage12-overlay.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage11_commit",
+    "reviewed_candidate_commit",
+    "reviewed_candidate_tree",
+    "stage12_commit",
+    "stage12_tree",
+    "entry_count",
+    "byte_length",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "maestro.external.vnext-final-stage12-overlay.v1"
+    },
+    "stage11_commit": {
+      "$ref": "#/$defs/sha1"
+    },
+    "reviewed_candidate_commit": {
+      "$ref": "#/$defs/sha1"
+    },
+    "reviewed_candidate_tree": {
+      "$ref": "#/$defs/sha1"
+    },
+    "stage12_commit": {
+      "$ref": "#/$defs/sha1"
+    },
+    "stage12_tree": {
+      "$ref": "#/$defs/sha1"
+    },
+    "entry_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "byte_length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "status",
+          "path",
+          "mode",
+          "byte_length",
+          "sha256"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "A",
+              "M"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(?!\\.)(?!.*\\/\\.)(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"
+          },
+          "mode": {
+            "enum": [
+              "100644",
+              "100755"
+            ]
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  },
+  "additionalProperties": false
+}

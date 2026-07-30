@@ -1,4 +1,4 @@
-use maestro::domain::vnext::authority::{
+use maestro::domain::authority::{
     ActionAuthorityBasisKindV1, ActionAuthorityBasisV1, ActionOutcomeV1, ActionRequestIdV1,
     ActionResultError, ActionResultV1, AuthorityContextIdV1, AuthorityContextKindV1,
     AuthorityContextV1, AuthorityContinuityManifestV1, AuthoritySnapshotV1, AuthorityTagError,
@@ -69,7 +69,7 @@ fn capacity_and_bootstrap_catalogs_are_closed_and_withdrawal_never_refills() {
     assert_eq!(spent.remaining(), 1);
     assert_eq!(
         spent.advance_spent(1, 0),
-        Err(maestro::domain::vnext::authority::CapacityError::NonMonotonicSpend)
+        Err(maestro::domain::authority::CapacityError::NonMonotonicSpend)
     );
 }
 
@@ -273,7 +273,7 @@ fn delegation_rejects_scope_widening_and_ancestry_self_targeting() {
         validity: HalfOpenValidityV1::new(20, 90).unwrap(),
         delegation_depth_remaining: 2,
         authority_use_constraint: AuthorityUseConstraintV1::BoundedBy(
-            maestro::domain::vnext::authority::CapacityRootIdV1::derive("root").unwrap(),
+            maestro::domain::authority::CapacityRootIdV1::derive("root").unwrap(),
         ),
     }
     .validate()

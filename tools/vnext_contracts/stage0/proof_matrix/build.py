@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -164,11 +165,27 @@ def run(command: list[str], env: dict[str, str] | None = None) -> None:
         capture_output=True,
         text=True,
         check=False,
-        env=env,
+        env=env or proof_environment(),
     )
     if process.returncode != 0:
         detail = process.stderr.strip() or process.stdout.strip() or "no diagnostic"
         raise ProofError(f"proof validator failed ({' '.join(command)}): {detail}")
+
+
+def proof_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
+    env = {
+        "HOME": tempfile.gettempdir(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYOPT": "",
+        "RUBYLIB": "",
+    }
+    if extra:
+        env.update(extra)
+    return env
 
 
 def result_hash(
@@ -372,15 +389,15 @@ def source_card_paths() -> tuple[dict[str, Path], list[str]]:
     return {path: card_root / Path(path).name for path in logical}, logical
 
 
-def build_manifest() -> tuple[dict[str, Any], bytes]:
+def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
     python = sys.executable
     external_validator = "tools/vnext_contracts/stage0/verify_input_bindings.py"
-    run([python, external_validator])
+    run([python, external_validator], proof_environment())
     bindings = load("contracts/vnext/stage0/input-bindings.json")
-    authoritative_env = {
-        **os.environ,
-        "MAESTRO_AUTHORITATIVE_SOURCE": bindings["source_repository_realpath"],
-    }
+    authoritative_env = proof_environment(
+        {"MAESTRO_AUTHORITATIVE_SOURCE": bindings["source_repository_realpath"]}
+    )
+    receipt_check = ["--check"] if check else []
 
     decision = load(DECISION)
     records = decision["records"]
@@ -453,7 +470,7 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
             ],
             semantic_counts=decision_counts,
             assertions={"decision_closure_id": decision["identity"]},
-            commands=[[python, "tools/vnext_contracts/stage0/decision_closure/verify.py"]],
+            commands=[[python, "tools/vnext_contracts/stage0/decision_closure/verify.py", *receipt_check]],
         )
     )
     predecessor_validators = [
@@ -581,7 +598,7 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
                 "closure_id": public_identity["closure_id"],
                 "manifest_id": public_identity["manifest"]["manifest_id"],
             },
-            commands=[[python, "tools/vnext_contracts/stage0/public_identity/verify.py"]],
+            commands=[[python, "tools/vnext_contracts/stage0/public_identity/verify.py", *receipt_check]],
             command_env=authoritative_env,
         )
     )
@@ -603,7 +620,7 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
                 "vector_count": len(submission["vectors"]),
             },
             assertions={"schema_id": submission["schema_id"]},
-            commands=[["ruby", "tools/vnext_contracts/stage0/submission_claim/verify.rb"]],
+            commands=[["/usr/bin/ruby", "tools/vnext_contracts/stage0/submission_claim/verify.rb"]],
         )
     )
     dispatch_paths = sorted(
@@ -627,7 +644,12 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
                 "semantic_mutant_count": len(dispatch["mutants"]["cases"]),
             },
             assertions={"runtime_activated": dispatch["runtime_activated"]},
-            commands=[[python, "tools/vnext_contracts/stage0/dispatch_cutover/validate.py", "--mutant-suite"]],
+            commands=[[
+                python,
+                "tools/vnext_contracts/stage0/dispatch_cutover/validate.py",
+                "--mutant-suite",
+                *receipt_check,
+            ]],
         )
     )
     effect_paths = sorted(
@@ -836,7 +858,7 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
 
 def execute(check: bool) -> None:
     try:
-        document, encoded = build_manifest()
+        document, encoded = build_manifest(check=check)
     except (KeyError, IndexError, OSError, ProofError, TypeError, ValueError) as error:
         print(json.dumps({"status": "blocked", "reason": str(error)}, sort_keys=True))
         raise SystemExit(2) from error

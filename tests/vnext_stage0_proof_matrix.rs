@@ -1,4 +1,4 @@
-use maestro::domain::vnext::contract::proof::{
+use maestro::domain::contract::proof::{
     ProofArtifactHashV1, Stage0ProofError, Stage0ProofGateKindV1, Stage0ProofGateV1,
     Stage0ProofManifestV1, Stage0ProofOutcomeV1, Stage0ProofResultV1,
     VERIFIED_NON_PROMOTING_RESULT_CLASS,

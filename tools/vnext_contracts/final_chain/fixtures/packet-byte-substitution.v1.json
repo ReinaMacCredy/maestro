@@ -1,0 +1,1 @@
+{"case":"packet-byte-substitution","expected":"refuse","mutation":{"file":"fanout-manifest.v4.json","sha256":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}}

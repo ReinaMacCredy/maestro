@@ -1,0 +1,50 @@
+schema_version: maestro.card.v1
+id: dec-canonical-trusted-host-protected-1fbc
+type: decision
+title: Canonical trusted-host protected diagnostic attestation and linearization
+status: superseded
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-21T23:56:23.958Z
+updated_at: 2026-07-21T23:56:23.995Z
+description: Close the authenticated-host provenance, active-Store restore-ABA and cross-domain currentness gaps without changing the frozen pure-read diagnostic classification or any public catalog.
+extra:
+  locked_at: 2026-07-21T23:56:23.995Z
+  decision: |-
+    This successor incorporates every unaffected disclosure, nondisclosure, trusted-time, validator-revision, zero-write, non-oracle, race, allowlist and adapter-parity clause of dec-canonical-non-action-protected-90a9 and its incorporated predecessor. It replaces only acquisition and linearization of the authenticated-host input. Protected continuity inspection remains a pure read and authentication is necessary but never sufficient.
+
+    Integration owns real host authentication acquisition and the live authenticated connection lifecycle. It may mint one internal TrustedHostDiagnosticAttestationV1 only inside a sealed adapter continuation from a supported host runtime concrete, live, already-authenticated connection. Authentication completes before the serialized Store read; minting and validation perform no network, credential, filesystem or provider I/O inside that read. The attestation carries an exclusive lifetime-bound borrow of the same connection and binds the exact host provider/profile and revision, process and connection incarnation, authenticated issuer/realm/audience and subject, current role and assurance, authentication-event identity, host session/currentness and revocation revision, freshness interval, channel or carrier commitment, one internally allocated collision-resistant invocation nonce and the exact protected-subject commitment. Raw credentials and bearer secrets never enter it.
+
+    The attestation has private fields and no public or crate-wide scalar constructor, Copy, Clone, Default, serialization, canonical bytes, persistence, wire form, cache, log representation, conversion into another authority type or replay path. Authority consumes it by value. A linear connection-owned issuance and consumption cell, not a nonzero identifier check, makes the challenge and invocation one-shot on both success and failure. Disconnect, reconnect, reauthentication, process restart, connection or channel replacement, role downgrade, revocation or host-currentness ABA invalidates it. RepositoryAuthenticatedHumanV1, request_commitment, caller bytes, hashes, Receipts, messages, OS identity, environment, TTY state and prior attestations cannot substitute.
+
+    The public authenticated_host_connection_context_ref remains an untrusted routing and equality hint only. It can be compared with the ambient inbound connection capability after that connection is independently authenticated, but cannot select, construct, recover or validate a capability by itself. An adapter without a supported out-of-band authenticated host connection returns the ordinary coarse unavailable or unauthorized result. There is no UID, environment, prior-session, context-string or test fallback in production.
+
+    Persistence supplies only Authority with the exact current read-view anchors: StoreStateV1::Active and its state revision, process-local Store-instance binding, Store Domain and role, protected activation-carrier identity/token/revision, activation attempt and destination seal, current restore or activation incarnation, active Head identity and revision, Generation identity and ordinal, publication clock and Contract Root. Restore, import, copied database bytes, path equality, matching Domain/Head/Generation or a RestoreActivationReceiptV1 never imports currentness. Every protected activation has a fresh non-ABA incarnation. Stage 9 owns the production activation, restore and currentness provider; Stage 5 freezes only its sealed port and test fixture.
+
+    Authority alone derives canonical Principal, Binding, Session, Context, protected subject membership, Store facts, Authority root and snapshot, manifest, closure, guard object, state token, revocation-set identity and revision, Trust Root, Epoch, current carrier procedure, trusted-time policy/source/acquisition freshness, witness carrier and validator revision from one serialized current Store view. Integration supplies only opaque host-native evidence. Authority accepts exactly one live Principal/Binding/Session match to the attested host identity, role and assurance; zero, multiple, first, latest, responder-by-convenience or merely human-capable matches refuse. It equality-joins every derived dimension with the attestation through a versioned length-delimited commitment; raw concatenation, caller commitments and nonzero scalar checks are insufficient.
+
+    Authority keeps the same serialized Store view open from challenge creation through attestation consumption, guard derivation, allowlisted envelope construction and the final process-local host-currentness recheck. It first requires Active state, then mints fresh nonzero collision-resistant challenge and invocation identities inside the view. The challenge binds the exact closed tagged protected subject with owner, domain or Context, kind, identity and revision; Store instance/state/activation/restore/Head/Generation/publication/Contract anchors; Authority snapshot/Epoch/fence/state-token/revocation/trusted-time/validator anchors; and exact witness carrier. Neither challenge nor invocation can escape the view. Integration holds the same exclusive live connection while answering without I/O, and Authority consumes both exactly once. Before any protected bytes leave the critical section, Integration rechecks the identical monotonic host authentication/currentness/revocation and connection-incarnation fences under that same borrow. Any unavailable or changed check, carrier or activation ABA, connection replacement, revocation, turnover, restore or currentness race discards the envelope and returns the same bounded refusal. This proves a stable interval, not a cross-domain transaction or durable authority.
+
+    Only the sealed Stage-8 diagnostic-envelope builder may use the guard inside that unchanged view, and it may construct only the complete locked allowlisted snapshot-relative non-bearer envelope. No caller-selected generic return type exists. No guard, attestation, challenge, witness, fence, callback, continuation, current projection, protected lookup capability or delayed resolution escapes. Authentication and operator eligibility are evaluated before protected subject resolution. Unknown, forbidden, stale, malformed, nonexistent and cross-domain subjects have the same externally observable ordinary response class, shape, bounded work class, logging and metrics behavior; no protected identifier, topology, count, carrier commitment, secret or credential appears in errors, logs, traces or panic text.
+
+    Stage 5 freezes the Authority validation seam, sealed Integration and Persistence ports, compile-time architecture guards, direct race and negative mutants, and cfg(test)-only host and Store adapters. Its replacement receipt is explicitly test_adapter_only and certifies neither production host authenticity nor production restore currentness. The production protected diagnostic entry remains unreachable and fails closed. Stage 8 owns the complete diagnostic envelope behavior and conformance builder; Stage 9 supplies the real active Store, restore, activation-carrier and currentness facts; Stage 10 supplies the real authenticated-host adapter and host descriptors. Stage 10 must run the identical conformance and negative suite against the Stage-8 reference path and production adapter, and the final cumulative seal proves parity plus absence of test constructors, scalar minting, caller-string trust and production fallbacks.
+
+    This protocol creates no Action, ScopeAtom, Ceremony, Grant, Mandate, capacity, Receipt, Result, idempotency mapping, Observation, Evidence, audit append, debit, repair, retry, selection, occurrence, mutation, persistence, public field, wire schema, MCP Tool, Resource, Bundle, Release or Action-catalog delta.
+  supersedes:
+  - dec-canonical-non-action-protected-90a9
+  superseded_by: dec-canonical-host-native-injected-trusted-2ba1
+  preview: |-
+    ambient authenticated connection
+      -> Integration exclusive live connection capability
+      -> Authority serialized Active Store view + one-shot challenge
+      -> Integration opaque move-only attestation, no I/O
+      -> Authority exact identity/currentness equality join
+      -> sealed Stage-8 allowlisted envelope in the same view
+      -> final host-currentness recheck
+      -> release or coarse refusal
+  rejected:
+  - 'Treat authenticated_host_connection_context_ref, request_id, OS user, environment, TTY, Session request_commitment or arbitrary bytes as authentication: caller-controlled or Store-readable values are forgeable and replayable.'
+  - 'Let Integration select canonical Principal, Binding, Session, Store, Authority root or protected subject facts: that creates substitution, latest-selection and topology-oracle paths.'
+  - 'Authenticate lazily or perform provider I/O while the Store view is held: that breaks the zero-I/O pure-read contract and cannot establish one bounded stable interval.'
+  - 'Return an arbitrary callback value, guard, witness, fence or current projection: detached data can be mistaken for durable currentness or reused outside the protected view.'
+  - 'Persist, serialize, cache, clone or reconstruct the attestation, challenge or invocation: that creates bearer and replay authority.'
+  - Ship the cfg(test) adapter or claim Stage-5 production authenticity before Stages 8, 9 and 10 provide and parity-prove the real envelope, Store-currentness and host adapters.

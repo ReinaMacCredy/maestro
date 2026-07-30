@@ -1,8 +1,8 @@
-use maestro::domain::vnext::design::{
+use maestro::domain::design::{
     AlternativeConsequenceV1, AlternativeV1, DecisionIdV1, DecisionRevisionV1, DecisionStateV1,
     DecisionV1, DecisionV1Error, ExactRecordRefV1, WorkDecisionEligibilityV1, WorkIdV1,
 };
-use maestro::domain::vnext::identity::{ContractRootIdV1, StoreDomainIdV1};
+use maestro::domain::identity::{ContractRootIdV1, StoreDomainIdV1};
 
 fn exact(seed: u8) -> ExactRecordRefV1 {
     ExactRecordRefV1::from_digest([seed; 32])

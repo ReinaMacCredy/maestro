@@ -6,6 +6,7 @@ use anyhow::{Result, bail};
 use serde::Serialize;
 
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
+use crate::domain::projection::LegacySuccessorSurfaceV1;
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::domain::{card, gate_lock, loop_recipes as loop_recipe_domain, run as run_domain};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
@@ -44,6 +45,8 @@ pub fn run(args: StatusArgs) -> Result<()> {
 }
 
 pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
+    super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::TaskNext)?;
+
     let report = build_task_next_report(paths)?;
     if json {
         println!(
@@ -60,6 +63,8 @@ pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
 }
 
 pub fn run_next(args: NextArgs) -> Result<()> {
+    super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::MaestroNext)?;
+
     let repo_root = match discover_repo_root() {
         Ok(repo_root) => repo_root,
         Err(_) => {

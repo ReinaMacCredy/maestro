@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.vnext.host-descriptor.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile_id",
+    "installation_scope",
+    "project_registration",
+    "public_skill",
+    "currentness_source",
+    "protected_runtime_activation"
+  ],
+  "properties": {
+    "schema": {
+      "const": "maestro.vnext.host-descriptor.v2"
+    },
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "installation_scope": {
+      "const": "global-user-agent-installation"
+    },
+    "project_registration": {
+      "const": false
+    },
+    "public_skill": {
+      "const": "maestro"
+    },
+    "currentness_source": {
+      "const": "Stage9InstallationReadPortV2"
+    },
+    "protected_runtime_activation": {
+      "$ref": "#/$defs/ProtectedRuntimeActivationBindingV2"
+    }
+  },
+  "$defs": {
+    "ProtectedRuntimeActivationBindingV2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "variant",
+            "reason_code"
+          ],
+          "properties": {
+            "variant": {
+              "const": "Inactive"
+            },
+            "reason_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "variant",
+            "provider_implementation_identity",
+            "provider_revision",
+            "host_owned_injection_entry",
+            "production_conformance_proof_identity",
+            "production_negative_proof_identity",
+            "binary_identity",
+            "release_id"
+          ],
+          "properties": {
+            "variant": {
+              "const": "Active"
+            },
+            "provider_implementation_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "provider_revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "host_owned_injection_entry": {
+              "type": "string",
+              "minLength": 1
+            },
+            "production_conformance_proof_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "production_negative_proof_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "binary_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "release_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

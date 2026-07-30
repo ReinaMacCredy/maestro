@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const PRODUCTION_UNWRAP_ALLOWLIST: &[(&str, usize)] = &[];
-const TEST_ONLY_SOURCE_FILES: &[&str] = &["src/domain/vnext/authority/facade_tests.rs"];
+const TEST_ONLY_SOURCE_FILES: &[&str] = &["src/domain/authority/facade_tests.rs"];
 const CLI_HARNESS_PUBLIC_METHODS: &[&str] = &[
     "arg",
     "args",
@@ -44,7 +44,7 @@ fn production_sources_do_not_call_unwrap() {
 
 #[test]
 fn test_only_source_file_exclusions_are_cfg_test_gated() {
-    let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
+    let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
     assert_eq!(
         facade
             .match_indices("#[cfg(test)]\n#[path = \"facade_tests.rs\"]\nmod tests;")

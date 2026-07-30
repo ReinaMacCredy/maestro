@@ -1,0 +1,223 @@
+{
+  "files": [
+    [
+      "contracts/vnext/stage4/execution/execution-effects.v1.json",
+      41682,
+      "18b215280ea9aeab3a7bb6edf15214950d35343e6d15be89fef54031c9a51e3b"
+    ],
+    [
+      "contracts/vnext/stage4/execution/execution-effects.v1.cbor",
+      29045,
+      "462d821152e1f621073276d8403ad0ea89d9ec66227cd8b3067cf956bdfaa077"
+    ],
+    [
+      "contracts/vnext/stage4/execution/behavioral-proof-receipt.v1.json",
+      20974,
+      "ead17b652be513d2bbb6cf8460676c38609ffaec9bee9ac1818d83be454cb3ac"
+    ],
+    [
+      "contracts/vnext/stage4/execution/python-encoder-receipt.v1.json",
+      7904,
+      "c806b4fe97ecb9374adf1ae7401fb86081230644a444ca4a77ff37c881e04f51"
+    ],
+    [
+      "contracts/vnext/stage4/execution/semantic-validation-receipt.v1.json",
+      27426,
+      "5fd6437350350691ee7b623fb3a0b8750b43b16fd3a7719cd9d7e8713d3756c4"
+    ],
+    [
+      "contracts/vnext/stage4/execution/ruby-verification-receipt.v1.json",
+      27422,
+      "e9a9e882decfc91a23ae5d2a47fef5b976b42583ae1b2b565ce7e2f2fab9103b"
+    ]
+  ],
+  "historical_receipt_validation": {
+    "archive_matches_source_commit": true,
+    "canonical_files_match_archive": true,
+    "mode": "read_only_commit_tree_content_and_receipt_equality",
+    "receipt_count": 4,
+    "receipts_report_pass": true,
+    "source_commit": "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+    "source_tree": "2f832a04c7109e17b4b298e40b4827c1ced2d527"
+  },
+  "identity": "sha256:462d821152e1f621073276d8403ad0ea89d9ec66227cd8b3067cf956bdfaa077",
+  "predecessor_chain": {
+    "command_receipts": [
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/effect_home/build.py",
+          "--check"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "2d53bbb64c1d1f548edfffba8a809b5dc447ad10d1a748494e9eda77b484adf0"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/effect_home/validate.py",
+          "--mutants"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "cb43c56fb22671244761a7d7c9f7748906479f5b541a07764de3719d65facc2f"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/dispatch_cutover/build.py",
+          "--check"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "f1733342165423b661ef95766d4de5bb5988398569735109d1817773068e6eb9"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/dispatch_cutover/validate.py",
+          "--mutant-suite",
+          "--no-write"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage2/authority/build.py",
+          "--check"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "e5771ef511edd24ce9cb68892cc4b9b6eb064a26be23f91643cf4f097e714bd6"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage3/domain/build.py",
+          "--check"
+        ],
+        "executable": {
+          "byte_length": 34448,
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b"
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "ce95c9572826b47e98ecf123b7cc1fa61a622a0675b560c8e9f6c6f7ffe461c9"
+      }
+    ],
+    "mode": "full_chain",
+    "proof_receipts": {
+      "stage0_dispatch_cutover": [
+        {
+          "byte_length": 749,
+          "path": "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json",
+          "sha256": "e911c1c1af419d0eb1aed0ed2a55271e8d64ab2a81c53469fe1f07bfc9a92ae0"
+        },
+        {
+          "byte_length": 1459,
+          "path": "contracts/vnext/stage0/dispatch-cutover/validation-receipt.v1.json",
+          "sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f"
+        }
+      ],
+      "stage0_effect_home": [
+        {
+          "byte_length": 393839,
+          "path": "contracts/vnext/stage0/effect-home/encoder-receipt.json",
+          "sha256": "79ba10484f84816acaac881024ba2bab9508214bf21ec6785e0e5e9af1b565c7"
+        },
+        {
+          "byte_length": 2570,
+          "path": "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
+          "sha256": "6026229515ed622e64c9e4012575043223dbf245d500bfdf9271d29f19c7bba0"
+        }
+      ],
+      "stage2_authority": [
+        {
+          "byte_length": 5249,
+          "path": "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
+          "sha256": "4b39f06bba5befa0506246cc40af239a66bf93ada52d9dfb08c17cfdb12b5bf8"
+        },
+        {
+          "byte_length": 1965,
+          "path": "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
+          "sha256": "fa703e2f46f1065780205540bd9c2312618812b13b13596039e15f985c958c37"
+        },
+        {
+          "byte_length": 1791,
+          "path": "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
+          "sha256": "80c9ffcc259896e7ca58f7ff8509dfc02195e2cde26523753962bb9045b90074"
+        }
+      ],
+      "stage3_domain": [
+        {
+          "byte_length": 2125,
+          "path": "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json",
+          "sha256": "5008877303e5e363d0effd44247efac1508676344bf356b9b8dccaadf11fb42a"
+        },
+        {
+          "byte_length": 1854,
+          "path": "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json",
+          "sha256": "eb566f4f2aa7342413031049082d3576f532e50653f946b6d003ccb66d77d4ba"
+        },
+        {
+          "byte_length": 1850,
+          "path": "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
+          "sha256": "66c8c38aa091c61d24a78f620f9e39d66b00506400cb4f3471161439a8da2b6b"
+        }
+      ]
+    },
+    "roots": {
+      "stage0_dispatch_cutover": "sha256:1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f",
+      "stage0_effect_home": "sha256:22f58983311b9088a53a40341dd2d79a3be17d4fb08d73742934fba6c22db802",
+      "stage2_authority": "sha256:b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
+      "stage3_domain": "sha256:03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9"
+    }
+  },
+  "schema_version": "maestro.vnext.stage5.predecessor-closure.v1",
+  "source_archive_byte_length": 16486231,
+  "source_archive_sha256": "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910",
+  "source_commit": "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+  "source_tree": "2f832a04c7109e17b4b298e40b4827c1ced2d527"
+}

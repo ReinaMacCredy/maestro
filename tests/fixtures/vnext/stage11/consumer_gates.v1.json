@@ -1,0 +1,41 @@
+{
+  "schema": "maestro.vnext.stage11.consumer-gates.v1",
+  "gates": [
+    {
+      "stage": "BeforeSemanticCurrentness",
+      "pass_condition": "zero active legacy, old, mixed, unknown, or wrong-Release consumers"
+    },
+    {
+      "stage": "ProtectedRetention",
+      "pass_condition": "legacy access is sealed non-bearer or a noninterpreting retention hold"
+    },
+    {
+      "stage": "PhysicalPruning",
+      "pass_condition": "zero legacy consumers and all five external prune prerequisites"
+    }
+  ],
+  "sealed_reader": {
+    "autoloading": false,
+    "bearer": false,
+    "admission": "OpaqueSealedOnly"
+  },
+  "authoritative_census": {
+    "source_manifest_required": true,
+    "owner_snapshot_required": true,
+    "closure_attestation_required": true,
+    "declared_members_must_be_nonzero": true,
+    "every_member_resolution": [
+      "Observed",
+      "Removed"
+    ],
+    "empty_observation_vector_is_not_consumer_zero": true
+  },
+  "production_owner_routes": {
+    "consumer_snapshot": "ConsumerClosureV1::evaluate_installation_snapshot",
+    "durable_consumer_finality": "ConsumerClosureDurableLinearizationV1",
+    "aggregate_census": "census_admitted_owner_roots_v2",
+    "pre_store_finality": "stage11_finality_v2::execute_pre_store"
+  },
+  "currentness_owner": "Stage9/domain owners",
+  "migration_owner": "Stage11 classification, association meaning, quarantine and inactive import"
+}

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ sys.path.insert(0, str(TOOLS))
 import cbor_py  # type: ignore[import-not-found]  # noqa: E402
 from behavior import (  # type: ignore[import-not-found]  # noqa: E402
     EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+    EXPECTED_RUNS,
     EXPECTED_TESTS,
     compiled_behavior,
 )
@@ -26,47 +28,117 @@ from behavior import (  # type: ignore[import-not-found]  # noqa: E402
 
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
 PUBLICATION_STATE = "inactive_candidate"
+DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = {
+    "artifact_id",
+    "behavior",
+    "behavior_manifest_identity",
+    "byte_length",
+    "cbor_hex",
+    "domain",
+    "diagnostic_proof_claim",
+    "invalidation_reasons",
+    "invariants",
+    "observation_catalog_manifest_id",
+    "observation_contract_table_identity",
+    "observation_kinds",
+    "predecessors",
+    "protocol",
+    "publication_state",
+    "schema_version",
+    "source_closure",
+    "stage",
+}
+BUILDER_RECEIPT_KEYS = {
+    "artifact_id",
+    "artifact_sha256",
+    "behavior_manifest_identity",
+    "behavior_passed",
+    "behavior_runs",
+    "builder_sha256",
+    "diagnostic_proof_claim",
+    "publication_state",
+    "receipt_identity",
+    "schema_version",
+    "source_closure_sha256",
+}
 SOURCE_PATHS = (
     "Cargo.toml",
     "Cargo.lock",
     "build.rs",
     "contracts/vnext/catalogs/generated/catalog-01-observation.json",
-    "src/lib.rs",
-    "src/domain/mod.rs",
-    "src/domain/vnext/mod.rs",
-    "src/domain/vnext/authority/action_basis.rs",
-    "src/domain/vnext/authority/facade.rs",
-    "src/domain/vnext/authority/facade/repository_admission.rs",
-    "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
-    "src/domain/vnext/authority/mod.rs",
-    "src/domain/vnext/authority/result.rs",
-    "src/domain/vnext/contract/runtime.rs",
-    "src/domain/vnext/evidence/assessment.rs",
-    "src/domain/vnext/evidence/claim.rs",
-    "src/domain/vnext/evidence/erasure.rs",
-    "src/domain/vnext/evidence/identity.rs",
-    "src/domain/vnext/evidence/mod.rs",
-    "src/domain/vnext/evidence/observation.rs",
-    "src/domain/vnext/evidence/submission_claim.rs",
-    "src/domain/vnext/evidence/store.rs",
-    "src/domain/vnext/execution/store.rs",
-    "src/domain/vnext/execution/runtime.rs",
-    "src/domain/vnext/gate/mod.rs",
-    "src/domain/vnext/persistence/mod.rs",
-    "src/domain/vnext/persistence/idempotency.rs",
-    "src/domain/vnext/persistence/metadata.rs",
-    "src/domain/vnext/persistence/store.rs",
-    "src/domain/vnext/persistence/tests/atomic_publication.rs",
-    "src/domain/vnext/repository/mod.rs",
-    "src/domain/vnext/repository/tests.rs",
-    "src/domain/vnext/work/lifecycle.rs",
-    "src/domain/vnext/work/mod.rs",
-    "src/domain/vnext/work/submission.rs",
+    "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
+      "src/lib.rs",
+      "src/domain/mod.rs",
+      "src/domain/mod.rs",
+      "src/domain/contract/mod.rs",
+      "src/domain/persistence/tests/mod.rs",
+      "src/foundation/mod.rs",
+      "src/foundation/core/mod.rs",
+    "src/domain/authority/action_basis.rs",
+    "src/domain/authority/downstream_action_basis.rs",
+    "src/domain/authority/facade.rs",
+    "src/domain/authority/facade_tests.rs",
+    "src/domain/authority/facade/repository_admission.rs",
+    "src/domain/authority/facade/repository_leaf_authority.rs",
+    "src/domain/authority/governance_attestation.rs",
+    "src/domain/authority/governance_attestation_stage7_seed.rs",
+    "src/domain/authority/governance_floor.rs",
+    "src/domain/authority/materialization.rs",
+    "src/domain/authority/mod.rs",
+    "src/domain/authority/protected_diagnostic_envelope.rs",
+    "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    "src/domain/authority/publication.rs",
+    "src/domain/authority/result.rs",
+    "src/domain/contract/runtime.rs",
+    "src/domain/evidence/assessment.rs",
+    "src/domain/evidence/claim.rs",
+    "src/domain/evidence/erasure.rs",
+    "src/domain/evidence/identity.rs",
+    "src/domain/evidence/mod.rs",
+    "src/domain/evidence/observation.rs",
+    "src/domain/evidence/submission_claim.rs",
+    "src/domain/evidence/store.rs",
+    "src/domain/execution/h3_withdrawal_publication.rs",
+    "src/domain/execution/mod.rs",
+    "src/domain/execution/store.rs",
+    "src/domain/execution/runtime.rs",
+    "src/domain/gate/mod.rs",
+    "src/domain/installation/consumer_snapshot.rs",
+    "src/domain/installation/consumer_snapshot_stage11_seed.rs",
+    "src/domain/installation/durable_finality.rs",
+    "src/domain/installation/durable_finality_stage9_seed.rs",
+    "src/domain/installation/durable_finality_stage11_seed.rs",
+    "src/domain/installation/mod.rs",
+    "src/domain/integration/consumer_closure.rs",
+    "src/domain/integration/mod.rs",
+    "src/domain/integration/trusted_host_diagnostic.rs",
+    "src/domain/integration/trusted_host_diagnostic_stage10_seed.rs",
+    "src/domain/persistence/mod.rs",
+    "src/domain/persistence/consumer_snapshot.rs",
+    "src/domain/persistence/idempotency.rs",
+    "src/domain/persistence/metadata.rs",
+    "src/domain/persistence/store.rs",
+    "src/domain/persistence/protected_diagnostic.rs",
+    "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
+    "src/domain/persistence/protected_locator_lease.rs",
+    "src/domain/persistence/protected_locator_stage9_seed.rs",
+    "src/domain/persistence/tests/atomic_publication.rs",
+    "src/domain/repository/mod.rs",
+    "src/domain/repository/tests.rs",
+    "src/domain/work/lifecycle.rs",
+    "src/domain/work/mod.rs",
+    "src/domain/work/submission.rs",
     "src/foundation/core/secure_fs.rs",
+    "src/foundation/core/descriptor_census_platform.rs",
+    "src/foundation/core/descriptor_census_platform_stage11_seed.rs",
+    "src/foundation/core/aggregate_census.rs",
+    "src/foundation/core/aggregate_census_stage11_seed.rs",
     "tests/vnext_evidence_claims.rs",
     "tests/vnext_submission_claim_set.rs",
     "tests/vnext_stage5_contracts.rs",
     "tests/vnext_stage5_evidence_gates.rs",
+    "tests/architecture_imports.rs",
     "tests/vnext_work_lifecycle.rs",
     "tools/vnext_contracts/catalogs/cbor_py.py",
     "tools/vnext_contracts/proof_engine/__init__.py",
@@ -82,6 +154,7 @@ SOURCE_PATHS = (
     "tools/vnext_contracts/stage5/evidence_gates/verify.rb",
     "tools/vnext_contracts/stage5/evidence_gates/seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_consensus.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py",
     "tools/vnext_contracts/stage5/evidence_gates/toolchain.py",
@@ -285,6 +358,69 @@ def run_behavior(cargo: Path, rustc: Path) -> dict[str, object]:
     }
 
 
+def exact_behavior_runs(runs: object) -> bool:
+    if not isinstance(runs, list) or len(runs) != len(EXPECTED_RUNS) + 1:
+        return False
+    binary_by_target: dict[str, str] = {}
+    for run, (label, target, tests) in zip(runs[:-1], EXPECTED_RUNS, strict=True):
+        if not isinstance(run, dict) or set(run) != {
+            "binary_sha256",
+            "label",
+            "passed",
+            "tests",
+        }:
+            return False
+        binary = run.get("binary_sha256")
+        actual_tests = run.get("tests")
+        if (
+            run.get("label") != label
+            or type(run.get("passed")) is not int
+            or run.get("passed") != len(tests)
+            or not isinstance(binary, str)
+            or re.fullmatch(r"[0-9a-f]{64}", binary) is None
+            or not isinstance(actual_tests, list)
+            or len(actual_tests) != len(tests)
+        ):
+            return False
+        if binary_by_target.setdefault(target, binary) != binary:
+            return False
+        for actual, test in zip(actual_tests, tests, strict=True):
+            if actual != {
+                "command": [target, test, "--exact", "--nocapture"],
+                "name": test,
+                "result": "pass",
+            }:
+                return False
+    first_target = EXPECTED_RUNS[0][1]
+    first_test = EXPECTED_RUNS[0][2][0]
+    mutant = runs[-1]
+    return isinstance(mutant, dict) and mutant == {
+        "binary_sha256": binary_by_target[first_target],
+        "command": [
+            first_target,
+            f"{first_test}_same_count_substitution_mutant",
+            "--exact",
+            "--nocapture",
+        ],
+        "label": "same-count-substitution-mutant",
+        "passed": 0,
+        "rejected": True,
+        "result": "rejected",
+        "substituted_for": first_test,
+    }
+
+
+def exact_behavior(behavior: object) -> bool:
+    if behavior == {"mode": "preflight", "passed": 0}:
+        return True
+    return (
+        isinstance(behavior, dict)
+        and set(behavior) == {"passed", "runs"}
+        and behavior.get("passed") == EXPECTED_TESTS
+        and exact_behavior_runs(behavior.get("runs"))
+    )
+
+
 def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -> None:
     catalog_path = WORKSPACE / OBSERVATION_CATALOG
     catalog = json.loads(catalog_path.read_text(encoding="ascii"))
@@ -295,6 +431,7 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
     semantic_value: list[object] = [
         DOMAIN,
         PUBLICATION_STATE,
+        DIAGNOSTIC_PROOF_CLAIM,
         5,
         catalog["manifest_id"],
         OBSERVATION_CONTRACT_TABLE_IDENTITY,
@@ -319,6 +456,7 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         "byte_length": len(encoded),
         "cbor_hex": encoded.hex(),
         "domain": DOMAIN,
+        "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
         "invalidation_reasons": [list(row) for row in INVALIDATION_REASONS],
         "invariants": list(INVARIANTS),
         "observation_catalog_manifest_id": catalog["manifest_id"],
@@ -336,6 +474,38 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         "source_closure": sources,
         "stage": 5,
     }
+    if (
+        set(artifact) != ARTIFACT_KEYS
+        or artifact["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
+        or not exact_behavior(artifact["behavior"])
+        or artifact
+        != {
+            "artifact_id": artifact_id,
+            "behavior": behavior,
+            "behavior_manifest_identity": EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+            "byte_length": len(encoded),
+            "cbor_hex": encoded.hex(),
+            "domain": DOMAIN,
+            "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
+            "invalidation_reasons": [list(row) for row in INVALIDATION_REASONS],
+            "invariants": list(INVARIANTS),
+            "observation_catalog_manifest_id": catalog["manifest_id"],
+            "observation_contract_table_identity": OBSERVATION_CONTRACT_TABLE_IDENTITY,
+            "observation_kinds": observation,
+            "predecessors": predecessors,
+            "protocol": {
+                "acquisition_modes": [list(row) for row in ACQUISITION_MODES],
+                "gate_input_classes": [list(row) for row in INPUT_CLASSES],
+                "gate_operators": [list(row) for row in OPERATORS],
+                "gate_results": [list(row) for row in RESULTS],
+            },
+            "publication_state": PUBLICATION_STATE,
+            "schema_version": DOMAIN,
+            "source_closure": sources,
+            "stage": 5,
+        }
+    ):
+        raise RuntimeError("Stage 5 artifact proof claim schema differs")
     artifact_bytes = pretty_json(artifact)
     receipt_value = {
         "artifact_id": artifact_id,
@@ -344,6 +514,7 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         "behavior_passed": behavior["passed"],
         "behavior_runs": behavior.get("runs", []),
         "builder_sha256": file_row("tools/vnext_contracts/stage5/evidence_gates/build.py")[2],
+        "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
         "publication_state": PUBLICATION_STATE,
         "schema_version": "maestro.vnext.stage5.python-builder-receipt.v1",
         "source_closure_sha256": sha256(canonical_json(sources)),
@@ -352,6 +523,13 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         **receipt_value,
         "receipt_identity": f"sha256:{sha256(canonical_json(receipt_value))}",
     }
+    if (
+        set(receipt) != BUILDER_RECEIPT_KEYS
+        or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
+        or receipt["behavior_runs"] != behavior.get("runs", [])
+        or (receipt["behavior_runs"] != [] and not exact_behavior_runs(receipt["behavior_runs"]))
+    ):
+        raise RuntimeError("Stage 5 builder receipt proof claim schema differs")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "evidence-gates.v1.json").write_bytes(artifact_bytes)
     (output_root / "evidence-gates.v1.cbor").write_bytes(encoded)

@@ -9,30 +9,76 @@ require "optparse"
 
 WORKSPACE = File.expand_path("../../../..", __dir__)
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
+DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = %w[
+  artifact_id behavior behavior_manifest_identity byte_length cbor_hex domain
+  diagnostic_proof_claim invalidation_reasons invariants observation_catalog_manifest_id
+  observation_contract_table_identity observation_kinds predecessors protocol
+  publication_state schema_version source_closure stage
+].sort.freeze
+RUBY_RECEIPT_KEYS = %w[
+  artifact_id artifact_sha256 behavior_manifest_identity behavior_passed behavior_runs
+  diagnostic_proof_claim publication_state receipt_identity schema_version
+  source_closure_sha256 verifier_sha256
+].sort.freeze
 SOURCE_PATHS = %w[
-  Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
+    Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/mod.rs
+    src/domain/contract/mod.rs src/domain/persistence/tests/mod.rs
+    src/foundation/mod.rs
+    src/foundation/core/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
-  src/domain/vnext/authority/action_basis.rs src/domain/vnext/authority/facade.rs
-  src/domain/vnext/authority/facade/repository_admission.rs
-  src/domain/vnext/authority/facade/repository_leaf_authority.rs src/domain/vnext/authority/mod.rs
-  src/domain/vnext/authority/result.rs
-  src/domain/vnext/contract/runtime.rs
-  src/domain/vnext/evidence/assessment.rs src/domain/vnext/evidence/claim.rs
-  src/domain/vnext/evidence/erasure.rs src/domain/vnext/evidence/identity.rs
-  src/domain/vnext/evidence/mod.rs src/domain/vnext/evidence/observation.rs
-  src/domain/vnext/evidence/submission_claim.rs src/domain/vnext/execution/store.rs
-  src/domain/vnext/execution/runtime.rs
-  src/domain/vnext/evidence/store.rs src/domain/vnext/gate/mod.rs
-  src/domain/vnext/persistence/mod.rs src/domain/vnext/persistence/idempotency.rs
-  src/domain/vnext/persistence/metadata.rs
-  src/domain/vnext/persistence/store.rs
-  src/domain/vnext/persistence/tests/atomic_publication.rs
-  src/domain/vnext/repository/mod.rs
-  src/domain/vnext/repository/tests.rs
-  src/domain/vnext/work/lifecycle.rs src/domain/vnext/work/mod.rs
-  src/domain/vnext/work/submission.rs src/foundation/core/secure_fs.rs
+  contracts/vnext/catalogs/generated/catalog-09-action-spec.json
+  src/domain/authority/action_basis.rs src/domain/authority/facade.rs
+  src/domain/authority/downstream_action_basis.rs
+  src/domain/authority/facade_tests.rs
+  src/domain/authority/facade/repository_admission.rs
+  src/domain/authority/facade/repository_leaf_authority.rs
+  src/domain/authority/governance_attestation.rs
+  src/domain/authority/governance_attestation_stage7_seed.rs
+  src/domain/authority/governance_floor.rs
+  src/domain/authority/materialization.rs src/domain/authority/mod.rs
+  src/domain/authority/protected_diagnostic_envelope.rs
+  src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs
+  src/domain/authority/publication.rs
+  src/domain/authority/result.rs
+  src/domain/contract/runtime.rs
+  src/domain/evidence/assessment.rs src/domain/evidence/claim.rs
+  src/domain/evidence/erasure.rs src/domain/evidence/identity.rs
+  src/domain/evidence/mod.rs src/domain/evidence/observation.rs
+  src/domain/evidence/submission_claim.rs src/domain/execution/store.rs
+  src/domain/execution/h3_withdrawal_publication.rs src/domain/execution/mod.rs
+  src/domain/execution/runtime.rs
+  src/domain/evidence/store.rs src/domain/gate/mod.rs
+  src/domain/installation/consumer_snapshot.rs
+  src/domain/installation/consumer_snapshot_stage11_seed.rs
+  src/domain/installation/durable_finality.rs
+  src/domain/installation/durable_finality_stage9_seed.rs
+  src/domain/installation/durable_finality_stage11_seed.rs
+  src/domain/installation/mod.rs
+  src/domain/integration/consumer_closure.rs
+  src/domain/integration/mod.rs
+  src/domain/integration/trusted_host_diagnostic.rs
+  src/domain/integration/trusted_host_diagnostic_stage10_seed.rs
+  src/domain/persistence/mod.rs src/domain/persistence/consumer_snapshot.rs
+  src/domain/persistence/idempotency.rs
+  src/domain/persistence/metadata.rs
+  src/domain/persistence/store.rs
+  src/domain/persistence/protected_diagnostic.rs
+  src/domain/persistence/protected_diagnostic_stage9_seed.rs
+  src/domain/persistence/protected_locator_lease.rs
+  src/domain/persistence/protected_locator_stage9_seed.rs
+  src/domain/persistence/tests/atomic_publication.rs
+  src/domain/repository/mod.rs
+  src/domain/repository/tests.rs
+  src/domain/work/lifecycle.rs src/domain/work/mod.rs
+  src/domain/work/submission.rs src/foundation/core/secure_fs.rs
+  src/foundation/core/descriptor_census_platform.rs
+  src/foundation/core/descriptor_census_platform_stage11_seed.rs
+  src/foundation/core/aggregate_census.rs
+  src/foundation/core/aggregate_census_stage11_seed.rs
   tests/vnext_evidence_claims.rs tests/vnext_submission_claim_set.rs
   tests/vnext_stage5_contracts.rs tests/vnext_stage5_evidence_gates.rs
+  tests/architecture_imports.rs
   tests/vnext_work_lifecycle.rs
   tools/vnext_contracts/catalogs/cbor_py.py
   tools/vnext_contracts/proof_engine/__init__.py
@@ -48,6 +94,7 @@ SOURCE_PATHS = %w[
   tools/vnext_contracts/stage5/evidence_gates/verify.rb
   tools/vnext_contracts/stage5/evidence_gates/seal.py
   tools/vnext_contracts/stage5/evidence_gates/test_consensus.py
+  tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py
   tools/vnext_contracts/stage5/evidence_gates/test_seal.py
   tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py
   tools/vnext_contracts/stage5/evidence_gates/toolchain.py
@@ -143,6 +190,34 @@ EXPECTED_RUNS = [
     domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication
   ]],
   ["authorized-evidence-store", "maestro", %w[
+    domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis
+    domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner
+    domain::vnext::authority::downstream_action_basis::tests::scheduling_policy_publication_has_one_named_exact_typed_leaf
+    domain::vnext::authority::materialization::tests::downgrade_mandate_and_action_binding_are_one_use_and_exact
+    domain::vnext::authority::materialization::tests::equivalent_policy_and_cross_transaction_substitution_refuse_without_consumption
+    domain::vnext::authority::materialization::tests::wrong_owner_action_cannot_enter_the_scheduling_binding
+    domain::vnext::authority::governance_floor::tests::explicit_legacy_migration_is_a_distinct_genesis_basis
+    domain::vnext::authority::governance_floor::tests::rotation_requires_action_68_and_a_gap_free_advancing_lineage
+    domain::vnext::authority::governance_floor::tests::restore_or_gap_in_floor_history_refuses_while_the_exact_same_domain_chain_passes
+    domain::vnext::authority::governance_floor::tests::semantic_or_action_105_substitution_refuses
+    domain::vnext::authority::governance_floor::tests::tag_25_snapshot_round_trips_and_preserves_the_action_105_totality_row
+    domain::vnext::authority::facade::tests::scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate
+    domain::vnext::authority::facade::tests::scheduling_materialization_is_one_atomic_authority_operation
+    domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts
+    domain::vnext::authority::facade::tests::inactive_store_refusal_mints_no_diagnostic_invocation
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_joins_every_independent_host_identity_dimension
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_ambiguous_operator_mapping
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation
+    domain::vnext::authority::facade::tests::session_request_commitment_is_snapshot_identity_not_host_authority
     domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe
     domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier
     domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export
@@ -155,6 +230,33 @@ EXPECTED_RUNS = [
     domain::vnext::persistence::idempotency::tests::publication_builder_reduces_a_superset_to_the_exact_generation_closure
     domain::vnext::repository::tests::work_completion_atomically_persists_claim_gate_and_submission_proof
     domain::vnext::repository::tests::work_completion_requires_and_commits_the_exact_current_satisfied_step_submission_closure
+    domain::vnext::execution::h3_withdrawal_publication::tests::all_three_homes_require_the_exact_causal_branch_and_one_use_finality
+    domain::vnext::execution::h3_withdrawal_publication::tests::cross_branch_and_complete_meaning_substitution_refuse_without_consumption
+    domain::vnext::execution::h3_withdrawal_publication::tests::pre_store_has_no_destination_root_or_candidate_seal_field
+    domain::vnext::installation::consumer_snapshot::tests::caller_gate_stage_and_post_issue_currentness_substitution_refuse
+    domain::vnext::installation::consumer_snapshot::tests::owner_issued_snapshot_joins_store_and_host_until_both_final_rechecks
+    domain::vnext::installation::consumer_snapshot::tests::pre_store_is_pre_currentness_only_and_has_no_final_root_or_candidate_seal
+    domain::vnext::installation::durable_finality::tests::active_store_no_op_cannot_mint_finality_from_an_echoed_nonzero_digest
+    domain::vnext::installation::durable_finality::tests::active_store_owner_effect_and_readback_are_one_typed_operation
+    domain::vnext::installation::durable_finality::tests::false_success_and_partial_readback_cannot_mint_finality
+    domain::vnext::installation::durable_finality::tests::post_write_outcomes_are_never_reported_as_ordinary_refusal
+    domain::vnext::installation::durable_finality::tests::production_owner_entry_points_are_frozen_for_stage9_and_stage11
+    domain::vnext::installation::durable_finality_stage9_seed::tests::stage9_owner_seed_is_constructible_only_in_its_owner_module
+    domain::vnext::installation::durable_finality_stage11_seed::tests::stage11_owner_seed_is_constructible_only_in_its_owner_module
+    domain::vnext::persistence::protected_locator_lease::tests::owner_observes_and_rereads_the_same_locator_through_finality
+    domain::vnext::persistence::protected_locator_lease::tests::pre_store_false_success_with_a_write_is_rejected_through_the_same_live_lease
+    domain::vnext::persistence::protected_locator_lease::tests::pre_store_hands_the_live_lease_to_the_ceremony_cas_continuation
+    domain::vnext::persistence::protected_locator_lease::tests::stale_pre_dispatch_tuple_refuses_without_cas
+    domain::vnext::persistence::protected_locator_lease::tests::unknown_and_old_root_readback_preserve_recovery_laws
+    foundation::core::aggregate_census::tests::aliases_and_aggregate_overflow_refuse
+    foundation::core::aggregate_census::tests::optional_absence_overlap_and_early_fence_release_refuse
+    foundation::core::aggregate_census::tests::owner_holds_the_complete_root_set_across_both_passes
+    foundation::core::aggregate_census::tests::partial_or_sequential_component_results_refuse
+    foundation::core::aggregate_census::tests::production_stage11_seed_is_fail_closed_until_the_backend_integrates
+    foundation::core::aggregate_census_stage11_seed::tests::production_seed_is_explicitly_replaceable_and_fail_closed
+    foundation::core::secure_fs::tests::descriptor_census_binds_regular_files_and_symlinks_without_following
+    foundation::core::secure_fs::tests::descriptor_census_refuses_every_hard_linked_leaf
+    foundation::core::secure_fs::tests::descriptor_census_refuses_mutation_fence_turnover
     foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_payload_unlink_and_marker_crashes
     foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_the_quarantine_rename
     foundation::core::secure_fs::tests::crash_residual_temp_blocks_absence_until_digest_bound_cleanup
@@ -186,10 +288,14 @@ EXPECTED_RUNS = [
     observation_publication_route_rejects_wrong_action_route_and_profile
     observations_bind_effect_free_and_exact_derivation_provenance
     pure_composite_evaluator_refuses_leaf_self_attestation
+  ]],
+  ["diagnostic-architecture", "architecture_imports", %w[
+    stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer
+    stage5_successor_seams_are_owner_private_and_production_replaceable
   ]]
 ].freeze
 EXPECTED_TESTS = EXPECTED_RUNS.sum { |row| row.fetch(2).length }
-EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:bc8d5dd0b46c8dda55b02791abbec7c92122e55e30643e0aa5e87a36add40665"
 
 def head(major, value)
   raise "CBOR unsigned value exceeds u64" unless value.between?(0, 0xffffffffffffffff)
@@ -253,6 +359,94 @@ def behavior_manifest_identity
   raise "Stage 5 behavior manifest is not an exact unique target/test closure" unless rows.length == EXPECTED_TESTS && rows.uniq.length == EXPECTED_TESTS
 
   "sha256:#{Digest::SHA256.hexdigest(canonical_json(rows))}"
+end
+
+def exact_behavior_runs?(runs)
+  return false unless runs.is_a?(Array) && runs.length == EXPECTED_RUNS.length + 1
+
+  binary_by_target = {}
+  EXPECTED_RUNS.zip(runs[0...-1]).each do |(label, target, tests), run|
+    return false unless run.is_a?(Hash) && run.keys.sort == %w[binary_sha256 label passed tests]
+    return false unless run.fetch("label", nil) == label && run.fetch("passed", nil) == tests.length
+    binary = run.fetch("binary_sha256", nil)
+    actual_tests = run.fetch("tests", nil)
+    return false unless binary.is_a?(String) && binary.match?(/\A[0-9a-f]{64}\z/)
+    return false unless actual_tests.is_a?(Array) && actual_tests.length == tests.length
+    return false if binary_by_target.fetch(target, binary) != binary
+
+    binary_by_target[target] = binary
+    tests.zip(actual_tests).each do |test, actual|
+      expected = {
+        "command" => [target, test, "--exact", "--nocapture"],
+        "name" => test,
+        "result" => "pass"
+      }
+      return false unless actual == expected
+    end
+  end
+  target = EXPECTED_RUNS.fetch(0).fetch(1)
+  test = EXPECTED_RUNS.fetch(0).fetch(2).fetch(0)
+  runs.fetch(-1) == {
+    "binary_sha256" => binary_by_target.fetch(target),
+    "command" => [target, "#{test}_same_count_substitution_mutant", "--exact", "--nocapture"],
+    "label" => "same-count-substitution-mutant",
+    "passed" => 0,
+    "rejected" => true,
+    "result" => "rejected",
+    "substituted_for" => test
+  }
+end
+
+def exact_behavior?(behavior)
+  return true if behavior == { "mode" => "preflight", "passed" => 0 }
+
+  behavior.is_a?(Hash) && behavior.keys.sort == %w[passed runs] &&
+    behavior.fetch("passed", nil) == EXPECTED_TESTS && exact_behavior_runs?(behavior.fetch("runs", nil))
+end
+
+def recursive_shape_mutants(value)
+  mutants = []
+  case value
+  when Hash
+    mutants << value.merge("__unexpected_claim__" => "prod-host-verified")
+    value.each do |key, child|
+      missing = Marshal.load(Marshal.dump(value))
+      missing.delete(key)
+      mutants << missing
+      renamed = Marshal.load(Marshal.dump(value))
+      renamed["__renamed_#{key}"] = renamed.delete(key)
+      mutants << renamed
+      recursive_shape_mutants(child).each do |mutated_child|
+        mutant = Marshal.load(Marshal.dump(value))
+        mutant[key] = mutated_child
+        mutants << mutant
+      end
+    end
+    mutants << [value]
+  when Array
+    mutants << (value + [{ "proof" => { "claim" => "live-host-certified" } }])
+    value.each_with_index do |child, index|
+      missing = Marshal.load(Marshal.dump(value))
+      missing.delete_at(index)
+      mutants << missing
+      recursive_shape_mutants(child).each do |mutated_child|
+        mutant = Marshal.load(Marshal.dump(value))
+        mutant[index] = mutated_child
+        mutants << mutant
+      end
+    end
+    mutants << { "substituted" => value }
+  when String
+    mutants << "#{value}-restore-freshness-guaranteed"
+    mutants << { "proof" => { "claim" => value } }
+  when Integer
+    mutants << (value + 1)
+    mutants << { "substituted" => value }
+  when TrueClass, FalseClass
+    mutants << !value
+    mutants << { "substituted" => value }
+  end
+  mutants
 end
 
 def observation_rows(catalog)
@@ -367,6 +561,7 @@ def run_behavior(cargo, rustc)
     test --frozen --offline --no-run --message-format=json --lib
     --test vnext_evidence_claims --test vnext_submission_claim_set
     --test vnext_stage5_evidence_gates --test vnext_work_lifecycle
+    --test architecture_imports
   ]
   stdout, stderr, status = Open3.capture3(
     environment, cargo, *compile_command, chdir: WORKSPACE
@@ -460,6 +655,36 @@ if options[:self_test_output_parser]
     "test result: FAILED. 1 passed; 1 failed"
   ) == -1
   raise "independent Ruby behavior manifest identity differs" unless behavior_manifest_identity == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
+  sample_runs = EXPECTED_RUNS.map do |label, target, tests|
+    {
+      "binary_sha256" => "a" * 64,
+      "label" => label,
+      "passed" => tests.length,
+      "tests" => tests.map do |test|
+        { "command" => [target, test, "--exact", "--nocapture"], "name" => test, "result" => "pass" }
+      end
+    }
+  end
+  first_target = EXPECTED_RUNS.fetch(0).fetch(1)
+  first_test = EXPECTED_RUNS.fetch(0).fetch(2).fetch(0)
+  sample_runs << {
+    "binary_sha256" => "a" * 64,
+    "command" => [first_target, "#{first_test}_same_count_substitution_mutant", "--exact", "--nocapture"],
+    "label" => "same-count-substitution-mutant",
+    "passed" => 0,
+    "rejected" => true,
+    "result" => "rejected",
+    "substituted_for" => first_test
+  }
+  raise "Ruby verifier rejected the exact behavior grammar" unless exact_behavior_runs?(sample_runs)
+  recursive_shape_mutants(sample_runs).each do |mutant|
+    raise "Ruby verifier admitted a recursive behavior shape mutant" if exact_behavior_runs?(mutant)
+  end
+  preflight = { "mode" => "preflight", "passed" => 0 }
+  raise "Ruby verifier rejected the exact preflight grammar" unless exact_behavior?(preflight)
+  recursive_shape_mutants(preflight).each do |mutant|
+    raise "Ruby verifier admitted a recursive preflight shape mutant" if exact_behavior?(mutant)
+  end
   puts({
     "behavior_manifest_identity" => EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
     "exact_test_output_parser" => "pass"
@@ -470,8 +695,13 @@ end
 
 artifact_bytes = File.binread(File.realpath(options.fetch(:artifact)))
 artifact = JSON.parse(artifact_bytes)
+raise "Stage 5 artifact key set differs" unless artifact.keys.sort == ARTIFACT_KEYS
 raise "Stage 5 domain differs" unless artifact.fetch("schema_version") == DOMAIN
 raise "Stage 5 publication state differs" unless artifact.fetch("publication_state") == "inactive_candidate"
+raise "Stage 5 diagnostic proof claim differs" unless artifact.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+raise "Stage 5 domain alias differs" unless artifact.fetch("domain") == DOMAIN
+raise "Stage 5 number differs" unless artifact.fetch("stage") == 5
+raise "Stage 5 behavior grammar differs" unless exact_behavior?(artifact.fetch("behavior"))
 
 catalog = JSON.parse(
   File.read(File.join(WORKSPACE, "contracts/vnext/catalogs/generated/catalog-01-observation.json"), encoding: Encoding::US_ASCII)
@@ -483,19 +713,23 @@ predecessors = PREDECESSOR_PATHS.map { |path| file_row(path) }
 raise "source closure differs" unless artifact.fetch("source_closure") == sources
 raise "predecessor closure differs" unless artifact.fetch("predecessors") == predecessors
 raise "Observation closure differs" unless artifact.fetch("observation_kinds") == observations
+raise "Observation manifest differs" unless artifact.fetch("observation_catalog_manifest_id") == catalog.fetch("manifest_id")
 unless artifact.fetch("observation_contract_table_identity") == OBSERVATION_CONTRACT_TABLE_IDENTITY
   raise "Observation runtime contract table differs"
 end
 raise "Stage 5 behavior manifest identity differs" unless artifact.fetch("behavior_manifest_identity") == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
-raise "Gate result closure differs" unless artifact.dig("protocol", "gate_results") == RESULTS
-raise "Gate input closure differs" unless artifact.dig("protocol", "gate_input_classes") == INPUT_CLASSES
-raise "Gate operator closure differs" unless artifact.dig("protocol", "gate_operators") == OPERATORS
-raise "acquisition closure differs" unless artifact.dig("protocol", "acquisition_modes") == ACQUISITION_MODES
+expected_protocol = {
+  "acquisition_modes" => ACQUISITION_MODES,
+  "gate_input_classes" => INPUT_CLASSES,
+  "gate_operators" => OPERATORS,
+  "gate_results" => RESULTS
+}
+raise "Gate and acquisition protocol closure differs" unless artifact.fetch("protocol") == expected_protocol
 raise "invalidation closure differs" unless artifact.fetch("invalidation_reasons") == INVALIDATION_REASONS
 raise "invariant closure differs" unless artifact.fetch("invariants") == INVARIANTS
 
 semantic_value = [
-  DOMAIN, "inactive_candidate", 5, catalog.fetch("manifest_id"),
+  DOMAIN, "inactive_candidate", DIAGNOSTIC_PROOF_CLAIM, 5, catalog.fetch("manifest_id"),
   OBSERVATION_CONTRACT_TABLE_IDENTITY, observations, RESULTS,
   INPUT_CLASSES, OPERATORS, ACQUISITION_MODES, INVALIDATION_REASONS, INVARIANTS,
   sources, predecessors, EXPECTED_TESTS, EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
@@ -515,6 +749,7 @@ receipt_value = {
   "behavior_manifest_identity" => EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
   "behavior_passed" => passed,
   "behavior_runs" => behavior_runs,
+  "diagnostic_proof_claim" => DIAGNOSTIC_PROOF_CLAIM,
   "publication_state" => "inactive_candidate",
   "schema_version" => "maestro.vnext.stage5.ruby-verification-receipt.v1",
   "source_closure_sha256" => Digest::SHA256.hexdigest(canonical_json(sources)),
@@ -523,6 +758,9 @@ receipt_value = {
 receipt = receipt_value.merge(
   "receipt_identity" => "sha256:#{Digest::SHA256.hexdigest(canonical_json(receipt_value))}"
 )
+raise "Stage 5 Ruby receipt key set differs" unless receipt.keys.sort == RUBY_RECEIPT_KEYS
+raise "Stage 5 Ruby receipt proof claim differs" unless receipt.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+raise "Stage 5 Ruby receipt behavior grammar differs" unless exact_behavior_runs?(receipt.fetch("behavior_runs"))
 FileUtils.mkdir_p(options.fetch(:output_root))
 File.write(
   File.join(options.fetch(:output_root), "ruby-verification-receipt.v1.json"),

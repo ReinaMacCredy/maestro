@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-cumulative-seal-pointer.v1",
+  "type": "object",
+  "required": ["schema_version", "generation", "object", "release_identity"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-cumulative-seal-pointer.v1"},
+    "generation": {"type": "integer", "minimum": 1},
+    "object": {"type": "string", "pattern": "^objects/[0-9a-f]{64}$"},
+    "release_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

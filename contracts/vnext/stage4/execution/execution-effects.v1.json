@@ -8,17 +8,17 @@
       [
         [
           "stage0_effect_home",
-          "sha256:22f58983311b9088a53a40341dd2d79a3be17d4fb08d73742934fba6c22db802",
+          "sha256:c8c51a348faa0293f63fa15a6da2d2baf0315f3c985529a96ed0b860b9bae8ce",
           [
             [
               "contracts/vnext/stage0/effect-home/encoder-receipt.json",
-              393839,
-              "79ba10484f84816acaac881024ba2bab9508214bf21ec6785e0e5e9af1b565c7"
+              396415,
+              "a24e38bc6bba4bee17bf03ad940ce84639c76c3747b474a1bf1d58b30d8cd891"
             ],
             [
               "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
               2570,
-              "6026229515ed622e64c9e4012575043223dbf245d500bfdf9271d29f19c7bba0"
+              "7e608e1e9a6cda039bbb20c0b762dd17dcd6906827f90d79cbf364b4b8e0d9be"
             ]
           ]
         ],
@@ -29,7 +29,7 @@
             [
               "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json",
               749,
-              "e911c1c1af419d0eb1aed0ed2a55271e8d64ab2a81c53469fe1f07bfc9a92ae0"
+              "03dd24f5c9c54faee935ef59cb81cbd91a96e2de0d424f230afe610865a13573"
             ],
             [
               "contracts/vnext/stage0/dispatch-cutover/validation-receipt.v1.json",
@@ -40,43 +40,43 @@
         ],
         [
           "stage2_authority",
-          "sha256:b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
+          "sha256:120d7e2a998a885ab8242655eee781df759c106ffaee3e2e5d2a81056151474c",
           [
             [
               "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
               5249,
-              "4b39f06bba5befa0506246cc40af239a66bf93ada52d9dfb08c17cfdb12b5bf8"
+              "fd0df1c6465eac5281845451c171fc0e4b56926814c558e580f659d38269edcb"
             ],
             [
               "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
               1965,
-              "fa703e2f46f1065780205540bd9c2312618812b13b13596039e15f985c958c37"
+              "a2bff49c26297919480029261a981886c212b9da34e9739cddc4d0a64d5334b5"
             ],
             [
               "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
               1791,
-              "80c9ffcc259896e7ca58f7ff8509dfc02195e2cde26523753962bb9045b90074"
+              "804c9fadc69764f48c9bb5f52c0f4d3ffeb59b3ee819a4570ee73ce28b7156b2"
             ]
           ]
         ],
         [
           "stage3_domain",
-          "sha256:03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9",
+          "sha256:09202f1c7c5281e7d9bde694d7fa7f328eab88e64fb9bc1d0732cbef66530ef4",
           [
             [
               "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json",
               2125,
-              "5008877303e5e363d0effd44247efac1508676344bf356b9b8dccaadf11fb42a"
+              "14676c948779d0c29953bd33ec4e046cd6007eb4619b264362d132b49b608db8"
             ],
             [
               "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json",
               1854,
-              "eb566f4f2aa7342413031049082d3576f532e50653f946b6d003ccb66d77d4ba"
+              "ca57367c18482e1edf5c8d0bd23815bc2c56895f899133512ebfe69f3a7021d1"
             ],
             [
               "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
               1850,
-              "66c8c38aa091c61d24a78f620f9e39d66b00506400cb4f3471161439a8da2b6b"
+              "b8033228db72f60043797be6ecd6bf70ea875bb8f0089203373dada4be24162f"
             ]
           ]
         ]
@@ -182,7 +182,7 @@
           ],
           0,
           "pass",
-          "ce95c9572826b47e98ecf123b7cc1fa61a622a0675b560c8e9f6c6f7ffe461c9",
+          "0d46ae43b8be7b2b201ebffbaa9ebb0bfbae81fd1345dd77c9706e6547d56384",
           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         ]
       ]
@@ -621,7 +621,7 @@
       [
         "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json",
         749,
-        "e911c1c1af419d0eb1aed0ed2a55271e8d64ab2a81c53469fe1f07bfc9a92ae0"
+        "03dd24f5c9c54faee935ef59cb81cbd91a96e2de0d424f230afe610865a13573"
       ],
       [
         "contracts/vnext/stage0/dispatch-cutover/dispatch-attempt-state.v1.json",
@@ -640,53 +640,53 @@
       ],
       [
         "contracts/vnext/stage0/effect-home/encoder-receipt.json",
-        393839,
-        "79ba10484f84816acaac881024ba2bab9508214bf21ec6785e0e5e9af1b565c7"
+        396415,
+        "a24e38bc6bba4bee17bf03ad940ce84639c76c3747b474a1bf1d58b30d8cd891"
       ],
       [
         "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
         2570,
-        "6026229515ed622e64c9e4012575043223dbf245d500bfdf9271d29f19c7bba0"
+        "7e608e1e9a6cda039bbb20c0b762dd17dcd6906827f90d79cbf364b4b8e0d9be"
       ],
       [
         "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
         5249,
-        "4b39f06bba5befa0506246cc40af239a66bf93ada52d9dfb08c17cfdb12b5bf8"
+        "fd0df1c6465eac5281845451c171fc0e4b56926814c558e580f659d38269edcb"
       ],
       [
         "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
         1791,
-        "80c9ffcc259896e7ca58f7ff8509dfc02195e2cde26523753962bb9045b90074"
+        "804c9fadc69764f48c9bb5f52c0f4d3ffeb59b3ee819a4570ee73ce28b7156b2"
       ],
       [
         "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
         1965,
-        "fa703e2f46f1065780205540bd9c2312618812b13b13596039e15f985c958c37"
+        "a2bff49c26297919480029261a981886c212b9da34e9739cddc4d0a64d5334b5"
       ],
       [
         "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.json",
         11269,
-        "5c66aeefdf4f6e875050e93f4b50c068caf3928ceec40d1e1ca8c14365be1819"
+        "978f3fad1dfbf469846d34067590598cf54261ea9ae2e4869ca4b8aabf6a69bc"
       ],
       [
         "contracts/vnext/stage3/domain/domain-kernel.v1.json",
-        34293,
-        "d1eb06cec4be508b44829accfc6e68506dfddc4fb7e09b2a8ee1f48520c850a9"
+        35979,
+        "ea6f85a5cb89fae1c163d9c8630c6d7b63aaf2697c84faef72530db9aa1edf1b"
       ],
       [
         "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json",
         2125,
-        "5008877303e5e363d0effd44247efac1508676344bf356b9b8dccaadf11fb42a"
+        "14676c948779d0c29953bd33ec4e046cd6007eb4619b264362d132b49b608db8"
       ],
       [
         "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
         1850,
-        "66c8c38aa091c61d24a78f620f9e39d66b00506400cb4f3471161439a8da2b6b"
+        "b8033228db72f60043797be6ecd6bf70ea875bb8f0089203373dada4be24162f"
       ],
       [
         "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json",
         1854,
-        "eb566f4f2aa7342413031049082d3576f532e50653f946b6d003ccb66d77d4ba"
+        "ca57367c18482e1edf5c8d0bd23815bc2c56895f899133512ebfe69f3a7021d1"
       ],
       [
         "src/domain/mod.rs",
@@ -695,8 +695,8 @@
       ],
       [
         "src/domain/vnext/authority/action_basis.rs",
-        28715,
-        "69be46ec16a27e6f8d033320d7b7d14777193a788b8489bcbc68bcfa3cf88ad7"
+        41503,
+        "d91343cd0de37b8579b14e905d80b5b4092f275bab87c848e3744365398338ed"
       ],
       [
         "src/domain/vnext/authority/continuity/trusted_time.rs",
@@ -705,23 +705,23 @@
       ],
       [
         "src/domain/vnext/authority/facade.rs",
-        113236,
-        "324c01e17d820eba0310ffc18d20c226770715c2688f3e66ab3a3bdf4917afd1"
+        148326,
+        "ae8938e75604de5a3eb4a873d85144102dd4c811c6979e9337af52e567208dba"
       ],
       [
         "src/domain/vnext/authority/facade/repository_admission.rs",
-        148049,
-        "82692e35371e005a0484d61c971311a3830aacbdf0ef7cce97ad965d4080a6bd"
+        185262,
+        "4b7b80bb3257d31018686a3d1443136b4594ad1dc26a5a2c508063f870069b41"
       ],
       [
         "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
-        82218,
-        "d8237029c54af80baedaeeec5344dccdce268fead0c79032385243e38323599b"
+        110869,
+        "72dad5f056c05358e2fedd9bfd5a45d495ee1f64e5542129ebacc7e85164293f"
       ],
       [
         "src/domain/vnext/authority/mod.rs",
-        7474,
-        "61308a82506ce097ad23e39b21613fc2e56500bd73c2626840cfbabdd39cf7d6"
+        8898,
+        "5d01b790c6b453a90442328b4c516bf3717239bfbc8129ee373896070b0ec4f0"
       ],
       [
         "src/domain/vnext/contract/assembly.rs",
@@ -780,18 +780,18 @@
       ],
       [
         "src/domain/vnext/contract/runtime.rs",
-        33888,
-        "7b91c41c98854de2848d773c26975eb5a83a2a5390fefd3ddb849ff3248130b8"
+        35008,
+        "854f8d134fa45431dda87220cac7bfdd7ba5edd180a427d7dacc7f3c14b401da"
       ],
       [
         "src/domain/vnext/evidence/claim.rs",
-        18905,
-        "896cf74689d2486299cd8930ef114a5645b3d54c75999e039d3f9ae91f765483"
+        26900,
+        "0b7850a5427d3235009e7d2e920d326084450f75cdf41837ef406b5733bf6442"
       ],
       [
         "src/domain/vnext/evidence/mod.rs",
-        572,
-        "5a134f8374e0faf56f1cd0180f0a36f25425103c6bb933df608585b4298a7e33"
+        2825,
+        "b2f2eab28969ad283dff9ee448715a8caee4857c8d756384ed6f39944b6ff640"
       ],
       [
         "src/domain/vnext/evidence/submission_claim.rs",
@@ -840,13 +840,13 @@
       ],
       [
         "src/domain/vnext/execution/runtime.rs",
-        145788,
-        "153b8ae2301e038ba18407c37683fe1738ca5ebf21ce72c0e32e0ae2c0dee04c"
+        146482,
+        "3ee86fbafa8b5d071bd072e4743b035b6ce75a2118c3b9c03c3dd0d097d53fe5"
       ],
       [
         "src/domain/vnext/execution/store.rs",
-        758713,
-        "dcfd1506b335aa969eda1fc2c25dea61877f6180d40a98f01988be6ea8d4fec4"
+        777469,
+        "59e5e4e65627bac999c7c26556b13eed7f28a0e144a01c0ac48f76af45fc8918"
       ],
       [
         "src/domain/vnext/execution/withdrawal.rs",
@@ -855,8 +855,8 @@
       ],
       [
         "src/domain/vnext/mod.rs",
-        464,
-        "ffac1b103bc89a38d2d4062735d6a900f6effccf9aa68b118a0e36067d2b0ad7"
+        733,
+        "99e0463609e6ec23c7362c57e3f780911bb0ef0252efd3fe7ba5f5a9f613bf09"
       ],
       [
         "src/domain/vnext/persistence/export.rs",
@@ -870,23 +870,33 @@
       ],
       [
         "src/domain/vnext/persistence/idempotency.rs",
-        5428,
-        "30d83470c4cdbae6dd654dab79ecd37e8368bdb9e97bcc98e8e67044ccc71f5f"
+        10787,
+        "a5d9d12cc88ece5ba223cb646769d9acde48c430492dfd2398f32c7dd95a52b7"
       ],
       [
         "src/domain/vnext/persistence/metadata.rs",
-        99463,
-        "1df4551726bd29d46140f82311980d6889f522b2ab0d7daf23719a76a2a5d0d6"
+        102766,
+        "80dde200cc3686ea20af57ec1971450a14241e29651c0e4cd0dfcb19b6d56b28"
       ],
       [
         "src/domain/vnext/persistence/mod.rs",
-        1669,
-        "06fe48ba165614a6728d0fd917ab1a10199c1cfcdb13d0945d6a0e9a78ce2ae6"
+        2318,
+        "76f5c46de6c251b3dd3c1c0502a943a90491673deabe9f13a5ec013716884f4e"
       ],
       [
         "src/domain/vnext/persistence/object.rs",
         4693,
         "f1d8a3921d7b25bbd010c2647e2cd56a5cb0c36efe0848dfd95303df9c6faff2"
+      ],
+      [
+        "src/domain/vnext/persistence/protected_diagnostic.rs",
+        28270,
+        "06068f4f7c3150d9e8ba6d5a5f5e4626805939c51767cd7d882c67e73ff54f42"
+      ],
+      [
+        "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs",
+        2632,
+        "b803945bd760ce20a2f8a2e10d0ac9e801d811030c39e1294ef74bd15371d156"
       ],
       [
         "src/domain/vnext/persistence/retention.rs",
@@ -920,13 +930,13 @@
       ],
       [
         "src/domain/vnext/persistence/store.rs",
-        146252,
-        "0f5e597443711318906c12964ea13e83cb616d18d82612fae5405194f1ca1ced"
+        213497,
+        "9c73eca54beec17cae58581a275a68848ba5a09d1d1b33ce17d775399e2851c7"
       ],
       [
         "src/domain/vnext/persistence/tests/atomic_publication.rs",
-        19475,
-        "4e19cb271e9eeacaf6aee2aa6d5eaf470a5ca9252143ce5992346df48c30c079"
+        22239,
+        "9a5f32788a5c992f6468fbdb227c1c2cc569bb879669a1ad1c287bb02b0d2226"
       ],
       [
         "src/domain/vnext/persistence/tests/canonical_store.rs",
@@ -985,8 +995,8 @@
       ],
       [
         "tests/vnext_stage4_contracts.rs",
-        81817,
-        "83282ed4481d3c73af2169f88901e98054eb0612faedbde45eb8e66c9cf20047"
+        81952,
+        "6633f70c084783178d0d1f159afc149e683399663da2a6dc2b285ccba83107a6"
       ],
       [
         "tools/vnext_contracts/catalogs/cbor_py.py",
@@ -996,17 +1006,17 @@
       [
         "tools/vnext_contracts/stage4/execution/build.py",
         51766,
-        "ae3b6b1f7b5d36d040ffb109afbe8ffd6d70ba4f7111739c6543512801cdf6e0"
+        "35896e81c6dd3ddfef235d8765218ae7d7f280000a0b156139025ba9a174aee3"
       ],
       [
         "tools/vnext_contracts/stage4/execution/validate.py",
         42353,
-        "60f5dc423fa0cc8790816aa84c77ffc8190050aa311dfe81eb968550b236eaed"
+        "9399d9770f7bb4120c8b77f1f1a59c925e22862f5a9552c6d9fbf19bea9fb99e"
       ],
       [
         "tools/vnext_contracts/stage4/execution/verify.rb",
         39501,
-        "60dd72b3146aa22b951e751317d1856aee455fdac7c8e93ab8c9a1157b4e9877"
+        "0f9f0b8e0851293b74ee3d56706e14e449eb0ab0e318a12797bab63739fde5c9"
       ]
     ],
     [
@@ -1084,7 +1094,7 @@
         ],
         [
           "PATH",
-          "/Users/reinamaccredy/.local/bin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:<codex-transient-arg0>:/Users/reinamaccredy/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/reinamaccredy/.hermes/node/bin:/Users/reinamaccredy/.grok/bin:/Users/reinamaccredy/.bun/bin:/Users/reinamaccredy/.local/bin:/Users/maccredyreina/.opencode/bin:/Users/reinamaccredy/.antigravity/antigravity/bin:/Users/reinamaccredy/Documents/Projects/scripts:/Users/reinamaccredy/Documents/Library/scripts:/opt/homebrew/lib/ruby/gems/3.4.0/bin:/opt/homebrew/opt/ruby/bin:/Users/reinamaccredy/.config/zide/bin:/opt/homebrew/opt/python@3.11/libexec/bin:/opt/homebrew/opt/python@3.12/libexec/bin:/Users/reinamaccredy/.console-ninja/.bin:/Users/reinamaccredy/development/flutter/bin:/Users/reinamaccredy/.lmstudio/bin:/Users/reinamaccredy/.cache/lm-studio/bin:/Users/reinamaccredy/.spicetify:/Users/reinamaccredy/.codeium/windsurf/bin:/Users/reinamaccredy/.opencode/bin:/Users/reinamaccredy/.cargo/bin:/Users/reinamaccredy/go/bin:/Users/reinamaccredy/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/Obsidian.app/Contents/MacOS"
+          "/Users/reinamaccredy/.local/bin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/VMware Fusion.app/Contents/Public:<codex-transient-arg0>:/Users/reinamaccredy/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/reinamaccredy/.hermes/node/bin:/Users/reinamaccredy/.grok/bin:/Users/reinamaccredy/.bun/bin:/Users/reinamaccredy/.local/bin:/Users/maccredyreina/.opencode/bin:/Users/reinamaccredy/.antigravity/antigravity/bin:/Users/reinamaccredy/Documents/Projects/scripts:/Users/reinamaccredy/Documents/Library/scripts:/opt/homebrew/lib/ruby/gems/3.4.0/bin:/opt/homebrew/opt/ruby/bin:/Users/reinamaccredy/.config/zide/bin:/opt/homebrew/opt/python@3.11/libexec/bin:/opt/homebrew/opt/python@3.12/libexec/bin:/Users/reinamaccredy/.console-ninja/.bin:/Users/reinamaccredy/development/flutter/bin:/Users/reinamaccredy/.lmstudio/bin:/Users/reinamaccredy/.cache/lm-studio/bin:/Users/reinamaccredy/.spicetify:/Users/reinamaccredy/.codeium/windsurf/bin:/Users/reinamaccredy/.opencode/bin:/Users/reinamaccredy/.cargo/bin:/Users/reinamaccredy/go/bin:/Users/reinamaccredy/.jbcontext/bin:/Users/reinamaccredy/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/Obsidian.app/Contents/MacOS"
         ],
         [
           "RUSTC",
@@ -1184,7 +1194,7 @@
       ]
     ]
   ],
-  "identity": "sha256:462d821152e1f621073276d8403ad0ea89d9ec66227cd8b3067cf956bdfaa077",
+  "identity": "sha256:2b19a05858c400f030b28123a6f608f0a919e1f68c3c234aec8f7c3eb55f68fe",
   "publication_state": "inactive_candidate",
   "schema_version": "maestro.vnext.stage4.execution-effects.v1"
 }

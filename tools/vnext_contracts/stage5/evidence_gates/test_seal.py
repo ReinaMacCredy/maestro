@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import cast
 from unittest import mock
 
-from tools.vnext_contracts.stage5.evidence_gates import seal
+from tools.vnext_contracts.stage5.evidence_gates import seal, toolchain
 from tools.vnext_contracts.proof_engine import (
     CommandSpec,
     EngineError,
@@ -160,22 +161,86 @@ class Stage5SnapshotTests(unittest.TestCase):
                 seal.build_snapshot(Path("/bin/false"), cache)
 
     def test_ruby_verifier_executes_its_exact_test_output_parser(self) -> None:
-        ruby = shutil.which("ruby")
-        if ruby is None:
-            self.fail("Ruby is required for the independent Stage 5 verifier")
+        ruby = seal.required_tool("ruby")
+        ruby_before, _ = seal.read_regular_file(ruby)
+        home = pwd.getpwuid(os.getuid()).pw_dir
         completed = subprocess.run(
-            [ruby, str(Path(seal.__file__).with_name("verify.rb")), "--self-test-output-parser"],
+            [str(ruby), str(Path(seal.__file__).with_name("verify.rb")), "--self-test-output-parser"],
             capture_output=True,
             check=False,
             text=True,
+            env={
+                "HOME": home,
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin",
+                "RUBYLIB": "",
+                "RUBYOPT": "",
+            },
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        ruby_after, _ = seal.read_regular_file(ruby)
+        self.assertEqual(seal.sha256(ruby_before), seal.sha256(ruby_after))
         self.assertEqual(
             json.loads(completed.stdout),
             {
-                "behavior_manifest_identity": "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12",
+                "behavior_manifest_identity": "sha256:bc8d5dd0b46c8dda55b02791abbec7c92122e55e30643e0aa5e87a36add40665",
                 "exact_test_output_parser": "pass",
             },
+        )
+
+    def test_driver_name_literal_is_identity_only_while_static_argument_executes(self) -> None:
+        temporary, _, cache = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        script = root / "record-driver.py"
+        script.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "source = Path(sys.argv[1])\n"
+            "destination = Path(sys.argv[3])\n"
+            "destination.write_text(f'{source.name}:{sys.argv[2]}', encoding='ascii')\n",
+            encoding="ascii",
+        )
+        driver = root / "file"
+        driver.write_bytes(b"driver-fixture")
+        driver_name = "librustc_driver-0123456789abcdef.dylib"
+        self.assertIsNotNone(toolchain.DRIVER_NAME.fullmatch(driver_name))
+        plan = ProofPlan(
+            inputs=(
+                InputBinding.file("script", script),
+                InputBinding.file("rustc-driver", driver),
+                InputBinding.literal("rustc-driver-name", driver_name),
+            ),
+            tools=(ToolSpec("python", Path(sys.executable), ("--version",)),),
+            phases=(
+                PhaseSpec(
+                    name="toolchain",
+                    commands=(
+                        CommandSpec(
+                            tool="python",
+                            args=(
+                                "{input:script}",
+                                "{input:rustc-driver}",
+                                driver_name,
+                                "{phase_root}/driver-name.txt",
+                            ),
+                            label="static-driver-name",
+                        ),
+                    ),
+                    inputs=("script", "rustc-driver", "rustc-driver-name"),
+                ),
+            ),
+        )
+        result = ProofEngine().execute(
+            plan,
+            run_root=root / "run",
+            cache_root=cache,
+            run_token="stage5-driver-name-static-argument",
+        )
+        self.assertEqual(
+            (result.phases[0].output_root / "driver-name.txt").read_text(encoding="ascii"),
+            f"file:{driver_name}",
         )
 
     def test_seven_phase_adapter_resumes_exact_topology_after_interruption(self) -> None:

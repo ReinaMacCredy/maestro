@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import copy
+import argparse
 import hashlib
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -25,7 +27,15 @@ def command(command: list[str], root: Path) -> subprocess.CompletedProcess[str]:
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "STAGE0_DECISION_CLOSURE_ROOT": str(root)},
+        env={
+            "HOME": tempfile.gettempdir(),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "RUBYOPT": "",
+            "STAGE0_DECISION_CLOSURE_ROOT": str(root),
+        },
     )
 
 
@@ -88,8 +98,11 @@ def write_documents(root: Path, external: dict[str, object], decision: dict[str,
 
 
 def main() -> int:
-    baseline_python = command(["python3", str(PYTHON)], CONTRACT)
-    baseline_ruby = command(["ruby", str(RUBY)], CONTRACT)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    baseline_python = command([sys.executable, str(PYTHON)], CONTRACT)
+    baseline_ruby = command(["/usr/bin/ruby", str(RUBY)], CONTRACT)
     if baseline_python.returncode or baseline_ruby.returncode:
         raise SystemExit("baseline validation failed")
     python_receipt = json.loads(baseline_python.stdout)
@@ -115,7 +128,7 @@ def main() -> int:
             mutated_decision = copy.deepcopy(decision)
             mutate_documents(name, mutated_external, mutated_decision)
             write_documents(root, mutated_external, mutated_decision)
-            for label, executable in (("python", ["python3", str(PYTHON)]), ("ruby", ["ruby", str(RUBY)])):
+            for label, executable in (("python", [sys.executable, str(PYTHON)]), ("ruby", ["/usr/bin/ruby", str(RUBY)])):
                 result = command(executable, root)
                 if result.returncode == 0:
                     raise SystemExit(f"{label} accepted mutant {name}")
@@ -130,7 +143,13 @@ def main() -> int:
         "mutants": {"cases": mutant_names, "rejected": rejected, "total": sum(rejected.values())},
         "validator_sha256": {"python": hashlib.sha256(PYTHON.read_bytes()).hexdigest(), "ruby": hashlib.sha256(RUBY.read_bytes()).hexdigest()},
     }
-    (CONTRACT / "encoder-receipt.v1.json").write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="ascii")
+    receipt_bytes = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+    receipt_path = CONTRACT / "encoder-receipt.v1.json"
+    if args.check:
+        if not receipt_path.is_file() or receipt_path.read_bytes() != receipt_bytes:
+            raise SystemExit("decision-closure encoder receipt drifted or is missing")
+    else:
+        receipt_path.write_bytes(receipt_bytes)
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return 0
 

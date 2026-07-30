@@ -119,6 +119,7 @@ SEMANTIC_LITERAL_SOURCES = {
     "src/domain/vnext/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
+    "src/domain/vnext/execution/h3_withdrawal_publication.rs": ("Execution", "candidate_contract_definition", "direct_stage4_h3_withdrawal_publication_literal"),
     "src/domain/vnext/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
     "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),

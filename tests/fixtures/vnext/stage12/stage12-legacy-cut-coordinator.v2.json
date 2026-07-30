@@ -1,0 +1,276 @@
+{
+  "approved_packet": {
+    "byte_length": 10927,
+    "path": "control/stage12/packet/replacement-build-approval-packet.v7.json",
+    "sha256": "sha256:0c525951a49c7406d1008c64a3ad328505777c09cb7388b11a5db8634c3f4f65"
+  },
+  "approved_packet_identity": "sha256:171de6121c62f1c8af55e9e248da506ca96322cb5a588c75ee3762f7d8082472",
+  "authority_scope": "one_expected_preimage_isolated_candidate_ref_cas_only",
+  "candidate_ref": {
+    "crash_states": [
+      "exact_expected_preimage",
+      "exact_declared_postimage"
+    ],
+    "declared_postimage": {
+      "commit": "2222222222222222222222222222222222222222",
+      "tree": "3333333333333333333333333333333333333333"
+    },
+    "declared_postimage_parent": "1111111111111111111111111111111111111111",
+    "expected_preimage": {
+      "commit": "1111111111111111111111111111111111111111",
+      "tree": "4444444444444444444444444444444444444444"
+    },
+    "git_common_dir_realpath": "/test-only/isolated-successor.git",
+    "ref": "refs/heads/test-only/isolated-successor",
+    "ref_update_algorithm": "git-update-ref-no-deref-new-old",
+    "repository_realpath": "/test-only/isolated-successor"
+  },
+  "cas_observation": {
+    "observed_commit": "1111111111111111111111111111111111111111",
+    "observed_tree": "4444444444444444444444444444444444444444",
+    "state": "not_executed"
+  },
+  "canonical_ancestry": [
+    {
+      "commit": "ff454521b7037d5df7b8e836b8ce30f77e1ff8dc",
+      "lane": "V7Design",
+      "tree": "bd2c08f87809d5093252943f2fd04a5be551aa13"
+    },
+    {
+      "commit": "66ba4bf8470ee63b81a77bddc0f9d83e6cc4961c",
+      "lane": "Stage11",
+      "tree": "f697a328de1b0271bcc266f9cb12a7d1c9ef24a3"
+    },
+    {
+      "commit": "0c27ccfe2c939b50ac2f99a9349d0aa56d065ff7",
+      "lane": "MainIntegrationStage11Wiring",
+      "tree": "4ed2c96e071532d275088d9b8089cccaebec0de9"
+    },
+    {
+      "commit": "fc190ce78d940475073b0451c349f52016380d3c",
+      "lane": "AuthorityOwner",
+      "tree": "e32bcc029e96cfbcb0f805527c19bc1efbf964af"
+    },
+    {
+      "commit": "73e2d226f51ac55ee9a92b411fade9b7737fa567",
+      "lane": "Stage12Product",
+      "tree": "9bca7075c5255b9bb3eb757693c7f13b8d294b19"
+    },
+    {
+      "commit": "acd2a469d058f5a17162d3f0a5a44fe394cf6676",
+      "lane": "AuthorityOwnerModulePlacementCorrection",
+      "tree": "b97282eadfc10ad552cdc5b46bef7b62454367ef"
+    },
+    {
+      "commit": "e03d21b64995a20cfda3e90d706048ca79038f30",
+      "lane": "Stage12ProductAffectedSuffixRebind",
+      "tree": "600171763b9e782d494fa0c04ba5de9a5d7fa5a4"
+    }
+  ],
+  "clean_successor_preimage": {
+    "commit": "e69295329c29c1c75901315a56e947b85b7a69cf",
+    "tree": "cd36cbb2963a264cb67a834bb38c709c0ea144ae"
+  },
+  "effect_boundary": {
+    "adapter_activation": false,
+    "authority_guard_mint_or_reconstruction": false,
+    "final_runner_candidate_ref_write": false,
+    "installation": false,
+    "live_product_path_pruning": false,
+    "primary_never_target": true,
+    "publication": false,
+    "release": false
+  },
+  "protected_primary": {
+      "boundary": {
+        "byte_length": 1126,
+        "path": "control/stage12/packet/primary-dirty-boundary.v7.json",
+        "sha256": "sha256:4f4ec8207a5f5824c9113cca1a3b04cf390f2bf731f1188e399ba56d8ad6c26a"
+      },
+      "boundary_identity": "sha256:e5b4c0592b8cf373ea68fc5e0e3f84020c14f3f422c5779e8d4a423930aa6054",
+    "candidate_target": false,
+    "checkout_realpath": "/Users/reinamaccredy/Code/maestro",
+    "commit": "13b9a5e9b5ec67e7086b0b21992a207d2e4cde94",
+    "ref": "refs/heads/main",
+    "tree": "97e08a00f8a721318cda13241129a3b06651accc"
+  },
+  "retained_inputs": [
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/legacy-source-case-manifest.v3.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000001",
+      "kind": "legacy_source_case_manifest_v3",
+      "state": "current_complete"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/stage12-sighting-manifest.v2.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000002",
+      "kind": "stage12_sighting_manifest_v2",
+      "state": "current_complete"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/migration-classification-manifest.v3.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000003",
+      "kind": "migration_classification_manifest_v3",
+      "state": "closed"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/declared-overlap-manifest.v2.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000004"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000004",
+      "kind": "declared_overlap_manifest_v2",
+      "state": "closed_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/unavailable-preexisting-loss-manifest.v3.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000005"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000005",
+      "kind": "unavailable_preexisting_loss_manifest_v3",
+      "state": "closed_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/sealed-quarantine-manifest.v3.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000006"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000006",
+      "kind": "sealed_quarantine_manifest_v3",
+      "state": "sealed_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/legacy-quarantine-epoch.v3.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000007"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000007",
+      "kind": "legacy_quarantine_epoch_v3",
+      "state": "sealed_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/replacement-activation.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000008"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000008",
+      "kind": "replacement_activation",
+      "state": "active_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/adapter-parity.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000009"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000009",
+      "kind": "adapter_parity",
+      "state": "exact"
+    },
+    {
+      "count": 0,
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/consumer-manifest.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000010"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000010",
+      "kind": "consumer_manifest",
+      "state": "zero_current"
+    },
+    {
+      "count": 0,
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/reader-manifest.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000011"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000011",
+      "kind": "reader_manifest",
+      "state": "zero_current"
+    },
+    {
+      "count": 0,
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/hold-manifest.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000012"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000012",
+      "kind": "hold_manifest",
+      "state": "zero_current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/rollback-rehearsal.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000013"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000013",
+      "kind": "rollback_rehearsal",
+      "state": "rehearsed_current"
+    },
+    {
+      "entry_count": 210,
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/namespace-promotion-manifest.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000014"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000014",
+      "kind": "namespace_promotion_manifest",
+      "mismatch_count": 0,
+      "state": "exact"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/release-currentness.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000015"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000015",
+      "kind": "release_currentness",
+      "state": "current"
+    },
+    {
+      "evidence": {
+        "byte_length": 1,
+        "path": "control/stage12/proof-registry-currentness.json",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000016"
+      },
+      "identity": "sha256:1000000000000000000000000000000000000000000000000000000000000016",
+      "kind": "proof_registry_currentness",
+      "state": "current"
+    }
+  ],
+  "schema_version": "maestro.external.stage12-legacy-cut-coordinator.v2",
+  "source_git_binding": {
+    "artifact": {
+      "byte_length": 1706,
+      "path": "control/stage12/packet/source-git-control-binding.v7.json",
+      "sha256": "sha256:7d73e0746497566712a1c6782c8d3435627aa2c7b997e59ceaea1b32756e792d"
+    },
+    "git_common_dir_realpath": "/Users/reinamaccredy/Code/maestro/.git",
+    "identity": "sha256:1099c62b3c9a333da68733a098ceece9e6754f28f1ea53f30b4b8dfcc6ae92d7",
+    "object_format": "sha1",
+    "repository_realpath": "/Users/reinamaccredy/Code/maestro"
+  }
+}

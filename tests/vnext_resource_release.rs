@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use maestro::domain::vnext::distribution::{
+use maestro::domain::distribution::{
     BUNDLE_KIND_COUNT, BundleKindV1, BundleManifestInputV1, BundleManifestV1,
     C868_RUNTIME_EDGE_COUNT, C868_SCHEMA_COUNT, C868_SUITE_COMPONENT_COUNT, CommitmentV1,
     ContentEncodingV1, DESCRIPTOR_ENVELOPE_SLOT_COUNT, DeltaDispositionV1, DeltaIdentityKindV1,

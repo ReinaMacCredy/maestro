@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -77,30 +78,50 @@ COMPILATION_ANCESTORS = [
     "build.rs",
     "src/lib.rs",
     "src/domain/mod.rs",
-    "src/domain/vnext/mod.rs",
+    "src/domain/mod.rs",
     "src/foundation/mod.rs",
     "src/foundation/core/mod.rs",
     "src/foundation/core/deterministic_cbor.rs",
 ]
 AUTHORITY_EXTENSION_SOURCES = [
-    "src/domain/vnext/authority/action_basis.rs",
-    "src/domain/vnext/authority/continuity/trusted_time.rs",
-    "src/domain/vnext/authority/facade.rs",
-    "src/domain/vnext/authority/facade/repository_admission.rs",
-    "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
-    "src/domain/vnext/authority/mod.rs",
+    "src/domain/authority/action_basis.rs",
+    "src/domain/authority/continuity/trusted_time.rs",
+    "src/domain/authority/downstream_action_basis.rs",
+    "src/domain/authority/facade.rs",
+    "src/domain/authority/facade_tests.rs",
+    "src/domain/authority/facade/repository_admission.rs",
+    "src/domain/authority/facade/repository_leaf_authority.rs",
+    "src/domain/authority/governance_attestation.rs",
+    "src/domain/authority/governance_attestation_stage7_seed.rs",
+    "src/domain/authority/governance_floor.rs",
+    "src/domain/authority/materialization.rs",
+    "src/domain/authority/mod.rs",
+    "src/domain/authority/protected_diagnostic_envelope.rs",
+    "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    "src/domain/authority/publication.rs",
+    "src/domain/installation/durable_finality.rs",
+    "src/domain/installation/durable_finality_stage9_seed.rs",
+    "src/domain/installation/durable_finality_stage11_seed.rs",
+    "src/domain/persistence/protected_locator_lease.rs",
+    "src/domain/persistence/protected_locator_stage9_seed.rs",
+    "src/foundation/core/secure_fs.rs",
+    "src/foundation/core/aggregate_census.rs",
+    "src/foundation/core/aggregate_census_stage11_seed.rs",
+    "src/foundation/core/descriptor_census_platform.rs",
+    "src/foundation/core/descriptor_census_platform_stage11_seed.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
-    "src/domain/vnext/evidence/mod.rs",
-    "src/domain/vnext/evidence/submission_claim.rs",
-    "src/domain/vnext/evidence/claim.rs",
-    "src/domain/vnext/step/lifecycle.rs",
-    "src/domain/vnext/step/submission.rs",
+    "src/domain/evidence/mod.rs",
+    "src/domain/evidence/submission_claim.rs",
+    "src/domain/evidence/claim.rs",
+    "src/domain/step/lifecycle.rs",
+    "src/domain/step/submission.rs",
 ]
 TOOL_SOURCES = [
     "tests/vnext_stage4_contracts.rs",
     "tools/vnext_contracts/catalogs/cbor_py.py",
     "tools/vnext_contracts/stage4/execution/build.py",
+    "tools/vnext_contracts/stage4/execution/test_behavior_census.py",
     "tools/vnext_contracts/stage4/execution/validate.py",
     "tools/vnext_contracts/stage4/execution/verify.rb",
 ]
@@ -125,7 +146,7 @@ MUTANT_COMMANDS = [
     ["cargo", "test", "--test", "vnext_stage4_contracts", "stage4_proof_rejects_", "--", "--nocapture"],
     ["cargo", "test", "--test", "vnext_stage4_contracts", "independent_execution_artifact_rejects_semantic_and_shape_mutants", "--", "--nocapture"],
 ]
-BEHAVIOR_EXPECTED_PASSED = [70, 5, 1, 1, 1, 1]
+BEHAVIOR_EXPECTED_PASSED = [70, 7, 1, 1, 1, 1]
 MUTANT_EXPECTED_PASSED = [10, 6, 1]
 SANITIZED_ENVIRONMENT_KEYS = [
     "CARGO_BUILD_TARGET", "CARGO_ENCODED_RUSTFLAGS", "CARGO_HOME", "CARGO_INCREMENTAL", "CARGO_TARGET_DIR",
@@ -289,15 +310,18 @@ def bound_environment_value(key: str, environment: dict[str, str]) -> str:
 
 
 def command_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    for key in UNSET_BUILD_OVERRIDE_KEYS:
-        environment.pop(key, None)
-    environment.setdefault("CARGO_HOME", str(Path.home() / ".cargo"))
-    environment.setdefault("RUSTUP_HOME", str(Path.home() / ".rustup"))
-    environment["CARGO_INCREMENTAL"] = "0"
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    environment["RUSTC"] = str(tool_descriptor("rustc")["invocation_path"])
-    return environment
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    return {
+        "CARGO_HOME": str(Path(home) / ".cargo"),
+        "CARGO_INCREMENTAL": "0",
+        "HOME": home,
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "RUSTC": str(tool_descriptor("rustc")["invocation_path"]),
+        "RUSTUP_HOME": str(Path(home) / ".rustup"),
+    }
 
 
 def result_digest(payload: object) -> str:
@@ -552,29 +576,29 @@ def reconstruct_withdrawal() -> list[object]:
 
 
 def execution_sources() -> list[str]:
-    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/vnext/execution").rglob("*.rs"))
-    if "src/domain/vnext/execution/mod.rs" not in paths:
+    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/execution").rglob("*.rs"))
+    if "src/domain/execution/mod.rs" not in paths:
         fail("live Execution source root is absent")
     return paths
 
 
 def persistence_sources() -> list[str]:
-    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/vnext/persistence").rglob("*.rs"))
-    if "src/domain/vnext/persistence/mod.rs" not in paths:
+    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/persistence").rglob("*.rs"))
+    if "src/domain/persistence/mod.rs" not in paths:
         fail("persistence source root is absent")
     return paths
 
 
 def contract_ownership_sources() -> list[str]:
-    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/vnext/contract").rglob("*.rs"))
-    if "src/domain/vnext/contract/mod.rs" not in paths:
+    paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in (WORKSPACE / "src/domain/contract").rglob("*.rs"))
+    if "src/domain/contract/mod.rs" not in paths:
         fail("Contract ownership source root is absent")
     return paths
 
 
 def reconstruct_source_paths() -> list[str]:
-    paths = sorted(set(CATALOG_PATHS + [DISPATCH_PATH, WITHDRAWAL_PATH] + list(PREDECESSOR_MANIFESTS.values()) + [path for group in PREDECESSOR_RECEIPTS.values() for path in group] + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES + FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources() + execution_sources() + persistence_sources() + TOOL_SOURCES))
-    if any(path.startswith("src/domain/vnext/gate/") or (path.startswith("src/domain/vnext/evidence/") and path not in FOCAL_STEP_EVIDENCE_SOURCES) for path in paths):
+    paths = sorted(set(CATALOG_PATHS + [DISPATCH_PATH, WITHDRAWAL_PATH] + list(PREDECESSOR_MANIFESTS.values()) + [path for group in PREDECESSOR_RECEIPTS.values() for path in group] + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES + FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources() + execution_sources() + persistence_sources() + ["src/domain/installation/consumer_snapshot.rs", "src/domain/installation/consumer_snapshot_stage11_seed.rs", "src/domain/installation/mod.rs", "src/domain/integration/consumer_closure.rs"] + TOOL_SOURCES))
+    if any(path.startswith("src/domain/gate/") or (path.startswith("src/domain/evidence/") and path not in FOCAL_STEP_EVIDENCE_SOURCES) for path in paths):
         fail("Stage 5 Gate or non-submission Evidence source leaked into Stage 4 closure")
     return paths
 
@@ -587,10 +611,10 @@ def verify_runtime_source() -> None:
     definition = "pub struct SubmissionClaimSetV1"
     definition_owners = sorted(
         path.relative_to(WORKSPACE).as_posix()
-        for path in (WORKSPACE / "src/domain/vnext").rglob("*.rs")
+        for path in (WORKSPACE / "src/domain").rglob("*.rs")
         if definition in path.read_text(encoding="utf-8")
     )
-    if definition_owners != ["src/domain/vnext/evidence/submission_claim.rs"]:
+    if definition_owners != ["src/domain/evidence/submission_claim.rs"]:
         fail("SubmissionClaimSetV1 must have exactly one Evidence-owned definition")
     contract_text = "\n".join((WORKSPACE / path).read_text(encoding="utf-8") for path in contract_ownership_sources())
     if "SubmissionClaimSetV1" in contract_text:
@@ -606,7 +630,7 @@ def verify_runtime_source() -> None:
         if text.count(marker) != 1:
             fail("Stage 4 takeover safety must remain consumer-only until Stage 5 owner Evidence")
     persistence = "\n".join((WORKSPACE / path).read_text(encoding="utf-8") for path in persistence_sources())
-    if not any(marker in text for marker in ["crate::domain::vnext::persistence", "super::super::persistence"]):
+    if not any(marker in text for marker in ["crate::domain::persistence", "super::super::persistence"]):
         fail("Execution does not bind the canonical persistence owner")
     if not all(marker in persistence for marker in ["transaction", "publish"]):
         fail("persistence source lacks atomic publication semantics")

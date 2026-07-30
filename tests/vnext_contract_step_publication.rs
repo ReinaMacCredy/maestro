@@ -1,12 +1,12 @@
-use maestro::domain::vnext::contract::runtime::{
+use maestro::domain::contract::runtime::{
     ContractGenerationIdV1, ContractRuntimeError, InitialContractStepPublicationV1,
 };
-use maestro::domain::vnext::identity::{ContractRootIdV1, StoreDomainIdV1};
-use maestro::domain::vnext::step::{
+use maestro::domain::identity::{ContractRootIdV1, StoreDomainIdV1};
+use maestro::domain::step::{
     StepBindingV1, StepGraphNodeV1, StepGraphSnapshotV1, StepIdV1, StepLifecycleV1,
     StepOpenBasisV1, StepRevisionIdV1, StepScopeV1,
 };
-use maestro::domain::vnext::work::WorkIdV1;
+use maestro::domain::work::WorkIdV1;
 
 fn identity(byte: u8) -> String {
     format!("sha256:{}", format!("{byte:02x}").repeat(32))

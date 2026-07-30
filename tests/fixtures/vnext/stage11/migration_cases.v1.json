@@ -1,0 +1,71 @@
+{
+  "schema": "maestro.vnext.stage11.migration-cases.v1",
+  "historical_non_promoting_inputs": {
+    "e204": {
+      "row_count": 204,
+      "manifest_digest": "c8fc4c6cd53d81272d19c3b402e99a0ca3f69ebd18cf9464539db1d1ecf85388"
+    },
+    "c325": {
+      "row_count": 325,
+      "manifest_digest": "9aee8ea371f770e8694131079d4bfb4845f849d59d0b545005a2f0371a42976a"
+    },
+    "physical_census": {
+      "historical_node_count": 28102,
+      "requires_fresh_recensus": true
+    },
+    "skill_ledger": {
+      "file_count": 35,
+      "line_count": 3853,
+      "byte_count": 193039,
+      "rewrite": 19,
+      "replace": 9,
+      "migration_only": 7,
+      "semantic_destination_count": 21
+    }
+  },
+  "instance_fixture": {
+    "path": "tests/fixtures/vnext/stage11/migration_instances.v1.jsonl",
+    "sha256": "b4f869a16328f0ccb640a5c3cc9a7c6bd9b1d295c614eb82fddfb680496498d5",
+    "row_counts": {
+      "e204": 204,
+      "c325": 325,
+      "skill_ledger": 35
+    },
+    "physical_posture": "aggregate_commitment_only_no_fabricated_rows",
+    "requires_fresh_live_recensus": true
+  },
+  "closed_dispositions": [
+    "MappedNormative",
+    "MappedHistoricalNonBearer",
+    "OpaquePreserved",
+    "Quarantined",
+    "UnavailablePreexistingLoss"
+  ],
+  "known_upstream_interface_gaps": [],
+  "production_owner_routes": [
+    "installation_consumer_snapshot_to_migration_closure",
+    "durable_consumer_finality_receipt",
+    "foundation_v2_aggregate_census_continuation",
+    "installation_v2_pre_store_finality"
+  ],
+  "required_nominal_cases": [
+    "byte_total_identity_is_order_independent",
+    "sealed_quarantine_replays_exact_source_bytes",
+    "inactive_import_remains_headless_and_inactive",
+    "pre_accept_no_effect_rollback_is_eligible",
+    "exact_current_client_passes_before_currentness_gate"
+  ],
+  "required_adversarial_cases": [
+    "missing_or_duplicate_classification_is_refused",
+    "cancel_label_without_unique_complete_h3_join_is_non_promoting",
+    "arbitrary_h3_digest_vector_is_unconstructible",
+    "consumer_zero_without_authoritative_nonempty_census_is_refused",
+    "old_mixed_unknown_or_wrong_release_client_is_refused",
+    "raw_cutover_host_facts_are_unconstructible",
+    "stale_host_rollback_is_refused",
+    "post_accept_effect_crossing_requires_fresh_vnext_recovery",
+    "empty_active_discovery_root_set_is_refused",
+    "quarantine_inside_active_discovery_is_refused",
+    "production_namespace_delete_or_promotion_is_absent"
+  ]
+}

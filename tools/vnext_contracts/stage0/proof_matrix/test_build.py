@@ -184,7 +184,7 @@ class ProofMatrixValidationTest(unittest.TestCase):
             )
             (root / "stage0-proof-manifest.v1.cbor").write_bytes(encoded)
             process = subprocess.run(
-                ["ruby", str(validate.TOOLS / "encode.rb")],
+                ["/usr/bin/ruby", str(validate.TOOLS / "encode.rb")],
                 cwd=validate.WORKSPACE,
                 env={**os.environ, "STAGE0_PROOF_MATRIX_ROOT": str(root)},
                 capture_output=True,

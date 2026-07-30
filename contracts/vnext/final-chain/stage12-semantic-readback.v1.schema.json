@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-stage12-semantic-readback-plan.v1",
+  "type": "object",
+  "required": ["schema_version", "snapshot_commit", "checks"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-stage12-semantic-readback-plan.v1"},
+    "snapshot_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "checks": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "argv", "expected_exit_code", "command_identity", "required_artifact_kinds", "minimum_canonical_reads", "minimum_negative_routes"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "kind": {"enum": ["compiled_namespace_absence", "generated_resource_absence", "persisted_identity_parity", "canonical_facade_behavior", "migration_route_absence", "retained_reader_absence", "consumer_reader_hold_zero", "negative_fixture"]},
+          "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "expected_exit_code": {"type": "integer"},
+          "command_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "required_artifact_kinds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"enum": ["compiled", "exported", "schema", "resource", "persisted", "consumer", "reader", "hold"]},
+            "uniqueItems": true
+          },
+          "minimum_canonical_reads": {"type": "integer", "minimum": 1},
+          "minimum_negative_routes": {"type": "integer", "minimum": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

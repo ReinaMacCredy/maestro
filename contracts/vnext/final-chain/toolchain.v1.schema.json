@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-toolchain.v1",
+  "type": "object",
+  "required": ["schema_version", "target", "profile", "environment", "lockfiles", "dependency_outputs", "tools"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-toolchain.v1"},
+    "target": {"type": "string", "minLength": 1},
+    "profile": {"type": "string", "minLength": 1},
+    "environment": {"type": "object", "additionalProperties": {"type": "string"}},
+    "lockfiles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bound_file"}},
+    "dependency_outputs": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/dependency_output"}},
+    "tools": {
+      "type": "object",
+      "required": ["python", "rust", "ruby", "cargo", "git"],
+      "properties": {
+        "python": {"$ref": "#/$defs/tool"},
+        "rust": {"$ref": "#/$defs/tool"},
+        "ruby": {"$ref": "#/$defs/tool"},
+        "cargo": {"$ref": "#/$defs/tool"},
+        "git": {"$ref": "#/$defs/tool"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "bound_file": {
+      "type": "object",
+      "required": ["path", "byte_length", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "byte_length": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "tool": {
+      "type": "object",
+      "required": ["resolved_path", "byte_length", "sha256", "probe_argv", "probe_exit_code", "probe_stdout", "probe_stderr"],
+      "properties": {
+        "resolved_path": {"type": "string", "pattern": "^/"},
+        "byte_length": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "probe_argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "probe_exit_code": {"type": "integer"},
+        "probe_stdout": {"type": "object"},
+        "probe_stderr": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "dependency_output": {
+      "type": "object",
+      "required": ["name", "resolved_path", "file_count", "byte_length", "identity", "files", "completeness_probe"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^(python|rust|ruby)-complete-cargo-native-closure$"},
+        "resolved_path": {"type": "string", "pattern": "^/"},
+        "file_count": {"type": "integer", "minimum": 1},
+        "byte_length": {"type": "integer", "minimum": 1},
+        "identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["path", "byte_length", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "byte_length": {"type": "integer", "minimum": 1},
+              "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "completeness_probe": {
+          "type": "object",
+          "required": ["argv", "exit_code", "stdout", "stderr"],
+          "properties": {
+            "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "exit_code": {"const": 0},
+            "stdout": {"$ref": "#/$defs/stream"},
+            "stderr": {"$ref": "#/$defs/stream"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "stream": {
+      "type": "object",
+      "required": ["byte_length", "sha256"],
+      "properties": {
+        "byte_length": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

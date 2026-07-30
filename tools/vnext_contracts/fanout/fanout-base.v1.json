@@ -1,0 +1,370 @@
+{
+  "schema_version": "maestro.external.vnext-fanout-base.v1",
+  "feature_id": "maestro-whole-flow-architecture-refoundation",
+  "design": {
+    "path": ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md",
+    "sha256": "8009a8f5d13c65d781a124559482725e2f05b2f41bf22953ebb5afbfc611ee61"
+  },
+  "successor_decisions": [
+    {
+      "card_id": "dec-canonical-non-action-protected-90a9",
+      "card_yaml_sha256": "8c6be56db78d8695b4e85e09fc4217257fee0b2dce0f5b5be8ef10230f24c20e",
+      "status": "locked"
+    },
+    {
+      "card_id": "dec-canonical-trusted-host-protected-1fbc",
+      "card_yaml_sha256": "e572dc28e0c811c81207558e64b0372f757a873122b7f537f6354af819f118d8",
+      "status": "locked"
+    }
+  ],
+  "certified_stage5": {
+    "commit": "527f7b2687a7d51737dc3e6e0c02dfdb6d6f611a",
+    "tree": "ebc01e90cd4f4bd9452662251f5252513358b86c",
+    "publication_pointer": "contracts/vnext/stage5/evidence-gates/current-proof.json",
+    "release_identity": "sha256:7c0a4aab9f2fdc8989c1affc9818ce6235ef9338008f8d00d53ad2d4022940c6",
+    "plan_identity": "sha256:4e1cc2633a93645c457f78f326b155be44e8f1b3f267098e43c43b0c44f8296c",
+    "snapshot_identity": "sha256:e76ae1421bb871b9f35edb23eec7a7b510d07f12d25df1ffa36d62abae8f7ece"
+  },
+  "authority": {
+    "canonical_integration_branch": "codex/maestro-vnext-refoundation",
+    "canonical_writer": "external-orchestrator",
+    "worker_merge_authority": false,
+    "worker_canonical_artifact_authority": false,
+    "worker_seal_authority": false
+  },
+  "scheduling": {
+    "canonical_integration_order": [6, 7, 8, 9, 10, 11, 12],
+    "initial_candidates": [6, 7, 8, 9, 10, 11],
+    "queued_candidates": [12],
+    "max_logical_stage_workers": 6,
+    "max_concurrent_compile_or_focused_test_jobs": 2,
+    "max_concurrent_broad_gates": 1,
+    "max_concurrent_canonical_seals": 1
+  },
+  "path_policy": {
+    "candidate_diff_statuses": ["A", "M"],
+    "candidate_blob_modes": ["100644", "100755"],
+    "candidate_executable_suffixes": [".py", ".rb", ".sh"],
+    "renames": "disabled",
+    "base_existing_paths": "immutable_except_exact_mutable_seed_files_and_inherited_mutable_seed_files",
+    "new_paths": "must_match_exact_stage_write_prefix",
+    "shared_files": "external_orchestrator_only_except_owning_stage_inherited_mutable_seed_files"
+  },
+  "fanout_base": {
+    "orchestrator_owned_files": {
+      ".maestro/cards/dec-canonical-non-action-protected-90a9/card.yaml": "A",
+      ".maestro/cards/dec-canonical-trusted-host-protected-1fbc/card.yaml": "A",
+      ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md": "A",
+      "ARCHITECTURE.md": "M",
+      "TESTING.md": "M",
+      "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-home-identity-input.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-cohort-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-consumer-census-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-h2-contract-manifest-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-migration-epoch-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-proof-profile-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/effect-intent-control-writer-epoch-v1.json": "M",
+      "contracts/vnext/stage0/effect-home/encoder-receipt.json": "M",
+      "contracts/vnext/stage0/effect-home/expected-delta-manifest.json": "M",
+      "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json": "M",
+      "contracts/vnext/stage0/effect-home/inventory.json": "M",
+      "contracts/vnext/stage0/effect-home/stage2-semantic-consumer-delta-v1.json": "M",
+      "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json": "M",
+      "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json": "M",
+      "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json": "M",
+      "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.cbor": "M",
+      "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.json": "M",
+      "contracts/vnext/stage3/domain/domain-kernel.v1.cbor": "M",
+      "contracts/vnext/stage3/domain/domain-kernel.v1.json": "M",
+      "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json": "M",
+      "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json": "M",
+      "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json": "M",
+      "contracts/vnext/stage4/execution/behavioral-proof-receipt.v1.json": "M",
+      "contracts/vnext/stage4/execution/execution-effects.v1.cbor": "M",
+      "contracts/vnext/stage4/execution/execution-effects.v1.json": "M",
+      "contracts/vnext/stage4/execution/python-encoder-receipt.v1.json": "M",
+      "contracts/vnext/stage4/execution/ruby-verification-receipt.v1.json": "M",
+      "contracts/vnext/stage4/execution/semantic-validation-receipt.v1.json": "M",
+      "src/domain/vnext/authority/facade.rs": "M",
+      "src/domain/vnext/authority/facade/repository_admission.rs": "M",
+      "src/domain/vnext/authority/facade/repository_leaf_authority.rs": "M",
+      "src/domain/vnext/authority/mod.rs": "M",
+      "src/domain/vnext/capability/mod.rs": "M",
+      "src/domain/vnext/distribution/mod.rs": "M",
+      "src/domain/vnext/evidence/mod.rs": "M",
+      "src/domain/vnext/migration/mod.rs": "M",
+      "src/domain/vnext/mod.rs": "M",
+      "src/domain/vnext/orchestration/mod.rs": "M",
+      "src/domain/vnext/persistence/store.rs": "M",
+      "src/domain/vnext/persistence/tests/atomic_publication.rs": "M",
+      "src/interfaces/mod.rs": "M",
+      "src/interfaces/vnext/mod.rs": "A",
+      "src/operations/mod.rs": "M",
+      "src/operations/vnext/mod.rs": "A",
+      "tests/architecture_imports.rs": "M",
+      "tests/vnext_stage3_contracts.rs": "M",
+      "tests/vnext_stage4_contracts.rs": "M",
+      "tests/vnext_stage5_contracts.rs": "M",
+      "tools/vnext_contracts/stage0/effect_home/build.py": "M",
+      "tools/vnext_contracts/stage0/effect_home/test_build.py": "A",
+      "tools/vnext_contracts/stage3/domain/build.py": "M",
+      "tools/vnext_contracts/stage3/domain/test_build.py": "A",
+      "tools/vnext_contracts/stage3/domain/validate.py": "M",
+      "tools/vnext_contracts/stage3/domain/verify.rb": "M",
+      "tools/vnext_contracts/stage4/execution/build.py": "M",
+      "tools/vnext_contracts/stage4/execution/test_behavior_census.py": "A",
+      "tools/vnext_contracts/stage4/execution/validate.py": "M",
+      "tools/vnext_contracts/stage4/execution/verify.rb": "M",
+      "tools/vnext_contracts/fanout/__init__.py": "A",
+      "tools/vnext_contracts/fanout/fanout-base.v1.json": "A",
+      "tools/vnext_contracts/fanout/test_validate.py": "A",
+      "tools/vnext_contracts/fanout/validate.py": "A"
+    }
+  },
+  "frozen_interface_roots": [
+    "contracts/vnext/catalogs/",
+    "contracts/vnext/public/",
+    "contracts/vnext/stage0/",
+    "contracts/vnext/stage2/",
+    "contracts/vnext/stage3/",
+    "contracts/vnext/stage4/",
+    "contracts/vnext/stage5/",
+    "src/domain/vnext/authority/",
+    "src/domain/vnext/contract/",
+    "src/domain/vnext/design/",
+    "src/domain/vnext/execution/",
+    "src/domain/vnext/gate/",
+    "src/domain/vnext/identity/",
+    "src/domain/vnext/integration/",
+    "src/domain/vnext/persistence/",
+    "src/domain/vnext/repository/",
+    "src/domain/vnext/step/",
+    "src/domain/vnext/work/"
+  ],
+  "shared_denylist": {
+    "exact_files": [
+      "AGENTS.md",
+      "ARCHITECTURE.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "MAINTENANCE.md",
+      "README.md",
+      "TESTING.md",
+      "build.rs",
+      "src/domain/mod.rs",
+      "src/domain/vnext/capability/mod.rs",
+      "src/domain/vnext/distribution/mod.rs",
+      "src/domain/vnext/evidence/mod.rs",
+      "src/domain/vnext/migration/mod.rs",
+      "src/domain/vnext/mod.rs",
+      "src/domain/vnext/orchestration/mod.rs",
+      "src/interfaces/mod.rs",
+      "src/lib.rs",
+      "src/main.rs",
+      "src/operations/mod.rs",
+      "src/interfaces/vnext/mod.rs",
+      "src/operations/vnext/mod.rs",
+      "tests/vnext_stage3_contracts.rs",
+      "tests/vnext_stage4_contracts.rs",
+      "tests/vnext_stage5_contracts.rs",
+      "tests/vnext_stage5_evidence_gates.rs",
+      "tests/architecture_imports.rs",
+      "tools/vnext_contracts/stage0/effect_home/build.py",
+      "tools/vnext_contracts/stage0/effect_home/test_build.py",
+      "tools/vnext_contracts/stage3/domain/build.py",
+      "tools/vnext_contracts/stage3/domain/test_build.py",
+      "tools/vnext_contracts/stage3/domain/validate.py",
+      "tools/vnext_contracts/stage3/domain/verify.rb",
+      "tools/vnext_contracts/stage4/execution/build.py",
+      "tools/vnext_contracts/stage4/execution/test_behavior_census.py",
+      "tools/vnext_contracts/stage4/execution/validate.py",
+      "tools/vnext_contracts/stage4/execution/verify.rb"
+    ],
+    "path_prefixes": [
+      ".git/",
+      ".maestro/",
+      "contracts/vnext/",
+      "embedded/vnext/capability/",
+      "embedded/vnext/orchestration/",
+      "embedded/vnext/release/",
+      "src/domain/vnext/authority/",
+      "src/domain/vnext/contract/",
+      "src/domain/vnext/design/",
+      "src/domain/vnext/execution/",
+      "src/domain/vnext/gate/",
+      "src/domain/vnext/identity/",
+      "src/domain/vnext/integration/",
+      "src/domain/vnext/persistence/",
+      "src/domain/vnext/repository/",
+      "src/domain/vnext/step/",
+      "src/domain/vnext/work/",
+      "src/foundation/",
+      "src/interfaces/cli/",
+      "src/interfaces/hooks/",
+      "src/interfaces/mcp/",
+      "src/interfaces/shell/",
+      "src/interfaces/tui/",
+      "tests/architecture_",
+      "tests/common/",
+      "tests/support/",
+      "tests/witness_support/",
+      "tools/vnext_contracts/fanout/"
+    ]
+  },
+  "stage_owners": [
+    {
+      "stage": 6,
+      "candidate_scope": "Projection, transport, Action submission and replay, CLI and JSON, generated capability catalog",
+      "write_prefixes": [
+        "src/domain/vnext/capability/generated_catalog/",
+        "src/domain/vnext/projection/",
+        "src/domain/vnext/transport/",
+        "src/interfaces/vnext/cli/",
+        "src/operations/vnext/action/",
+        "tests/fixtures/vnext/stage6/",
+        "tests/vnext_stage6_",
+        "tools/vnext_contracts/stage6/"
+      ],
+      "mutable_seed_files": [
+        "src/domain/vnext/capability/generated_catalog/mod.rs",
+        "src/domain/vnext/projection/mod.rs",
+        "src/domain/vnext/transport/mod.rs",
+        "src/interfaces/vnext/cli/mod.rs",
+        "src/operations/vnext/action/mod.rs"
+      ],
+      "inherited_mutable_seed_files": []
+    },
+    {
+      "stage": 7,
+      "candidate_scope": "Orchestration, Recipe application and return, Planning, Scheduling Assessment, Coordination and Inbox",
+      "write_prefixes": [
+        "src/domain/vnext/coordination/",
+        "src/domain/vnext/orchestration/runtime/",
+        "src/domain/vnext/planning/",
+        "src/operations/vnext/orchestration/",
+        "tests/fixtures/vnext/stage7/",
+        "tests/vnext_stage7_",
+        "tools/vnext_contracts/stage7/"
+      ],
+      "mutable_seed_files": [
+        "src/domain/vnext/coordination/mod.rs",
+        "src/domain/vnext/orchestration/runtime/mod.rs",
+        "src/domain/vnext/planning/mod.rs",
+        "src/operations/vnext/orchestration/mod.rs"
+      ],
+      "inherited_mutable_seed_files": []
+    },
+    {
+      "stage": 8,
+      "candidate_scope": "Search, Memory, Intake, Research, Capability and Maturity, observation-facing diagnostics",
+      "write_prefixes": [
+        "src/domain/vnext/capability/runtime/",
+        "src/domain/vnext/evidence/diagnostics/",
+        "src/domain/vnext/intake/",
+        "src/domain/vnext/maturity/",
+        "src/domain/vnext/memory/",
+        "src/domain/vnext/research/",
+        "src/domain/vnext/search/",
+        "src/operations/vnext/observation/",
+        "tests/fixtures/vnext/stage8/",
+        "tests/vnext_stage8_",
+        "tools/vnext_contracts/stage8/"
+      ],
+      "mutable_seed_files": [
+        "src/domain/vnext/capability/runtime/mod.rs",
+        "src/domain/vnext/evidence/diagnostics/mod.rs",
+        "src/domain/vnext/intake/mod.rs",
+        "src/domain/vnext/maturity/mod.rs",
+        "src/domain/vnext/memory/mod.rs",
+        "src/domain/vnext/research/mod.rs",
+        "src/domain/vnext/search/mod.rs",
+        "src/operations/vnext/observation/mod.rs"
+      ],
+      "inherited_mutable_seed_files": [
+        "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs"
+      ]
+    },
+    {
+      "stage": 9,
+      "candidate_scope": "Distribution and Installation transaction, custody, snapshot catalog, recovery, currentness and domain-local publication",
+      "write_prefixes": [
+        "src/domain/vnext/distribution/runtime/",
+        "src/domain/vnext/installation/",
+        "src/operations/vnext/installation/",
+        "tests/fixtures/vnext/stage9/",
+        "tests/vnext_stage9_",
+        "tools/vnext_contracts/stage9/"
+      ],
+      "mutable_seed_files": [
+        "src/domain/vnext/distribution/runtime/mod.rs",
+        "src/domain/vnext/installation/mod.rs",
+        "src/operations/vnext/installation/mod.rs"
+      ],
+      "inherited_mutable_seed_files": [
+        "src/domain/vnext/persistence/mod.rs",
+        "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs"
+      ]
+    },
+    {
+      "stage": 10,
+      "candidate_scope": "Two read-only MCP adapters, production trusted-host acquisition and presentation adapter with Stage 5/8 parity proof, host descriptors, Skill and bootstrap wiring, TUI, hooks, shell, schemas, patterns and connectors",
+      "write_prefixes": [
+        "embedded/vnext/bootstrap/",
+        "embedded/vnext/connectors/",
+        "embedded/vnext/hosts/",
+        "embedded/vnext/patterns/",
+        "embedded/vnext/schemas/",
+        "src/interfaces/vnext/connectors/",
+        "src/interfaces/vnext/hooks/",
+        "src/interfaces/vnext/mcp/",
+        "src/interfaces/vnext/shell/",
+        "src/interfaces/vnext/tui/",
+        "src/operations/vnext/adapters/",
+        "tests/fixtures/vnext/stage10/",
+        "tests/vnext_stage10_",
+        "tools/vnext_contracts/stage10/"
+      ],
+      "mutable_seed_files": [
+        "src/interfaces/vnext/connectors/mod.rs",
+        "src/interfaces/vnext/hooks/mod.rs",
+        "src/interfaces/vnext/mcp/mod.rs",
+        "src/interfaces/vnext/shell/mod.rs",
+        "src/interfaces/vnext/tui/mod.rs",
+        "src/operations/vnext/adapters/mod.rs"
+      ],
+      "inherited_mutable_seed_files": [
+        "src/domain/vnext/integration/mod.rs",
+        "src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs"
+      ]
+    },
+    {
+      "stage": 11,
+      "candidate_scope": "Byte-total inventory, classification, identity map, quarantine, inactive-store import, migration fixtures and consumer closure",
+      "write_prefixes": [
+        "src/domain/vnext/migration/runtime/",
+        "src/operations/vnext/migration/",
+        "tests/fixtures/vnext/stage11/",
+        "tests/vnext_stage11_",
+        "tools/vnext_contracts/stage11/"
+      ],
+      "mutable_seed_files": [
+        "src/domain/vnext/migration/runtime/mod.rs",
+        "src/operations/vnext/migration/mod.rs"
+      ],
+      "inherited_mutable_seed_files": []
+    },
+    {
+      "stage": 12,
+      "candidate_scope": "Initially read-only consumer census, architecture guards, negative compatibility fixtures and release-proof inputs",
+      "write_prefixes": [
+        "tests/fixtures/vnext/stage12/",
+        "tests/vnext_stage12_",
+        "tools/vnext_contracts/stage12/"
+      ],
+      "mutable_seed_files": [],
+      "inherited_mutable_seed_files": [],
+      "production_mutation": "external_orchestrator_only_after_stage11_integrated_unsealed"
+    }
+  ]
+}

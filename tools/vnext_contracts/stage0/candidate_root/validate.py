@@ -293,10 +293,17 @@ def mutant_rejections(output: Path = OUTPUT) -> int:
 
 def ruby_equality(output: Path = OUTPUT) -> None:
     process = subprocess.run(
-        ["ruby", str(Path(__file__).with_name("encode.rb")), str(output)],
+        ["/usr/bin/ruby", str(Path(__file__).with_name("encode.rb")), str(output)],
         check=True,
         capture_output=True,
         text=True,
+        env={
+            "HOME": tempfile.gettempdir(),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "RUBYOPT": "",
+        },
     )
     artifacts = json.loads(process.stdout)["artifacts"]
     for name, cbor_hex in artifacts.items():

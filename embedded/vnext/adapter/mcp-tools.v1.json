@@ -1,12 +1,13 @@
 {
   "schema": "maestro.vnext.mcp-tool-source.v1",
-  "candidate_only": true,
-  "runtime_activation": false,
-  "runtime_registration": false,
+  "candidate_only": false,
+  "runtime_activation": true,
+  "runtime_registration": true,
   "scope": "global-user-agent-installation",
   "tools": [
     {
       "name": "maestro_packet",
+      "description": "Read one canonical bounded Packet projection from an explicit repository locator.",
       "read_only": true,
       "writes": false,
       "network_io": false,
@@ -28,6 +29,7 @@
     },
     {
       "name": "maestro_cli_search",
+      "description": "Search the running binary's frozen public operation catalog without repository state.",
       "read_only": true,
       "writes": false,
       "network_io": false,

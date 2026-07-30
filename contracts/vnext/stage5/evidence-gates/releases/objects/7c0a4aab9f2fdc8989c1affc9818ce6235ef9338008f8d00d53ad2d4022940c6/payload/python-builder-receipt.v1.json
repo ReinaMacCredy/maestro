@@ -1,0 +1,814 @@
+{
+  "artifact_id": "33c7c365317fa2ce514e4d368ddb3d7919c5dc755edade08645dda5dd01b0b4c",
+  "artifact_sha256": "fb8fd9c26bf82e4cdabc8ba8ed3fb107e8102fd08482a85ab30f9a0d6870b34f",
+  "behavior_manifest_identity": "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e",
+  "behavior_passed": 73,
+  "behavior_runs": [
+    {
+      "binary_sha256": "898bd69e1f1f8f2f245177fe016598a46e70f0493144493a9e74fe9f1c661a56",
+      "label": "assessment-kernel",
+      "passed": 15,
+      "tests": [
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::all_same_result_assessments_remain_applicable_without_newest_selection",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::all_same_result_assessments_remain_applicable_without_newest_selection",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::applicability_binds_the_complete_historical_time_basis",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::applicability_binds_the_complete_historical_time_basis",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::claim_assessment_requires_exact_resolved_observations",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::claim_assessment_requires_exact_resolved_observations",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::closed_presence_rules_cannot_self_attest_gate_satisfaction",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::closed_presence_rules_cannot_self_attest_gate_satisfaction",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::composite_assessment_consumes_exact_child_resolutions",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::composite_assessment_consumes_exact_child_resolutions",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::closed_semantic_evaluator_can_pass_fail_and_derive_satisfaction",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::closed_semantic_evaluator_can_pass_fail_and_derive_satisfaction",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::conflict_invalidation_and_expiry_never_prefer_pass",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::conflict_invalidation_and_expiry_never_prefer_pass",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::foreign_work_and_contract_claims_are_rejected_before_evaluation",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::foreign_work_and_contract_claims_are_rejected_before_evaluation",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::leaf_assessment_uses_pinned_evaluator_and_conservative_freshness",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::leaf_assessment_uses_pinned_evaluator_and_conservative_freshness",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::quorum_requires_pairwise_contributor_and_source_independence",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::quorum_requires_pairwise_contributor_and_source_independence",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::security_erasure_is_authorized_and_couples_all_invalidations",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::security_erasure_is_authorized_and_couples_all_invalidations",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::step_claim_subject_helper_remains_generation_scoped",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::step_claim_subject_helper_remains_generation_scoped",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::step_scope_and_mixed_authority_inputs_are_exact",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::step_scope_and_mixed_authority_inputs_are_exact",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::stored_assessment_decoder_rejects_self_consistent_duplicate_inputs",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::stored_assessment_decoder_rejects_self_consistent_duplicate_inputs",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::assessment::tests::trusted_time_and_store_domain_fail_closed",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::assessment::tests::trusted_time_and_store_domain_fail_closed",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "898bd69e1f1f8f2f245177fe016598a46e70f0493144493a9e74fe9f1c661a56",
+      "label": "submission-evidence-join",
+      "passed": 5,
+      "tests": [
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::execution::store::tests::competing_step_submissions_have_one_atomic_winner",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::execution::store::tests::competing_step_submissions_have_one_atomic_winner",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::execution::store::tests::step_submission_and_renewal_race_has_one_atomic_winner",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::execution::store::tests::step_submission_and_renewal_race_has_one_atomic_winner",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::execution::store::tests::step_submission_and_takeover_boundary_proves_both_atomic_linearizations",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::execution::store::tests::step_submission_and_takeover_boundary_proves_both_atomic_linearizations",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::execution::store::tests::step_submission_one_and_many_claims_are_atomic_restart_decodable_and_idempotent",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::execution::store::tests::step_submission_one_and_many_claims_are_atomic_restart_decodable_and_idempotent",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "898bd69e1f1f8f2f245177fe016598a46e70f0493144493a9e74fe9f1c661a56",
+      "label": "authorized-evidence-store",
+      "passed": 34,
+      "tests": [
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::inactive_store_refusal_mints_no_diagnostic_invocation",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::inactive_store_refusal_mints_no_diagnostic_invocation",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_joins_every_independent_host_identity_dimension",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_joins_every_independent_host_identity_dimension",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_ambiguous_operator_mapping",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_ambiguous_operator_mapping",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::authority::facade::tests::session_request_commitment_is_snapshot_identity_not_host_authority",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::authority::facade::tests::session_request_commitment_is_snapshot_identity_not_host_authority",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::store::tests::failed_sealer_cleanup_cannot_unlink_a_waiting_sealers_committed_carrier",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::store::tests::failed_sealer_cleanup_cannot_unlink_a_waiting_sealers_committed_carrier",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::store::tests::hard_link_race_blocks_controlled_copy_absence_receipt_after_restart",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::store::tests::hard_link_race_blocks_controlled_copy_absence_receipt_after_restart",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::tests::atomic_publication::historical_idempotency_result_is_a_durable_replay_horizon_after_head_advance",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::tests::atomic_publication::historical_idempotency_result_is_a_durable_replay_horizon_after_head_advance",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::idempotency::tests::atomic_publication_rejects_unreachable_supplied_objects",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::idempotency::tests::atomic_publication_rejects_unreachable_supplied_objects",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::idempotency::tests::generation_closure_rejects_a_missing_referenced_object",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::idempotency::tests::generation_closure_rejects_a_missing_referenced_object",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::persistence::idempotency::tests::publication_builder_reduces_a_superset_to_the_exact_generation_closure",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::persistence::idempotency::tests::publication_builder_reduces_a_superset_to_the_exact_generation_closure",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::repository::tests::work_completion_atomically_persists_claim_gate_and_submission_proof",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::repository::tests::work_completion_atomically_persists_claim_gate_and_submission_proof",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "domain::vnext::repository::tests::work_completion_requires_and_commits_the_exact_current_satisfied_step_submission_closure",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "domain::vnext::repository::tests::work_completion_requires_and_commits_the_exact_current_satisfied_step_submission_closure",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_payload_unlink_and_marker_crashes",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_payload_unlink_and_marker_crashes",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_the_quarantine_rename",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_the_quarantine_rename",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "foundation::core::secure_fs::tests::crash_residual_temp_blocks_absence_until_digest_bound_cleanup",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "foundation::core::secure_fs::tests::crash_residual_temp_blocks_absence_until_digest_bound_cleanup",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "foundation::core::secure_fs::tests::hard_link_after_sentinel_check_never_publishes_resolution",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "foundation::core::secure_fs::tests::hard_link_after_sentinel_check_never_publishes_resolution",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "maestro",
+            "foundation::core::secure_fs::tests::hard_link_race_leaves_durable_removal_debt_across_restart",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "foundation::core::secure_fs::tests::hard_link_race_leaves_durable_removal_debt_across_restart",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "8110b3f2988af5cec117adcab1b47babba3b47d3689b6aaa922e311e6eaa27b7",
+      "label": "work-completion-boundary",
+      "passed": 1,
+      "tests": [
+        {
+          "command": [
+            "vnext_work_lifecycle",
+            "pure_lifecycle_appends_revision_facts_and_refuses_unverified_completion",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "pure_lifecycle_appends_revision_facts_and_refuses_unverified_completion",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "358a52c3e7f8bb117e8b69f1fe3710c963c89350cad8db5d1bf7a172718ddc82",
+      "label": "claim-contracts",
+      "passed": 5,
+      "tests": [
+        {
+          "command": [
+            "vnext_evidence_claims",
+            "authoritative_claim_set_has_no_second_claim_count_cap",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "authoritative_claim_set_has_no_second_claim_count_cap",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_evidence_claims",
+            "authoritative_claim_set_is_derived_only_from_claims_bound_to_one_submission",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "authoritative_claim_set_is_derived_only_from_claims_bound_to_one_submission",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_evidence_claims",
+            "claim_identity_and_record_bind_one_exact_submission_deterministically",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "claim_identity_and_record_bind_one_exact_submission_deterministically",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_evidence_claims",
+            "stage3_claim_and_work_submission_v1_vectors_remain_exact",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "stage3_claim_and_work_submission_v1_vectors_remain_exact",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_evidence_claims",
+            "zero_or_missing_claim_identity_material_is_rejected_before_publication",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "zero_or_missing_claim_identity_material_is_rejected_before_publication",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "77d26c4a63ef3e819b390f9d19eff37cb970b7be95e7a1a5851d4af1809ac820",
+      "label": "submission-claim-carrier",
+      "passed": 4,
+      "tests": [
+        {
+          "command": [
+            "vnext_submission_claim_set",
+            "freezes_one_and_many_claim_vectors",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "freezes_one_and_many_claim_vectors",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_submission_claim_set",
+            "freezes_the_schema_identity_and_rejects_shape_mutants",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "freezes_the_schema_identity_and_rejects_shape_mutants",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_submission_claim_set",
+            "reference_encoder_matches_the_rust_encoder",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "reference_encoder_matches_the_rust_encoder",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_submission_claim_set",
+            "rejects_every_malformed_set_product",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "rejects_every_malformed_set_product",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "0505d9d06fb139781f338f58d781e7527ec43214a7c11128b6b38126917f9ce4",
+      "label": "evidence-gate-contracts",
+      "passed": 8,
+      "tests": [
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "claim_publication_requires_exact_resolved_observation_records",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "claim_publication_requires_exact_resolved_observation_records",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "composite_gate_grammars_are_fail_closed_and_order_independent",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "composite_gate_grammars_are_fail_closed_and_order_independent",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "gate_snapshot_is_canonical_closed_and_root_reachable",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "gate_snapshot_is_canonical_closed_and_root_reachable",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "observation_kind_runtime_matches_all_frozen_catalog_semantics",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "observation_kind_runtime_matches_all_frozen_catalog_semantics",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "payload_manifest_requires_current_authenticated_zero_secret_scan",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "payload_manifest_requires_current_authenticated_zero_secret_scan",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "observation_publication_route_rejects_wrong_action_route_and_profile",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "observation_publication_route_rejects_wrong_action_route_and_profile",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "observations_bind_effect_free_and_exact_derivation_provenance",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "observations_bind_effect_free_and_exact_derivation_provenance",
+          "result": "pass"
+        },
+        {
+          "command": [
+            "vnext_stage5_evidence_gates",
+            "pure_composite_evaluator_refuses_leaf_self_attestation",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "pure_composite_evaluator_refuses_leaf_self_attestation",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "105d3f7cb102baa12748649659cc43fbeacd3d60975437a2e65442783c5d6a05",
+      "label": "diagnostic-architecture",
+      "passed": 1,
+      "tests": [
+        {
+          "command": [
+            "architecture_imports",
+            "stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer",
+            "--exact",
+            "--nocapture"
+          ],
+          "name": "stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "binary_sha256": "898bd69e1f1f8f2f245177fe016598a46e70f0493144493a9e74fe9f1c661a56",
+      "command": [
+        "maestro",
+        "domain::vnext::evidence::assessment::tests::all_same_result_assessments_remain_applicable_without_newest_selection_same_count_substitution_mutant",
+        "--exact",
+        "--nocapture"
+      ],
+      "label": "same-count-substitution-mutant",
+      "passed": 0,
+      "rejected": true,
+      "result": "rejected",
+      "substituted_for": "domain::vnext::evidence::assessment::tests::all_same_result_assessments_remain_applicable_without_newest_selection"
+    }
+  ],
+  "builder_sha256": "bd18ec1550442a3f5ac0279ba191c737b409121b4d0bf3589985e61634b94c6c",
+  "diagnostic_proof_claim": "test_adapter_only",
+  "publication_state": "inactive_candidate",
+  "receipt_identity": "sha256:5bf591b308e20acfb6194e361df0a51e8cde65adfd144f8677ccb28be973bd25",
+  "schema_version": "maestro.vnext.stage5.python-builder-receipt.v1",
+  "source_closure_sha256": "5bfa01d4b33afd75bec50cc8d7ee20daf2c1960325ac7a04bfce070cfee536f0"
+}

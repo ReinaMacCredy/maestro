@@ -1,0 +1,5 @@
+{
+  "$id": "maestro.vnext.external-pattern.v1",
+  "type": "object",
+  "required": ["pattern_id"]
+}

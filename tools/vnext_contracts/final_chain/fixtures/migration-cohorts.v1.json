@@ -1,0 +1,33 @@
+{
+  "schema_version": "maestro.external.vnext-final-migration-cohorts.v1",
+  "fixture": {
+    "path": "tests/fixtures/vnext/stage11/migration_instances.v1.jsonl",
+    "sha256": "sha256:b4f869a16328f0ccb640a5c3cc9a7c6bd9b1d295c614eb82fddfb680496498d5"
+  },
+  "cohorts": [
+    {
+      "id": "old-reader",
+      "role": "reader",
+      "generation": "v1-frozen",
+      "executable_identity_source": "registry-bound-command"
+    },
+    {
+      "id": "new-reader",
+      "role": "reader",
+      "generation": "vnext-final",
+      "executable_identity_source": "registry-bound-command"
+    },
+    {
+      "id": "final-writer",
+      "role": "writer",
+      "generation": "vnext-final",
+      "executable_identity_source": "registry-bound-command"
+    }
+  ],
+  "required_outcomes": [
+    "old_reader_typed_compatibility_or_refusal",
+    "new_reader_typed_acceptance",
+    "writer_typed_commit",
+    "rollback_typed_restore"
+  ]
+}
