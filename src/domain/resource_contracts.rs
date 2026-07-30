@@ -43,6 +43,7 @@ const SCHEMA_OUTPUTS: &[GeneratedOutput] = &[
 ];
 
 const LOOP_RECIPE_OUTPUTS: &[GeneratedOutput] = &[
+    GeneratedOutput::ResourceGuardRows,
     GeneratedOutput::ResourceInventory,
     GeneratedOutput::CompatibilityReport,
     GeneratedOutput::FixtureCoverage,
@@ -107,11 +108,11 @@ const SHIPPED_RESOURCE_FAMILIES: &[ResourceFamily] = &[
         },
         parser: SemanticKernel {
             owner: "src/domain/loop_recipes.rs",
-            responsibility: "parse maestro.recipe.v2 YAML into typed recipe contracts",
+            responsibility: "parse maestro.recipe.v2/v3 plus exact embedded profiles into typed recipe contracts",
         },
         validator: SemanticKernel {
             owner: "src/domain/loop_recipes.rs",
-            responsibility: "validate phases, transitions, triggers, return conditions, and safety rules",
+            responsibility: "validate typed profile composition and safety monotonicity across phases, transitions, triggers, and return conditions",
         },
         generated_outputs: LOOP_RECIPE_OUTPUTS,
         install_sync_policy: InstallSyncPolicy::BinaryServedReadOnly,
