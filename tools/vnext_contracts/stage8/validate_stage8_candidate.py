@@ -11,6 +11,9 @@ from pathlib import Path
 
 
 DEFAULT_BASE = "d9442aa6fda9b21d0cd60536b06ffca5c03d0645"
+INTEGRATION_COMMIT = "36076d45da6ffa7934aef4f7ccf6fdd9b2b13340"
+INTEGRATION_TREE = "a3f31252d4a5e32f6b8b5cc4a2b944efd37248da"
+CANONICAL_MERGE = "78133fe05a08976b0d2092f853ed6fcab1a806f4"
 BASE_MANIFEST_IDENTITY = (
     "sha256:b7fe6a736c906ccbe8eb830348c63b62b8562f4c7799d2cd87a606e6b12e7393"
 )
@@ -24,7 +27,7 @@ PRESERVED_CANDIDATE = "702577f1d61ce8c5acd84218e526c4167d84529c"
 ALLOWED_STATUSES = frozenset({"A", "M"})
 ALLOWED_MODES = frozenset({"100644", "100755"})
 EXECUTABLE_SUFFIXES = (".py", ".rb", ".sh")
-OWNED_PREFIXES = (
+HISTORICAL_OWNED_PREFIXES = (
     "src/domain/vnext/capability/runtime/",
     "src/domain/vnext/evidence/diagnostics/",
     "src/domain/vnext/intake/",
@@ -38,10 +41,14 @@ OWNED_PREFIXES = (
     "tools/vnext_contracts/stage8/",
 )
 INHERITED_SEED = (
+    "src/domain/authority/"
+    "protected_diagnostic_envelope_stage8_seed.rs"
+)
+HISTORICAL_INHERITED_SEED = (
     "src/domain/vnext/authority/"
     "protected_diagnostic_envelope_stage8_seed.rs"
 )
-MUTABLE_SEEDS = frozenset(
+HISTORICAL_MUTABLE_SEEDS = frozenset(
     {
         "src/domain/vnext/capability/runtime/mod.rs",
         "src/domain/vnext/evidence/diagnostics/mod.rs",
@@ -55,15 +62,28 @@ MUTABLE_SEEDS = frozenset(
 )
 RUST_SOURCES = (
     INHERITED_SEED,
-    "src/domain/vnext/search/mod.rs",
-    "src/domain/vnext/memory/mod.rs",
-    "src/domain/vnext/intake/mod.rs",
-    "src/domain/vnext/research/mod.rs",
-    "src/domain/vnext/capability/runtime/mod.rs",
-    "src/domain/vnext/maturity/mod.rs",
-    "src/domain/vnext/evidence/diagnostics/mod.rs",
-    "src/operations/vnext/observation/mod.rs",
+    "src/domain/search/mod.rs",
+    "src/domain/memory/mod.rs",
+    "src/domain/intake/mod.rs",
+    "src/domain/research/mod.rs",
+    "src/domain/capability/runtime/mod.rs",
+    "src/domain/maturity/mod.rs",
+    "src/domain/evidence/diagnostics/mod.rs",
+    "src/operations/observation/mod.rs",
 )
+CANONICAL_SOURCE_SHA256 = {
+    "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs": "f3054d1a1b4b062c7058a05b6e4cdea6851fcec9927255136ee2246438961378",
+    "src/domain/search/mod.rs": "9da913255cd56e02a3dd2681960f675306a9e7f51f9e65bd0459d2f408c9844f",
+    "src/domain/memory/mod.rs": "ddbcb7e978bd3afcd6ce93c728c117af82230712c54329265f12a35b3a853087",
+    "src/domain/intake/mod.rs": "a9ada92d7b493999b4cf9440bec6e7d0187282b1baba0f32cb4ff656ba33fdcb",
+    "src/domain/research/mod.rs": "2793048147dac5025f1c5f7c7b08eefce1ff92e45ca6593138e322542a04e1cd",
+    "src/domain/capability/runtime/mod.rs": "fb770cc05afc2e404a165229800921f97d8924d127c29f3b217fd7f3c0e5aaef",
+    "src/domain/maturity/mod.rs": "462482e74f33973552b0b4e16fedce8e001dd07be52140139620794c60927032",
+    "src/domain/evidence/diagnostics/mod.rs": "6a735f5a39925ecc01418321a9a2cec64021a06632245eae0c9aca84a503cdb5",
+    "src/operations/observation/mod.rs": "226a501bfe27c8eb2e875f2a0d9586e6da62ba1082475424eff53f458ac3d8ed",
+    "tests/fixtures/vnext/stage8/information-capabilities.v1.json": "87ac8871daf39183ad104753e52a48d84ff07ebe9b3c1590552848bf21fbed74",
+    "tests/vnext_stage8_contracts.rs": "f6cabffbc47cb7288c83d929041a03247245fc9d5d54803fbdd7467c1bc49773",
+}
 FORBIDDEN_RUST = (
     "std::fs",
     "std::net",
@@ -84,6 +104,16 @@ class ValidationError(RuntimeError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValidationError(message)
+
+
+def git_output(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def changed_entries(root: Path, base: str) -> list[tuple[str, str, str]]:
@@ -124,14 +154,14 @@ def validate_paths(
             f"Stage-8 executable suffix is forbidden: {path}",
         )
         require(
-            path == INHERITED_SEED
-            or any(path.startswith(prefix) for prefix in OWNED_PREFIXES),
+            path == HISTORICAL_INHERITED_SEED
+            or any(path.startswith(prefix) for prefix in HISTORICAL_OWNED_PREFIXES),
             f"Stage-8 candidate changed an unowned path: {path}",
         )
         require(
             not exists_at_base(root, base, path)
-            or path == INHERITED_SEED
-            or path in MUTABLE_SEEDS,
+            or path == HISTORICAL_INHERITED_SEED
+            or path in HISTORICAL_MUTABLE_SEEDS,
             f"Stage-8 candidate changed an immutable base-existing path: {path}",
         )
 
@@ -160,15 +190,15 @@ def validate_base_manifest(root: Path) -> None:
     )
     stage8 = next(row for row in manifest["stage_owners"] if row["stage"] == 8)
     require(
-        tuple(stage8["write_prefixes"]) == OWNED_PREFIXES,
+        tuple(stage8["write_prefixes"]) == HISTORICAL_OWNED_PREFIXES,
         "Stage-8 write prefixes differ",
     )
     require(
-        frozenset(stage8["mutable_seed_files"]) == MUTABLE_SEEDS,
+        frozenset(stage8["mutable_seed_files"]) == HISTORICAL_MUTABLE_SEEDS,
         "Stage-8 mutable seed files differ",
     )
     require(
-        stage8["inherited_mutable_seed_files"] == [INHERITED_SEED],
+        stage8["inherited_mutable_seed_files"] == [HISTORICAL_INHERITED_SEED],
         "Stage-8 inherited mutable seed differs",
     )
 
@@ -210,15 +240,15 @@ def validate_v4_manifest(
         "V4 Stage-8 candidate scope differs",
     )
     require(
-        tuple(stage8["write_prefixes"]) == OWNED_PREFIXES,
+        tuple(stage8["write_prefixes"]) == HISTORICAL_OWNED_PREFIXES,
         "V4 Stage-8 write prefixes differ",
     )
     require(
-        frozenset(stage8["mutable_seed_files"]) == MUTABLE_SEEDS,
+        frozenset(stage8["mutable_seed_files"]) == HISTORICAL_MUTABLE_SEEDS,
         "V4 Stage-8 mutable seed files differ",
     )
     require(
-        stage8["inherited_mutable_seed_files"] == [INHERITED_SEED],
+        stage8["inherited_mutable_seed_files"] == [HISTORICAL_INHERITED_SEED],
         "V4 Stage-8 inherited mutable seed differs",
     )
 
@@ -227,7 +257,7 @@ def validate_v4_manifest(
     denied_prefixes = tuple(shared["path_prefixes"])
     for _, _, candidate_path in entries:
         require(
-            candidate_path == INHERITED_SEED
+            candidate_path == HISTORICAL_INHERITED_SEED
             or (
                 candidate_path not in denied_files
                 and not candidate_path.startswith(denied_prefixes)
@@ -238,6 +268,21 @@ def validate_v4_manifest(
 
 def source_map(root: Path) -> dict[str, str]:
     return {path: (root / path).read_text() for path in RUST_SOURCES}
+
+
+def validate_canonical_source_closure(root: Path) -> None:
+    for path, expected in CANONICAL_SOURCE_SHA256.items():
+        source = root / path
+        require(source.is_file() and not source.is_symlink(), f"unsafe canonical path: {path}")
+        require(
+            hashlib.sha256(source.read_bytes()).hexdigest() == expected,
+            f"canonical Stage-8 source identity differs: {path}",
+        )
+        legacy = path.replace("src/domain/", "src/domain/vnext/", 1).replace(
+            "src/operations/", "src/operations/vnext/", 1
+        )
+        if legacy != path:
+            require(not (root / legacy).exists(), f"legacy Stage-8 source survived: {legacy}")
 
 
 def validate_sources(sources: dict[str, str]) -> None:
@@ -259,26 +304,17 @@ def validate_sources(sources: dict[str, str]) -> None:
     ):
         require(marker in builder, f"inherited diagnostic seed lost {marker}")
     require("encode_canonical_envelope(input)?" in builder, "builder is not canonical")
-    require("#[cfg(not(test))]" in builder, "production builder branch is absent")
-    production_builder = builder.split("#[cfg(not(test))]", 1)[1].split(
-        "#[cfg(test)]", 1
-    )[0]
     require(
-        "let _ = (input, mode);" in production_builder
-        and "None" in production_builder
-        and "encode_canonical_envelope(input)?" not in production_builder
-        and "Some(candidate)" not in production_builder,
-        "production assembler bypasses the Authority-owned diagnostic consumer",
-    )
-    test_builder = builder.split("#[cfg(test)]", 1)[1]
-    require(
-        "encode_canonical_envelope(input)?" in test_builder
-        and "Some(candidate)" in test_builder,
-        "test-only canonical assembler is absent",
+        "ProtectedContinuityDiagnosticAssemblerModeV1::Canonical => {}" in builder
+        and "#[cfg(test)]\n        ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission"
+        in builder
+        and "#[cfg(test)]\n        ProtectedContinuityDiagnosticAssemblerModeV1::IgnoreInput"
+        in builder,
+        "noncanonical diagnostic assembler modes escaped the test boundary",
     )
     require("Some(candidate)" in builder, "builder does not return the candidate")
 
-    diagnostics = sources["src/domain/vnext/evidence/diagnostics/mod.rs"]
+    diagnostics = sources["src/domain/evidence/diagnostics/mod.rs"]
     declaration = diagnostics.find(
         "pub(crate) struct ProtectedDiagnosticEnvelopeV1"
     )
@@ -306,7 +342,7 @@ def validate_sources(sources: dict[str, str]) -> None:
     ):
         require(marker in diagnostics, f"protected diagnostic carrier lost {marker}")
 
-    observation = sources["src/operations/vnext/observation/mod.rs"]
+    observation = sources["src/operations/observation/mod.rs"]
     for marker in (
         "inputs.search.snapshot_ref()",
         "inputs.memory.snapshot_ref()",
@@ -333,11 +369,11 @@ def validate_sources(sources: dict[str, str]) -> None:
         require(marker in observation, f"protected diagnostic acquisition lost {marker}")
 
     action_markers = {
-        "src/domain/vnext/search/mod.rs": (
+        "src/domain/search/mod.rs": (
             range(130, 132),
             ("authorized_rebuild", "authorized_purge"),
         ),
-        "src/domain/vnext/memory/mod.rs": (
+        "src/domain/memory/mod.rs": (
             range(132, 139),
             (
                 "record_candidate",
@@ -349,11 +385,11 @@ def validate_sources(sources: dict[str, str]) -> None:
                 "security_erase",
             ),
         ),
-        "src/domain/vnext/intake/mod.rs": (
+        "src/domain/intake/mod.rs": (
             range(139, 142),
             ("record_source", "publish_finding", "dispose_source"),
         ),
-        "src/domain/vnext/research/mod.rs": (
+        "src/domain/research/mod.rs": (
             range(142, 146),
             (
                 "begin_question",
@@ -373,7 +409,7 @@ def validate_sources(sources: dict[str, str]) -> None:
         ):
             require(marker in source, f"{path} lost {marker}")
         require(
-            "#[cfg(test)]\nuse crate::domain::vnext::authority::"
+            "#[cfg(test)]\nuse crate::domain::authority::"
             "AdmittedRepositoryActionV1;" in source,
             f"{path} exposes the raw admitted-Action adapter in production",
         )
@@ -387,10 +423,10 @@ def validate_sources(sources: dict[str, str]) -> None:
             require(str(tag) in source, f"{path} lost Action tag {tag}")
 
     action_call_counts = {
-        "src/domain/vnext/search/mod.rs": ("require_action_and_snapshot(", 3),
-        "src/domain/vnext/memory/mod.rs": ("self.require_action(admitted", 6),
-        "src/domain/vnext/intake/mod.rs": ("self.require_action(admitted", 3),
-        "src/domain/vnext/research/mod.rs": ("self.require_action(admitted", 4),
+        "src/domain/search/mod.rs": ("require_action_and_snapshot(", 3),
+        "src/domain/memory/mod.rs": ("self.require_action(admitted", 6),
+        "src/domain/intake/mod.rs": ("self.require_action(admitted", 3),
+        "src/domain/research/mod.rs": ("self.require_action(admitted", 4),
     }
     for path, (marker, expected) in action_call_counts.items():
         require(
@@ -403,12 +439,12 @@ def validate_frozen_stage5_interfaces(
     root: Path, *, facade_source: str | None = None
 ) -> None:
     materialization = (
-        root / "src/domain/vnext/authority/materialization.rs"
+        root / "src/domain/authority/materialization.rs"
     ).read_text()
     facade = (
         facade_source
         if facade_source is not None
-        else (root / "src/domain/vnext/authority/facade.rs").read_text()
+        else (root / "src/domain/authority/facade.rs").read_text()
     )
     for marker in (
         "SearchMaintenanceRepositoryActionBindingOwnerV1",
@@ -422,39 +458,36 @@ def validate_frozen_stage5_interfaces(
             f"frozen Stage-5 owner materialization shape lost {marker}",
         )
     for marker in (
-        "pub(in crate::domain::vnext::authority) fn execute_owner_materialization",
-        "pub(in crate::domain::vnext::authority) fn publish_repository_materialization",
+        "pub(in crate::domain::authority) fn execute_owner_materialization",
+        "pub(in crate::domain::authority) fn publish_repository_materialization",
         "fn execute_scheduling_policy_materialization(",
         "fn derive_scheduling_policy_binding_facts(",
         "self.publish_repository_materialization(probe, move |port| {",
-        "port.execute_scheduling_policy_materialization(probe, owner, "
-        "requires_downgrade_mandate)",
+        "port.execute_scheduling_policy_materialization(probe, owner)",
     ):
         require(
             marker in facade,
             f"frozen Stage-5 owner consumption shape lost {marker}",
         )
     require(
-        "pub(in crate::domain::vnext::authority) struct RepositoryActionBindingFactsV1"
+        "pub(in crate::domain::authority) struct RepositoryActionBindingFactsV1"
         in materialization,
         "Authority fact bag escaped its owner-private boundary",
     )
     for marker in (
         "pub(super) struct SchedulingPolicyPublicationInputV1",
         "impl SchedulingPolicyPublicationInputV1 {\n    pub(super) fn new(",
-        "pub(super) fn publish_scheduling_policy_without_downgrade(",
-        "pub(super) fn publish_scheduling_policy_with_downgrade(",
+        "pub(super) fn publish_scheduling_policy(",
     ):
         require(
             marker in facade,
             f"private scheduling publication facade lost {marker}",
         )
     for widened in (
-        "pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1",
+        "pub(in crate::domain) struct SchedulingPolicyPublicationInputV1",
         "impl SchedulingPolicyPublicationInputV1 {\n"
-        "    pub(in crate::domain::vnext) fn new(",
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy_without_downgrade(",
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy_with_downgrade(",
+        "    pub(in crate::domain) fn new(",
+        "pub(in crate::domain) fn publish_scheduling_policy(",
     ):
         require(
             widened not in facade,
@@ -462,13 +495,12 @@ def validate_frozen_stage5_interfaces(
         )
     stage7_seed = (
         root
-        / "src/domain/vnext/authority/governance_attestation_stage7_seed.rs"
+        / "src/domain/authority/governance_attestation_stage7_seed.rs"
     ).read_text()
     for marker in (
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(",
+        "pub(in crate::domain) fn publish_scheduling_policy_from_stage7(",
         "SchedulingPolicyPublicationInputV1::new(",
-        "facade.publish_scheduling_policy_without_downgrade(",
-        "facade.publish_scheduling_policy_with_downgrade(",
+        "facade.publish_scheduling_policy(probe, authority, input)",
     ):
         require(
             marker in stage7_seed,
@@ -476,10 +508,10 @@ def validate_frozen_stage5_interfaces(
         )
 
     integration = (
-        root / "src/domain/vnext/integration/trusted_host_diagnostic.rs"
+        root / "src/domain/integration/trusted_host_diagnostic.rs"
     ).read_text()
     persistence = (
-        root / "src/domain/vnext/persistence/protected_diagnostic.rs"
+        root / "src/domain/persistence/protected_diagnostic.rs"
     ).read_text()
     for marker in (
         "pub(crate) fn protected_continuity_diagnostic_with_ports(",
@@ -529,32 +561,32 @@ def validate_mutants(sources: dict[str, str]) -> int:
     mutants.append(("missing-inherited-seed-consumer", seed_consumer))
 
     observation = dict(sources)
-    observation["src/operations/vnext/observation/mod.rs"] = observation[
-        "src/operations/vnext/observation/mod.rs"
+    observation["src/operations/observation/mod.rs"] = observation[
+        "src/operations/observation/mod.rs"
     ].replace("inputs.memory.snapshot_ref(),", "", 1)
     mutants.append(("mixed-memory-snapshot", observation))
 
     memory = dict(sources)
-    memory["src/domain/vnext/memory/mod.rs"] = memory[
-        "src/domain/vnext/memory/mod.rs"
+    memory["src/domain/memory/mod.rs"] = memory[
+        "src/domain/memory/mod.rs"
     ].replace("current_snapshot_id()", "authorization_receipt()", 1)
     mutants.append(("memory-currentness", memory))
 
     passive_probe = dict(sources)
-    passive_probe["src/domain/vnext/capability/runtime/mod.rs"] += (
+    passive_probe["src/domain/capability/runtime/mod.rs"] += (
         "\nuse std::process::Command;\n"
     )
     mutants.append(("passive-probe", passive_probe))
 
     invented_action = dict(sources)
-    invented_action["src/domain/vnext/evidence/diagnostics/mod.rs"] += (
+    invented_action["src/domain/evidence/diagnostics/mod.rs"] += (
         "\nstruct ActionSpec;\n"
     )
     mutants.append(("diagnostic-action", invented_action))
 
     test_only_consumer = dict(sources)
-    test_only_consumer["src/domain/vnext/evidence/diagnostics/mod.rs"] = test_only_consumer[
-        "src/domain/vnext/evidence/diagnostics/mod.rs"
+    test_only_consumer["src/domain/evidence/diagnostics/mod.rs"] = test_only_consumer[
+        "src/domain/evidence/diagnostics/mod.rs"
     ].replace(
         "pub(crate) struct ProtectedDiagnosticEnvelopeV1",
         "#[cfg(test)]\npub(crate) struct ProtectedDiagnosticEnvelopeV1",
@@ -563,8 +595,8 @@ def validate_mutants(sources: dict[str, str]) -> int:
     mutants.append(("test-only-diagnostic-consumer", test_only_consumer))
 
     missing_acquisition = dict(sources)
-    missing_acquisition["src/operations/vnext/observation/mod.rs"] = missing_acquisition[
-        "src/operations/vnext/observation/mod.rs"
+    missing_acquisition["src/operations/observation/mod.rs"] = missing_acquisition[
+        "src/operations/observation/mod.rs"
     ].replace(
         "pub(crate) fn acquire_protected_continuity_diagnostic(",
         "pub(crate) fn detached_protected_diagnostic(",
@@ -573,8 +605,8 @@ def validate_mutants(sources: dict[str, str]) -> int:
     mutants.append(("missing-diagnostic-acquisition", missing_acquisition))
 
     cloneable_carrier = dict(sources)
-    cloneable_carrier["src/domain/vnext/evidence/diagnostics/mod.rs"] = cloneable_carrier[
-        "src/domain/vnext/evidence/diagnostics/mod.rs"
+    cloneable_carrier["src/domain/evidence/diagnostics/mod.rs"] = cloneable_carrier[
+        "src/domain/evidence/diagnostics/mod.rs"
     ].replace(
         "pub(crate) struct ProtectedDiagnosticEnvelopeV1",
         "#[derive(Clone)]\npub(crate) struct ProtectedDiagnosticEnvelopeV1",
@@ -583,14 +615,14 @@ def validate_mutants(sources: dict[str, str]) -> int:
     mutants.append(("cloneable-diagnostic-carrier", cloneable_carrier))
 
     search_guard = dict(sources)
-    search_guard["src/domain/vnext/search/mod.rs"] = search_guard[
-        "src/domain/vnext/search/mod.rs"
+    search_guard["src/domain/search/mod.rs"] = search_guard[
+        "src/domain/search/mod.rs"
     ].replace("    require_action_and_snapshot(\n", "    unchecked_action(\n", 1)
     mutants.append(("unguarded-search-mutation", search_guard))
 
     intake_guard = dict(sources)
-    intake_guard["src/domain/vnext/intake/mod.rs"] = intake_guard[
-        "src/domain/vnext/intake/mod.rs"
+    intake_guard["src/domain/intake/mod.rs"] = intake_guard[
+        "src/domain/intake/mod.rs"
     ].replace(
         "        self.require_action(admitted, RECORD_INTAKE_SOURCE_TAG_V1)?;\n",
         "",
@@ -599,8 +631,8 @@ def validate_mutants(sources: dict[str, str]) -> int:
     mutants.append(("unguarded-intake-mutation", intake_guard))
 
     research_guard = dict(sources)
-    research_guard["src/domain/vnext/research/mod.rs"] = research_guard[
-        "src/domain/vnext/research/mod.rs"
+    research_guard["src/domain/research/mod.rs"] = research_guard[
+        "src/domain/research/mod.rs"
     ].replace(
         "        self.require_action(admitted, BEGIN_RESEARCH_QUESTION_TAG_V1)?;\n",
         "",
@@ -619,8 +651,8 @@ def validate_mutants(sources: dict[str, str]) -> int:
 
 def validate_path_mutants(root: Path, base: str) -> int:
     mutants = (
-        ("deleted-owned-path", ("D", "100644", INHERITED_SEED)),
-        ("symlink-owned-path", ("M", "120000", INHERITED_SEED)),
+        ("deleted-owned-path", ("D", "100644", HISTORICAL_INHERITED_SEED)),
+        ("symlink-owned-path", ("M", "120000", HISTORICAL_INHERITED_SEED)),
         (
             "executable-rust-path",
             ("M", "100755", "src/domain/vnext/search/mod.rs"),
@@ -637,13 +669,12 @@ def validate_path_mutants(root: Path, base: str) -> int:
 
 
 def validate_frozen_stage5_interface_mutants(root: Path) -> int:
-    facade = (root / "src/domain/vnext/authority/facade.rs").read_text()
+    facade = (root / "src/domain/authority/facade.rs").read_text()
     widened = facade
     for private_marker in (
         "pub(super) struct SchedulingPolicyPublicationInputV1",
         "impl SchedulingPolicyPublicationInputV1 {\n    pub(super) fn new(",
-        "pub(super) fn publish_scheduling_policy_without_downgrade(",
-        "pub(super) fn publish_scheduling_policy_with_downgrade(",
+        "pub(super) fn publish_scheduling_policy(",
     ):
         require(
             private_marker in widened,
@@ -652,7 +683,7 @@ def validate_frozen_stage5_interface_mutants(root: Path) -> int:
         widened = widened.replace(
             private_marker,
             private_marker.replace(
-                "pub(super)", "pub(in crate::domain::vnext)"
+                "pub(super)", "pub(in crate::domain)"
             ),
             1,
         )
@@ -688,16 +719,25 @@ def validate_fixture(root: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default=DEFAULT_BASE)
-    parser.add_argument("--fanout-manifest", required=True, type=Path)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
     args = parser.parse_args()
     root = args.root.resolve()
 
-    entries = changed_entries(root, args.base)
-    paths = [path for _, _, path in entries]
+    require(
+        git_output(root, "merge-base", INTEGRATION_COMMIT, "HEAD") == INTEGRATION_COMMIT,
+        "Stage-8 integration commit is not an ancestor",
+    )
+    require(
+        git_output(root, "rev-parse", f"{INTEGRATION_COMMIT}^{{tree}}")
+        == INTEGRATION_TREE,
+        "Stage-8 integration tree differs",
+    )
+    require(
+        git_output(root, "merge-base", CANONICAL_MERGE, "HEAD") == CANONICAL_MERGE,
+        "canonical merge is not an ancestor",
+    )
     validate_base_manifest(root)
-    validate_v4_manifest(args.fanout_manifest.resolve(), entries)
-    validate_paths(root, args.base, entries)
+    validate_canonical_source_closure(root)
     sources = source_map(root)
     validate_sources(sources)
     mutants_rejected = validate_mutants(sources)
@@ -713,7 +753,8 @@ def main() -> None:
                 "base": args.base,
                 "fanout_manifest_sha256": V4_FANOUT_MANIFEST_SHA256,
                 "preserved_candidate": PRESERVED_CANDIDATE,
-                "changed_paths": paths,
+                "canonical_merge": CANONICAL_MERGE,
+                "canonical_sources": sorted(CANONICAL_SOURCE_SHA256),
                 "mutants_rejected": mutants_rejected,
                 "compile_or_runtime_proof": False,
             },
