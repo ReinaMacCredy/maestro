@@ -146,6 +146,7 @@ def is_product_owned(
 
 def find_correction_checkpoint(
     correction_predecessor: str,
+    descendant: str,
     existing: set[str],
     planned_new: set[str],
     prefixes: tuple[str, ...],
@@ -153,7 +154,7 @@ def find_correction_checkpoint(
     expected_parent = correction_predecessor
     checkpoint = ""
     correction_changed: set[str] = set()
-    for commit in first_parent_commits(correction_predecessor, FINAL_REF):
+    for commit in first_parent_commits(correction_predecessor, descendant):
         parent = run("git", "rev-parse", f"{commit}^1").strip()
         if parent != expected_parent:
             fail("Stage12 correction first-parent chain drifted")
@@ -190,7 +191,7 @@ def find_correction_checkpoint(
         expected_parent = commit
     if not checkpoint:
         fail("Stage12 correction has no owner-only checkpoint")
-    require_ancestor(checkpoint, FINAL_REF, "Stage12 correction checkpoint")
+    require_ancestor(checkpoint, descendant, "Stage12 correction checkpoint")
     return checkpoint, correction_changed
 
 
@@ -201,6 +202,10 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
     affected_suffix_checkpoint = str(manifest["affected_suffix_checkpoint"])
     affected_suffix_tree = str(manifest["affected_suffix_tree"])
     correction_predecessor = str(manifest["correction_predecessor"])
+    integration_checkpoint = manifest.get("integration_checkpoint")
+    canonical_merge_checkpoint = manifest.get("canonical_merge_checkpoint")
+    canonical_merge_first_parent = manifest.get("canonical_merge_first_parent")
+    canonical_merge_tree = manifest.get("canonical_merge_tree")
     affected_suffix_proof_inputs = set(manifest["affected_suffix_proof_inputs"])
     existing = set(manifest["existing_exact_files"])
     planned_new = set(manifest["planned_new_exact_files"])
@@ -232,7 +237,83 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         FINAL_REF,
         "final candidate affected Stage12 suffix",
     )
-    require_ancestor(correction_predecessor, FINAL_REF, "Stage12 correction")
+    if integration_checkpoint is None:
+        if manifest.get("schema") != "maestro.vnext.stage12-product-path-manifest.v3":
+            fail("historical Stage12 ownership manifest schema drifted")
+        correction_checkpoint, correction_changed = find_correction_checkpoint(
+            correction_predecessor,
+            FINAL_REF,
+            existing,
+            planned_new,
+            prefixes,
+        )
+    else:
+        if (
+            manifest.get("schema")
+            != "maestro.vnext.stage12-product-path-manifest.v4"
+            or not isinstance(integration_checkpoint, str)
+            or not isinstance(canonical_merge_checkpoint, str)
+            or not isinstance(canonical_merge_first_parent, str)
+            or not isinstance(canonical_merge_tree, str)
+        ):
+            fail("post-merge Stage12 ownership manifest closure drifted")
+        require_ancestor(
+            correction_predecessor,
+            integration_checkpoint,
+            "Stage12 correction",
+        )
+        require_ancestor(
+            integration_checkpoint,
+            canonical_merge_checkpoint,
+            "Stage12 candidate integration",
+        )
+        require_ancestor(
+            canonical_merge_checkpoint,
+            FINAL_REF,
+            "Stage12 canonical merge",
+        )
+        merge_row = run(
+            "git",
+            "rev-list",
+            "--parents",
+            "-n",
+            "1",
+            canonical_merge_checkpoint,
+        ).split()
+        if merge_row != [
+            canonical_merge_checkpoint,
+            canonical_merge_first_parent,
+            integration_checkpoint,
+        ]:
+            fail("canonical Stage12 merge parent closure drifted")
+        if tree_id(canonical_merge_checkpoint) != canonical_merge_tree:
+            fail("canonical Stage12 merge tree drifted")
+        historical_checkpoint, historical_changed = find_correction_checkpoint(
+            correction_predecessor,
+            integration_checkpoint,
+            existing,
+            planned_new,
+            prefixes,
+        )
+        for relative in existing | planned_new:
+            if base_blob(integration_checkpoint, relative) != base_blob(
+                canonical_merge_checkpoint,
+                relative,
+            ):
+                fail(f"canonical merge changed Stage12-owned bytes: {relative}")
+        correction_checkpoint, post_merge_changed = find_correction_checkpoint(
+            canonical_merge_checkpoint,
+            FINAL_REF,
+            existing,
+            planned_new,
+            prefixes,
+        )
+        correction_changed = historical_changed | post_merge_changed
+        require_ancestor(
+            historical_checkpoint,
+            integration_checkpoint,
+            "historical Stage12 correction checkpoint",
+        )
     if tree_id(affected_suffix_checkpoint) != affected_suffix_tree:
         fail("affected Stage12 suffix checkpoint tree drifted")
     for relative in existing:
@@ -267,12 +348,6 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         if forbidden in affected_summary:
             fail(f"forbidden affected-suffix change shape present: {forbidden}")
 
-    correction_checkpoint, correction_changed = find_correction_checkpoint(
-        correction_predecessor,
-        existing,
-        planned_new,
-        prefixes,
-    )
     for relative in correction_changed:
         if not is_product_owned(relative, existing, planned_new, prefixes):
             fail(f"Stage12 correction changed an unowned path: {relative}")
@@ -562,6 +637,10 @@ def main() -> int:
                 "affected_suffix_parent": manifest["affected_suffix_parent"],
                 "affected_suffix_checkpoint": manifest["affected_suffix_checkpoint"],
                 "affected_suffix_tree": manifest["affected_suffix_tree"],
+                "integration_checkpoint": manifest.get("integration_checkpoint"),
+                "canonical_merge_checkpoint": manifest.get(
+                    "canonical_merge_checkpoint"
+                ),
                 "final_ref": run("git", "rev-parse", FINAL_REF).strip(),
                 "original_changed_path_count": 22,
                 "changed_path_count": len(changed),
