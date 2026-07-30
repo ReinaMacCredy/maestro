@@ -118,13 +118,13 @@ EXPECTED_OBLIGATIONS = (
     "dogfood_and_recovery_rehearsal",
     "final_edge_sweep",
 )
-EXPECTED_CENSUS_ROW_COUNT = 384
+EXPECTED_CENSUS_ROW_COUNT = 388
 EXPECTED_CENSUS_SCAN_SHA256 = (
-    "71c14a39a8dd7e3750e757b52fb2a1e2beefc26f0313226edf56127aa9f23c4f"
+    "c01d3ee1a5714490cafda9ad30c9457fea4a8d16489cfeaf8140696ba57c49e1"
 )
 EXPECTED_LEGACY_RULE_COUNTS = {
     "legacy_skill_surface": 274,
-    "legacy_next_surface": 108,
+    "legacy_next_surface": 112,
     "legacy_harness_resource": 2,
 }
 sys.dont_write_bytecode = True

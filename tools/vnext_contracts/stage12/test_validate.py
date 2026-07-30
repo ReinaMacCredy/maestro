@@ -174,7 +174,7 @@ class Stage12CandidateTests(unittest.TestCase):
             require_census_sight(historical)
 
         off_by_one = copy.deepcopy(census)
-        off_by_one["row_count"] = 383
+        off_by_one["row_count"] = 387
         with self.assertRaises(ValidationError):
             require_census_sight(off_by_one)
 
