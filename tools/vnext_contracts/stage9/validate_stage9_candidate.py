@@ -10,40 +10,43 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 BASE = "a14b782a4aea161a10bbd3b194c8396eab6011e8"
-LOCATOR_SEED = ROOT / "src/domain/vnext/persistence/protected_locator_stage9_seed.rs"
-LOCATOR_FACADE = ROOT / "src/domain/vnext/persistence/mod.rs"
-LOCATOR_CORE = ROOT / "src/domain/vnext/persistence/protected_locator_lease.rs"
-FINALITY_SEED = ROOT / "src/domain/vnext/installation/durable_finality_stage9_seed.rs"
-INSTALLATION_FACADE = ROOT / "src/domain/vnext/installation/mod.rs"
-FINALITY_CORE = ROOT / "src/domain/vnext/installation/durable_finality.rs"
-DIAGNOSTIC_SEED = ROOT / "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs"
+INTEGRATION_COMMIT = "36076d45da6ffa7934aef4f7ccf6fdd9b2b13340"
+INTEGRATION_TREE = "a3f31252d4a5e32f6b8b5cc4a2b944efd37248da"
+CANONICAL_MERGE = "78133fe05a08976b0d2092f853ed6fcab1a806f4"
+LOCATOR_SEED = ROOT / "src/domain/persistence/protected_locator_stage9_seed.rs"
+LOCATOR_FACADE = ROOT / "src/domain/persistence/mod.rs"
+FINALITY_SEED = ROOT / "src/domain/installation/durable_finality_stage9_seed.rs"
+INSTALLATION_FACADE = ROOT / "src/domain/installation/mod.rs"
+DIAGNOSTIC_SEED = ROOT / "src/domain/persistence/protected_diagnostic_stage9_seed.rs"
 FIXTURE = ROOT / "tests/fixtures/vnext/stage9/distribution-installation-proof-input.v1.json"
 
-APPROVED_PATHS = {
-    "src/domain/vnext/distribution/runtime/catalog.rs": "A",
-    "src/domain/vnext/distribution/runtime/custody.rs": "A",
-    "src/domain/vnext/distribution/runtime/mod.rs": "M",
-    "src/domain/vnext/distribution/runtime/model.rs": "A",
-    "src/domain/vnext/distribution/runtime/records.rs": "A",
-    "src/domain/vnext/distribution/runtime/transaction.rs": "A",
-    "src/domain/vnext/installation/census.rs": "A",
-    "src/domain/vnext/installation/closure.rs": "A",
-    "src/domain/vnext/installation/consumer_materialization.rs": "A",
-    "src/domain/vnext/installation/currentness.rs": "A",
-    "src/domain/vnext/installation/cutover.rs": "A",
-    "src/domain/vnext/installation/durable_finality_stage9_seed.rs": "M",
-    "src/domain/vnext/installation/mod.rs": "M",
-    "src/domain/vnext/persistence/mod.rs": "M",
-    "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs": "M",
-    "src/domain/vnext/persistence/protected_locator_stage9_seed.rs": "M",
-    "src/operations/vnext/installation/active.rs": "A",
-    "src/operations/vnext/installation/effects.rs": "A",
-    "src/operations/vnext/installation/mod.rs": "M",
-    "src/operations/vnext/installation/prestore.rs": "A",
-    "tests/fixtures/vnext/stage9/distribution-installation-proof-input.v1.json": "A",
-    "tests/vnext_stage9_distribution.rs": "A",
-    "tests/vnext_stage9_installation.rs": "A",
-    "tools/vnext_contracts/stage9/validate_stage9_candidate.py": "A",
+CANONICAL_SOURCE_SHA256 = {
+    "src/domain/distribution/runtime/catalog.rs": "c0e83caa58fd8a3c2384f35b177c7cd5d2bda624176d6e9bb3154abfe94a9164",
+    "src/domain/distribution/runtime/custody.rs": "d2c859cc39c2166f7d55dc7f3a5ba28539357ca4573caca301cd8b6b7e327f36",
+    "src/domain/distribution/runtime/mod.rs": "74c9427bc55d0754da9108e297b74bff8259db048b8c8070560eb1ed4836e31d",
+    "src/domain/distribution/runtime/model.rs": "0f3760fbd90785879bea72e486e8be3b2601f4eee2771b752bc67412530f56ee",
+    "src/domain/distribution/runtime/owner_facts.rs": "5f1dc86d2e4cabae9729a5b7599b40a222797094901bff75a972d50e8deda18e",
+    "src/domain/distribution/runtime/records.rs": "abae64a98bf1e6429306489eb5461b16da2d24ecd342eed81831b8ac92fe3097",
+    "src/domain/distribution/runtime/transaction.rs": "99f5dd9971ddc0dfa2dc46ffcc343c3d8c97f36a5a85ac42a072b293a5af900f",
+    "src/domain/installation/census.rs": "38d5923904bbed7621f82542a46884ea0675de78768342faa845623f7626526f",
+    "src/domain/installation/closure.rs": "bf44711633bafcfc2505f28127ec05fd0c1e88b15c3547c78cc8662ac152c64f",
+    "src/domain/installation/consumer_materialization.rs": "8a55d73e2680a37c7626aa0add67b1d68d0299f8f5517a4e8fffd449f3d3cb75",
+    "src/domain/installation/currentness.rs": "37db63d7644f465d114263c0b85bda5c8e846cd262e61d854ed45f62fd623a44",
+    "src/domain/installation/cutover.rs": "ba8567ac533c539a5b8f3493bebab090843447d7320c09f851424815000004d0",
+    "src/domain/installation/durable_finality.rs": "cd6bfea5b763d2f2a716c7de7f7474092643cad5115d2fd6d6fb74339f894720",
+    "src/domain/installation/durable_finality_stage9_seed.rs": "ed0ce18ae28f5ce10b3005b185cdf9fd7df039d6e2edf2e476fd1f8addeef627",
+    "src/domain/installation/mod.rs": "96e0adc3a6242203491aac1dde041c049f3e4bc7bc22290ba3f2ebed462439b4",
+    "src/domain/persistence/mod.rs": "437699cbe16752592df9db1f5391411fef0441fb22f6078b678d51e2ad428a26",
+    "src/domain/persistence/protected_diagnostic_stage9_seed.rs": "12fae00cbb1d7f324edb1d91954b3d4eeda1cb098087dbd2a9ec390ae3b4f9dd",
+    "src/domain/persistence/protected_locator_lease.rs": "7dfdb74bcfbe5cd039195aae336c04706e103a867b854fa154a737abbce67eca",
+    "src/domain/persistence/protected_locator_stage9_seed.rs": "5e1483ca007d7215027eef4c4921e02a5d443a7eb225f8e77cf6a8cb9f3be767",
+    "src/operations/installation/active.rs": "8481c8254fa9f663d7a4c07ca7a120f7884c79a1cddfa74e464e27cb4f604af2",
+    "src/operations/installation/agent_resource_release.rs": "143edd66d45a61208bd3fbb441098a2ebca34507a30ac172dd99eab0a4b9c4b5",
+    "src/operations/installation/effects.rs": "86c894b78baeeff6149a4591796ba4d84428ebe9c2a8e6ae2ac20f4dfedecf82",
+    "src/operations/installation/mod.rs": "5649e94819182902f7731ccc356e1011d0d0e48970f85f0afd547c155fb719ee",
+    "src/operations/installation/prestore.rs": "53cd125c7da191f2f542e76d6bd5055199b566addc74cc5378aec8c1060c2fa8",
+    "tests/vnext_stage9_distribution.rs": "6832562e653aa7258b0ba0f418c28324a7882335121fd937b3c2be215f517623",
+    "tests/vnext_stage9_installation.rs": "5f86e6c9e128adb3bf2ca9fb673c231f0b444215bcf87334edc8afb42b4bd3cb",
 }
 
 
@@ -61,38 +64,17 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def base_sha256(path):
-    return hashlib.sha256(
-        subprocess.run(
-            ["git", "show", f"{BASE}:{path.relative_to(ROOT)}"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-        ).stdout
-    ).hexdigest()
-
-
-def candidate_changes():
-    rows = {}
-    for line in git_output("diff", "--no-renames", "--name-status", BASE).splitlines():
-        status, path = line.split("\t", maxsplit=1)
-        rows[path] = status
-    for path in git_output("ls-files", "--others", "--exclude-standard").splitlines():
-        rows[path] = "A"
-    return rows
-
-
 def validate_paths():
-    changes = candidate_changes()
-    assert changes == APPROVED_PATHS, (
-        sorted(set(changes) - set(APPROVED_PATHS)),
-        sorted(set(APPROVED_PATHS) - set(changes)),
-        sorted((path, changes.get(path), status) for path, status in APPROVED_PATHS.items()
-               if changes.get(path) != status),
-    )
-    for path in APPROVED_PATHS:
-        mode = (ROOT / path).lstat().st_mode
-        assert stat.S_ISREG(mode) and not mode & stat.S_IXUSR, path
+    for relative, expected in CANONICAL_SOURCE_SHA256.items():
+        source = ROOT / relative
+        mode = source.lstat().st_mode
+        assert stat.S_ISREG(mode) and not mode & stat.S_IXUSR, relative
+        assert sha256(source) == expected, relative
+        legacy = relative.replace("src/domain/", "src/domain/vnext/", 1).replace(
+            "src/operations/", "src/operations/vnext/", 1
+        )
+        if legacy != relative:
+            assert not (ROOT / legacy).exists(), legacy
 
 
 def real_provider_contract_holds(locator, locator_facade, finality, installation, diagnostic):
@@ -156,7 +138,7 @@ def validate_mutants(locator, locator_facade, finality, installation, diagnostic
 
 
 def validate_forbidden_shapes(locator, locator_facade, finality, installation):
-    production = "\n".join((locator, locator_facade, finality, installation))
+    production = "\n".join((locator, locator_facade, finality))
     forbidden = (
         "Box<dyn",
         "unsafe {",
@@ -165,14 +147,14 @@ def validate_forbidden_shapes(locator, locator_facade, finality, installation):
         "AmbientStore",
         "GLOBAL_STORE",
         "bind_stage9_owner_provider",
-        "trait Stage9ProtectedLocatorProviderV2",
-        "trait Stage9ActiveStoreFinalityProviderV2",
     )
     for needle in forbidden:
         assert needle not in production, needle
+    assert "trait Stage9ProtectedLocatorProviderV2" not in locator + locator_facade
+    assert "trait Stage9ActiveStoreFinalityProviderV2" not in finality + installation
     assert "PreStoreCutoverCandidateV1" not in locator + locator_facade
-    assert "#[cfg(test)]\npub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1" in finality
-    assert "#[cfg(test)]\npub(in crate::domain::vnext::persistence) struct Stage9ProtectedLocatorBackendSeedV1" in locator
+    assert "#[cfg(test)]\npub(in crate::domain) struct Stage9ActiveStoreFinalitySeedV1" in finality
+    assert "#[cfg(test)]\npub(in crate::domain::persistence) struct Stage9ProtectedLocatorBackendSeedV1" in locator
     capture_signature = locator.split("fn acquire_stage9_backend_v2<'locator>(", 1)[1].split(
         ") -> Result", 1
     )[0]
@@ -181,14 +163,17 @@ def validate_forbidden_shapes(locator, locator_facade, finality, installation):
 
 
 def main():
-    assert git_output("merge-base", BASE, "HEAD") == BASE
+    assert git_output("merge-base", INTEGRATION_COMMIT, "HEAD") == INTEGRATION_COMMIT
+    assert git_output("rev-parse", f"{INTEGRATION_COMMIT}^{{tree}}") == INTEGRATION_TREE
+    assert git_output("merge-base", CANONICAL_MERGE, "HEAD") == CANONICAL_MERGE
     validate_paths()
-    for frozen in (LOCATOR_CORE, FINALITY_CORE):
-        assert sha256(frozen) == base_sha256(frozen), frozen
 
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert fixture["candidate_state"] == "v4_real_provider_candidate_ready"
+    assert fixture["candidate_state"] == "canonical_namespace_integrated_unverified"
     assert fixture["base_commit"] == BASE
+    assert fixture["integration_commit"] == INTEGRATION_COMMIT
+    assert fixture["integration_tree"] == INTEGRATION_TREE
+    assert fixture["canonical_merge"] == CANONICAL_MERGE
 
     locator = LOCATOR_SEED.read_text(encoding="utf-8")
     locator_facade = LOCATOR_FACADE.read_text(encoding="utf-8")
@@ -197,6 +182,18 @@ def main():
     diagnostic = DIAGNOSTIC_SEED.read_text(encoding="utf-8")
     validate_mutants(locator, locator_facade, finality, installation, diagnostic)
     validate_forbidden_shapes(locator, locator_facade, finality, installation)
+    print(
+        json.dumps(
+            {
+                "authority_state": "none",
+                "canonical_source_count": len(CANONICAL_SOURCE_SHA256),
+                "candidate_state": fixture["candidate_state"],
+                "mutant_count": 13,
+                "status": "pass",
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

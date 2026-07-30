@@ -1,8 +1,11 @@
 {
   "schema_version": "maestro.vnext.stage9-proof-input.v1",
-  "candidate_state": "v4_real_provider_candidate_ready",
+  "candidate_state": "canonical_namespace_integrated_unverified",
   "base_commit": "a14b782a4aea161a10bbd3b194c8396eab6011e8",
   "base_tree": "536b5511ae036bc815bc8c5ff3c5996061b1c9b8",
+  "integration_commit": "36076d45da6ffa7934aef4f7ccf6fdd9b2b13340",
+  "integration_tree": "a3f31252d4a5e32f6b8b5cc4a2b944efd37248da",
+  "canonical_merge": "78133fe05a08976b0d2092f853ed6fcab1a806f4",
   "packet_sha256": "a022b557b28174361ebf721a217fdbce7deb0ec1cf3a2ac6aacb59f241d058d4",
   "fanout_manifest_sha256": "22160433bbf9784317b76fbe2784cd8f155fc7ee83f43e23f47453d564c64cb8",
   "stage5_interface_boundary_sha256": "63f36a8d4da6eb12452b18fe852df52d15504c561be78d85ec965a2ae0b4d655",
