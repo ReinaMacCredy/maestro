@@ -42,17 +42,17 @@ PLANNING_ACTIONS = [
 ]
 
 PRODUCTION_STAGE7 = [
-    "src/domain/vnext/coordination/model.rs",
-    "src/domain/vnext/coordination/projection.rs",
-    "src/domain/vnext/coordination/state.rs",
-    "src/domain/vnext/orchestration/runtime/advice.rs",
-    "src/domain/vnext/orchestration/runtime/catalog.rs",
-    "src/domain/vnext/orchestration/runtime/continuation.rs",
-    "src/domain/vnext/planning/evaluation.rs",
-    "src/domain/vnext/planning/model.rs",
-    "src/domain/vnext/planning/publication.rs",
-    "src/domain/vnext/planning/state.rs",
-    "src/operations/vnext/orchestration/mod.rs",
+    "src/domain/coordination/model.rs",
+    "src/domain/coordination/projection.rs",
+    "src/domain/coordination/state.rs",
+    "src/domain/orchestration/runtime/advice.rs",
+    "src/domain/orchestration/runtime/catalog.rs",
+    "src/domain/orchestration/runtime/continuation.rs",
+    "src/domain/planning/evaluation.rs",
+    "src/domain/planning/model.rs",
+    "src/domain/planning/publication.rs",
+    "src/domain/planning/state.rs",
+    "src/operations/orchestration/mod.rs",
 ]
 
 
@@ -167,10 +167,10 @@ def validate_action_rows() -> None:
         fail("frozen Action catalog tags 94..106 do not match Stage-7 owners")
 
     coordination = (
-        REPOSITORY / "src/domain/vnext/coordination/state.rs"
+        REPOSITORY / "src/domain/coordination/state.rs"
     ).read_text(encoding="utf-8")
     planning = (
-        REPOSITORY / "src/domain/vnext/planning/state.rs"
+        REPOSITORY / "src/domain/planning/state.rs"
     ).read_text(encoding="utf-8")
     for _, literal in COORDINATION_ACTIONS:
         if coordination.count(f'"{literal}"') != 1:
@@ -193,10 +193,10 @@ def validate_architecture() -> None:
                 fail(f"hidden scheduler/retry/effect runtime in {relative}")
 
     coordination_mod = (
-        REPOSITORY / "src/domain/vnext/coordination/mod.rs"
+        REPOSITORY / "src/domain/coordination/mod.rs"
     ).read_text(encoding="utf-8")
     planning_mod = (
-        REPOSITORY / "src/domain/vnext/planning/mod.rs"
+        REPOSITORY / "src/domain/planning/mod.rs"
     ).read_text(encoding="utf-8")
     if (
         "#[cfg(test)]\nmod authority_test_adapter;" not in coordination_mod
@@ -204,8 +204,8 @@ def validate_architecture() -> None:
     ):
         fail("Stage-6 Authority parity adapters must remain explicitly test-only")
     for relative in [
-        "src/domain/vnext/coordination/authority_test_adapter.rs",
-        "src/domain/vnext/planning/authority_test_adapter.rs",
+        "src/domain/coordination/authority_test_adapter.rs",
+        "src/domain/planning/authority_test_adapter.rs",
     ]:
         if "frozen Stage-6 Authority facade" not in (
             REPOSITORY / relative
@@ -214,7 +214,7 @@ def validate_architecture() -> None:
 
     continuation = (
         REPOSITORY
-        / "src/domain/vnext/orchestration/runtime/continuation.rs"
+        / "src/domain/orchestration/runtime/continuation.rs"
     ).read_text(encoding="utf-8")
     for boundary in [
         "MissingAuthority",
@@ -233,13 +233,13 @@ def validate_architecture() -> None:
             fail(f"bounded-continuation stop boundary missing: {boundary}")
 
     planning_model = (
-        REPOSITORY / "src/domain/vnext/planning/model.rs"
+        REPOSITORY / "src/domain/planning/model.rs"
     ).read_text(encoding="utf-8")
     if "downgrade_mandate_consumption_ref" in planning_model:
         fail("Scheduling Policy Binding persists forbidden downgrade authority")
 
     publication = (
-        REPOSITORY / "src/domain/vnext/planning/publication.rs"
+        REPOSITORY / "src/domain/planning/publication.rs"
     ).read_text(encoding="utf-8")
     if (
         publication.count("publish_scheduling_policy_from_stage7(") != 1
@@ -287,48 +287,40 @@ def validate_architecture() -> None:
             fail("Scheduling publication derives or transports an Authority-owned governance floor")
     for owner_fact in [
         ".scheduling_safety_floor()",
-        "PlanningSchedulingPolicyInputV1::from_stage7_planning(",
+        "publish_scheduling_policy_from_stage7(",
+        "PlanningRepositoryActionAuthorityV1::new(",
     ]:
         if owner_fact not in publication:
             fail(f"Scheduling publication does not derive live owner fact: {owner_fact}")
-    for mandate_gate in [
-        "SemanticPolicyDiffKindV1::Weakening | SemanticPolicyDiffKindV1::Incomparable",
-        "SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate",
-        "SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening",
-    ]:
-        if mandate_gate not in publication:
-            fail(f"Scheduling publication does not gate the downgrade Mandate: {mandate_gate}")
-
-
 def validate_frozen_authority_seam() -> None:
     seed = (
         REPOSITORY
-        / "src/domain/vnext/authority/governance_attestation_stage7_seed.rs"
+        / "src/domain/authority/governance_attestation_stage7_seed.rs"
     ).read_text(encoding="utf-8")
     if (
-        seed.count("publish_scheduling_policy_without_downgrade(") != 1
-        or seed.count("publish_scheduling_policy_with_downgrade(") != 1
-        or "SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening" not in seed
-        or "SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate"
-        not in seed
+        seed.count("publish_scheduling_policy_from_stage7(") != 1
+        or seed.count("PlanningSchedulingPolicyInputV1::from_stage7_planning(") != 1
+        or seed.count("facade.publish_scheduling_policy(probe, authority, input)") != 1
     ):
-        fail("frozen Stage-7 Authority seed is not the two-kind one-call entry")
+        fail("frozen Stage-7 Authority seed is not the typed one-call entry")
 
     facade = (
-        REPOSITORY / "src/domain/vnext/authority/facade.rs"
+        REPOSITORY / "src/domain/authority/facade.rs"
     ).read_text(encoding="utf-8")
-    for owner_derivation in [
-        "resolve_repository_governance_floor_current_view(",
-        "GovernanceAttestationV1::derive(",
+    for owner_derivation, expected_count in [
+        ("resolve_repository_governance_floor_current_view(", 1),
+        ("GovernanceAttestationV1::derive(", 1),
+        ("relation\n            .requires_downgrade_mandate()", 1),
+        ("resolve_scheduling_policy_downgrade_mandate(", 2),
     ]:
-        if facade.count(owner_derivation) != 1:
+        if facade.count(owner_derivation) != expected_count:
             fail(
                 "Authority does not derive the live governance view exactly once "
                 f"inside the Store transaction: {owner_derivation}"
             )
 
     attestation = (
-        REPOSITORY / "src/domain/vnext/authority/governance_attestation.rs"
+        REPOSITORY / "src/domain/authority/governance_attestation.rs"
     ).read_text(encoding="utf-8")
     for live_fact in [
         "current_view.snapshot().semantic_hash()",
