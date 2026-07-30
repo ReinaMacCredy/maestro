@@ -202,7 +202,11 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
     affected_suffix_checkpoint = str(manifest["affected_suffix_checkpoint"])
     affected_suffix_tree = str(manifest["affected_suffix_tree"])
     correction_predecessor = str(manifest["correction_predecessor"])
+    historical_validation_checkpoint = manifest.get(
+        "historical_validation_checkpoint"
+    )
     integration_checkpoint = manifest.get("integration_checkpoint")
+    integration_tree = manifest.get("integration_tree")
     canonical_merge_checkpoint = manifest.get("canonical_merge_checkpoint")
     canonical_merge_first_parent = manifest.get("canonical_merge_first_parent")
     canonical_merge_tree = manifest.get("canonical_merge_tree")
@@ -251,7 +255,9 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
         if (
             manifest.get("schema")
             != "maestro.vnext.stage12-product-path-manifest.v4"
+            or not isinstance(historical_validation_checkpoint, str)
             or not isinstance(integration_checkpoint, str)
+            or not isinstance(integration_tree, str)
             or not isinstance(canonical_merge_checkpoint, str)
             or not isinstance(canonical_merge_first_parent, str)
             or not isinstance(canonical_merge_tree, str)
@@ -259,9 +265,16 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
             fail("post-merge Stage12 ownership manifest closure drifted")
         require_ancestor(
             correction_predecessor,
-            integration_checkpoint,
+            historical_validation_checkpoint,
             "Stage12 correction",
         )
+        require_ancestor(
+            historical_validation_checkpoint,
+            integration_checkpoint,
+            "Stage12 V8 integration",
+        )
+        if tree_id(integration_checkpoint) != integration_tree:
+            fail("Stage12 V8 integration tree drifted")
         require_ancestor(
             integration_checkpoint,
             canonical_merge_checkpoint,
@@ -290,17 +303,27 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
             fail("canonical Stage12 merge tree drifted")
         historical_checkpoint, historical_changed = find_correction_checkpoint(
             correction_predecessor,
-            integration_checkpoint,
+            historical_validation_checkpoint,
             existing,
             planned_new,
             prefixes,
         )
-        for relative in existing | planned_new:
-            if base_blob(integration_checkpoint, relative) != base_blob(
+        merge_owned_changed = {
+            relative
+            for relative in changed_paths(
+                integration_checkpoint,
                 canonical_merge_checkpoint,
-                relative,
+            )
+            if is_product_owned(relative, existing, planned_new, prefixes)
+        }
+        for relative in merge_owned_changed:
+            blob = base_blob(canonical_merge_checkpoint, relative)
+            if (
+                blob is None
+                or blob[0] not in {"100644", "100755"}
+                or blob[1] != "blob"
             ):
-                fail(f"canonical merge changed Stage12-owned bytes: {relative}")
+                fail(f"canonical merge Stage12 path is not a regular blob: {relative}")
         correction_checkpoint, post_merge_changed = find_correction_checkpoint(
             canonical_merge_checkpoint,
             FINAL_REF,
@@ -308,10 +331,12 @@ def validate_ownership(manifest: dict[str, object]) -> set[str]:
             planned_new,
             prefixes,
         )
-        correction_changed = historical_changed | post_merge_changed
+        correction_changed = (
+            historical_changed | merge_owned_changed | post_merge_changed
+        )
         require_ancestor(
             historical_checkpoint,
-            integration_checkpoint,
+            historical_validation_checkpoint,
             "historical Stage12 correction checkpoint",
         )
     if tree_id(affected_suffix_checkpoint) != affected_suffix_tree:
