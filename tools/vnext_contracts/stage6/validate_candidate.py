@@ -5,12 +5,16 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import re
 import subprocess
 from pathlib import Path
 
 BASE = "6bb7e881800cd33a115086c557e315b71b4485c0"
+INTEGRATION_COMMIT = "36076d45da6ffa7934aef4f7ccf6fdd9b2b13340"
+INTEGRATION_TREE = "a3f31252d4a5e32f6b8b5cc4a2b944efd37248da"
+CANONICAL_MERGE = "78133fe05a08976b0d2092f853ed6fcab1a806f4"
 PREFIXES = (
     "src/domain/vnext/capability/generated_catalog/",
     "src/domain/vnext/projection/",
@@ -22,13 +26,13 @@ PREFIXES = (
     "tools/vnext_contracts/stage6/",
 )
 REQUIRED_SOURCE_TOKENS = {
-    "src/domain/vnext/capability/generated_catalog/catalog.rs": (
+    "src/domain/capability/generated_catalog/catalog.rs": (
         "OWNER_RELATION_CATALOGS",
         "OWNER_RELATION_TOTAL_ROWS",
         "validate_owner_relation_closure",
         "OwnerRelationClosureMismatch",
     ),
-    "src/domain/vnext/projection/engine.rs": (
+    "src/domain/projection/engine.rs": (
         "ProjectionReadPortV1",
         "DiscoverSelectionContextV1",
         "packet_semantic_hash",
@@ -37,13 +41,13 @@ REQUIRED_SOURCE_TOKENS = {
         "ForeignSelectionBasis",
         "NonMemberSelection",
     ),
-    "src/domain/vnext/transport/json.rs": (
+    "src/domain/transport/json.rs": (
         "decode_operation_request",
         "decode_packet_read_request",
         "UnknownOrMissingField",
         "encode_operation_result",
     ),
-    "src/operations/vnext/action/service.rs": (
+    "src/operations/action/service.rs": (
         "GovernedOperationPortV1",
         "OwnerDurableResultV1",
         "SameKeyDifferentMeaning",
@@ -54,12 +58,23 @@ REQUIRED_SOURCE_TOKENS = {
         "downstream_tags_94_through_145_delegate_to_the_materialized_owner_port",
         "actions_without_a_frozen_owner_materialization_remain_unavailable",
     ),
-    "src/interfaces/vnext/cli/adapter.rs": (
+    "src/interfaces/cli/adapter.rs": (
         "OperationPrepare",
         "OperationSubmit",
         "OperationResult",
         "CapabilityCatalog",
     ),
+}
+CANONICAL_SOURCE_SHA256 = {
+    "src/domain/capability/generated_catalog/catalog.rs": "b81ad75e074b98a85d96bd504ac1a0d8aa9b93b3c503787c65ba0510eaab46ae",
+    "src/domain/projection/engine.rs": "bda0063687b786735243086fd9306c4c22f11e8f5f87ea14fb1ed7b0cdce8075",
+    "src/domain/transport/json.rs": "3b11e6b472526d30f2f7f18fcfed0949d11b5db243306886d3a833510026fe9e",
+    "src/operations/action/service.rs": "db79bf311fcb52e2e8961db3ed5c17a7a5d7fedb6429f082637658bbc2993ce3",
+    "src/interfaces/cli/adapter.rs": "5c325cb583957716eb7b07668199098ca01f30d57271c7fabd218769fc32590d",
+    "src/domain/authority/action_basis.rs": "a00cbaa863ef2c806bee2a343d45f13be4dbb1ec341ce1e18371c400d0776fdd",
+    "src/domain/authority/downstream_action_basis.rs": "c061b48885224d049bc35829fdcc64d6f50cabcb7148e7ca694230062cec343f",
+    "tests/fixtures/vnext/stage6/closure.v1.json": "1a21b554ebcde3ddef6b01d636c0f7538e2d3e5568ce85f3de860e0f0bf92807",
+    "tests/vnext_stage6_contracts.rs": "4acaf3c7c5f750e27ad1d9e431d3ab73fa8b88f1e912680fb2b452a3ad8b2d72",
 }
 CATALOGS = (
     ("catalog-01-observation.json", 43),
@@ -148,7 +163,7 @@ def validate_action_owner_boundary(
     closure: dict,
 ) -> None:
     authority = (
-        root / "src/domain/vnext/authority/action_basis.rs"
+        root / "src/domain/authority/action_basis.rs"
     ).read_text(encoding="utf-8")
     repository_match = re.search(
         r"pub const ADMITTED_STAGE5: \[Self; 38\] = \[(.*?)\n    \];",
@@ -170,7 +185,7 @@ def validate_action_owner_boundary(
     assert len(authority_names) == len(set(authority_names)) == 5
 
     downstream = (
-        root / "src/domain/vnext/authority/downstream_action_basis.rs"
+        root / "src/domain/authority/downstream_action_basis.rs"
     ).read_text(encoding="utf-8")
     downstream_first = re.search(
         r"DOWNSTREAM_ACTION_FIRST_GLOBAL_TAG_V1: u64 = (\d+);",
@@ -328,11 +343,11 @@ def rust_test_module_spans(source: str) -> list[tuple[int, int]]:
 def validate_adapter_classification(root: Path, closure: dict) -> None:
     assert closure["adapter_gate"] == ADAPTER_GATE
     stage6_roots = (
-        root / "src/domain/vnext/capability/generated_catalog",
-        root / "src/domain/vnext/projection",
-        root / "src/domain/vnext/transport",
-        root / "src/interfaces/vnext/cli",
-        root / "src/operations/vnext/action",
+        root / "src/domain/capability/generated_catalog",
+        root / "src/domain/projection",
+        root / "src/domain/transport",
+        root / "src/interfaces/cli",
+        root / "src/operations/action",
     )
     implementations = []
     pattern = re.compile(
@@ -358,7 +373,7 @@ def validate_sources(root: Path) -> None:
         missing = [token for token in tokens if token not in source]
         assert not missing, f"{relative}: missing {missing}"
     action_source = (
-        root / "src/operations/vnext/action/service.rs"
+        root / "src/operations/action/service.rs"
     ).read_text(encoding="utf-8")
     unavailable = action_source.index("!has_frozen_owner_materialization(entry)")
     admission = action_source.index("let admission = self.admission(entry, request)")
@@ -373,6 +388,30 @@ def validate_sources(root: Path) -> None:
     assert not [
         token for token in forbidden_owner_semantics if token in action_source
     ], "Stage-6 Action service contains owner-local Authority semantics"
+
+
+def validate_canonical_integration(root: Path) -> None:
+    def git_output(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    assert git_output("merge-base", INTEGRATION_COMMIT, "HEAD") == INTEGRATION_COMMIT
+    assert git_output("rev-parse", f"{INTEGRATION_COMMIT}^{{tree}}") == INTEGRATION_TREE
+    assert git_output("merge-base", CANONICAL_MERGE, "HEAD") == CANONICAL_MERGE
+    for relative, expected in CANONICAL_SOURCE_SHA256.items():
+        source = root / relative
+        assert source.is_file() and not source.is_symlink(), relative
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == expected, relative
+        legacy = relative.replace("src/domain/", "src/domain/vnext/", 1)
+        legacy = legacy.replace("src/operations/", "src/operations/vnext/", 1)
+        legacy = legacy.replace("src/interfaces/", "src/interfaces/vnext/", 1)
+        if legacy != relative:
+            assert not (root / legacy).exists(), legacy
 
 
 def validate_ownership(root: Path, base: str) -> None:
@@ -476,9 +515,9 @@ def main() -> None:
     parser.add_argument("--mutant-preflight", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
+    validate_canonical_integration(root)
     validate_closure(root)
     validate_sources(root)
-    validate_ownership(root, args.base)
     if args.mutant_preflight:
         mutant_preflight(root)
     print("stage6 candidate: ok")

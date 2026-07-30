@@ -4,10 +4,10 @@
 from pathlib import Path
 
 FILES = (
-    "src/domain/vnext/capability/generated_catalog/catalog.rs",
-    "src/domain/vnext/projection/engine.rs",
-    "src/domain/vnext/transport/json.rs",
-    "src/operations/vnext/action/service.rs",
+    "src/domain/capability/generated_catalog/catalog.rs",
+    "src/domain/projection/engine.rs",
+    "src/domain/transport/json.rs",
+    "src/operations/action/service.rs",
 )
 FORBIDDEN = (
     "std::process::Command",
