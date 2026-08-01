@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.16
+version: 1.36.18
 description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -104,16 +104,13 @@ the same turn; do not make the user send "next fork" just to continue. If no
 fork remains, do not go straight to build approval. First run a bounded edge
 sweep chained to Maestro's shipped Unknowns Lens as the no-fork edge sweep:
 pressure-test the locked design for edge cases that could change acceptance,
-proof, non-goals, ownership, or safety; then read `maestro loop next` or
-`maestro loop next --json` and compare `unknown_gap` against locked decisions,
-feature questions, acceptance, affected areas, removals, proof gates, and
-shared-state risks.
-Use the shipped loop next `unknown_gap` framing to decide whether remaining
-unknowns are material. Material unknowns reopen a fork. If the sweep finds only
-implementation risk, add acceptance/proof wording. If it finds no material
-issue, say: "No forks remain. Edge sweep found no material unresolved choices.
-Waiting for explicit build approval." Only a clean sweep reaches the explicit
-build-approval gate.
+proof, non-goals, ownership, or safety; then compare every remaining
+`unknown_gap` against locked decisions, feature questions, acceptance, affected
+areas, removals, proof gates, and shared-state risks. Material unknowns reopen a
+fork. If the sweep finds only implementation risk, add acceptance/proof
+wording. If it finds no material issue, say: "No forks remain. Edge sweep found
+no material unresolved choices. Waiting for explicit build approval." Only a
+clean sweep reaches the explicit build-approval gate.
 Do not run `maestro feature reconcile <id>` or `maestro feature finalize <id>`
 until the user approves the build transition.
 
@@ -138,27 +135,19 @@ If the user asks for more detail, examples, or clarification, answer by
 improving the current fork or thesis first. Only open a new fork after the
 clarified point is settled or explicitly becomes the next decision.
 
-Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
-for current state and `maestro loop next` as the read-only router when the next
-recipe is not obvious. Design work normally uses the shipped `design` lifecycle
-recipe. Before deciding or changing the proposed contract, read or cite
-`maestro loop show design` and keep the work inside perceive -> choose -> act
--> observe -> learn -> continue. If the user is unavailable but gave a bounded
-design mandate, read or cite `maestro loop show design-relay` first: the main
-session may make only in-mandate design decisions, subagents/advisors provide
-evidence only, and the relay returns to the parent design loop. Writes still use
-the existing Maestro verbs
-named by the recipe. Custom recipes are allowed only for the current card/run,
-and only when no shipped recipe fits; they must use the same six phases, current
-Maestro verbs, hard stops, and continue output. Rule: loop next recommends;
-outcome/proof/memory verbs write. Use `maestro loop next --chain` to explain
-the current chain position, transition trigger, next native command, and return
-conditions without writing. Use `maestro loop outcome` for structured attempt
-evidence and transition receipts after native work, `maestro loop trace <card>`
-to audit card-scoped chain receipts, and `maestro loop improve` for read-only
-improvement proposals; do not silently edit recipes or skills from router
-output. Do not use hidden stores, hidden schedulers, silent recipe mutation, or
-proof/QA bypass.
+Routing checkpoint: use `maestro status --json` for current repository state.
+When an exact bounded vNext projection is required, Integration supplies one
+canonical JSON request with authenticated host context and expected
+Release/catalog identities; pass it on stdin to `maestro packet read`. Never
+invent those authority facts. Design work keeps the explicit perceive ->
+choose -> act -> observe -> learn -> continue discipline. If the user is
+unavailable but gave a bounded design mandate, the main session may make only
+in-mandate design decisions; subagents/advisors provide evidence only, and
+control returns to the owning design session. Retired successor routes and
+legacy lifecycle recipe identifiers are not fallback routers. Writes use the
+explicit current Feature and Decision verbs. Do not silently edit recipes or
+skills from router output, and do not use hidden stores, hidden schedulers,
+silent recipe mutation, or proof/QA bypass.
 When designing loop automation, map it into native Maestro pattern packs,
 recipe templates, readiness levels, and operating limits. Name the intended
 readiness target (L0 draft, L1 report, L2 assisted, or L3 unattended), the
@@ -244,9 +233,9 @@ is complete only after the user approves build and `feature reconcile` plus
 
 ## Taste Forks
 
-Use a generate-filter pass for naming, UX wording, API shape, report
-structure, or other judgment-heavy forks. Full orchestration HOW (generator
-angles, judge, pairwise): `maestro loop show generate-filter`.
+Use a generate-filter pass for naming, UX wording, API shape, report structure,
+or other judgment-heavy forks: generator angles, a fresh judge, and pairwise
+comparison when scores cluster.
 
 1. Write a 3-5 point rubric into `notes.md` before generating options.
 2. Ask 3-5 fresh-context generators for one concrete option each from different
@@ -332,5 +321,4 @@ or unrelated files you will not touch, stay on main. Worktree-isolate only for
 a fresh non-self same-card/path overlap, unknown source/test dirt,
 release/install clean-tree proof, or explicit user isolation. If you split,
 follow the conflict-handoff protocol in HARNESS.md (link + `maestro conflict`
-on a shared file; merge back then `--clear`); `maestro loop show
-conflict-handoff` is the full dance.
+on a shared file; merge back then `--clear`).

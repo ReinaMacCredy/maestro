@@ -6,11 +6,13 @@ from __future__ import annotations
 import copy
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_successor_input_bindings as successor_builder
 import verify_input_bindings as verifier
 
 
@@ -133,6 +135,170 @@ def main(*, causal_only: bool = False) -> None:
 
     original = bindings()
     verifier.verify_successor_external_approval_event(original)
+    packet_verifier = verifier.verify_successor_packet_artifacts
+
+    def captured_packet(_bindings: dict[str, object]) -> dict[str, bytes]:
+        return {
+            "replacement-build-approval-packet.v1.json": b'{"snapshot":"captured"}\n'
+        }
+
+    verifier.verify_successor_packet_artifacts = captured_packet
+    try:
+        if successor_builder.verified_packet() != {"snapshot": "captured"}:
+            raise SystemExit("successor builder did not consume the verifier-captured bytes")
+    finally:
+        verifier.verify_successor_packet_artifacts = packet_verifier
+    repository_root = Path(__file__).resolve().parents[3]
+    serialized = json.loads(
+        (repository_root / "contracts/vnext/stage0/input-bindings.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    verifier.verify_serialized_external_control_bindings(serialized)
+    control_mutants = (
+        (
+            "nested source digest",
+            ("external_control_bindings", "source_git_control", "repository_config_sha256"),
+            "0" * 64,
+        ),
+        (
+            "duplicate source path",
+            ("external_control_bindings", "source_git_control", "source_repository_realpath"),
+            "/private/tmp/substituted-source",
+        ),
+        (
+            "duplicate baseline commit",
+            ("external_control_bindings", "source_git_control", "baseline_commit"),
+            "0" * 40,
+        ),
+        (
+            "destination ancestor metadata",
+            ("external_control_bindings", "destination_ancestors", "ancestors", "0", "mode"),
+            "0777",
+        ),
+        (
+            "sandbox authority",
+            ("external_control_bindings", "checkout_sandbox_profile", "network"),
+            "enabled",
+        ),
+    )
+    for label, path, value in control_mutants:
+        mutant = copy.deepcopy(serialized)
+        cursor: object = mutant
+        for component in path[:-1]:
+            if isinstance(cursor, dict):
+                cursor = cursor[component]
+            else:
+                assert isinstance(cursor, list)
+                cursor = cursor[int(component)]
+        assert isinstance(cursor, dict)
+        cursor[path[-1]] = value
+        try:
+            verifier.verify_serialized_external_control_bindings(mutant)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit(
+                f"successor verifier accepted {label} under retained control identities"
+            )
+    extra_field_mutant = copy.deepcopy(serialized)
+    extra_controls = extra_field_mutant["external_control_bindings"]
+    assert isinstance(extra_controls, dict)
+    extra_source = extra_controls["source_git_control"]
+    assert isinstance(extra_source, dict)
+    extra_source["unbound_authority"] = "accepted"
+    try:
+        verifier.verify_serialized_external_control_bindings(extra_field_mutant)
+    except SystemExit:
+        pass
+    else:
+        raise SystemExit("successor verifier accepted an unbound control field")
+
+    with tempfile.TemporaryDirectory(prefix="maestro-stage0-replace-ref-") as directory:
+        replacement_repo = Path(directory)
+        git_environment = {
+            **os.environ,
+            "GIT_AUTHOR_EMAIL": "proof@example.invalid",
+            "GIT_AUTHOR_NAME": "Proof",
+            "GIT_COMMITTER_EMAIL": "proof@example.invalid",
+            "GIT_COMMITTER_NAME": "Proof",
+        }
+
+        def git(*arguments: str) -> str:
+            return subprocess.run(
+                ["/usr/bin/git", *arguments],
+                cwd=replacement_repo,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=git_environment,
+            ).stdout.strip()
+
+        git("init", "--quiet")
+        tracked = replacement_repo / "tracked"
+        tracked.write_text("approved\n", encoding="utf-8")
+        git("add", "tracked")
+        git("commit", "--quiet", "-m", "approved")
+        approved_commit = git("rev-parse", "HEAD")
+        approved_tree = git("rev-parse", "HEAD^{tree}")
+        tracked.write_text("substituted\n", encoding="utf-8")
+        git("commit", "--quiet", "-am", "substituted")
+        substituted_commit = git("rev-parse", "HEAD")
+        git("replace", approved_commit, substituted_commit)
+        archived_bindings = {
+            "baseline": {"commit": approved_commit, "tree": approved_tree},
+            "current_implementation_base": {
+                "commit": approved_commit,
+                "tree": approved_tree,
+            },
+        }
+        verifier.verify_archived_baseline_objects(
+            archived_bindings, replacement_repo
+        )
+        alternates = replacement_repo / ".git/objects/info/alternates"
+        alternates.write_text(
+            str(replacement_repo / ".git/objects") + "\n",
+            encoding="utf-8",
+        )
+        try:
+            verifier.verify_archived_baseline_objects(
+                archived_bindings, replacement_repo
+            )
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit("archived verifier accepted an alternate object source")
+        alternates.unlink()
+        approved_tree_object = (
+            replacement_repo / ".git/objects" / approved_tree[:2] / approved_tree[2:]
+        )
+        displaced_tree_object = approved_tree_object.with_suffix(".displaced")
+        approved_tree_object.rename(displaced_tree_object)
+        try:
+            verifier.verify_archived_baseline_objects(
+                archived_bindings, replacement_repo
+            )
+        except (subprocess.CalledProcessError, SystemExit):
+            pass
+        else:
+            raise SystemExit("archived verifier accepted a missing bound tree object")
+
+    alternate_root = subprocess.run(
+        [
+            sys.executable,
+            str(
+                repository_root
+                / "tools/vnext_contracts/stage0/build_successor_input_bindings.py"
+            ),
+            "--packet-root",
+            "/private/tmp/untrusted-successor-packet",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if alternate_root.returncode == 0 or "unrecognized arguments" not in alternate_root.stderr:
+        raise SystemExit("successor builder still accepts a caller-selected packet root")
     cases = {
         "packet": ("external_approval", "packet_sha256"),
         "candidate": ("external_approval", "candidate_input_commitment"),
@@ -164,6 +330,38 @@ def main(*, causal_only: bool = False) -> None:
             pass
         else:
             raise SystemExit("descriptor capture accepted a symlink substitution")
+        append_only = root / "append-only.jsonl"
+        first = b'{"record":1}\n'
+        second = b'{"record":2}\n'
+        append_only.write_bytes(first)
+        append_only.chmod(0o600)
+
+        def append_record() -> None:
+            with append_only.open("ab") as handle:
+                handle.write(second)
+
+        if (
+            verifier.descriptor_capture_append_only(
+                append_only,
+                after_read_for_test=append_record,
+            )
+            != first
+        ):
+            raise SystemExit("append-only descriptor capture changed the stable prefix")
+
+        def mutate_prefix() -> None:
+            with append_only.open("r+b") as handle:
+                handle.write(b'{"record":0}\n')
+
+        try:
+            verifier.descriptor_capture_append_only(
+                append_only,
+                after_read_for_test=mutate_prefix,
+            )
+        except (OSError, SystemExit):
+            pass
+        else:
+            raise SystemExit("append-only descriptor capture accepted prefix mutation")
         ancestor = root / "ancestor"
         packet = ancestor / "packet"
         packet.mkdir(parents=True)

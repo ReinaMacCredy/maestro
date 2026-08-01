@@ -576,8 +576,8 @@ pub enum RootCommand {
     )]
     Playbook(PlaybookArgs),
     #[command(
-        about = "Print loop recipe contracts, route next, or run choose-phase helpers",
-        after_help = "Examples:\n  maestro loop                    # list shipped and project custom recipes\n  maestro loop list               # same as above\n  maestro loop show design        # print one lifecycle recipe contract\n  maestro loop show feature-fanout # print one orchestration recipe\n  maestro loop next --json        # recommend the next recipe without writing\n  maestro loop improve --json     # plan improvement proposals without writing\n  maestro loop validate design    # validate one structured loop recipe\n  maestro loop work-lease --json  # run the choose-phase helper for one ready card"
+        about = "Print loop recipe contracts or run current choose-phase helpers",
+        after_help = "Examples:\n  maestro loop                    # list shipped and project custom recipes\n  maestro loop list               # same as above\n  maestro loop show design        # print one lifecycle recipe contract\n  maestro loop show feature-fanout # print one orchestration recipe\n  maestro loop improve --json     # plan improvement proposals without writing\n  maestro loop validate design    # validate one structured loop recipe\n  maestro loop work-lease --json  # run the choose-phase helper for one ready card"
     )]
     Loop(LoopArgs),
     #[command(
@@ -794,7 +794,7 @@ pub struct LoopArgs {
 pub enum LoopCommand {
     #[command(about = "List shipped and project custom recipes")]
     List,
-    #[command(about = "Recommend the next loop recipe without mutating state")]
+    #[command(about = "Retired successor route; returns a typed refusal")]
     Next(LoopNextArgs),
     #[command(about = "Plan loop improvement proposals without mutating state")]
     Improve(LoopImproveArgs),

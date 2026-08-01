@@ -32,8 +32,13 @@ const EXPECTED_STAGE3_SOURCES: &[&str] = &[
     "src/domain/authority/facade/repository_leaf_authority.rs",
     "src/domain/authority/facade_tests.rs",
     "src/domain/authority/grant.rs",
+    "src/domain/authority/governance_attestation.rs",
+    "src/domain/authority/governance_attestation_stage7_seed.rs",
+    "src/domain/authority/governance_floor.rs",
     "src/domain/authority/identity.rs",
+    "src/domain/authority/legacy_removal_guard.rs",
     "src/domain/authority/mandate.rs",
+    "src/domain/authority/materialization.rs",
     "src/domain/authority/mod.rs",
     "src/domain/authority/post_cut.rs",
     "src/domain/authority/principal.rs",
@@ -59,6 +64,7 @@ const EXPECTED_STAGE3_SOURCES: &[&str] = &[
     "src/domain/design/closure.rs",
     "src/domain/design/common.rs",
     "src/domain/design/decision.rs",
+    "src/domain/design/legacy.rs",
     "src/domain/design/materialization.rs",
     "src/domain/design/mod.rs",
     "src/domain/design/revision.rs",
@@ -75,15 +81,21 @@ const EXPECTED_STAGE3_SOURCES: &[&str] = &[
     "src/domain/identity/mod.rs",
     "src/domain/identity/schema.rs",
     "src/domain/mod.rs",
+    "src/domain/persistence/consumer_snapshot.rs",
     "src/domain/persistence/export.rs",
     "src/domain/persistence/generation.rs",
     "src/domain/persistence/idempotency.rs",
+    "src/domain/persistence/legacy_quarantine.rs",
+    "src/domain/persistence/legacy_source_history.rs",
     "src/domain/persistence/metadata.rs",
     "src/domain/persistence/mod.rs",
     "src/domain/persistence/object.rs",
     "src/domain/persistence/protected_diagnostic.rs",
     "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
+    "src/domain/persistence/protected_locator_lease.rs",
+    "src/domain/persistence/protected_locator_stage9_seed.rs",
     "src/domain/persistence/retention.rs",
+    "src/domain/persistence/root_universe.rs",
     "src/domain/persistence/snapshot.rs",
     "src/domain/persistence/snapshot_blocks.rs",
     "src/domain/persistence/snapshot_export.rs",
@@ -96,7 +108,11 @@ const EXPECTED_STAGE3_SOURCES: &[&str] = &[
     "src/domain/persistence/tests/store_full_export.rs",
     "src/domain/persistence/tests/store_safety.rs",
     "src/domain/persistence/types.rs",
+    "src/domain/repository/bootstrap.rs",
+    "src/domain/repository/legacy_quarantine_admission.rs",
+    "src/domain/repository/legacy_source_history.rs",
     "src/domain/repository/mod.rs",
+    "src/domain/repository/root_universe.rs",
     "src/domain/repository/tests.rs",
     "src/domain/step/amendment.rs",
     "src/domain/step/graph.rs",
@@ -438,7 +454,7 @@ fn stage3_source_closure_rejects_transitive_semantic_dependency_mutations() {
 }
 
 #[test]
-fn stage3_proof_check_rejects_cfg_disabled_vnext_compilation_ancestry() {
+fn stage3_proof_check_rejects_cfg_disabled_canonical_compilation_ancestry() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     let temporary = TemporaryRoot::new("cfg-disabled-vnext-export");
     let workspace = temporary.0.join("workspace");
@@ -451,12 +467,13 @@ fn stage3_proof_check_rejects_cfg_disabled_vnext_compilation_ancestry() {
     );
     let domain_root = workspace.join("src/domain/mod.rs");
     let source = fs::read_to_string(&domain_root).expect("read copied domain compilation root");
-    assert!(source.contains("pub mod vnext;"));
+    assert!(!source.contains("pub mod vnext;"));
+    assert!(source.contains("pub mod contract;"));
     fs::write(
         &domain_root,
-        source.replace("pub mod vnext;", "#[cfg(any())]\npub mod vnext;"),
+        source.replace("pub mod contract;", "#[cfg(any())]\npub mod contract;"),
     )
-    .expect("cfg-disable copied vnext export");
+    .expect("cfg-disable copied canonical contract export");
 
     for (program, script) in [
         ("python3", "tools/vnext_contracts/stage3/domain/validate.py"),
@@ -474,11 +491,11 @@ fn stage3_proof_check_rejects_cfg_disabled_vnext_compilation_ancestry() {
         );
         assert!(
             !output.status.success(),
-            "{program} accepted a cfg-disabled src/domain/mod.rs vnext export"
+            "{program} accepted a cfg-disabled src/domain/mod.rs canonical contract export"
         );
         assert!(
             String::from_utf8_lossy(&output.stderr).contains("semantic"),
-            "{program} rejected the cfg-disabled vnext export for the wrong reason\nstdout:\n{}\nstderr:\n{}",
+            "{program} rejected the cfg-disabled canonical contract export for the wrong reason\nstdout:\n{}\nstderr:\n{}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );

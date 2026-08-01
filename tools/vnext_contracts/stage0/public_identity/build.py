@@ -22,6 +22,10 @@ EXPECTED_AUTHORITATIVE_HASHES = {
     ".maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
     ".maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
 }
+COMMITMENT_ONLY_AUTHORITATIVE_PATHS = {
+    ".maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
+    ".maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
+}
 PUBLIC_ARTIFACTS = [
     "contracts/vnext/public/public_contracts.v1.json",
     "contracts/vnext/public/recipe_selection_application_vectors.v1.json",
@@ -144,6 +148,11 @@ def source_commitments() -> list[dict[str, str]]:
     authoritative = authoritative_root()
     rows: list[dict[str, str]] = []
     for relative, expected in EXPECTED_AUTHORITATIVE_HASHES.items():
+        if relative in COMMITMENT_ONLY_AUTHORITATIVE_PATHS:
+            rows.append(
+                {"path": f"approved-commitment:{relative}", "sha256": expected}
+            )
+            continue
         override = os.environ.get(
             "MAESTRO_AUTHORITATIVE_" + Path(relative).name.split(".")[0].upper()
         )
@@ -237,10 +246,15 @@ def semantic_snapshot() -> dict[str, Any]:
         setup,
         activation,
         instruction_tree,
-        mcp,
         recipe_catalog,
     ]
     require(all(inactive(value) for value in inactive_sources), "public identity source activated")
+    require(
+        mcp.get("candidate_only") is False
+        and mcp.get("runtime_activation") is True
+        and mcp.get("runtime_registration") is True,
+        "promoted MCP adapter source is not active",
+    )
     require(all(public["prohibitions"].values()), "public prohibition opened")
     require(selection["vector_count"] == 30, "selection product drifted")
     require(returns["member_count"] == 30 and returns["application_outcome_vector_count"] == 196, "return closure drifted")

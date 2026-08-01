@@ -5254,7 +5254,7 @@ mod tests {
     fn show_renders_structured_contract_from_yaml() {
         let body = show("design").expect("design contract should render");
         assert!(body.contains("# Design loop"), "{body}");
-        assert!(body.contains("schema_version: maestro.recipe.v2"), "{body}");
+        assert!(body.contains("schema_version: maestro.recipe.v3"), "{body}");
         assert!(body.contains("## Router Metadata"), "{body}");
         assert!(body.contains("## Authority Scope"), "{body}");
         assert!(body.contains("## Autonomy"), "{body}");
@@ -5283,7 +5283,7 @@ mod tests {
         let body = show("conflict-handoff").expect("migrated recipe should render");
         assert!(body.contains("# Conflict handoff"), "{body}");
         assert!(body.contains("git worktree add"), "{body}");
-        assert!(body.contains("schema_version: maestro.recipe.v2"), "{body}");
+        assert!(body.contains("schema_version: maestro.recipe.v3"), "{body}");
     }
 
     #[test]

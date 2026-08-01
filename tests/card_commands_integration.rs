@@ -51,6 +51,16 @@ fn run_err(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+fn ready_card_ids(repo: &Path) -> Vec<String> {
+    let paths = MaestroPaths::new(repo);
+    let cards = maestro::domain::card::query::scan(&paths)
+        .expect("invariant: integration fixture cards should scan");
+    maestro::domain::card::query::ready(&cards)
+        .into_iter()
+        .map(|card| card.id.clone())
+        .collect()
+}
+
 fn git(cwd: &Path, args: &[&str]) {
     let output = Command::new("git")
         .args(args)
@@ -214,16 +224,10 @@ fn legacy_workable_cards_remain_readable_after_progress_card_addition() {
         );
     }
 
-    let ready = run(repo, &["card", "ready"]);
+    let ready = ready_card_ids(repo);
     assert!(
         ready.contains(&task_id) && ready.contains(&bug_id) && ready.contains(&chore_id),
-        "legacy workable cards remain on the card-ready board:\n{ready}"
-    );
-
-    let root_ready = run(repo, &["ready"]);
-    assert!(
-        root_ready.contains("Parallel wave: none") && !root_ready.contains(&task_id),
-        "top-level ready is task-wave readiness, not legacy card readiness:\n{root_ready}"
+        "legacy workable records remain readable for migration after the public route is retired:\n{ready:?}"
     );
 }
 
@@ -267,10 +271,10 @@ fn progress_card_queries_show_progress_card_and_task_list_shows_low_tasks() {
         "routine task list hides low-level task ids; use --json for stable ids:\n{tasks}"
     );
 
-    let ready = run(repo, &["card", "ready"]);
+    let ready = ready_card_ids(repo);
     assert!(
         !ready.contains(&progress_id) && !ready.contains(&task_id),
-        "progress cards and their low tasks do not enter the legacy card ready board:\n{ready}"
+        "progress cards and their low tasks do not enter the retained migration read model:\n{ready:?}"
     );
 }
 
@@ -486,11 +490,6 @@ fn show_renders_the_display_alias_for_parented_cards() {
     assert!(
         !feature_shown.contains("alias:"),
         "a parentless card carries no alias line:\n{feature_shown}"
-    );
-    let ready = run(repo, &["card", "ready"]);
-    assert!(
-        !ready.contains("csv-export."),
-        "ready carries no alias column:\n{ready}"
     );
     let listed = run(repo, &["list"]);
     assert!(
@@ -1800,26 +1799,12 @@ fn show_compact_json_keeps_raw_show_json_unchanged() {
 }
 
 #[test]
-fn ready_and_list_render_the_beads_structure() {
+fn list_renders_the_beads_structure() {
     let temp = cards_repo("s2-beads-output");
     let repo = temp.path();
 
     run(repo, &["create", "-t", "task", "First task"]);
     run(repo, &["create", "-t", "bug", "Second bug"]);
-
-    let ready = run(repo, &["card", "ready"]);
-    assert!(
-        ready.contains("Ready work (2 cards, no blockers):"),
-        "beads ready header with a count:\n{ready}"
-    );
-    assert!(
-        ready.contains("1. [P1]") && ready.contains("2. [P2]"),
-        "numbered [P#] rank rows:\n{ready}"
-    );
-    assert!(
-        ready.contains("(unclaimed)"),
-        "unclaimed cards show the claim column:\n{ready}"
-    );
 
     let list = run(repo, &["list"]);
     assert!(
@@ -1899,8 +1884,7 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
     run(repo, &["create", "-t", "task", "Route the skill"]);
     let first = id_by_title(repo, "Draft the loop");
     let second = id_by_title(repo, "Route the skill");
-    let ready_before: serde_json::Value =
-        serde_json::from_str(&run(repo, &["card", "ready", "--json"])).expect("ready json before");
+    let ready_before = ready_card_ids(repo);
     let list_before: serde_json::Value =
         serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json before");
 
@@ -1935,13 +1919,12 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
         "reverse add does not write a reciprocal edge: {second_doc:?}"
     );
 
-    let ready_after: serde_json::Value =
-        serde_json::from_str(&run(repo, &["card", "ready", "--json"])).expect("ready json after");
+    let ready_after = ready_card_ids(repo);
     let list_after: serde_json::Value =
         serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json after");
     assert_eq!(
         ready_before, ready_after,
-        "related links do not change the ready JSON contract"
+        "related links do not change the retained migration readiness read model"
     );
     assert_eq!(
         list_before, list_after,
@@ -1989,10 +1972,10 @@ fn dep_remove_unblocks_the_child_and_is_directional() {
     let parent = id_by_title(repo, "The blocker");
 
     run(repo, &["dep", "add", &child, &parent]);
-    let blocked_ready = run(repo, &["card", "ready", "--json"]);
+    let blocked_ready = ready_card_ids(repo);
     assert!(
         !blocked_ready.contains(&child),
-        "the dependent is not ready while blocked:\n{blocked_ready}"
+        "the dependent is not ready while blocked:\n{blocked_ready:?}"
     );
     let child_show = run(repo, &["show", &child]);
     assert!(
@@ -2022,10 +2005,10 @@ fn dep_remove_unblocks_the_child_and_is_directional() {
         child_doc["deps"].as_sequence().is_none_or(Vec::is_empty),
         "the blocks edge is deleted: {child_doc:?}"
     );
-    let unblocked_ready = run(repo, &["card", "ready", "--json"]);
+    let unblocked_ready = ready_card_ids(repo);
     assert!(
         unblocked_ready.contains(&child),
-        "the dependent is ready once unblocked:\n{unblocked_ready}"
+        "the dependent is ready once unblocked:\n{unblocked_ready:?}"
     );
 
     let again = run(repo, &["dep", "remove", &child, &parent]);
@@ -2289,18 +2272,6 @@ fn linked_inbox_is_advisory_and_explicit_task_blocker_is_the_execution_gate() {
         .expect("task id should be UTF-8")
         .trim()
         .to_string();
-
-    let next = maestro_in_session(repo, "ui", &["task", "next"]);
-    assert!(
-        next.status.success(),
-        "unread inbox must not block task next\nstderr:\n{}",
-        String::from_utf8_lossy(&next.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&next.stdout).contains(&wire_ui),
-        "task next should still point at the ready task while inbox is unread:\n{}",
-        String::from_utf8_lossy(&next.stdout)
-    );
 
     let start = maestro_in_session(repo, "ui", &["task", "start", &wire_ui]);
     assert!(

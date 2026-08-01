@@ -1,5 +1,5 @@
 ---
-version: 1.29.25
+version: 1.29.27
 ---
 
 # Maestro Harness Protocol
@@ -33,23 +33,15 @@ risky-skipped, or hosting-incompatible, route to `maestro-research`.
 
 ## Route
 
-Maestro's main workflow is the loop. Use `maestro status` for current state and
-`maestro loop next` when routing is unclear. `loop next` is read-only: it
-recommends from local artifacts and never writes cards, tasks, features,
-decisions, proof, QA, git, releases, archives, or files. Read
-`maestro loop show <recipe>` and write only through existing Maestro verbs.
-Rule: loop next recommends; outcome/proof/memory verbs write. Use
-`maestro loop next --chain` when you need the current chain position,
-transition trigger, next native command, and return conditions without writing.
-Use `maestro loop outcome` after action/proof/repair; transition receipts are
-explicit outcome evidence, not lifecycle authority. Use `maestro loop trace
-<card>` to audit card-scoped chain receipts. Use `maestro loop improve` for
-read-only proposals; apply only the explicit memory, harness, proof, or QA
-command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
-or proof/QA bypass.
-Use the closest shipped lifecycle recipe: `maestro loop show design`,
-`maestro loop show work`, `maestro loop show audit`, `maestro loop show ship`,
-`maestro loop show unattended`, or `maestro loop show learning`.
+Use `maestro status --json` for repository-local routing. When an exact bounded
+vNext projection is required, Integration supplies one canonical JSON request
+with authenticated host context and expected Release/catalog identities; pass
+that document on stdin to `maestro packet read`. Never invent those authority
+facts. `maestro next`, `maestro task next`, `maestro loop next`,
+`maestro card ready`, and the legacy lifecycle recipe identifiers are typed
+refusal surfaces, not fallback routers. Continue only through explicit current
+Task, Feature, Decision, Proof, QA, Packet, and release verbs. No hidden stores,
+hidden schedulers, silent recipe mutation, or proof/QA bypass.
 Loop readiness is native evidence, not a claim. Use
 `maestro loop validate <pattern>` and `maestro status` to read the L0 draft,
 L1 report, L2 assisted, or L3 unattended level, effective operating limits,
@@ -58,10 +50,9 @@ L3 unattended unless those readouts say L3 and list no next-level blockers.
 External schedulers stay external; Maestro remains passive/local-first and
 reports readiness for external drivers instead of becoming a daemon, cron,
 queue, worker launcher, or hidden executor.
-When the user is unavailable but has provided a bounded design mandate, use
-`maestro loop show design-relay`: the main session may make only in-mandate
-design decisions, subagents/advisors provide evidence only, and the relay must
-return to the parent design loop.
+When the user is unavailable but has provided a bounded design mandate, the
+main session may make only in-mandate design decisions; subagents/advisors
+provide evidence only, and control returns to the owning design session.
 If no shipped recipe fits, custom card/run recipes still use perceive -> choose
 -> act -> observe -> learn -> continue, current Maestro verbs, hard stops,
 continue output, and no skipped proof, QA, authority, approval, or hard-stop
@@ -105,10 +96,8 @@ may run in parallel when their files, cards, and external side effects do not
 overlap. Use subagents or worktrees for that fan-out when the user allowed
 delegation or the wave benefits from parallel execution; the orchestrator still
 owns shared Maestro store writes. `maestro ready` also shows ready serial gates
-and the bounded blocked-next frontier. `maestro loop next` uses that projection
-and does not create a second scheduler; `maestro loop next --chain` explains the
-derived chain overlay over the same artifacts. `maestro card ready` is the
-explicit legacy card-board readiness surface.
+and the bounded blocked-next frontier. It is the task-wave projection; no
+retired successor route creates a second scheduler.
 Complete executable work with `maestro task complete` using summary, claim, and
 proof. Close Progress rows with `maestro task done <ref> --proof "<evidence>"`.
 Verification matches each `--claim` against recorded/inline proof; empty claims
@@ -148,9 +137,9 @@ Inbox messages are advisory. If order matters, record a Task blocker/dependency;
 readiness, next, claim, and verification gates use blockers, not messages.
 The card store is shared state. In fan-out, the orchestrator owns store writes;
 sub-agents return data unless isolated. Use worktrees for overlapping code/store
-writes. Coordinate with `maestro active`, `[overlap]`, `[CONFLICT]`, `[busy]`,
-and `maestro loop show conflict-handoff`. If a multi-file store command fails,
-re-run it so Maestro rereads current state and reapplies the change.
+writes. Coordinate with `maestro active`, `[overlap]`, `[CONFLICT]`, and
+`[busy]`. If a multi-file store command fails, re-run it so Maestro rereads
+current state and reapplies the change.
 
 ## Harness Improvement
 

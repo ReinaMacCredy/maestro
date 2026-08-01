@@ -133,12 +133,12 @@ TOOL_SOURCES = [
     "tools/vnext_contracts/stage4/execution/verify.rb",
 ]
 BEHAVIOR_COMMANDS = [
-    ["cargo", "test", "--lib", "domain::vnext::execution::", "--", "--nocapture"],
+    ["cargo", "test", "--lib", "domain::execution::", "--", "--nocapture"],
     [
         "cargo",
         "test",
         "--lib",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+        "domain::authority::facade::repository_admission::ancestry_tests",
         "--",
         "--nocapture",
     ],
@@ -146,7 +146,7 @@ BEHAVIOR_COMMANDS = [
         "cargo",
         "test",
         "--lib",
-        "domain::vnext::authority::continuity::trusted_time::tests",
+        "domain::authority::continuity::trusted_time::tests",
         "--",
         "--nocapture",
     ],
@@ -207,7 +207,7 @@ MUTANT_COMMANDS = [
         "--nocapture",
     ],
 ]
-BEHAVIOR_EXPECTED_PASSED = [70, 7, 1, 1, 1, 1]
+BEHAVIOR_EXPECTED_PASSED = [75, 7, 1, 1, 1, 1]
 MUTANT_EXPECTED_PASSED = [10, 6, 1]
 SANITIZED_ENVIRONMENT_KEYS = [
     "CARGO_BUILD_TARGET",
@@ -504,6 +504,18 @@ def tool_descriptor(name: str) -> dict[str, object]:
     }
 
 
+def proof_tool_path() -> str:
+    components = []
+    for name in ("cargo", "rustc", "python3", "ruby"):
+        directory = str(Path(str(tool_descriptor(name)["invocation_path"])).parent)
+        if directory not in components:
+            components.append(directory)
+    for directory in ("/usr/bin", "/bin", "/usr/sbin", "/sbin"):
+        if directory not in components:
+            components.append(directory)
+    return os.pathsep.join(components)
+
+
 def bound_environment_value(key: str, environment: dict[str, str]) -> str:
     value = environment.get(key, "<unset>")
     if key != "PATH" or value == "<unset>":
@@ -524,7 +536,7 @@ def command_environment() -> dict[str, str]:
         "HOME": home,
         "LANG": "C",
         "LC_ALL": "C",
-        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PATH": proof_tool_path(),
         "PYTHONDONTWRITEBYTECODE": "1",
         "RUSTC": str(tool_descriptor("rustc")["invocation_path"]),
         "RUSTUP_HOME": str(Path(home) / ".rustup"),

@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.11.6
+version: 1.11.8
 description: "Setup Maestro in a project using or adopting Maestro: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
@@ -11,17 +11,15 @@ Tune a Maestro-enabled repository harness from current repository evidence.
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-setup --session <session_id>`
 
-Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
-for current state and `maestro loop next` as the read-only router when the next
-lifecycle is not obvious. Setup writes still use the existing Maestro verbs
+Routing checkpoint: use `maestro status --json` for current repository state.
+When an exact bounded vNext projection is required, Integration supplies one
+canonical JSON request with authenticated host context and expected
+Release/catalog identities; pass it on stdin to `maestro packet read`. Never
+invent those authority facts. Setup writes still use the explicit Maestro verbs
 named by this skill (`init`, `install`, `sync`, `doctor`, `upgrade`,
-`uninstall`, and `shell-init`), not hidden setup state. Rule: loop next
-recommends; outcome/proof/memory verbs write. `maestro loop next --chain`
-explains current chain position without writing; `maestro loop outcome` appends
-structured outcomes and transition receipts after native work; `maestro loop
-trace <card>` audits card-scoped receipts; `maestro loop improve` is a read-only
-proposer. Do not use hidden stores, hidden schedulers, silent recipe mutation,
-or proof/QA bypass.
+`uninstall`, and `shell-init`), not hidden setup state. Retired successor routes
+and legacy lifecycle recipe identifiers are not fallback routers. Do not use
+hidden stores, hidden schedulers, silent recipe mutation, or proof/QA bypass.
 
 ## Use
 

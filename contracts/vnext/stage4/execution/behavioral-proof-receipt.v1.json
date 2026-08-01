@@ -5,97 +5,102 @@
         "cargo",
         "test",
         "--lib",
-        "domain::vnext::execution::",
+        "domain::execution::",
         "--",
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "e0650862128235ea7df5a8e36a405119f8a9120c5128eab9039f27d7e9f85241",
-      "passed": 70,
+      "normalized_output_sha256": "55db4eb30dde89decf1a5a95f731933c7643e40aaee44e3d730b2b32b14a3fc7",
+      "passed": 75,
       "result": "pass",
       "test_binary": {
-        "byte_length": 78302408,
-        "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
+        "byte_length": 112156536,
+        "path": "target/debug/deps/maestro-2029ceef4ae21624",
+        "sha256": "a325bf740effefe114a56c5906b4b980f421656db0c9ce15a1242cef999a97cd"
       },
       "test_names": [
-        "domain::vnext::execution::ceremony::tests::abandoned_initialization_leaf_does_not_publish_or_poison_final_incarnation",
-        "domain::vnext::execution::ceremony::tests::all_eleven_ceremonies_have_exactly_four_owner_issued_legal_durable_modes",
-        "domain::vnext::execution::ceremony::tests::ceremony_anchor_rejects_leaf_replacement_and_recovers_published_incarnation",
-        "domain::vnext::execution::ceremony::tests::ceremony_readers_share_one_snapshot_with_concurrent_writer_history_validation",
-        "domain::vnext::execution::ceremony::tests::ceremony_refuses_virgin_resolve_post_terminal_mutation_and_symlink_root",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_debug_redacts_every_bearer_token",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_has_one_winner_durable_full_history_replay_and_owner_refusal",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_journal_creation_rejects_hardlink_substitution_at_open",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_rejects_corrupted_transition_history",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_rejects_unsafe_owner_writable_modes_and_journal_aliases",
-        "domain::vnext::execution::ceremony::tests::protected_ceremony_reopens_from_durable_anchor_and_rejects_inode_replacement",
-        "domain::vnext::execution::control_head::tests::control_pair_product_is_exactly_ten",
-        "domain::vnext::execution::control_head::tests::same_home_restore_is_bound_to_a_durable_fencing_receipt",
-        "domain::vnext::execution::control_head::tests::unhealthy_control_products_fail_closed_until_exact_recovery",
-        "domain::vnext::execution::effects::tests::dispatch_control_carries_fresh_fence_and_preserves_crossing_uncertainty",
-        "domain::vnext::execution::effects::tests::effect_origin_catalog_is_exact_and_closed",
-        "domain::vnext::execution::effects::tests::persisted_dispatch_carrier_rejects_phase_owner_and_runset_mutants",
-        "domain::vnext::execution::effects::tests::persisted_reconciliation_carrier_rejects_fence_owner_and_refinement_mutants",
-        "domain::vnext::execution::effects::tests::reconciliation_is_one_bounded_effect_free_read_with_fresh_requests",
-        "domain::vnext::execution::runtime::tests::execution_action_catalog_is_dense_and_exact",
-        "domain::vnext::execution::runtime::tests::execution_cannot_close_pair_as_submitted",
-        "domain::vnext::execution::runtime::tests::lease_attempt_pair_is_one_to_one_and_terms_are_contiguous",
-        "domain::vnext::execution::runtime::tests::non_step_attempts_cannot_receive_lease_terms_or_step_power",
-        "domain::vnext::execution::runtime::tests::ordinary_reservation_cannot_bypass_the_retry_chain",
-        "domain::vnext::execution::runtime::tests::retry_requires_conclusive_no_start",
-        "domain::vnext::execution::runtime::tests::run_fixed_envelope_and_deadline_are_enforced",
-        "domain::vnext::execution::runtime::tests::run_graph_is_exact_and_terminal_never_reopens",
-        "domain::vnext::execution::runtime::tests::stored_carrier_rejects_cross_invariant_mutants",
-        "domain::vnext::execution::runtime::tests::terminal_pair_closes_open_runs_atomically",
-        "domain::vnext::execution::store::tests::bootstrap_g0_effect_route_is_exact_authorized_reconcilable_and_withdrawable",
-        "domain::vnext::execution::store::tests::competing_step_submissions_have_one_atomic_winner",
-        "domain::vnext::execution::store::tests::continuity_maintenance_effect_route_is_slot_authorized_reconcilable_and_withdrawable",
-        "domain::vnext::execution::store::tests::current_step_effect_origin_is_authorized_and_committed",
-        "domain::vnext::execution::store::tests::effect_dispatch_control_cross_invariants_reject_individually_valid_mismatches",
-        "domain::vnext::execution::store::tests::effect_health_and_writer_handoff_race_has_one_expected_old_winner",
-        "domain::vnext::execution::store::tests::effect_health_fail_closed_and_integrity_blocked_cannot_handoff",
-        "domain::vnext::execution::store::tests::effect_origination_reserves_dispatch_atomically_replays_and_restarts",
-        "domain::vnext::execution::store::tests::effect_origination_stale_contenders_spend_capacity_once",
-        "domain::vnext::execution::store::tests::effect_publication_binds_authority_and_replay_meaning",
-        "domain::vnext::execution::store::tests::effect_reconciliation_is_fresh_authorized_bounded_atomic_and_restart_decodable",
-        "domain::vnext::execution::store::tests::effect_reconciliation_phase_contenders_have_one_winner_and_one_debit",
-        "domain::vnext::execution::store::tests::effect_recover_reserved_can_commit_exact_local_rejection_without_release",
-        "domain::vnext::execution::store::tests::effect_recover_reserved_has_one_seal_winner_zero_io_replay_and_restart",
-        "domain::vnext::execution::store::tests::effect_recover_sealed_health_is_durable_and_writer_handoff_restores_atomically",
-        "domain::vnext::execution::store::tests::effect_redispatch_requires_conclusive_not_applied_and_persists_higher_fence",
-        "domain::vnext::execution::store::tests::effect_restart_replay_never_reconstructs_provider_release",
-        "domain::vnext::execution::store::tests::effect_seal_and_terminal_contenders_commit_once",
-        "domain::vnext::execution::store::tests::effect_withdrawal_is_authorized_atomic_zero_io_replayable_and_restart_decodable",
-        "domain::vnext::execution::store::tests::effect_writer_handoff_fences_the_old_writer_atomically_and_restarts",
-        "domain::vnext::execution::store::tests::external_io_releases_reject_deadline_equality_before_calling_adapters",
-        "domain::vnext::execution::store::tests::historical_open_step_with_same_contract_root_cannot_acquire_execution",
-        "domain::vnext::execution::store::tests::installation_effect_operation_matrix_replays_restarts_and_fences_races",
-        "domain::vnext::execution::store::tests::installation_effect_uses_installation_authority_capacity_and_restarts",
-        "domain::vnext::execution::store::tests::provider_gateway_loads_current_authority_time_at_the_io_boundary",
-        "domain::vnext::execution::store::tests::provider_gateway_serializes_writer_handoff_across_external_io",
-        "domain::vnext::execution::store::tests::reconciliation_continues_after_interleaved_unrelated_authorized_publication",
-        "domain::vnext::execution::store::tests::recovered_sealed_dispatch_restarts_into_fresh_authorized_reconciliation",
-        "domain::vnext::execution::store::tests::renewed_step_term_rejects_stale_effect_origin_without_write_or_debit",
-        "domain::vnext::execution::store::tests::specialized_effect_authority_rejects_cross_basis_and_substituted_carriers_without_debit",
-        "domain::vnext::execution::store::tests::stale_step_submission_fence_writes_nothing_and_spends_no_authority",
-        "domain::vnext::execution::store::tests::step_execution_store_is_single_selector_atomic_and_restart_decodable",
-        "domain::vnext::execution::store::tests::step_submission_and_renewal_race_has_one_atomic_winner",
-        "domain::vnext::execution::store::tests::step_submission_and_takeover_boundary_proves_both_atomic_linearizations",
-        "domain::vnext::execution::store::tests::step_submission_one_and_many_claims_are_atomic_restart_decodable_and_idempotent",
-        "domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication",
-        "domain::vnext::execution::store::tests::step_timeout_is_refused_before_expiry_and_restart_closes_at_exact_expiry",
-        "domain::vnext::execution::store::tests::takeover_submission_expiry_and_supersession_reject_stale_step_effect_origin",
-        "domain::vnext::execution::store::tests::writer_handoff_and_withdrawal_head_writer_races_have_one_winner_and_one_debit",
-        "domain::vnext::execution::withdrawal::tests::withdrawal_denied_product_catalog_is_exact_and_validation_fails_closed",
-        "domain::vnext::execution::withdrawal::tests::withdrawal_totality_is_sixty_unique_exact_catalog_cells"
+        "domain::execution::ceremony::tests::abandoned_initialization_leaf_does_not_publish_or_poison_final_incarnation",
+        "domain::execution::ceremony::tests::all_eleven_ceremonies_have_exactly_four_owner_issued_legal_durable_modes",
+        "domain::execution::ceremony::tests::ceremony_anchor_rejects_leaf_replacement_and_recovers_published_incarnation",
+        "domain::execution::ceremony::tests::ceremony_readers_share_one_snapshot_with_concurrent_writer_history_validation",
+        "domain::execution::ceremony::tests::ceremony_refuses_virgin_resolve_post_terminal_mutation_and_symlink_root",
+        "domain::execution::ceremony::tests::protected_ceremony_debug_redacts_every_bearer_token",
+        "domain::execution::ceremony::tests::protected_ceremony_has_one_winner_durable_full_history_replay_and_owner_refusal",
+        "domain::execution::ceremony::tests::protected_ceremony_journal_creation_rejects_hardlink_substitution_at_open",
+        "domain::execution::ceremony::tests::protected_ceremony_rejects_corrupted_transition_history",
+        "domain::execution::ceremony::tests::protected_ceremony_rejects_unsafe_owner_writable_modes_and_journal_aliases",
+        "domain::execution::ceremony::tests::protected_ceremony_reopens_from_durable_anchor_and_rejects_inode_replacement",
+        "domain::execution::control_head::tests::control_pair_product_is_exactly_ten",
+        "domain::execution::control_head::tests::same_home_restore_is_bound_to_a_durable_fencing_receipt",
+        "domain::execution::control_head::tests::unhealthy_control_products_fail_closed_until_exact_recovery",
+        "domain::execution::effects::tests::dispatch_control_carries_fresh_fence_and_preserves_crossing_uncertainty",
+        "domain::execution::effects::tests::effect_origin_catalog_is_exact_and_closed",
+        "domain::execution::effects::tests::persisted_dispatch_carrier_rejects_phase_owner_and_runset_mutants",
+        "domain::execution::effects::tests::persisted_reconciliation_carrier_rejects_fence_owner_and_refinement_mutants",
+        "domain::execution::effects::tests::reconciliation_is_one_bounded_effect_free_read_with_fresh_requests",
+        "domain::execution::h3_withdrawal_publication::tests::active_store_association_and_finality_context_substitution_refuses_unconsumed",
+        "domain::execution::h3_withdrawal_publication::tests::all_three_homes_require_the_exact_causal_branch_and_one_use_finality",
+        "domain::execution::h3_withdrawal_publication::tests::cross_branch_and_complete_meaning_substitution_refuse_without_consumption",
+        "domain::execution::h3_withdrawal_publication::tests::native_publication_source_catalog_and_release_substitution_refuse",
+        "domain::execution::h3_withdrawal_publication::tests::pre_store_has_no_destination_root_or_candidate_seal_field",
+        "domain::execution::runtime::tests::execution_action_catalog_is_dense_and_exact",
+        "domain::execution::runtime::tests::execution_cannot_close_pair_as_submitted",
+        "domain::execution::runtime::tests::lease_attempt_pair_is_one_to_one_and_terms_are_contiguous",
+        "domain::execution::runtime::tests::non_step_attempts_cannot_receive_lease_terms_or_step_power",
+        "domain::execution::runtime::tests::ordinary_reservation_cannot_bypass_the_retry_chain",
+        "domain::execution::runtime::tests::retry_requires_conclusive_no_start",
+        "domain::execution::runtime::tests::run_fixed_envelope_and_deadline_are_enforced",
+        "domain::execution::runtime::tests::run_graph_is_exact_and_terminal_never_reopens",
+        "domain::execution::runtime::tests::stored_carrier_rejects_cross_invariant_mutants",
+        "domain::execution::runtime::tests::terminal_pair_closes_open_runs_atomically",
+        "domain::execution::store::tests::bootstrap_g0_effect_route_is_exact_authorized_reconcilable_and_withdrawable",
+        "domain::execution::store::tests::competing_step_submissions_have_one_atomic_winner",
+        "domain::execution::store::tests::continuity_maintenance_effect_route_is_slot_authorized_reconcilable_and_withdrawable",
+        "domain::execution::store::tests::current_step_effect_origin_is_authorized_and_committed",
+        "domain::execution::store::tests::effect_dispatch_control_cross_invariants_reject_individually_valid_mismatches",
+        "domain::execution::store::tests::effect_health_and_writer_handoff_race_has_one_expected_old_winner",
+        "domain::execution::store::tests::effect_health_fail_closed_and_integrity_blocked_cannot_handoff",
+        "domain::execution::store::tests::effect_origination_reserves_dispatch_atomically_replays_and_restarts",
+        "domain::execution::store::tests::effect_origination_stale_contenders_spend_capacity_once",
+        "domain::execution::store::tests::effect_publication_binds_authority_and_replay_meaning",
+        "domain::execution::store::tests::effect_reconciliation_is_fresh_authorized_bounded_atomic_and_restart_decodable",
+        "domain::execution::store::tests::effect_reconciliation_phase_contenders_have_one_winner_and_one_debit",
+        "domain::execution::store::tests::effect_recover_reserved_can_commit_exact_local_rejection_without_release",
+        "domain::execution::store::tests::effect_recover_reserved_has_one_seal_winner_zero_io_replay_and_restart",
+        "domain::execution::store::tests::effect_recover_sealed_health_is_durable_and_writer_handoff_restores_atomically",
+        "domain::execution::store::tests::effect_redispatch_requires_conclusive_not_applied_and_persists_higher_fence",
+        "domain::execution::store::tests::effect_restart_replay_never_reconstructs_provider_release",
+        "domain::execution::store::tests::effect_seal_and_terminal_contenders_commit_once",
+        "domain::execution::store::tests::effect_withdrawal_is_authorized_atomic_zero_io_replayable_and_restart_decodable",
+        "domain::execution::store::tests::effect_writer_handoff_fences_the_old_writer_atomically_and_restarts",
+        "domain::execution::store::tests::external_io_releases_reject_deadline_equality_before_calling_adapters",
+        "domain::execution::store::tests::historical_open_step_with_same_contract_root_cannot_acquire_execution",
+        "domain::execution::store::tests::installation_effect_operation_matrix_replays_restarts_and_fences_races",
+        "domain::execution::store::tests::installation_effect_uses_installation_authority_capacity_and_restarts",
+        "domain::execution::store::tests::provider_gateway_loads_current_authority_time_at_the_io_boundary",
+        "domain::execution::store::tests::provider_gateway_serializes_writer_handoff_across_external_io",
+        "domain::execution::store::tests::reconciliation_continues_after_interleaved_unrelated_authorized_publication",
+        "domain::execution::store::tests::recovered_sealed_dispatch_restarts_into_fresh_authorized_reconciliation",
+        "domain::execution::store::tests::renewed_step_term_rejects_stale_effect_origin_without_write_or_debit",
+        "domain::execution::store::tests::specialized_effect_authority_rejects_cross_basis_and_substituted_carriers_without_debit",
+        "domain::execution::store::tests::stale_step_submission_fence_writes_nothing_and_spends_no_authority",
+        "domain::execution::store::tests::step_execution_store_is_single_selector_atomic_and_restart_decodable",
+        "domain::execution::store::tests::step_submission_and_renewal_race_has_one_atomic_winner",
+        "domain::execution::store::tests::step_submission_and_takeover_boundary_proves_both_atomic_linearizations",
+        "domain::execution::store::tests::step_submission_one_and_many_claims_are_atomic_restart_decodable_and_idempotent",
+        "domain::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication",
+        "domain::execution::store::tests::step_timeout_is_refused_before_expiry_and_restart_closes_at_exact_expiry",
+        "domain::execution::store::tests::takeover_submission_expiry_and_supersession_reject_stale_step_effect_origin",
+        "domain::execution::store::tests::writer_handoff_and_withdrawal_head_writer_races_have_one_winner_and_one_debit",
+        "domain::execution::withdrawal::tests::withdrawal_denied_product_catalog_is_exact_and_validation_fails_closed",
+        "domain::execution::withdrawal::tests::withdrawal_totality_is_sixty_unique_exact_catalog_cells"
       ]
     },
     {
@@ -103,34 +108,34 @@
         "cargo",
         "test",
         "--lib",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+        "domain::authority::facade::repository_admission::ancestry_tests",
         "--",
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "4163062a174e0c8d4ceb708ed0767b1ede8942fcbb84cc85a29d74d3666976ba",
+      "normalized_output_sha256": "b5903dd63980995790ab47d04155068180fcd5e0112446c1d839131eadb96884",
       "passed": 7,
       "result": "pass",
       "test_binary": {
-        "byte_length": 78302408,
-        "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
+        "byte_length": 112156536,
+        "path": "target/debug/deps/maestro-2029ceef4ae21624",
+        "sha256": "a325bf740effefe114a56c5906b4b980f421656db0c9ce15a1242cef999a97cd"
       },
       "test_names": [
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::every_owner_family_wrapper_enters_the_existing_ordinary_admission_pipeline",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::same_key_substitutions_do_not_alias_and_selection_substitution_fails_closed",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_accepts_g0_through_two_ordinary_grants",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_a_missing_ordinary_ancestor_or_delegation_edge",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_cycle_orphan_cross_root_non_attenuation_staleness_and_revocation",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_duplicate_grant_and_delegation_carriers",
-        "domain::vnext::authority::facade::repository_admission::ancestry_tests::successor_snapshot_preserves_multi_hop_ancestry_for_a_second_repository_admission"
+        "domain::authority::facade::repository_admission::ancestry_tests::every_owner_family_wrapper_enters_the_existing_ordinary_admission_pipeline",
+        "domain::authority::facade::repository_admission::ancestry_tests::same_key_substitutions_do_not_alias_and_selection_substitution_fails_closed",
+        "domain::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_accepts_g0_through_two_ordinary_grants",
+        "domain::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_a_missing_ordinary_ancestor_or_delegation_edge",
+        "domain::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_cycle_orphan_cross_root_non_attenuation_staleness_and_revocation",
+        "domain::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_duplicate_grant_and_delegation_carriers",
+        "domain::authority::facade::repository_admission::ancestry_tests::successor_snapshot_preserves_multi_hop_ancestry_for_a_second_repository_admission"
       ]
     },
     {
@@ -138,28 +143,28 @@
         "cargo",
         "test",
         "--lib",
-        "domain::vnext::authority::continuity::trusted_time::tests",
+        "domain::authority::continuity::trusted_time::tests",
         "--",
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "583ebde2da8eec9f8e782a09e6dc19de7386ab6e841159eea89fe06caeca179e",
+      "normalized_output_sha256": "f8ed4087c6d2e9c388a241a2ad18fa9f0412a6cdf17f27a8618175d58fc9bb51",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 78302408,
-        "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
+        "byte_length": 112156536,
+        "path": "target/debug/deps/maestro-2029ceef4ae21624",
+        "sha256": "a325bf740effefe114a56c5906b4b980f421656db0c9ce15a1242cef999a97cd"
       },
       "test_names": [
-        "domain::vnext::authority::continuity::trusted_time::tests::carry_plus_fresh_lower_uses_only_max_base_and_lower_and_rejects_invalid_upper"
+        "domain::authority::continuity::trusted_time::tests::carry_plus_fresh_lower_uses_only_max_base_and_lower_and_rejects_invalid_upper"
       ]
     },
     {
@@ -173,20 +178,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "b6803a5b7daa77f9e27bb56d0dd063aef0836deed4b963ce9889f6cafe20e491",
+      "normalized_output_sha256": "58ea7f18ae8c7f3edfec13b1ac5ee987fda5805dbf058d0ef2feaccf2cbae57d",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5063848,
-        "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
+        "byte_length": 5391688,
+        "path": "target/debug/deps/vnext_stage4_contracts-3e4c9b2cb6b7b03d",
+        "sha256": "485844bc5bb6ccb0b36b9eb3ca50ff47d617bcbc79e866b477582f6ed9e00a11"
       },
       "test_names": [
         "stage4_public_effect_facade_exports_are_complete"
@@ -203,20 +208,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "0afe74fb87e71286fc18ae1754ab04efe6547b209a26c1df3e77907a5e2b483a",
+      "normalized_output_sha256": "4da8edde186ba3527f2d3ce9e04707db042a2e8b917ecf34bec0ced19223cfe2",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5063848,
-        "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
+        "byte_length": 5391688,
+        "path": "target/debug/deps/vnext_stage4_contracts-3e4c9b2cb6b7b03d",
+        "sha256": "485844bc5bb6ccb0b36b9eb3ca50ff47d617bcbc79e866b477582f6ed9e00a11"
       },
       "test_names": [
         "runtime_withdrawal_catalog_matches_all_sixty_frozen_rows_and_twenty_one_denials"
@@ -233,20 +238,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "c666be6caa7a68572fbb3afa2bfcb4d82a9118c9cc5c39fbac96e35c2cc2c372",
+      "normalized_output_sha256": "9b59f880af3f74a46ab2c920e67063978f4f4a90059aba0d3ef15af864828fd1",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 1702776,
-        "path": "target/debug/deps/vnext_effect_home_literals-452e06338a453af5",
-        "sha256": "2172fde435f8843f7e3df8caa28ece2622dde3de4ce37b4424a19f995a3945b6"
+        "byte_length": 1782344,
+        "path": "target/debug/deps/vnext_effect_home_literals-ca5556686b6e1375",
+        "sha256": "9cbc573e76c9b47854ea8bf39364d91f41ec99332e55812edeec9b2d98699c4f"
       },
       "test_names": [
         "stage0_effect_home_artifacts_are_reproducible_and_reject_mutants"
@@ -258,7 +263,7 @@
       "cargo",
       "test",
       "--lib",
-      "domain::vnext::execution::",
+      "domain::execution::",
       "--",
       "--nocapture"
     ],
@@ -266,7 +271,7 @@
       "cargo",
       "test",
       "--lib",
-      "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+      "domain::authority::facade::repository_admission::ancestry_tests",
       "--",
       "--nocapture"
     ],
@@ -274,7 +279,7 @@
       "cargo",
       "test",
       "--lib",
-      "domain::vnext::authority::continuity::trusted_time::tests",
+      "domain::authority::continuity::trusted_time::tests",
       "--",
       "--nocapture"
     ],
@@ -306,7 +311,7 @@
       "--nocapture"
     ]
   ],
-  "identity": "sha256:2b19a05858c400f030b28123a6f608f0a919e1f68c3c234aec8f7c3eb55f68fe",
+  "identity": "sha256:107ff1b66eaffd4000948e06cd7f2d946cb72aa4c3f0d8e66a1ecc756b00cdec",
   "mutant_command_receipts": [
     {
       "command": [
@@ -319,20 +324,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "515e28129a5f6c5857978b194d5895db8b7c0abd9c367fb20a39278e9ebe7e47",
+      "normalized_output_sha256": "5657c7c89d7fc139bb47f61130a655076b1e474ee16fe964c179015720abf89d",
       "passed": 10,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5063848,
-        "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
+        "byte_length": 5391688,
+        "path": "target/debug/deps/vnext_stage4_contracts-3e4c9b2cb6b7b03d",
+        "sha256": "485844bc5bb6ccb0b36b9eb3ca50ff47d617bcbc79e866b477582f6ed9e00a11"
       },
       "test_names": [
         "stage4_regenerated_basis_donation_mutant_fails_compiled_contract",
@@ -358,20 +363,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "31ae20309a39da09b2e389ffec525ffd5a94870e6385e6c05348f5b677a3d0c6",
+      "normalized_output_sha256": "977ad55ba7a6d50d5240de1893f8914c2df1f29c8e07dca7510ce8acb6e50a7a",
       "passed": 6,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5063848,
-        "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
+        "byte_length": 5391688,
+        "path": "target/debug/deps/vnext_stage4_contracts-3e4c9b2cb6b7b03d",
+        "sha256": "485844bc5bb6ccb0b36b9eb3ca50ff47d617bcbc79e866b477582f6ed9e00a11"
       },
       "test_names": [
         "stage4_proof_rejects_execution_store_disconnection",
@@ -393,20 +398,20 @@
         "--nocapture"
       ],
       "executable": {
-        "byte_length": 31323728,
+        "byte_length": 31259808,
         "invocation_path": "/opt/homebrew/bin/cargo",
-        "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
-        "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea"
+        "resolved_path": "/opt/homebrew/Cellar/rust/1.97.1/bin/cargo",
+        "sha256": "b7a341737d8777ef0e21a71f0af90723ccf692914255110c12bbcfed79d75a53"
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "03d563810fb8c6d4a105c40db17830fc77fdc93e84380e718b3372c982001ce1",
+      "normalized_output_sha256": "c5a0a447b98b97defea2976a033694374a3735acad87b07f05df538d862fee9f",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5063848,
-        "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
+        "byte_length": 5391688,
+        "path": "target/debug/deps/vnext_stage4_contracts-3e4c9b2cb6b7b03d",
+        "sha256": "485844bc5bb6ccb0b36b9eb3ca50ff47d617bcbc79e866b477582f6ed9e00a11"
       },
       "test_names": [
         "independent_execution_artifact_rejects_semantic_and_shape_mutants"

@@ -15,11 +15,11 @@ from . import validate
 
 def synthetic_manifest() -> tuple[dict[str, object], bytes]:
     component_tags = build.rust_enum_tags(
-        "src/domain/vnext/contract/component_kind.rs",
+        "src/domain/contract/component_kind.rs",
         "ContractComponentKindV1",
     )
     finalization_tags = build.rust_enum_tags(
-        "src/domain/vnext/contract/finalization.rs",
+        "src/domain/contract/finalization.rs",
         "FinalizationInputKindV1",
     )
     assertions: dict[int, dict[str, object]] = {

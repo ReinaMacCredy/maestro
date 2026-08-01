@@ -220,9 +220,8 @@ fn assert_workspace_rejected_by_both(workspace: &Path, name: &str) {
 }
 
 fn stage4_certification_identity(workspace: &Path) -> String {
-    read_json(
-        &workspace.join("contracts/vnext/stage4/execution/execution-effects.v1.json"),
-    )["identity"]
+    read_json(&workspace.join("contracts/vnext/stage4/execution/behavioral-proof-receipt.v1.json"))
+        ["identity"]
         .as_str()
         .expect("parent Stage 4 certification identity")
         .to_owned()
@@ -1216,7 +1215,10 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
         read_json(&repo.join("contracts/vnext/stage4/execution/execution-effects.v1.json"));
     let receipt =
         read_json(&repo.join("contracts/vnext/stage4/execution/behavioral-proof-receipt.v1.json"));
-    assert_eq!(receipt["identity"], manifest["identity"]);
+    assert_ne!(
+        receipt["identity"], manifest["identity"],
+        "the immutable historical behavioral receipt must not claim the regenerated artifact identity"
+    );
     assert_eq!(receipt["result"], "pass");
     assert_eq!(receipt["validation_mode"], "full_chain");
     assert_eq!(receipt["mutant_validation"], "executed");
@@ -1227,7 +1229,7 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
                 "cargo",
                 "test",
                 "--lib",
-                "domain::vnext::execution::",
+                "domain::execution::",
                 "--",
                 "--nocapture"
             ],
@@ -1235,7 +1237,7 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
                 "cargo",
                 "test",
                 "--lib",
-                "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+                "domain::authority::facade::repository_admission::ancestry_tests",
                 "--",
                 "--nocapture"
             ],
@@ -1243,7 +1245,7 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
                 "cargo",
                 "test",
                 "--lib",
-                "domain::vnext::authority::continuity::trusted_time::tests",
+                "domain::authority::continuity::trusted_time::tests",
                 "--",
                 "--nocapture"
             ],
@@ -1309,7 +1311,7 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
         ])
     );
     for (key, expected) in [
-        ("command_receipts", [70, 7, 1, 1, 1, 1].as_slice()),
+        ("command_receipts", [75, 7, 1, 1, 1, 1].as_slice()),
         ("mutant_command_receipts", [10, 6, 1].as_slice()),
     ] {
         let receipts = receipt[key].as_array().expect("execution receipts");
@@ -1414,7 +1416,15 @@ fn stage4_receipts_bind_the_exact_full_predecessor_chain() {
                 "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
             ]),
     });
-    let mut exact_chain = None;
+    let manifest =
+        read_json(&repo.join("contracts/vnext/stage4/execution/execution-effects.v1.json"));
+    let behavior =
+        read_json(&repo.join("contracts/vnext/stage4/execution/behavioral-proof-receipt.v1.json"));
+    let historical_identity = behavior["identity"]
+        .as_str()
+        .expect("historical Stage 4 certification identity");
+    assert_ne!(manifest["identity"], behavior["identity"]);
+    let mut historical_chain = None;
     for relative in [
         "contracts/vnext/stage4/execution/python-encoder-receipt.v1.json",
         "contracts/vnext/stage4/execution/semantic-validation-receipt.v1.json",
@@ -1424,11 +1434,25 @@ fn stage4_receipts_bind_the_exact_full_predecessor_chain() {
         assert_eq!(receipt["validation_mode"], "full_chain", "{relative}");
         let chain = &receipt["predecessor_chain"];
         assert_eq!(chain["mode"], "full_chain", "{relative}");
-        assert_eq!(chain["roots"], expected_roots, "{relative}");
-        assert_eq!(
-            chain["proof_receipts"], expected_proof_receipts,
-            "{relative}"
-        );
+        if relative.ends_with("python-encoder-receipt.v1.json") {
+            assert_eq!(receipt["identity"], manifest["identity"], "{relative}");
+            assert_eq!(chain["roots"], expected_roots, "{relative}");
+            assert_eq!(
+                chain["proof_receipts"], expected_proof_receipts,
+                "{relative}"
+            );
+        } else {
+            assert_eq!(receipt["identity"], historical_identity, "{relative}");
+            assert_ne!(
+                chain["roots"], expected_roots,
+                "{relative} must remain bound to its historical predecessor closure"
+            );
+            if let Some(expected) = &historical_chain {
+                assert_eq!(chain, expected, "{relative}");
+            } else {
+                historical_chain = Some(chain.clone());
+            }
+        }
         let command_receipts = chain["command_receipts"]
             .as_array()
             .expect("predecessor command receipts");
@@ -1447,17 +1471,12 @@ fn stage4_receipts_bind_the_exact_full_predecessor_chain() {
             assert_eq!(row["stderr_sha256"].as_str().unwrap().len(), 64);
             assert_eq!(row["executable"]["sha256"].as_str().unwrap().len(), 64);
         }
-        if let Some(expected) = &exact_chain {
-            assert_eq!(chain, expected, "{relative}");
-        } else {
-            exact_chain = Some(chain.clone());
-        }
         if relative.ends_with("semantic-validation-receipt.v1.json")
             || relative.ends_with("ruby-verification-receipt.v1.json")
         {
             let reexecution = &receipt["behavioral_reexecution"];
             for (key, expected) in [
-                ("command_receipts", [70, 7, 1, 1, 1, 1].as_slice()),
+                ("command_receipts", [75, 7, 1, 1, 1, 1].as_slice()),
                 ("mutant_command_receipts", [10, 6, 1].as_slice()),
             ] {
                 let rows = reexecution[key]
@@ -1643,8 +1662,22 @@ fn stage4_source_closure_is_live_exact_and_excludes_stage5() {
         .find(|row| row[0] == "PATH")
         .and_then(|row| row[1].as_str())
         .expect("bound PATH");
-    assert!(path.contains("<codex-transient-arg0>"));
     assert!(!path.contains("/.codex/tmp/arg0/codex-arg0"));
+    let rustc_invocation = toolchain[1]
+        .as_array()
+        .expect("proof tool descriptors")
+        .iter()
+        .find(|row| row[0] == "rustc")
+        .and_then(|row| row[1].as_str())
+        .expect("rustc invocation path");
+    let rustc_parent = Path::new(rustc_invocation)
+        .parent()
+        .expect("rustc invocation parent");
+    assert!(
+        path.split(':')
+            .any(|component| Path::new(component) == rustc_parent),
+        "bound PATH must include the descriptor-bound rustc directory"
+    );
 }
 
 #[test]

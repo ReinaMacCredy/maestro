@@ -88,9 +88,22 @@ def validate_artifacts(
         paths.append(path)
         projected.append([path, build.Bytes(bytes.fromhex(digest))])
         if verify_files:
-            location = artifact_location(path, bindings)
-            require(location.is_file(), f"proof-bound artifact is missing: {path}")
-            require(build.sha256_file(location) == digest, f"proof-bound artifact drifted: {path}")
+            if path.startswith("approved-commitment:.maestro/cards/"):
+                source_inputs = bindings["canonical_source_inputs"]
+                expected = {
+                    "card.yaml": source_inputs["card_sha256"],
+                    "decisions.yaml": source_inputs["decisions_sha256"],
+                    "design.md": source_inputs["design_sha256"],
+                }.get(Path(path).name)
+                require(expected is not None, f"unexpected approved source commitment: {path}")
+                require(
+                    digest == expected,
+                    f"proof-bound approved source commitment drifted: {path}",
+                )
+            else:
+                location = artifact_location(path, bindings)
+                require(location.is_file(), f"proof-bound artifact is missing: {path}")
+                require(build.sha256_file(location) == digest, f"proof-bound artifact drifted: {path}")
     require(paths == sorted(paths) and len(paths) == len(set(paths)), f"{label} paths must be sorted and unique")
     return projected
 
@@ -168,11 +181,11 @@ def validate_locked_semantics(gates: list[dict[str, Any]]) -> None:
 
     assembly = gates[14]
     component_tags = build.rust_enum_tags(
-        "src/domain/vnext/contract/component_kind.rs",
+        "src/domain/contract/component_kind.rs",
         "ContractComponentKindV1",
     )
     finalization_tags = build.rust_enum_tags(
-        "src/domain/vnext/contract/finalization.rs",
+        "src/domain/contract/finalization.rs",
         "FinalizationInputKindV1",
     )
     assertions = assembly.get("assertions", {})

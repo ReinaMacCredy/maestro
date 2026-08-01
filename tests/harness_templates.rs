@@ -12,7 +12,9 @@ fn harness_markdown_matches_spec_section_14_protocol() {
     assert_eq!(HARNESS_MD, include_str!("../embedded/harness/HARNESS.md"));
     assert!(HARNESS_MD.contains("# Maestro Harness Protocol"));
     assert!(HARNESS_MD.contains("Run `maestro status` before acting"));
-    assert!(HARNESS_MD.contains("maestro loop show work"));
+    assert!(HARNESS_MD.contains("maestro status --json"));
+    assert!(HARNESS_MD.contains("maestro packet read"));
+    assert!(!HARNESS_MD.contains("maestro loop show work"));
     assert!(HARNESS_MD.contains("maestro task complete"));
     assert!(HARNESS_MD.contains("maestro task proof"));
     assert!(!HARNESS_MD.contains("## If you are Claude Code"));

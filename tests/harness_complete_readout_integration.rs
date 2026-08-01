@@ -650,7 +650,7 @@ fn structured_guardrails_report_decision_memory_scorer_task_check_and_agents_har
 }
 
 #[test]
-fn passive_scheduler_stance_is_reported_on_loop_next_watch_active_and_query_run() {
+fn passive_scheduler_stance_is_reported_on_status_watch_active_and_query_run() {
     let temp = support::TestTempDir::new("passive-scheduler");
     let repo = temp.path();
     init_git_marker(repo);
@@ -687,12 +687,12 @@ fn passive_scheduler_stance_is_reported_on_loop_next_watch_active_and_query_run(
         )],
     );
 
-    let next = run_with_home(repo, &["next"]);
+    let status = run_with_home(repo, &["status"]);
     assert!(
-        next.contains("harness: scheduler degraded (stance=passive_local_first"),
-        "{next}"
+        status.contains("harness: scheduler degraded (stance=passive_local_first"),
+        "{status}"
     );
-    assert!(next.contains("dead_runs=1"), "{next}");
+    assert!(status.contains("dead_runs=1"), "{status}");
 
     let active = run_with_home(repo, &["active", "--all"]);
     assert!(

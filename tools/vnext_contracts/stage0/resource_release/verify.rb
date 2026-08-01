@@ -6,8 +6,8 @@ require "json"
 
 ROOT = File.expand_path("../../../..", __dir__)
 OUT = File.join(ROOT, "contracts/vnext/stage0/resource-release")
-RESOURCE_COUNT = 377
-DELTA_ENTRY_COUNT = 530
+RESOURCE_COUNT = 412
+DELTA_ENTRY_COUNT = 565
 
 SCHEMA_IDS = {
   "ResourceDescriptorV1" => "78cc56e71ae16fa2539429601fb08e37970d32569d0fddfd12c2129b6344bcc9",
@@ -291,9 +291,9 @@ end
 
 def python_assignment_literal!(source, symbol, literal, label)
   pattern = /\A#{Regexp.escape(symbol)}\s*=\s*(.*)\z/
-  matches = source.lines.each_with_index.filter_map do |line, index|
+  matches = source.lines.each_with_index.each_with_object([]) do |(line, index), rows|
     match = line.chomp.match(pattern)
-    [index, match[1]] if match
+    rows << [index, match[1]] if match
   end
   contract!(matches.length == 1, "#{label} top-level assignment is missing or duplicate")
   index, first_rhs = matches.first

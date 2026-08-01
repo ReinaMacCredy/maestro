@@ -17,11 +17,11 @@ TARGET_COMMAND = [
     "cargo",
     "test",
     "--lib",
-    "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+    "domain::authority::facade::repository_admission::ancestry_tests",
     "--",
     "--nocapture",
 ]
-EXPECTED_BEHAVIOR_COUNTS = [70, 7, 1, 1, 1, 1]
+EXPECTED_BEHAVIOR_COUNTS = [75, 7, 1, 1, 1, 1]
 
 
 def python_assignment(path: Path, name: str) -> object:

@@ -1,10 +1,10 @@
 {
-  "closure_id": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+  "closure_id": "sha256:c1afda5dfadc7be7cb97df29fc890508b65e3fe5045cb31889dc2e4b95034bd2",
   "current_live_equality": false,
   "encoder_equality": "pass",
   "encoder_equality_scope": "byte_exact",
   "historical_census_count": 28102,
-  "manifest_id": "sha256:b5c5153a5af400468bdd77caea97dd7d1d811af784e9fb20841d6c76fa5ab7ad",
+  "manifest_id": "sha256:541a7381a4e66a69b1ef34a3e5370c54e3448add75f6f0dda8c64c7a0cfd4c27",
   "mutants": {
     "count": 38,
     "rejected": [
@@ -49,7 +49,7 @@
     ]
   },
   "python_semantic_validator": "pass",
-  "resource_input_id": "sha256:30753104cceece9fb3154740b15928eb16caff1e3878de21b1bcdc5930f39778",
+  "resource_input_id": "sha256:517f3b1fdd0116a36af6b42736f814adbad5de5eaabb90923835cd1a731b5279",
   "ruby_encoder": "pass",
   "schema": "maestro.vnext.stage0-public-identity-encoder-receipt.v1",
   "schema_descriptor_count": 79,

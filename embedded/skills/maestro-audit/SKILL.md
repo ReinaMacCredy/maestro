@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.13.7
+version: 1.13.9
 description: "Audit a project using Maestro read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
@@ -14,22 +14,17 @@ not the repo.
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-audit --session <session_id>`
 
-Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
-for current state and `maestro loop next` as the read-only router when the next
-recipe is not obvious. Audit work uses `maestro loop show audit`. Use that
-recipe as the shape for perceive -> choose -> act -> observe -> learn ->
-continue: read the bounded surface, choose a falsifiable probe, run read-only
-checks, observe findings, record durable proposals, then return the next audit
-or hard stop. Writes still use the existing Maestro verbs named by the recipe.
-Custom card/run recipes are allowed only when no shipped recipe fits, and must
-use the same six phases, current Maestro verbs, hard stops, and continue output.
-Rule: loop next recommends; outcome/proof/memory verbs write. Use
-`maestro loop next --chain` to explain current chain position without writing,
-`maestro loop outcome` to preserve structured attempt outcomes and transition
-receipts after native work, `maestro loop trace <card>` to audit card-scoped
-receipts, and `maestro loop improve` for read-only proposals over sourced
-outcomes. Audit may file explicit harness or memory proposals. Do not use silent
-recipe mutation, hidden stores, hidden schedulers, or proof/QA bypass.
+Routing checkpoint: use `maestro status --json` for current repository state.
+When an exact bounded vNext projection is required, Integration supplies one
+canonical JSON request with authenticated host context and expected
+Release/catalog identities; pass it on stdin to `maestro packet read`. Never
+invent those authority facts. Audit work still follows perceive -> choose ->
+act -> observe -> learn -> continue: read the bounded surface, choose a
+falsifiable probe, run read-only checks, observe findings, record durable
+proposals, then return the next audit or hard stop. Retired successor routes and
+legacy lifecycle recipe identifiers are not fallback routers. Audit may file
+explicit harness or memory proposals. Do not use silent recipe mutation, hidden
+stores, hidden schedulers, or proof/QA bypass.
 
 ## Stop
 

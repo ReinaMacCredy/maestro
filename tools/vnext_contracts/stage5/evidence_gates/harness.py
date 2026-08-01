@@ -49,6 +49,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_target_profile_and_mutant_are_independent_cache_key_inputs",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_tool_aba_substitution_cannot_change_the_executed_bytes",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_tool_byte_change_invalidates_cache",
+    "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_all_independent_engines_bind_the_exact_same_source_set",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_engine_local_binary_hashes_are_validated_before_semantic_consensus",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_frozen_behavior_manifest_rejects_a_real_passing_test_substitution",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_predecessor_rows_are_recomputed_instead_of_trusted",
@@ -85,7 +86,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_relocated_clang_links_concurrently_with_empty_path",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:c5d8562805f5b655447d32f1262d4fc06e91c7a80ce9ccdeab4eb0c77e1188a1"
+    "sha256:703c5bd549cf77954b5950b00106aca4678ad70e85e99446a020f303b0d06b05"
 )
 
 

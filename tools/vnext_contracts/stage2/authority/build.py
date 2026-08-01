@@ -28,7 +28,7 @@ STAGE2_SEMANTIC_DELTA = (
     WORKSPACE
     / "contracts/vnext/stage0/effect-home/stage2-semantic-consumer-delta-v1.json"
 )
-GOVERNANCE_FLOOR_SOURCE = "src/domain/vnext/authority/governance_floor.rs"
+GOVERNANCE_FLOOR_SOURCE = "src/domain/authority/governance_floor.rs"
 GOVERNANCE_FLOOR_REQUIRED_LITERALS = (
     "RepositoryGovernanceFloorSnapshotV1",
     "maestro.vnext.repository-governance-floor-snapshot.v1",

@@ -12,7 +12,7 @@ use git2::{Repository, Signature};
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
-use serde_json::{Value as JsonValue, json};
+use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 use witness_support::write_valid_witness;
@@ -223,20 +223,6 @@ fn ownership_event(session: &str, card: &str, minutes_ago: u64) -> String {
     let ts = ts_minutes_ago(minutes_ago);
     format!(
         r#"{{"event_type":"ownership_acquire","session_id":"{session}","card_id":"{card}","ts":"{ts}"}}"#
-    )
-}
-
-fn ownership_release_event(session: &str, card: &str, status: &str, minutes_ago: u64) -> String {
-    let ts = ts_minutes_ago(minutes_ago);
-    format!(
-        r#"{{"event_type":"ownership_release","session_id":"{session}","card_id":"{card}","status":"{status}","ts":"{ts}"}}"#
-    )
-}
-
-fn scope_event(session: &str, path: &str, minutes_ago: u64) -> String {
-    let ts = ts_minutes_ago(minutes_ago);
-    format!(
-        r#"{{"event_type":"scope_declaration","session_id":"{session}","scope_paths":["{path}"],"ts":"{ts}"}}"#
     )
 }
 
@@ -531,277 +517,7 @@ fn status_skips_malformed_local_card_with_repair_hint() {
 }
 
 #[test]
-fn task_next_no_action_prints_summary_and_exits_nonzero() {
-    let temp = setup_repo("maestro-task-next-empty");
-    let repo = temp.path();
-
-    let next = maestro(repo, &["task", "next"]);
-
-    assert_failure(&next, &["task", "next"]);
-    assert!(stdout(&next).contains("no actionable task"));
-    assert!(stderr(&next).contains("no actionable task"));
-}
-
-#[test]
-fn next_default_reports_best_action_without_mutating_ready_task() {
-    let temp = setup_repo("maestro-next-read-only-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let next = run(repo, &["next"]);
-
-    assert!(next.contains("run: maestro task claim"), "{next}");
-    assert!(next.contains(&format!("task: {ready}")), "{next}");
-    assert_eq!(task_yaml(repo, &ready)["state"].as_str(), Some("ready"));
-    assert!(task_yaml(repo, &ready)["claimed_by"].is_null());
-}
-
-#[test]
-fn next_json_uses_next_schema_and_marks_claim_task_auto_safe() {
-    let temp = setup_repo("maestro-next-json-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let json = run(repo, &["next", "--json"]);
-    let parsed: JsonValue = serde_json::from_str(&json).expect("invariant: next JSON should parse");
-
-    assert_eq!(parsed["schema"], "maestro.next.v1");
-    assert_eq!(parsed["mode"], "suggest");
-    assert_eq!(parsed["next_action"]["kind"], "claim_task");
-    assert_eq!(parsed["next_action"]["auto_safe"], true);
-    assert_eq!(parsed["next_action"]["task_id"], ready);
-}
-
-#[test]
-fn next_brief_text_reports_one_action_without_side_payloads() {
-    let temp = setup_repo("maestro-next-brief-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let next = run(repo, &["next", "--brief"]);
-
-    assert!(
-        next.contains(&format!("next: maestro task claim {ready}")),
-        "{next}"
-    );
-    assert!(next.contains("reason: ready task is unclaimed"), "{next}");
-    assert!(
-        next.contains(&format!("inspect: maestro task show {ready}")),
-        "{next}"
-    );
-    assert!(!next.contains("stop:"), "{next}");
-    assert!(!next.contains("harness: scheduler"), "{next}");
-    assert!(!next.contains("ACTIVE FEATURES"), "{next}");
-    assert_eq!(task_yaml(repo, &ready)["state"].as_str(), Some("ready"));
-}
-
-#[test]
-fn next_brief_json_marks_auto_safe_claim_as_runnable() {
-    let temp = setup_repo("maestro-next-brief-json-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let json = run(repo, &["next", "--brief", "--json"]);
-    let parsed: JsonValue =
-        serde_json::from_str(&json).expect("invariant: brief next JSON should parse");
-
-    assert_eq!(parsed["schema"], "maestro.next.brief.v1");
-    assert_eq!(parsed["status"], "runnable");
-    assert_eq!(parsed["kind"], "claim_task");
-    assert_eq!(parsed["task_id"], ready);
-    assert_eq!(parsed["cmd"], json!(["maestro", "task", "claim", ready]));
-    assert!(parsed.get("needs").is_none());
-    assert!(parsed.get("stop").is_none());
-    assert_eq!(parsed["inspect"], format!("maestro task show {ready}"));
-}
-
-#[test]
-fn next_brief_json_emits_compact_agent_contract() {
-    let temp = setup_repo("maestro-next-brief-json-input");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-    run(repo, &["task", "claim", &ready]);
-
-    let json = run(repo, &["next", "--brief", "--json"]);
-    let parsed: JsonValue =
-        serde_json::from_str(&json).expect("invariant: brief next JSON should parse");
-
-    assert_eq!(parsed["schema"], "maestro.next.brief.v1");
-    assert_eq!(parsed["status"], "blocked");
-    assert_eq!(parsed["kind"], "complete_task");
-    assert_eq!(parsed["task_id"], ready);
-    assert_eq!(parsed["cmd"][0], "maestro");
-    assert_eq!(parsed["cmd"][1], "task");
-    assert_eq!(parsed["cmd"][2], "complete");
-    assert_eq!(parsed["needs"][0]["name"], "summary");
-    assert_eq!(parsed["needs"][0]["why"], "what changed");
-    assert_eq!(parsed["stop"], "requires input");
-    assert_eq!(parsed["inspect"], format!("maestro task show {ready}"));
-    assert!(parsed.get("title").is_none());
-    assert!(parsed.get("auto_safe").is_none());
-    assert!(parsed.get("runnable").is_none());
-    assert!(parsed.get("reason").is_none());
-    assert!(parsed.get("scheduler").is_none());
-    assert!(parsed.get("ready_to_close_features").is_none());
-}
-
-#[test]
-fn next_run_claims_only_auto_safe_ready_task() {
-    let temp = setup_repo("maestro-next-run-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let next = run(repo, &["next", "--run"]);
-
-    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
-    assert_eq!(
-        task_yaml(repo, &ready)["state"].as_str(),
-        Some("in_progress")
-    );
-    assert!(!task_yaml(repo, &ready)["claimed_by"].is_null());
-}
-
-#[test]
-fn next_run_refuses_input_requiring_completion_template() {
-    let temp = setup_repo("maestro-next-run-refuses-input");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-    run(repo, &["task", "claim", &ready]);
-
-    let next = maestro(repo, &["next", "--run"]);
-
-    assert_failure(&next, &["next", "--run"]);
-    let out = stdout(&next);
-    assert!(out.contains("blocked: next action requires input"), "{out}");
-    assert!(out.contains("template: maestro task complete"), "{out}");
-    assert_eq!(
-        task_yaml(repo, &ready)["state"].as_str(),
-        Some("in_progress")
-    );
-}
-
-#[test]
-fn next_run_brief_stops_before_input_requiring_completion() {
-    let temp = setup_repo("maestro-next-run-brief-refuses-input");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-    run(repo, &["task", "claim", &ready]);
-
-    let next = maestro(repo, &["next", "--run", "--brief"]);
-
-    assert_failure(&next, &["next", "--run", "--brief"]);
-    let out = stdout(&next);
-    assert!(out.contains("next: maestro task complete"), "{out}");
-    assert!(out.contains("needs: summary, claim, proof"), "{out}");
-    assert!(out.contains("stop: requires input"), "{out}");
-    assert!(!out.contains("template:"), "{out}");
-    assert_eq!(
-        task_yaml(repo, &ready)["state"].as_str(),
-        Some("in_progress")
-    );
-}
-
-#[test]
-fn next_loop_stops_after_first_blocker_and_reports_transcript() {
-    let temp = setup_repo("maestro-next-loop-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let next = run(repo, &["next", "--loop", "--max-steps", "5"]);
-
-    assert!(next.contains("step 1/5:"), "{next}");
-    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
-    assert!(
-        next.contains("blocked: next action requires input"),
-        "{next}"
-    );
-    assert_eq!(
-        task_yaml(repo, &ready)["state"].as_str(),
-        Some("in_progress")
-    );
-}
-
-#[test]
-fn next_loop_brief_stops_after_auto_safe_claim_before_proof() {
-    let temp = setup_repo("maestro-next-loop-brief-ready");
-    let repo = temp.path();
-    run(
-        repo,
-        &["task", "create", "Ready task", "--check", "ready check"],
-    );
-    let ready = id_by_title(repo, "Ready task");
-    run(repo, &["task", "explore", &ready]);
-    run(repo, &["task", "accept", &ready]);
-
-    let next = run(repo, &["next", "--loop", "--brief", "--max-steps", "5"]);
-
-    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
-    assert!(next.contains("next: maestro task complete"), "{next}");
-    assert!(next.contains("needs: summary, claim, proof"), "{next}");
-    assert!(next.contains("stop: requires input"), "{next}");
-    assert!(!next.contains("template:"), "{next}");
-    assert_eq!(
-        task_yaml(repo, &ready)["state"].as_str(),
-        Some("in_progress")
-    );
-}
-
-#[test]
-fn status_and_task_next_choose_current_task_before_ready_queue() {
+fn status_chooses_current_task_before_ready_queue() {
     let temp = setup_repo("maestro-status-current");
     let repo = temp.path();
     run(
@@ -813,13 +529,6 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
     run(repo, &["task", "accept", &ready]);
     run(repo, &["task", "create", "Draft task"]);
     let draft = id_by_title(repo, "Draft task");
-
-    let next = maestro_with_env(repo, &["task", "next"], &[("MAESTRO_CURRENT_TASK", &draft)]);
-
-    assert_success(&next, &["task", "next"]);
-    let out = stdout(&next);
-    assert!(out.contains(&format!("template: maestro task set {draft} --check")));
-    assert!(out.contains(&format!("task: {draft}")));
 
     let status = maestro_with_env(
         repo,
@@ -1203,7 +912,7 @@ fn resume_surfaces_recent_archive_memory() {
 }
 
 #[test]
-fn disabled_escalation_keeps_status_and_task_next_output_unchanged() {
+fn disabled_escalation_keeps_status_output_unchanged() {
     let temp = setup_repo("maestro-escalation-disabled-output");
     let repo = temp.path();
     write_disabled_harness(repo);
@@ -1216,17 +925,15 @@ fn disabled_escalation_keeps_status_and_task_next_output_unchanged() {
     run(repo, &["task", "accept", &id]);
 
     let status_before = run(repo, &["status"]);
-    let next_before = run(repo, &["task", "next"]);
     write_correction_session(repo, "session-a");
     write_correction_session(repo, "session-b");
     write_correction_session(repo, "session-c");
 
     assert_eq!(run(repo, &["status"]), status_before);
-    assert_eq!(run(repo, &["task", "next"]), next_before);
 }
 
 #[test]
-fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
+fn harness_friction_surfaces_in_status_list_and_complete() {
     let temp = setup_repo("maestro-harness-surfacing");
     let repo = temp.path();
     write_correction_session(repo, "session-a");
@@ -1251,15 +958,6 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         status.contains(&format!("apply: maestro harness apply {friction}")),
         "{status}"
     );
-
-    let next = run(repo, &["task", "next"]);
-    let friction_at = next
-        .find("HARNESS FRICTION")
-        .expect("invariant: task next should show friction");
-    let normal_at = next
-        .find(&format!("run: maestro task claim {id}"))
-        .expect("invariant: task next should keep normal next action");
-    assert!(friction_at < normal_at, "{next}");
 
     let list = run(repo, &["harness", "list"]);
     assert!(
@@ -1404,7 +1102,7 @@ fn current_task_infers_feature_context_without_feature_env() {
 }
 
 #[test]
-fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
+fn human_fallback_warnings_are_first_line_for_status() {
     let temp = setup_repo("maestro-status-warning-first");
     let repo = temp.path();
     run(
@@ -1422,85 +1120,10 @@ fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
         status_out.starts_with("warning: MAESTRO_CURRENT_TASK=task-999 was not found"),
         "{status_out}"
     );
-
-    let next = maestro_with_env(
-        repo,
-        &["task", "next"],
-        &[("MAESTRO_CURRENT_TASK", "task-999")],
-    );
-    assert_success(&next, &["task", "next"]);
-    let next_out = stdout(&next);
-    assert!(
-        next_out.starts_with("warning: MAESTRO_CURRENT_TASK=task-999 was not found"),
-        "{next_out}"
-    );
-    assert!(next_out.contains(&format!("run: maestro task claim {id}")));
 }
 
 #[test]
-fn current_ready_task_next_claims_selected_task_not_generic_next() {
-    let temp = setup_repo("maestro-status-current-ready-task");
-    let repo = temp.path();
-    run(
-        repo,
-        &[
-            "task",
-            "create",
-            "First ready task",
-            "--check",
-            "first check",
-        ],
-    );
-    let first = id_by_title(repo, "First ready task");
-    run(repo, &["task", "explore", &first]);
-    run(repo, &["task", "accept", &first]);
-    run(
-        repo,
-        &[
-            "task",
-            "create",
-            "Current ready task",
-            "--check",
-            "second check",
-        ],
-    );
-    let current = id_by_title(repo, "Current ready task");
-    run(repo, &["task", "explore", &current]);
-    run(repo, &["task", "accept", &current]);
-
-    let human = maestro_with_env(
-        repo,
-        &["task", "next"],
-        &[("MAESTRO_CURRENT_TASK", &current)],
-    );
-    assert_success(&human, &["task", "next"]);
-    let human_out = stdout(&human);
-    assert!(
-        human_out.contains(&format!("run: maestro task claim {current}")),
-        "{human_out}"
-    );
-    assert!(
-        !human_out.contains("maestro task claim --next"),
-        "{human_out}"
-    );
-
-    let json = maestro_with_env(
-        repo,
-        &["task", "next", "--json"],
-        &[("MAESTRO_CURRENT_TASK", &current)],
-    );
-    assert_success(&json, &["task", "next", "--json"]);
-    let parsed: JsonValue =
-        serde_json::from_str(&stdout(&json)).expect("invariant: task next JSON should parse");
-    assert_eq!(parsed["next_action"]["task_id"], current);
-    assert_eq!(
-        parsed["next_action"]["command"]["argv"],
-        serde_json::json!(["maestro", "task", "claim", current])
-    );
-}
-
-#[test]
-fn ready_to_close_status_json_and_task_next_broader_actions_are_structured() {
+fn ready_to_close_status_json_action_is_structured() {
     let temp = setup_repo("maestro-ready-to-close-json");
     let repo = temp.path();
     run(repo, &["feature", "new", "CSV export"]);
@@ -1582,17 +1205,6 @@ fn ready_to_close_status_json_and_task_next_broader_actions_are_structured() {
         ready["next_action"]["command"]["requires_input"][0]["flag"],
         "--outcome"
     );
-
-    let next = maestro(repo, &["task", "next", "--json"]);
-    assert_failure(&next, &["task", "next", "--json"]);
-    let next_json: JsonValue =
-        serde_json::from_str(&stdout(&next)).expect("invariant: task next JSON should parse");
-    assert!(next_json["next_action"].is_null());
-    assert_eq!(
-        next_json["broader_actions"][0]["kind"],
-        "feature_ready_to_close"
-    );
-    assert_eq!(next_json["broader_actions"][0]["feature_id"], "csv-export");
 }
 
 #[test]
@@ -1688,98 +1300,6 @@ fn status_shows_compact_loop_hint_from_router_for_ready_task() {
     );
     assert_eq!(parsed["next_action"]["task_id"], task_id);
     assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
-}
-
-#[test]
-fn loop_next_routes_conflict_only_for_actionable_active_overlap() {
-    let temp = setup_repo("maestro-loop-active-overlap-filter");
-    let repo = temp.path();
-    let task_id = run(repo, &["task", "add", "--id-only", "Implement router"]);
-    let task_id = task_id.trim();
-    clear_runs(repo);
-    seed_run(repo, "me", &[ownership_event("me", task_id, 1)]);
-    seed_run(
-        repo,
-        "fresh-other-card",
-        &[ownership_event("fresh-other-card", "task-other", 1)],
-    );
-    seed_run(
-        repo,
-        "released-same-card",
-        &[
-            ownership_event("released-same-card", task_id, 2),
-            ownership_release_event("released-same-card", task_id, "done", 1),
-        ],
-    );
-    seed_run(
-        repo,
-        "old-unconfirmed-other-card",
-        &[ownership_event(
-            "old-unconfirmed-other-card",
-            "task-old-other",
-            121,
-        )],
-    );
-
-    let no_overlap = maestro_with_env(
-        repo,
-        &["loop", "next", "--json"],
-        &[("MAESTRO_SESSION_ID", "me")],
-    );
-    assert_success(&no_overlap, &["loop", "next", "--json"]);
-    let no_overlap_json: JsonValue =
-        serde_json::from_str(&stdout(&no_overlap)).expect("loop next JSON should parse");
-    assert_eq!(no_overlap_json["recommended_recipe"], "work");
-    assert!(
-        !no_overlap_json["reason"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("active sessions are visible"),
-        "{no_overlap_json}"
-    );
-
-    seed_run(
-        repo,
-        "fresh-same-card",
-        &[ownership_event("fresh-same-card", task_id, 1)],
-    );
-    let same_card = maestro_with_env(
-        repo,
-        &["loop", "next", "--json"],
-        &[("MAESTRO_SESSION_ID", "me")],
-    );
-    assert_success(&same_card, &["loop", "next", "--json"]);
-    let same_card_json: JsonValue =
-        serde_json::from_str(&stdout(&same_card)).expect("loop next JSON should parse");
-    assert_eq!(same_card_json["recommended_recipe"], "conflict-handoff");
-
-    fs::remove_dir_all(repo.join(".maestro/runs/fresh-same-card"))
-        .expect("invariant: run fixture should be removable");
-    seed_run(
-        repo,
-        "me",
-        &[
-            ownership_event("me", task_id, 1),
-            scope_event("me", "src/interfaces/cli/status.rs", 1),
-        ],
-    );
-    seed_run(
-        repo,
-        "fresh-same-scope",
-        &[
-            ownership_event("fresh-same-scope", "task-scope-other", 1),
-            scope_event("fresh-same-scope", "./src/interfaces/cli/status.rs", 1),
-        ],
-    );
-    let same_scope = maestro_with_env(
-        repo,
-        &["loop", "next", "--json"],
-        &[("MAESTRO_SESSION_ID", "me")],
-    );
-    assert_success(&same_scope, &["loop", "next", "--json"]);
-    let same_scope_json: JsonValue =
-        serde_json::from_str(&stdout(&same_scope)).expect("loop next JSON should parse");
-    assert_eq!(same_scope_json["recommended_recipe"], "conflict-handoff");
 }
 
 #[test]

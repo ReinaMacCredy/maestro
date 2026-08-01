@@ -76,18 +76,23 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = [
     "TrustedTimePolicyStackRotation",
     "ExternalLogicalCarrierProfileRotation",
     "PlannedEpochTurnoverPreparation",
+    "RepositoryGovernanceFloorSnapshotV1",
+    "maestro.vnext.repository-governance-floor-snapshot.v1",
+    "maestro.vnext.repository-governance-head-class-8.v1",
 ]
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
-    "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
-    "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
-    "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
-    "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
-    "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
-    "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
-    "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
-    "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
-    "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
-    "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
+    "src/domain/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
+    "src/domain/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
+    "src/domain/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
+    "src/domain/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
+    "src/domain/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
+    "src/domain/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
+    "src/domain/authority/governance_floor.rs": ("Authority", "candidate_contract_definition", "exact_internal_append_only_authority_schema_tag_25"),
+    "src/domain/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/authority/publication.rs": ("Authority", "candidate_contract_definition", "exact_internal_authority_schema_registry_prefix_and_tag_25"),
+    "src/domain/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
+    "src/domain/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
+    "src/domain/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
     "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
     "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),
     "tests/vnext_authority_continuity_totality.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_continuity_totality_proof"),
@@ -113,23 +118,35 @@ SEMANTIC_LITERAL_SOURCES = {
     "contracts/vnext/stage0/resource-release/predecessor-migration-cutover-contract-v1.json": ("ResourceRelease", "candidate_contract_definition", "direct_resource_release_predecessor_literal"),
     "contracts/vnext/stage0/resource-release/predecessor-resource-contract-suite-v1.json": ("ResourceRelease", "candidate_contract_definition", "direct_resource_release_predecessor_literal"),
     "contracts/vnext/public/setup_operation_compatibility.v1.json": ("PublicContracts", "candidate_contract_definition", "direct_public_literal"),
-    "src/domain/vnext/execution/control_head.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/execution/ceremony.rs": ("Execution", "candidate_contract_definition", "direct_stage4_protected_ceremony_literal"),
-    "src/domain/vnext/execution/dispatch_state.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
-    "src/domain/vnext/execution/h3_withdrawal_publication.rs": ("Execution", "candidate_contract_definition", "direct_stage4_h3_withdrawal_publication_literal"),
-    "src/domain/vnext/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
-    "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
-    "src/domain/vnext/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
-    "src/domain/vnext/evidence/observation.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_observation_literal"),
-    "src/domain/vnext/evidence/store.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_evidence_store_literal"),
-    "src/domain/vnext/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
-    "src/domain/vnext/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
+    "src/domain/execution/control_head.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/execution/ceremony.rs": ("Execution", "candidate_contract_definition", "direct_stage4_protected_ceremony_literal"),
+    "src/domain/execution/dispatch_state.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
+    "src/domain/execution/h3_withdrawal_publication.rs": ("Execution", "candidate_contract_definition", "direct_stage4_h3_withdrawal_publication_literal"),
+    "src/domain/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
+    "src/domain/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
+    "src/domain/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/evidence/observation.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_observation_literal"),
+    "src/domain/evidence/store.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_evidence_store_literal"),
+    "src/domain/distribution/runtime/model.rs": ("Distribution", "candidate_contract_definition", "direct_stage9_distribution_model_literal"),
+    "src/domain/distribution/runtime/records.rs": ("Distribution", "candidate_contract_definition", "direct_stage9_distribution_record_literal"),
+    "src/domain/distribution/runtime/transaction.rs": ("Distribution", "candidate_contract_definition", "direct_stage9_distribution_transaction_literal"),
+    "src/domain/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
+    "src/domain/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
+    "src/domain/migration/runtime/classification.rs": ("Migration", "candidate_contract_definition", "direct_stage11_migration_classification_literal"),
+    "src/domain/persistence/protected_locator_stage9_seed.rs": ("Persistence", "candidate_contract_definition", "direct_stage9_protected_locator_literal"),
+    "src/domain/transport/json.rs": ("Transport", "candidate_contract_definition", "direct_stage6_transport_literal"),
+    "src/operations/action/service.rs": ("Action", "candidate_contract_definition", "direct_stage6_action_service_literal"),
+    "src/operations/installation/agent_resource_release.rs": ("Installation", "candidate_contract_definition", "direct_stage9_agent_resource_release_literal"),
+    "src/operations/installation/effects.rs": ("Installation", "candidate_contract_definition", "direct_stage9_installation_effect_literal"),
+    "src/operations/migration/tests.rs": ("Migration", "candidate_proof_reader", "direct_stage11_migration_runtime_proof"),
+    "src/operations/repository.rs": ("Repository", "candidate_contract_definition", "direct_stage8_repository_literal"),
     "tests/vnext_dispatch_cutover_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tests/vnext_effect_home_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
+    "tests/vnext_stage11_migration_contracts.rs": ("Stage11Proof", "candidate_proof_reader", "direct_stage11_migration_contract_proof"),
     "tests/vnext_stage4_contracts.rs": ("Stage4Proof", "candidate_proof_reader", "direct_stage4_execution_contract_proof"),
     "tests/vnext_manifest_identity.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tools/vnext_contracts/catalogs/build.py": ("Catalogs", "candidate_contract_definition", "direct_catalog_builder_literal"),
@@ -141,7 +158,6 @@ SEMANTIC_LITERAL_SOURCES = {
     "tools/vnext_contracts/stage0/dispatch_cutover/build.py": ("Stage0DispatchCutover", "candidate_contract_definition", "direct_dispatch_builder_literal"),
     "tools/vnext_contracts/stage0/effect_home/build.py": ("Stage0EffectHome", "candidate_contract_definition", "direct_effect_home_builder_literal"),
     "tools/vnext_contracts/stage0/effect_home/validate.py": ("Stage0Proof", "candidate_proof_reader", "direct_effect_home_validator_literal"),
-    "tools/vnext_contracts/stage0/proof_matrix/build.py": ("Stage0Proof", "candidate_proof_reader", "stage0_proof_manifest_effect_home_reader"),
     "tools/vnext_contracts/stage4/execution/build.py": ("Stage4Execution", "candidate_contract_definition", "direct_stage4_execution_builder_literal"),
     "tools/vnext_contracts/stage4/execution/validate.py": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_reconstruction"),
     "tools/vnext_contracts/stage4/execution/verify.rb": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_ruby_reconstruction"),
@@ -157,6 +173,11 @@ SEMANTIC_ROLE_SOURCES = {
         "direct_resource_release_effect_home_reader",
         "function_scoped_resource_release_effect_binding_validation",
     ),
+    "tools/vnext_contracts/stage0/proof_matrix/build.py": (
+        "Stage0Proof", "candidate_proof_reader",
+        "stage0_proof_manifest_effect_home_reader",
+        "function_scoped_stage0_proof_manifest_effect_binding",
+    ),
 }
 SEMANTIC_ROLE_AST_BINDINGS = {
     "tools/vnext_contracts/stage0/resource_release/validate.py": (
@@ -169,15 +190,24 @@ SEMANTIC_ROLE_AST_BINDINGS = {
             'require(closure.get("effect_home_expected_delta_manifest_id") == effect["expected_delta_manifest_id"], "Effect expected-delta ManifestId drifted")',
         ),
     ),
+    "tools/vnext_contracts/stage0/proof_matrix/build.py": (
+        "build_manifest",
+        ('effect_inventory = load("contracts/vnext/stage0/effect-home/inventory.json")',),
+    ),
 }
 SEMANTIC_ROLE_AST_CALLERS = {
     "tools/vnext_contracts/stage0/resource_release/validate.py": (
         "validate_all",
         "validate_resource_release(documents, inventory, resources, bundles, census, release)",
     ),
+    "tools/vnext_contracts/stage0/proof_matrix/build.py": (
+        "execute",
+        "document, encoded = build_manifest(check=check)",
+    ),
 }
 SEMANTIC_ROLE_SOURCE_SHA256 = {
-    "tools/vnext_contracts/stage0/resource_release/validate.py": "1ef7b22757e35bcb97db6b3bfdb0fc7f0d0f2fc2486901835d877616562ea667",
+    "tools/vnext_contracts/stage0/resource_release/validate.py": "f02dc1f50903c54c6b30de3c86c56b576e7880f2a986e3f3f1a5a102fc2e8349",
+    "tools/vnext_contracts/stage0/proof_matrix/build.py": "c997a02cfe10880bddeac64a45e89cee48c59c367524976d7ebfa7e32c77cc88",
 }
 DOWNSTREAM_GENERATED_SEMANTIC_OBLIGATIONS = {
     "contracts/vnext/stage4/execution/execution-effects.v1.cbor": (
@@ -229,8 +259,6 @@ LEGACY_SEMANTIC_REMOVAL_SOURCES = {
     "src/domain/channel.rs": ("delivery_release", "Channel", "replacement_removal_target", "append_delivery_receipt", "legacy_delivery_receipt_and_latest_cursor_writer", "direct_v1_delivery_receipt_and_latest_join"),
     "src/interfaces/cli/msg.rs": ("connector_adapter", "CliMessage", "replacement_removal_target", "send_codex_thread_primary", "legacy_codex_connector_delivery_adapter", "direct_v1_connector_delivery_adapter"),
     "tests/msg_codex_delivery_integration.rs": ("delivery_release", "Stage0Proof", "candidate_proof_reader", "codex_to_codex_msg_send_uses_target_thread_without_unread_local_duplicate", "legacy_codex_delivery_contract_test", "direct_v1_delivery_integration_proof"),
-    "src/interfaces/mcp/tools.rs": ("connector_adapter", "Mcp", "replacement_removal_target", "maestro_status", "legacy_mcp_command_adapter", "direct_v1_mcp_adapter_surface"),
-    "src/interfaces/mcp/server.rs": ("connector_adapter", "Mcp", "replacement_removal_target", "discover_repo_root", "legacy_mcp_repo_scope_adapter", "direct_v1_mcp_server_scope"),
     "src/operations/update/github_release.rs": ("update_github_curl", "Update", "replacement_removal_target", "GitHubCurlDownloader", "legacy_github_curl_release_reader", "direct_v1_github_curl_path"),
     "src/operations/update/mod.rs": ("update_github_curl", "Update", "replacement_removal_target", "InstallMethod::Curl", "legacy_update_install_method_classifier", "direct_v1_update_curl_selector"),
     "src/interfaces/cli/update.rs": ("update_github_curl", "CliUpdate", "replacement_removal_target", "auto_check_paths_from", "legacy_update_cwd_scope_inference", "direct_v1_update_cli_scope"),
@@ -268,14 +296,14 @@ LEGACY_SEMANTIC_REMOVAL_SOURCES = {
     "src/foundation/core/git.rs": ("independent_cross_worktree_classification", "Foundation", "replacement_removal_target", "worktree_roots", "legacy_cross_worktree_root_union", "direct_v1_cross_worktree_root_union"),
 }
 C325_BASELINE_DRIFTS = [
-    ("src/domain/loop_recipes.rs", "753c9f535ebf219cb60998cb19aa2876b8dfad9134eedab4a878a478a549ea91", "12d02195fd88031b2661c236318af4f9dc5b790ebd41d8bfb97066530c5e5394", "loop_recipes_domain_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
+    ("src/domain/loop_recipes.rs", "753c9f535ebf219cb60998cb19aa2876b8dfad9134eedab4a878a478a549ea91", "776ba071adaafd17a3eaa45ddee4ec55c652f82bcf83650c4640ed87c2f487e9", "loop_recipes_domain_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("src/domain/mod.rs", "70a6dbbc96645090e77750f12879db081e3b2f4647e04c9785e13617c1f55ce7", "8ecc94ec3520e1b00fc76cd453ace95645af36453fc2888a23948dba49ab2930", "domain_module_facade_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("src/interfaces/cli/loop_recipes.rs", "babfbd7ef04b869e9a86d0022c312b10653b5df5f1be5d7e647d967a0d44e947", "f8c3fcd5d01aaa9a590e4c93703928e018531dd5d1665b385411ae8fe95e91c7", "loop_recipes_cli_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("src/interfaces/cli/mod.rs", "7c43e73ff25ae8c12d378b0a9ead453f7ad89452848b59a9190a852a87f1c7f8", "ddb86f6af0a20bbda80fb03824f3c18ed8ca45c62e688a6cd89099d4654ae000", "cli_module_facade_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("src/interfaces/cli/status.rs", "d560602a5ac888e5ef6f256f487056712536f7915e18f855389b1db2e2695a35", "4f62a633c8398d404605eed8647e15c815fdf5b5ab2ea81ea188f0716c9601f1", "status_cli_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("tests/loop_recipes_integration.rs", "85cc2627b8db9616bdd20976204c660737d726858f546f62fd20a6ea26f1c61c", "5fc7a9808427daf0caea1316c6069d7d31528c0c19c50dc0d6836b5c777fc447", "loop_recipes_test_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
     ("tests/resource_contracts.rs", "1c553df182bbe8a6f5a22ef1c838cb8fd12ee2ddd118cfda61f4f7b145ec4878", "81e07503d036606d3fbeb6514bb475e4ad894336515a1d868b35bd11278b4275", "resource_contract_test_surface_changed_after_c325_baseline_not_effect_semantic_evidence"),
-    ("tests/resources_version_guard.rs", "8176e638c10301d1fd5ede30ab006096307895ef229fe3cd197a15eab8c1c0ba", "2701713fc6d5fa6b05665d05d8b44ab8987c0c8b8dc2fab9aeeb060f51af2612", "resource_version_guard_changed_after_c325_baseline_not_effect_semantic_evidence"),
+    ("tests/resources_version_guard.rs", "8176e638c10301d1fd5ede30ab006096307895ef229fe3cd197a15eab8c1c0ba", "bdc15354e5b32c85f6db2a7a781559de9a55ff53f0fb3510be9a68bc31c60f4e", "resource_version_guard_changed_after_c325_baseline_not_effect_semantic_evidence"),
 ]
 DENIED = {
     "live_dispatch_reserved_or_sealed",
@@ -327,9 +355,15 @@ def ast_binds_name(node: ast.AST, name: str) -> bool:
         return node.name == name
     if isinstance(node, ast.ExceptHandler):
         return node.name == name
-    if isinstance(node, (ast.MatchAs, ast.MatchStar)):
+    match_binding_nodes = tuple(
+        node_type
+        for name in ("MatchAs", "MatchStar")
+        if (node_type := getattr(ast, name, None)) is not None
+    )
+    if match_binding_nodes and isinstance(node, match_binding_nodes):
         return node.name == name
-    if isinstance(node, ast.MatchMapping):
+    match_mapping_node = getattr(ast, "MatchMapping", None)
+    if match_mapping_node is not None and isinstance(node, match_mapping_node):
         return node.rest == name
     if isinstance(node, ast.alias):
         return (node.asname or node.name.split(".", 1)[0]) == name
@@ -887,7 +921,9 @@ def validate_h2_components(documents: dict[str, dict[str, object]]) -> None:
         "EffectIntentControlTransitionV1",
         "EffectIntentControlWriterTermV1",
     ]
-    for name, kind in zip(H2_COMPONENTS, expected_kinds, strict=True):
+    if len(H2_COMPONENTS) != len(expected_kinds):
+        fail("H2 component and kind cardinality drifted")
+    for name, kind in zip(H2_COMPONENTS, expected_kinds):
         component = documents[name]
         if component["canonical_value"][0:2] != [kind, 1]:
             fail(f"H2 component type drifted: {name}")

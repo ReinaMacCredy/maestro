@@ -5,17 +5,17 @@
       [
         "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/design.md",
         {
-          "bytes": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18"
+          "bytes": "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b"
         }
       ],
       [
-        "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
+        "approved-commitment:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
         {
-          "bytes": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd"
+          "bytes": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
         }
       ],
       [
-        "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
+        "approved-commitment:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
         {
           "bytes": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4"
         }
@@ -143,7 +143,7 @@
       [
         "embedded/vnext/adapter/mcp-tools.v1.json",
         {
-          "bytes": "945ae506a1dbed88df25061fc75e8d90fe1f3ce64bf97a8ecb14531f0c507ee9"
+          "bytes": "0056fc7391e46c341b365569e5362a8100132c3c939dfaad966cc7ca67887c77"
         }
       ],
       [
@@ -259,14 +259,14 @@
   "inputs": [
     {
       "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/design.md",
-      "sha256": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18"
+      "sha256": "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b"
     },
     {
-      "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
-      "sha256": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd"
+      "path": "approved-commitment:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
+      "sha256": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
     },
     {
-      "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
+      "path": "approved-commitment:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
       "sha256": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4"
     },
     {
@@ -351,7 +351,7 @@
     },
     {
       "path": "embedded/vnext/adapter/mcp-tools.v1.json",
-      "sha256": "945ae506a1dbed88df25061fc75e8d90fe1f3ce64bf97a8ecb14531f0c507ee9"
+      "sha256": "0056fc7391e46c341b365569e5362a8100132c3c939dfaad966cc7ca67887c77"
     },
     {
       "path": "embedded/vnext/orchestration/recipe-catalog.v1.json",
@@ -426,6 +426,6 @@
       "sha256": "ad4dc1f942c584c6152fb1160ff321753c45b5d72e2549bc425355c90310a7df"
     }
   ],
-  "resource_input_id": "sha256:30753104cceece9fb3154740b15928eb16caff1e3878de21b1bcdc5930f39778",
+  "resource_input_id": "sha256:517f3b1fdd0116a36af6b42736f814adbad5de5eaabb90923835cd1a731b5279",
   "schema": "maestro.vnext.stage0-public-identity-resource-input.v1"
 }

@@ -2,10 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const NATIVE_LAYER_SOURCES: &[&str] = &[
-    "src/domain/intake.rs",
-    "src/domain/capability.rs",
-    "src/domain/maturity.rs",
-    "src/domain/research.rs",
+    "src/domain/intake/mod.rs",
+    "src/domain/capability/mod.rs",
+    "src/domain/maturity/mod.rs",
+    "src/domain/research/mod.rs",
     "src/interfaces/cli/intake.rs",
     "src/interfaces/cli/capability.rs",
     "src/interfaces/cli/maturity.rs",

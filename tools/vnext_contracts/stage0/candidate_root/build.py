@@ -90,7 +90,7 @@ RESOURCE_SUCCESSOR_SLOTS = (
 THROUGH_RELEASE_IDENTITY_COUNTS = {
     "Schema": 117,
     "Manifest": 26,
-    "Resource": 377,
+    "Resource": 412,
     "Bundle": 8,
     "Census": 1,
     "Release": 1,
@@ -424,8 +424,8 @@ def final_resource_release(
     if by_slot.get("release_binding") != rendered(release_id):
         raise Blocked("resource-release release-binding slot does not equal the exact ReleaseId")
     if (
-        document.get("resource_count") != 377
-        or len(document.get("resources", ())) != 377
+        document.get("resource_count") != 412
+        or len(document.get("resources", ())) != 412
         or document.get("bundle_count") != 8
         or len(document.get("bundles", ())) != 8
         or len(release_document.get("bundle_ids", ())) != 8
@@ -761,8 +761,14 @@ def input_sources() -> dict[str, Any]:
     if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
         if source_inputs != current_source_inputs:
             raise ValueError("successor canonical and current source inputs diverged")
+        authoritative_source = Path(
+            os.environ.get(
+                "MAESTRO_AUTHORITATIVE_SOURCE",
+                bindings["source_repository_realpath"],
+            )
+        )
         tracked_design = (
-            WORKSPACE
+            authoritative_source
             / ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md"
         )
         if artifact_hash(tracked_design) != current_source_inputs["design_sha256"]:
@@ -822,15 +828,20 @@ def proof_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def verify_closed_sources(check: bool = False) -> None:
+    bindings = load(INPUT_BINDINGS)
+    authoritative_source = os.environ.get(
+        "MAESTRO_AUTHORITATIVE_SOURCE",
+        bindings["source_repository_realpath"],
+    )
     env = proof_environment(
-        {
-            "MAESTRO_AUTHORITATIVE_SOURCE": load(INPUT_BINDINGS)[
-                "source_repository_realpath"
-            ]
-        }
+        {"MAESTRO_AUTHORITATIVE_SOURCE": authoritative_source}
     )
     commands = (
-        [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/verify_input_bindings.py")],
+        [
+            sys.executable,
+            str(WORKSPACE / "tools/vnext_contracts/stage0/verify_input_bindings.py"),
+            "--artifact-reconstruction",
+        ],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/decision_closure/validate.py")],
         [
             sys.executable,

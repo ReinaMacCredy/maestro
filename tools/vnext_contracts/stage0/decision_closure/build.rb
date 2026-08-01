@@ -37,7 +37,7 @@ RATIONALE_ONLY = {
 IGNORED_UNILATERAL_CLAIMS = [
   ["dec-public-wire-contract-2f11", "dec-canonical-agent-control-plane-contract-25a5"],
   ["dec-branch-publication-carriers-2f11", "dec-canonical-carrier-specific-ed08"],
-  ["dec-canonical-non-action-protected-90a9", "dec-canonical-trusted-host-protected-1fbc"]
+  ["dec-canonical-trusted-host-protected-1fbc", "dec-canonical-non-action-protected-90a9"]
 ].freeze
 
 RECOGNIZED_EXTERNAL_COMPOSITE_HEADS = [
@@ -286,7 +286,9 @@ def verify_successor_packet(packet_root, parsed, raw_by_id)
     [fields[1], fields[2]] if fields[0] == "E" && fields[4] == "ignored_unilateral_claim"
   end
   raise "replacement packet closure node mismatch" unless node_ids.sort == manifest.keys.sort
-  raise "replacement packet ignored unilateral claims drifted" unless ignored == IGNORED_UNILATERAL_CLAIMS
+  ignored_claims = ignored.map { |predecessor, successor| [successor, predecessor] }
+  raise "replacement packet ignored unilateral claims drifted" unless
+    ignored_claims == IGNORED_UNILATERAL_CLAIMS
 end
 
 def raw_records(raw)
@@ -448,17 +450,15 @@ end
 
 def build(repo, output)
   source = repo.join(".maestro/cards/maestro-whole-flow-architecture-refoundation")
-  design_path = source.join("design.md")
-  decisions_path = explicit_input("STAGE0_SUCCESSOR_DECISIONS_YAML")
-  card_path = explicit_input("STAGE0_SUCCESSOR_CARD_YAML")
-  design_bytes = require_bytes(design_path, EXPECTED.fetch("design"))
-  source_bytes = capture_regular(decisions_path)
-  card_bytes = require_bytes(card_path, EXPECTED.fetch("card"))
-  hashes = {
-    "design" => Digest::SHA256.hexdigest(design_bytes),
-    "decisions" => EXPECTED.fetch("decisions"),
-    "card" => Digest::SHA256.hexdigest(card_bytes)
-  }
+    design_path = source.join("design.md")
+    decisions_path = explicit_input("STAGE0_SUCCESSOR_DECISIONS_YAML")
+    design_bytes = require_bytes(design_path, EXPECTED.fetch("design"))
+    source_bytes = capture_regular(decisions_path)
+    hashes = {
+      "design" => Digest::SHA256.hexdigest(design_bytes),
+      "decisions" => EXPECTED.fetch("decisions"),
+      "card" => EXPECTED.fetch("card")
+    }
 
   design = design_bytes.force_encoding(Encoding::UTF_8)
   parsed = YAML.load(source_bytes, permitted_classes: [Time], aliases: false)

@@ -1,7 +1,6 @@
-//! `maestro card <verb>` forwards the 10 flat card-store verbs (ready, list,
-//! dep, archive, claim, note, create, show, update, close) to the exact flat
-//! handlers, so the namespaced spelling an agent guesses is never a dead end
-//! and its output is byte-identical to the flat spelling.
+//! `maestro card <verb>` forwards the retained flat card-store verbs to the
+//! exact flat handlers. The retired `card ready` successor route is covered by
+//! the vNext negative-compatibility contract.
 
 mod common;
 mod support;
@@ -54,7 +53,7 @@ fn card_show_output_is_identical_to_flat_show() {
 }
 
 #[test]
-fn all_ten_card_verbs_forward_to_the_flat_handlers() {
+fn retained_card_verbs_forward_to_the_flat_handlers() {
     let repo = init_repo("maestro-card-ns-verbs");
     let root = repo.path();
 
@@ -105,11 +104,6 @@ fn all_ten_card_verbs_forward_to_the_flat_handlers() {
         &["card", "dep", "add"],
     );
     assert!(out.contains(&child), "{out}");
-
-    // ready -- the blocker is workable, the dep'd child is not.
-    let ready = stdout(maestro(&["card", "ready"], root), &["card", "ready"]);
-    assert!(ready.contains(&blocker), "{ready}");
-    assert!(!ready.contains(&child), "{ready}");
 
     // list -- both tasks ride under the feature.
     let list = stdout(

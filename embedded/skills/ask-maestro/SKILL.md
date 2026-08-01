@@ -1,6 +1,6 @@
 ---
 name: ask-maestro
-version: 1.0.5
+version: 1.0.7
 description: "Router for choosing the next Maestro skill or lifecycle recipe."
 disable-model-invocation: true
 ---
@@ -18,17 +18,13 @@ repo harness.
 Run `maestro status` before routing. If implementation might overlap another
 session, run `maestro active` and respect any conflict-handoff hard stop.
 
-If the next move is still unclear, run `maestro loop next`. It is read-only and
-routes from local artifacts. Read the selected recipe with
-`maestro loop show <recipe>`.
-
-Rule: loop next recommends; outcome/proof/memory verbs write. Use
-`maestro loop next --chain` to explain current chain position without writing,
-`maestro loop outcome` to record structured attempt outcomes and transition
-receipts after native work, `maestro loop trace <card>` to audit card-scoped
-receipts, and `maestro loop improve` for read-only improvement proposals. Do
-not use hidden stores, hidden schedulers, silent recipe mutation, or proof/QA
-bypass.
+If the next move is still unclear, read `maestro status --json`. For an exact
+bounded vNext projection, Integration must supply one canonical JSON request
+with authenticated host context and expected Release/catalog identities; pass
+it on stdin to `maestro packet read`. Never invent those authority facts.
+Retired successor routes and legacy lifecycle recipe identifiers return a typed
+refusal and must not be used as fallback routers. Do not use hidden stores,
+hidden schedulers, silent recipe mutation, or proof/QA bypass.
 
 ## The Main Flow: Idea To Ship
 
@@ -43,8 +39,8 @@ Most Maestro work moves through this path:
    work: implement, bugfix, verify, QA, close, release, archive, or continue
    active work. Behavior-changing implementation defaults to test-first work
    unless the task is explicitly docs/config/mechanical/light/spike.
-3. `maestro-card` ship path - use `maestro loop show ship` for close, release,
-   local install, archive, and proof-backed handoff boundaries.
+3. `maestro-card` ship path - use its explicit close, release, local install,
+   archive, and proof-backed handoff gates.
 
 Do not route approved build work back into design just because more discussion
 is possible. Do route back to design when the requested outcome depends on an
@@ -86,19 +82,19 @@ Use Maestro artifacts instead of chat memory:
 - "Brainstorm/design/grill/spec/PRD/domain model this" -> `maestro-design`.
 - "Go build/implement/fix/verify/close/archive/release" -> `maestro-card`.
 - "Review/audit/find improvements/propose backlog" -> `maestro-audit`.
-- "Work while away/asleep/keep looping" -> `maestro-card`, then
-  `maestro loop show unattended`.
-- "Record a reusable lesson" -> `maestro-card`, then
-  `maestro loop show learning`.
-- "There are active sessions or possible overlap" -> `maestro loop show
-  conflict-handoff`.
+- "Work while away/asleep/keep looping" -> `maestro-card`, subject to current
+  readiness and unattended-authority gates.
+- "Record a reusable lesson" -> `maestro-card` and its explicit learning
+  evidence path.
+- "There are active sessions or possible overlap" -> the conflict-handoff
+  protocol in the repository Harness.
 
 Completion criterion: one route is chosen with the exact next skill, recipe, or
 command; if no route fits, the missing fact is explicit before fallback.
 
 ## Stop
 
-If no route fits, say what is missing and use `maestro loop next` before
-inventing a custom flow. Custom flows still use Maestro verbs, proof, QA,
-authority gates, hard stops, and the loop grammar:
+If no route fits, say what is missing and re-read `maestro status --json`
+before inventing a custom flow. Custom flows still use Maestro verbs, proof,
+QA, authority gates, hard stops, and the loop grammar:
 perceive -> choose -> act -> observe -> learn -> continue.

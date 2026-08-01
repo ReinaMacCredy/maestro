@@ -156,18 +156,18 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = list(dict.fromkeys([
     "maestro.vnext.repository-governance-head-class-8.v1",
 ]))
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
-    "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
-    "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
-    "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
-    "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
-    "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
-    "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
-    "src/domain/vnext/authority/governance_floor.rs": ("Authority", "candidate_contract_definition", "exact_internal_append_only_authority_schema_tag_25"),
-    "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
-    "src/domain/vnext/authority/publication.rs": ("Authority", "candidate_contract_definition", "exact_internal_authority_schema_registry_prefix_and_tag_25"),
-    "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
-    "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
-    "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
+    "src/domain/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
+    "src/domain/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
+    "src/domain/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
+    "src/domain/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
+    "src/domain/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
+    "src/domain/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
+    "src/domain/authority/governance_floor.rs": ("Authority", "candidate_contract_definition", "exact_internal_append_only_authority_schema_tag_25"),
+    "src/domain/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/authority/publication.rs": ("Authority", "candidate_contract_definition", "exact_internal_authority_schema_registry_prefix_and_tag_25"),
+    "src/domain/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
+    "src/domain/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
+    "src/domain/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
     "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
     "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),
     "tests/vnext_authority_continuity_totality.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_continuity_totality_proof"),
@@ -177,7 +177,7 @@ STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
     "tools/vnext_contracts/stage2/authority/verify.rb": ("Stage2Proof", "candidate_proof_reader", "independent_stage2_ruby_reconstruction"),
 }
 STAGE2_REQUIRED_LITERALS_BY_SOURCE = {
-    "src/domain/vnext/authority/governance_floor.rs": (
+    "src/domain/authority/governance_floor.rs": (
         "RepositoryGovernanceFloorSnapshotV1",
         "maestro.vnext.repository-governance-floor-snapshot.v1",
         "maestro.vnext.repository-governance-head-class-8.v1",
@@ -324,7 +324,7 @@ def semantic_source_rows(source_overrides: dict[str, bytes] | None = None) -> li
             not missing,
             f"Stage 2 semantic consumer is missing exact literals: {path}: {', '.join(missing)}",
         )
-        if path == "src/domain/vnext/authority/governance_floor.rs":
+        if path == "src/domain/authority/governance_floor.rs":
             normalized = " ".join(contents.split())
             require(
                 all(
@@ -360,7 +360,7 @@ def semantic_source_identity(rows: list[dict[str, Any]]) -> str:
 
 def self_test_semantic_sources() -> None:
     semantic_source_rows()
-    path = "src/domain/vnext/authority/governance_floor.rs"
+    path = "src/domain/authority/governance_floor.rs"
     source = (WORKSPACE / path).read_bytes()
     for target, replacement in GOVERNANCE_FLOOR_SOURCE_MUTANTS:
         require(target in source, f"governance-floor mutant target is absent: {target!r}")

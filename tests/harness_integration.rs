@@ -1601,7 +1601,7 @@ fn mcp_registry_dispatches_exact_packet_and_search_surface_before_legacy_refusal
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>()
     );
-    let catalog = "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1";
+    let catalog = "sha256:c1afda5dfadc7be7cb97df29fc890508b65e3fe5045cb31889dc2e4b95034bd2";
     let packet = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 2,
@@ -1716,7 +1716,7 @@ fn packet_cli_uses_only_the_explicit_locator_and_skips_passive_output() {
         "authenticated_host_connection_context_ref": "candidate:host:test:v1",
         "projection_scope": {"variant": "Repository"},
         "expected_release_ref": "candidate:release:known-stale:v1",
-        "expected_public_catalog_ref": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+        "expected_public_catalog_ref": "sha256:c1afda5dfadc7be7cb97df29fc890508b65e3fe5045cb31889dc2e4b95034bd2",
         "bounded_response_redaction_profile": "repository-local",
         "read_mode": {"variant": "DiscoverSelectionContextV1"}
     })
@@ -1924,7 +1924,7 @@ fn mcp_invalid_or_missing_protocol_fields_never_dispatch() {
         "authenticated_host_connection_context_ref": "candidate:host:test:v1",
         "projection_scope": {"variant": "Repository"},
         "expected_release_ref": "candidate:release:known-stale:v1",
-        "expected_public_catalog_ref": "sha256:ea84817fc6ff3314992900a31ce337eb151183ad5d996e7939cb44f4f5af21b1",
+        "expected_public_catalog_ref": "sha256:c1afda5dfadc7be7cb97df29fc890508b65e3fe5045cb31889dc2e4b95034bd2",
         "bounded_response_redaction_profile": "repository-local",
         "read_mode": {"variant": "DiscoverSelectionContextV1"}
     });

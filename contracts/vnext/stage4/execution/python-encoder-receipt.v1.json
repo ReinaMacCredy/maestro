@@ -2,17 +2,17 @@
   "artifacts": [
     [
       "execution-effects.v1.cbor",
-      29341,
-      "2b19a05858c400f030b28123a6f608f0a919e1f68c3c234aec8f7c3eb55f68fe"
+      30965,
+      "469c334fd8c094cf320c9b3b9359d2de92e9f62a7cdbccca8fac59091de5b971"
     ],
     [
       "execution-effects.v1.json",
-      42075,
-      "aeb69d988e1355d21814d16e7ca466a2e2b26448611be1191abf8264e5522412"
+      45081,
+      "3f9fa1d91b3e8f86cb5e4464e3bc026d4509035a26c70656ac149fe86a9be031"
     ]
   ],
   "encoder": "python-stdlib-plus-frozen-cbor-subset",
-  "identity": "sha256:2b19a05858c400f030b28123a6f608f0a919e1f68c3c234aec8f7c3eb55f68fe",
+  "identity": "sha256:469c334fd8c094cf320c9b3b9359d2de92e9f62a7cdbccca8fac59091de5b971",
   "predecessor_chain": {
     "command_receipts": [
       {
@@ -82,7 +82,7 @@
         "exit_code": 0,
         "result": "pass",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f"
+        "stdout_sha256": "b60b7942f92a54e1c301ccaf1b886f0edbc5e0f5b14e0904229cece07065c984"
       },
       {
         "command": [
@@ -116,7 +116,7 @@
         "exit_code": 0,
         "result": "pass",
         "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "stdout_sha256": "0d46ae43b8be7b2b201ebffbaa9ebb0bfbae81fd1345dd77c9706e6547d56384"
+        "stdout_sha256": "dd058e681f631af348136a586d78cf7e07c677c38c0aebc95597c46917b60a5f"
       }
     ],
     "mode": "full_chain",
@@ -125,66 +125,66 @@
         {
           "byte_length": 749,
           "path": "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json",
-          "sha256": "03dd24f5c9c54faee935ef59cb81cbd91a96e2de0d424f230afe610865a13573"
+          "sha256": "7dfe2e8c73eb96f3088223f83a32679ea8aaa4ea97f3a6fedf2ffde6a0d63737"
         },
         {
           "byte_length": 1459,
           "path": "contracts/vnext/stage0/dispatch-cutover/validation-receipt.v1.json",
-          "sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f"
+          "sha256": "b60b7942f92a54e1c301ccaf1b886f0edbc5e0f5b14e0904229cece07065c984"
         }
       ],
       "stage0_effect_home": [
         {
-          "byte_length": 396415,
+          "byte_length": 419777,
           "path": "contracts/vnext/stage0/effect-home/encoder-receipt.json",
-          "sha256": "a24e38bc6bba4bee17bf03ad940ce84639c76c3747b474a1bf1d58b30d8cd891"
+          "sha256": "84fb67ea6ba0fe271656a746c6a9829380d3569801608f6c375e6d7f6bceedc0"
         },
         {
           "byte_length": 2570,
           "path": "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
-          "sha256": "7e608e1e9a6cda039bbb20c0b762dd17dcd6906827f90d79cbf364b4b8e0d9be"
+          "sha256": "596bc33e80e0886195fb132470e722daf621403a1dd98588955e8f207c564723"
         }
       ],
       "stage2_authority": [
         {
           "byte_length": 5249,
           "path": "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
-          "sha256": "fd0df1c6465eac5281845451c171fc0e4b56926814c558e580f659d38269edcb"
+          "sha256": "01d805fb36df7e9f7e7373711e7a25e8c4f554904bc4103237d5d13fd4bc31c0"
         },
         {
           "byte_length": 1965,
           "path": "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
-          "sha256": "a2bff49c26297919480029261a981886c212b9da34e9739cddc4d0a64d5334b5"
+          "sha256": "9b739da833b740c582097972cce1792cd4fddb1e6128c4a03e6c38df8492c558"
         },
         {
           "byte_length": 1791,
           "path": "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
-          "sha256": "804c9fadc69764f48c9bb5f52c0f4d3ffeb59b3ee819a4570ee73ce28b7156b2"
+          "sha256": "b8fce8e37b273a4bd28c72954aa2e84d80c21eb6f93c32f6cba5b82ef09743ae"
         }
       ],
       "stage3_domain": [
         {
           "byte_length": 2125,
           "path": "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json",
-          "sha256": "14676c948779d0c29953bd33ec4e046cd6007eb4619b264362d132b49b608db8"
+          "sha256": "d118ba123eeb49171854030b699442e41ef389dc63f55fa79d6d7b9f09cd119e"
         },
         {
           "byte_length": 1854,
           "path": "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json",
-          "sha256": "ca57367c18482e1edf5c8d0bd23815bc2c56895f899133512ebfe69f3a7021d1"
+          "sha256": "353b0cc8e9287aae5fbb9c3c416a4be10f382d6447482df11f37040e4444c5a9"
         },
         {
           "byte_length": 1850,
           "path": "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
-          "sha256": "b8033228db72f60043797be6ecd6bf70ea875bb8f0089203373dada4be24162f"
+          "sha256": "0f78dfaa8f67043540563d0f9cd31844e449697cd8ee66acc42ce54f88ba6fb4"
         }
       ]
     },
     "roots": {
-      "stage0_dispatch_cutover": "sha256:1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f",
-      "stage0_effect_home": "sha256:c8c51a348faa0293f63fa15a6da2d2baf0315f3c985529a96ed0b860b9bae8ce",
-      "stage2_authority": "sha256:120d7e2a998a885ab8242655eee781df759c106ffaee3e2e5d2a81056151474c",
-      "stage3_domain": "sha256:09202f1c7c5281e7d9bde694d7fa7f328eab88e64fb9bc1d0732cbef66530ef4"
+      "stage0_dispatch_cutover": "sha256:b60b7942f92a54e1c301ccaf1b886f0edbc5e0f5b14e0904229cece07065c984",
+      "stage0_effect_home": "sha256:e85197a49bf763d1ae579f1124fbea58ef9ad4a0e22564d7862c9d846c7e0a63",
+      "stage2_authority": "sha256:aa6d348780d7361da559423898fd16604660ea806186a8ac47d6b17ef4a346ca",
+      "stage3_domain": "sha256:964066b2b88e1b15f066d31ec06b9ff005fc96594aff7205775441bd28d1b1b0"
     }
   },
   "schema_version": "maestro.vnext.stage4.execution-effects.v1.python-encoder-receipt.v1",

@@ -151,8 +151,8 @@ def validate(document: dict[str, object], external: bool) -> tuple[str, bytes]:
             for item in document["lineage"]["ignored_unilateral_claims"]
         }
         if (
-            "dec-canonical-non-action-protected-90a9",
             "dec-canonical-trusted-host-protected-1fbc",
+            "dec-canonical-non-action-protected-90a9",
         ) not in ignored:
             raise ValueError("missing protected-diagnostic unilateral-claim refusal")
     materialization_base = {

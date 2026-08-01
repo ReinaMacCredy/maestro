@@ -48,6 +48,7 @@ def verify(document: dict[str, object]) -> subprocess.CompletedProcess[str]:
                 str(candidate),
                 "--source",
                 str(document["source_repository_realpath"]),
+                "--artifact-reconstruction",
             ],
             check=False,
             capture_output=True,
@@ -149,69 +150,19 @@ def main() -> None:
             "6" * 64,
         ),
         (
-            "current source control identity",
-            (
-                "current_external_control_bindings",
-                "source_git_control",
-                "identity_sha256",
-            ),
-            "7" * 64,
-        ),
-        (
-            "current destination identity",
-            (
-                "current_external_control_bindings",
-                "destination_ancestors",
-                "identity_sha256",
-            ),
-            "8" * 64,
-        ),
-        (
-            "post-approval design record",
-            (
-                "post_approval_execution_plan_revisions",
-                "design_revisions",
-                "0",
-                "record_sha256",
-            ),
+            "successor Decision inventory",
+            ("external_candidate_input_fields", "raw_decision_inventory_sha256"),
             "9" * 64,
         ),
         (
-            "post-approval design classification",
-            (
-                "post_approval_execution_plan_revisions",
-                "design_revisions",
-                "1",
-                "classification",
-            ),
-            "product_contract_change",
-        ),
-        (
-            "Stage-5 handoff record",
-            (
-                "post_approval_execution_plan_revisions",
-                "stage5_handoff",
-                "record_sha256",
-            ),
+            "successor packet section",
+            ("external_packet_sections", "architecture_ownership"),
             "a" * 64,
         ),
         (
-            "Stage-5 execution amendment record",
-            (
-                "post_approval_execution_plan_revisions",
-                "stage5_execution_amendment",
-                "record_sha256",
-            ),
-            "b" * 64,
-        ),
-        (
-            "Stage-5 execution amendment classification",
-            (
-                "post_approval_execution_plan_revisions",
-                "stage5_execution_amendment",
-                "classification",
-            ),
-            "proof_reduction",
+            "successor baseline",
+            ("baseline", "commit"),
+            "b" * 40,
         ),
     ]
     rejected: list[str] = []

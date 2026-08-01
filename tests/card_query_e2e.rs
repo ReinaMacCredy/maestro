@@ -1,4 +1,4 @@
-//! P4b/P4c/P4d/P4e/P4f end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
+//! P4b/P4c/P4d/P4e/P4f end-to-end: the retained `maestro list`, `maestro dep`,
 //! `maestro archive`, `maestro claim`, and `maestro note` verbs drive the card
 //! query/edit/archive layers through the real binary. Coverage: a genuinely migrated repo (coarse
 //! mapping DN3 over the real migrated status words); a hand-built blocker chain
@@ -66,8 +66,17 @@ fn write_card(paths: &MaestroPaths, card: &Card) {
     save_with_snapshot(&path, card, &snapshot).expect("invariant: card write should succeed");
 }
 
+fn ready_card_ids(paths: &MaestroPaths) -> Vec<String> {
+    let cards = maestro::domain::card::query::scan(paths)
+        .expect("invariant: integration fixture cards should scan");
+    maestro::domain::card::query::ready(&cards)
+        .into_iter()
+        .map(|card| card.id.clone())
+        .collect()
+}
+
 #[test]
-fn ready_and_list_reflect_a_migrated_card_store() {
+fn migration_read_model_and_list_reflect_a_migrated_card_store() {
     let temp = TestTempDir::new("p4b-ready-migrated");
     let paths = MaestroPaths::new(temp.path());
 
@@ -111,29 +120,16 @@ fn ready_and_list_reflect_a_migrated_card_store() {
 
     // G3 + D3 + DN3 + D4: the workable, coarse-OPEN task surfaces; the feature
     // card does not.
-    let ready = run(repo, &["card", "ready"]);
+    let ready = ready_card_ids(&paths);
     assert!(
         ready.contains(&task1_id),
-        "ready should list the task:\n{ready}"
+        "migration readiness should retain the task:\n{ready:?}"
     );
     // The task's slug id contains "csv-export", so match the feature row
     // (id + type column) rather than the bare substring.
     assert!(
-        !ready.contains("csv-export  feature"),
-        "feature card is not workable and must stay out of ready:\n{ready}"
-    );
-
-    // `card ready <feature>` scopes to a feature's children (handler-side retain,
-    // a different path from `list --parent`'s ListFilter).
-    let scoped = run(repo, &["card", "ready", "csv-export"]);
-    assert!(
-        scoped.contains(&task1_id),
-        "feature-scoped ready keeps its children:\n{scoped}"
-    );
-    let other = run(repo, &["card", "ready", "no-such-feature"]);
-    assert!(
-        !other.contains(&task1_id),
-        "scoping to another feature drops it:\n{other}"
+        !ready.contains(&feature_id),
+        "feature card is not workable and must stay out of migration readiness:\n{ready:?}"
     );
 
     // list --type splits the entity kinds.
@@ -144,25 +140,6 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     );
     let tasks = run(repo, &["list", "--type", "task"]);
     assert!(tasks.contains(&task1_id), "task should list:\n{tasks}");
-
-    let ready_json = run(repo, &["card", "ready", "--json"]);
-    let ready_value: serde_json::Value =
-        serde_json::from_str(&ready_json).expect("ready --json emits valid JSON");
-    assert_eq!(ready_value["version"], serde_json::json!(1));
-    assert_eq!(ready_value["schema"], serde_json::json!("maestro.ready.v1"));
-    let ready_cards = ready_value["cards"]
-        .as_array()
-        .expect("ready cards should be an array");
-    let ready_task = ready_cards
-        .iter()
-        .find(|card| card["id"] == serde_json::json!(task1_id))
-        .expect("ready JSON should include the migrated task");
-    assert_eq!(ready_task["rank"], serde_json::json!(1));
-    assert_eq!(ready_task["type"], serde_json::json!("task"));
-    assert_eq!(ready_task["title"], serde_json::json!("Add CSV export"));
-    assert_eq!(ready_task["status"], serde_json::json!("draft"));
-    assert_eq!(ready_task["parent"], serde_json::json!("csv-export"));
-    assert_eq!(ready_task["claimed_by"], serde_json::Value::Null);
 
     let list_json = run(repo, &["list", "--type", "task", "--json"]);
     let list_value: serde_json::Value =
@@ -205,10 +182,9 @@ fn ready_and_list_reflect_a_migrated_card_store() {
 }
 
 #[test]
-fn ready_hides_a_blocked_card_until_its_blocker_closes() {
+fn migration_readiness_hides_a_blocked_card_until_its_blocker_closes() {
     let temp = TestTempDir::new("p4b-blocker");
     let paths = MaestroPaths::new(temp.path());
-    let repo = temp.path();
 
     // task-100 is free; task-101 blocks on it. Writing into cards/ makes the
     // repo card-mode (the .maestro/cards/ dir is both the store and the marker).
@@ -222,14 +198,14 @@ fn ready_hides_a_blocked_card_until_its_blocker_closes() {
     write_card(&paths, &blocked);
 
     // E8: the blocker is coarse-OPEN, so the blocked card is held back.
-    let before = run(repo, &["card", "ready"]);
+    let before = ready_card_ids(&paths);
     assert!(
-        before.contains("task-100"),
-        "the unblocked card is ready:\n{before}"
+        before.contains(&"task-100".to_string()),
+        "the unblocked card is ready:\n{before:?}"
     );
     assert!(
-        !before.contains("task-101"),
-        "the card blocked by an open card is held back:\n{before}"
+        !before.contains(&"task-101".to_string()),
+        "the card blocked by an open card is held back:\n{before:?}"
     );
 
     // Close the blocker; now the dependent clears, and the closed blocker itself
@@ -240,14 +216,14 @@ fn ready_hides_a_blocked_card_until_its_blocker_closes() {
     closed.status = "closed".to_string();
     save_with_snapshot(&path, &closed, &snapshot).expect("rewrite blocker");
 
-    let after = run(repo, &["card", "ready"]);
+    let after = ready_card_ids(&paths);
     assert!(
-        after.contains("task-101"),
-        "the blocker is closed, so the dependent is ready:\n{after}"
+        after.contains(&"task-101".to_string()),
+        "the blocker is closed, so the dependent is ready:\n{after:?}"
     );
     assert!(
-        !after.contains("task-100"),
-        "a closed card is not open and must leave ready:\n{after}"
+        !after.contains(&"task-100".to_string()),
+        "a closed card is not open and must leave ready:\n{after:?}"
     );
 }
 
@@ -297,10 +273,10 @@ fn dep_add_blocks_the_dependent_through_the_binary() {
         &Card::new("task-002", CardType::Task, "Dependent", "ready", NOW),
     );
 
-    let before = run(repo, &["card", "ready"]);
+    let before = ready_card_ids(&paths);
     assert!(
-        before.contains("task-001") && before.contains("task-002"),
-        "both free cards are ready before any edge:\n{before}"
+        before.contains(&"task-001".to_string()) && before.contains(&"task-002".to_string()),
+        "both free cards are ready before any edge:\n{before:?}"
     );
 
     // `dep add <child> <parent>`: the edge is stored on the dependent (child).
@@ -310,14 +286,14 @@ fn dep_add_blocks_the_dependent_through_the_binary() {
         "the verb confirms the new edge:\n{added}"
     );
 
-    let after = run(repo, &["card", "ready"]);
+    let after = ready_card_ids(&paths);
     assert!(
-        after.contains("task-001"),
-        "the open blocker stays ready:\n{after}"
+        after.contains(&"task-001".to_string()),
+        "the open blocker stays ready:\n{after:?}"
     );
     assert!(
-        !after.contains("task-002"),
-        "the dependent is held back while its blocker is open (E8):\n{after}"
+        !after.contains(&"task-002".to_string()),
+        "the dependent is held back while its blocker is open (E8):\n{after:?}"
     );
 
     // idempotent: a second identical add is a no-op.
@@ -391,10 +367,10 @@ fn archive_moves_a_shipped_feature_and_its_children_through_the_binary() {
     assert!(repo.join(".maestro/cards/other").is_dir());
 
     // archived work no longer surfaces in the live board
-    let ready = run(repo, &["card", "ready"]);
+    let ready = ready_card_ids(&paths);
     assert!(
-        !ready.contains("task-001"),
-        "an archived card is out of ready:\n{ready}"
+        !ready.contains(&"task-001".to_string()),
+        "an archived card is out of migration readiness:\n{ready:?}"
     );
 }
 
@@ -656,16 +632,11 @@ fn note_appends_dated_lines_to_a_card_sidecar_through_the_binary() {
 }
 
 #[test]
-fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
+fn retained_card_verbs_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 
-    let ready = run(repo, &["card", "ready"]);
-    assert!(
-        ready.contains("no card store"),
-        "legacy repo gets a guiding notice, not an error:\n{ready}"
-    );
     let list = run(repo, &["list"]);
     assert!(
         list.contains("no card store"),
@@ -693,37 +664,33 @@ fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     );
 }
 
-/// The agent contract holds even without a card store: `--json` stdout is a
+/// The retained agent contract holds even without a card store: `--json` stdout is a
 /// valid zero-card envelope and the guiding notice moves to stderr (AGENTS.md
 /// "Agent-facing read contracts are JSON, not human text").
 #[test]
-fn ready_and_list_json_stay_parseable_without_a_card_store() {
+fn list_json_stays_parseable_without_a_card_store() {
     let temp = TestTempDir::new("p4b-legacy-json");
     let repo = temp.path();
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 
-    for (args, schema) in [
-        (&["card", "ready", "--json"][..], "maestro.ready.v1"),
-        (&["list", "--json"][..], "maestro.list.v1"),
-    ] {
-        let output = maestro(repo, args);
-        assert!(output.status.success(), "{args:?} exits 0");
-        let stdout = String::from_utf8(output.stdout).expect("stdout is UTF-8");
-        let value: serde_json::Value = serde_json::from_str(&stdout)
-            .unwrap_or_else(|e| panic!("{args:?} must stay parseable JSON ({e}):\n{stdout}"));
-        assert_eq!(value["version"], serde_json::json!(1));
-        assert_eq!(value["schema"], serde_json::json!(schema));
-        assert_eq!(
-            value["cards"],
-            serde_json::json!([]),
-            "no card store means zero cards, not human text"
-        );
-        let stderr = String::from_utf8(output.stderr).expect("stderr is UTF-8");
-        assert!(
-            stderr.contains("no card store"),
-            "the guiding notice moves to stderr in --json mode:\n{stderr}"
-        );
-    }
+    let args = &["list", "--json"][..];
+    let output = maestro(repo, args);
+    assert!(output.status.success(), "{args:?} exits 0");
+    let stdout = String::from_utf8(output.stdout).expect("stdout is UTF-8");
+    let value: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("{args:?} must stay parseable JSON ({e}):\n{stdout}"));
+    assert_eq!(value["version"], serde_json::json!(1));
+    assert_eq!(value["schema"], serde_json::json!("maestro.list.v1"));
+    assert_eq!(
+        value["cards"],
+        serde_json::json!([]),
+        "no card store means zero cards, not human text"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr is UTF-8");
+    assert!(
+        stderr.contains("no card store"),
+        "the guiding notice moves to stderr in --json mode:\n{stderr}"
+    );
 }
 
 #[test]

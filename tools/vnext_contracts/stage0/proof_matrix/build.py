@@ -137,7 +137,11 @@ def identity(canonical: Any) -> str:
     return f"sha256:{sha256_bytes(cbor([DOMAIN, canonical]))}"
 
 
-def artifact(path: str, physical: Path | None = None) -> dict[str, str]:
+def artifact(
+    path: str,
+    physical: Path | None = None,
+    committed_sha256: str | None = None,
+) -> dict[str, str]:
     if (
         not path
         or path.startswith("/")
@@ -146,13 +150,37 @@ def artifact(path: str, physical: Path | None = None) -> dict[str, str]:
         or not path.isascii()
     ):
         raise ProofError(f"non-canonical proof artifact path: {path}")
+    if physical is not None and committed_sha256 is not None:
+        raise ProofError(f"proof artifact has competing byte sources: {path}")
+    if committed_sha256 is not None:
+        if (
+            len(committed_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in committed_sha256)
+        ):
+            raise ProofError(f"proof artifact commitment is not lowercase SHA-256: {path}")
+        return {"path": path, "sha256": committed_sha256}
     location = physical or WORKSPACE / path
     return {"path": path, "sha256": sha256_file(location)}
 
 
-def artifacts(paths: list[str], external: dict[str, Path] | None = None) -> list[dict[str, str]]:
+def artifacts(
+    paths: list[str],
+    external: dict[str, Path] | None = None,
+    external_hashes: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
     external = external or {}
-    rows = sorted((artifact(path, external.get(path)) for path in paths), key=lambda row: row["path"])
+    external_hashes = external_hashes or {}
+    rows = sorted(
+        (
+            artifact(
+                path,
+                external.get(path),
+                external_hashes.get(path),
+            )
+            for path in paths
+        ),
+        key=lambda row: row["path"],
+    )
     if len({row["path"] for row in rows}) != len(rows):
         raise ProofError("proof artifact paths must be unique")
     return rows
@@ -226,14 +254,15 @@ def gate(
     commands: list[list[str]] | None = None,
     command_env: dict[str, str] | None = None,
     external_paths: dict[str, Path] | None = None,
+    external_hashes: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], list[Any]]:
     if name != GATE_NAMES[tag - 1]:
         raise ProofError("proof gate tag/name mismatch")
     for command in commands or []:
         run(command, command_env)
-    source_rows = artifacts(source_paths, external_paths)
+    source_rows = artifacts(source_paths, external_paths, external_hashes)
     validator_rows = artifacts(validator_paths)
-    input_rows = artifacts(input_paths, external_paths)
+    input_rows = artifacts(input_paths, external_paths, external_hashes)
     if not validator_rows:
         raise ProofError(f"proof gate has no validator source: {name}")
     counts = sorted(semantic_counts.items())
@@ -311,17 +340,11 @@ def checkpoint_assertions() -> tuple[dict[str, Any], dict[str, int]]:
             raise ProofError(f"incorporated Decision body drifted: {decision_id}")
 
     bindings = load("contracts/vnext/stage0/input-bindings.json")
-    source_root = Path(bindings["source_repository_realpath"])
-    card_root = source_root / ".maestro/cards" / bindings["feature_id"]
-    decisions_text = (card_root / "decisions.yaml").read_text(encoding="utf-8")
-    required_phrases = (
-        "RouteRoleV1 = ActionReserve | ActionRecoverReserved | ActionOutcome | ActionReconcile | CeremonyInitiate | CeremonyRecoverReserved | CeremonyResolveResult",
-        "19 Action branches x 4 + 11 Ceremony branches x 3 = 109 routes",
-        "147-symbol proof",
-        "150 total pre-manifest symbols",
-    )
-    if any(phrase not in decisions_text for phrase in required_phrases):
-        raise ProofError("incorporated catalog checkpoint semantics are absent from source Decision bytes")
+    if (
+        bindings.get("canonical_source_inputs", {}).get("decisions_sha256")
+        != "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
+    ):
+        raise ProofError("incorporated catalog checkpoint source commitment drifted")
     assertions = {
         "d0aa": {"body_sha256": required["dec-correct-split-plane-catalog-owner-d0aa"], "symbol_count": 150},
         "d116": {"body_sha256": required["dec-canonical-typed-recoverreserved-d116"], "route_count": 109, "role_count": 7},
@@ -374,28 +397,35 @@ def catalog_successor_assertions() -> tuple[dict[str, Any], dict[str, int]]:
     return assertions, counts
 
 
-def source_card_paths() -> tuple[dict[str, Path], list[str]]:
+def source_card_commitments() -> tuple[dict[str, str], list[str]]:
     bindings = load("contracts/vnext/stage0/input-bindings.json")
-    card_root = (
-        Path(bindings["source_repository_realpath"])
-        / ".maestro/cards"
-        / bindings["feature_id"]
-    )
     logical = [
-        f".maestro/cards/{bindings['feature_id']}/card.yaml",
-        f".maestro/cards/{bindings['feature_id']}/decisions.yaml",
-        f".maestro/cards/{bindings['feature_id']}/design.md",
+        f"approved-commitment:.maestro/cards/{bindings['feature_id']}/card.yaml",
+        f"approved-commitment:.maestro/cards/{bindings['feature_id']}/decisions.yaml",
+        f"approved-commitment:.maestro/cards/{bindings['feature_id']}/design.md",
     ]
-    return {path: card_root / Path(path).name for path in logical}, logical
+    source_inputs = bindings["canonical_source_inputs"]
+    return {
+        logical[0]: source_inputs["card_sha256"],
+        logical[1]: source_inputs["decisions_sha256"],
+        logical[2]: source_inputs["design_sha256"],
+    }, logical
 
 
 def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
     python = sys.executable
     external_validator = "tools/vnext_contracts/stage0/verify_input_bindings.py"
-    run([python, external_validator], proof_environment())
+    run(
+        [python, external_validator, "--artifact-reconstruction"],
+        proof_environment(),
+    )
     bindings = load("contracts/vnext/stage0/input-bindings.json")
+    authoritative_source = os.environ.get(
+        "MAESTRO_AUTHORITATIVE_SOURCE",
+        bindings["source_repository_realpath"],
+    )
     authoritative_env = proof_environment(
-        {"MAESTRO_AUTHORITATIVE_SOURCE": bindings["source_repository_realpath"]}
+        {"MAESTRO_AUTHORITATIVE_SOURCE": authoritative_source}
     )
     receipt_check = ["--check"] if check else []
 
@@ -411,7 +441,7 @@ def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
     }
     checkpoint_claims, checkpoint_counts = checkpoint_assertions()
     catalog_claims, catalog_counts = catalog_successor_assertions()
-    source_external, source_logical = source_card_paths()
+    source_hashes, source_logical = source_card_commitments()
 
     public = load("contracts/vnext/public/public_contracts.v1.json")
     public_identity = load("contracts/vnext/stage0/public-identity/public-identity-closure.v1.json")
@@ -518,7 +548,7 @@ def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
             input_paths=source_logical[1:2],
             semantic_counts=checkpoint_counts,
             assertions=checkpoint_claims,
-            external_paths=source_external,
+            external_hashes=source_hashes,
         )
     )
 
@@ -794,11 +824,11 @@ def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
         )
     )
     component_kind_tags = rust_enum_tags(
-        "src/domain/vnext/contract/component_kind.rs",
+        "src/domain/contract/component_kind.rs",
         "ContractComponentKindV1",
     )
     finalization_input_kind_tags = rust_enum_tags(
-        "src/domain/vnext/contract/finalization.rs",
+        "src/domain/contract/finalization.rs",
         "FinalizationInputKindV1",
     )
     gate_specs.append(
@@ -813,11 +843,11 @@ def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
                 "tools/vnext_contracts/stage0/candidate_root/test_build.py",
             ],
             input_paths=[
-                "src/domain/vnext/contract/assembly.rs",
-                "src/domain/vnext/contract/component_kind.rs",
-                "src/domain/vnext/contract/finalization.rs",
-                "src/domain/vnext/contract/proof.rs",
-                "src/domain/vnext/identity/digest.rs",
+                "src/domain/contract/assembly.rs",
+                "src/domain/contract/component_kind.rs",
+                "src/domain/contract/finalization.rs",
+                "src/domain/contract/proof.rs",
+                "src/domain/identity/digest.rs",
             ],
             semantic_counts={
                 "component_kind_count": len(component_kind_tags),
@@ -834,7 +864,7 @@ def build_manifest(check: bool = False) -> tuple[dict[str, Any], bytes]:
                 "public_descriptor_count_source": "public_identity_closure",
             },
             commands=[[python, "-m", "unittest", "tools.vnext_contracts.stage0.candidate_root.test_build"]],
-            external_paths=source_external,
+            external_hashes=source_hashes,
         )
     )
 

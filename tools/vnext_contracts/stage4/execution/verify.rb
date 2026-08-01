@@ -119,9 +119,9 @@ TOOL_SOURCES = %w[
   tools/vnext_contracts/stage4/execution/verify.rb
 ].freeze
 BEHAVIOR_COMMANDS = [
-  %w[cargo test --lib domain::vnext::execution:: -- --nocapture],
-  %w[cargo test --lib domain::vnext::authority::facade::repository_admission::ancestry_tests -- --nocapture],
-  %w[cargo test --lib domain::vnext::authority::continuity::trusted_time::tests -- --nocapture],
+  %w[cargo test --lib domain::execution:: -- --nocapture],
+  %w[cargo test --lib domain::authority::facade::repository_admission::ancestry_tests -- --nocapture],
+  %w[cargo test --lib domain::authority::continuity::trusted_time::tests -- --nocapture],
     %w[cargo test --test vnext_stage4_contracts stage4_public_effect_facade_exports_are_complete -- --nocapture],
     %w[cargo test --test vnext_stage4_contracts runtime_withdrawal_catalog_matches_all_sixty_frozen_rows_and_twenty_one_denials -- --nocapture],
     %w[cargo test --test vnext_effect_home_literals stage0_effect_home_artifacts_are_reproducible_and_reject_mutants -- --nocapture],
@@ -131,7 +131,7 @@ MUTANT_COMMANDS = [
   %w[cargo test --test vnext_stage4_contracts stage4_proof_rejects_ -- --nocapture],
   %w[cargo test --test vnext_stage4_contracts independent_execution_artifact_rejects_semantic_and_shape_mutants -- --nocapture],
 ].freeze
-  BEHAVIOR_EXPECTED_PASSED = [70, 7, 1, 1, 1, 1].freeze
+  BEHAVIOR_EXPECTED_PASSED = [75, 7, 1, 1, 1, 1].freeze
 MUTANT_EXPECTED_PASSED = [10, 6, 1].freeze
 SANITIZED_ENVIRONMENT_KEYS = %w[
   CARGO_BUILD_TARGET CARGO_ENCODED_RUSTFLAGS CARGO_HOME CARGO_INCREMENTAL CARGO_TARGET_DIR CC CFLAGS HOME LDFLAGS
@@ -377,6 +377,13 @@ def tool_descriptor(name)
   }
 end
 
+def proof_tool_path
+  tool_directories = %w[cargo rustc python3 ruby].map do |name|
+    File.dirname(tool_descriptor(name).fetch("invocation_path"))
+  end
+  (tool_directories + %w[/usr/bin /bin /usr/sbin /sbin]).uniq.join(File::PATH_SEPARATOR)
+end
+
 def bound_environment_value(key, environment)
   value = environment.fetch(key, "<unset>")
   return value unless key == "PATH" && value != "<unset>"
@@ -394,7 +401,7 @@ def command_environment
     "HOME" => home,
     "LANG" => "C",
     "LC_ALL" => "C",
-    "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin",
+    "PATH" => proof_tool_path,
     "PYTHONDONTWRITEBYTECODE" => "1",
     "RUSTC" => tool_descriptor("rustc").fetch("invocation_path"),
     "RUSTUP_HOME" => File.join(home, ".rustup"),

@@ -119,7 +119,7 @@ RESOURCE_SUCCESSOR_SLOTS = (
 THROUGH_RELEASE_IDENTITY_COUNTS = {
     "Schema": 117,
     "Manifest": 26,
-    "Resource": 377,
+    "Resource": 412,
     "Bundle": 8,
     "Census": 1,
     "Release": 1,
@@ -703,12 +703,12 @@ def validate_resource_closure(
     require(
         actual_counts
         == {
-            "resource_count": 377,
+            "resource_count": 412,
             "bundle_count": 8,
-            "consumer_edge_count": 376,
+            "consumer_edge_count": 411,
             "downstream_obligation_count": 3,
         }
-        and resource.get("resource_count") == 377
+        and resource.get("resource_count") == 412
         and resource.get("bundle_count") == 8
         and len(release.get("bundle_ids", [])) == 8,
         "Resource, Bundle, Census, or downstream-obligation exact counts drifted",

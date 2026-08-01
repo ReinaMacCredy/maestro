@@ -179,13 +179,13 @@ fn current_surface_and_consumer_census_are_exact_and_content_bound() {
     let consumer_readers = consumers["readers"]
         .as_array()
         .expect("consumer direct-reader rows");
-    assert_eq!(surface["resource_count"], 377);
-    assert_eq!(resources.len(), 377);
-    assert_eq!(surface["direct_reader_edge_count"], 377);
-    assert_eq!(direct_readers.len(), 377);
-    assert_eq!(consumers["resource_count"], 377);
-    assert_eq!(consumers["direct_reader_edge_count"], 377);
-    assert_eq!(consumer_readers.len(), 377);
+    assert_eq!(surface["resource_count"], 412);
+    assert_eq!(resources.len(), 412);
+    assert_eq!(surface["direct_reader_edge_count"], 412);
+    assert_eq!(direct_readers.len(), 412);
+    assert_eq!(consumers["resource_count"], 412);
+    assert_eq!(consumers["direct_reader_edge_count"], 412);
+    assert_eq!(consumer_readers.len(), 412);
     assert_eq!(consumer_readers, direct_readers);
     assert_eq!(consumers["exact_one_reader_evidence_per_resource"], true);
     assert_eq!(consumers["historical_c325_promoted"], false);
@@ -214,9 +214,9 @@ fn current_surface_and_consumer_census_are_exact_and_content_bound() {
         .iter()
         .map(|row| row["resource_id"].as_str().expect("reader Resource id"))
         .collect::<BTreeSet<_>>();
-    assert_eq!(resource_keys.len(), 377);
+    assert_eq!(resource_keys.len(), 412);
     assert_eq!(resource_keys, reader_resource_keys);
-    assert_eq!(resource_ids.len(), 377);
+    assert_eq!(resource_ids.len(), 412);
     assert_eq!(resource_ids, reader_resource_ids);
     assert_eq!(
         resources
@@ -230,14 +230,14 @@ fn current_surface_and_consumer_census_are_exact_and_content_bound() {
         .as_array()
         .expect("surface canonical value");
     assert_eq!(surface_value.len(), 7);
-    assert_eq!(surface_value[2].as_array().unwrap().len(), 377);
-    assert_eq!(surface_value[3].as_array().unwrap().len(), 377);
+    assert_eq!(surface_value[2].as_array().unwrap().len(), 412);
+    assert_eq!(surface_value[3].as_array().unwrap().len(), 412);
     assert!(surface_value[6].as_array().unwrap().is_empty());
     let consumer_value = consumers["canonical_value"]
         .as_array()
         .expect("consumer canonical value");
     assert_eq!(consumer_value.len(), 3);
-    assert_eq!(consumer_value[2].as_array().unwrap().len(), 377);
+    assert_eq!(consumer_value[2].as_array().unwrap().len(), 412);
 
     assert!(surface["unclassified_paths"].as_array().unwrap().is_empty());
     assert_eq!(

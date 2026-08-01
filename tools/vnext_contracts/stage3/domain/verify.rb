@@ -173,12 +173,17 @@ SOURCE_PATHS = %w[
   src/domain/authority/evaluator.rs
   src/domain/authority/facade.rs
   src/domain/authority/facade/repository_admission.rs
-  src/domain/authority/facade/repository_leaf_authority.rs
-  src/domain/authority/facade_tests.rs
-  src/domain/authority/grant.rs
-  src/domain/authority/identity.rs
-  src/domain/authority/mandate.rs
-  src/domain/authority/mod.rs
+    src/domain/authority/facade/repository_leaf_authority.rs
+    src/domain/authority/facade_tests.rs
+    src/domain/authority/grant.rs
+    src/domain/authority/governance_attestation.rs
+    src/domain/authority/governance_attestation_stage7_seed.rs
+    src/domain/authority/governance_floor.rs
+    src/domain/authority/identity.rs
+    src/domain/authority/legacy_removal_guard.rs
+    src/domain/authority/mandate.rs
+    src/domain/authority/materialization.rs
+    src/domain/authority/mod.rs
   src/domain/authority/post_cut.rs
   src/domain/authority/principal.rs
   src/domain/authority/protected_diagnostic_envelope.rs
@@ -202,8 +207,9 @@ SOURCE_PATHS = %w[
   src/domain/design/batch.rs
   src/domain/design/closure.rs
   src/domain/design/common.rs
-  src/domain/design/decision.rs
-  src/domain/design/materialization.rs
+    src/domain/design/decision.rs
+    src/domain/design/legacy.rs
+    src/domain/design/materialization.rs
   src/domain/design/mod.rs
   src/domain/design/revision.rs
   src/domain/evidence/assessment.rs
@@ -219,15 +225,21 @@ SOURCE_PATHS = %w[
   src/domain/identity/mod.rs
   src/domain/identity/schema.rs
   src/domain/mod.rs
-  src/domain/persistence/export.rs
-  src/domain/persistence/generation.rs
-  src/domain/persistence/idempotency.rs
-  src/domain/persistence/metadata.rs
+    src/domain/persistence/consumer_snapshot.rs
+    src/domain/persistence/export.rs
+    src/domain/persistence/generation.rs
+    src/domain/persistence/idempotency.rs
+    src/domain/persistence/legacy_quarantine.rs
+    src/domain/persistence/legacy_source_history.rs
+    src/domain/persistence/metadata.rs
   src/domain/persistence/mod.rs
   src/domain/persistence/object.rs
-  src/domain/persistence/protected_diagnostic.rs
-  src/domain/persistence/protected_diagnostic_stage9_seed.rs
-  src/domain/persistence/retention.rs
+    src/domain/persistence/protected_diagnostic.rs
+    src/domain/persistence/protected_diagnostic_stage9_seed.rs
+    src/domain/persistence/protected_locator_lease.rs
+    src/domain/persistence/protected_locator_stage9_seed.rs
+    src/domain/persistence/retention.rs
+    src/domain/persistence/root_universe.rs
   src/domain/persistence/snapshot.rs
   src/domain/persistence/snapshot_blocks.rs
   src/domain/persistence/snapshot_export.rs
@@ -239,9 +251,13 @@ SOURCE_PATHS = %w[
   src/domain/persistence/tests/mod.rs
   src/domain/persistence/tests/store_full_export.rs
   src/domain/persistence/tests/store_safety.rs
-  src/domain/persistence/types.rs
-  src/domain/repository/mod.rs
-  src/domain/repository/tests.rs
+    src/domain/persistence/types.rs
+    src/domain/repository/bootstrap.rs
+    src/domain/repository/legacy_quarantine_admission.rs
+    src/domain/repository/legacy_source_history.rs
+    src/domain/repository/mod.rs
+    src/domain/repository/root_universe.rs
+    src/domain/repository/tests.rs
   src/domain/step/amendment.rs
   src/domain/step/graph.rs
   src/domain/step/identity.rs

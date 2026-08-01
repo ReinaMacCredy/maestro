@@ -418,9 +418,9 @@ def validate_resources(
     require((OUT / "resource-descriptors.v1.cbor").read_bytes() == raw, "Resource descriptor-set sibling CBOR drifted")
     require(descriptor_set.get("descriptor_domain") == "maestro.vnext.resource.descriptor.v1", "Resource descriptor domain drifted")
     require(descriptor_set.get("descriptor_schema_id") == FROZEN_SCHEMA_IDS["ResourceDescriptorV1"], "Resource descriptor SchemaId drifted")
-    require(descriptor_set.get("resource_count") == 377, "Resource descriptor-set count drifted")
+    require(descriptor_set.get("resource_count") == 412, "Resource descriptor-set count drifted")
     records = descriptor_set.get("resources")
-    require(isinstance(records, list) and len(records) == 377, "Resource descriptor set is not exact 377")
+    require(isinstance(records, list) and len(records) == 412, "Resource descriptor set is not exact 412")
     candidates = list(inventory.resources)
     readers_by_key: dict[str, list[Any]] = {candidate.stable_key: [] for candidate in candidates}
     for reader in inventory.direct_readers:
@@ -555,11 +555,11 @@ def validate_current_surface(
         surface.get("inventory_validation") == expected_proof_stable_inventory_validation(validation),
         "current surface proof-stable inventory validation projection drifted",
     )
-    require(surface.get("resource_count") == 377 and surface.get("direct_reader_edge_count") == 377, "current surface totality count drifted")
-    require(surface.get("generated_reference_producer_count") == 59, "producer-only src/interfaces count drifted")
+    require(surface.get("resource_count") == 412 and surface.get("direct_reader_edge_count") == 412, "current surface totality count drifted")
+    require(surface.get("generated_reference_producer_count") == 62, "producer-only src/interfaces count drifted")
     require(surface.get("unclassified_paths") == [], "current surface has unclassified paths")
     rows = surface.get("resources")
-    require(isinstance(rows, list) and len(rows) == 377, "current surface Resource rows drifted")
+    require(isinstance(rows, list) and len(rows) == 412, "current surface Resource rows drifted")
     expected_resource_rows = [
         {
             "resource_tag": resource.resource_tag,
@@ -581,7 +581,7 @@ def validate_current_surface(
     ]
     require(rows == expected_resource_rows, "current surface Resource records differ from live inventory")
     reader_rows = surface.get("direct_readers")
-    require(isinstance(reader_rows, list) and len(reader_rows) == 377, "current surface exact reader rows drifted")
+    require(isinstance(reader_rows, list) and len(reader_rows) == 412, "current surface exact reader rows drifted")
     by_key = {candidate.stable_key: resources[candidate.inventory_ordinal - 1] for candidate in inventory.resources}
     expected_reader_rows = [
         {
@@ -614,14 +614,14 @@ def validate_current_surface(
         for row in inventory.authoritative_sources
         if row.source_kind == SourceKind.GENERATED_REFERENCE_PRODUCER
     ]
-    require(producer_rows == expected_producers, "current surface exact 59 producer-only records drifted")
+    require(producer_rows == expected_producers, "current surface exact 62 producer-only records drifted")
     forbidden = {
         row.stable_locator
         for row in inventory.vnext_sources
         if row.source_kind in {SourceKind.GENERATED_PROOF_OUTPUT, SourceKind.DOCUMENTATION_NOT_RESOURCE}
     }
     require(not (strings_in(surface["canonical_commitment_envelope"]) & forbidden), "noncanonical output/documentation leaked into current surface identity")
-    require(consumers.get("resource_count") == 377 and consumers.get("direct_reader_edge_count") == 377, "current consumer census count drifted")
+    require(consumers.get("resource_count") == 412 and consumers.get("direct_reader_edge_count") == 412, "current consumer census count drifted")
     require(consumers.get("exact_one_reader_evidence_per_resource") is True, "current consumer census is not exact one-evidence-per-Resource")
     require(consumers.get("historical_c325_promoted") is False, "historical C325 rows were promoted")
     require(consumers.get("consumer_inventory_digest") == consumer_inventory_digest(inventory), "current consumer inventory digest drifted")
@@ -809,7 +809,7 @@ def validate_schema_and_migration_audits(
     migration = documents["migration-rollback-requirements.v1.json"]
     validate_stage0_commitment(migration, "maestro.vnext.migration-rollback-requirements.v1")
     rows = migration.get("requirements")
-    require(isinstance(rows, list) and len(rows) == 377, "migration/rollback exact Resource coverage drifted")
+    require(isinstance(rows, list) and len(rows) == 412, "migration/rollback exact Resource coverage drifted")
     require(
         migration.get("stage0_execution_complete") is False
         and migration.get("stage0_rehearsal_complete") is False
@@ -820,7 +820,7 @@ def validate_schema_and_migration_audits(
         migration.get("stage") == "stage0_candidate_only"
         and migration.get("status") == "requirements_complete_runtime_proof_pending"
         and migration.get("proof_status") == "pending_stage0_execution_and_rehearsal"
-        and migration.get("pending_runtime_proof_count") == 377,
+        and migration.get("pending_runtime_proof_count") == 412,
         "migration/rollback pending Stage-0 proof boundary drifted",
     )
     descriptor_records = documents["resource-descriptors"]["resources"]
@@ -1136,13 +1136,13 @@ def validate_delta(
     require(delta.get("exact_identity_kind_counts") == {
         "Schema": 117,
         "Manifest": 26,
-        "Resource": 377,
+        "Resource": 412,
         "Bundle": 8,
         "Census": 1,
         "Release": 1,
     }, "through-Release identity-kind counts drifted")
     entries = delta.get("entries")
-    require(isinstance(entries, list) and len(entries) == 530, "through-Release exact entry closure drifted")
+    require(isinstance(entries, list) and len(entries) == 565, "through-Release exact entry closure drifted")
     keys = [(row.get("identity_kind"), row.get("logical_key")) for row in entries]
     kind_tags = {name: index for index, name in enumerate((*IDENTITY_KINDS, "RootInput", "HandoffInput"), 1)}
     require(keys == sorted(keys, key=lambda row: (kind_tags[row[0]], row[1])), "through-Release entries are not canonical ordered")
@@ -1573,7 +1573,7 @@ def validate_resource_release(
     require(not ({"manifest_identity_envelope", "release_state", "runtime", "state"} & set(closure)), "Stage-0 closure contains a false Manifest/runtime/state claim")
     descriptor_set = documents["resource-descriptors"]
     require(closure.get("resource_descriptor_set_identity") == descriptor_set["identity"], "Resource descriptor-set identity drifted in closure")
-    require(closure.get("resource_count") == 377 and closure.get("resources") == descriptor_set["resources"], "closure Resource exact-set drifted")
+    require(closure.get("resource_count") == 412 and closure.get("resources") == descriptor_set["resources"], "closure Resource exact-set drifted")
     expected_bundle_records = [
         dict(document) | {"artifact_path": f"contracts/vnext/stage0/resource-release/{name}.json"}
         for name, document in zip(BUNDLE_NAMES, documents["bundles"], strict=True)
@@ -1642,8 +1642,8 @@ def validate_resource_release(
     require(
         counts
         == {
-            "resources": 377,
-            "direct_reader_edges": 377,
+            "resources": 412,
+            "direct_reader_edges": 412,
             "bundle_instances": 8,
             "bundle_kinds": 7,
             "current_persistence_descriptors": 22,
@@ -1655,7 +1655,7 @@ def validate_resource_release(
         },
         "closure exact source counts drifted",
     )
-    require(closure.get("migration_requirement_count") == 377 and closure.get("migration_runtime_proof_complete") is False, "closure migration proof status drifted")
+    require(closure.get("migration_requirement_count") == 412 and closure.get("migration_runtime_proof_complete") is False, "closure migration proof status drifted")
     require(
         closure.get("post_root_delta_identity") is None
         and closure.get("post_root_union_identity") is None

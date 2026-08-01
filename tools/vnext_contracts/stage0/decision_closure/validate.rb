@@ -117,9 +117,9 @@ def validate(document, external)
     ignored = document.fetch("lineage").fetch("ignored_unilateral_claims").map do |item|
       [item.fetch("source"), item.fetch("claimed_predecessor")]
     end
-    unless ignored.include?(["dec-canonical-non-action-protected-90a9", "dec-canonical-trusted-host-protected-1fbc"])
-      raise "missing protected-diagnostic unilateral-claim refusal"
-    end
+      unless ignored.include?(["dec-canonical-trusted-host-protected-1fbc", "dec-canonical-non-action-protected-90a9"])
+        raise "missing protected-diagnostic unilateral-claim refusal"
+      end
   end
   records.each do |record|
     seen = []

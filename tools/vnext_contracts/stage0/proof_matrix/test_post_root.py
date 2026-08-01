@@ -312,11 +312,11 @@ def closed_fixture():
             exact_identity_kind_counts=post_root.THROUGH_RELEASE_IDENTITY_COUNTS,
         )
         delta_id = str(delta["identity"])
-        resources = [{"resource_id": identifier(30_000 + index)} for index in range(377)]
+        resources = [{"resource_id": identifier(30_000 + index)} for index in range(412)]
         bundles = [{"bundle_id": identifier(40_000 + index)} for index in range(8)]
         consumer_edges = [
             [identifier(50_000 + index), resources[index]["resource_id"]]
-            for index in range(376)
+            for index in range(411)
         ]
         census_envelope = ["census-domain", "census-schema", "entry-schema", [1], []]
         census = {
@@ -332,9 +332,9 @@ def closed_fixture():
         }
         write_json(release_census, census)
         resource_counts = {
-            "resource_count": 377,
+            "resource_count": 412,
             "bundle_count": 8,
-            "consumer_edge_count": 376,
+            "consumer_edge_count": 411,
             "downstream_obligation_count": 3,
         }
         resource = write_stage0_commitment(
@@ -344,7 +344,7 @@ def closed_fixture():
             source_publication=False,
             runtime_registration=False,
             installation=False,
-            resource_count=377,
+            resource_count=412,
             resources=resources,
             bundle_count=8,
             bundles=bundles,

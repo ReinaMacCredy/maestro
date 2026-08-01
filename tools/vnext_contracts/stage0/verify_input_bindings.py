@@ -214,6 +214,76 @@ def descriptor_capture(path: Path, *, allow_root_owner: bool = False) -> bytes:
             os.close(descriptor)
 
 
+def descriptor_capture_append_only(
+    path: Path,
+    *,
+    allow_root_owner: bool = False,
+    after_read_for_test: object | None = None,
+) -> bytes:
+    descriptors = _open_directory_chain(path.parent)
+    try:
+        parent = descriptors[-1]
+        named_before = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        flags = os.O_RDONLY | os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(path.name, flags, dir_fd=parent)
+        try:
+            before = os.fstat(descriptor)
+            permitted_owners = {0, os.geteuid()} if allow_root_owner else {os.geteuid()}
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or before.st_uid not in permitted_owners
+                or stat.S_IMODE(before.st_mode) & 0o022
+            ):
+                raise SystemExit(f"unsafe append-only descriptor-captured input: {path}")
+            stable_identity = lambda value: (
+                value.st_dev,
+                value.st_ino,
+                value.st_mode,
+                value.st_uid,
+                value.st_gid,
+                value.st_nlink,
+            )
+            if stable_identity(named_before) != stable_identity(before):
+                raise SystemExit(f"append-only descriptor-captured name was substituted: {path}")
+
+            def read_prefix(length: int) -> bytes:
+                chunks: list[bytes] = []
+                offset = 0
+                while offset < length:
+                    chunk = os.pread(descriptor, min(1024 * 1024, length - offset), offset)
+                    if not chunk:
+                        raise SystemExit(f"append-only descriptor-captured input was truncated: {path}")
+                    chunks.append(chunk)
+                    offset += len(chunk)
+                return b"".join(chunks)
+
+            data = read_prefix(before.st_size)
+            if after_read_for_test is not None:
+                if not callable(after_read_for_test):
+                    raise SystemExit("append-only descriptor-capture read hook is not callable")
+                after_read_for_test()
+            after = os.fstat(descriptor)
+            named_after = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+            if stable_identity(before) != stable_identity(after):
+                raise SystemExit(f"append-only descriptor-captured input identity changed: {path}")
+            if stable_identity(named_before) != stable_identity(named_after):
+                raise SystemExit(f"append-only descriptor-captured name changed: {path}")
+            if after.st_size < before.st_size:
+                raise SystemExit(f"append-only descriptor-captured input shrank: {path}")
+            if read_prefix(before.st_size) != data:
+                raise SystemExit(f"append-only descriptor-captured prefix changed during read: {path}")
+            _validate_directory_chain(descriptors, path.parent)
+            return data
+        finally:
+            os.close(descriptor)
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
 def descriptor_capture_directory(
     path: Path,
     *,
@@ -284,7 +354,10 @@ def capture_log_records(
     expected_by_hash = {digest: name for name, digest in expected.items()}
     captured: dict[str, dict[str, object]] = {}
     ordinals: dict[str, int] = {}
-    for ordinal, raw_line in enumerate(descriptor_capture(path).splitlines(keepends=True), start=1):
+    for ordinal, raw_line in enumerate(
+        descriptor_capture_append_only(path).splitlines(keepends=True),
+        start=1,
+    ):
         name = expected_by_hash.get(hashlib.sha256(raw_line).hexdigest())
         if name is None:
             continue
@@ -435,6 +508,8 @@ def verify_successor_packet_artifacts(
 
 def verify_successor_external_approval_event(
     bindings: dict[str, object],
+    *,
+    artifact_reconstruction: bool = False,
 ) -> dict[str, bytes]:
     event = bindings["external_approval_event"]
     assert isinstance(event, dict)
@@ -608,6 +683,8 @@ def verify_successor_external_approval_event(
         int(packet_complete_payload["completed_at"]),
         SUCCESSOR_APPROVAL_STARTED_AT,
     )
+    if artifact_reconstruction:
+        return {}
     return verify_successor_packet_artifacts(bindings)
 
 
@@ -642,6 +719,169 @@ def path_metadata(path: Path) -> dict[str, str]:
         "mode": format(stat.S_IMODE(metadata.st_mode), "04o"),
         "type": "directory",
     }
+
+
+def verify_serialized_control_set(
+    bindings: dict[str, object],
+    controls: dict[str, object],
+    label: str,
+) -> None:
+    baseline = bindings["baseline"]
+    assert isinstance(baseline, dict)
+    source_control = controls["source_git_control"]
+    destination = controls["destination_ancestors"]
+    sandbox = controls["checkout_sandbox_profile"]
+    assert isinstance(source_control, dict)
+    assert isinstance(destination, dict)
+    assert isinstance(sandbox, dict)
+
+    require_equal(
+        f"{label} control-set keys",
+        set(controls),
+        {
+            "source_git_control",
+            "destination_ancestors",
+            "checkout_sandbox_profile",
+        },
+    )
+    require_equal(
+        f"{label} source Git control keys",
+        set(source_control),
+        {
+            "identity_sha256",
+            "baseline_commit",
+            "baseline_tree",
+            "git_common_dir_device",
+            "git_common_dir_gid",
+            "git_common_dir_inode",
+            "git_common_dir_mode",
+            "git_common_dir_realpath",
+            "git_common_dir_uid",
+            "git_control_path_manifest",
+            "git_control_path_manifest_sha256",
+            "object_directory_device",
+            "object_directory_gid",
+            "object_directory_inode",
+            "object_directory_mode",
+            "object_directory_realpath",
+            "object_directory_uid",
+            "object_format",
+            "repository_config_sha256",
+            "source_repository_realpath",
+        },
+    )
+    require_equal(
+        f"{label} source repository binding",
+        source_control["source_repository_realpath"],
+        bindings["source_repository_realpath"],
+    )
+    require_equal(
+        f"{label} source baseline commit",
+        source_control["baseline_commit"],
+        baseline["commit"],
+    )
+    require_equal(
+        f"{label} source baseline tree",
+        source_control["baseline_tree"],
+        baseline["tree"],
+    )
+
+    manifest_rows = source_control["git_control_path_manifest"]
+    assert isinstance(manifest_rows, list)
+    manifest = ("\n".join(str(row) for row in manifest_rows) + "\n").encode("utf-8")
+    require_equal(
+        f"{label} Git control manifest digest",
+        hashlib.sha256(manifest).hexdigest(),
+        source_control["git_control_path_manifest_sha256"],
+    )
+    source_records = [
+        ("source_repository_realpath", str(bindings["source_repository_realpath"])),
+        ("git_common_dir_realpath", str(source_control["git_common_dir_realpath"])),
+        ("git_common_dir_device", str(source_control["git_common_dir_device"])),
+        ("git_common_dir_inode", str(source_control["git_common_dir_inode"])),
+        ("git_common_dir_uid", str(source_control["git_common_dir_uid"])),
+        ("git_common_dir_gid", str(source_control["git_common_dir_gid"])),
+        ("git_common_dir_mode", str(source_control["git_common_dir_mode"])),
+        ("object_directory_realpath", str(source_control["object_directory_realpath"])),
+        ("object_directory_device", str(source_control["object_directory_device"])),
+        ("object_directory_inode", str(source_control["object_directory_inode"])),
+        ("object_directory_uid", str(source_control["object_directory_uid"])),
+        ("object_directory_gid", str(source_control["object_directory_gid"])),
+        ("object_directory_mode", str(source_control["object_directory_mode"])),
+        ("object_format", str(source_control["object_format"])),
+        ("repository_config_sha256", str(source_control["repository_config_sha256"])),
+        (
+            "git_control_path_manifest_sha256",
+            str(source_control["git_control_path_manifest_sha256"]),
+        ),
+        ("baseline_commit", str(baseline["commit"])),
+        ("baseline_tree", str(baseline["tree"])),
+    ]
+    require_equal(
+        f"{label} source Git control identity",
+        digest_records(b"maestro.external-git-source-control.v1\0", source_records),
+        source_control["identity_sha256"],
+    )
+
+    ancestors = destination["ancestors"]
+    assert isinstance(ancestors, list)
+    require_equal(
+        f"{label} destination ancestor keys",
+        set(destination),
+        {"identity_sha256", "ancestors"},
+    )
+    destination_records = [("ancestor_count", str(len(ancestors)))]
+    for index, entry in enumerate(ancestors):
+        assert isinstance(entry, dict)
+        require_equal(
+            f"{label} destination ancestor {index} keys",
+            set(entry),
+            {"path", "realpath", "device", "inode", "uid", "gid", "mode", "type"},
+        )
+        for key in ("path", "realpath", "device", "inode", "uid", "gid", "mode", "type"):
+            destination_records.append((f"ancestor_{index}_{key}", str(entry[key])))
+    require_equal(
+        f"{label} destination ancestor identity",
+        digest_records(b"maestro.external-destination-ancestors.v1\0", destination_records),
+        destination["identity_sha256"],
+    )
+
+    sandbox_names = [
+        "profile_id",
+        "config_sources",
+        "hooks",
+        "filters",
+        "attributes_transform",
+        "external_commands",
+        "network",
+        "submodule_checkout",
+        "object_source",
+        "registration",
+        "materializer",
+        "verifier",
+        "symlink_policy",
+    ]
+    require_equal(
+        f"{label} checkout sandbox profile keys",
+        set(sandbox),
+        {"identity_sha256", *sandbox_names},
+    )
+    sandbox_records = [(name, str(sandbox[name])) for name in sandbox_names]
+    require_equal(
+        f"{label} checkout sandbox profile identity",
+        digest_records(b"maestro.external-checkout-sandbox.v1\0", sandbox_records),
+        sandbox["identity_sha256"],
+    )
+
+
+def verify_serialized_external_control_bindings(bindings: dict[str, object]) -> None:
+    approved = bindings["external_control_bindings"]
+    assert isinstance(approved, dict)
+    verify_serialized_control_set(bindings, approved, "approved")
+    current = bindings.get("current_external_control_bindings")
+    if current is not None:
+        assert isinstance(current, dict)
+        verify_serialized_control_set(bindings, current, "current")
 
 
 def verify_external_control_bindings(bindings: dict[str, object], source: Path) -> None:
@@ -1233,6 +1473,94 @@ def verify_baseline_objects(bindings: dict[str, object], source: Path) -> None:
         raise SystemExit("current implementation HEAD does not descend from the approved baseline")
 
 
+def verify_archived_baseline_objects(bindings: dict[str, object], source: Path) -> None:
+    git = Path("/usr/bin/git")
+    git_dir = source / ".git"
+    object_dir = git_dir / "objects"
+    path_metadata(git_dir)
+    path_metadata(object_dir)
+    for unsafe in (object_dir / "info/alternates",):
+        if unsafe.exists() or unsafe.is_symlink():
+            raise SystemExit(f"archived object verification refuses alternate sources: {unsafe}")
+    if any((object_dir / "pack").glob("*.promisor")):
+        raise SystemExit("archived object verification refuses promisor object sources")
+    directory_identity = lambda path: (
+        (metadata := os.stat(path, follow_symlinks=False)).st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+    )
+    git_dir_identity = directory_identity(git_dir)
+    object_dir_identity = directory_identity(object_dir)
+    git_environment = {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES": "",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_DIR": str(git_dir),
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OBJECT_DIRECTORY": str(object_dir),
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_WORK_TREE": str(source),
+        "HOME": "/",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+    }
+    for label, record in (
+        ("baseline", bindings["baseline"]),
+        (
+            "current implementation base",
+            bindings.get("current_implementation_base", bindings["baseline"]),
+        ),
+    ):
+        assert isinstance(record, dict)
+        commit_id = str(record["commit"])
+        tree_id = str(record["tree"])
+        object_type = subprocess.run(
+            [str(git), "--no-replace-objects", "cat-file", "-t", commit_id],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=git_environment,
+        ).stdout.strip()
+        commit_body = subprocess.run(
+            [str(git), "--no-replace-objects", "cat-file", "-p", commit_id],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=git_environment,
+        ).stdout
+        tree_rows = [
+            line.removeprefix("tree ")
+            for line in commit_body.splitlines()
+            if line.startswith("tree ")
+        ]
+        require_equal(f"{label} tree row count", len(tree_rows), 1)
+        require_equal(f"{label} object type", object_type, "commit")
+        require_equal(f"{label} tree", tree_rows[0], tree_id)
+        tree_type = subprocess.run(
+            [str(git), "--no-replace-objects", "cat-file", "-t", tree_id],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=git_environment,
+        ).stdout.strip()
+        require_equal(f"{label} tree object type", tree_type, "tree")
+    require_equal(
+        "archived Git directory identity",
+        directory_identity(git_dir),
+        git_dir_identity,
+    )
+    require_equal(
+        "archived object directory identity",
+        directory_identity(object_dir),
+        object_dir_identity,
+    )
+
+
 def external_build_plan_handoff(
     bindings: dict[str, object], candidate_commitment: str | None = None
 ) -> str:
@@ -1381,9 +1709,14 @@ def verify_external_packet(bindings: dict[str, object]) -> None:
 
 def verify_external_approval_event(
     bindings: dict[str, object],
+    *,
+    artifact_reconstruction: bool = False,
 ) -> dict[str, bytes] | None:
     if successor_approval(bindings):
-        return verify_successor_external_approval_event(bindings)
+        return verify_successor_external_approval_event(
+            bindings,
+            artifact_reconstruction=artifact_reconstruction,
+        )
 
     event = bindings["external_approval_event"]
     plan = bindings["external_build_plan"]
@@ -1820,16 +2153,7 @@ def verify_decision_inventory(bindings: dict[str, object], source: Path) -> None
         raise SystemExit(f"effective composite head is absent: {head}")
 
 
-def verify_successor_source_closure(
-    bindings: dict[str, object], packet_files: dict[str, bytes]
-) -> None:
-    packet_name = "replacement-build-approval-packet.v1.json"
-    manifest_name = "successor-decision-store-manifest.v1.txt"
-    if packet_name not in packet_files or manifest_name not in packet_files:
-        raise SystemExit("successor packet source closure is incomplete")
-    packet = json.loads(packet_files[packet_name])
-    candidate_records = packet["candidate_input"]["records"]
-    assert isinstance(candidate_records, dict)
+def verify_successor_source_commitments(bindings: dict[str, object]) -> None:
     canonical = bindings["canonical_source_inputs"]
     current = bindings["current_source_inputs"]
     inventory = bindings["decision_inventory"]
@@ -1845,8 +2169,6 @@ def verify_successor_source_closure(
     }
     require_equal("successor canonical source inputs", canonical, expected_source)
     require_equal("successor current source inputs", current, expected_source)
-    for key, value in expected_source.items():
-        require_equal(f"successor packet {key}", candidate_records[key], value)
     require_equal(
         "successor baseline",
         baseline,
@@ -1860,6 +2182,23 @@ def verify_successor_source_closure(
         {key: inventory[key] for key in ("total", "locked", "superseded", "open")},
         {"total": 213, "locked": 117, "superseded": 96, "open": 0},
     )
+
+
+def verify_successor_source_closure(
+    bindings: dict[str, object], packet_files: dict[str, bytes]
+) -> None:
+    verify_successor_source_commitments(bindings)
+    packet_name = "replacement-build-approval-packet.v1.json"
+    manifest_name = "successor-decision-store-manifest.v1.txt"
+    if packet_name not in packet_files or manifest_name not in packet_files:
+        raise SystemExit("successor packet source closure is incomplete")
+    packet = json.loads(packet_files[packet_name])
+    candidate_records = packet["candidate_input"]["records"]
+    assert isinstance(candidate_records, dict)
+    current = bindings["current_source_inputs"]
+    assert isinstance(current, dict)
+    for key, value in current.items():
+        require_equal(f"successor packet {key}", candidate_records[key], value)
     rows = [
         line.split("\t")
         for line in packet_files[manifest_name].decode("utf-8").splitlines()
@@ -1906,6 +2245,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bindings", type=Path, default=DEFAULT_BINDINGS)
     parser.add_argument("--source", type=Path)
+    parser.add_argument(
+        "--artifact-reconstruction",
+        action="store_true",
+        help="verify the immutable approved input record without requiring its historical filesystem device to remain live",
+    )
     args = parser.parse_args()
 
     bindings_path = args.bindings.resolve(strict=True)
@@ -1924,21 +2268,33 @@ def main() -> None:
         bindings["source_repository_realpath"],
     )
     verify_nonpromotion(bindings)
-    verify_external_control_bindings(bindings, source)
+    verify_serialized_external_control_bindings(bindings)
+    if not args.artifact_reconstruction:
+        verify_external_control_bindings(bindings, source)
     verify_external_candidate_commitment(bindings)
-    verify_baseline_objects(bindings, source)
+    if args.artifact_reconstruction:
+        verify_archived_baseline_objects(bindings, source)
+    else:
+        verify_baseline_objects(bindings, source)
     verify_external_packet(bindings)
-    successor_packet_files = verify_external_approval_event(bindings)
+    successor_packet_files = verify_external_approval_event(
+        bindings,
+        artifact_reconstruction=args.artifact_reconstruction,
+    )
     if successor_approval(bindings):
-        if successor_packet_files is None:
+        if args.artifact_reconstruction:
+            verify_successor_source_commitments(bindings)
+        elif successor_packet_files is None:
             raise SystemExit("successor packet capture is unavailable")
-        verify_successor_source_closure(bindings, successor_packet_files)
+        else:
+            verify_successor_source_closure(bindings, successor_packet_files)
     else:
         verify_current_control_rebind(bindings)
         verify_external_build_plan(bindings, source)
         verify_post_approval_execution_plan_revisions(bindings)
-        verify_source_inputs(bindings, source)
-        verify_decision_inventory(bindings, source)
+        if not args.artifact_reconstruction:
+            verify_source_inputs(bindings, source)
+            verify_decision_inventory(bindings, source)
     print(
         json.dumps(
             {
@@ -1946,6 +2302,11 @@ def main() -> None:
                 "bindings_sha256": sha256(bindings_path),
                 "feature_id": bindings["feature_id"],
                 "decision_total": bindings["decision_inventory"]["total"],
+                "verification_mode": (
+                    "immutable_artifact_reconstruction"
+                    if args.artifact_reconstruction
+                    else "live_external_control"
+                ),
                 "result": "verified_non_promoting",
             },
             sort_keys=True,

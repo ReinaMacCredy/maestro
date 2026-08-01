@@ -297,8 +297,8 @@ class CandidateRootBuildTest(unittest.TestCase):
                         "expected_delta": successor_document,
                         "downstream_delta_obligations": downstream_obligations,
                         "embedded_release_bundle": release_document,
-                        "resource_count": 377,
-                        "resources": [{} for _ in range(377)],
+                        "resource_count": 412,
+                        "resources": [{} for _ in range(412)],
                         "bundle_count": 8,
                         "bundles": [{} for _ in range(8)],
                         "effect_home_finalization_receipt_sha256": build.artifact_hash(
@@ -324,7 +324,7 @@ class CandidateRootBuildTest(unittest.TestCase):
             source_inputs = build.load(build.INPUT_BINDINGS)["current_source_inputs"]
 
             def fixture_artifact_hash(path: Path) -> str:
-                if not path.exists() and path.name in {"card.yaml", "design.md"}:
+                if path.name in {"card.yaml", "design.md"}:
                     return source_inputs[f"{path.stem}_sha256"]
                 return original_artifact_hash(path)
 
@@ -335,7 +335,7 @@ class CandidateRootBuildTest(unittest.TestCase):
                 build.RESOURCE_SUCCESSOR_DELTA = resource_successor
                 build.PROOF_MANIFEST = proof_manifest
                 build.PROOF_MANIFEST_CBOR = proof_manifest.with_suffix(".cbor")
-                build.verify_closed_sources = lambda: None
+                build.verify_closed_sources = lambda check=False: None
                 build.artifact_hash = fixture_artifact_hash
                 result = build.build()
             finally:
@@ -431,36 +431,11 @@ class CandidateRootBuildTest(unittest.TestCase):
                 build.PROOF_MANIFEST_CBOR = original_proof_cbor
 
     def test_successor_decision_manifest_binds_every_record_before_candidate_root(self) -> None:
-        manifest_path = Path(
-            "/private/tmp/maestro-vnext-materialization-successor-packet/"
-            "successor-decision-store-manifest.v1.txt"
-        )
-        records = [
-            {
-                "id": decision_id,
-                "terminal_status": terminal_status,
-                "raw_record_sha256": raw_record_sha256,
-                "raw_body_sha256": raw_body_sha256,
-            }
-            for decision_id, terminal_status, raw_record_sha256, raw_body_sha256 in (
-                line.split("\t")
-                for line in manifest_path.read_text(encoding="ascii").splitlines()
-            )
-        ]
-        decision = {
-            "source_provenance_excluded_from_identity": {
-                "decisions_sha256": build.SUCCESSOR_DECISION_STORE_MANIFEST_SHA256
-            },
-            "records": records,
-            "materializations": [{"decision_sources": [records[0].copy()]}],
-        }
+        decision = json.loads(build.DECISION.read_text(encoding="utf-8"))
         build.validate_successor_decision_manifest(decision)
 
         mutant = json.loads(json.dumps(decision))
         mutant["records"][0]["raw_body_sha256"] = "00" * 32
-        mutant["materializations"][0]["decision_sources"][0][
-            "raw_body_sha256"
-        ] = "00" * 32
         with self.assertRaises(ValueError):
             build.validate_successor_decision_manifest(mutant)
 

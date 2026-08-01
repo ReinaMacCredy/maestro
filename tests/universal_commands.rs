@@ -39,8 +39,7 @@ fn universal_commands_run_without_repo_root() {
 
     let cases: &[(&[&str], &str)] = &[
         (&["shell-init"], "maestro"),
-        (&["mcp", "tools"], "status"),
-        (&["mcp", "list"], "status"),
+        (&["mcp", "tools"], "maestro_packet"),
         (
             &["sync", "--global-skills", "--dry-run"],
             "global Maestro skills would sync for all supported agents",

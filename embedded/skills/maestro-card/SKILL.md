@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.24
+version: 1.37.26
 description: "Card work in a project using Maestro after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -53,29 +53,20 @@ or unrelated files you will not touch, stay on main. Worktree-isolate only for
 a fresh non-self same-card/path overlap, unknown source/test dirt,
 release/install clean-tree proof, or explicit user isolation. If you split,
 follow the conflict-handoff protocol in HARNESS.md: link + `maestro conflict`
-on a file you will share, merge back then `--clear`. The full dance (including
-a conflicted merge-back) is `maestro loop show conflict-handoff`.
+on a file you will share, merge back then `--clear`.
 
-Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
-for current state, `maestro loop next` as the read-only router when the next
-recipe is not obvious, and `maestro loop show <recipe>` for the selected
-lifecycle grammar. Use `maestro loop show work` for task/card implementation,
-`maestro loop show ship` before close/release/archive gates,
-`maestro loop show unattended` for away-mode autonomy, and
-`maestro loop show learning` when recording reusable lessons. Writes still use
-the existing Maestro verbs named by the recipe. Rule: loop next recommends;
-outcome/proof/memory verbs write. Use `maestro loop next --chain` to explain
-current chain position without writing, `maestro loop outcome` to append
-structured attempt outcomes and transition receipts after native work,
-`maestro loop trace <card>` to audit card-scoped receipts, and `maestro loop
-improve` for read-only improvement proposals whose apply commands must be run
-explicitly. Do not use hidden stores, hidden schedulers, silent recipe mutation,
-or proof/QA bypass. Custom card/run recipes are
-allowed only when no shipped recipe fits, and must keep the same six phases,
-current Maestro verbs, hard stops, and continue output. Work Lease is only a
-choose-phase helper; it may select or reserve one safe unit, but it is not a
-scheduler, daemon, queue, worker launcher, executor, hidden store, or second
-lifecycle.
+Routing checkpoint: use `maestro status --json` for current repository state.
+When an exact bounded vNext projection is required, Integration supplies one
+canonical JSON request with authenticated host context and expected
+Release/catalog identities; pass it on stdin to `maestro packet read`. Never
+invent those authority facts. Retired successor routes and legacy lifecycle
+recipe identifiers are not fallback routers. Writes use the explicit current
+Task, Feature, Decision, Proof, QA, Packet, and release verbs. Do not use hidden
+stores, hidden schedulers, silent recipe mutation, or proof/QA bypass. Custom
+card/run workflows keep the same six phases, current Maestro verbs, hard stops,
+and continue output. Work Lease is only a choose-phase helper; it may select or
+reserve one safe unit, but it is not a scheduler, daemon, queue, worker
+launcher, executor, hidden store, or second lifecycle.
 Loop readiness is an evidence gate. For production loop patterns or any
 unattended/away-mode claim, read `maestro loop validate <pattern>` and
 `maestro status`; report the effective L0/L1/L2/L3 level, gaps, operating-limit

@@ -39,8 +39,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "ask-maestro",
-        "1.0.5",
-        "bb56afd9b527d1d50ce670e8713fdb652a39781ac0728656efa7596ca7b693fa",
+        "1.0.7",
+        "61250fa7f9140495242bb7de441199f8d00fe0915686d3b1b644788b67370132",
     ),
     (
         "skill",
@@ -51,8 +51,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "maestro-card",
-        "1.37.24",
-        "8e1416b4a324b81b24e5077c23d5c17c04fe21b20d005c3101913b98af8a1c5d",
+        "1.37.26",
+        "a105d8a0c85c706cf8e809f8b33be549b6c4367ef1efef799c58c084905bfabf",
     ),
     (
         "skill",
@@ -63,20 +63,20 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "maestro-setup",
-        "1.11.6",
-        "c9e3a9ab4d20e7beedcb1b11430e586b5b5aa2bcb826b0bb31b614a33a5916bb",
+        "1.11.8",
+        "990f09fe51c77b3c6eb60479cd309de55621da0d133c99a3d1da22426f9ca312",
     ),
     (
         "skill",
         "maestro-design",
-        "1.36.16",
-        "26d81998ca2ee4bd40c1eb3703b834176acab8a45872533aefc5799abb8caee1",
+        "1.36.18",
+        "f23ee1fdcdd44ca42c8b83bcf5759f82774c765b3ef25a7afaaf0dccc4278a45",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.7",
-        "386d1e23ea9c12720a76721ec395344ee157bc4e4202ed11fbdd1cbdb7992157",
+        "1.13.9",
+        "550e0760c9b7a9307cb3a009fffba9384b96aa06d76f5f8d516e31e0429c2608",
     ),
     (
         "hook",
@@ -87,8 +87,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.25",
-        "46859ec176e0f4c7802056cfacb58bcc0e3e20518b0ac925a4d54d84d5c2affe",
+        "1.29.27",
+        "ae0da06ebe23a856430218c936d944ce5afbc22a0ea04457381e6ba1d1066019",
     ),
     (
         "playbook",
@@ -338,20 +338,21 @@ fn maestro_card_skill_keeps_explicit_unattended_loop_triggers() {
 }
 
 #[test]
-fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
+fn shipped_harness_and_skills_adopt_vnext_packet_routing() {
     let harness = HARNESS_MD.replace('\n', " ");
     assert!(
-        harness.contains("Maestro's main workflow is the loop")
-            && harness.contains("maestro status")
-            && harness.contains("maestro loop next")
-            && harness.contains("read-only")
-            && harness.contains("existing Maestro verbs"),
-        "harness must teach the loop-first state/router/write split"
+        harness.contains("maestro status --json")
+            && harness.contains("canonical JSON request")
+            && harness.contains("maestro packet read")
+            && harness.contains("Never invent those authority facts")
+            && harness.contains("typed refusal surfaces"),
+        "harness must teach the vNext state/packet/authority split"
     );
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "outcome/proof/memory verbs write",
+        "authenticated host context",
+        "expected Release/catalog identities",
+        "legacy lifecycle recipe identifiers",
+        "explicit current",
         "hidden stores",
         "hidden schedulers",
         "silent recipe mutation",
@@ -359,7 +360,7 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     ] {
         assert!(
             harness.contains(phrase),
-            "harness must explain loop intelligence boundary phrase {phrase:?}"
+            "harness must explain the vNext routing boundary phrase {phrase:?}"
         );
     }
     for phrase in [
@@ -406,8 +407,7 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "Use subagents or worktrees for that fan-out",
         "the orchestrator still owns shared Maestro store writes",
         "bounded blocked-next frontier",
-        "does not create a second scheduler",
-        "explicit legacy card-board readiness surface",
+        "no retired successor route creates a second scheduler",
     ] {
         assert!(
             harness.contains(phrase),
@@ -415,20 +415,10 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     assert!(
-        harness.contains("maestro loop show design")
-            && harness.contains("maestro loop show work")
-            && harness.contains("maestro loop show audit")
-            && harness.contains("maestro loop show ship")
-            && harness.contains("maestro loop show unattended")
-            && harness.contains("maestro loop show learning"),
-        "harness must route agents to shipped lifecycle recipe checkpoints"
-    );
-    assert!(
-        harness.contains("maestro loop show design-relay")
-            && harness.contains("bounded design mandate")
+        harness.contains("bounded design mandate")
             && harness.contains("subagents/advisors provide evidence only")
-            && harness.contains("return to the parent design loop"),
-        "harness must route delegated design mandates to the design-relay recipe"
+            && harness.contains("control returns to the owning design session"),
+        "harness must preserve delegated design authority"
     );
     for phrase in [
         "Loop readiness is native evidence",
@@ -459,21 +449,19 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 
     let design = shipped_skill_body("maestro-design").replace('\n', " ");
     assert!(
-        design.contains("Recipe checkpoint")
-            && design.contains("maestro loop show design")
-            && design.contains("maestro loop show design-relay")
-            && design.contains("maestro status")
-            && design.contains("maestro loop next")
-            && design.contains("read-only")
-            && design.contains("existing Maestro verbs")
+        design.contains("Routing checkpoint")
+            && design.contains("maestro status --json")
+            && design.contains("maestro packet read")
+            && design.contains("Retired successor routes")
+            && design.contains("explicit current Feature and Decision verbs")
             && design.contains("perceive -> choose -> act"),
-        "maestro-design must adopt the loop-first design lifecycle recipe"
+        "maestro-design must adopt vNext packet routing"
     );
     assert!(
         design.contains("bounded design mandate")
             && design.contains("subagents/advisors provide evidence only")
-            && design.contains("returns to the parent design loop"),
-        "maestro-design must explain delegated design relay authority"
+            && design.contains("control returns to the owning design session"),
+        "maestro-design must explain delegated design authority"
     );
     assert!(
         design.contains("Before technical forks, decide scope depth")
@@ -486,15 +474,15 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "maestro-design must separate full design scope from implementation staging and reject MVP by default"
     );
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "loop next recommends",
-        "outcome/proof/memory verbs write",
+        "canonical JSON request",
+        "authenticated host context",
+        "Never invent those authority facts",
+        "legacy lifecycle recipe identifiers",
         "silent recipe mutation",
     ] {
         assert!(
             design.contains(phrase),
-            "maestro-design must explain loop intelligence boundary phrase {phrase:?}"
+            "maestro-design must explain vNext routing boundary phrase {phrase:?}"
         );
     }
     for phrase in [
@@ -512,12 +500,10 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     for phrase in [
         "no-fork edge sweep",
         "edge pressure",
-        "loop next `unknown_gap` framing",
         "Material unknowns reopen a fork",
         "Only a clean sweep reaches the explicit build-approval gate",
         "bounded edge sweep chained to Maestro's shipped Unknowns Lens",
-        "maestro loop next --json",
-        "compare `unknown_gap` against locked decisions",
+        "compare every remaining `unknown_gap` against locked decisions",
         "edge-case pressure: what each option could miss",
         "No forks remain. Edge sweep found no material unresolved choices. Waiting for explicit build approval.",
     ] {
@@ -553,14 +539,12 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 
     let audit = shipped_skill_body("maestro-audit").replace('\n', " ");
     assert!(
-        audit.contains("Recipe checkpoint")
-            && audit.contains("maestro loop show audit")
-            && audit.contains("maestro status")
-            && audit.contains("maestro loop next")
-            && audit.contains("read-only")
-            && audit.contains("existing Maestro verbs")
+        audit.contains("Routing checkpoint")
+            && audit.contains("maestro status --json")
+            && audit.contains("maestro packet read")
+            && audit.contains("Retired successor routes")
             && audit.contains("perceive -> choose -> act"),
-        "maestro-audit must adopt the loop-first audit lifecycle recipe"
+        "maestro-audit must adopt vNext packet routing"
     );
     assert!(
         audit.contains("architecture review")
@@ -573,28 +557,25 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "maestro-audit must retain the architecture review branch"
     );
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "loop next recommends",
-        "outcome/proof/memory verbs write",
+        "canonical JSON request",
+        "authenticated host context",
+        "Never invent those authority facts",
+        "legacy lifecycle recipe identifiers",
         "silent recipe mutation",
     ] {
         assert!(
             audit.contains(phrase),
-            "maestro-audit must explain loop intelligence boundary phrase {phrase:?}"
+            "maestro-audit must explain vNext routing boundary phrase {phrase:?}"
         );
     }
 
     let card = shipped_skill_body("maestro-card").replace('\n', " ");
     for phrase in [
-        "Recipe checkpoint",
-        "maestro loop show work",
-        "maestro loop show ship",
-        "maestro loop show unattended",
-        "maestro loop show learning",
-        "maestro status",
-        "maestro loop next",
-        "existing Maestro verbs",
+        "Routing checkpoint",
+        "maestro status --json",
+        "maestro packet read",
+        "Retired successor routes",
+        "explicit current",
         "choose-phase helper",
         "not a scheduler, daemon, queue, worker launcher, executor",
     ] {
@@ -604,10 +585,9 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "loop next recommends",
-        "outcome/proof/memory verbs write",
+        "canonical JSON request",
+        "authenticated host context",
+        "Never invent those authority facts",
         "hidden stores",
         "proof/QA bypass",
     ] {
@@ -661,11 +641,11 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 
     let setup = shipped_skill_body("maestro-setup").replace('\n', " ");
     for phrase in [
-        "Recipe checkpoint",
-        "maestro status",
-        "maestro loop next",
-        "read-only router",
-        "existing Maestro verbs",
+        "Routing checkpoint",
+        "maestro status --json",
+        "maestro packet read",
+        "Retired successor routes",
+        "explicit Maestro verbs",
     ] {
         assert!(
             setup.contains(phrase),
@@ -673,10 +653,9 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "loop next recommends",
-        "outcome/proof/memory verbs write",
+        "canonical JSON request",
+        "authenticated host context",
+        "Never invent those authority facts",
         "hidden schedulers",
     ] {
         assert!(
@@ -687,21 +666,21 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 
     let ask = shipped_skill_body("ask-maestro").replace('\n', " ");
     for phrase in [
-        "maestro loop outcome",
-        "maestro loop improve",
-        "loop next recommends",
-        "outcome/proof/memory verbs write",
+        "maestro status --json",
+        "maestro packet read",
+        "Retired successor routes",
+        "Never invent those authority facts",
         "hidden stores",
     ] {
         assert!(
             ask.contains(phrase),
-            "ask-maestro must explain loop intelligence boundary phrase {phrase:?}"
+            "ask-maestro must explain vNext routing boundary phrase {phrase:?}"
         );
     }
 }
 
 #[test]
-fn shipped_loop_guidance_uses_one_compact_router_call_per_changed_state() {
+fn shipped_guidance_uses_vnext_packet_projection_and_refuses_legacy_routing() {
     let skill_names = [
         "ask-maestro",
         "maestro-audit",
@@ -709,27 +688,33 @@ fn shipped_loop_guidance_uses_one_compact_router_call_per_changed_state() {
         "maestro-design",
         "maestro-setup",
     ];
-    let mut bodies = vec![("HARNESS.md", HARNESS_MD.to_string())];
+    let mut bodies = vec![("HARNESS.md", HARNESS_MD.replace('\n', " "))];
     for name in skill_names {
         let body = skills()
             .iter()
             .find(|skill| skill.name == name)
             .unwrap_or_else(|| panic!("{name} should ship"))
             .skill_md()
-            .to_string();
+            .replace('\n', " ");
         bodies.push((name, body));
     }
     for (name, body) in bodies {
         for phrase in [
-            "compact default",
-            "--full",
-            "once after a state change",
-            "Do not probe `--help`",
-            "maestro loop next --json",
-            "--compact --json",
+            "maestro status --json",
+            "canonical JSON request",
+            "authenticated host context",
+            "expected Release/catalog identities",
+            "maestro packet read",
+            "legacy lifecycle recipe identifiers",
         ] {
             assert!(body.contains(phrase), "{name} is missing {phrase:?}");
         }
+        assert!(
+            !body.contains("Invoke `maestro loop next")
+                && !body.contains("run `maestro loop next")
+                && !body.contains("Use `maestro loop next"),
+            "{name} still recommends a retired successor route"
+        );
     }
 }
 

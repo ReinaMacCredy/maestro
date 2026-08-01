@@ -54,6 +54,13 @@ RESOURCE_RELEASE_ROOT = "contracts/vnext/stage0/resource-release"
 POST_RELEASE_GENERATED_OUTPUT_ROOTS = (
     "contracts/vnext/stage0/proof-matrix",
     "contracts/vnext/stage0/candidate-root",
+    "contracts/vnext/stage2/authority",
+    "contracts/vnext/stage3/domain",
+    "contracts/vnext/stage4/execution",
+    "contracts/vnext/stage5/evidence-gates",
+)
+POST_RELEASE_GENERATED_OUTPUT_LOCATORS = frozenset(
+    {"contracts/vnext/stage0/effect-home/stage2-semantic-consumer-delta-v1.json"}
 )
 RESOURCE_RELEASE_ADMITTED_INPUT_LOCATORS = frozenset(
     {
@@ -128,8 +135,8 @@ LEGACY_TUI_EXPECTED_LOCATORS = frozenset(
 LEGACY_TUI_EXPECTED_RUNTIME_REACHABLE_COUNT = 29
 LEGACY_TUI_EXPECTED_TYPESCRIPT_PROJECT_ONLY_COUNT = 1
 LEGACY_TUI_EXPECTED_MIGRATION_CENSUS_ONLY_COUNT = 11
-EXPECTED_RESOURCE_COUNT = 377
-EXPECTED_GENERATED_REFERENCE_PRODUCER_COUNT = 59
+EXPECTED_RESOURCE_COUNT = 412
+EXPECTED_GENERATED_REFERENCE_PRODUCER_COUNT = 62
 EXPECTED_BUNDLE_COUNTS: Mapping["BundleKind", int]
 ROOT_INSTRUCTION_DISPOSITIONS: Mapping[str, "ResourceDisposition"]
 
@@ -524,12 +531,12 @@ ROOT_INSTRUCTION_DISPOSITIONS = {
 }
 EXPECTED_BUNDLE_COUNTS = {
     BundleKind.RELEASE: 0,
-    BundleKind.AGENT_BOOTSTRAP: 1,
+    BundleKind.AGENT_BOOTSTRAP: 2,
     BundleKind.CAPABILITY: 34,
     BundleKind.ORCHESTRATION: 13,
-    BundleKind.SHARED_CONTRACT: 67,
-    BundleKind.ADAPTER: 1,
-    BundleKind.EXTERNAL_PATTERN: 77,
+    BundleKind.SHARED_CONTRACT: 90,
+    BundleKind.ADAPTER: 7,
+    BundleKind.EXTERNAL_PATTERN: 82,
     BundleKind.MIGRATION: 184,
 }
 
@@ -578,6 +585,54 @@ CANDIDATE_GROUPS: tuple[_CandidateGroup, ...] = (
         ReaderEvidenceKind.TYPED_VALIDATOR,
         ReaderRole.LIVE_READER,
         "validates the exact current AgentBootstrap surface row",
+    ),
+    _CandidateGroup(
+        "vnext-connectors",
+        "embedded/vnext/connectors",
+        SourceKind.VNEXT_TARGET_RESOURCE,
+        _ResourcePolicy(SemanticOwner.ADAPTER, BundleKind.ADAPTER, ResourceDisposition.RETAIN),
+        "tools/vnext_contracts/stage10/validate.py#main",
+        SemanticOwner.INTEGRATION,
+        ReaderEvidenceKind.TYPED_VALIDATOR,
+        ReaderRole.LIVE_READER,
+        "validates the exact Stage-10 connector descriptor closure",
+    ),
+    _CandidateGroup(
+        "vnext-hosts",
+        "embedded/vnext/hosts",
+        SourceKind.VNEXT_TARGET_RESOURCE,
+        _ResourcePolicy(SemanticOwner.ADAPTER, BundleKind.ADAPTER, ResourceDisposition.RETAIN),
+        "tools/vnext_contracts/stage10/validate.py#main",
+        SemanticOwner.INTEGRATION,
+        ReaderEvidenceKind.TYPED_VALIDATOR,
+        ReaderRole.LIVE_READER,
+        "validates the exact Stage-10 host descriptor closure",
+    ),
+    _CandidateGroup(
+        "vnext-patterns",
+        "embedded/vnext/patterns",
+        SourceKind.VNEXT_TARGET_RESOURCE,
+        _ResourcePolicy(SemanticOwner.DESIGN, BundleKind.EXTERNAL_PATTERN, ResourceDisposition.RETAIN),
+        "tools/vnext_contracts/stage10/validate.py#main",
+        SemanticOwner.INTEGRATION,
+        ReaderEvidenceKind.TYPED_VALIDATOR,
+        ReaderRole.LIVE_READER,
+        "validates the exact Stage-10 external pattern closure",
+    ),
+    _CandidateGroup(
+        "vnext-schemas",
+        "embedded/vnext/schemas",
+        SourceKind.VNEXT_TARGET_RESOURCE,
+        _ResourcePolicy(
+            SemanticOwner.SHARED_CONTRACT,
+            BundleKind.SHARED_CONTRACT,
+            ResourceDisposition.RETAIN,
+        ),
+        "tools/vnext_contracts/stage10/validate.py#main",
+        SemanticOwner.INTEGRATION,
+        ReaderEvidenceKind.TYPED_VALIDATOR,
+        ReaderRole.LIVE_READER,
+        "validates the exact Stage-10 adapter and host schema closure",
     ),
     _CandidateGroup(
         "vnext-capability",
@@ -733,6 +788,21 @@ CANDIDATE_GROUPS: tuple[_CandidateGroup, ...] = (
         ReaderRole.LIVE_READER,
         "defines the non-promoting Stage-0 input verification boundary without packaging any approval instance",
     ),
+    _CandidateGroup(
+        "vnext-final-chain",
+        "contracts/vnext/final-chain",
+        SourceKind.VNEXT_CONTRACT_ARTIFACT,
+        _ResourcePolicy(
+            SemanticOwner.SHARED_CONTRACT,
+            BundleKind.SHARED_CONTRACT,
+            ResourceDisposition.RETAIN,
+        ),
+        "tools/vnext_contracts/stage12/validate.py#main",
+        SemanticOwner.CONTRACT_CLOSURE,
+        ReaderEvidenceKind.TYPED_VALIDATOR,
+        ReaderRole.LIVE_READER,
+        "validates the exact Stage-12 final-chain schema and proof-input closure",
+    ),
 )
 
 
@@ -818,7 +888,7 @@ MACRO_READERS: tuple[_MacroReader, ...] = (
         "include_dir embeds every playbook Resource and the typed server enumerates it",
     ),
     _MacroReader(
-        "src/domain/design.rs",
+        "src/domain/design/legacy.rs",
         "embedded/design/styles",
         None,
         ReaderEvidenceKind.INCLUDE_DIR_TYPED_EXTRACTOR,
@@ -826,7 +896,7 @@ MACRO_READERS: tuple[_MacroReader, ...] = (
         "include_dir embeds exact first-party Design Resources",
     ),
     _MacroReader(
-        "src/domain/design.rs",
+        "src/domain/design/legacy.rs",
         "embedded/design/vendor/awesome-design-md",
         None,
         ReaderEvidenceKind.INCLUDE_DIR_TYPED_EXTRACTOR,
@@ -1193,8 +1263,11 @@ def _is_post_release_generated_output(locator: str) -> bool:
     """Classify every downstream or output-owned file as noncanonical."""
 
     return (
-        locator.startswith(f"{RESOURCE_RELEASE_ROOT}/")
-        and locator not in RESOURCE_RELEASE_ADMITTED_INPUT_LOCATORS
+        locator in POST_RELEASE_GENERATED_OUTPUT_LOCATORS
+        or (
+            locator.startswith(f"{RESOURCE_RELEASE_ROOT}/")
+            and locator not in RESOURCE_RELEASE_ADMITTED_INPUT_LOCATORS
+        )
     ) or any(locator.startswith(f"{root}/") for root in POST_RELEASE_GENERATED_OUTPUT_ROOTS)
 
 
@@ -1546,6 +1619,8 @@ def _bundle_group(source: PhysicalSource, policy: _ResourcePolicy) -> str:
         return "ExternalPattern:first-party-neutral-baseline"
     if source.stable_locator.startswith("embedded/design/vendor/awesome-design-md/"):
         return "ExternalPattern:third-party-awesome-design-md"
+    if source.stable_locator.startswith("embedded/vnext/patterns/"):
+        return "ExternalPattern:first-party-neutral-baseline"
     raise InventoryError(
         f"ExternalPattern Resource lacks an explicit provenance-separated Bundle group: {source.stable_locator}"
     )
@@ -2489,7 +2564,7 @@ def validate_inventory(inventory: CurrentInventory) -> InventoryValidation:
         )
     expected_generated_outputs = (
         resource_release_sources - RESOURCE_RELEASE_ADMITTED_INPUT_LOCATORS
-    ) | {
+    ) | POST_RELEASE_GENERATED_OUTPUT_LOCATORS | {
         locator
         for locator in vnext_locators
         if any(locator.startswith(f"{root}/") for root in POST_RELEASE_GENERATED_OUTPUT_ROOTS)
@@ -2599,7 +2674,14 @@ def validate_inventory(inventory: CurrentInventory) -> InventoryValidation:
     for resource in external_pattern_resources:
         external_pattern_groups.setdefault(resource.target_bundle_group, set()).add(resource.stable_locator)
     expected_external_pattern_groups = {
-        "ExternalPattern:first-party-neutral-baseline": {"embedded/design/styles/neutral/DESIGN.md"},
+        "ExternalPattern:first-party-neutral-baseline": {
+            "embedded/design/styles/neutral/DESIGN.md",
+            *{
+                row.stable_locator
+                for row in inventory.vnext_sources
+                if row.stable_locator.startswith("embedded/vnext/patterns/")
+            },
+        },
         "ExternalPattern:third-party-awesome-design-md": {
             row.stable_locator
             for row in inventory.authoritative_sources
@@ -2607,7 +2689,7 @@ def validate_inventory(inventory: CurrentInventory) -> InventoryValidation:
         },
     }
     if external_pattern_groups != expected_external_pattern_groups:
-        raise InventoryError("ExternalPattern Resources are not split into exact neutral/vendor Bundles")
+        raise InventoryError("ExternalPattern Resources are not split into exact first-party/vendor Bundles")
     for resource in external_pattern_resources:
         if resource.target_bundle_group == "ExternalPattern:first-party-neutral-baseline":
             if resource.provenance.kind != ResourceProvenanceKind.FIRST_PARTY or resource.provenance.license_locator:

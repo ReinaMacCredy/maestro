@@ -1,7 +1,7 @@
-//! T4 read surface for the monorepo `--project` scope: `list`/`card ready` `--project`
-//! filter, the `[project]` badge on human rows, group-by-project in `list` once
-//! two or more distinct projects appear, and the flat `project` field in
-//! `list`/`card ready`/`status` `--json`. Drives the real binary so the contract is
+//! T4 read surface for the monorepo `--project` scope: `list --project`
+//! filtering, the `[project]` badge on human rows, group-by-project in `list`
+//! once two or more distinct projects appear, and the flat `project` field in
+//! `list`/`status --json`. Drives the real binary so the retained contract is
 //! exercised the way an agent consumer would.
 
 pub mod card_support;
@@ -74,12 +74,6 @@ fn project_filter_returns_only_matching_cards_and_unknown_is_empty() {
         "card list --project filters too:\n{pay_ns}"
     );
 
-    let ready_pay = run(repo, &["card", "ready", "--project", "svc-pay"]);
-    assert!(
-        ready_pay.contains("pay one") && !ready_pay.contains("auth one"),
-        "card ready --project filters too:\n{ready_pay}"
-    );
-
     // An unknown project is an empty result, not an error (exit 0).
     let unknown = maestro(repo, &["list", "--project", "svc-nope"]);
     assert!(
@@ -91,13 +85,6 @@ fn project_filter_returns_only_matching_cards_and_unknown_is_empty() {
     assert!(
         !unknown_out.contains("pay one") && !unknown_out.contains("auth one"),
         "unknown project shows no cards:\n{unknown_out}"
-    );
-
-    let unknown_ready = maestro(repo, &["card", "ready", "--project", "svc-nope"]);
-    assert!(
-        unknown_ready.status.success(),
-        "unknown project ready exits 0:\nstderr:\n{}",
-        String::from_utf8_lossy(&unknown_ready.stderr)
     );
 }
 
@@ -135,16 +122,6 @@ fn badge_shows_for_project_cards_and_is_absent_otherwise() {
     assert!(
         !loose_line.contains('['),
         "a card without a project shows no badge:\n{loose_line}"
-    );
-
-    let ready = run(repo, &["card", "ready"]);
-    let ready_scoped = ready
-        .lines()
-        .find(|l| l.contains("scoped task"))
-        .expect("scoped task ready row present");
-    assert!(
-        ready_scoped.contains("[svc-pay]"),
-        "ready rows carry the badge too:\n{ready_scoped}"
     );
 }
 
@@ -260,19 +237,6 @@ fn json_stays_flat_with_a_project_field_even_when_human_would_group() {
     assert!(
         loose["project"].is_null(),
         "a no-project card carries project: null:\n{loose}"
-    );
-
-    // card ready --json: same flat shape.
-    let ready = run(repo, &["card", "ready", "--json"]);
-    let ready_json: Value = serde_json::from_str(ready.trim()).expect("ready --json parses");
-    let ready_cards = ready_json["cards"].as_array().expect("ready cards array");
-    let ready_pay = ready_cards
-        .iter()
-        .find(|c| c["title"] == "pay one")
-        .expect("ready pay card");
-    assert_eq!(
-        ready_pay["project"], "svc-pay",
-        "ready --json carries a flat project field:\n{ready_pay}"
     );
 
     // status --json: the per-row JSON carries a flat project field too.

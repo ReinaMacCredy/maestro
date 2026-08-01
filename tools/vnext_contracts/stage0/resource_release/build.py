@@ -702,8 +702,8 @@ def build_resources(
                 "reader_evidence": records[-1]["reader_evidence"],
             }
         )
-    if len(resources) != 377 or [row.resource_tag for row in resources] != list(range(1, 378)):
-        raise BuildError("exact 377-Resource tag closure changed")
+    if len(resources) != 412 or [row.resource_tag for row in resources] != list(range(1, 413)):
+        raise BuildError("exact 412-Resource tag closure changed")
     return resources, records, requirement_rows
 
 
@@ -1639,7 +1639,7 @@ def build_delta(
     if exact_counts != {
         "Schema": len(public_identity["schema_descriptors"]) + 38,
         "Manifest": 26,
-        "Resource": 377,
+        "Resource": 412,
         "Bundle": 8,
         "Census": 1,
         "Release": 1,
