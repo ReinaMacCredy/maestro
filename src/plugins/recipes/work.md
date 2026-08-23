@@ -1,0 +1,39 @@
+# Work
+
+Use this recipe for one accepted implementation unit. Keep the change inside
+the work item's acceptance and authority. If the scope is unclear or must
+expand, stop and return to the design recipe.
+
+## Loop anatomy
+
+### Perceive
+
+Run `work show <id>`, inspect `ready`, read relevant messages, source, tests,
+and repository instructions. Name the task-owned dirty paths before editing.
+
+### Choose
+
+Select the smallest behavior that can be falsified at the accepted seam. For a
+behavior change, write the agreed failing test before production code.
+
+### Act
+
+Start the item with `work start <id>`. Make the minimum source and test edits
+needed for that behavior. Preserve unrelated files and avoid speculative
+abstractions or dependencies.
+
+### Observe
+
+Run the focused test, then the relevant type, lint, and build checks. Review
+the diff against acceptance and confirm the test could expose the defect.
+
+### Learn
+
+Record a `work note <id> "..."` only for a reusable correction, decision, or
+failed approach. Keep ordinary command output out of notes.
+
+### Continue
+
+Complete with `work done <id>` and the evidence required by enabled policies.
+Use tag-prefixed claim/proof pairs such as `test:` or `qa:` when those gates
+are active. Otherwise return the next ready item or a concrete blocker.

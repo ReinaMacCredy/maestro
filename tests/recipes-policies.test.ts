@@ -26,13 +26,21 @@ const recipeNames = [
 
 async function snapshotTree(root: string): Promise<Map<string, string>> {
   const snapshot = new Map<string, string>();
+  const runtimeStoreFiles = new Set([
+    ".maestro/maestro.db",
+    ".maestro/maestro.db-shm",
+    ".maestro/maestro.db-wal",
+  ]);
   const visit = async (directory: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(path);
       } else if (entry.isFile()) {
-        snapshot.set(relative(root, path), (await readFile(path)).toString("base64"));
+        const repoPath = relative(root, path);
+        if (!runtimeStoreFiles.has(repoPath)) {
+          snapshot.set(repoPath, (await readFile(path)).toString("base64"));
+        }
       }
     }
   };
