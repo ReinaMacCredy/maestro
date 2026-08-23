@@ -266,6 +266,11 @@ test("9 policy-witness requires a witness note from a different session", async 
     };
     expect((await runCli(fixture, ["work", "start", parent], ownerEnv)).exitCode).toBe(0);
 
+    const selfWitness = await runCli(
+      fixture,
+      ["work", "note", parent, "witness: owner self-review"],
+      ownerEnv,
+    );
     const blocked = await runCli(
       fixture,
       ["work", "done", parent, "--evidence", "owner verification"],
@@ -291,6 +296,7 @@ test("9 policy-witness requires a witness note from a different session", async 
     expect(blockedMessage).toContain(`maestro work note ${parent}`);
     expect(blockedMessage).toContain('"witness:');
     expect(blockedMessage).toContain("different session");
+    expect(selfWitness.exitCode).toBe(0);
     expect(witnessed.exitCode).toBe(0);
     expect(passed.exitCode).toBe(0);
   });
