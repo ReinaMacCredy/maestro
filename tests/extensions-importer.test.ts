@@ -150,6 +150,7 @@ test("38 search returns tagged legacy title, file, and decision hits alongside n
     const perCardDecision = await runCli(fixture, ["search", "ultraviolet"]);
 
     expect(title.stdout).toContain(`work ${idFrom(native)}`);
+    expect(title.stdout).toContain(`work ${idFrom(native)}: Native Aurora follow-up`);
     expect(title.stdout).toContain(`[legacy] ${featureId}`);
     expect(file.stdout).toContain(`[legacy] ${featureId}`);
     expect(decision.stdout).toContain("[legacy] dec-root-sqlite");
@@ -261,11 +262,11 @@ test("52 legacy search summaries and result count stay bounded", async () => {
     const hits = lines.filter((line) => line.startsWith("[legacy]"));
 
     expect(result.exitCode).toBe(0);
-    expect(hits).toHaveLength(50);
-    expect(lines.at(-1)).toContain("10 more matches");
+    expect(hits).toHaveLength(20);
+    expect(lines.at(-1)).toBe("40 more — refine query");
     for (const hit of hits) {
       expect(hit).toMatch(/^\[legacy\] \S+ \(feature, closed\): Context bomb \d+ — /);
-      expect(hit.length).toBeLessThanOrEqual(360);
+      expect(hit.split(" — ").at(-1)?.length).toBeLessThanOrEqual(200);
       expect(hit).not.toContain("schema_version:");
     }
   });
