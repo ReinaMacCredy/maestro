@@ -1,5 +1,0 @@
-{
-  "$id": "maestro.vnext.bootstrap-wiring.v1",
-  "type": "object",
-  "required": ["public_skill", "global_mcp_tools", "stage10_state"]
-}

@@ -1,1 +1,0 @@
-{"case":"network-sandbox-unavailable","expected":"refuse","mutation":{"sandbox_exec":"absent"}}

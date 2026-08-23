@@ -1,9 +1,0 @@
-Script completed
-Wall time 8.2 seconds
-Output:
-COUNTS legacy=4816 c115=3230 repo=4665 cache=15277 binary=64 perroot=34 user=16 total=28102
-TYPES files=27883 symlinks=219
-LOCATOR 0490f6c1960b840181e119d9a5d493a6906686bc3240dfe55f049e5c09d791be
-PASS1 identity=29bfc337d3b4187c04f9e61c3a9f0bc012bdaef9fb93cc5af9a6ff58b8505d8c bytes=2723337235
-PASS2 identity=29bfc337d3b4187c04f9e61c3a9f0bc012bdaef9fb93cc5af9a6ff58b8505d8c bytes=2723337235
-STABLE true changed=0

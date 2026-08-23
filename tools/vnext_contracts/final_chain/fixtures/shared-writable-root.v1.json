@@ -1,1 +1,0 @@
-{"case":"shared-writable-root","expected":"refuse","mutation":{"alias":"python-output=rust-output"}}

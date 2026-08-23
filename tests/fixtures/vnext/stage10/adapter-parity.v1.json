@@ -1,4 +1,0 @@
-{
-  "expected_renderers": ["mcp", "shell", "hook", "tui"],
-  "rule": "immutable-frame"
-}

@@ -1,5 +1,0 @@
-{
-  "$id": "maestro.vnext.adapter-rendering.v1",
-  "type": "object",
-  "required": ["release_ref", "public_catalog_ref", "semantic_ref", "outcome", "summary"]
-}

@@ -1,1 +1,0 @@
-{"case":"engine-coverage-gap","expected":"refuse","mutation":{"remove_engine":"ruby"}}

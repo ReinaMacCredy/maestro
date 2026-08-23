@@ -1,24 +1,2 @@
-# >>> maestro >>>
-# Maestro local agent settings
-.claude/settings.local.json
-.codex/hooks.json
-.factory/hooks.json
-# <<< maestro <<<
-
-# --- user-managed (outside the maestro block) ---
-
-# Rust build artifacts
-/target/
-**/*.rs.bk
-
-# TypeScript/OpenTUI dependencies
-/node_modules/
-
-# Maestro local cache (not covered by the managed block above)
-.maestro/*
-!.maestro/
-!.maestro/store.sqlite
-# macOS / local noise
-.DS_Store
-.claude/scheduled_tasks.lock
-.worktrees/
+node_modules/
+.maestro/

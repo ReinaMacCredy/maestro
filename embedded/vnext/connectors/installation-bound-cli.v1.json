@@ -1,7 +1,0 @@
-{
-  "schema": "maestro.vnext.connector-descriptor.v1",
-  "connector_id": "installation-bound-cli",
-  "read_only": false,
-  "writes": "only-through-governed-cli-after-stage6",
-  "trusted_host_requirement": "Stage5V2"
-}

@@ -1,5 +1,0 @@
-{
-  "schema": "maestro.vnext.external-pattern.v1",
-  "pattern_id": "offline-tui",
-  "rule": "TUI rendering is local and does not perform checkout fallback or network installation."
-}

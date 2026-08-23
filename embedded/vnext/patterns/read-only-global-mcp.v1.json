@@ -1,7 +1,0 @@
-{
-  "schema": "maestro.vnext.external-pattern.v1",
-  "pattern_id": "read-only-global-mcp",
-  "tools": ["maestro_packet", "maestro_cli_search"],
-  "writes": false,
-  "network_io": false
-}

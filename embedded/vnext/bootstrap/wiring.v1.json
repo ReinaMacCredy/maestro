@@ -1,6 +1,0 @@
-{
-  "schema": "maestro.vnext.bootstrap-wiring.v1",
-  "public_skill": "maestro",
-  "global_mcp_tools": ["maestro_packet", "maestro_cli_search"],
-  "stage10_state": "dormant-until-stage5-trusted-host-v2"
-}

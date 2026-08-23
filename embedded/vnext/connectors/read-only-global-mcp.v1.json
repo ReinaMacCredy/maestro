@@ -1,8 +1,0 @@
-{
-  "schema": "maestro.vnext.connector-descriptor.v1",
-  "connector_id": "read-only-global-mcp",
-  "read_only": true,
-  "writes": false,
-  "network_io": false,
-  "tools": ["maestro_packet", "maestro_cli_search"]
-}

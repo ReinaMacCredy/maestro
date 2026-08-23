@@ -1,5 +1,0 @@
-family: progress
-read:
-  - maestro.progress.v1
-write: maestro.progress.v1
-legacy: []

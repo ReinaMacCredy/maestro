@@ -1,9 +1,0 @@
-{
-  "schema": "maestro.vnext.external-pattern.v1",
-  "pattern_id": "trusted-host-diagnostic",
-  "applies_to": ["agents-compatible-cli", "claude-code"],
-  "stage5_checkpoint": "V2",
-  "trusted_host_port": "TrustedHostDiagnosticConnectionPortV1",
-  "authority_continuation": "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
-  "runtime_activation": false
-}
