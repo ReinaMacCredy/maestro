@@ -52,6 +52,12 @@ function isolatedPath(localBin: string): string {
   return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
 }
 
+function errorMessage(result: { stderr: string }): string {
+  const parsed = JSON.parse(result.stderr) as { error?: { message?: unknown } };
+  if (typeof parsed.error?.message !== "string") throw new Error("missing CLI error message");
+  return parsed.error.message;
+}
+
 test("1 recipe list prints the shipped catalog with one-line descriptions", async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(fixture, ["recipe", "list"]);
@@ -149,11 +155,12 @@ test("6 policy-tdd blocks untagged write completion and passes a test-tagged pai
       "bun test passes",
     ]);
     const shown = await runCli(fixture, ["work", "show", id]);
+    const blockedMessage = errorMessage(blocked);
 
     expect(blocked.exitCode).not.toBe(0);
     expect(blocked.stderr).toContain("policy-tdd");
-    expect(blocked.stderr).toContain(`maestro work done ${id}`);
-    expect(blocked.stderr).toContain('--claim "test:');
+    expect(blockedMessage).toContain(`maestro work done ${id}`);
+    expect(blockedMessage).toContain('--claim "test:');
     expect(passed.exitCode).toBe(0);
     expect(shown.stdout).toContain("claim: test: regression covered");
     expect(shown.stdout).toContain("proof: bun test passes");
@@ -197,11 +204,12 @@ test("7 policy-qa blocks an untagged parent close and passes a qa-tagged pair", 
       "--proof",
       "observed expected output",
     ]);
+    const blockedMessage = errorMessage(blocked);
 
     expect(blocked.exitCode).not.toBe(0);
     expect(blocked.stderr).toContain("policy-qa");
-    expect(blocked.stderr).toContain(`maestro work done ${parent}`);
-    expect(blocked.stderr).toContain('--claim "qa:');
+    expect(blockedMessage).toContain(`maestro work done ${parent}`);
+    expect(blockedMessage).toContain('--claim "qa:');
     expect(passed.exitCode).toBe(0);
   });
 });
@@ -224,11 +232,12 @@ test("8 policy-research blocks a fresh feature and passes after a research note"
     const blocked = await runCli(fixture, ["work", "start", id]);
     const noted = await runCli(fixture, ["work", "note", id, "research: precedent inspected"]);
     const passed = await runCli(fixture, ["work", "start", id]);
+    const blockedMessage = errorMessage(blocked);
 
     expect(blocked.exitCode).not.toBe(0);
     expect(blocked.stderr).toContain("policy-research");
-    expect(blocked.stderr).toContain(`maestro work note ${id}`);
-    expect(blocked.stderr).toContain('"research:');
+    expect(blockedMessage).toContain(`maestro work note ${id}`);
+    expect(blockedMessage).toContain('"research:');
     expect(noted.exitCode).toBe(0);
     expect(passed.exitCode).toBe(0);
   });
@@ -275,12 +284,13 @@ test("9 policy-witness requires a witness note from a different session", async 
       ["work", "done", parent, "--evidence", "owner verification"],
       ownerEnv,
     );
+    const blockedMessage = errorMessage(blocked);
 
     expect(blocked.exitCode).not.toBe(0);
     expect(blocked.stderr).toContain("policy-witness");
-    expect(blocked.stderr).toContain(`maestro work note ${parent}`);
-    expect(blocked.stderr).toContain('"witness:');
-    expect(blocked.stderr).toContain("different session");
+    expect(blockedMessage).toContain(`maestro work note ${parent}`);
+    expect(blockedMessage).toContain('"witness:');
+    expect(blockedMessage).toContain("different session");
     expect(witnessed.exitCode).toBe(0);
     expect(passed.exitCode).toBe(0);
   });
