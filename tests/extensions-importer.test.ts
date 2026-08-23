@@ -11,7 +11,7 @@ function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function writeLegacyStore(fixture: Fixture): Promise<string> {
+async function writeLegacyStore(fixture: Fixture, extraCards = 0): Promise<string> {
   const path = join(fixture.repo, ".maestro", "store.sqlite");
   const database = new Database(path, { create: true, strict: true });
   database.exec(`
@@ -79,6 +79,20 @@ async function writeLegacyStore(fixture: Fixture): Promise<string> {
     now,
     now,
   );
+  for (let index = 0; index < extraCards; index += 1) {
+    const id = `feature-context-bomb-${String(index).padStart(2, "0")}`;
+    insertCard.run(
+      id,
+      "feature",
+      null,
+      "closed",
+      `Context bomb ${index}`,
+      `schema_version: "4"\nid: ${id}\ncard_type: feature\nstatus: closed\ntitle: Context bomb ${index}\ndescription: ${"contextbomb ".repeat(80)}\n`,
+      now,
+      now,
+      now,
+    );
+  }
 
   const insertFile = database.query(
     `INSERT INTO card_files (card_id, path, mode, contents, sha256, updated_at)
@@ -234,5 +248,25 @@ test("E1/E2 ordinary verbs neither touch the Rust store nor auto-import legacy r
     database.close();
     expect(count).toBe(0);
     expect(sha256(await readFile(source))).toBe(before);
+  });
+});
+
+test("52 legacy search summaries and result count stay bounded", async () => {
+  await withFixture(async (fixture) => {
+    await writeLegacyStore(fixture, 60);
+    expect((await runCli(fixture, ["import", "rust"])).exitCode).toBe(0);
+
+    const result = await runCli(fixture, ["search", "contextbomb"]);
+    const lines = result.stdout.trim().split("\n");
+    const hits = lines.filter((line) => line.startsWith("[legacy]"));
+
+    expect(result.exitCode).toBe(0);
+    expect(hits).toHaveLength(50);
+    expect(lines.at(-1)).toContain("10 more matches");
+    for (const hit of hits) {
+      expect(hit).toMatch(/^\[legacy\] \S+ \(feature, closed\): Context bomb \d+ — /);
+      expect(hit.length).toBeLessThanOrEqual(360);
+      expect(hit).not.toContain("schema_version:");
+    }
   });
 });
