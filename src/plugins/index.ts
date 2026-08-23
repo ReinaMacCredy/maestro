@@ -1,6 +1,7 @@
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
+import { installPlugin } from "./install.ts";
 import { observabilityPlugin } from "./observability.ts";
 import { pluginManagerPlugin } from "./plugin-manager.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
@@ -17,4 +18,5 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyBreakdownPlugin,
   observabilityPlugin,
   watchPlugin,
+  installPlugin,
 ];

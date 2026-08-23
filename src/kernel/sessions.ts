@@ -28,9 +28,22 @@ export class Sessions {
   }
 
   current(): { id: string; pid: number } {
-    const id = process.env.MAESTRO_SESSION_ID || `pid-${process.pid}`;
-    const parsed = Number(process.env.MAESTRO_SESSION_PID ?? process.pid);
-    return { id, pid: Number.isInteger(parsed) && parsed > 0 ? parsed : process.pid };
+    const explicitPid = Number(process.env.MAESTRO_SESSION_PID);
+    const pid = Number.isInteger(explicitPid) && explicitPid > 0 ? explicitPid : this.hostPid();
+    const environmentId =
+      process.env.MAESTRO_SESSION_ID ||
+      process.env.CODEX_SESSION_ID ||
+      process.env.CODEX_THREAD_ID ||
+      process.env.CLAUDE_CODE_SESSION_ID ||
+      process.env.CLAUDE_SESSION_ID ||
+      process.env.CURSOR_SESSION_ID;
+    if (environmentId) return { id: environmentId, pid };
+    const recorded = this.store.database
+      .query<{ id: string }, [number]>(
+        "SELECT id FROM sessions WHERE pid = ? ORDER BY last_seen DESC LIMIT 1",
+      )
+      .get(pid);
+    return { id: recorded?.id ?? `pid-${pid}`, pid };
   }
 
   record(event: string): SessionRecord {
@@ -85,5 +98,26 @@ export class Sessions {
     } catch {
       return false;
     }
+  }
+
+  private hostPid(): number {
+    const directParent = process.ppid;
+    let candidate = directParent;
+    for (let depth = 0; depth < 6 && candidate > 1; depth += 1) {
+      let result: ReturnType<typeof Bun.spawnSync>;
+      try {
+        result = Bun.spawnSync(["ps", "-o", "ppid=,comm=", "-p", String(candidate)]);
+      } catch {
+        break;
+      }
+      if (result.exitCode !== 0) break;
+      const output = result.stdout.toString().trim();
+      const match = output.match(/^(\d+)\s+(.+)$/);
+      if (!match) break;
+      const command = match[2] as string;
+      if (/(^|\/)(codex|claude|cursor)(\s|$)/i.test(command)) return candidate;
+      candidate = Number(match[1]);
+    }
+    return directParent;
   }
 }
