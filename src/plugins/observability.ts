@@ -69,34 +69,46 @@ export const observabilityPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("search", (invocation): CliResult => {
-        const term = required(invocation, 0, "search term");
-        const query = `"${term.replaceAll('"', '""')}"`;
-        const matches = context.store.database
-          .query<SearchRow, [string]>(
-            "SELECT surface, entity_id, text FROM search_index WHERE search_index MATCH ? ORDER BY rowid",
-          )
-          .all(query);
-        return {
-          data: { matches },
-          text: matches
-            .map((match) => `${match.surface} ${match.entity_id}: ${match.text}`)
-            .join("\n"),
-        };
-      }, {}, 1),
+      context.cli.register(
+        "search",
+        (invocation): CliResult => {
+          const term = required(invocation, 0, "search term");
+          const query = `"${term.replaceAll('"', '""')}"`;
+          const matches = context.store.database
+            .query<SearchRow, [string]>(
+              "SELECT surface, entity_id, text FROM search_index WHERE search_index MATCH ? ORDER BY rowid",
+            )
+            .all(query);
+          return {
+            data: { matches },
+            text: matches
+              .map((match) => `${match.surface} ${match.entity_id}: ${match.text}`)
+              .join("\n"),
+          };
+        },
+        {},
+        1,
+        "Search work, decisions, notes, and event history.",
+      ),
     );
 
     context.effect(() =>
-      context.cli.register("trace", (invocation): CliResult => {
-        const id = required(invocation, 0, "work id");
-        const events = context.log.list("work", id);
-        return {
-          data: { events },
-          text: events
-            .map((event) => `${event.id} ${event.type} ${JSON.stringify(event.payload)}`)
-            .join("\n"),
-        };
-      }, {}, 1),
+      context.cli.register(
+        "trace",
+        (invocation): CliResult => {
+          const id = required(invocation, 0, "work id");
+          const events = context.log.list("work", id);
+          return {
+            data: { events },
+            text: events
+              .map((event) => `${event.id} ${event.type} ${JSON.stringify(event.payload)}`)
+              .join("\n"),
+          };
+        },
+        {},
+        1,
+        "Reconstruct one work item's event history.",
+      ),
     );
   },
 };

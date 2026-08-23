@@ -1,6 +1,7 @@
 import type { Disposer } from "./events.ts";
 
 export interface FlagDefinition {
+  description?: string;
   multiple?: boolean;
   value?: boolean;
 }
@@ -21,9 +22,15 @@ export type CliHandler = (
 ) => CliResult | string | void | Promise<CliResult | string | void>;
 
 interface CommandDefinition {
+  description: string;
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
   maxPositionals: number;
+}
+
+interface HelpRow {
+  description: string;
+  label: string;
 }
 
 function editDistance(left: string, right: string): number {
@@ -64,11 +71,13 @@ export class Cli {
     handler: CliHandler,
     flags: Record<string, FlagDefinition> = {},
     maxPositionals = 0,
+    description = `Run ${command}.`,
   ): Disposer {
     if (this.commands.has(command)) {
       throw new Error(`command already registered: ${command}`);
     }
     this.commands.set(command, {
+      description: this.oneLine(description, `Run ${command}.`),
       handler,
       flags: new Map(Object.entries(flags)),
       maxPositionals,
@@ -90,14 +99,29 @@ export class Cli {
 
   async dispatch(args: string[]): Promise<number> {
     try {
-      if (args.length === 0 || args[0] === "help" || args[0] === "--help") {
-        const unexpected = args[1];
+      if (args.length === 0) {
+        process.stdout.write(this.helpText());
+        return 0;
+      }
+      if (args[0] === "help") {
+        const unexpected = args[2];
         if (unexpected) {
           throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
             argument: unexpected,
           });
         }
-        process.stdout.write(this.helpText());
+        process.stdout.write(this.helpText(args[1]));
+        return 0;
+      }
+      const helpIndex = args.indexOf("--help");
+      if (helpIndex >= 0) {
+        const unexpected = args[helpIndex + 1];
+        if (unexpected) {
+          throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
+            argument: unexpected,
+          });
+        }
+        process.stdout.write(this.helpText(args.slice(0, helpIndex).join(" ") || undefined));
         return 0;
       }
       const found = this.findCommand(args);
@@ -218,8 +242,85 @@ export class Cli {
     return { command, options, positionals };
   }
 
-  private helpText(): string {
-    return `verbs:\n${this.rootVerbs().map((verb) => `  ${verb}`).join("\n")}\n`;
+  private helpText(target?: string): string {
+    if (!target) {
+      const rows = this.rootVerbs().map((verb): HelpRow => ({
+        label: verb,
+        description: this.rootDescription(verb),
+      }));
+      return `verbs:\n${this.formatRows(rows, "  ")}\n`;
+    }
+
+    const entries = [...this.commands.entries()]
+      .filter(([command]) => command === target || command.startsWith(`${target} `))
+      .sort(([left], [right]) => left.localeCompare(right));
+    if (entries.length === 0) {
+      const { attempted, suggestions } = this.nearestCommands(target.split(" "));
+      throw new CliError(
+        "UNKNOWN_VERB",
+        `unknown verb: ${attempted}; nearest: ${suggestions.join(", ")}`,
+        { suggestions, verb: attempted },
+      );
+    }
+
+    const direct = entries.find(([command]) => command === target)?.[1];
+    const description = direct?.description ?? entries[0]?.[1].description ?? `Run ${target}.`;
+    const lines = [`${target}  ${description}`];
+    if (direct) lines.push(...this.flagHelp(target, direct));
+
+    const nested = entries.filter(([command]) => command !== target);
+    if (nested.length > 0) {
+      lines.push("subverbs:");
+      const rows = nested.map(([command, definition]): HelpRow => ({
+        label: command.slice(target.length + 1),
+        description: definition.description,
+      }));
+      const commandLines = this.formatRows(rows, "  ").split("\n");
+      for (const [index, [command, definition]] of nested.entries()) {
+        lines.push(commandLines[index] ?? command);
+        const flags = this.flagHelp(command, definition);
+        if (flags.length > 0) lines.push(...flags);
+      }
+    }
+    return `${lines.join("\n")}\n`;
+  }
+
+  private flagHelp(command: string, definition: CommandDefinition): string[] {
+    const flags = new Map([
+      ...definition.flags,
+      ...(this.extensions.get(command) ?? new Map<string, FlagDefinition>()),
+    ]);
+    if (flags.size === 0) return [];
+    const rows = [...flags.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([flag, metadata]): HelpRow => ({
+        label: `${flag}${metadata.value ? " <value>" : ""}${metadata.multiple ? " (repeatable)" : ""}`,
+        description: this.oneLine(metadata.description, `Set ${flag}.`),
+      }));
+    return [this.formatRows(rows, "    ")];
+  }
+
+  private formatRows(rows: HelpRow[], indent: string): string {
+    const width = Math.max(...rows.map((row) => row.label.length));
+    return rows
+      .map((row) => `${indent}${row.label.padEnd(width + 2)}${row.description}`)
+      .join("\n");
+  }
+
+  private rootDescription(root: string): string {
+    if (root === "help") return "Show top-level or per-verb help.";
+    const direct = this.commands.get(root);
+    if (direct) return direct.description;
+    const nested = [...this.commands.entries()]
+      .filter(([command]) => command.startsWith(`${root} `))
+      .sort(([left], [right]) => left.localeCompare(right));
+    return nested[0]?.[1].description ?? `Run ${root} commands.`;
+  }
+
+  private oneLine(description: string | undefined, fallback: string): string {
+    const value = description?.trim() || fallback;
+    if (/\r|\n/.test(value)) throw new Error("CLI descriptions must fit on one line");
+    return value;
   }
 
   private nearestCommands(args: string[]): { attempted: string; suggestions: string[] } {

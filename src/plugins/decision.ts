@@ -201,11 +201,12 @@ export const decisionPlugin: BuiltInPlugin = {
           return { data: { decision: created }, text: format(created) };
         },
         {
-          "--parent": { value: true },
-          "--work": { value: true },
-          "--supersedes": { value: true },
+          "--parent": { description: "Attach this draft beneath a parent decision.", value: true },
+          "--work": { description: "Link this draft to a work item.", value: true },
+          "--supersedes": { description: "Supersede a locked decision with this draft.", value: true },
         },
         2,
+        "Create or edit a draft decision.",
       ),
     );
 
@@ -228,24 +229,30 @@ export const decisionPlugin: BuiltInPlugin = {
         });
         const locked = service.get(id) as DecisionRecord;
         return { data: { decision: locked }, text: format(locked) };
-      }, {}, 1),
+      }, {}, 1, "Lock a draft decision against further edits."),
     );
 
     context.effect(() =>
       context.cli.register("decision show", (invocation): CliResult => {
         const decision = requireDecision(context, required(invocation, 0, "decision id"));
         return { data: { decision }, text: format(decision) };
-      }, {}, 1),
+      }, {}, 1, "Show one decision and its links."),
     );
 
     context.effect(() =>
-      context.cli.register("decision list", (): CliResult => {
-        const decisions = service.list();
-        return {
-          data: { decisions },
-          text: decisions.map((decision) => `${decision.id} [${decision.state}] ${decision.text}`).join("\n"),
-        };
-      }),
+      context.cli.register(
+        "decision list",
+        (): CliResult => {
+          const decisions = service.list();
+          return {
+            data: { decisions },
+            text: decisions.map((decision) => `${decision.id} [${decision.state}] ${decision.text}`).join("\n"),
+          };
+        },
+        {},
+        0,
+        "List decisions and their current states.",
+      ),
     );
   },
 };

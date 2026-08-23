@@ -51,7 +51,9 @@ export const watchPlugin: BuiltInPlugin = {
             await Bun.sleep(1000);
           }
         },
-        { "--once": {} },
+        { "--once": { description: "Render one snapshot and exit." } },
+        0,
+        "Render live work and session state.",
       ),
     );
   },

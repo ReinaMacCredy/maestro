@@ -236,13 +236,21 @@ export const workPlugin: BuiltInPlugin = {
           return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
         },
         {
-          "--kind": { value: true },
-          "--parent": { value: true },
-          "--blocked-by": { value: true, multiple: true },
-          "--acceptance": { value: true },
-          "--atomic-reason": { value: true },
+          "--kind": { description: "Set the work kind.", value: true },
+          "--parent": { description: "Attach the item beneath a parent work ID.", value: true },
+          "--blocked-by": {
+            description: "Add a blocking work ID.",
+            value: true,
+            multiple: true,
+          },
+          "--acceptance": { description: "Record the observable acceptance condition.", value: true },
+          "--atomic-reason": {
+            description: "Explain why parentless work needs no child breakdown.",
+            value: true,
+          },
         },
         1,
+        "Add a tracked work item.",
       ),
     );
 
@@ -292,7 +300,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { holder: session.id },
         });
         return { data: { work: service.get(id) }, text: `${id} started by ${session.id}` };
-      }, {}, 1),
+      }, {}, 1, "Start work and claim its live session lease."),
     );
 
     context.effect(() =>
@@ -312,7 +320,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { text },
         });
         return { data: { id, text }, text: `${id} note: ${text}` };
-      }, {}, 2),
+      }, {}, 2, "Append a note to a work item."),
     );
 
     context.effect(() =>
@@ -358,8 +366,14 @@ export const workPlugin: BuiltInPlugin = {
           });
           return { data: { work: service.get(id) }, text: `${id} done` };
         },
-        { "--evidence": { value: true } },
+        {
+          "--evidence": {
+            description: "Record opaque completion evidence.",
+            value: true,
+          },
+        },
         1,
+        "Complete held work with policy-checked evidence.",
       ),
     );
 
@@ -367,41 +381,53 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         return { data: { work }, text: formatWork(work) };
-      }, {}, 1),
+      }, {}, 1, "Show one work item and its recorded evidence."),
     );
 
     context.effect(() =>
-      context.cli.register("work list", (): CliResult => {
-        const works = service.list();
-        return {
-          data: { works },
-          text: works.map((work) => `${work.id} [${work.state}] ${work.title}`).join("\n"),
-        };
-      }),
+      context.cli.register(
+        "work list",
+        (): CliResult => {
+          const works = service.list();
+          return {
+            data: { works },
+            text: works.map((work) => `${work.id} [${work.state}] ${work.title}`).join("\n"),
+          };
+        },
+        {},
+        0,
+        "List tracked work and current states.",
+      ),
     );
 
     context.effect(() =>
-      context.cli.register("ready", (): CliResult => {
-        const items = service.list().map((work) => {
-          const blockers = context.store.database
-            .query<{ id: string; state: string }, [string]>(
-              `SELECT blocker.id, blocker.state
-               FROM work_blockers edge
-               JOIN work blocker ON blocker.id = edge.blocker_id
-               WHERE edge.work_id = ?`,
-            )
-            .all(work.id);
-          return { ...work, blockers };
-        });
-        const ready = context.ready.project(items);
-        return {
-          data: { works: ready },
-          text:
-            ready.length > 0
-              ? ready.map((work) => `${work.id} ${work.title}`).join("\n")
-              : "no ready work",
-        };
-      }),
+      context.cli.register(
+        "ready",
+        (): CliResult => {
+          const items = service.list().map((work) => {
+            const blockers = context.store.database
+              .query<{ id: string; state: string }, [string]>(
+                `SELECT blocker.id, blocker.state
+                 FROM work_blockers edge
+                 JOIN work blocker ON blocker.id = edge.blocker_id
+                 WHERE edge.work_id = ?`,
+              )
+              .all(work.id);
+            return { ...work, blockers };
+          });
+          const ready = context.ready.project(items);
+          return {
+            data: { works: ready },
+            text:
+              ready.length > 0
+                ? ready.map((work) => `${work.id} ${work.title}`).join("\n")
+                : "no ready work",
+          };
+        },
+        {},
+        0,
+        "List work unblocked and ready to start.",
+      ),
     );
   },
 };

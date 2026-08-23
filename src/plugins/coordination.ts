@@ -252,48 +252,60 @@ export const coordinationPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("msg send", (invocation): CliResult => {
-        const target = required(invocation, 0, "target session");
-        const text = required(invocation, 1, "message text");
-        const message = mailbox.send(target, text);
-        const sender = context.sessions.get(message.senderSession);
-        const targetSession = context.sessions.get(target);
-        const nativeDelivery =
-          sender?.harness === "claude" &&
-          targetSession?.harness === "claude" &&
-          targetSession.live;
-        context.log.append({
-          type: "msg.send",
-          entityType: "message",
-          entityId: String(message.id),
-          sessionId: message.senderSession,
-          payload: message,
-        });
-        const deliveryTip = nativeDelivery
-          ? `[native-delivery] also use native SendMessage for session ${target}`
-          : "";
-        return {
-          data: { message, nativeDelivery },
-          text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),
-        };
-      }, {}, 2),
+      context.cli.register(
+        "msg send",
+        (invocation): CliResult => {
+          const target = required(invocation, 0, "target session");
+          const text = required(invocation, 1, "message text");
+          const message = mailbox.send(target, text);
+          const sender = context.sessions.get(message.senderSession);
+          const targetSession = context.sessions.get(target);
+          const nativeDelivery =
+            sender?.harness === "claude" &&
+            targetSession?.harness === "claude" &&
+            targetSession.live;
+          context.log.append({
+            type: "msg.send",
+            entityType: "message",
+            entityId: String(message.id),
+            sessionId: message.senderSession,
+            payload: message,
+          });
+          const deliveryTip = nativeDelivery
+            ? `[native-delivery] also use native SendMessage for session ${target}`
+            : "";
+          return {
+            data: { message, nativeDelivery },
+            text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),
+          };
+        },
+        {},
+        2,
+        "Send a message to another live session.",
+      ),
     );
 
     context.effect(() =>
-      context.cli.register("msg read", (): CliResult => {
-        const sessionId = context.sessions.current().id;
-        const messages = mailbox.read(sessionId);
-        if (messages.length > 0) {
-          context.log.append({
-            type: "msg.read",
-            entityType: "session",
-            entityId: sessionId,
-            sessionId,
-            payload: { messageIds: messages.map((message) => message.id) },
-          });
-        }
-        return { data: { messages }, text: formatMessages(messages) };
-      }),
+      context.cli.register(
+        "msg read",
+        (): CliResult => {
+          const sessionId = context.sessions.current().id;
+          const messages = mailbox.read(sessionId);
+          if (messages.length > 0) {
+            context.log.append({
+              type: "msg.read",
+              entityType: "session",
+              entityId: sessionId,
+              sessionId,
+              payload: { messageIds: messages.map((message) => message.id) },
+            });
+          }
+          return { data: { messages }, text: formatMessages(messages) };
+        },
+        {},
+        0,
+        "Read new messages for the current session.",
+      ),
     );
 
     context.effect(() =>
@@ -316,28 +328,39 @@ export const coordinationPlugin: BuiltInPlugin = {
           const text = await brief.render(session.id);
           return { data: { session, brief: text }, text };
         },
-        { "--event": { value: true }, "--harness": { value: true } },
+        {
+          "--event": { description: "Record this harness event name.", value: true },
+          "--harness": { description: "Record the originating harness.", value: true },
+        },
+        0,
+        "Record a harness event and print the dynamic brief.",
       ),
     );
 
     context.effect(() =>
-      context.cli.register("status", (): CliResult => {
-        const sessions = context.sessions.list();
-        const peers = livePeers(sessions, work.list(), context.sessions.current().id);
-        const sessionText =
-          sessions.length > 0
-            ? sessions
-                .map(
-                  (session) =>
-                    `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"}`,
-                )
-                .join("\n")
-            : "no sessions";
-        return {
-          data: { livePeers: peers, sessions },
-          text: [sessionText, formatLivePeers(peers)].filter(Boolean).join("\n"),
-        };
-      }),
+      context.cli.register(
+        "status",
+        (): CliResult => {
+          const sessions = context.sessions.list();
+          const peers = livePeers(sessions, work.list(), context.sessions.current().id);
+          const sessionText =
+            sessions.length > 0
+              ? sessions
+                  .map(
+                    (session) =>
+                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"}`,
+                  )
+                  .join("\n")
+              : "no sessions";
+          return {
+            data: { livePeers: peers, sessions },
+            text: [sessionText, formatLivePeers(peers)].filter(Boolean).join("\n"),
+          };
+        },
+        {},
+        0,
+        "Show sessions, live peers, and held work.",
+      ),
     );
   },
 };

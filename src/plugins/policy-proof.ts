@@ -27,10 +27,18 @@ export const policyProofPlugin: BuiltInPlugin = {
   inject: ["work"],
   apply(context) {
     context.effect(() =>
-      context.cli.registerFlag("work done", "--claim", { value: true, multiple: true }),
+      context.cli.registerFlag("work done", "--claim", {
+        description: "Record a completion claim.",
+        value: true,
+        multiple: true,
+      }),
     );
     context.effect(() =>
-      context.cli.registerFlag("work done", "--proof", { value: true, multiple: true }),
+      context.cli.registerFlag("work done", "--proof", {
+        description: "Record proof paired with a claim.",
+        value: true,
+        multiple: true,
+      }),
     );
     context.effect(() =>
       context.events.on<CompletionInput, CompletionResult>("work.done", async (input, next) => {
