@@ -7,3 +7,5 @@
 - [Bundle 2 recipes](archive/maestro-ts-recipes-policies/) — built-in `recipe` serves 18 source-owned markdown methods on demand and contributes only a brief pointer; `recipe show` never extracts content into repos.
 - [Bundle 2 policies](archive/maestro-ts-recipes-policies/) — tdd/qa/research/witness ship disabled and gate through `test:`/`qa:` claim-proof pairs or `research:`/independent-session `witness:` notes; mutation coverage proves witness identity matters.
 - [ADR-0005](adr/0005-shared-store-anchor.md) — one repository-unique store shared by worktrees; non-standard Git layouts stay isolated and concurrent IDs/leases use bounded SQLite serialization
+- [Bundle 3 shared coordination](archive/maestro-ts-coordination/) — worktrees share the Git-common-root store; cwd fallback accepts only Git's explicit outside-repository diagnostics, while private stage-1 stores and legacy `store.sqlite` remain untouched.
+- [Bundle 3 peer identity](archive/maestro-ts-coordination/) — overlap and live-peer output are advisory-only; hook adapters persist Claude/Codex harness identity and Claude-to-live-Claude mail advertises native SendMessage delivery.
