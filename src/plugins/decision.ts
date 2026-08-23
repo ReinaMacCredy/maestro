@@ -127,7 +127,7 @@ export const decisionPlugin: BuiltInPlugin = {
           const first = required(invocation, 0, "decision text");
           const second = invocation.positionals[1];
           const existing = getDecision(context, first);
-          if (existing && second) {
+          if (existing && second !== undefined) {
             if (existing.state !== "draft") {
               throw new CliError(
                 "LOCKED_DECISION",
@@ -135,7 +135,7 @@ export const decisionPlugin: BuiltInPlugin = {
                 { id: existing.id, state: existing.state },
               );
             }
-            const text = second;
+            const text = required(invocation, 1, "replacement text");
             const updatedAt = new Date().toISOString();
             context.store.database
               .query("UPDATE decisions SET text = ?, updated_at = ? WHERE id = ? AND state = 'draft'")
@@ -150,7 +150,7 @@ export const decisionPlugin: BuiltInPlugin = {
             const updated = service.get(existing.id);
             return { data: { decision: updated }, text: format(updated as DecisionRecord) };
           }
-          if (second) {
+          if (second !== undefined) {
             throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${second}`, {
               argument: second,
             });

@@ -233,6 +233,23 @@ test("24 unexpected positionals fail with UNKNOWN_ARGUMENT naming the token", as
     const draftError = JSON.parse(drafted.stderr.trim());
     expect(draftError.error.code).toBe("UNKNOWN_ARGUMENT");
     expect(draftError.error.message).toContain("discarded decision text");
+
+    const emptyCreate = await runCli(fixture, [
+      "decision",
+      "draft",
+      "kept empty decision text",
+      "",
+    ]);
+    expect(emptyCreate.exitCode).not.toBe(0);
+    const emptyCreateError = JSON.parse(emptyCreate.stderr.trim());
+    expect(emptyCreateError.error.code).toBe("UNKNOWN_ARGUMENT");
+    expect(emptyCreateError.error.argument).toBe("");
+
+    const editable = idFrom(await runCli(fixture, ["decision", "draft", "editable decision"]));
+    const emptyEdit = await runCli(fixture, ["decision", "draft", editable, ""]);
+    expect(emptyEdit.exitCode).not.toBe(0);
+    const emptyEditError = JSON.parse(emptyEdit.stderr.trim());
+    expect(emptyEditError.error.code).toBe("MISSING_ARGUMENT");
   });
 });
 
