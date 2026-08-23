@@ -1,6 +1,7 @@
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
+import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
 import { observabilityPlugin } from "./observability.ts";
 import { pluginManagerPlugin } from "./plugin-manager.ts";
@@ -28,6 +29,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyWitnessPlugin,
   recipePlugin,
   observabilityPlugin,
+  importRustPlugin,
   watchPlugin,
   versionPlugin,
   installPlugin,

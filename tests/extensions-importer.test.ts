@@ -171,15 +171,21 @@ test("39 legacy show prints one card, selects one file, and suggests a near miss
 
 test("40 repeated rust imports replace legacy rows without changing counts", async () => {
   await withFixture(async (fixture) => {
-    await writeLegacyStore(fixture);
+    const source = await writeLegacyStore(fixture);
 
     const first = await runCli(fixture, ["import", "rust"]);
-    const second = await runCli(fixture, ["import", "rust"]);
+    const second = await runCli(fixture, ["import", "rust", "--path", source]);
     const database = targetDatabase(fixture);
     const counts = {
-      cards: database.query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_cards").get()?.count,
-      decisions: database.query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_decisions").get()?.count,
-      files: database.query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_files").get()?.count,
+      cards: database
+        .query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_cards")
+        .get()?.count,
+      decisions: database
+        .query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_decisions")
+        .get()?.count,
+      files: database
+        .query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_files")
+        .get()?.count,
     };
     database.close();
 

@@ -51,7 +51,7 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
 export class Store {
   readonly database: Database;
 
-  constructor(path: string) {
+  constructor(readonly path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.database = new Database(path, { create: true, strict: true });
     this.database.exec("PRAGMA busy_timeout = 5000");
