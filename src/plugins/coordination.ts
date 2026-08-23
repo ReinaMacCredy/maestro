@@ -1,7 +1,7 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { WorkService } from "./work.ts";
+import type { WorkRecord, WorkService } from "./work.ts";
 
 interface MessageRow {
   id: number;
@@ -17,6 +17,23 @@ export interface MessageRecord {
   senderSession: string;
   text: string;
   createdAt: string;
+}
+
+interface LivePeer {
+  heldWork: WorkRecord[];
+  id: string;
+}
+
+interface WorkStartInput {
+  sessionId: string;
+  work: WorkRecord;
+}
+
+interface WorkStartResult {
+  blocked: boolean;
+  evidence?: string;
+  origin?: string;
+  reason?: string;
 }
 
 type BriefContributor = (sessionId: string) => string | Promise<string>;
@@ -127,6 +144,27 @@ function formatMessages(messages: MessageRecord[]): string {
     .join("\n");
 }
 
+function livePeers(context: PluginContext, work: WorkService, sessionId: string): LivePeer[] {
+  const items = work.list();
+  return context.sessions
+    .list()
+    .filter((session) => session.live && session.id !== sessionId)
+    .map((session) => ({
+      heldWork: items.filter((item) => item.heldBy === session.id),
+      id: session.id,
+    }));
+}
+
+function formatLivePeers(peers: LivePeer[]): string {
+  if (peers.length === 0) return "";
+  return `live peers:\n${peers
+    .map((peer) => {
+      const held = peer.heldWork.map((item) => `${item.id} ${item.title}`).join(", ") || "none";
+      return `- ${peer.id} holds: ${held}`;
+    })
+    .join("\n")}`;
+}
+
 export const coordinationPlugin: BuiltInPlugin = {
   name: "coordination",
   inject: ["work"],
@@ -159,6 +197,9 @@ export const coordinationPlugin: BuiltInPlugin = {
       }),
     );
     context.effect(() =>
+      brief.register((sessionId) => formatLivePeers(livePeers(context, work, sessionId))),
+    );
+    context.effect(() =>
       brief.register(() => {
         const policies = context.loader.records
           .filter((record) => record.status === "active" && record.name.startsWith("policy-"))
@@ -177,6 +218,28 @@ export const coordinationPlugin: BuiltInPlugin = {
       }),
     );
     context.effect(() => brief.register(() => "next: maestro ready"));
+
+    context.effect(() =>
+      context.events.on<WorkStartInput, WorkStartResult>("work.start", async (input, next) => {
+        const overlaps = work
+          .list()
+          .filter(
+            (item) =>
+              item.id !== input.work.id &&
+              item.parentId === input.work.parentId &&
+              item.heldBy !== null &&
+              item.heldBy !== input.sessionId,
+          );
+        if (overlaps.length > 0) {
+          process.stderr.write(
+            `[overlap] ${input.work.id} is a sibling of ${overlaps
+              .map((item) => `${item.id} held by ${item.heldBy}`)
+              .join(", ")}\n`,
+          );
+        }
+        return next();
+      }),
+    );
 
     context.effect(() =>
       context.cli.register("msg send", (invocation): CliResult => {
@@ -237,17 +300,19 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("status", (): CliResult => {
         const sessions = context.sessions.list();
+        const peers = livePeers(context, work, context.sessions.current().id);
+        const sessionText =
+          sessions.length > 0
+            ? sessions
+                .map(
+                  (session) =>
+                    `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid}`,
+                )
+                .join("\n")
+            : "no sessions";
         return {
-          data: { sessions },
-          text:
-            sessions.length > 0
-              ? sessions
-                  .map(
-                    (session) =>
-                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid}`,
-                  )
-                  .join("\n")
-              : "no sessions",
+          data: { livePeers: peers, sessions },
+          text: [sessionText, formatLivePeers(peers)].filter(Boolean).join("\n"),
         };
       }),
     );
