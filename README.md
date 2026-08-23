@@ -68,3 +68,4 @@ references.
 and the next prompt. It also maintains small pointer blocks in `CLAUDE.md` and
 `AGENTS.md`. Claude consumes its configured commands directly; review Codex
 hook trust with `/hooks` after installation.
+Do not set `MAESTRO_SESSION_PID` manually: sessions anchor to the live agent host process automatically, and the environment variable exists for tests.
