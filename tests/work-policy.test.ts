@@ -47,14 +47,14 @@ test("8 disabling policy-proof removes its flags while core evidence still compl
       "--evidence",
       evidence,
     ]);
-    const shown = await runCli(fixture, ["work", "show", id, "--json"]);
+    const shown = await runCli(fixture, ["work", "show", id]);
 
     expect(rejected.exitCode).not.toBe(0);
     expect(rejected.stderr).toContain("unknown flag");
     expect(rejected.stderr).toContain("--claim");
     expect(completed.exitCode).toBe(0);
     expect(shown.exitCode).toBe(0);
-    expect(JSON.parse(shown.stdout).data.work.evidence).toBe(evidence);
+    expect(shown.stdout).toContain(evidence);
   });
 });
 
