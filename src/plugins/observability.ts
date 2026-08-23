@@ -7,6 +7,19 @@ interface SearchRow {
   text: string;
 }
 
+interface LegacyCardSummary {
+  card_type: string;
+  status: string;
+  title: string;
+}
+
+const legacySearchResultLimit = 20;
+
+function oneLine(value: string, limit: number): string {
+  const compact = value.replaceAll(/\s+/g, " ").trim();
+  return compact.length <= limit ? compact : `${compact.slice(0, limit - 1).trimEnd()}…`;
+}
+
 function required(invocation: CliInvocation, index: number, label: string): string {
   const value = invocation.positionals[index];
   if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
@@ -76,14 +89,52 @@ export const observabilityPlugin: BuiltInPlugin = {
           const query = `"${term.replaceAll('"', '""')}"`;
           const matches = context.store.database
             .query<SearchRow, [string]>(
-              "SELECT surface, entity_id, text FROM search_index WHERE search_index MATCH ? ORDER BY rowid",
+              `SELECT surface, entity_id,
+                      CASE WHEN surface = '[legacy]'
+                        THEN snippet(search_index, 2, '', '', ' … ', 32)
+                        ELSE text
+                      END AS text
+                 FROM search_index
+                WHERE search_index MATCH ?
+                ORDER BY rowid`,
             )
             .all(query);
+          const displayed: Array<SearchRow & Record<string, unknown>> = [];
+          const lines: string[] = [];
+          let legacyMatches = 0;
+          for (const match of matches) {
+            if (match.surface !== "[legacy]") {
+              displayed.push(match);
+              lines.push(`${match.surface} ${match.entity_id}: ${match.text}`);
+              continue;
+            }
+            legacyMatches += 1;
+            if (legacyMatches > legacySearchResultLimit) continue;
+            const card = context.store.database
+              .query<LegacyCardSummary, [string]>(
+                "SELECT card_type, status, title FROM legacy_cards WHERE id = ?",
+              )
+              .get(match.entity_id);
+            const id = oneLine(match.entity_id, 120);
+            const kind = oneLine(card?.card_type ?? "unknown", 40);
+            const status = oneLine(card?.status ?? "unknown", 40);
+            const title = oneLine(card?.title ?? match.entity_id, 120);
+            const snippet = oneLine(match.text, 200);
+            displayed.push({
+              ...match,
+              entity_id: id,
+              text: snippet,
+              cardType: kind,
+              status,
+              title,
+            });
+            lines.push(`[legacy] ${id} (${kind}, ${status}): ${title} — ${snippet}`);
+          }
+          const more = legacyMatches - legacySearchResultLimit;
+          if (more > 0) lines.push(`${more} more — refine query`);
           return {
-            data: { matches },
-            text: matches
-              .map((match) => `${match.surface} ${match.entity_id}: ${match.text}`)
-              .join("\n"),
+            data: { matches: displayed },
+            text: lines.join("\n"),
           };
         },
         {
