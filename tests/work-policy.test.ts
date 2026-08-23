@@ -23,7 +23,7 @@ test("7 policy-proof blocks a claim without matching proof", async () => {
   });
 });
 
-test("8 disabling policy-proof permits completion and preserves opaque evidence verbatim", async () => {
+test("8 disabling policy-proof removes its flags while core evidence still completes verbatim", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["plugin", "disable", "policy-proof"])).exitCode).toBe(0);
     const added = await runCli(fixture, ["work", "add", "inspect", "--kind", "idea"]);
@@ -31,7 +31,7 @@ test("8 disabling policy-proof permits completion and preserves opaque evidence 
     expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
     const evidence = "raw: checks=missing; keep  spacing & punctuation";
 
-    const completed = await runCli(fixture, [
+    const rejected = await runCli(fixture, [
       "work",
       "done",
       id,
@@ -40,8 +40,18 @@ test("8 disabling policy-proof permits completion and preserves opaque evidence 
       "--evidence",
       evidence,
     ]);
+    const completed = await runCli(fixture, [
+      "work",
+      "done",
+      id,
+      "--evidence",
+      evidence,
+    ]);
     const shown = await runCli(fixture, ["work", "show", id, "--json"]);
 
+    expect(rejected.exitCode).not.toBe(0);
+    expect(rejected.stderr).toContain("unknown flag");
+    expect(rejected.stderr).toContain("--claim");
     expect(completed.exitCode).toBe(0);
     expect(shown.exitCode).toBe(0);
     expect(JSON.parse(shown.stdout).data.work.evidence).toBe(evidence);
