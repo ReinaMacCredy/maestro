@@ -3,6 +3,7 @@ import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
+import { lifecyclePlugin } from "./lifecycle.ts";
 import { mcpPlugin } from "./mcp.ts";
 import { observabilityPlugin } from "./observability.ts";
 import { pluginManagerPlugin } from "./plugin-manager.ts";
@@ -35,4 +36,5 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   watchPlugin,
   versionPlugin,
   installPlugin,
+  lifecyclePlugin,
 ];

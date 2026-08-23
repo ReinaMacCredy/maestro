@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
+import { writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
   disabled?: boolean;
@@ -54,6 +55,19 @@ const policyDefaults: PluginEntry[] = [
   { name: "policy-research", disabled: true },
   { name: "policy-witness", disabled: true },
 ];
+
+const managedIgnoreBegin = "# maestro-ts:begin";
+const managedIgnoreEnd = "# maestro-ts:end";
+const managedIgnoreBlock = `${managedIgnoreBegin}\nmaestro.db\nmaestro.db-*\nconfig\n${managedIgnoreEnd}`;
+const managedAdapters = [
+  ".maestro/hooks/record.ts",
+  ".claude/hooks/maestro-record.ts",
+  ".codex/hooks/maestro-record.ts",
+];
+
+function emptyObject(value: Record<string, unknown>): boolean {
+  return Object.keys(value).length === 0;
+}
 
 async function executable(name: string): Promise<string | null> {
   for (const directory of (process.env.PATH ?? "").split(delimiter)) {
@@ -98,11 +112,7 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
     for (const group of groups) {
       group.hooks = group.hooks.filter(
         (handler) =>
-          ![
-            ".maestro/hooks/record.ts",
-            ".claude/hooks/maestro-record.ts",
-            ".codex/hooks/maestro-record.ts",
-          ].some((adapter) => handler.command.includes(adapter)),
+          !managedAdapters.some((adapter) => handler.command.includes(adapter)),
       );
     }
     config.hooks[event] = [
@@ -134,6 +144,128 @@ async function writeMirror(path: string): Promise<void> {
   await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`);
 }
 
+async function writeManagedIgnore(path: string): Promise<void> {
+  const existing = existsSync(path) ? await readFile(path, "utf8") : "";
+  const cleaned = existing.replace(
+    /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
+    "\n",
+  );
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${managedIgnoreBlock}\n`);
+}
+
+async function removeManagedHooks(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false;
+  const config = await readJson<HookConfig>(path, { hooks: {} });
+  let changed = false;
+  if (config.hooks) {
+    for (const [event, groups] of Object.entries(config.hooks)) {
+      const retained = groups
+        .map((group) => {
+          const hooks = group.hooks.filter(
+            (handler) => !managedAdapters.some((adapter) => handler.command.includes(adapter)),
+          );
+          if (hooks.length !== group.hooks.length) changed = true;
+          return { ...group, hooks };
+        })
+        .filter((group) => group.hooks.length > 0);
+      if (retained.length > 0) {
+        config.hooks[event] = retained;
+      } else {
+        delete config.hooks[event];
+      }
+    }
+    if (emptyObject(config.hooks)) delete config.hooks;
+  }
+  if (!changed) return false;
+  if (emptyObject(config)) {
+    await rm(path, { force: true });
+  } else {
+    await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
+  }
+  return true;
+}
+
+async function removeManagedMirror(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false;
+  const existing = await readFile(path, "utf8");
+  const cleaned = existing.replace(
+    /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
+    "\n",
+  );
+  if (cleaned === existing) return false;
+  const normalized = cleaned.replace(/\n{3,}/g, "\n\n").trimEnd();
+  if (!normalized) {
+    await rm(path, { force: true });
+  } else {
+    await writeFile(path, `${normalized}\n`);
+  }
+  return true;
+}
+
+async function removeManagedPolicyConfig(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false;
+  const config = await readJson<Record<string, unknown> & { plugins?: PluginEntry[] }>(path, {});
+  const plugins = Array.isArray(config.plugins) ? config.plugins : [];
+  const managed = new Set(policyDefaults.map((entry) => entry.name));
+  const retained = plugins.filter((entry) => !managed.has(entry.name));
+  if (retained.length === plugins.length) return false;
+  if (retained.length > 0) {
+    config.plugins = retained;
+  } else {
+    delete config.plugins;
+  }
+  if (emptyObject(config)) {
+    await rm(path, { force: true });
+  } else {
+    await writeFile(path, `${JSON.stringify(config)}\n`);
+  }
+  return true;
+}
+
+async function removeManagedIgnore(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false;
+  const existing = await readFile(path, "utf8");
+  const cleaned = existing.replace(
+    /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
+    "\n",
+  );
+  if (cleaned === existing) return false;
+  const normalized = cleaned.replace(/\n{3,}/g, "\n\n").trimEnd();
+  if (!normalized) {
+    await rm(path, { force: true });
+  } else {
+    await writeFile(path, `${normalized}\n`);
+  }
+  return true;
+}
+
+export async function uninstallRepo(repo: string): Promise<string[]> {
+  const removed: string[] = [];
+  for (const path of [
+    join(repo, ".claude", "hooks", "maestro-record.ts"),
+    join(repo, ".codex", "hooks", "maestro-record.ts"),
+  ]) {
+    if (!existsSync(path)) continue;
+    await rm(path, { force: true });
+    removed.push(path);
+  }
+  for (const path of [
+    join(repo, ".claude", "settings.json"),
+    join(repo, ".codex", "hooks.json"),
+  ]) {
+    if (await removeManagedHooks(path)) removed.push(`${path} managed hooks`);
+  }
+  for (const path of [join(repo, "AGENTS.md"), join(repo, "CLAUDE.md")]) {
+    if (await removeManagedMirror(path)) removed.push(`${path} mirror block`);
+  }
+  const config = join(repo, ".maestro", "config");
+  if (await removeManagedPolicyConfig(config)) removed.push(`${config} managed plugins`);
+  const ignore = join(repo, ".maestro", ".gitignore");
+  if (await removeManagedIgnore(ignore)) removed.push(`${ignore} managed block`);
+  return removed;
+}
+
 function hookSource(harness: "claude" | "codex"): string {
   return `#!/usr/bin/env bun
 const raw = await Bun.stdin.text();
@@ -157,7 +289,7 @@ process.exitCode = exitCode;
 `;
 }
 
-async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
+export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
   if (resolve(sourceRoot) === resolve(runtimeRoot)) return;
   await rm(runtimeRoot, { recursive: true, force: true });
   await mkdir(runtimeRoot, { recursive: true });
@@ -166,7 +298,7 @@ async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<voi
   }
 }
 
-async function resolveSourceRoot(repo: string): Promise<string> {
+export async function resolveSourceRoot(repo: string): Promise<string> {
   const loadedRoot = resolve(import.meta.dir, "..", "..");
   const packagePath = join(repo, "package.json");
   if (!existsSync(packagePath) || !existsSync(join(repo, "bin", "maestro.ts"))) {
@@ -180,7 +312,7 @@ async function resolveSourceRoot(repo: string): Promise<string> {
   }
 }
 
-async function readGitHeadCommit(sourceRoot: string): Promise<string | null> {
+export async function readGitHeadCommit(sourceRoot: string): Promise<string | null> {
   const git = Bun.spawn(["git", "-C", sourceRoot, "rev-parse", "HEAD"], {
     stderr: "ignore",
     stdout: "pipe",
@@ -198,7 +330,7 @@ async function readStampedCommit(sourceRoot: string): Promise<string | null> {
   return result.status === "valid" ? result.stamp.commit : null;
 }
 
-async function stampRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
+export async function stampRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
   const packageJson = JSON.parse(
     await readFile(join(sourceRoot, "package.json"), "utf8"),
   ) as PackageJson;
@@ -256,7 +388,14 @@ export const installPlugin: BuiltInPlugin = {
         const sourceRoot = await resolveSourceRoot(repo);
         await syncRuntime(sourceRoot, runtimeRoot);
         await stampRuntime(sourceRoot, runtimeRoot);
+        if (
+          resolve(sourceRoot) !== resolve(runtimeRoot) &&
+          (await readGitHeadCommit(sourceRoot)) !== null
+        ) {
+          await writeSourceRecord(home, sourceRoot);
+        }
         await writePolicyConfig(join(repo, ".maestro", "config"));
+        await writeManagedIgnore(join(repo, ".maestro", ".gitignore"));
 
         const adapters = [
           {

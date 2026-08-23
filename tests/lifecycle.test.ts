@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   type CliResult,
@@ -321,7 +321,7 @@ test("50 source installs record a machine-scoped checkout without leaking paths 
     const stampText = await readFile(stampPath, "utf8");
     const stamp = JSON.parse(stampText);
 
-    expect(sourceRecord).toEqual({ path: source });
+    expect(sourceRecord).toEqual({ path: await realpath(source) });
     expect(sourceRecordPath.startsWith(runtime.runtimeRoot)).toBe(false);
     expect(Object.keys(stamp).sort()).toEqual(["commit", "installedAt", "version"]);
     expect(stampText).not.toContain(source);
