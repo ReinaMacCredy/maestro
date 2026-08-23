@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import {
   type CliResult,
   type Fixture,
+  type InstallFixture,
+  prepareInstallFixture,
   runCli,
   runTool,
   withFixture,
@@ -12,44 +14,32 @@ import {
 const installStampFile = ".maestro-install.json";
 const sourceRoot = resolve(import.meta.dir, "..");
 
-function isolatedPath(localBin: string): string {
-  return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
-}
-
-async function installRuntime(fixture: Fixture): Promise<{
-  localBin: string;
-  path: string;
+async function installRuntime(fixture: Fixture): Promise<InstallFixture & {
   runtimeRoot: string;
 }> {
-  const localBin = join(fixture.home, ".local", "bin");
-  const shim = join(localBin, "maestro");
-  await mkdir(localBin, { recursive: true });
-  await writeFile(shim, "#!/bin/sh\necho legacy-maestro\n");
-  await chmod(shim, 0o755);
-  const path = isolatedPath(localBin);
+  const installFixture = await prepareInstallFixture(fixture);
+  const { path } = installFixture;
   const installed = await runCli(fixture, ["install"], { PATH: path });
   expect(installed.exitCode).toBe(0);
   return {
-    localBin,
-    path,
+    ...installFixture,
     runtimeRoot: join(fixture.home, ".maestro", "runtime"),
   };
 }
 
 async function runInstalled(
   fixture: Fixture,
-  localBin: string,
-  path: string,
+  runtime: InstallFixture,
   args: string[],
 ): Promise<CliResult> {
-  const child = Bun.spawn([join(localBin, "maestro"), ...args], {
+  const child = Bun.spawn([runtime.shim, ...args], {
     cwd: fixture.repo,
     env: {
       ...process.env,
       HOME: fixture.home,
       MAESTRO_SESSION_ID: "test-session",
       MAESTRO_SESSION_PID: String(process.pid),
-      PATH: path,
+      PATH: runtime.path,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -70,16 +60,17 @@ async function sourceCommit(): Promise<string> {
 
 test("31 installed version and top-level aliases print package and install identity", async () => {
   await withFixture(async (fixture) => {
-    const { localBin, path } = await installRuntime(fixture);
-    const verb = await runInstalled(fixture, localBin, path, ["version"]);
-    const longAlias = await runInstalled(fixture, localBin, path, ["--version"]);
-    const shortAlias = await runInstalled(fixture, localBin, path, ["-v"]);
+    const runtime = await installRuntime(fixture);
+    const expectedCommit = await sourceCommit();
+    const verb = await runInstalled(fixture, runtime, ["version"]);
+    const longAlias = await runInstalled(fixture, runtime, ["--version"]);
+    const shortAlias = await runInstalled(fixture, runtime, ["-v"]);
 
     for (const result of [verb, longAlias, shortAlias]) {
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
       expect(result.stdout).toContain("maestro 0.1.0");
-      expect(result.stdout).toContain(await sourceCommit());
+      expect(result.stdout).toContain(expectedCommit);
       expect(result.stdout).toMatch(/installed \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
     }
     expect(longAlias.stdout).toBe(verb.stdout);

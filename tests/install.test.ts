@@ -1,22 +1,13 @@
 import { expect, test } from "bun:test";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { runCli, withFixture } from "./helpers.ts";
-
-function isolatedPath(localBin: string): string {
-  return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
-}
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
-    const localBin = join(fixture.home, ".local", "bin");
-    const shim = join(localBin, "maestro");
-    const legacy = join(localBin, "maestro-legacy");
-    await mkdir(localBin, { recursive: true });
     const legacySource = "#!/bin/sh\necho legacy-maestro\n";
-    await writeFile(shim, legacySource);
-    await chmod(shim, 0o755);
-    const path = isolatedPath(localBin);
+    const { localBin, path, shim } = await prepareInstallFixture(fixture, legacySource);
+    const legacy = join(localBin, "maestro-legacy");
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
@@ -88,14 +79,10 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
 
 test("29 install writes portable hook files without machine-absolute paths", async () => {
   await withFixture(async (fixture) => {
-    const localBin = join(fixture.home, ".local", "bin");
-    const shim = join(localBin, "maestro");
-    await mkdir(localBin, { recursive: true });
-    await writeFile(shim, "#!/bin/sh\necho legacy-maestro\n");
-    await chmod(shim, 0o755);
+    const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], {
-      PATH: isolatedPath(localBin),
+      PATH: path,
     });
     const codexHookSource = await readFile(
       join(fixture.repo, ".codex", "hooks", "maestro-record.ts"),

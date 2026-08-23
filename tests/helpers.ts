@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -12,6 +12,12 @@ export interface CliResult {
   exitCode: number;
   stderr: string;
   stdout: string;
+}
+
+export interface InstallFixture {
+  localBin: string;
+  path: string;
+  shim: string;
 }
 
 const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
@@ -66,6 +72,22 @@ export async function runCliAt(
     child.exited,
   ]);
   return { exitCode, stdout, stderr };
+}
+
+export async function prepareInstallFixture(
+  fixture: Fixture,
+  shimSource = "#!/bin/sh\necho legacy-maestro\n",
+): Promise<InstallFixture> {
+  const localBin = join(fixture.home, ".local", "bin");
+  const shim = join(localBin, "maestro");
+  await mkdir(localBin, { recursive: true });
+  await writeFile(shim, shimSource);
+  await chmod(shim, 0o755);
+  return {
+    localBin,
+    path: [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":"),
+    shim,
+  };
 }
 
 export async function initializeGitRepository(repo: string): Promise<void> {

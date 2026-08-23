@@ -1,44 +1,11 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
-
-export const installStampFile = ".maestro-install.json";
-
-interface InstallStamp {
-  commit: string;
-  installedAt: string;
-  version: string;
-}
+import { readInstallStamp } from "./install-stamp.ts";
 
 interface PackageJson {
   version: string;
-}
-
-function validStamp(value: unknown): value is InstallStamp {
-  if (!value || typeof value !== "object") return false;
-  const stamp = value as Partial<InstallStamp>;
-  return (
-    typeof stamp.commit === "string" &&
-    typeof stamp.installedAt === "string" &&
-    typeof stamp.version === "string"
-  );
-}
-
-async function readStamp(root: string): Promise<InstallStamp | null> {
-  const path = join(root, installStampFile);
-  if (!existsSync(path)) return null;
-  try {
-    const stamp = JSON.parse(await readFile(path, "utf8")) as unknown;
-    if (validStamp(stamp)) return stamp;
-  } catch {
-    // Report the same actionable error for malformed JSON and invalid fields.
-  }
-  throw new CliError(
-    "INVALID_INSTALL_STAMP",
-    "runtime install stamp is invalid; run maestro install from the Maestro source checkout",
-  );
 }
 
 export const versionPlugin: BuiltInPlugin = {
@@ -47,10 +14,18 @@ export const versionPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("version", async (): Promise<CliResult> => {
         const root = resolve(import.meta.dir, "..", "..");
-        const packageJson = JSON.parse(
-          await readFile(join(root, "package.json"), "utf8"),
-        ) as PackageJson;
-        const stamp = await readStamp(root);
+        const [packageText, stampRead] = await Promise.all([
+          readFile(join(root, "package.json"), "utf8"),
+          readInstallStamp(root),
+        ]);
+        if (stampRead.status === "invalid") {
+          throw new CliError(
+            "INVALID_INSTALL_STAMP",
+            "runtime install stamp is invalid; run maestro install from the Maestro source checkout",
+          );
+        }
+        const packageJson = JSON.parse(packageText) as PackageJson;
+        const stamp = stampRead.status === "valid" ? stampRead.stamp : null;
         return {
           data: stamp ?? { version: packageJson.version, source: "dev" },
           text: stamp

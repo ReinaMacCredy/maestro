@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
-import { idFrom, runCli, withFixture } from "./helpers.ts";
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
+import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const recipeNames = [
   "design",
@@ -46,10 +46,6 @@ async function snapshotTree(root: string): Promise<Map<string, string>> {
   };
   await visit(root);
   return snapshot;
-}
-
-function isolatedPath(localBin: string): string {
-  return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
 }
 
 function errorMessage(result: { stderr: string }): string {
@@ -304,14 +300,10 @@ test("9 policy-witness requires a witness note from a different session", async 
 
 test("10 fresh install ships four disabled policies and honest enable activates tdd", async () => {
   await withFixture(async (fixture) => {
-    const localBin = join(fixture.home, ".local", "bin");
-    const shim = join(localBin, "maestro");
-    await mkdir(localBin, { recursive: true });
-    await writeFile(shim, "#!/bin/sh\necho legacy-maestro\n");
-    await chmod(shim, 0o755);
+    const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], {
-      PATH: isolatedPath(localBin),
+      PATH: path,
     });
     const config = JSON.parse(
       await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
