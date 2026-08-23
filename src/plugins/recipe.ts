@@ -90,7 +90,12 @@ export const recipePlugin: BuiltInPlugin = {
       context.cli.register("recipe show", (invocation): CliResult => {
         const name = requiredName(invocation);
         const entry = recipes.get(name);
-        if (!entry) throw new CliError("RECIPE_NOT_FOUND", `recipe not found: ${name}`);
+        if (!entry) {
+          throw new CliError(
+            "RECIPE_NOT_FOUND",
+            `recipe not found: ${name}; available: ${recipes.list().map((recipe) => recipe.name).join(", ")}`,
+          );
+        }
         const body = typeof entry.body === "function" ? entry.body() : entry.body;
         return { data: { name, description: entry.description, body }, text: body };
       }, {}, 1),
