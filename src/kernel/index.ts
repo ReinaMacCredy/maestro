@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { builtInPlugins } from "../plugins/index.ts";
 import { Cli } from "./cli.ts";
 import { Events } from "./events.ts";
@@ -6,12 +5,18 @@ import { Loader } from "./loader.ts";
 import { EventLog } from "./log.ts";
 import { Ready } from "./ready.ts";
 import { Sessions } from "./sessions.ts";
-import { Store } from "./store.ts";
+import { resolveStoreLocation, Store } from "./store.ts";
 
 export async function run(args: string[]): Promise<number> {
   const repo = process.cwd();
   const home = process.env.HOME ?? repo;
-  const store = new Store(join(repo, ".maestro", "maestro.db"));
+  const storeLocation = resolveStoreLocation(repo);
+  if (storeLocation.orphanPath) {
+    process.stderr.write(
+      `[orphan] private maestro store left untouched: ${storeLocation.orphanPath}\n`,
+    );
+  }
+  const store = new Store(storeLocation.path);
   const cli = new Cli();
   const events = new Events();
   const log = new EventLog(store);

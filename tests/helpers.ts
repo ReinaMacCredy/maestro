@@ -39,8 +39,17 @@ export async function runCli(
   args: string[],
   env: Record<string, string> = {},
 ): Promise<CliResult> {
+  return runCliAt(fixture, fixture.repo, args, env);
+}
+
+export async function runCliAt(
+  fixture: Fixture,
+  cwd: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<CliResult> {
   const child = Bun.spawn([process.execPath, cli, ...args], {
-    cwd: fixture.repo,
+    cwd,
     env: {
       ...process.env,
       HOME: fixture.home,
@@ -57,6 +66,41 @@ export async function runCli(
     child.exited,
   ]);
   return { exitCode, stdout, stderr };
+}
+
+export async function initializeGitRepository(repo: string): Promise<void> {
+  await mkdir(join(repo, ".maestro"), { recursive: true });
+  const config = join(repo, ".maestro", "config");
+  if (!(await Bun.file(config).exists())) {
+    await writeFile(config, `${JSON.stringify({ plugins: [] })}\n`);
+  }
+  const commands = [
+    ["git", "init", "-b", "main"],
+    ["git", "add", ".maestro/config"],
+    [
+      "git",
+      "-c",
+      "user.name=Maestro Tests",
+      "-c",
+      "user.email=maestro-tests@example.invalid",
+      "commit",
+      "-m",
+      "fixture",
+    ],
+  ];
+  for (const command of commands) {
+    const result = await runTool(command, repo);
+    if (result.exitCode !== 0) {
+      throw new Error(`fixture git command failed: ${command.join(" ")}\n${result.stderr}`);
+    }
+  }
+}
+
+export async function addLinkedWorktree(repo: string, path: string): Promise<void> {
+  const result = await runTool(["git", "worktree", "add", "--detach", path], repo);
+  if (result.exitCode !== 0) {
+    throw new Error(`fixture git worktree add failed: ${result.stderr}`);
+  }
 }
 
 export async function runTool(
