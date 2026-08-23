@@ -24,6 +24,33 @@ export interface CliResult {
   text?: string;
 }
 
+export interface CliFlagDescriptor {
+  description: string;
+  multiple: boolean;
+  name: string;
+  value: boolean;
+}
+
+export interface CliCommandDescriptor {
+  description: string;
+  flags: CliFlagDescriptor[];
+  name: string;
+}
+
+export interface CliSuccessEnvelope {
+  data: unknown;
+  ok: true;
+}
+
+export interface CliFailureEnvelope {
+  error: {
+    code: string;
+    message: string;
+    [detail: string]: unknown;
+  };
+  ok: false;
+}
+
 export type CliHandler = (
   invocation: CliInvocation,
 ) => CliResult | string | void | Promise<CliResult | string | void>;
@@ -68,6 +95,28 @@ export class CliError extends Error {
   ) {
     super(message);
   }
+}
+
+export function normalizeCliError(error: unknown): CliError {
+  return error instanceof CliError
+    ? error
+    : new CliError("INTERNAL", error instanceof Error ? error.message : String(error));
+}
+
+export function successEnvelope(result: CliResult): CliSuccessEnvelope {
+  return { ok: true, data: result.data ?? null };
+}
+
+export function failureEnvelope(error: unknown): CliFailureEnvelope {
+  const cliError = normalizeCliError(error);
+  return {
+    ok: false,
+    error: {
+      code: cliError.code,
+      message: cliError.message,
+      ...cliError.details,
+    },
+  };
 }
 
 export class Cli {
@@ -127,88 +176,102 @@ export class Cli {
     };
   }
 
+  describeCommands(): CliCommandDescriptor[] {
+    return [...this.commands.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, definition]) => ({
+        name,
+        description: definition.description,
+        flags: [...this.effectiveFlags(name, definition).entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([flag, metadata]) => ({
+            name: flag,
+            description: this.oneLine(metadata.description, `Set ${flag}.`),
+            multiple: metadata.multiple ?? false,
+            value: metadata.value ?? false,
+          })),
+      }));
+  }
+
+  async execute(args: string[]): Promise<CliResult> {
+    return (await this.invoke(args)).result;
+  }
+
   async dispatch(args: string[]): Promise<number> {
     try {
-      if (args.length === 0) {
-        process.stdout.write(this.helpText());
-        return 0;
-      }
-      if (args[0] === "help") {
-        const unexpected = args[2];
-        if (unexpected) {
-          throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
-            argument: unexpected,
-          });
-        }
-        process.stdout.write(this.helpText(args[1]));
-        return 0;
-      }
-      const helpIndex = args.indexOf("--help");
-      if (helpIndex >= 0) {
-        const unexpected = args[helpIndex + 1];
-        if (unexpected) {
-          throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
-            argument: unexpected,
-          });
-        }
-        process.stdout.write(this.helpText(args.slice(0, helpIndex).join(" ") || undefined));
-        return 0;
-      }
-      const found = this.findCommand(args);
-      if (!found) {
-        const { attempted, suggestions } = this.nearestCommands(args);
-        throw new CliError(
-          "UNKNOWN_VERB",
-          `unknown verb: ${attempted}; nearest: ${suggestions.join(", ")}`,
-          { suggestions, verb: attempted },
-        );
-      }
-      const { command, definition, consumed } = found;
-      const remaining = args.slice(consumed);
-      const jsonIndex = remaining.indexOf("--json");
-      const wantsJson = jsonIndex >= 0;
+      const { result, wantsJson } = await this.invoke(args);
       if (wantsJson) {
-        if (!(command === "status" || command === "msg send" || command.endsWith(" list"))) {
-          throw new CliError("UNKNOWN_FLAG", `unknown flag: --json`, { flag: "--json" });
-        }
-        remaining.splice(jsonIndex, 1);
-      }
-      const invocation = this.parse(
-        command,
-        remaining,
-        this.effectiveFlags(command, definition),
-        definition.maxPositionals,
-      );
-      const result = await definition.handler(invocation);
-      const normalized: CliResult =
-        typeof result === "string" ? { text: result, data: result } : result ?? {};
-      if (wantsJson) {
-        process.stdout.write(`${JSON.stringify({ ok: true, data: normalized.data ?? null })}\n`);
-      } else if (normalized.text) {
-        process.stdout.write(normalized.text.endsWith("\n") ? normalized.text : `${normalized.text}\n`);
+        process.stdout.write(`${JSON.stringify(successEnvelope(result))}\n`);
+      } else if (result.text) {
+        process.stdout.write(result.text.endsWith("\n") ? result.text : `${result.text}\n`);
       }
       return 0;
     } catch (error) {
-      const cliError =
-        error instanceof CliError
-          ? error
-          : new CliError("INTERNAL", error instanceof Error ? error.message : String(error));
-      process.stderr.write(
-        `${JSON.stringify({
-          ok: false,
-          error: {
-            code: cliError.code,
-            message: cliError.message,
-            ...cliError.details,
-          },
-        })}\n`,
-      );
+      const cliError = normalizeCliError(error);
+      process.stderr.write(`${JSON.stringify(failureEnvelope(cliError))}\n`);
       return cliError.code === "UNKNOWN_VERB" ||
         cliError.code === "UNKNOWN_FLAG" ||
         cliError.code === "UNKNOWN_ARGUMENT"
         ? 2
         : 1;
     }
+  }
+
+  private async invoke(args: string[]): Promise<{ result: CliResult; wantsJson: boolean }> {
+    if (args.length === 0) {
+      const help = this.helpText();
+      return { result: { data: { help }, text: help }, wantsJson: false };
+    }
+    if (args[0] === "help") {
+      const unexpected = args[2];
+      if (unexpected) {
+        throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
+          argument: unexpected,
+        });
+      }
+      const help = this.helpText(args[1]);
+      return { result: { data: { help }, text: help }, wantsJson: false };
+    }
+    const helpIndex = args.indexOf("--help");
+    if (helpIndex >= 0) {
+      const unexpected = args[helpIndex + 1];
+      if (unexpected) {
+        throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
+          argument: unexpected,
+        });
+      }
+      const help = this.helpText(args.slice(0, helpIndex).join(" ") || undefined);
+      return { result: { data: { help }, text: help }, wantsJson: false };
+    }
+    const found = this.findCommand(args);
+    if (!found) {
+      const { attempted, suggestions } = this.nearestCommands(args);
+      throw new CliError(
+        "UNKNOWN_VERB",
+        `unknown verb: ${attempted}; nearest: ${suggestions.join(", ")}`,
+        { suggestions, verb: attempted },
+      );
+    }
+    const { command, definition, consumed } = found;
+    const remaining = args.slice(consumed);
+    const jsonIndex = remaining.indexOf("--json");
+    const wantsJson = jsonIndex >= 0;
+    if (wantsJson) {
+      if (!(command === "status" || command === "msg send" || command.endsWith(" list"))) {
+        throw new CliError("UNKNOWN_FLAG", "unknown flag: --json", { flag: "--json" });
+      }
+      remaining.splice(jsonIndex, 1);
+    }
+    const invocation = this.parse(
+      command,
+      remaining,
+      this.effectiveFlags(command, definition),
+      definition.maxPositionals,
+    );
+    const result = await definition.handler(invocation);
+    const normalized: CliResult =
+      typeof result === "string" ? { text: result, data: result } : result ?? {};
+    return { result: normalized, wantsJson };
   }
 
   private findCommand(args: string[]): {

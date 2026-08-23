@@ -149,7 +149,16 @@ export default {
     const closed = await mcp.close();
     const pluginResult = pluginFind.result?.structuredContent as {
       recipes: Array<{ name: string }>;
-      verbs: Array<{ description: string; flags: Array<{ name: string }>; name: string }>;
+      verbs: Array<{
+        description: string;
+        flags: Array<{
+          description: string;
+          multiple: boolean;
+          name: string;
+          value: boolean;
+        }>;
+        name: string;
+      }>;
     };
     const recipeResult = recipeFind.result?.structuredContent as {
       recipes: Array<{ name: string }>;
