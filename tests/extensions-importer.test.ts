@@ -133,11 +133,13 @@ test("38 search returns tagged legacy title, file, and decision hits alongside n
     const title = await runCli(fixture, ["search", "Aurora"]);
     const file = await runCli(fixture, ["search", "quasar"]);
     const decision = await runCli(fixture, ["search", "quorum"]);
+    const perCardDecision = await runCli(fixture, ["search", "ultraviolet"]);
 
     expect(title.stdout).toContain(`work ${idFrom(native)}`);
     expect(title.stdout).toContain(`[legacy] ${featureId}`);
     expect(file.stdout).toContain(`[legacy] ${featureId}`);
     expect(decision.stdout).toContain("[legacy] dec-root-sqlite");
+    expect(perCardDecision.stdout).toContain(`[legacy] ${featureId}`);
   });
 });
 
@@ -213,5 +215,24 @@ test("41 legacy ids remain unknown to work, ready, and work list", async () => {
     expect(done.stderr).toContain("NOT_FOUND");
     expect(ready.stdout).not.toContain(featureId);
     expect(listed.stdout).not.toContain(featureId);
+  });
+});
+
+test("E1/E2 ordinary verbs neither touch the Rust store nor auto-import legacy rows", async () => {
+  await withFixture(async (fixture) => {
+    const source = await writeLegacyStore(fixture);
+    const before = sha256(await readFile(source));
+
+    expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["ready"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["search", "Aurora"])).exitCode).toBe(0);
+
+    const database = targetDatabase(fixture);
+    const count = database
+      .query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_cards")
+      .get()?.count;
+    database.close();
+    expect(count).toBe(0);
+    expect(sha256(await readFile(source))).toBe(before);
   });
 });

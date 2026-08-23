@@ -235,7 +235,7 @@ function sourceData(path: string): {
     for (const card of cards) {
       if (card.card_type !== "decision") continue;
       decisions.set(card.id, {
-        cardId: card.id,
+        cardId: card.parent ?? card.id,
         id: card.id,
         sourcePath: card.record_file,
         status: card.status,
