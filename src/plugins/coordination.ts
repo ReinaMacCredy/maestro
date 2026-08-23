@@ -21,7 +21,7 @@ export interface MessageRecord {
 
 type BriefContributor = (sessionId: string) => string | Promise<string>;
 
-class BriefService {
+export class BriefService {
   private readonly contributors: BriefContributor[] = [];
 
   register(contributor: BriefContributor): Disposer {

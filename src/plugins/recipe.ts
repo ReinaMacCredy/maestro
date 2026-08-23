@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
+import type { BriefService } from "./coordination.ts";
 
 export interface RecipeEntry {
   body: string | (() => string);
@@ -71,8 +72,10 @@ function requiredName(invocation: CliInvocation): string {
 
 export const recipePlugin: BuiltInPlugin = {
   name: "recipe",
+  inject: ["brief"],
   apply(context) {
     const recipes = new Recipes();
+    const brief = context.brief as BriefService;
     context.effect(() => context.provide("recipe", recipes));
     for (const [name, description] of catalog) {
       context.effect(() => recipes.register(shippedRecipe(name, description)));
@@ -99,6 +102,9 @@ export const recipePlugin: BuiltInPlugin = {
         const body = typeof entry.body === "function" ? entry.body() : entry.body;
         return { data: { name, description: entry.description, body }, text: body };
       }, {}, 1),
+    );
+    context.effect(() =>
+      brief.register(() => "recipes: maestro recipe list; maestro recipe show <name>"),
     );
   },
 };
