@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { join } from "node:path";
 import { runCli, withFixture } from "./helpers.ts";
 
 function sessionEnvironment(id: string, pid = process.pid): Record<string, string> {
@@ -10,6 +12,18 @@ function sessionEnvironment(id: string, pid = process.pid): Record<string, strin
 
 test("B3.7 hook-recorded harness identity is shown while an absent harness remains null", async () => {
   await withFixture(async (fixture) => {
+    const legacy = new Database(join(fixture.repo, ".maestro", "maestro.db"), { create: true });
+    legacy.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        pid INTEGER NOT NULL,
+        last_event TEXT NOT NULL,
+        last_seen TEXT NOT NULL
+      );
+      INSERT INTO sessions (id, pid, last_event, last_seen)
+      VALUES ('legacy-session', ${process.pid}, 'SessionStart', '2026-08-23T00:00:00.000Z');
+    `);
+    legacy.close();
     expect(
       (
         await runCli(
@@ -40,6 +54,7 @@ test("B3.7 hook-recorded harness identity is shown while an absent harness remai
       "claude",
     );
     expect(envelope.data.sessions.find((session) => session.id === "unknown-session")?.harness).toBeNull();
+    expect(envelope.data.sessions.find((session) => session.id === "legacy-session")?.harness).toBeNull();
   });
 });
 
@@ -50,6 +65,7 @@ test("B3.8 claude peers receive a native SendMessage tip and JSON delivery signa
       ["claude-target", "claude", process.pid],
       ["codex-target", "codex", process.pid],
       ["dead-claude-target", "claude", 99_999_999],
+      ["codex-sender", "codex", process.pid],
     ] as const) {
       expect(
         (
@@ -82,6 +98,22 @@ test("B3.8 claude peers receive a native SendMessage tip and JSON delivery signa
     );
     expect(codexHuman.stdout).not.toContain("[native-delivery]");
     expect(deadHuman.stdout).not.toContain("[native-delivery]");
+
+    const codexSenderHuman = await runCli(
+      fixture,
+      ["msg", "send", "claude-target", "codex sender human"],
+      sessionEnvironment("codex-sender"),
+    );
+    const codexSenderJson = await runCli(
+      fixture,
+      ["msg", "send", "claude-target", "codex sender json", "--json"],
+      sessionEnvironment("codex-sender"),
+    );
+    expect(codexSenderHuman.stdout).not.toContain("[native-delivery]");
+    expect(
+      (JSON.parse(codexSenderJson.stdout) as { data: { nativeDelivery: boolean } }).data
+        .nativeDelivery,
+    ).toBeFalse();
 
     const nativeJson = await runCli(
       fixture,

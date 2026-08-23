@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 export interface Fixture {
@@ -89,6 +89,41 @@ export async function initializeGitRepository(repo: string): Promise<void> {
     ],
   ];
   for (const command of commands) {
+    const result = await runTool(command, repo);
+    if (result.exitCode !== 0) {
+      throw new Error(`fixture git command failed: ${command.join(" ")}\n${result.stderr}`);
+    }
+  }
+}
+
+export async function initializeSeparateGitRepository(
+  repo: string,
+  gitDirectory: string,
+): Promise<void> {
+  await mkdir(repo, { recursive: true });
+  await mkdir(dirname(gitDirectory), { recursive: true });
+  const initialized = await runTool(
+    ["git", "init", "-b", "main", "--separate-git-dir", gitDirectory],
+    repo,
+  );
+  if (initialized.exitCode !== 0) {
+    throw new Error(`fixture separate git init failed: ${initialized.stderr}`);
+  }
+  await mkdir(join(repo, ".maestro"), { recursive: true });
+  await writeFile(join(repo, ".maestro", "config"), `${JSON.stringify({ plugins: [] })}\n`);
+  for (const command of [
+    ["git", "add", ".maestro/config"],
+    [
+      "git",
+      "-c",
+      "user.name=Maestro Tests",
+      "-c",
+      "user.email=maestro-tests@example.invalid",
+      "commit",
+      "-m",
+      "fixture",
+    ],
+  ]) {
     const result = await runTool(command, repo);
     if (result.exitCode !== 0) {
       throw new Error(`fixture git command failed: ${command.join(" ")}\n${result.stderr}`);

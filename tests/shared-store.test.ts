@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   addLinkedWorktree,
   initializeGitRepository,
+  initializeSeparateGitRepository,
   runCli,
   runCliAt,
   withFixture,
@@ -86,6 +87,31 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     expect(firstList.stdout).not.toContain("second repository item");
     expect(secondList.stdout).toContain("second repository item");
     expect(secondList.stdout).not.toContain("first repository item");
+
+    const gitDirectories = join(fixture.root, "git-directories");
+    const firstSeparateRepo = join(fixture.root, "first-separate-repo");
+    const secondSeparateRepo = join(fixture.root, "second-separate-repo");
+    const firstGitDirectory = join(gitDirectories, "first.git");
+    const secondGitDirectory = join(gitDirectories, "second.git");
+    await initializeSeparateGitRepository(firstSeparateRepo, firstGitDirectory);
+    await initializeSeparateGitRepository(secondSeparateRepo, secondGitDirectory);
+
+    expect(
+      (await runCliAt(fixture, firstSeparateRepo, ["work", "add", "first separate item"]))
+        .exitCode,
+    ).toBe(0);
+    expect(
+      (await runCliAt(fixture, secondSeparateRepo, ["work", "add", "second separate item"]))
+        .exitCode,
+    ).toBe(0);
+    const firstSeparateList = await runCliAt(fixture, firstSeparateRepo, ["work", "list"]);
+    const secondSeparateList = await runCliAt(fixture, secondSeparateRepo, ["work", "list"]);
+    expect(firstSeparateList.stdout).toContain("first separate item");
+    expect(firstSeparateList.stdout).not.toContain("second separate item");
+    expect(secondSeparateList.stdout).toContain("second separate item");
+    expect(secondSeparateList.stdout).not.toContain("first separate item");
+    expect(await Bun.file(join(firstGitDirectory, ".maestro", "maestro.db")).exists()).toBeTrue();
+    expect(await Bun.file(join(secondGitDirectory, ".maestro", "maestro.db")).exists()).toBeTrue();
   });
 });
 

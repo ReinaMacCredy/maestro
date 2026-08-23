@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export interface StoreLocation {
   orphanPath: string | null;
@@ -16,17 +16,28 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
       stderr: "pipe",
       stdout: "pipe",
     });
-  } catch {
-    return { orphanPath: null, path: fallback };
+  } catch (error) {
+    throw new Error(
+      `cannot resolve git repository: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
-  if (result.exitCode !== 0) return { orphanPath: null, path: fallback };
+  if (result.exitCode !== 0) {
+    const diagnostic = result.stderr?.toString().trim() ?? "";
+    if (diagnostic.includes("not a git repository")) {
+      return { orphanPath: null, path: fallback };
+    }
+    throw new Error(`cannot resolve git repository: ${diagnostic || `git exited ${result.exitCode}`}`);
+  }
 
   const [checkoutOutput, commonDirectoryOutput] = (result.stdout?.toString() ?? "")
     .trim()
     .split("\n");
-  if (!checkoutOutput || !commonDirectoryOutput) return { orphanPath: null, path: fallback };
+  if (!checkoutOutput || !commonDirectoryOutput) {
+    throw new Error("cannot resolve git repository: git returned incomplete paths");
+  }
   const checkoutRoot = resolve(cwd, checkoutOutput);
-  const commonRoot = dirname(resolve(cwd, commonDirectoryOutput));
+  const commonDirectory = resolve(cwd, commonDirectoryOutput);
+  const commonRoot = basename(commonDirectory) === ".git" ? dirname(commonDirectory) : commonDirectory;
   const path = join(commonRoot, ".maestro", "maestro.db");
   const privatePath = join(checkoutRoot, ".maestro", "maestro.db");
   const orphanPath = privatePath !== path && existsSync(privatePath) ? privatePath : null;
@@ -39,6 +50,7 @@ export class Store {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.database = new Database(path, { create: true, strict: true });
+    this.database.exec("PRAGMA busy_timeout = 5000");
     this.database.exec("PRAGMA foreign_keys = ON");
     this.database.exec("PRAGMA journal_mode = WAL");
   }

@@ -200,22 +200,32 @@ export const workPlugin: BuiltInPlugin = {
           const blockers = listOption(invocation, "blocked-by");
           if (parentId) requireWork(context, parentId);
           for (const blocker of blockers) requireWork(context, blocker);
-          const id = nextId(context);
+          let id = "";
           const now = new Date().toISOString();
           const kind = textOption(invocation, "kind") ?? "task";
           const acceptance = textOption(invocation, "acceptance") ?? null;
           const atomicReason = textOption(invocation, "atomic-reason") ?? null;
-          context.store.database
-            .query(
-              `INSERT INTO work
-                (id, title, kind, state, parent_id, acceptance, atomic_reason, created_at, updated_at)
-               VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
-            )
-            .run(id, title, kind, parentId, acceptance, atomicReason, now, now);
-          const insertBlocker = context.store.database.query(
-            "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
-          );
-          for (const blocker of blockers) insertBlocker.run(id, blocker);
+          context.store.database.exec("BEGIN IMMEDIATE");
+          try {
+            id = nextId(context);
+            context.store.database
+              .query(
+                `INSERT INTO work
+                  (id, title, kind, state, parent_id, acceptance, atomic_reason, created_at, updated_at)
+                 VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+              )
+              .run(id, title, kind, parentId, acceptance, atomicReason, now, now);
+            const insertBlocker = context.store.database.query(
+              "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
+            );
+            for (const blocker of blockers) insertBlocker.run(id, blocker);
+            context.store.database.exec("COMMIT");
+          } catch (error) {
+            try {
+              context.store.database.exec("ROLLBACK");
+            } catch {}
+            throw error;
+          }
           context.log.append({
             type: "work.add",
             entityType: "work",
@@ -258,9 +268,22 @@ export const workPlugin: BuiltInPlugin = {
         );
         blockIfNeeded(result);
         const now = new Date().toISOString();
-        context.store.database
-          .query("UPDATE work SET state = 'active', held_by = ?, updated_at = ? WHERE id = ?")
-          .run(session.id, now, id);
+        const claimed = context.store.database
+          .query(
+            `UPDATE work
+             SET state = 'active', held_by = ?, updated_at = ?
+             WHERE id = ? AND state != 'done' AND (held_by IS NULL OR held_by = ?)`,
+          )
+          .run(session.id, now, id, session.id);
+        if (claimed.changes === 0) {
+          const current = requireWork(context, id);
+          if (current.state === "done") {
+            throw new CliError("INVALID_STATE", `${id} is already done`);
+          }
+          throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy}`, {
+            holder: current.heldBy,
+          });
+        }
         context.log.append({
           type: "work.start",
           entityType: "work",

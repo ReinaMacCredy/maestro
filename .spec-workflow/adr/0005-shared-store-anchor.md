@@ -2,6 +2,7 @@
 
 Date: 2026-08-23
 Status: accepted
+Amended: 2026-08-23 (non-standard Git isolation and concurrent writers)
 
 ## Context
 
@@ -24,6 +25,15 @@ remain fully separate. The new store file (`maestro.db`) never collides with
 the legacy Rust `store.sqlite` even when both live in the same `.maestro/`.
 When a linked worktree still carries a private stage-1 store, the shared
 store wins and maestro prints a one-line advisory naming the orphan file.
+For a normal `.git` common directory, the store remains in the owning
+checkout. When Git has no adjacent owning checkout (submodules,
+`--separate-git-dir`, or bare-backed worktrees), the store lives inside that
+repository's unique common directory rather than deriving a shared parent.
+
+The shared SQLite store uses a bounded busy timeout. Work IDs are allocated
+inside an immediate transaction, and work leases are acquired with a
+conditional compare-and-set update, so simultaneous CLI processes serialize
+without duplicate IDs or multiple successful lease claimants.
 
 ## Rejected
 
@@ -32,11 +42,15 @@ store wins and maestro prints a one-line advisory naming the orphan file.
   second transport.
 - A machine-global store (`~/.maestro`): crosses repository boundaries,
   breaking the local-first per-repo model and the wipe/backup story.
+- `dirname(git-common-dir)` for every Git layout: separate repositories can
+  share a parent even though their common directories are distinct.
+- Process-global mutexes or a daemon: CLI processes do not share memory, and
+  a background coordinator contradicts the local on-demand mechanism.
 
 ## Consequences
 
 - Coordination primitives (overlap advisories, cross-worktree msg, session
   union) become plain reads of one store — no scanning, no daemon.
-- SQLite WAL over one shared file handles concurrent sessions; that is what
-  it is for.
+- SQLite WAL plus bounded contention handling and atomic write boundaries
+  supports concurrent CLI sessions without turning advisories into locks.
 - The gitignore convention (`.maestro/`) already covers the anchor point.
