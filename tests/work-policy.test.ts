@@ -170,3 +170,89 @@ test("12 write verbs append events and the store rejects mutation of prior log r
     }
   });
 });
+
+test("22 paired claims and proofs complete work and are recorded in evidence", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "paired proof", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const completed = await runCli(fixture, [
+      "work",
+      "done",
+      id,
+      "--claim",
+      "tests pass",
+      "--proof",
+      "bun test: 1 pass",
+    ]);
+    const shown = await runCli(fixture, ["work", "show", id]);
+
+    expect(completed.exitCode).toBe(0);
+    expect(shown.stdout).toContain("tests pass");
+    expect(shown.stdout).toContain("bun test: 1 pass");
+  });
+});
+
+test("23 policy-proof blocks completion without evidence or claims", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "empty completion", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const completed = await runCli(fixture, ["work", "done", id]);
+
+    expect(completed.exitCode).not.toBe(0);
+    expect(completed.stderr).toContain("policy-proof");
+  });
+});
+
+test("24 unexpected positionals fail with UNKNOWN_ARGUMENT naming the token", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "strict arguments", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const completed = await runCli(fixture, [
+      "work",
+      "done",
+      id,
+      "discarded text",
+      "--evidence",
+      "real evidence",
+    ]);
+    const error = JSON.parse(completed.stderr.trim());
+
+    expect(completed.exitCode).not.toBe(0);
+    expect(error.error.code).toBe("UNKNOWN_ARGUMENT");
+    expect(error.error.message).toContain("discarded text");
+  });
+});
+
+test("30 breakdown and proof blocks name concrete unblocking commands", async () => {
+  await withFixture(async (fixture) => {
+    const root = idFrom(
+      await runCli(fixture, ["work", "add", "needs breakdown", "--kind", "feature"]),
+    );
+    const breakdown = await runCli(fixture, ["work", "start", root]);
+
+    const proofWork = idFrom(
+      await runCli(fixture, ["work", "add", "needs proof", "--kind", "idea"]),
+    );
+    expect((await runCli(fixture, ["work", "start", proofWork])).exitCode).toBe(0);
+    const proof = await runCli(fixture, [
+      "work",
+      "done",
+      proofWork,
+      "--claim",
+      "tests pass",
+    ]);
+
+    expect(breakdown.exitCode).not.toBe(0);
+    expect(breakdown.stderr).toContain("work add");
+    expect(breakdown.stderr).toContain("--parent");
+    expect(breakdown.stderr).toContain(root);
+    expect(breakdown.stderr).toContain("--atomic-reason");
+    expect(proof.exitCode).not.toBe(0);
+    expect(proof.stderr).toContain("work done");
+    expect(proof.stderr).toContain(proofWork);
+    expect(proof.stderr).toContain("--proof");
+  });
+});

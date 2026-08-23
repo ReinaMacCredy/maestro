@@ -69,3 +69,33 @@ test("A5 install preserves rollback before writing the shim and wires temp-only 
     expect(stdout).toContain("enabled policies");
   });
 });
+
+test("29 install writes portable hook files without machine-absolute paths", async () => {
+  await withFixture(async (fixture) => {
+    const localBin = join(fixture.home, ".local", "bin");
+    const shim = join(localBin, "maestro");
+    await mkdir(localBin, { recursive: true });
+    await writeFile(shim, "#!/bin/sh\necho legacy-maestro\n");
+    await chmod(shim, 0o755);
+
+    const installed = await runCli(fixture, ["install"], {
+      PATH: `${localBin}:${process.env.PATH ?? ""}`,
+    });
+    const hookSource = await readFile(
+      join(fixture.repo, ".maestro", "hooks", "record.ts"),
+      "utf8",
+    );
+    const codexHooks = await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8");
+    const claudeHooks = await readFile(
+      join(fixture.repo, ".claude", "settings.json"),
+      "utf8",
+    );
+    const hookFiles = `${hookSource}\n${codexHooks}\n${claudeHooks}`;
+
+    expect(installed.exitCode).toBe(0);
+    expect(hookFiles).not.toContain(fixture.root);
+    expect(hookFiles).not.toContain(process.execPath);
+    expect(codexHooks).toContain("bun .maestro/hooks/record.ts");
+    expect(claudeHooks).toContain("bun .maestro/hooks/record.ts");
+  });
+});
