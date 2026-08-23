@@ -70,6 +70,19 @@ test("B3.8 claude peers receive a native SendMessage tip and JSON delivery signa
     expect(human.stdout).toContain("native SendMessage");
     expect(human.stdout).toContain("claude-target");
 
+    const codexHuman = await runCli(
+      fixture,
+      ["msg", "send", "codex-target", "codex human"],
+      sessionEnvironment("claude-sender"),
+    );
+    const deadHuman = await runCli(
+      fixture,
+      ["msg", "send", "dead-claude-target", "dead human"],
+      sessionEnvironment("claude-sender"),
+    );
+    expect(codexHuman.stdout).not.toContain("[native-delivery]");
+    expect(deadHuman.stdout).not.toContain("[native-delivery]");
+
     const nativeJson = await runCli(
       fixture,
       ["msg", "send", "claude-target", "urgent json", "--json"],
