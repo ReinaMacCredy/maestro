@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   addLinkedWorktree,
   initializeGitRepository,
@@ -91,8 +91,8 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     const gitDirectories = join(fixture.root, "git-directories");
     const firstSeparateRepo = join(fixture.root, "first-separate-repo");
     const secondSeparateRepo = join(fixture.root, "second-separate-repo");
-    const firstGitDirectory = join(gitDirectories, "first.git");
-    const secondGitDirectory = join(gitDirectories, "second.git");
+    const firstGitDirectory = join(gitDirectories, "first", ".git");
+    const secondGitDirectory = join(gitDirectories, "second", ".git");
     await initializeSeparateGitRepository(firstSeparateRepo, firstGitDirectory);
     await initializeSeparateGitRepository(secondSeparateRepo, secondGitDirectory);
 
@@ -110,8 +110,19 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     expect(firstSeparateList.stdout).not.toContain("second separate item");
     expect(secondSeparateList.stdout).toContain("second separate item");
     expect(secondSeparateList.stdout).not.toContain("first separate item");
-    expect(await Bun.file(join(firstGitDirectory, ".maestro", "maestro.db")).exists()).toBeTrue();
-    expect(await Bun.file(join(secondGitDirectory, ".maestro", "maestro.db")).exists()).toBeTrue();
+    expect(
+      await Bun.file(join(dirname(firstGitDirectory), ".maestro", "maestro.db")).exists(),
+    ).toBeTrue();
+    expect(
+      await Bun.file(join(dirname(secondGitDirectory), ".maestro", "maestro.db")).exists(),
+    ).toBeTrue();
+
+    const brokenRepo = join(fixture.root, "broken-git-indirection");
+    await mkdir(brokenRepo, { recursive: true });
+    await writeFile(join(brokenRepo, ".git"), "gitdir: /definitely/missing/maestro-git-dir\n");
+    const broken = await runCliAt(fixture, brokenRepo, ["status"]);
+    expect(broken.exitCode).not.toBe(0);
+    expect(await Bun.file(join(brokenRepo, ".maestro", "maestro.db")).exists()).toBeFalse();
   });
 });
 

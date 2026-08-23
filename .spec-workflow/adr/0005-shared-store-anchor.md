@@ -25,10 +25,10 @@ remain fully separate. The new store file (`maestro.db`) never collides with
 the legacy Rust `store.sqlite` even when both live in the same `.maestro/`.
 When a linked worktree still carries a private stage-1 store, the shared
 store wins and maestro prints a one-line advisory naming the orphan file.
-For a normal `.git` common directory, the store remains in the owning
-checkout. When Git has no adjacent owning checkout (submodules,
-`--separate-git-dir`, or bare-backed worktrees), the store lives inside that
-repository's unique common directory rather than deriving a shared parent.
+For a `.git` common directory, the store remains in its unique parent. For
+common directories with any other name (submodules, bare-backed worktrees,
+or `--separate-git-dir` layouts), the store lives inside that repository's
+unique common directory rather than deriving a potentially shared parent.
 
 The shared SQLite store uses a bounded busy timeout. Work IDs are allocated
 inside an immediate transaction, and work leases are acquired with a
