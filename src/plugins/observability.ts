@@ -7,6 +7,12 @@ interface SearchRow {
   text: string;
 }
 
+interface DisplayedSearchRow extends SearchRow {
+  cardType?: string;
+  status?: string;
+  title?: string;
+}
+
 interface LegacyCardSummary {
   card_type: string;
   status: string;
@@ -99,7 +105,7 @@ export const observabilityPlugin: BuiltInPlugin = {
                 ORDER BY rowid`,
             )
             .all(query);
-          const displayed: Array<SearchRow & Record<string, unknown>> = [];
+          const displayed: DisplayedSearchRow[] = [];
           const lines: string[] = [];
           let legacyMatches = 0;
           for (const match of matches) {
