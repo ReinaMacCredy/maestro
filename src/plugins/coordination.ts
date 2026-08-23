@@ -1,8 +1,10 @@
+import { resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
+import { driftAdvisory } from "./lifecycle.ts";
 
 interface MessageRow {
   id: number;
@@ -228,6 +230,11 @@ export const coordinationPlugin: BuiltInPlugin = {
       }),
     );
     context.effect(() => brief.register(() => "next: maestro ready"));
+    context.effect(() =>
+      brief.register(() =>
+        driftAdvisory(process.env.HOME ?? process.cwd(), resolve(import.meta.dir, "..", "..")),
+      ),
+    );
 
     context.effect(() =>
       context.events.on<WorkStartInput, WorkStartResult>("work.start", async (input, next) => {
@@ -342,9 +349,13 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "status",
-        (): CliResult => {
+        async (): Promise<CliResult> => {
           const sessions = context.sessions.list();
           const peers = livePeers(sessions, work.list(), context.sessions.current().id);
+          const advisory = await driftAdvisory(
+            process.env.HOME ?? process.cwd(),
+            resolve(import.meta.dir, "..", ".."),
+          );
           const sessionText =
             sessions.length > 0
               ? sessions
@@ -356,7 +367,7 @@ export const coordinationPlugin: BuiltInPlugin = {
               : "no sessions";
           return {
             data: { livePeers: peers, sessions },
-            text: [sessionText, formatLivePeers(peers)].filter(Boolean).join("\n"),
+            text: [sessionText, formatLivePeers(peers), advisory].filter(Boolean).join("\n"),
           };
         },
         { description: "Show sessions, live peers, and held work." },

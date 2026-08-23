@@ -170,7 +170,7 @@ test("46 uninstall reverses managed wiring while preserving foreign content and 
     }
     const config = JSON.parse(
       await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
-    ) as { plugins: Array<{ name: string }> };
+    ) as { plugins: Array<{ disabled?: boolean; name: string }> };
     expect(config.plugins).toEqual([{ name: "foreign-plugin", disabled: false }]);
     expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8")).toBe("foreign agents\n");
     expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8")).toBe("foreign claude\n");
