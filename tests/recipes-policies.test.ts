@@ -372,3 +372,64 @@ test("10 fresh install ships four disabled policies and honest enable activates 
     expect(enabledBlock.stderr).toContain("policy-tdd");
   });
 });
+
+test("36 stacked prefixed gates explain one-invocation claim and proof pairs", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["plugin", "enable", "policy-tdd"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["plugin", "enable", "policy-qa"])).exitCode).toBe(0);
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "stacked gates", "--kind", "feature"]),
+    );
+    idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "implemented child",
+        "--kind",
+        "idea",
+        "--parent",
+        parent,
+      ]),
+    );
+    expect((await runCli(fixture, ["work", "start", parent])).exitCode).toBe(0);
+
+    const tddBlocked = await runCli(fixture, [
+      "work",
+      "done",
+      parent,
+      "--claim",
+      "qa: manual path checked",
+      "--proof",
+      "observed expected output",
+    ]);
+    const qaBlocked = await runCli(fixture, [
+      "work",
+      "done",
+      parent,
+      "--claim",
+      "test: regression covered",
+      "--proof",
+      "bun test passes",
+    ]);
+    const combined =
+      `maestro work done ${parent} ` +
+      `--claim "test: <test claim>" --proof "<test output>" ` +
+      `--claim "qa: <checked behavior>" --proof "<QA evidence>"`;
+
+    for (const [result, origin] of [
+      [tddBlocked, "policy-tdd"],
+      [qaBlocked, "policy-qa"],
+    ] as const) {
+      const error = JSON.parse(result.stderr).error as {
+        code: string;
+        message: string;
+        origin: string;
+      };
+      expect(result.exitCode).not.toBe(0);
+      expect(error.code).toBe("GATE_BLOCKED");
+      expect(error.origin).toBe(origin);
+      expect(error.message).toContain("multiple --claim/--proof pairs");
+      expect(error.message).toContain(combined);
+    }
+  });
+});

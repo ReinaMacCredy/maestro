@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { runCli, withFixture } from "./helpers.ts";
+import { runCli, withFixture, writePlugin } from "./helpers.ts";
 
 test("25 bare and help invocations list verbs while unknown verbs suggest the nearest verb", async () => {
   await withFixture(async (fixture) => {
@@ -19,5 +19,86 @@ test("25 bare and help invocations list verbs while unknown verbs suggest the ne
     expect(error.error.code).toBe("UNKNOWN_VERB");
     expect(error.error.message).toContain("work");
     expect(error.error.message).not.toContain("discarded-tail");
+  });
+});
+
+test("34 per-verb help is registry-driven for built-in and plugin verbs", async () => {
+  await withFixture(async (fixture) => {
+    await writePlugin(
+      fixture,
+      "repo",
+      "greet",
+      `
+export default {
+  name: "greet",
+  apply(ctx) {
+    ctx.effect(() => ctx.cli.register(
+      "greet wave",
+      async () => "hello",
+      { "--enthusiasm": { value: true, description: "Set the greeting intensity." } },
+      0,
+      "Wave hello to the current user.",
+    ));
+  },
+};
+`,
+    );
+
+    const helpWork = await runCli(fixture, ["help", "work"]);
+    const flagWork = await runCli(fixture, ["work", "--help"]);
+
+    expect(helpWork.exitCode).toBe(0);
+    expect(flagWork.exitCode).toBe(0);
+    expect(flagWork.stdout).toBe(helpWork.stdout);
+    for (const subverb of ["add", "start", "note", "done", "show", "list"]) {
+      expect(helpWork.stdout).toMatch(new RegExp(`^  ${subverb} {2,}\\S`, "m"));
+    }
+    for (const flag of [
+      "--claim",
+      "--proof",
+      "--evidence",
+      "--parent",
+      "--kind",
+      "--atomic-reason",
+    ]) {
+      expect(helpWork.stdout).toContain(flag);
+    }
+    expect(helpWork.stdout).toContain("Record a completion claim.");
+    expect(helpWork.stdout).toContain("Record proof paired with a claim.");
+    expect(helpWork.stdout).toContain("Record opaque completion evidence.");
+
+    const pluginHelp = await runCli(fixture, ["help", "greet"]);
+    expect(pluginHelp.exitCode).toBe(0);
+    expect(pluginHelp.stdout).toContain("wave");
+    expect(pluginHelp.stdout).toContain("Wave hello to the current user.");
+    expect(pluginHelp.stdout).toContain("--enthusiasm");
+    expect(pluginHelp.stdout).toContain("Set the greeting intensity.");
+  });
+});
+
+test("35 top-level help lists every root verb with its registered description", async () => {
+  await withFixture(async (fixture) => {
+    const result = await runCli(fixture, ["help"]);
+
+    expect(result.exitCode).toBe(0);
+    for (const verb of [
+      "decision",
+      "help",
+      "hook",
+      "install",
+      "msg",
+      "plugin",
+      "ready",
+      "recipe",
+      "search",
+      "status",
+      "trace",
+      "version",
+      "watch",
+      "work",
+    ]) {
+      expect(result.stdout).toMatch(new RegExp(`^  ${verb} {2,}\\S`, "m"));
+      expect(result.stdout).not.toMatch(new RegExp(`^  ${verb}$`, "m"));
+    }
   });
 });
