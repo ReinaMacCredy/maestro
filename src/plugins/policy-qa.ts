@@ -1,5 +1,6 @@
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
+import { stackedClaimProofHint } from "./policy-completion-hint.ts";
 
 interface CompletionInput {
   claims: string[];
@@ -35,7 +36,8 @@ export const policyQaPlugin: BuiltInPlugin = {
           origin: "policy-qa",
           reason:
             `parent completion requires a qa: claim/proof pair; run: maestro work done ` +
-            `${input.work.id} --claim "qa: <checked behavior>" --proof "<QA evidence>"`,
+            `${input.work.id} --claim "qa: <checked behavior>" --proof "<QA evidence>"` +
+            stackedClaimProofHint(context, input.work.id),
         };
       }),
     );

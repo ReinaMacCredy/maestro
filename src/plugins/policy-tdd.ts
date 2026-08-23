@@ -1,5 +1,6 @@
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import type { WorkRecord } from "./work.ts";
+import { stackedClaimProofHint } from "./policy-completion-hint.ts";
 
 const writeLikeKinds = new Set(["feature", "task", "bug", "chore", "implement"]);
 
@@ -36,7 +37,8 @@ export const policyTddPlugin: BuiltInPlugin = {
           origin: "policy-tdd",
           reason:
             `write-like completion requires a test: claim/proof pair; run: maestro work done ` +
-            `${input.work.id} --claim "test: <test claim>" --proof "<test output>"`,
+            `${input.work.id} --claim "test: <test claim>" --proof "<test output>"` +
+            stackedClaimProofHint(context, input.work.id),
         };
       }),
     );
