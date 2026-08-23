@@ -2,4 +2,6 @@
 
 import { run } from "../src/kernel/index.ts";
 
-process.exitCode = await run(process.argv.slice(2));
+const args = process.argv.slice(2);
+if (args[0] === "--version" || args[0] === "-v") args[0] = "version";
+process.exitCode = await run(args);

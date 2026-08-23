@@ -13,6 +13,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
+import { installStampFile } from "./version.ts";
 
 interface PluginEntry {
   disabled?: boolean;
@@ -38,6 +39,17 @@ interface HookConfig {
   description?: string;
   hooks?: Record<string, HookGroup[]>;
   [key: string]: unknown;
+}
+
+interface InstallStamp {
+  commit: string;
+  installedAt: string;
+  version: string;
+}
+
+interface PackageJson {
+  name?: string;
+  version: string;
 }
 
 const policyDefaults: PluginEntry[] = [
@@ -160,6 +172,66 @@ async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<voi
   }
 }
 
+async function resolveSourceRoot(repo: string): Promise<string> {
+  const loadedRoot = resolve(import.meta.dir, "..", "..");
+  const packagePath = join(repo, "package.json");
+  if (!existsSync(packagePath) || !existsSync(join(repo, "bin", "maestro.ts"))) {
+    return loadedRoot;
+  }
+  try {
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as PackageJson;
+    return packageJson.name === "maestro" ? repo : loadedRoot;
+  } catch {
+    return loadedRoot;
+  }
+}
+
+async function sourceCommit(sourceRoot: string): Promise<string | null> {
+  const git = Bun.spawn(["git", "-C", sourceRoot, "rev-parse", "HEAD"], {
+    stderr: "ignore",
+    stdout: "pipe",
+  });
+  const [stdout, exitCode] = await Promise.all([
+    new Response(git.stdout).text(),
+    git.exited,
+  ]);
+  const commit = stdout.trim();
+  return exitCode === 0 && /^[0-9a-f]{40}$/.test(commit) ? commit : null;
+}
+
+async function existingCommit(sourceRoot: string): Promise<string | null> {
+  const path = join(sourceRoot, installStampFile);
+  if (!existsSync(path)) return null;
+  try {
+    const stamp = JSON.parse(await readFile(path, "utf8")) as Partial<InstallStamp>;
+    return typeof stamp.commit === "string" ? stamp.commit : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeInstallStamp(sourceRoot: string, runtimeRoot: string): Promise<void> {
+  const packageJson = JSON.parse(
+    await readFile(join(sourceRoot, "package.json"), "utf8"),
+  ) as PackageJson;
+  const commit =
+    resolve(sourceRoot) === resolve(runtimeRoot)
+      ? await existingCommit(sourceRoot)
+      : (await sourceCommit(sourceRoot)) ?? (await existingCommit(sourceRoot));
+  if (!commit) {
+    throw new CliError(
+      "SOURCE_COMMIT_UNKNOWN",
+      "cannot determine the Maestro source commit; run install from the Maestro source checkout",
+    );
+  }
+  const stamp: InstallStamp = {
+    version: packageJson.version,
+    commit,
+    installedAt: new Date().toISOString(),
+  };
+  await writeFile(join(runtimeRoot, installStampFile), `${JSON.stringify(stamp)}\n`);
+}
+
 export const installPlugin: BuiltInPlugin = {
   name: "install",
   apply(context) {
@@ -191,8 +263,9 @@ export const installPlugin: BuiltInPlugin = {
         }
 
         const runtimeRoot = join(home, ".maestro", "runtime");
-        const sourceRoot = join(import.meta.dir, "..", "..");
+        const sourceRoot = await resolveSourceRoot(repo);
         await syncRuntime(sourceRoot, runtimeRoot);
+        await writeInstallStamp(sourceRoot, runtimeRoot);
         await writePolicyConfig(join(repo, ".maestro", "config"));
 
         const adapters = [
