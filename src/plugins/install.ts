@@ -46,6 +46,7 @@ const policyDefaults: PluginEntry[] = [
   { name: "policy-tdd", disabled: true },
   { name: "policy-qa", disabled: true },
   { name: "policy-research", disabled: true },
+  { name: "policy-witness", disabled: true },
 ];
 
 async function executable(name: string): Promise<string | null> {
