@@ -20,7 +20,10 @@ export const policyBreakdownPlugin: BuiltInPlugin = {
             return {
               blocked: true,
               origin: "policy-breakdown",
-              reason: "parentless write-like work requires a child breakdown or atomic reason",
+              reason:
+                `parentless write-like work requires a child breakdown; run: maestro work add ` +
+                `"<child>" --parent ${input.work.id} --kind task; for new atomic work use ` +
+                `--atomic-reason "<reason>"`,
             };
           }
           return next();

@@ -37,6 +37,7 @@ export interface WorkService {
 
 interface GateResult {
   blocked: boolean;
+  evidence?: string;
   origin?: string;
   reason?: string;
 }
@@ -314,21 +315,22 @@ export const workPlugin: BuiltInPlugin = {
           >(
             "work.done",
             { work, evidence, claims, proofs },
-            async () => ({ blocked: false }),
+            async (completion) => ({ blocked: false, evidence: completion.evidence }),
           );
           blockIfNeeded(result);
+          const recordedEvidence = result.evidence ?? evidence;
           const now = new Date().toISOString();
           context.store.database
             .query(
               "UPDATE work SET state = 'done', evidence = ?, held_by = NULL, updated_at = ? WHERE id = ?",
             )
-            .run(evidence, now, id);
+            .run(recordedEvidence, now, id);
           context.log.append({
             type: "work.done",
             entityType: "work",
             entityId: id,
             sessionId,
-            payload: { evidence, claims, proofs },
+            payload: { evidence: recordedEvidence, claims, proofs },
           });
           return { data: { work: service.get(id) }, text: `${id} done` };
         },
