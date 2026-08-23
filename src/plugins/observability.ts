@@ -86,9 +86,10 @@ export const observabilityPlugin: BuiltInPlugin = {
               .join("\n"),
           };
         },
-        {},
-        1,
-        "Search work, decisions, notes, and event history.",
+        {
+          description: "Search work, decisions, notes, and event history.",
+          maxPositionals: 1,
+        },
       ),
     );
 
@@ -105,9 +106,10 @@ export const observabilityPlugin: BuiltInPlugin = {
               .join("\n"),
           };
         },
-        {},
-        1,
-        "Reconstruct one work item's event history.",
+        {
+          description: "Reconstruct one work item's event history.",
+          maxPositionals: 1,
+        },
       ),
     );
   },

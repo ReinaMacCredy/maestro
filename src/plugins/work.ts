@@ -236,21 +236,24 @@ export const workPlugin: BuiltInPlugin = {
           return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
         },
         {
-          "--kind": { description: "Set the work kind.", value: true },
-          "--parent": { description: "Attach the item beneath a parent work ID.", value: true },
-          "--blocked-by": {
-            description: "Add a blocking work ID.",
-            value: true,
-            multiple: true,
+          description: "Add a tracked work item.",
+          flags: {
+            "--kind": { description: "Set the work kind.", value: true },
+            "--parent": { description: "Attach the item beneath a parent work ID.", value: true },
+            "--blocked-by": {
+              description: "Add a blocking work ID.",
+              value: true,
+              multiple: true,
+            },
+            "--acceptance": { description: "Record the observable acceptance condition.", value: true },
+            "--atomic-reason": {
+              description: "Explain why parentless work needs no child breakdown.",
+              value: true,
+            },
           },
-          "--acceptance": { description: "Record the observable acceptance condition.", value: true },
-          "--atomic-reason": {
-            description: "Explain why parentless work needs no child breakdown.",
-            value: true,
-          },
+          maxPositionals: 1,
+          rootDescription: "Manage tracked work, leases, dependencies, and evidence.",
         },
-        1,
-        "Add a tracked work item.",
       ),
     );
 
@@ -300,7 +303,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { holder: session.id },
         });
         return { data: { work: service.get(id) }, text: `${id} started by ${session.id}` };
-      }, {}, 1, "Start work and claim its live session lease."),
+      }, { description: "Start work and claim its live session lease.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -320,7 +323,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { text },
         });
         return { data: { id, text }, text: `${id} note: ${text}` };
-      }, {}, 2, "Append a note to a work item."),
+      }, { description: "Append a note to a work item.", maxPositionals: 2 }),
     );
 
     context.effect(() =>
@@ -367,13 +370,15 @@ export const workPlugin: BuiltInPlugin = {
           return { data: { work: service.get(id) }, text: `${id} done` };
         },
         {
-          "--evidence": {
-            description: "Record opaque completion evidence.",
-            value: true,
+          description: "Complete held work with policy-checked evidence.",
+          flags: {
+            "--evidence": {
+              description: "Record opaque completion evidence.",
+              value: true,
+            },
           },
+          maxPositionals: 1,
         },
-        1,
-        "Complete held work with policy-checked evidence.",
       ),
     );
 
@@ -381,7 +386,7 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         return { data: { work }, text: formatWork(work) };
-      }, {}, 1, "Show one work item and its recorded evidence."),
+      }, { description: "Show one work item and its recorded evidence.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -394,9 +399,7 @@ export const workPlugin: BuiltInPlugin = {
             text: works.map((work) => `${work.id} [${work.state}] ${work.title}`).join("\n"),
           };
         },
-        {},
-        0,
-        "List tracked work and current states.",
+        { description: "List tracked work and current states." },
       ),
     );
 
@@ -424,9 +427,7 @@ export const workPlugin: BuiltInPlugin = {
                 : "no ready work",
           };
         },
-        {},
-        0,
-        "List work unblocked and ready to start.",
+        { description: "List work unblocked and ready to start." },
       ),
     );
   },

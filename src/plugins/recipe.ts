@@ -90,9 +90,10 @@ export const recipePlugin: BuiltInPlugin = {
             text: entries.map((entry) => `${entry.name}\t${entry.description}`).join("\n"),
           };
         },
-        {},
-        0,
-        "List the shipped workflow recipes.",
+        {
+          description: "List the shipped workflow recipes.",
+          rootDescription: "Browse and read shipped workflow recipes.",
+        },
       ),
     );
     context.effect(() =>
@@ -110,9 +111,10 @@ export const recipePlugin: BuiltInPlugin = {
           const body = typeof entry.body === "function" ? entry.body() : entry.body;
           return { data: { name, description: entry.description, body }, text: body };
         },
-        {},
-        1,
-        "Show one workflow recipe by name.",
+        {
+          description: "Show one workflow recipe by name.",
+          maxPositionals: 1,
+        },
       ),
     );
     context.effect(() =>

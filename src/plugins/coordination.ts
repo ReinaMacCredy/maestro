@@ -279,9 +279,11 @@ export const coordinationPlugin: BuiltInPlugin = {
             text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),
           };
         },
-        {},
-        2,
-        "Send a message to another live session.",
+        {
+          description: "Send a message to another live session.",
+          maxPositionals: 2,
+          rootDescription: "Exchange repository-backed messages between sessions.",
+        },
       ),
     );
 
@@ -302,9 +304,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           }
           return { data: { messages }, text: formatMessages(messages) };
         },
-        {},
-        0,
-        "Read new messages for the current session.",
+        { description: "Read new messages for the current session." },
       ),
     );
 
@@ -329,11 +329,13 @@ export const coordinationPlugin: BuiltInPlugin = {
           return { data: { session, brief: text }, text };
         },
         {
-          "--event": { description: "Record this harness event name.", value: true },
-          "--harness": { description: "Record the originating harness.", value: true },
+          description: "Record a harness event and print the dynamic brief.",
+          flags: {
+            "--event": { description: "Record this harness event name.", value: true },
+            "--harness": { description: "Record the originating harness.", value: true },
+          },
+          rootDescription: "Record harness events for session delivery.",
         },
-        0,
-        "Record a harness event and print the dynamic brief.",
       ),
     );
 
@@ -357,9 +359,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             text: [sessionText, formatLivePeers(peers)].filter(Boolean).join("\n"),
           };
         },
-        {},
-        0,
-        "Show sessions, live peers, and held work.",
+        { description: "Show sessions, live peers, and held work." },
       ),
     );
   },

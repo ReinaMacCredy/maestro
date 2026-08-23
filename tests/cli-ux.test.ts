@@ -35,9 +35,10 @@ export default {
     ctx.effect(() => ctx.cli.register(
       "greet wave",
       async () => "hello",
-      { "--enthusiasm": { value: true, description: "Set the greeting intensity." } },
-      0,
-      "Wave hello to the current user.",
+      {
+        description: "Wave hello to the current user.",
+        flags: { "--enthusiasm": { value: true, description: "Set the greeting intensity." } },
+      },
     ));
   },
 };

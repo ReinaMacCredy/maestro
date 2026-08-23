@@ -73,9 +73,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           );
           return { data: { plugins: records }, text: records.map(formatRecord).join("\n") };
         },
-        {},
-        0,
-        "List built-in, global, and repository plugins.",
+        {
+          description: "List built-in, global, and repository plugins.",
+          rootDescription: "Manage built-in, global, and repository plugins.",
+        },
       ),
     );
 
@@ -105,7 +106,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name, disabled: false }, text: `${name} enabled` };
-      }, {}, 1, "Enable an installed plugin."),
+      }, { description: "Enable an installed plugin.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -120,7 +121,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         });
         await context.loader.unload(name);
         return { data: { name, disabled: true }, text: `${name} disabled` };
-      }, {}, 1, "Disable a plugin and unwind its effects."),
+      }, { description: "Disable a plugin and unwind its effects.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -133,7 +134,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         await mkdir(directory, { recursive: true });
         await writeFile(
           path,
-          `export default {\n  name: ${JSON.stringify(name)},\n  apply(ctx) {\n    ctx.effect(() => ctx.cli.register(${JSON.stringify(name)}, async () => ${JSON.stringify(name)}, {}, 0, ${JSON.stringify(`Run the ${name} plugin command.`)}));\n  },\n};\n`,
+          `export default {\n  name: ${JSON.stringify(name)},\n  apply(ctx) {\n    ctx.effect(() => ctx.cli.register(${JSON.stringify(name)}, async () => ${JSON.stringify(name)}, { description: ${JSON.stringify(`Run the ${name} plugin command.`)} }));\n  },\n};\n`,
         );
         context.log.append({
           type: "plugin.new",
@@ -143,7 +144,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           payload: { path },
         });
         return { data: { name, path, source: "repo" }, text: `${name} created at ${path}` };
-      }, {}, 1, "Scaffold a repository-local plugin."),
+      }, { description: "Scaffold a repository-local plugin.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -203,7 +204,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           data: { name: pluginName, path: destination, source: "global" },
           text: `${pluginName} added globally`,
         };
-      }, {}, 1, "Clone and enable a plugin from a Git URL."),
+      }, { description: "Clone and enable a plugin from a Git URL.", maxPositionals: 1 }),
     );
 
     context.effect(() =>
@@ -230,7 +231,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name }, text: `${name} removed` };
-      }, {}, 1, "Remove a managed plugin and its files."),
+      }, { description: "Remove a managed plugin and its files.", maxPositionals: 1 }),
     );
   },
 };

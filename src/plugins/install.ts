@@ -297,7 +297,7 @@ export const installPlugin: BuiltInPlugin = {
           data: { repo, runtimeRoot, shim, legacy },
           text: `maestro installed for ${repo}\nreview Codex hook trust with /hooks`,
         };
-      }, {}, 0, "Install Maestro runtime and repository hook wiring."),
+      }, { description: "Install Maestro runtime and repository hook wiring." }),
     );
   },
 };

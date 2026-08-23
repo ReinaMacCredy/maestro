@@ -6,6 +6,13 @@ export interface FlagDefinition {
   value?: boolean;
 }
 
+export interface CommandOptions {
+  description?: string;
+  flags?: Record<string, FlagDefinition>;
+  maxPositionals?: number;
+  rootDescription?: string;
+}
+
 export interface CliInvocation {
   command: string;
   options: Record<string, boolean | string | string[]>;
@@ -26,6 +33,7 @@ interface CommandDefinition {
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
   maxPositionals: number;
+  rootDescription?: string;
 }
 
 interface HelpRow {
@@ -66,21 +74,43 @@ export class Cli {
   private readonly commands = new Map<string, CommandDefinition>();
   private readonly extensions = new Map<string, Map<string, FlagDefinition>>();
 
+  register(command: string, handler: CliHandler, options?: CommandOptions): Disposer;
   register(
     command: string,
     handler: CliHandler,
-    flags: Record<string, FlagDefinition> = {},
-    maxPositionals = 0,
-    description = `Run ${command}.`,
+    flags?: Record<string, FlagDefinition>,
+    maxPositionals?: number,
+    description?: string,
+  ): Disposer;
+  register(
+    command: string,
+    handler: CliHandler,
+    optionsOrFlags: CommandOptions | Record<string, FlagDefinition> = {},
+    legacyMaxPositionals = 0,
+    legacyDescription?: string,
   ): Disposer {
     if (this.commands.has(command)) {
       throw new Error(`command already registered: ${command}`);
     }
+    const legacy =
+      legacyDescription !== undefined ||
+      legacyMaxPositionals !== 0 ||
+      Object.keys(optionsOrFlags).some((key) => key.startsWith("--"));
+    const options: CommandOptions = legacy
+      ? {
+          description: legacyDescription,
+          flags: optionsOrFlags as Record<string, FlagDefinition>,
+          maxPositionals: legacyMaxPositionals,
+        }
+      : (optionsOrFlags as CommandOptions);
     this.commands.set(command, {
-      description: this.oneLine(description, `Run ${command}.`),
+      description: this.oneLine(options.description, `Run ${command}.`),
       handler,
-      flags: new Map(Object.entries(flags)),
-      maxPositionals,
+      flags: new Map(Object.entries(options.flags ?? {})),
+      maxPositionals: options.maxPositionals ?? 0,
+      rootDescription: options.rootDescription
+        ? this.oneLine(options.rootDescription, options.rootDescription)
+        : undefined,
     });
     return () => this.commands.delete(command);
   }
@@ -146,10 +176,7 @@ export class Cli {
       const invocation = this.parse(
         command,
         remaining,
-        new Map([
-          ...definition.flags,
-          ...(this.extensions.get(command) ?? new Map<string, FlagDefinition>()),
-        ]),
+        this.effectiveFlags(command, definition),
         definition.maxPositionals,
       );
       const result = await definition.handler(invocation);
@@ -264,7 +291,11 @@ export class Cli {
     }
 
     const direct = entries.find(([command]) => command === target)?.[1];
-    const description = direct?.description ?? entries[0]?.[1].description ?? `Run ${target}.`;
+    const description =
+      direct?.description ??
+      entries.find(([, definition]) => definition.rootDescription)?.[1].rootDescription ??
+      entries[0]?.[1].description ??
+      `Run ${target}.`;
     const lines = [`${target}  ${description}`];
     if (direct) lines.push(...this.flagHelp(target, direct));
 
@@ -275,9 +306,9 @@ export class Cli {
         label: command.slice(target.length + 1),
         description: definition.description,
       }));
-      const commandLines = this.formatRows(rows, "  ").split("\n");
+      const width = Math.max(...rows.map((row) => row.label.length));
       for (const [index, [command, definition]] of nested.entries()) {
-        lines.push(commandLines[index] ?? command);
+        lines.push(this.formatRow(rows[index] ?? { label: command, description: definition.description }, width, "  "));
         const flags = this.flagHelp(command, definition);
         if (flags.length > 0) lines.push(...flags);
       }
@@ -286,10 +317,7 @@ export class Cli {
   }
 
   private flagHelp(command: string, definition: CommandDefinition): string[] {
-    const flags = new Map([
-      ...definition.flags,
-      ...(this.extensions.get(command) ?? new Map<string, FlagDefinition>()),
-    ]);
+    const flags = this.effectiveFlags(command, definition);
     if (flags.size === 0) return [];
     const rows = [...flags.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -302,9 +330,11 @@ export class Cli {
 
   private formatRows(rows: HelpRow[], indent: string): string {
     const width = Math.max(...rows.map((row) => row.label.length));
-    return rows
-      .map((row) => `${indent}${row.label.padEnd(width + 2)}${row.description}`)
-      .join("\n");
+    return rows.map((row) => this.formatRow(row, width, indent)).join("\n");
+  }
+
+  private formatRow(row: HelpRow, width: number, indent: string): string {
+    return `${indent}${row.label.padEnd(width + 2)}${row.description}`;
   }
 
   private rootDescription(root: string): string {
@@ -314,7 +344,21 @@ export class Cli {
     const nested = [...this.commands.entries()]
       .filter(([command]) => command.startsWith(`${root} `))
       .sort(([left], [right]) => left.localeCompare(right));
-    return nested[0]?.[1].description ?? `Run ${root} commands.`;
+    return (
+      nested.find(([, definition]) => definition.rootDescription)?.[1].rootDescription ??
+      nested[0]?.[1].description ??
+      `Run ${root} commands.`
+    );
+  }
+
+  private effectiveFlags(
+    command: string,
+    definition: CommandDefinition,
+  ): Map<string, FlagDefinition> {
+    return new Map([
+      ...definition.flags,
+      ...(this.extensions.get(command) ?? new Map<string, FlagDefinition>()),
+    ]);
   }
 
   private oneLine(description: string | undefined, fallback: string): string {
