@@ -1,0 +1,12 @@
+{
+  "name": "maestro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "maestro": "bin/maestro.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}

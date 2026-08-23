@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true
+  },
+  "include": ["bin/**/*.ts", "src/**/*.ts", "tests/**/*.ts"]
+}
