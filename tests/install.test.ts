@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runCli, withFixture } from "./helpers.ts";
+
+function isolatedPath(localBin: string): string {
+  return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+}
 
 test("A5 install preserves rollback before writing the shim and wires temp-only hooks", async () => {
   await withFixture(async (fixture) => {
@@ -12,7 +16,7 @@ test("A5 install preserves rollback before writing the shim and wires temp-only 
     const legacySource = "#!/bin/sh\necho legacy-maestro\n";
     await writeFile(shim, legacySource);
     await chmod(shim, 0o755);
-    const path = `${localBin}:${process.env.PATH ?? ""}`;
+    const path = isolatedPath(localBin);
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
@@ -79,7 +83,7 @@ test("29 install writes portable hook files without machine-absolute paths", asy
     await chmod(shim, 0o755);
 
     const installed = await runCli(fixture, ["install"], {
-      PATH: `${localBin}:${process.env.PATH ?? ""}`,
+      PATH: isolatedPath(localBin),
     });
     const hookSource = await readFile(
       join(fixture.repo, ".maestro", "hooks", "record.ts"),

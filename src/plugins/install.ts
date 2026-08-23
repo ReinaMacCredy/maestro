@@ -120,17 +120,13 @@ async function writeMirror(path: string): Promise<void> {
   await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`);
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function hookSource(shim: string): string {
+function hookSource(): string {
   return `#!/usr/bin/env bun
 const raw = await Bun.stdin.text();
 const input = raw.trim() ? JSON.parse(raw) : {};
 const event = typeof input.hook_event_name === "string" ? input.hook_event_name : "SessionStart";
 const sessionId = typeof input.session_id === "string" ? input.session_id : undefined;
-const child = Bun.spawn([${JSON.stringify(shim)}, "hook", "record", "--event", event], {
+const child = Bun.spawn(["maestro", "hook", "record", "--event", event], {
   cwd: typeof input.cwd === "string" ? input.cwd : process.cwd(),
   env: { ...process.env, ...(sessionId ? { MAESTRO_SESSION_ID: sessionId } : {}) },
   stdout: "pipe",
@@ -193,9 +189,9 @@ export const installPlugin: BuiltInPlugin = {
 
         const hookPath = join(repo, ".maestro", "hooks", "record.ts");
         await mkdir(dirname(hookPath), { recursive: true });
-        await writeFile(hookPath, hookSource(shim));
+        await writeFile(hookPath, hookSource());
         await chmod(hookPath, 0o755);
-        const hookCommand = `${shellQuote(process.execPath)} ${shellQuote(hookPath)}`;
+        const hookCommand = "bun .maestro/hooks/record.ts";
         await writeHookConfig(join(repo, ".codex", "hooks.json"), hookCommand);
         await writeHookConfig(join(repo, ".claude", "settings.json"), hookCommand);
         await writeMirror(join(repo, "AGENTS.md"));
