@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
@@ -106,5 +107,22 @@ test("29 install writes portable hook files without machine-absolute paths", asy
     expect(claudeHooks).toContain("bun .claude/hooks/maestro-record.ts");
     expect(codexHookSource).toContain('"--harness", "codex"');
     expect(claudeHookSource).toContain('"--harness", "claude"');
+  });
+});
+
+test("45 install mirrors name the manual hookless SessionStart bootstrap without Cursor wiring", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    const agents = await readFile(join(fixture.repo, "AGENTS.md"), "utf8");
+    const claude = await readFile(join(fixture.repo, "CLAUDE.md"), "utf8");
+    const bootstrap =
+      "If no harness hook fired, run `maestro hook record --event SessionStart` and read the brief from stdout.";
+
+    expect(installed.exitCode).toBe(0);
+    expect(agents).toContain(bootstrap);
+    expect(claude).toContain(bootstrap);
+    expect(existsSync(join(fixture.repo, ".cursor"))).toBe(false);
   });
 });
