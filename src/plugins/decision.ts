@@ -199,6 +199,7 @@ export const decisionPlugin: BuiltInPlugin = {
           "--work": { value: true },
           "--supersedes": { value: true },
         },
+        2,
       ),
     );
 
@@ -221,14 +222,14 @@ export const decisionPlugin: BuiltInPlugin = {
         });
         const locked = service.get(id) as DecisionRecord;
         return { data: { decision: locked }, text: format(locked) };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
       context.cli.register("decision show", (invocation): CliResult => {
         const decision = requireDecision(context, required(invocation, 0, "decision id"));
         return { data: { decision }, text: format(decision) };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>

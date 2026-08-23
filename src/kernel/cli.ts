@@ -23,6 +23,26 @@ export type CliHandler = (
 interface CommandDefinition {
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
+  maxPositionals: number;
+}
+
+function editDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitution =
+        (previous[rightIndex - 1] ?? 0) +
+        (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1);
+      current[rightIndex] = Math.min(
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex] ?? 0) + 1,
+        substitution,
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length] ?? 0;
 }
 
 export class CliError extends Error {
@@ -43,11 +63,16 @@ export class Cli {
     command: string,
     handler: CliHandler,
     flags: Record<string, FlagDefinition> = {},
+    maxPositionals = 0,
   ): Disposer {
     if (this.commands.has(command)) {
       throw new Error(`command already registered: ${command}`);
     }
-    this.commands.set(command, { handler, flags: new Map(Object.entries(flags)) });
+    this.commands.set(command, {
+      handler,
+      flags: new Map(Object.entries(flags)),
+      maxPositionals,
+    });
     return () => this.commands.delete(command);
   }
 
@@ -65,9 +90,24 @@ export class Cli {
 
   async dispatch(args: string[]): Promise<number> {
     try {
+      if (args.length === 0 || args[0] === "help" || args[0] === "--help") {
+        const unexpected = args[1];
+        if (unexpected) {
+          throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
+            argument: unexpected,
+          });
+        }
+        process.stdout.write(this.helpText());
+        return 0;
+      }
       const found = this.findCommand(args);
       if (!found) {
-        throw new CliError("UNKNOWN_VERB", `unknown verb: ${args.join(" ") || "<none>"}`);
+        const { attempted, suggestions } = this.nearestCommands(args);
+        throw new CliError(
+          "UNKNOWN_VERB",
+          `unknown verb: ${attempted}; nearest: ${suggestions.join(", ")}`,
+          { suggestions, verb: attempted },
+        );
       }
       const { command, definition, consumed } = found;
       const remaining = args.slice(consumed);
@@ -86,6 +126,7 @@ export class Cli {
           ...definition.flags,
           ...(this.extensions.get(command) ?? new Map<string, FlagDefinition>()),
         ]),
+        definition.maxPositionals,
       );
       const result = await definition.handler(invocation);
       const normalized: CliResult =
@@ -111,7 +152,11 @@ export class Cli {
           },
         })}\n`,
       );
-      return cliError.code === "UNKNOWN_VERB" || cliError.code === "UNKNOWN_FLAG" ? 2 : 1;
+      return cliError.code === "UNKNOWN_VERB" ||
+        cliError.code === "UNKNOWN_FLAG" ||
+        cliError.code === "UNKNOWN_ARGUMENT"
+        ? 2
+        : 1;
     }
   }
 
@@ -133,11 +178,12 @@ export class Cli {
     command: string,
     args: string[],
     flags: Map<string, FlagDefinition>,
+    maxPositionals: number,
   ): CliInvocation {
     const positionals: string[] = [];
     const options: Record<string, boolean | string | string[]> = {};
     for (let index = 0; index < args.length; index += 1) {
-      const token = args[index] as string;
+      const token = args[index] ?? "";
       if (!token.startsWith("--")) {
         positionals.push(token);
         continue;
@@ -163,6 +209,38 @@ export class Cli {
         options[key] = true;
       }
     }
+    const unexpected = positionals[maxPositionals];
+    if (unexpected !== undefined) {
+      throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
+        argument: unexpected,
+      });
+    }
     return { command, options, positionals };
+  }
+
+  private helpText(): string {
+    return `verbs:\n${this.rootVerbs().map((verb) => `  ${verb}`).join("\n")}\n`;
+  }
+
+  private nearestCommands(args: string[]): { attempted: string; suggestions: string[] } {
+    const root = args[0] ?? "";
+    const nested = [...this.commands.keys()].filter((command) => command.startsWith(`${root} `));
+    const candidates = nested.length > 0 ? nested : this.rootVerbs();
+    const attempted = nested.length > 0 ? args.slice(0, 2).join(" ") : root;
+    const suggestions = candidates
+      .map((command) => ({ command, distance: editDistance(attempted, command) }))
+      .sort((left, right) => left.distance - right.distance || left.command.localeCompare(right.command))
+      .slice(0, 3)
+      .map(({ command }) => command);
+    return { attempted, suggestions };
+  }
+
+  private rootVerbs(): string[] {
+    return [
+      ...new Set([
+        "help",
+        ...[...this.commands.keys()].map((command) => command.split(" ", 1)[0] ?? command),
+      ]),
+    ].sort();
   }
 }

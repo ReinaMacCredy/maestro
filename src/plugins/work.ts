@@ -232,6 +232,7 @@ export const workPlugin: BuiltInPlugin = {
           "--acceptance": { value: true },
           "--atomic-reason": { value: true },
         },
+        1,
       ),
     );
 
@@ -268,7 +269,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { holder: session.id },
         });
         return { data: { work: service.get(id) }, text: `${id} started by ${session.id}` };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -288,7 +289,7 @@ export const workPlugin: BuiltInPlugin = {
           payload: { text },
         });
         return { data: { id, text }, text: `${id} note: ${text}` };
-      }),
+      }, {}, 2),
     );
 
     context.effect(() =>
@@ -335,6 +336,7 @@ export const workPlugin: BuiltInPlugin = {
           return { data: { work: service.get(id) }, text: `${id} done` };
         },
         { "--evidence": { value: true } },
+        1,
       ),
     );
 
@@ -342,7 +344,7 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         return { data: { work }, text: formatWork(work) };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -371,7 +373,10 @@ export const workPlugin: BuiltInPlugin = {
         const ready = context.ready.project(items);
         return {
           data: { works: ready },
-          text: ready.map((work) => `${work.id} ${work.title}`).join("\n"),
+          text:
+            ready.length > 0
+              ? ready.map((work) => `${work.id} ${work.title}`).join("\n")
+              : "no ready work",
         };
       }),
     );

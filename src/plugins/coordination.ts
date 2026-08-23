@@ -191,7 +191,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           payload: message,
         });
         return { data: { message }, text: `message ${message.id} sent to ${target}` };
-      }),
+      }, {}, 2),
     );
 
     context.effect(() =>
@@ -239,12 +239,15 @@ export const coordinationPlugin: BuiltInPlugin = {
         const sessions = context.sessions.list();
         return {
           data: { sessions },
-          text: sessions
-            .map(
-              (session) =>
-                `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid}`,
-            )
-            .join("\n"),
+          text:
+            sessions.length > 0
+              ? sessions
+                  .map(
+                    (session) =>
+                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid}`,
+                  )
+                  .join("\n")
+              : "no sessions",
         };
       }),
     );

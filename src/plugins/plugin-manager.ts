@@ -79,7 +79,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name, disabled: false }, text: `${name} enabled` };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -94,7 +94,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         });
         await context.loader.unload(name);
         return { data: { name, disabled: true }, text: `${name} disabled` };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -117,7 +117,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           payload: { path },
         });
         return { data: { name, path, source: "repo" }, text: `${name} created at ${path}` };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -151,7 +151,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           payload: { url, destination },
         });
         return { data: { name, path: destination, source: "global" }, text: `${name} added globally` };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -178,7 +178,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name }, text: `${name} removed` };
-      }),
+      }, {}, 1),
     );
   },
 };

@@ -83,7 +83,7 @@ export const observabilityPlugin: BuiltInPlugin = {
             .map((match) => `${match.surface} ${match.entity_id}: ${match.text}`)
             .join("\n"),
         };
-      }),
+      }, {}, 1),
     );
 
     context.effect(() =>
@@ -96,7 +96,7 @@ export const observabilityPlugin: BuiltInPlugin = {
             .map((event) => `${event.id} ${event.type} ${JSON.stringify(event.payload)}`)
             .join("\n"),
         };
-      }),
+      }, {}, 1),
     );
   },
 };
