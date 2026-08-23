@@ -1,7 +1,7 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { Harness } from "../kernel/sessions.ts";
+import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 
 interface MessageRow {
@@ -152,10 +152,12 @@ function formatMessages(messages: MessageRecord[]): string {
     .join("\n");
 }
 
-function livePeers(context: PluginContext, work: WorkService, sessionId: string): LivePeer[] {
-  const items = work.list();
-  return context.sessions
-    .list()
+function livePeers(
+  sessions: SessionRecord[],
+  items: WorkRecord[],
+  sessionId: string,
+): LivePeer[] {
+  return sessions
     .filter((session) => session.live && session.id !== sessionId)
     .map((session) => ({
       heldWork: items.filter((item) => item.heldBy === session.id),
@@ -198,14 +200,14 @@ export const coordinationPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       brief.register((sessionId) => {
-        const held = work.list().filter((item) => item.heldBy === sessionId);
-        return held.length === 0
+        const items = work.list();
+        const held = items.filter((item) => item.heldBy === sessionId);
+        const heldText = held.length === 0
           ? "held work: none"
           : `held work: ${held.map((item) => `${item.id} ${item.title}`).join(", ")}`;
+        const peers = livePeers(context.sessions.list(), items, sessionId);
+        return [heldText, formatLivePeers(peers)].filter(Boolean).join("\n");
       }),
-    );
-    context.effect(() =>
-      brief.register((sessionId) => formatLivePeers(livePeers(context, work, sessionId))),
     );
     context.effect(() =>
       brief.register(() => {
@@ -321,7 +323,7 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("status", (): CliResult => {
         const sessions = context.sessions.list();
-        const peers = livePeers(context, work, context.sessions.current().id);
+        const peers = livePeers(sessions, work.list(), context.sessions.current().id);
         const sessionText =
           sessions.length > 0
             ? sessions
