@@ -218,11 +218,21 @@ test("24 unexpected positionals fail with UNKNOWN_ARGUMENT naming the token", as
       "--evidence",
       "real evidence",
     ]);
-    const error = JSON.parse(completed.stderr.trim());
-
     expect(completed.exitCode).not.toBe(0);
+    const error = JSON.parse(completed.stderr.trim());
     expect(error.error.code).toBe("UNKNOWN_ARGUMENT");
     expect(error.error.message).toContain("discarded text");
+
+    const drafted = await runCli(fixture, [
+      "decision",
+      "draft",
+      "kept decision text",
+      "discarded decision text",
+    ]);
+    expect(drafted.exitCode).not.toBe(0);
+    const draftError = JSON.parse(drafted.stderr.trim());
+    expect(draftError.error.code).toBe("UNKNOWN_ARGUMENT");
+    expect(draftError.error.message).toContain("discarded decision text");
   });
 });
 
