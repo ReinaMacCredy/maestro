@@ -9,6 +9,7 @@ import { policyProofPlugin } from "./policy-proof.ts";
 import { policyQaPlugin } from "./policy-qa.ts";
 import { policyResearchPlugin } from "./policy-research.ts";
 import { policyTddPlugin } from "./policy-tdd.ts";
+import { policyWitnessPlugin } from "./policy-witness.ts";
 import { recipePlugin } from "./recipe.ts";
 import { workPlugin } from "./work.ts";
 import { watchPlugin } from "./watch.ts";
@@ -23,6 +24,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyTddPlugin,
   policyQaPlugin,
   policyResearchPlugin,
+  policyWitnessPlugin,
   recipePlugin,
   observabilityPlugin,
   watchPlugin,
