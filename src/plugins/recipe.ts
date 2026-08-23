@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CliResult } from "../kernel/cli.ts";
+import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 
@@ -63,6 +63,12 @@ function shippedRecipe(name: string, description: string): RecipeEntry {
   };
 }
 
+function requiredName(invocation: CliInvocation): string {
+  const name = invocation.positionals[0];
+  if (!name) throw new CliError("MISSING_ARGUMENT", "missing recipe name");
+  return name;
+}
+
 export const recipePlugin: BuiltInPlugin = {
   name: "recipe",
   apply(context) {
@@ -79,6 +85,15 @@ export const recipePlugin: BuiltInPlugin = {
           text: entries.map((entry) => `${entry.name}\t${entry.description}`).join("\n"),
         };
       }),
+    );
+    context.effect(() =>
+      context.cli.register("recipe show", (invocation): CliResult => {
+        const name = requiredName(invocation);
+        const entry = recipes.get(name);
+        if (!entry) throw new CliError("RECIPE_NOT_FOUND", `recipe not found: ${name}`);
+        const body = typeof entry.body === "function" ? entry.body() : entry.body;
+        return { data: { name, description: entry.description, body }, text: body };
+      }, {}, 1),
     );
   },
 };
