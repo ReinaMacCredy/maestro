@@ -18,7 +18,7 @@ background service.
   into every repository. Browse them with `maestro recipe list` and read one
   with `maestro recipe show <name>`.
 
-## Install and update
+## Install, update, and remove
 
 Run the first install from a Maestro source checkout. The installer preserves
 the previous executable as `maestro-legacy`, copies the Bun runtime to
@@ -30,16 +30,37 @@ bun bin/maestro.ts install
 maestro version
 ```
 
-To update after the rewrite is on `main`, pull that checkout and reinstall from
-it. `maestro install` recognizes the Maestro source checkout and resyncs the
-runtime:
+The source checkout is recorded outside the runtime at
+`~/.maestro/source.json`. `maestro update` fetches that checkout's current
+upstream, accepts only a fast-forward, and resyncs the runtime. It refuses a
+dirty, diverged, unreachable, or stale source without partially updating the
+source or runtime:
 
 ```sh
-git switch main
-git pull --ff-only origin main
-maestro install
+maestro update
 maestro version
 ```
+
+`maestro install` remains the offline resync operation and is equivalent to the
+old `sync` behavior when run from a source checkout.
+
+`maestro uninstall` removes Maestro-managed hooks, settings keys, mirror
+blocks, and wiring from the current repository. It is idempotent and never
+deletes `.maestro/maestro.db` or a legacy `.maestro/store.sqlite`. To remove the
+machine-level shim and runtime as a separate manual action, run exactly:
+
+```sh
+rm ~/.local/bin/maestro
+rm -rf ~/.maestro/runtime
+```
+
+`maestro doctor` diagnoses the shim target, runtime stamp, recorded source,
+current repository wiring, and store access without repairing or changing
+them. A healthy report exits zero; every reported issue names its fix command.
+
+Status and hook briefs append a one-line advisory when the installed runtime
+commit differs from the recorded source checkout's local HEAD. This check is
+offline and never fetches. Set `MAESTRO_AUTO_UPDATE=0` to silence it.
 
 ## Verb tour
 
@@ -54,9 +75,10 @@ maestro version
   extensions.
 - `maestro recipe list|show` serves the deeper working methods; `maestro watch`
   renders live state.
-- `maestro install` refreshes the runtime and repository wiring. `maestro
-  version`, `maestro --version`, and `maestro -v` report the same install
-  identity.
+- `maestro install` refreshes the runtime and repository wiring; `maestro
+  update`, `maestro uninstall`, and `maestro doctor` complete the distribution
+  lifecycle. `maestro version`, `maestro --version`, and `maestro -v` report
+  the same install identity.
 
 `maestro help` and the Markdown recipes are the deeper command and method
 references.

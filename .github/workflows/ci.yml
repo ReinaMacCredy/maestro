@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install
+        run: bun install
+      - name: Test
+        run: bun test
+      - name: Type-check
+        run: bunx tsc --noEmit
+      - name: A1 no daemon or scheduler
+        run: |
+          if rg -n 'setInterval|setTimeout\(.*,\s*[0-9]{4,}|cron|detach' src/; then
+            exit 1
+          fi
+      - name: A2 mechanism-only kernel
+        run: |
+          if rg -in 'proof|qa|tdd|test-first|research' src/kernel/; then
+            exit 1
+          fi
+      - name: A3 no escape-hatch flags
+        run: |
+          if rg -n -- '\blean\b|--lane|--qa' src/; then
+            exit 1
+          fi
