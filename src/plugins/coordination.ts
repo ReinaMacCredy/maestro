@@ -1,6 +1,7 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { Harness } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 
 interface MessageRow {
@@ -138,6 +139,13 @@ function required(invocation: CliInvocation, index: number, label: string): stri
   return value;
 }
 
+function harnessOption(invocation: CliInvocation): Harness | null {
+  const value = invocation.options.harness;
+  if (value === undefined) return null;
+  if (value === "claude" || value === "codex") return value;
+  throw new CliError("INVALID_HARNESS", `invalid harness: ${String(value)}`);
+}
+
 function formatMessages(messages: MessageRecord[]): string {
   return messages
     .map((message) => `message ${message.id} from ${message.senderSession}: ${message.text}`)
@@ -246,6 +254,12 @@ export const coordinationPlugin: BuiltInPlugin = {
         const target = required(invocation, 0, "target session");
         const text = required(invocation, 1, "message text");
         const message = mailbox.send(target, text);
+        const sender = context.sessions.get(message.senderSession);
+        const targetSession = context.sessions.get(target);
+        const nativeDelivery =
+          sender?.harness === "claude" &&
+          targetSession?.harness === "claude" &&
+          targetSession.live;
         context.log.append({
           type: "msg.send",
           entityType: "message",
@@ -253,7 +267,13 @@ export const coordinationPlugin: BuiltInPlugin = {
           sessionId: message.senderSession,
           payload: message,
         });
-        return { data: { message }, text: `message ${message.id} sent to ${target}` };
+        const deliveryTip = nativeDelivery
+          ? `[native-delivery] also use native SendMessage for session ${target}`
+          : "";
+        return {
+          data: { message, nativeDelivery },
+          text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),
+        };
       }, {}, 2),
     );
 
@@ -282,18 +302,19 @@ export const coordinationPlugin: BuiltInPlugin = {
           if (typeof event !== "string") {
             throw new CliError("MISSING_ARGUMENT", "missing hook event");
           }
-          const session = context.sessions.record(event);
+          const harness = harnessOption(invocation);
+          const session = context.sessions.record(event, harness);
           context.log.append({
             type: "hook.record",
             entityType: "session",
             entityId: session.id,
             sessionId: session.id,
-            payload: { event, pid: session.pid },
+            payload: { event, harness, pid: session.pid },
           });
           const text = await brief.render(session.id);
           return { data: { session, brief: text }, text };
         },
-        { "--event": { value: true } },
+        { "--event": { value: true }, "--harness": { value: true } },
       ),
     );
 
@@ -306,7 +327,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             ? sessions
                 .map(
                   (session) =>
-                    `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid}`,
+                    `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"}`,
                 )
                 .join("\n")
             : "no sessions";

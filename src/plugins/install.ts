@@ -90,7 +90,14 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
   for (const event of ["SessionStart", "UserPromptSubmit"]) {
     const groups = config.hooks[event] ?? [];
     for (const group of groups) {
-      group.hooks = group.hooks.filter((handler) => !handler.command.includes(".maestro/hooks/record.ts"));
+      group.hooks = group.hooks.filter(
+        (handler) =>
+          ![
+            ".maestro/hooks/record.ts",
+            ".claude/hooks/maestro-record.ts",
+            ".codex/hooks/maestro-record.ts",
+          ].some((adapter) => handler.command.includes(adapter)),
+      );
     }
     config.hooks[event] = [
       ...groups.filter((group) => group.hooks.length > 0),
@@ -121,13 +128,13 @@ async function writeMirror(path: string): Promise<void> {
   await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`);
 }
 
-function hookSource(): string {
+function hookSource(harness: "claude" | "codex"): string {
   return `#!/usr/bin/env bun
 const raw = await Bun.stdin.text();
 const input = raw.trim() ? JSON.parse(raw) : {};
 const event = typeof input.hook_event_name === "string" ? input.hook_event_name : "SessionStart";
 const sessionId = typeof input.session_id === "string" ? input.session_id : undefined;
-const child = Bun.spawn(["maestro", "hook", "record", "--event", event], {
+const child = Bun.spawn(["maestro", "hook", "record", "--event", event, "--harness", "${harness}"], {
   cwd: typeof input.cwd === "string" ? input.cwd : process.cwd(),
   env: { ...process.env, ...(sessionId ? { MAESTRO_SESSION_ID: sessionId } : {}) },
   stdout: "pipe",
@@ -188,13 +195,26 @@ export const installPlugin: BuiltInPlugin = {
         await syncRuntime(sourceRoot, runtimeRoot);
         await writePolicyConfig(join(repo, ".maestro", "config"));
 
-        const hookPath = join(repo, ".maestro", "hooks", "record.ts");
-        await mkdir(dirname(hookPath), { recursive: true });
-        await writeFile(hookPath, hookSource());
-        await chmod(hookPath, 0o755);
-        const hookCommand = "bun .maestro/hooks/record.ts";
-        await writeHookConfig(join(repo, ".codex", "hooks.json"), hookCommand);
-        await writeHookConfig(join(repo, ".claude", "settings.json"), hookCommand);
+        const adapters = [
+          {
+            configPath: join(repo, ".claude", "settings.json"),
+            harness: "claude" as const,
+            hookCommand: "bun .claude/hooks/maestro-record.ts",
+            hookPath: join(repo, ".claude", "hooks", "maestro-record.ts"),
+          },
+          {
+            configPath: join(repo, ".codex", "hooks.json"),
+            harness: "codex" as const,
+            hookCommand: "bun .codex/hooks/maestro-record.ts",
+            hookPath: join(repo, ".codex", "hooks", "maestro-record.ts"),
+          },
+        ];
+        for (const adapter of adapters) {
+          await mkdir(dirname(adapter.hookPath), { recursive: true });
+          await writeFile(adapter.hookPath, hookSource(adapter.harness));
+          await chmod(adapter.hookPath, 0o755);
+          await writeHookConfig(adapter.configPath, adapter.hookCommand);
+        }
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
 

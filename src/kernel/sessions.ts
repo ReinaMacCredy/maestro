@@ -1,6 +1,9 @@
 import type { Store } from "./store.ts";
 
+export type Harness = "claude" | "codex";
+
 export interface SessionRecord {
+  harness: Harness | null;
   id: string;
   pid: number;
   lastEvent: string;
@@ -9,6 +12,7 @@ export interface SessionRecord {
 }
 
 interface SessionRow {
+  harness: Harness | null;
   id: string;
   pid: number;
   last_event: string;
@@ -22,9 +26,24 @@ export class Sessions {
         id TEXT PRIMARY KEY,
         pid INTEGER NOT NULL,
         last_event TEXT NOT NULL,
-        last_seen TEXT NOT NULL
+        last_seen TEXT NOT NULL,
+        harness TEXT CHECK(harness IN ('claude', 'codex'))
       );
     `);
+    const columns = store.database.query<{ name: string }, []>("PRAGMA table_info(sessions)").all();
+    if (!columns.some((column) => column.name === "harness")) {
+      try {
+        store.migrate(
+          "ALTER TABLE sessions ADD COLUMN harness TEXT CHECK(harness IN ('claude', 'codex'))",
+        );
+      } catch (error) {
+        const migrated = store.database
+          .query<{ name: string }, []>("PRAGMA table_info(sessions)")
+          .all()
+          .some((column) => column.name === "harness");
+        if (!migrated) throw error;
+      }
+    }
   }
 
   current(): { id: string; pid: number } {
@@ -46,20 +65,28 @@ export class Sessions {
     return { id: recorded?.id ?? `pid-${pid}`, pid };
   }
 
-  record(event: string): SessionRecord {
+  record(event: string, harness?: Harness | null): SessionRecord {
     const current = this.current();
     const lastSeen = new Date().toISOString();
+    const recordedHarness = harness === undefined ? (this.get(current.id)?.harness ?? null) : harness;
     this.store.database
       .query(
-        `INSERT INTO sessions (id, pid, last_event, last_seen)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            pid = excluded.pid,
            last_event = excluded.last_event,
-           last_seen = excluded.last_seen`,
+           last_seen = excluded.last_seen,
+           harness = excluded.harness`,
       )
-      .run(current.id, current.pid, event, lastSeen);
-    return { ...current, lastEvent: event, lastSeen, live: this.isPidAlive(current.pid) };
+      .run(current.id, current.pid, event, lastSeen, recordedHarness);
+    return {
+      ...current,
+      harness: recordedHarness,
+      lastEvent: event,
+      lastSeen,
+      live: this.isPidAlive(current.pid),
+    };
   }
 
   get(id: string): SessionRecord | null {
@@ -83,6 +110,7 @@ export class Sessions {
 
   private fromRow(row: SessionRow): SessionRecord {
     return {
+      harness: row.harness,
       id: row.id,
       pid: row.pid,
       lastEvent: row.last_event,

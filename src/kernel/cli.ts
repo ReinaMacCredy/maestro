@@ -114,7 +114,7 @@ export class Cli {
       const jsonIndex = remaining.indexOf("--json");
       const wantsJson = jsonIndex >= 0;
       if (wantsJson) {
-        if (!(command === "status" || command.endsWith(" list"))) {
+        if (!(command === "status" || command === "msg send" || command.endsWith(" list"))) {
           throw new CliError("UNKNOWN_FLAG", `unknown flag: --json`, { flag: "--json" });
         }
         remaining.splice(jsonIndex, 1);

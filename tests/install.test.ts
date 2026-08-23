@@ -7,7 +7,7 @@ function isolatedPath(localBin: string): string {
   return [localBin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
 }
 
-test("A5 install preserves rollback before writing the shim and wires temp-only hooks", async () => {
+test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
     const localBin = join(fixture.home, ".local", "bin");
     const shim = join(localBin, "maestro");
@@ -47,30 +47,42 @@ test("A5 install preserves rollback before writing the shim and wires temp-only 
     expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8")).toContain("maestro status");
     expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8")).toContain("maestro ready");
 
-    const hookPath = join(fixture.repo, ".maestro", "hooks", "record.ts");
-    const hook = Bun.spawn([process.execPath, hookPath], {
-      cwd: fixture.repo,
-      env: { ...process.env, HOME: fixture.home, PATH: path },
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    hook.stdin.write(
-      JSON.stringify({
+    for (const [adapter, harness] of [
+      [join(fixture.repo, ".claude", "hooks", "maestro-record.ts"), "claude"],
+      [join(fixture.repo, ".codex", "hooks", "maestro-record.ts"), "codex"],
+    ] as const) {
+      const sessionId = `install-${harness}-session`;
+      const hook = Bun.spawn([process.execPath, adapter], {
         cwd: fixture.repo,
-        hook_event_name: "SessionStart",
-        session_id: "install-hook-session",
-      }),
-    );
-    hook.stdin.end();
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(hook.stdout).text(),
-      new Response(hook.stderr).text(),
-      hook.exited,
-    ]);
-    expect(stderr).toBe("");
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("enabled policies");
+        env: { ...process.env, HOME: fixture.home, PATH: path },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      hook.stdin.write(
+        JSON.stringify({
+          cwd: fixture.repo,
+          hook_event_name: "SessionStart",
+          session_id: sessionId,
+        }),
+      );
+      hook.stdin.end();
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(hook.stdout).text(),
+        new Response(hook.stderr).text(),
+        hook.exited,
+      ]);
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("enabled policies");
+      const status = await runCli(fixture, ["status", "--json"]);
+      const envelope = JSON.parse(status.stdout) as {
+        data: { sessions: Array<{ harness: string | null; id: string }> };
+      };
+      expect(envelope.data.sessions.find((session) => session.id === sessionId)?.harness).toBe(
+        harness,
+      );
+    }
   });
 });
 
@@ -85,8 +97,12 @@ test("29 install writes portable hook files without machine-absolute paths", asy
     const installed = await runCli(fixture, ["install"], {
       PATH: isolatedPath(localBin),
     });
-    const hookSource = await readFile(
-      join(fixture.repo, ".maestro", "hooks", "record.ts"),
+    const codexHookSource = await readFile(
+      join(fixture.repo, ".codex", "hooks", "maestro-record.ts"),
+      "utf8",
+    );
+    const claudeHookSource = await readFile(
+      join(fixture.repo, ".claude", "hooks", "maestro-record.ts"),
       "utf8",
     );
     const codexHooks = await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8");
@@ -94,12 +110,14 @@ test("29 install writes portable hook files without machine-absolute paths", asy
       join(fixture.repo, ".claude", "settings.json"),
       "utf8",
     );
-    const hookFiles = `${hookSource}\n${codexHooks}\n${claudeHooks}`;
+    const hookFiles = `${codexHookSource}\n${claudeHookSource}\n${codexHooks}\n${claudeHooks}`;
 
     expect(installed.exitCode).toBe(0);
     expect(hookFiles).not.toContain(fixture.root);
     expect(hookFiles).not.toContain(process.execPath);
-    expect(codexHooks).toContain("bun .maestro/hooks/record.ts");
-    expect(claudeHooks).toContain("bun .maestro/hooks/record.ts");
+    expect(codexHooks).toContain("bun .codex/hooks/maestro-record.ts");
+    expect(claudeHooks).toContain("bun .claude/hooks/maestro-record.ts");
+    expect(codexHookSource).toContain('"--harness", "codex"');
+    expect(claudeHookSource).toContain('"--harness", "claude"');
   });
 });
