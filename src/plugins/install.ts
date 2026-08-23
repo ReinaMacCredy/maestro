@@ -15,7 +15,7 @@ import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 
 interface PluginEntry {
-  disabled?: true | false;
+  disabled?: boolean;
   name: string;
 }
 
@@ -113,14 +113,11 @@ async function writeMirror(path: string): Promise<void> {
   const end = "<!-- maestro:end -->";
   const block = `${begin}\nLive maestro state is injected by hooks. Use \`maestro status\` for the current session view and \`maestro ready\` for available work.\n${end}`;
   const existing = existsSync(path) ? await readFile(path, "utf8") : "";
-  const withoutBlock = existing.replace(
+  const cleaned = existing.replace(
     /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
     "\n",
   );
-  await writeFile(
-    path,
-    `${withoutBlock.trimEnd()}${withoutBlock.trim() ? "\n\n" : ""}${block}\n`,
-  );
+  await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`);
 }
 
 function shellQuote(value: string): string {

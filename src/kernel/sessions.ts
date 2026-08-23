@@ -5,7 +5,7 @@ export interface SessionRecord {
   pid: number;
   lastEvent: string;
   lastSeen: string;
-  live: true | false;
+  live: boolean;
 }
 
 interface SessionRow {
@@ -69,7 +69,7 @@ export class Sessions {
     return row ? this.fromRow(row) : null;
   }
 
-  isAlive(id: string): true | false {
+  isAlive(id: string): boolean {
     const session = this.get(id);
     return session ? this.isPidAlive(session.pid) : false;
   }
@@ -91,7 +91,7 @@ export class Sessions {
     };
   }
 
-  private isPidAlive(pid: number): true | false {
+  private isPidAlive(pid: number): boolean {
     try {
       process.kill(pid, 0);
       return true;

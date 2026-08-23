@@ -1,13 +1,13 @@
 import type { Disposer } from "./events.ts";
 
 export interface FlagDefinition {
-  multiple?: true | false;
-  value?: true | false;
+  multiple?: boolean;
+  value?: boolean;
 }
 
 export interface CliInvocation {
   command: string;
-  options: Record<string, true | false | string | string[]>;
+  options: Record<string, boolean | string | string[]>;
   positionals: string[];
 }
 
@@ -135,7 +135,7 @@ export class Cli {
     flags: Map<string, FlagDefinition>,
   ): CliInvocation {
     const positionals: string[] = [];
-    const options: Record<string, true | false | string | string[]> = {};
+    const options: Record<string, boolean | string | string[]> = {};
     for (let index = 0; index < args.length; index += 1) {
       const token = args[index] as string;
       if (!token.startsWith("--")) {

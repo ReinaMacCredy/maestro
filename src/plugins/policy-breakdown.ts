@@ -13,13 +13,14 @@ export const policyBreakdownPlugin: BuiltInPlugin = {
         async (input, next) => {
           if (
             writeLikeKinds.has(input.work.kind) &&
+            !input.work.parentId &&
             input.children.length === 0 &&
             !input.work.atomicReason
           ) {
             return {
               blocked: true,
               origin: "policy-breakdown",
-              reason: "write-like work requires a child breakdown or atomic reason",
+              reason: "parentless write-like work requires a child breakdown or atomic reason",
             };
           }
           return next();

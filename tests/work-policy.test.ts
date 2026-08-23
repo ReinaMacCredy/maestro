@@ -58,14 +58,30 @@ test("8 disabling policy-proof removes its flags while core evidence still compl
   });
 });
 
-test("9 policy-breakdown blocks childless write-like work without an atomic reason", async () => {
+test("9 policy-breakdown blocks only parentless childless write-like work", async () => {
   await withFixture(async (fixture) => {
-    const added = await runCli(fixture, ["work", "add", "implement", "--kind", "feature"]);
+    const root = idFrom(
+      await runCli(fixture, ["work", "add", "root implementation", "--kind", "feature"]),
+    );
 
-    const result = await runCli(fixture, ["work", "start", idFrom(added)]);
+    const blockedRoot = await runCli(fixture, ["work", "start", root]);
+    const child = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "child implementation",
+        "--kind",
+        "feature",
+        "--parent",
+        root,
+      ]),
+    );
+    const startedChild = await runCli(fixture, ["work", "start", child]);
 
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("policy-breakdown");
+    expect(blockedRoot.exitCode).not.toBe(0);
+    expect(blockedRoot.stderr).toContain("policy-breakdown");
+    expect(startedChild.exitCode).toBe(0);
+    expect(startedChild.stderr).not.toContain("policy-breakdown");
   });
 });
 
