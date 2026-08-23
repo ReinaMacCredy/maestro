@@ -158,10 +158,10 @@ test("26 plugin enable refuses an unresolvable source without changing config", 
     const configPath = join(fixture.repo, ".maestro", "config");
     const before = await readFile(configPath, "utf8");
 
-    const enabled = await runCli(fixture, ["plugin", "enable", "policy-tdd"]);
+    const enabled = await runCli(fixture, ["plugin", "enable", "policy-nosuch"]);
 
     expect(enabled.exitCode).not.toBe(0);
-    expect(enabled.stderr).toContain("policy-tdd");
+    expect(enabled.stderr).toContain("policy-nosuch");
     expect(enabled.stderr).toContain("source");
     expect(await readFile(configPath, "utf8")).toBe(before);
   });
