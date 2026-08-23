@@ -87,7 +87,28 @@ function getWork(context: PluginContext, id: string): WorkRecord | null {
   const row = context.store.database
     .query<WorkRow, [string]>("SELECT * FROM work WHERE id = ?")
     .get(id);
-  return row ? toWork(row) : null;
+  return row ? expireDeadLease(context, toWork(row)) : null;
+}
+
+function expireDeadLease(context: PluginContext, work: WorkRecord): WorkRecord {
+  if (!work.heldBy || context.sessions.isAlive(work.heldBy)) return work;
+  const previousHolder = work.heldBy;
+  const updatedAt = new Date().toISOString();
+  const result = context.store.database
+    .query(
+      `UPDATE work
+       SET state = 'open', held_by = NULL, updated_at = ?
+       WHERE id = ? AND held_by = ? AND state = 'active'`,
+    )
+    .run(updatedAt, work.id, previousHolder);
+  if (result.changes === 0) return work;
+  context.log.append({
+    type: "work.lease.expire",
+    entityType: "work",
+    entityId: work.id,
+    payload: { holder: previousHolder },
+  });
+  return { ...work, state: "open", heldBy: null, updatedAt };
 }
 
 function requireWork(context: PluginContext, id: string): WorkRecord {
@@ -100,7 +121,8 @@ function listWork(context: PluginContext): WorkRecord[] {
   return context.store.database
     .query<WorkRow, []>("SELECT * FROM work ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)")
     .all()
-    .map(toWork);
+    .map(toWork)
+    .map((work) => expireDeadLease(context, work));
 }
 
 function formatWork(work: WorkRecord): string {
@@ -163,7 +185,8 @@ export const workPlugin: BuiltInPlugin = {
             "SELECT * FROM work WHERE parent_id = ? ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
           )
           .all(id)
-          .map(toWork),
+          .map(toWork)
+          .map((work) => expireDeadLease(context, work)),
     };
     context.effect(() => context.provide("work", service));
 
@@ -218,14 +241,9 @@ export const workPlugin: BuiltInPlugin = {
         if (work.state === "done") throw new CliError("INVALID_STATE", `${id} is already done`);
         const session = context.sessions.record("work.start");
         if (work.heldBy && work.heldBy !== session.id) {
-          if (context.sessions.isAlive(work.heldBy)) {
-            throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
-              holder: work.heldBy,
-            });
-          }
-          context.store.database
-            .query("UPDATE work SET held_by = NULL, state = 'open', updated_at = ? WHERE id = ?")
-            .run(new Date().toISOString(), id);
+          throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
+            holder: work.heldBy,
+          });
         }
         const children = service.children(id);
         const result = await context.events.waterfall<
@@ -278,6 +296,15 @@ export const workPlugin: BuiltInPlugin = {
         async (invocation): Promise<CliResult> => {
           const id = requirePosition(invocation, 0, "work id");
           const work = requireWork(context, id);
+          const sessionId = context.sessions.current().id;
+          if (work.heldBy !== sessionId) {
+            if (work.heldBy) {
+              throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
+                holder: work.heldBy,
+              });
+            }
+            throw new CliError("LEASE_REQUIRED", `${id} must be started before completion`);
+          }
           const evidence = textOption(invocation, "evidence") ?? "";
           const claims = listOption(invocation, "claim");
           const proofs = listOption(invocation, "proof");
@@ -300,7 +327,7 @@ export const workPlugin: BuiltInPlugin = {
             type: "work.done",
             entityType: "work",
             entityId: id,
-            sessionId: context.sessions.current().id,
+            sessionId,
             payload: { evidence, claims, proofs },
           });
           return { data: { work: service.get(id) }, text: `${id} done` };

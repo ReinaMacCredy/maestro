@@ -21,6 +21,7 @@ export interface BuiltInPlugin extends Plugin {
 }
 
 export interface PluginRecord {
+  artifact?: "directory" | "file";
   name: string;
   source: PluginSource;
   status: "active" | "disabled" | "error" | "unloaded";
@@ -52,6 +53,7 @@ interface ConfigFile {
 }
 
 interface Candidate {
+  artifact?: "directory" | "file";
   plugin: Plugin;
   source: PluginSource;
   path?: string;
@@ -101,6 +103,7 @@ export class Loader {
       const entry = this.config.get(candidate.plugin.name);
       if (entry?.disabled ?? candidate.defaultDisabled ?? false) {
         this.records.push({
+          artifact: candidate.artifact,
           name: candidate.plugin.name,
           source: candidate.source,
           status: "disabled",
@@ -128,6 +131,7 @@ export class Loader {
       for (const candidate of pending.splice(0)) {
         const missing = (candidate.plugin.inject ?? []).filter((name) => !this.services.has(name));
         this.records.push({
+          artifact: candidate.artifact,
           name: candidate.plugin.name,
           source: candidate.source,
           status: "unloaded",
@@ -184,6 +188,7 @@ export class Loader {
     try {
       await candidate.plugin.apply(this.context, this.config.get(candidate.plugin.name)?.config);
       this.records.push({
+        artifact: candidate.artifact,
         name: candidate.plugin.name,
         source: candidate.source,
         status: "active",
@@ -192,6 +197,7 @@ export class Loader {
     } catch (error) {
       await this.unload(candidate.plugin.name);
       this.records.push({
+        artifact: candidate.artifact,
         name: candidate.plugin.name,
         source: candidate.source,
         status: "error",
@@ -248,7 +254,12 @@ export class Loader {
         if (!plugin?.name || typeof plugin.apply !== "function") {
           throw new Error("module must export { name, apply }");
         }
-        candidates.push({ plugin, source, path });
+        candidates.push({
+          artifact: entry.isDirectory() ? "directory" : "file",
+          plugin,
+          source,
+          path,
+        });
       } catch (error) {
         const name = entry.name.replace(/\.ts$/, "");
         this.records.push({

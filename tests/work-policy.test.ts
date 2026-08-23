@@ -106,9 +106,24 @@ test("11 live leases refuse a second session and dead-session leases expire pass
       expect(claimed.exitCode).toBe(0);
       expect(refused.exitCode).not.toBe(0);
       expect(refused.stderr).toContain("session-a");
+      const completionCollision = await runCli(
+        fixture,
+        ["work", "done", id, "--evidence", "not mine"],
+        {
+          MAESTRO_SESSION_ID: "session-b",
+          MAESTRO_SESSION_PID: String(process.pid),
+        },
+      );
+      expect(completionCollision.exitCode).not.toBe(0);
+      expect(completionCollision.stderr).toContain("session-a");
 
       holder.kill();
       await holder.exited;
+      const passivelyReady = await runCli(fixture, ["ready"], {
+        MAESTRO_SESSION_ID: "session-b",
+        MAESTRO_SESSION_PID: String(process.pid),
+      });
+      expect(passivelyReady.stdout).toContain(id);
       const reclaimed = await runCli(fixture, ["work", "start", id], {
         MAESTRO_SESSION_ID: "session-b",
         MAESTRO_SESSION_PID: String(process.pid),

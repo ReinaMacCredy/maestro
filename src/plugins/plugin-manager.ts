@@ -164,9 +164,9 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         }
         await context.loader.unload(name);
         if (record.path) {
-          if (record.path.endsWith(".ts") && !record.path.endsWith("/index.ts")) {
+          if (record.artifact === "file") {
             await unlink(record.path);
-          } else {
+          } else if (record.artifact === "directory") {
             await rm(join(record.path, ".."), { recursive: true, force: true });
           }
         }

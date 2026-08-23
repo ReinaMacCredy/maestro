@@ -138,5 +138,16 @@ test("6 plugin new and plugin add appear with repo and global source tiers", asy
     expect(listed.stdout).toContain("repo");
     expect(listed.stdout).toContain(basename(remote));
     expect(listed.stdout).toContain("global");
+
+    await writePlugin(
+      fixture,
+      "repo",
+      "index",
+      `export default { name: "index-local", apply() {} };\n`,
+    );
+    const removed = await runCli(fixture, ["plugin", "remove", "index-local"]);
+    const scaffoldStillLoads = await runCli(fixture, ["my-gate"]);
+    expect(removed.exitCode).toBe(0);
+    expect(scaffoldStillLoads.exitCode).toBe(0);
   });
 });
