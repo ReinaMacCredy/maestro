@@ -6,7 +6,7 @@ import type { BuiltInPlugin, PluginRecord } from "../kernel/loader.ts";
 
 interface ConfigEntry {
   config?: unknown;
-  disabled?: boolean;
+  disabled?: true | false;
   name: string;
 }
 
@@ -31,7 +31,7 @@ async function readRepoConfig(path: string): Promise<ConfigFile> {
   return JSON.parse(await readFile(path, "utf8")) as ConfigFile;
 }
 
-async function updateEntry(path: string, name: string, disabled: boolean): Promise<void> {
+async function updateEntry(path: string, name: string, disabled: true | false): Promise<void> {
   const config = await readRepoConfig(path);
   const entry = config.plugins.find((candidate) => candidate.name === name);
   if (entry) entry.disabled = disabled;

@@ -17,7 +17,7 @@ export interface Plugin {
 }
 
 export interface BuiltInPlugin extends Plugin {
-  defaultDisabled?: boolean;
+  defaultDisabled?: true | false;
 }
 
 export interface PluginRecord {
@@ -43,7 +43,7 @@ export interface PluginContext {
 
 interface PluginEntry {
   config?: unknown;
-  disabled?: boolean;
+  disabled?: true | false;
   name: string;
 }
 
@@ -55,7 +55,7 @@ interface Candidate {
   plugin: Plugin;
   source: PluginSource;
   path?: string;
-  defaultDisabled?: boolean;
+  defaultDisabled?: true | false;
 }
 
 export class Loader {

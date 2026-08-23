@@ -36,7 +36,7 @@ export interface WorkService {
 }
 
 interface GateResult {
-  blocked: boolean;
+  blocked: true | false;
   origin?: string;
   reason?: string;
 }
