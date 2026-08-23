@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
-import type { BuiltInPlugin, PluginRecord } from "../kernel/loader.ts";
+import {
+  importPluginEntrypoint,
+  resolvePluginEntrypoint,
+  type BuiltInPlugin,
+  type PluginRecord,
+} from "../kernel/loader.ts";
 
 interface ConfigEntry {
   config?: unknown;
@@ -71,6 +76,21 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("plugin enable", async (invocation): Promise<CliResult> => {
         const name = requireName(invocation);
+        const record = context.loader.records.find((candidate) => candidate.name === name);
+        if (!record || record.diagnostic === "plugin source not found") {
+          throw new CliError(
+            "PLUGIN_SOURCE_NOT_FOUND",
+            `plugin source not found: ${name}`,
+            { plugin: name },
+          );
+        }
+        if (record.status === "error") {
+          throw new CliError(
+            "INVALID_PLUGIN",
+            `plugin source is not loadable: ${name}: ${record.diagnostic ?? "unknown error"}`,
+            { plugin: name },
+          );
+        }
         await updateEntry(configPath, name, false);
         context.log.append({
           type: "plugin.enable",
@@ -143,14 +163,40 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           await rm(destination, { recursive: true, force: true });
           throw new CliError("CLONE_FAILED", stderr.trim() || `git clone failed: ${url}`);
         }
+        let pluginName: string;
+        try {
+          const entrypoint = resolvePluginEntrypoint(destination);
+          if (!entrypoint) {
+            throw new CliError(
+              "INVALID_PLUGIN",
+              `plugin entrypoint not found: expected index.ts or one root .ts file in ${name}`,
+              { plugin: name },
+            );
+          }
+          const plugin = await importPluginEntrypoint(entrypoint);
+          validateName(plugin.name);
+          pluginName = plugin.name;
+          await updateEntry(configPath, pluginName, false);
+        } catch (error) {
+          await rm(destination, { recursive: true, force: true });
+          if (error instanceof CliError) throw error;
+          throw new CliError(
+            "INVALID_PLUGIN",
+            `plugin entrypoint is not loadable: ${name}: ${error instanceof Error ? error.message : String(error)}`,
+            { plugin: name },
+          );
+        }
         context.log.append({
           type: "plugin.add",
           entityType: "plugin",
-          entityId: name,
+          entityId: pluginName,
           sessionId: context.sessions.current().id,
           payload: { url, destination },
         });
-        return { data: { name, path: destination, source: "global" }, text: `${name} added globally` };
+        return {
+          data: { name: pluginName, path: destination, source: "global" },
+          text: `${pluginName} added globally`,
+        };
       }, {}, 1),
     );
 

@@ -60,6 +60,27 @@ interface Candidate {
   defaultDisabled?: boolean;
 }
 
+export function resolvePluginEntrypoint(directory: string): string | null {
+  const index = join(directory, "index.ts");
+  if (existsSync(index)) return index;
+  const rootTypeScriptFiles = readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+    .map((entry) => join(directory, entry.name));
+  return rootTypeScriptFiles.length === 1 ? (rootTypeScriptFiles[0] ?? null) : null;
+}
+
+export async function importPluginEntrypoint(path: string): Promise<Plugin> {
+  const module = (await import(pathToFileURL(path).href)) as {
+    default?: Plugin;
+    plugin?: Plugin;
+  };
+  const plugin = module.default ?? module.plugin;
+  if (!plugin?.name || typeof plugin.apply !== "function") {
+    throw new Error("module must export { name, apply }");
+  }
+  return plugin;
+}
+
 export class Loader {
   readonly records: PluginRecord[] = [];
   readonly context: PluginContext;
@@ -243,17 +264,13 @@ export class Loader {
     const candidates: Candidate[] = [];
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const path = entry.isDirectory()
-        ? join(directory, entry.name, "index.ts")
+        ? resolvePluginEntrypoint(join(directory, entry.name))
         : entry.isFile() && entry.name.endsWith(".ts")
           ? join(directory, entry.name)
           : null;
       if (!path || !existsSync(path)) continue;
       try {
-        const module = (await import(pathToFileURL(path).href)) as { default?: Plugin; plugin?: Plugin };
-        const plugin = module.default ?? module.plugin;
-        if (!plugin?.name || typeof plugin.apply !== "function") {
-          throw new Error("module must export { name, apply }");
-        }
+        const plugin = await importPluginEntrypoint(path);
         candidates.push({
           artifact: entry.isDirectory() ? "directory" : "file",
           plugin,
@@ -263,6 +280,7 @@ export class Loader {
       } catch (error) {
         const name = entry.name.replace(/\.ts$/, "");
         this.records.push({
+          artifact: entry.isDirectory() ? "directory" : "file",
           name,
           source,
           status: "error",
