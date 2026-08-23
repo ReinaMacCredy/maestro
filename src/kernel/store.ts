@@ -24,7 +24,10 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
   }
   if (result.exitCode !== 0) {
     const diagnostic = result.stderr?.toString().trim() ?? "";
-    if (diagnostic.startsWith("fatal: not a git repository (or any of the parent directories):")) {
+    if (
+      diagnostic.startsWith("fatal: not a git repository (or any of the parent directories):") ||
+      diagnostic.startsWith("fatal: not a git repository (or any parent up to mount point ")
+    ) {
       return { orphanPath: null, path: fallback };
     }
     throw new Error(`cannot resolve git repository: ${diagnostic || `git exited ${result.exitCode}`}`);

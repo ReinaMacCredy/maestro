@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   addLinkedWorktree,
@@ -123,6 +123,30 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     const broken = await runCliAt(fixture, brokenRepo, ["status"]);
     expect(broken.exitCode).not.toBe(0);
     expect(await Bun.file(join(brokenRepo, ".maestro", "maestro.db")).exists()).toBeFalse();
+
+    const outsideRepo = join(fixture.root, "outside-git-at-filesystem-boundary");
+    const fakeBin = join(fixture.root, "fake-git-bin");
+    await mkdir(join(outsideRepo, ".maestro"), { recursive: true });
+    await writeFile(join(outsideRepo, ".maestro", "config"), `${JSON.stringify({ plugins: [] })}\n`);
+    await mkdir(fakeBin, { recursive: true });
+    const fakeGit = join(fakeBin, "git");
+    await writeFile(
+      fakeGit,
+      [
+        "#!/bin/sh",
+        "echo 'fatal: not a git repository (or any parent up to mount point /)' >&2",
+        "echo 'Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).' >&2",
+        "exit 128",
+        "",
+      ].join("\n"),
+    );
+    await chmod(fakeGit, 0o755);
+
+    const filesystemBoundary = await runCliAt(fixture, outsideRepo, ["status"], {
+      PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+    });
+    expect(filesystemBoundary.exitCode).toBe(0);
+    expect(await Bun.file(join(outsideRepo, ".maestro", "maestro.db")).exists()).toBeTrue();
   });
 });
 
