@@ -207,7 +207,10 @@ export const decisionPlugin: BuiltInPlugin = {
             "--work": { description: "Link this draft to a work item.", value: true },
             "--supersedes": { description: "Supersede a locked decision with this draft.", value: true },
           },
-          maxPositionals: 2,
+          positionals: [
+            { name: "text-or-id", required: true },
+            { name: "replacement", required: false },
+          ],
           rootDescription: "Record durable decisions and their lifecycle.",
         },
       ),
@@ -232,14 +235,20 @@ export const decisionPlugin: BuiltInPlugin = {
         });
         const locked = service.get(id) as DecisionRecord;
         return { data: { decision: locked }, text: format(locked) };
-      }, { description: "Lock a draft decision against further edits.", maxPositionals: 1 }),
+      }, {
+        description: "Lock a draft decision against further edits.",
+        positionals: [{ name: "id", required: true }],
+      }),
     );
 
     context.effect(() =>
       context.cli.register("decision show", (invocation): CliResult => {
         const decision = requireDecision(context, required(invocation, 0, "decision id"));
         return { data: { decision }, text: format(decision) };
-      }, { description: "Show one decision and its links.", maxPositionals: 1 }),
+      }, {
+        description: "Show one decision and its links.",
+        positionals: [{ name: "id", required: true }],
+      }),
     );
 
     context.effect(() =>

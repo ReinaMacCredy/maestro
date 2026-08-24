@@ -455,7 +455,7 @@ export const importRustPlugin: BuiltInPlugin = {
           flags: {
             "--file": { description: "Show only this legacy file path.", value: true },
           },
-          maxPositionals: 1,
+          positionals: [{ name: "id", required: true }],
           rootDescription: "Read imported legacy cards without changing them.",
         },
       ),

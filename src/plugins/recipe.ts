@@ -115,7 +115,7 @@ export const recipePlugin: BuiltInPlugin = {
         },
         {
           description: "Show one workflow recipe by name.",
-          maxPositionals: 1,
+          positionals: [{ name: "name", required: true }],
         },
       ),
     );

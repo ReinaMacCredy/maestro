@@ -272,7 +272,7 @@ export const workPlugin: BuiltInPlugin = {
               value: true,
             },
           },
-          maxPositionals: 1,
+          positionals: [{ name: "title", required: true }],
           rootDescription: "Manage tracked work, leases, dependencies, and evidence.",
         },
       ),
@@ -324,7 +324,10 @@ export const workPlugin: BuiltInPlugin = {
           payload: { holder: session.id },
         });
         return { data: { work: service.get(id) }, text: `${id} started by ${session.id}` };
-      }, { description: "Start work and claim its live session lease.", maxPositionals: 1 }),
+      }, {
+        description: "Start work and claim its live session lease.",
+        positionals: [{ name: "id", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -344,7 +347,13 @@ export const workPlugin: BuiltInPlugin = {
           payload: { text },
         });
         return { data: { id, text }, text: `${id} note: ${text}` };
-      }, { description: "Append a note to a work item.", maxPositionals: 2 }),
+      }, {
+        description: "Append a note to a work item.",
+        positionals: [
+          { name: "id", required: true },
+          { name: "text", required: true },
+        ],
+      }),
     );
 
     context.effect(() =>
@@ -409,7 +418,7 @@ export const workPlugin: BuiltInPlugin = {
               value: true,
             },
           },
-          maxPositionals: 1,
+          positionals: [{ name: "id", required: true }],
         },
       ),
     );
@@ -418,7 +427,10 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         return { data: { work }, text: formatWork(work) };
-      }, { description: "Show one work item and its recorded evidence.", maxPositionals: 1 }),
+      }, {
+        description: "Show one work item and its recorded evidence.",
+        positionals: [{ name: "id", required: true }],
+      }),
     );
 
     context.effect(() =>

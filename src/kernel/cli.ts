@@ -10,7 +10,13 @@ export interface CommandOptions {
   description?: string;
   flags?: Record<string, FlagDefinition>;
   maxPositionals?: number;
+  positionals?: PositionalDefinition[];
   rootDescription?: string;
+}
+
+export interface PositionalDefinition {
+  name: string;
+  required: boolean;
 }
 
 export interface CliInvocation {
@@ -35,6 +41,7 @@ export interface CliCommandDescriptor {
   description: string;
   flags: CliFlagDescriptor[];
   name: string;
+  positionals?: PositionalDefinition[];
 }
 
 export interface CliSuccessEnvelope {
@@ -60,6 +67,7 @@ interface CommandDefinition {
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
   maxPositionals: number;
+  positionals: PositionalDefinition[];
   rootDescription?: string;
 }
 
@@ -156,7 +164,8 @@ export class Cli {
       description: this.oneLine(options.description, `Run ${command}.`),
       handler,
       flags: new Map(Object.entries(options.flags ?? {})),
-      maxPositionals: options.maxPositionals ?? 0,
+      maxPositionals: options.maxPositionals ?? options.positionals?.length ?? 0,
+      positionals: options.positionals ?? [],
       rootDescription: options.rootDescription
         ? this.oneLine(options.rootDescription, options.rootDescription)
         : undefined,
@@ -184,6 +193,9 @@ export class Cli {
       .map(([name, definition]) => ({
         name,
         description: definition.description,
+        ...(definition.positionals.length > 0
+          ? { positionals: definition.positionals.map((positional) => ({ ...positional })) }
+          : {}),
         flags: [...this.effectiveFlags(name, definition).entries()]
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([flag, metadata]) => ({
@@ -225,13 +237,13 @@ export class Cli {
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     if (args[0] === "help") {
-      const unexpected = args[2];
+      const { target, unexpected } = this.helpTarget(args.slice(1));
       if (unexpected) {
         throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
           argument: unexpected,
         });
       }
-      const help = this.helpText(args[1]);
+      const help = this.helpText(target);
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     const helpIndex = args.indexOf("--help");
@@ -362,7 +374,10 @@ export class Cli {
       entries[0]?.[1].description ??
       `Run ${target}.`;
     const lines = [`${target}  ${description}`];
-    if (direct) lines.push(...this.flagHelp(target, direct));
+    if (direct) {
+      lines.push(`usage: maestro ${this.usage(target, direct)}`);
+      lines.push(...this.flagHelp(target, direct));
+    }
 
     const nested = entries.filter(([command]) => command !== target);
     if (nested.length > 0) {
@@ -391,6 +406,25 @@ export class Cli {
         description: this.oneLine(metadata.description, `Set ${flag}.`),
       }));
     return [this.formatRows(rows, "    ")];
+  }
+
+  private usage(command: string, definition: CommandDefinition): string {
+    const positionals = definition.positionals.map((positional) =>
+      positional.required ? `<${positional.name}>` : `[${positional.name}]`
+    );
+    return [command, ...positionals].join(" ");
+  }
+
+  private helpTarget(args: string[]): { target?: string; unexpected?: string } {
+    if (args.length === 0) return {};
+    const targets = [...new Set([...this.commands.keys(), ...this.rootVerbs()])]
+      .map((target) => ({ parts: target.split(" "), target }))
+      .sort((left, right) => right.parts.length - left.parts.length);
+    const matched = targets.find(({ parts }) =>
+      parts.every((part, index) => args[index] === part)
+    );
+    if (!matched) return { target: args[0], unexpected: args[1] };
+    return { target: matched.target, unexpected: args[matched.parts.length] };
   }
 
   private formatRows(rows: HelpRow[], indent: string): string {

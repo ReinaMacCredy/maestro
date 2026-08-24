@@ -145,7 +145,7 @@ export const observabilityPlugin: BuiltInPlugin = {
         },
         {
           description: "Search work, decisions, notes, and event history.",
-          maxPositionals: 1,
+          positionals: [{ name: "query", required: true }],
         },
       ),
     );
@@ -165,7 +165,7 @@ export const observabilityPlugin: BuiltInPlugin = {
         },
         {
           description: "Reconstruct one work item's event history.",
-          maxPositionals: 1,
+          positionals: [{ name: "id", required: true }],
         },
       ),
     );

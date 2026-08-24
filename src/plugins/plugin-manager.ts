@@ -106,7 +106,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name, disabled: false }, text: `${name} enabled` };
-      }, { description: "Enable an installed plugin.", maxPositionals: 1 }),
+      }, {
+        description: "Enable an installed plugin.",
+        positionals: [{ name: "name", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -121,7 +124,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         });
         await context.loader.unload(name);
         return { data: { name, disabled: true }, text: `${name} disabled` };
-      }, { description: "Disable a plugin and unwind its effects.", maxPositionals: 1 }),
+      }, {
+        description: "Disable a plugin and unwind its effects.",
+        positionals: [{ name: "name", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -144,7 +150,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           payload: { path },
         });
         return { data: { name, path, source: "repo" }, text: `${name} created at ${path}` };
-      }, { description: "Scaffold a repository-local plugin.", maxPositionals: 1 }),
+      }, {
+        description: "Scaffold a repository-local plugin.",
+        positionals: [{ name: "name", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -204,7 +213,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           data: { name: pluginName, path: destination, source: "global" },
           text: `${pluginName} added globally`,
         };
-      }, { description: "Clone and enable a plugin from a Git URL.", maxPositionals: 1 }),
+      }, {
+        description: "Clone and enable a plugin from a Git URL.",
+        positionals: [{ name: "url", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -231,7 +243,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
         });
         return { data: { name }, text: `${name} removed` };
-      }, { description: "Remove a managed plugin and its files.", maxPositionals: 1 }),
+      }, {
+        description: "Remove a managed plugin and its files.",
+        positionals: [{ name: "name", required: true }],
+      }),
     );
   },
 };

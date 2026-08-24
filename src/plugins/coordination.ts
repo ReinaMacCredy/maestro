@@ -288,7 +288,10 @@ export const coordinationPlugin: BuiltInPlugin = {
         },
         {
           description: "Send a message to another live session.",
-          maxPositionals: 2,
+          positionals: [
+            { name: "session", required: true },
+            { name: "message", required: true },
+          ],
           rootDescription: "Exchange repository-backed messages between sessions.",
         },
       ),
