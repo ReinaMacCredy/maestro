@@ -121,6 +121,7 @@ test("96 installed harness docs name the stderr JSON failure envelope", async ()
     const block = await readFile(join(fixture.repo, "CLAUDE.md"), "utf8");
     expect(block).toContain("JSON error envelope");
     expect(block).toContain("stderr");
+    expect(block).toContain("when the fix is mechanical");
   });
 });
 
@@ -130,5 +131,126 @@ test("97 work recipe disambiguates claim tagging and evidence forms", async () =
     expect(recipe.exitCode).toBe(0);
     expect(recipe.stdout).toContain("the tag prefix goes on the claim");
     expect(recipe.stdout).toContain("opaque");
+  });
+});
+
+test("98 session lastEvent records what happened, not what was attempted", async () => {
+  await withFixture(async (fixture) => {
+    const session = { MAESTRO_SESSION_ID: "honest-session", MAESTRO_SESSION_PID: String(process.pid) };
+    expect(
+      (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session)).exitCode,
+    ).toBe(0);
+
+    const gated = idFrom(
+      await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"], session),
+    );
+    expect((await runCli(fixture, ["work", "start", gated], session)).exitCode).not.toBe(0);
+    const afterRefusedStart = await runCli(fixture, ["status"], session);
+    expect(afterRefusedStart.stdout).toContain("SessionStart");
+    expect(afterRefusedStart.stdout).not.toContain("work.start");
+
+    const item = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"],
+        session,
+      ),
+    );
+    expect((await runCli(fixture, ["work", "start", item], session)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", item], session)).exitCode).not.toBe(0);
+    const afterRefusedDone = await runCli(fixture, ["status"], session);
+    expect(afterRefusedDone.stdout).toContain("work.start");
+    expect(afterRefusedDone.stdout).not.toContain("work.done");
+
+    expect(
+      (await runCli(fixture, ["work", "done", item, "--evidence", "done"], session)).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["status"], session)).stdout).toContain("work.done");
+  });
+});
+
+test("99 status renders held work per session", async () => {
+  await withFixture(async (fixture) => {
+    const session = { MAESTRO_SESSION_ID: "holder-session", MAESTRO_SESSION_PID: String(process.pid) };
+    expect(
+      (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session)).exitCode,
+    ).toBe(0);
+    const item = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "held item", "--kind", "task", "--atomic-reason", "spike"],
+        session,
+      ),
+    );
+    expect((await runCli(fixture, ["work", "start", item], session)).exitCode).toBe(0);
+
+    const holding = await runCli(fixture, ["status"], session);
+    expect(holding.exitCode).toBe(0);
+    expect(holding.stdout).toContain(`holds: ${item}`);
+
+    expect(
+      (await runCli(fixture, ["work", "done", item, "--evidence", "done"], session)).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["status"], session)).stdout).toContain("holds: none");
+  });
+});
+
+test("100 completing already-done work fails INVALID_STATE, not a lease dead-end", async () => {
+  await withFixture(async (fixture) => {
+    const item = idFrom(
+      await runCli(fixture, ["work", "add", "one shot", "--kind", "task", "--atomic-reason", "spike"]),
+    );
+    expect((await runCli(fixture, ["work", "start", item])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", item, "--evidence", "done"])).exitCode).toBe(0);
+
+    const again = await runCli(fixture, ["work", "done", item, "--evidence", "again"]);
+    expect(again.exitCode).not.toBe(0);
+    const error = (JSON.parse(again.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("INVALID_STATE");
+    expect(String(error.message)).toContain("already done");
+    expect(String(error.message)).not.toContain("work start");
+  });
+});
+
+test("101 NOT_FOUND names the listing command", async () => {
+  await withFixture(async (fixture) => {
+    const missing = await runCli(fixture, ["work", "start", "w99"]);
+    expect(missing.exitCode).not.toBe(0);
+    const error = (JSON.parse(missing.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("NOT_FOUND");
+    expect(String(error.message)).toContain("run: maestro work list");
+    expect(error.command).toBe("maestro work list");
+  });
+});
+
+test("102 UNKNOWN_FLAG names the help command for its verb", async () => {
+  await withFixture(async (fixture) => {
+    const bogus = await runCli(fixture, ["work", "list", "--bogus"]);
+    expect(bogus.exitCode).not.toBe(0);
+    const error = (JSON.parse(bogus.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("UNKNOWN_FLAG");
+    expect(String(error.message)).toContain("run: maestro help work");
+    expect(error.command).toBe("maestro help work");
+  });
+});
+
+test("103 plugin list states what each policy requires", async () => {
+  await withFixture(async (fixture) => {
+    const list = await runCli(fixture, ["plugin", "list", "--json"]);
+    expect(list.exitCode).toBe(0);
+    const plugins = (JSON.parse(list.stdout) as {
+      data: { plugins: Array<{ name: string; requires?: string }> };
+    }).data.plugins;
+    const requiresFor = (name: string) =>
+      plugins.find((plugin) => plugin.name === name)?.requires ?? "";
+    expect(requiresFor("policy-proof")).toContain("--evidence");
+    expect(requiresFor("policy-proof")).toContain("--claim");
+    expect(requiresFor("policy-breakdown")).toContain("--atomic-reason");
+    expect(requiresFor("policy-tdd")).toContain("test:");
+    expect(requiresFor("policy-qa")).toContain("qa:");
+
+    const text = await runCli(fixture, ["plugin", "list"]);
+    expect(text.stdout).toContain("--atomic-reason");
+    expect(text.stdout).toContain("test:");
   });
 });
