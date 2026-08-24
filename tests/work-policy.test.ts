@@ -92,16 +92,83 @@ test("10 ready excludes blocked work and promotes it after its blocker completes
       await runCli(fixture, ["work", "add", "second", "--kind", "idea", "--blocked-by", first]),
     );
 
-    const before = await runCli(fixture, ["ready"]);
-    expect(before.stdout).toContain(first);
-    expect(before.stdout).not.toContain(second);
+    const before = await runCli(fixture, ["ready", "--json"]);
+    expect(before.exitCode).toBe(0);
+    const beforeData = JSON.parse(before.stdout).data as {
+      gated: unknown[];
+      works: Array<{ id: string }>;
+    };
+    expect(beforeData.works.map((work) => work.id)).toContain(first);
+    expect(beforeData.works.map((work) => work.id)).not.toContain(second);
+    expect(beforeData.gated).toEqual([]);
 
     expect((await runCli(fixture, ["work", "start", first])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", first, "--evidence", "finished"])).exitCode).toBe(0);
-    const after = await runCli(fixture, ["ready"]);
-
+    const after = await runCli(fixture, ["ready", "--json"]);
     expect(after.exitCode).toBe(0);
-    expect(after.stdout).toContain(second);
+    const afterData = JSON.parse(after.stdout).data as {
+      gated: unknown[];
+      works: Array<{ id: string }>;
+    };
+
+    expect(afterData.works.map((work) => work.id)).toContain(second);
+    expect(afterData.gated).toEqual([]);
+  });
+});
+
+test("67 ready separates startable work from policy-breakdown gated work", async () => {
+  await withFixture(async (fixture) => {
+    const gated = idFrom(
+      await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"]),
+    );
+    const startable = idFrom(
+      await runCli(fixture, ["work", "add", "startable idea", "--kind", "idea"]),
+    );
+    const reason =
+      `parentless write-like work requires a child breakdown; run: maestro work add ` +
+      `"<child>" --parent ${gated} --kind task; for new atomic work use ` +
+      `--atomic-reason "<reason>"`;
+
+    const blocked = await runCli(fixture, ["work", "start", gated]);
+    const human = await runCli(fixture, ["ready"]);
+    const json = await runCli(fixture, ["ready", "--json"]);
+    expect(json.exitCode).toBe(0);
+    const data = JSON.parse(json.stdout).data as {
+      gated: Array<{ id: string; origin: string; reason: string; title: string }>;
+      works: Array<{ id: string }>;
+    };
+
+    expect(blocked.exitCode).not.toBe(0);
+    expect(blocked.stderr).toContain(reason);
+    expect(data.works.map((work) => work.id)).toEqual([startable]);
+    expect(data.gated).toEqual([
+      { id: gated, title: "gated root", origin: "policy-breakdown", reason },
+    ]);
+    expect(human.stdout.indexOf(startable)).toBeLessThan(human.stdout.indexOf(gated));
+    expect(human.stdout).toContain(reason);
+
+    expect(
+      (
+        await runCli(fixture, [
+          "work",
+          "add",
+          "gated child",
+          "--kind",
+          "task",
+          "--parent",
+          gated,
+        ])
+      ).exitCode,
+    ).toBe(0);
+    const after = await runCli(fixture, ["ready", "--json"]);
+    expect(after.exitCode).toBe(0);
+    const afterData = JSON.parse(after.stdout).data as {
+      gated: Array<{ id: string }>;
+      works: Array<{ id: string }>;
+    };
+    expect(afterData.works.map((work) => work.id)).toContain(gated);
+    expect(afterData.gated.map((work) => work.id)).not.toContain(gated);
+    expect((await runCli(fixture, ["work", "start", gated])).exitCode).toBe(0);
   });
 });
 

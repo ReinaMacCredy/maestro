@@ -13,6 +13,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
     expect(installed.exitCode).toBe(0);
+    expect(installed.stdout).toContain("review Codex hook trust with /hooks");
     expect(await readFile(legacy, "utf8")).toBe(legacySource);
     expect(await readFile(shim, "utf8")).toContain(".maestro/runtime/bin/maestro.ts");
     expect(await Bun.file(join(fixture.home, ".maestro", "runtime", "bin", "maestro.ts")).exists()).toBe(true);
@@ -38,6 +39,14 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     expect(claudeHooks.hooks.UserPromptSubmit).toBeArray();
     expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8")).toContain("maestro status");
     expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8")).toContain("maestro ready");
+
+    const codexHooksBefore = await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8");
+    const repeated = await runCli(fixture, ["install"], { PATH: path });
+    expect(repeated.exitCode).toBe(0);
+    expect(repeated.stdout).not.toContain("review Codex hook trust with /hooks");
+    expect(await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8")).toBe(
+      codexHooksBefore,
+    );
 
     for (const [adapter, harness] of [
       [join(fixture.repo, ".claude", "hooks", "maestro-record.ts"), "claude"],

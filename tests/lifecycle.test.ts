@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -374,6 +375,16 @@ test("49 doctor reports healthy components and structured fixable issues without
     const runtime = await installSource(fixture, source);
     const databasePath = join(source, ".maestro", "maestro.db");
     const databaseBefore = sha256(await readFile(databasePath));
+    const database = new Database(databasePath, { readonly: true, strict: true });
+    const tableCount = database
+      .query<{ count: number }, []>(
+        "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+      )
+      .get()?.count ?? 0;
+    database.close();
+    await writeFile(join(source, "doctor-untracked.txt"), "scratch\n");
+    const sourcePath = await realpath(source);
+    const sourceHead = await git(source, ["rev-parse", "HEAD"]);
 
     const healthy = await runInstalled(fixture, runtime, source, ["doctor"]);
 
@@ -381,6 +392,9 @@ test("49 doctor reports healthy components and structured fixable issues without
     for (const component of ["shim", "runtime", "source", "wiring", "store"]) {
       expect(healthy.stdout).toContain(component);
     }
+    expect(healthy.stdout).toContain(`source: ok ${sourcePath} ${sourceHead} clean`);
+    expect(healthy.stdout).toContain(`store: ok (${tableCount} tables)`);
+    expect(healthy.stdout).not.toContain("store: ok schema");
     expect(sha256(await readFile(databasePath))).toBe(databaseBefore);
 
     const missingHook = join(source, ".claude", "hooks", "maestro-record.ts");

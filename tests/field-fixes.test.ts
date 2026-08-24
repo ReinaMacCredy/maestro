@@ -121,8 +121,14 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     const list = await runCli(fixture, ["work", "list"], PEER);
     expect(list.stdout).toContain("[cancelled] orphan stub");
 
-    const ready = await runCli(fixture, ["ready"], PEER);
-    expect(ready.stdout).not.toContain("orphan stub");
+    const ready = await runCli(fixture, ["ready", "--json"], PEER);
+    expect(ready.exitCode).toBe(0);
+    const readyData = JSON.parse(ready.stdout).data as {
+      gated: unknown[];
+      works: Array<{ title: string }>;
+    };
+    expect(readyData.works.map((work) => work.title)).not.toContain("orphan stub");
+    expect(readyData.gated).toEqual([]);
 
     const startCancelled = await runCli(fixture, ["work", "start", "w1"], PEER);
     expect(startCancelled.exitCode).not.toBe(0);
@@ -147,16 +153,28 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     expect(shown.stdout).toContain("duplicate of w6");
 
     // A cancelled blocker resolves its dependents.
-    const readyBefore = await runCli(fixture, ["ready"], PEER);
-    expect(readyBefore.stdout).not.toContain("dependent item");
+    const readyBefore = await runCli(fixture, ["ready", "--json"], PEER);
+    expect(readyBefore.exitCode).toBe(0);
+    const beforeData = JSON.parse(readyBefore.stdout).data as {
+      gated: unknown[];
+      works: Array<{ title: string }>;
+    };
+    expect(beforeData.works.map((work) => work.title)).not.toContain("dependent item");
+    expect(beforeData.gated).toEqual([]);
     const cancelBlocker = await runCli(
       fixture,
       ["work", "cancel", "w2", "--reason", "blocker abandoned"],
       PEER,
     );
     expect(cancelBlocker.exitCode).toBe(0);
-    const readyAfter = await runCli(fixture, ["ready"], PEER);
-    expect(readyAfter.stdout).toContain("dependent item");
+    const readyAfter = await runCli(fixture, ["ready", "--json"], PEER);
+    expect(readyAfter.exitCode).toBe(0);
+    const afterData = JSON.parse(readyAfter.stdout).data as {
+      gated: unknown[];
+      works: Array<{ title: string }>;
+    };
+    expect(afterData.works.map((work) => work.title)).toContain("dependent item");
+    expect(afterData.gated).toEqual([]);
 
     // A done item refuses cancel.
     expect((await runCli(fixture, ["work", "start", "w4"], PEER)).exitCode).toBe(0);

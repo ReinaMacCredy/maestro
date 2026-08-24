@@ -58,6 +58,28 @@ test("B3.7 hook-recorded harness identity is shown while an absent harness remai
   });
 });
 
+test("68 bare SessionStart preserves the Claude harness guessed from the environment", async () => {
+  await withFixture(async (fixture) => {
+    const sessionId = "bare-claude-session";
+    const recorded = await runCli(
+      fixture,
+      ["hook", "record", "--event", "SessionStart"],
+      {
+        CLAUDE_CODE_ENTRYPOINT: "cli",
+        MAESTRO_SESSION_ID: sessionId,
+        MAESTRO_SESSION_PID: String(process.pid),
+      },
+    );
+    const status = await runCli(fixture, ["status", "--json"]);
+    const sessions = (JSON.parse(status.stdout) as {
+      data: { sessions: Array<{ harness: string | null; id: string }> };
+    }).data.sessions;
+
+    expect(recorded.exitCode).toBe(0);
+    expect(sessions.find((session) => session.id === sessionId)?.harness).toBe("claude");
+  });
+});
+
 test("B3.8 claude peers receive a native SendMessage tip and JSON delivery signal only while live", async () => {
   await withFixture(async (fixture) => {
     for (const [id, harness, pid] of [

@@ -219,7 +219,12 @@ test("41 legacy ids remain unknown to work, ready, and work list", async () => {
 
     const started = await runCli(fixture, ["work", "start", featureId]);
     const done = await runCli(fixture, ["work", "done", featureId]);
-    const ready = await runCli(fixture, ["ready"]);
+    const ready = await runCli(fixture, ["ready", "--json"]);
+    expect(ready.exitCode).toBe(0);
+    const readyData = JSON.parse(ready.stdout).data as {
+      gated: Array<{ id: string }>;
+      works: Array<{ id: string }>;
+    };
     const listed = await runCli(fixture, ["work", "list"]);
 
     expect(imported.exitCode).toBe(0);
@@ -227,7 +232,8 @@ test("41 legacy ids remain unknown to work, ready, and work list", async () => {
     expect(started.stderr).toContain("NOT_FOUND");
     expect(done.exitCode).not.toBe(0);
     expect(done.stderr).toContain("NOT_FOUND");
-    expect(ready.stdout).not.toContain(featureId);
+    expect(readyData.works.map((work) => work.id)).not.toContain(featureId);
+    expect(readyData.gated.map((work) => work.id)).not.toContain(featureId);
     expect(listed.stdout).not.toContain(featureId);
   });
 });

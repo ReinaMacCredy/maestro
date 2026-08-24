@@ -165,15 +165,21 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
     database.close();
 
     const observer = { ...noPs, ...sessionEnvironment("observer") };
-    const ready = await runCli(fixture, ["ready"], observer);
+    const ready = await runCli(fixture, ["ready", "--json"], observer);
+    expect(ready.exitCode).toBe(0);
+    const readyData = JSON.parse(ready.stdout).data as {
+      gated: unknown[];
+      works: Array<{ id: string }>;
+    };
     const status = await runCli(fixture, ["status", "--json"], observer);
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ id: string; live: boolean }> };
     }).data.sessions;
 
-    expect(ready.stdout).toContain(staleId);
-    expect(ready.stdout).not.toContain(freshId);
-    expect(ready.stdout).toContain(pidId);
+    expect(readyData.works.map((work) => work.id)).toContain(staleId);
+    expect(readyData.works.map((work) => work.id)).not.toContain(freshId);
+    expect(readyData.works.map((work) => work.id)).toContain(pidId);
+    expect(readyData.gated).toEqual([]);
     expect(sessions.find((session) => session.id === "stale-ttl")?.live).toBeFalse();
     expect(sessions.find((session) => session.id === "fresh-ttl")?.live).toBeTrue();
     expect(sessions.find((session) => session.id === "dead-pid")?.live).toBeFalse();
