@@ -24,8 +24,19 @@ a real diff is a slogan and gets cut; the catalog stays at or under 20 entries.
 | Coverage chasing (law 1) | Tests added purely to raise a coverage number, asserting nothing decided | Delete or replace with a falsifiable behavior test |
 | Fixture drift (law 2) | Test setup re-implements production logic and diverges from it | Build fixtures through the public seam the user would use |
 | Assertion-free run (law 4) | Test executes code and asserts only that no exception was thrown | Assert the observable result the decision names |
+| Test-driven API invention (law 1) | Red test names a production symbol that does not exist; the "fix" mints it to clear the compile error | Stabilize the minimum contract first (spec, existing code, or a decision — stable enough for this slice); red must fail on an assertion, not a missing symbol |
+| Contract drift (law 1) | Spec says A, existing code does B, the test asserts a third shape C and implementation follows C | Reconcile with a recorded decision before writing the test; the test transcribes, never arbitrates |
 
 Seed specimens from the live-agent loop on this repo: a junk claim/proof pair
 ("test: a" / "p1") passed the proof gate until the pair-check tightened; a
 round-4 stop-condition forced a false "done" claim the adjudicator had to
 revert. Both are the Junk evidence and Forced green rows above.
+
+On API invention: red tests may discover implementation, but must not invent
+an unstabilized contract. Agents are especially prone here — a human reading a
+sketched API in a test knows it is a sketch; an agent treats the compile
+failure as work and bridges it by creating whatever symbols the test names.
+Each mint is a premature commitment later tasks start depending on, and every
+task can stay green while the architecture drifts (local convergence, global
+divergence). If the contract is unresolved, stop at the boundary rather than
+letting the test define it.
