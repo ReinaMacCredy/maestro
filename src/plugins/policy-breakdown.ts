@@ -3,10 +3,12 @@ import type { WorkGateInput, WorkRecord } from "./work.ts";
 
 const writeLikeKinds = new Set(["feature", "task", "bug", "chore", "implement"]);
 
+// Cancelled children are not a breakdown; without this filter two commands
+// (add child, cancel child) would defeat the gate.
 function needsBreakdown(work: WorkRecord, children: WorkRecord[]): boolean {
   return writeLikeKinds.has(work.kind) &&
     !work.parentId &&
-    children.length === 0 &&
+    children.filter((child) => child.state !== "cancelled").length === 0 &&
     !work.atomicReason;
 }
 

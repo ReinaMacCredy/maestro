@@ -469,6 +469,8 @@ export const installPlugin: BuiltInPlugin = {
           data: { repo, runtimeRoot, shim, legacy },
           text:
             `maestro installed for ${repo}` +
+            "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/, AGENTS.md, CLAUDE.md" +
+            " (AGENTS.md and CLAUDE.md carry the same maestro block for Claude and Codex)" +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),

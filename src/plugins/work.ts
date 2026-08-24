@@ -297,7 +297,11 @@ export const workPlugin: BuiltInPlugin = {
         {
           description: "Add a tracked work item.",
           flags: {
-            "--kind": { description: "Set the work kind.", value: true },
+            "--kind": {
+              description:
+                "Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).",
+              value: true,
+            },
             "--parent": { description: "Attach the item beneath a parent work ID.", value: true },
             "--blocked-by": {
               description: "Add a blocking work ID.",
@@ -636,14 +640,20 @@ export const workPlugin: BuiltInPlugin = {
               (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
             ),
           ];
+          const held = allWorks.filter(
+            (work) => work.state === "active" && work.heldBy === sessionId,
+          );
           return {
             data: { works, gated },
             text: lines.length > 0
               ? lines.join("\n")
+              : held.length > 0
+              ? `no ready work; you hold ${held.map((work) => work.id).join(", ")}; ` +
+                `finish it: maestro work done ${held[0]?.id}`
               : 'no ready work; add some: maestro work add "<title>"',
           };
         },
-        { description: "List work unblocked and ready to start." },
+        { description: "List ready work and gated items with their blockers." },
       ),
     );
   },

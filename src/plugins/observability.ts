@@ -269,6 +269,15 @@ export const observabilityPlugin: BuiltInPlugin = {
         "trace",
         (invocation): CliResult => {
           const id = required(invocation, 0, "work id");
+          const exists = context.store.database
+            .query<{ id: string }, [string]>("SELECT id FROM work WHERE id = ?")
+            .get(id);
+          if (!exists) {
+            throw new CliError("NOT_FOUND", `work not found: ${id}; run: maestro work list`, {
+              command: "maestro work list",
+              id,
+            });
+          }
           const events = context.log.list("work", id);
           return {
             data: { events },
