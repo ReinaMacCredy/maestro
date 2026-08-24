@@ -51,6 +51,8 @@ export interface WorkGateInput {
 
 interface GateResult {
   blocked: boolean;
+  blockers?: Array<{ id: string; state: string }>;
+  command?: string;
   evidence?: string;
   origin?: string;
   reason?: string;
@@ -234,7 +236,11 @@ function formatWork(work: WorkRecord): string {
 function blockIfNeeded(result: GateResult): void {
   if (!result.blocked) return;
   const details = gateDetails(result);
-  throw new CliError("GATE_BLOCKED", details.reason, { origin: details.origin });
+  throw new CliError("GATE_BLOCKED", details.reason, {
+    origin: details.origin,
+    ...(result.blockers ? { blockers: result.blockers } : {}),
+    ...(result.command ? { command: result.command } : {}),
+  });
 }
 
 function gateDetails(result: GateResult): { origin: string; reason: string } {
@@ -706,10 +712,11 @@ export const workPlugin: BuiltInPlugin = {
             if (result.blocked) {
               const details = gateDetails(result);
               gated.push({
-                blockers: work.blockers.map((blocker) => ({
+                blockers: result.blockers ?? work.blockers.map((blocker) => ({
                   id: blocker.id,
                   state: blocker.state,
                 })),
+                ...(result.command ? { command: result.command } : {}),
                 id: work.id,
                 title: work.title,
                 ...details,

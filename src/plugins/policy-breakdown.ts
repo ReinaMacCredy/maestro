@@ -24,6 +24,8 @@ function openChildren(children: WorkRecord[]): WorkRecord[] {
 
 interface Gate {
   blocked: true;
+  blockers?: Array<{ id: string; state: string }>;
+  command?: string;
   origin: string;
   reason: string;
 }
@@ -51,6 +53,8 @@ function openChildrenGate(work: WorkRecord, open: WorkRecord[], sessionId: strin
     : `maestro work start ${next.id}`;
   return {
     blocked: true,
+    blockers: open.map((child) => ({ id: child.id, state: child.state })),
+    command,
     origin: "policy-breakdown",
     reason:
       `${work.id} has open children: ${ids.join(", ")}; finish them first: ` +
