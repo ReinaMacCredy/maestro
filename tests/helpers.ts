@@ -43,7 +43,7 @@ export async function withFixture<T>(run: (fixture: Fixture) => Promise<T>): Pro
 export async function runCli(
   fixture: Fixture,
   args: string[],
-  env: Record<string, string> = {},
+  env: Record<string, string | undefined> = {},
 ): Promise<CliResult> {
   return runCliAt(fixture, fixture.repo, args, env);
 }
@@ -52,17 +52,24 @@ export async function runCliAt(
   fixture: Fixture,
   cwd: string,
   args: string[],
-  env: Record<string, string> = {},
+  env: Record<string, string | undefined> = {},
 ): Promise<CliResult> {
+  const childEnvironment: Record<string, string | undefined> = {
+    ...process.env,
+    HOME: fixture.home,
+    MAESTRO_SESSION_ID: "test-session",
+    MAESTRO_SESSION_PID: String(process.pid),
+  };
+  for (const [name, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete childEnvironment[name];
+    } else {
+      childEnvironment[name] = value;
+    }
+  }
   const child = Bun.spawn([process.execPath, cli, ...args], {
     cwd,
-    env: {
-      ...process.env,
-      HOME: fixture.home,
-      MAESTRO_SESSION_ID: "test-session",
-      MAESTRO_SESSION_PID: String(process.pid),
-      ...env,
-    },
+    env: childEnvironment,
     stdout: "pipe",
     stderr: "pipe",
   });

@@ -425,6 +425,10 @@ export const installPlugin: BuiltInPlugin = {
         await writePolicyConfig(join(repo, ".maestro", "config"));
         await writeManagedIgnore(join(repo, ".maestro", ".gitignore"));
 
+        const codexConfigPath = join(repo, ".codex", "hooks.json");
+        const codexHooksBefore = existsSync(codexConfigPath)
+          ? await readFile(codexConfigPath, "utf8")
+          : null;
         const adapters = [
           {
             configPath: join(repo, ".claude", "settings.json"),
@@ -445,6 +449,7 @@ export const installPlugin: BuiltInPlugin = {
           await chmod(adapter.hookPath, 0o755);
           await writeHookConfig(adapter.configPath, adapter.hookCommand);
         }
+        const codexHooksChanged = codexHooksBefore !== await readFile(codexConfigPath, "utf8");
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
 
@@ -462,7 +467,9 @@ export const installPlugin: BuiltInPlugin = {
         });
         return {
           data: { repo, runtimeRoot, shim, legacy },
-          text: `maestro installed for ${repo}\nreview Codex hook trust with /hooks`,
+          text:
+            `maestro installed for ${repo}` +
+            (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),
     );

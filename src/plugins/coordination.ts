@@ -327,7 +327,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             throw new CliError("MISSING_ARGUMENT", "missing hook event");
           }
           const harness = harnessOption(invocation);
-          const session = context.sessions.record(event, harness);
+          const session = context.sessions.record(event, harness ?? undefined);
           context.log.append({
             type: "hook.record",
             entityType: "session",

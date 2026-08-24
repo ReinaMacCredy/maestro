@@ -10,6 +10,12 @@ function sessionEnvironment(id: string, pid = process.pid): Record<string, strin
   };
 }
 
+const withoutHarnessEnvironment = Object.fromEntries(
+  Object.keys(process.env)
+    .filter((name) => name.startsWith("CLAUDE_") || name.startsWith("CODEX_"))
+    .map((name) => [name, undefined]),
+) as Record<string, undefined>;
+
 test("B3.7 hook-recorded harness identity is shown while an absent harness remains null", async () => {
   await withFixture(async (fixture) => {
     const legacy = new Database(join(fixture.repo, ".maestro", "maestro.db"), { create: true });
@@ -38,7 +44,7 @@ test("B3.7 hook-recorded harness identity is shown while an absent harness remai
         await runCli(
           fixture,
           ["hook", "record", "--event", "SessionStart"],
-          sessionEnvironment("unknown-session"),
+          { ...withoutHarnessEnvironment, ...sessionEnvironment("unknown-session") },
         )
       ).exitCode,
     ).toBe(0);
@@ -65,6 +71,7 @@ test("68 bare SessionStart preserves the Claude harness guessed from the environ
       fixture,
       ["hook", "record", "--event", "SessionStart"],
       {
+        ...withoutHarnessEnvironment,
         CLAUDE_CODE_ENTRYPOINT: "cli",
         MAESTRO_SESSION_ID: sessionId,
         MAESTRO_SESSION_PID: String(process.pid),

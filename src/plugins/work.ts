@@ -38,6 +38,12 @@ export interface WorkService {
   children(id: string): WorkRecord[];
 }
 
+export interface WorkGateInput {
+  children: WorkRecord[];
+  sessionId: string;
+  work: WorkRecord;
+}
+
 interface GateResult {
   blocked: boolean;
   evidence?: string;
@@ -167,10 +173,15 @@ function formatWork(work: WorkRecord): string {
 
 function blockIfNeeded(result: GateResult): void {
   if (!result.blocked) return;
-  throw new CliError("GATE_BLOCKED", result.reason ?? "gate blocked", {
+  const details = gateDetails(result);
+  throw new CliError("GATE_BLOCKED", details.reason, details);
+}
+
+function gateDetails(result: GateResult): { origin: string; reason: string } {
+  return {
     origin: result.origin ?? "unknown",
     reason: result.reason ?? "gate blocked",
-  });
+  };
 }
 
 export const workPlugin: BuiltInPlugin = {
@@ -319,7 +330,7 @@ export const workPlugin: BuiltInPlugin = {
         }
         const children = service.children(id);
         const result = await context.events.waterfall<
-          { work: WorkRecord; children: WorkRecord[]; sessionId: string },
+          WorkGateInput,
           GateResult
         >(
           "work.start",
@@ -531,8 +542,16 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "ready",
-        (): CliResult => {
-          const items = service.list().map((work) => {
+        async (): Promise<CliResult> => {
+          const allWorks = service.list();
+          const childrenByParent = new Map<string, WorkRecord[]>();
+          for (const work of allWorks) {
+            if (!work.parentId) continue;
+            const children = childrenByParent.get(work.parentId) ?? [];
+            children.push(work);
+            childrenByParent.set(work.parentId, children);
+          }
+          const items = allWorks.map((work) => {
             const blockers = context.store.database
               .query<{ id: string; state: string; cancelled_at: string | null }, [string]>(
                 `SELECT blocker.id, blocker.state, blocker.cancelled_at
@@ -547,13 +566,39 @@ export const workPlugin: BuiltInPlugin = {
               }));
             return { ...work, blockers };
           });
-          const ready = context.ready.project(items);
+          const candidates = context.ready.project(items);
+          const works: WorkRecord[] = [];
+          const gated: Array<{ id: string; origin: string; reason: string; title: string }> = [];
+          const sessionId = context.sessions.current().id;
+          for (const work of candidates) {
+            const result = await context.events.waterfall<
+              WorkGateInput,
+              GateResult
+            >(
+              "work.ready",
+              { work, children: childrenByParent.get(work.id) ?? [], sessionId },
+              async () => ({ blocked: false }),
+            );
+            if (result.blocked) {
+              const details = gateDetails(result);
+              gated.push({
+                id: work.id,
+                title: work.title,
+                ...details,
+              });
+            } else {
+              works.push(work);
+            }
+          }
+          const lines = [
+            ...works.map((work) => `${work.id} ${work.title}`),
+            ...gated.map(
+              (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
+            ),
+          ];
           return {
-            data: { works: ready },
-            text:
-              ready.length > 0
-                ? ready.map((work) => `${work.id} ${work.title}`).join("\n")
-                : "no ready work",
+            data: { works, gated },
+            text: lines.length > 0 ? lines.join("\n") : "no ready work",
           };
         },
         { description: "List work unblocked and ready to start." },

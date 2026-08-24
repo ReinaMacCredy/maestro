@@ -139,7 +139,7 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     };
 
     expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain(reason);
+    expect((JSON.parse(blocked.stderr) as { error: { reason: string } }).error.reason).toBe(reason);
     expect(data.works.map((work) => work.id)).toEqual([startable]);
     expect(data.gated).toEqual([
       { id: gated, title: "gated root", origin: "policy-breakdown", reason },

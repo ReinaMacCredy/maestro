@@ -286,7 +286,7 @@ async function doctor(): Promise<CliResult> {
   } else {
     const [head, state] = await Promise.all([
       readGitHeadCommit(recordRead.record.path),
-      command(recordRead.record.path, ["git", "status", "--porcelain"]),
+      command(recordRead.record.path, ["git", "status", "--porcelain", "--untracked-files=no"]),
     ]);
     if (!head || state.exitCode !== 0) {
       issues.push({
@@ -336,9 +336,13 @@ async function doctor(): Promise<CliResult> {
   } else {
     try {
       const database = new Database(storePath, { readonly: true, strict: true });
-      const schema = database.query<{ schema_version: number }, []>("PRAGMA schema_version").get();
+      const tables = database
+        .query<{ count: number }, []>(
+          "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .get();
       database.close();
-      checks.push(`store: ok schema ${schema?.schema_version ?? 0}`);
+      checks.push(`store: ok (${tables?.count ?? 0} tables)`);
     } catch (error) {
       issues.push({
         component: "store",

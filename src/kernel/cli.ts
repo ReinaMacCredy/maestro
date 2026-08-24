@@ -273,6 +273,7 @@ export class Cli {
     if (wantsJson) {
       if (!(
         command === "status" ||
+        command === "ready" ||
         command === "msg send" ||
         command === "search" ||
         command.endsWith(" list")
