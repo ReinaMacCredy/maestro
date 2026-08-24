@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database, SQLiteError } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -56,7 +56,13 @@ export class Store {
     this.database = new Database(path, { create: true, strict: true });
     this.database.exec("PRAGMA busy_timeout = 5000");
     this.database.exec("PRAGMA foreign_keys = ON");
-    this.database.exec("PRAGMA journal_mode = WAL");
+    try {
+      this.database.exec("PRAGMA journal_mode = WAL");
+    } catch (error) {
+      if (!(error instanceof SQLiteError) || !error.code?.startsWith("SQLITE_BUSY")) throw error;
+      Bun.sleepSync(100);
+      this.database.exec("PRAGMA journal_mode = WAL");
+    }
   }
 
   migrate(sql: string): void {
