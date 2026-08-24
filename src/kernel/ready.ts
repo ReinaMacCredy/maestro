@@ -7,7 +7,9 @@ export interface ReadinessItem {
 export class Ready {
   project<T extends ReadinessItem>(items: T[]): T[] {
     return items.filter(
-      (item) => item.state === "open" && item.blockers.every((blocker) => blocker.state === "done"),
+      (item) =>
+        item.state === "open" &&
+        item.blockers.every((blocker) => blocker.state === "done" || blocker.state === "cancelled"),
     );
   }
 }

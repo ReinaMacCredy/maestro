@@ -305,8 +305,10 @@ export class Sessions {
     try {
       process.kill(pid, 0);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      // EPERM means the process exists but this checker may not signal it
+      // (e.g. a sandboxed peer probing a foreign session); only ESRCH is death.
+      return (error as NodeJS.ErrnoException).code === "EPERM";
     }
   }
 

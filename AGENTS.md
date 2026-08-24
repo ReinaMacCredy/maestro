@@ -15,3 +15,9 @@ Rules:
 - Test-first: implement against the SPEC red-test list; VERIFY rows prove done.
 - Append working notes to NOTES.md; never rewrite its history.
 - Commit per verified step on this branch; never push unasked.
+
+<!-- maestro:begin -->
+Live maestro state is injected by hooks. Use `maestro status` for the current session view and `maestro ready` for available work.
+Track work with `maestro work add|start|done`; method depth: `maestro recipe show work`.
+If no harness hook fired, run `maestro hook record --event SessionStart` and read the brief from stdout.
+<!-- maestro:end -->

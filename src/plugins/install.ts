@@ -135,7 +135,7 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
 async function writeMirror(path: string): Promise<void> {
   const begin = "<!-- maestro:begin -->";
   const end = "<!-- maestro:end -->";
-  const block = `${begin}\nLive maestro state is injected by hooks. Use \`maestro status\` for the current session view and \`maestro ready\` for available work.\nIf no harness hook fired, run \`maestro hook record --event SessionStart\` and read the brief from stdout.\n${end}`;
+  const block = `${begin}\nLive maestro state is injected by hooks. Use \`maestro status\` for the current session view and \`maestro ready\` for available work.\nTrack work with \`maestro work add|start|done\`; method depth: \`maestro recipe show work\`.\nIf no harness hook fired, run \`maestro hook record --event SessionStart\` and read the brief from stdout.\n${end}`;
   const existing = existsSync(path) ? await readFile(path, "utf8") : "";
   const cleaned = existing.replace(
     /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,

@@ -5,12 +5,13 @@ export interface WorkRecord {
   id: string;
   title: string;
   kind: string;
-  state: "open" | "active" | "done";
+  state: "open" | "active" | "done" | "cancelled";
   parentId: string | null;
   acceptance: string | null;
   atomicReason: string | null;
   evidence: string | null;
   heldBy: string | null;
+  cancelReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +26,8 @@ interface WorkRow {
   atomic_reason: string | null;
   evidence: string | null;
   held_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,12 +50,13 @@ function toWork(row: WorkRow): WorkRecord {
     id: row.id,
     title: row.title,
     kind: row.kind,
-    state: row.state,
+    state: row.cancelled_at ? "cancelled" : row.state,
     parentId: row.parent_id,
     acceptance: row.acceptance,
     atomicReason: row.atomic_reason,
     evidence: row.evidence,
     heldBy: row.held_by,
+    cancelReason: row.cancel_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -155,6 +159,7 @@ function formatWork(work: WorkRecord): string {
     work.heldBy ? `held by: ${work.heldBy}` : null,
     work.acceptance ? `acceptance: ${work.acceptance}` : null,
     work.atomicReason ? `atomic reason: ${work.atomicReason}` : null,
+    work.cancelReason ? `cancel reason: ${work.cancelReason}` : null,
     work.evidence !== null ? `evidence: ${work.evidence}` : null,
   ];
   return fields.filter((field): field is string => field !== null).join("\n");
@@ -197,6 +202,23 @@ export const workPlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL
       );
     `);
+    const hasWorkColumn = (name: string) =>
+      context.store.database
+        .query<{ name: string }, []>("PRAGMA table_info(work)")
+        .all()
+        .some((column) => column.name === name);
+    for (const [name, migration] of [
+      ["cancelled_at", "ALTER TABLE work ADD COLUMN cancelled_at TEXT"],
+      ["cancel_reason", "ALTER TABLE work ADD COLUMN cancel_reason TEXT"],
+    ] as const) {
+      if (hasWorkColumn(name)) continue;
+      try {
+        context.store.migrate(migration);
+      } catch (error) {
+        // Concurrent startup can race the same ALTER; losing is fine.
+        if (!hasWorkColumn(name)) throw error;
+      }
+    }
 
     const service: WorkService = {
       get: (id) => getWork(context, id),
@@ -283,6 +305,12 @@ export const workPlugin: BuiltInPlugin = {
         const id = requirePosition(invocation, 0, "work id");
         const work = requireWork(context, id);
         if (work.state === "done") throw new CliError("INVALID_STATE", `${id} is already done`);
+        if (work.state === "cancelled") {
+          throw new CliError(
+            "INVALID_STATE",
+            `${id} is cancelled (${work.cancelReason ?? "no reason recorded"}); add a new work item instead`,
+          );
+        }
         const session = context.sessions.record("work.start");
         if (work.heldBy && work.heldBy !== session.id) {
           throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
@@ -362,6 +390,12 @@ export const workPlugin: BuiltInPlugin = {
         async (invocation): Promise<CliResult> => {
           const id = requirePosition(invocation, 0, "work id");
           const work = requireWork(context, id);
+          if (work.state === "cancelled") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${id} is cancelled (${work.cancelReason ?? "no reason recorded"}); add a new work item instead`,
+            );
+          }
           const sessionId = context.sessions.current().id;
           if (work.heldBy !== sessionId) {
             if (work.heldBy) {
@@ -424,6 +458,53 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
+      context.cli.register(
+        "work cancel",
+        (invocation): CliResult => {
+          const id = requirePosition(invocation, 0, "work id");
+          const work = requireWork(context, id);
+          if (work.state === "cancelled") {
+            throw new CliError("INVALID_STATE", `${id} is already cancelled`);
+          }
+          if (work.state === "done") {
+            throw new CliError("INVALID_STATE", `${id} is done; completed work cannot be cancelled`);
+          }
+          if (work.state === "active") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${id} is active and held by ${work.heldBy}; finish it with: maestro work done ${id}`,
+            );
+          }
+          const reason = textOption(invocation, "reason");
+          if (!reason) {
+            throw new CliError("MISSING_ARGUMENT", "work cancel requires --reason <text>");
+          }
+          const now = new Date().toISOString();
+          context.store.database
+            .query(
+              "UPDATE work SET cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+            )
+            .run(now, reason, now, id);
+          context.log.append({
+            type: "work.cancel",
+            entityType: "work",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { reason },
+          });
+          return { data: { work: service.get(id) }, text: `${id} cancelled: ${reason}` };
+        },
+        {
+          description: "Cancel open work permanently with a recorded reason.",
+          flags: {
+            "--reason": { description: "Record why this work is cancelled.", value: true },
+          },
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         return { data: { work }, text: formatWork(work) };
@@ -453,13 +534,17 @@ export const workPlugin: BuiltInPlugin = {
         (): CliResult => {
           const items = service.list().map((work) => {
             const blockers = context.store.database
-              .query<{ id: string; state: string }, [string]>(
-                `SELECT blocker.id, blocker.state
+              .query<{ id: string; state: string; cancelled_at: string | null }, [string]>(
+                `SELECT blocker.id, blocker.state, blocker.cancelled_at
                  FROM work_blockers edge
                  JOIN work blocker ON blocker.id = edge.blocker_id
                  WHERE edge.work_id = ?`,
               )
-              .all(work.id);
+              .all(work.id)
+              .map((blocker) => ({
+                id: blocker.id,
+                state: blocker.cancelled_at ? "cancelled" : blocker.state,
+              }));
             return { ...work, blockers };
           });
           const ready = context.ready.project(items);
