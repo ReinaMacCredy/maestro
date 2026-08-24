@@ -148,7 +148,10 @@ export const decisionPlugin: BuiltInPlugin = {
               payload: { text, edit: true },
             });
             const updated = service.get(existing.id);
-            return { data: { decision: updated }, text: format(updated as DecisionRecord) };
+            return {
+              data: { decision: updated, previous: existing.text },
+              text: `${format(updated as DecisionRecord)}\nprevious: ${existing.text}`,
+            };
           }
           if (second !== undefined) {
             throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${second}`, {

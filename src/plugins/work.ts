@@ -32,6 +32,11 @@ interface WorkRow {
   updated_at: string;
 }
 
+interface WorkNoteRow {
+  text: string;
+  created_at: string;
+}
+
 export interface WorkService {
   get(id: string): WorkRecord | null;
   list(): WorkRecord[];
@@ -257,7 +262,6 @@ export const workPlugin: BuiltInPlugin = {
           const title = requirePosition(invocation, 0, "work title");
           const parentId = textOption(invocation, "parent") ?? null;
           const blockers = listOption(invocation, "blocked-by");
-          if (parentId) requireWork(context, parentId);
           for (const blocker of blockers) requireWork(context, blocker);
           let id = "";
           const now = new Date().toISOString();
@@ -266,6 +270,15 @@ export const workPlugin: BuiltInPlugin = {
           const atomicReason = textOption(invocation, "atomic-reason") ?? null;
           context.store.database.exec("BEGIN IMMEDIATE");
           try {
+            if (parentId) {
+              const parent = requireWork(context, parentId);
+              if (parent.state === "done" || parent.state === "cancelled") {
+                throw new CliError(
+                  "INVALID_STATE",
+                  `${parentId} is ${parent.state} and cannot accept children; add new top-level work instead: maestro work add "<title>"`,
+                );
+              }
+            }
             id = nextId(context);
             context.store.database
               .query(
@@ -501,10 +514,12 @@ export const workPlugin: BuiltInPlugin = {
             throw new CliError("INVALID_STATE", `${id} is done; completed work cannot be cancelled`);
           }
           if (work.state === "active") {
-            throw new CliError(
-              "INVALID_STATE",
-              `${id} is active and held by ${work.heldBy}; finish it with: maestro work done ${id}`,
-            );
+            const sessionId = context.sessions.current().id;
+            if (work.heldBy !== sessionId) {
+              throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
+                holder: work.heldBy,
+              });
+            }
           }
           const reason = textOption(invocation, "reason");
           if (!reason) {
@@ -513,7 +528,7 @@ export const workPlugin: BuiltInPlugin = {
           const now = new Date().toISOString();
           context.store.database
             .query(
-              "UPDATE work SET cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+              "UPDATE work SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ? WHERE id = ?",
             )
             .run(now, reason, now, id);
           context.log.append({
@@ -526,7 +541,7 @@ export const workPlugin: BuiltInPlugin = {
           return { data: { work: service.get(id) }, text: `${id} cancelled: ${reason}` };
         },
         {
-          description: "Cancel open work permanently with a recorded reason.",
+          description: "Cancel open or currently held work permanently with a recorded reason.",
           flags: {
             "--reason": { description: "Record why this work is cancelled.", value: true },
           },
@@ -539,15 +554,21 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         const children = service.children(work.id);
+        const notes = context.store.database
+          .query<WorkNoteRow, [string]>(
+            "SELECT text, created_at FROM work_notes WHERE work_id = ? ORDER BY id",
+          )
+          .all(work.id)
+          .map((note) => ({ text: note.text, createdAt: note.created_at }));
         const childLines = children.map(
           (child) => `child: ${child.id} [${child.state}] ${child.title}`,
         );
         return {
-          data: { work, children },
-          text: [formatWork(work), ...childLines].join("\n"),
+          data: { work, children, notes },
+          text: [formatWork(work), ...childLines, ...notes.map((note) => `note: ${note.text}`)].join("\n"),
         };
       }, {
-        description: "Show one work item and its recorded evidence.",
+        description: "Show one work item with its evidence, children, and notes.",
         positionals: [{ name: "id", required: true }],
       }),
     );

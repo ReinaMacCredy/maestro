@@ -312,7 +312,10 @@ export const coordinationPlugin: BuiltInPlugin = {
               payload: { messageIds: messages.map((message) => message.id) },
             });
           }
-          return { data: { messages }, text: formatMessages(messages) };
+          return {
+            data: { messages },
+            text: messages.length > 0 ? formatMessages(messages) : "no new messages",
+          };
         },
         { description: "Read new messages for the current session." },
       ),

@@ -271,13 +271,7 @@ export class Cli {
     const jsonIndex = remaining.indexOf("--json");
     const wantsJson = jsonIndex >= 0;
     if (wantsJson) {
-      if (!(
-        command === "status" ||
-        command === "ready" ||
-        command === "msg send" ||
-        command === "search" ||
-        command.endsWith(" list")
-      )) {
+      if (!this.supportsJson(command)) {
         const helpCommand = `maestro help ${command.split(" ")[0]}`;
         throw new CliError("UNKNOWN_FLAG", `unknown flag: --json; run: ${helpCommand}`, {
           command: helpCommand,
@@ -403,6 +397,9 @@ export class Cli {
       const width = Math.max(...rows.map((row) => row.label.length));
       for (const [index, [command, definition]] of nested.entries()) {
         lines.push(this.formatRow(rows[index] ?? { label: command, description: definition.description }, width, "  "));
+        if (definition.positionals.length > 0) {
+          lines.push(`    usage: maestro ${this.usage(command, definition)}`);
+        }
         const flags = this.flagHelp(command, definition);
         if (flags.length > 0) lines.push(...flags);
       }
@@ -412,6 +409,9 @@ export class Cli {
 
   private flagHelp(command: string, definition: CommandDefinition): string[] {
     const flags = this.effectiveFlags(command, definition);
+    if (this.supportsJson(command)) {
+      flags.set("--json", { description: "Emit one compact JSON success envelope." });
+    }
     if (flags.size === 0) return [];
     const rows = [...flags.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -478,6 +478,14 @@ export class Cli {
     const value = description?.trim() || fallback;
     if (/\r|\n/.test(value)) throw new Error("CLI descriptions must fit on one line");
     return value;
+  }
+
+  private supportsJson(command: string): boolean {
+    return command === "status" ||
+      command === "ready" ||
+      command === "msg send" ||
+      command === "search" ||
+      command.endsWith(" list");
   }
 
   private nearestCommands(args: string[]): { attempted: string; suggestions: string[] } {

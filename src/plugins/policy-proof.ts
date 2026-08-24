@@ -55,6 +55,15 @@ export const policyProofPlugin: BuiltInPlugin = {
               `--claim "<claim>" --proof "<proof>"`,
           };
         }
+        if (input.claims.length === 0) {
+          return {
+            blocked: true,
+            origin: "policy-proof",
+            reason:
+              `--proof requires a matching --claim; run: maestro work done ` +
+              `${input.work.id} --claim "<claim>" --proof "<proof>"`,
+          };
+        }
         const paired =
           input.proofs.length === input.claims.length &&
           input.proofs.every((proof) => proof.length > 0);
