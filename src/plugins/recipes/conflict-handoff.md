@@ -5,11 +5,11 @@ worktree branch needs a deliberate merge owner.
 
 ## Detect and contain
 
-- Read `status`, relevant messages, `git status --short --branch`, and
+- Read `maestro status`, relevant messages, `git status --short --branch`, and
   `git worktree list` before editing.
 - Name the contested paths and stop overlapping writes until ownership is
   explicit.
-- Use `msg send <session> "..."` for the ownership request or handoff. Do not
+- Use `maestro msg send <session> "..."` for the ownership request or handoff. Do not
   hide coordination only in chat.
 
 ## Handoff packet

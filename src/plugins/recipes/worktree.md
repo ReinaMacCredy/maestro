@@ -6,11 +6,11 @@ messages that make the lane understandable.
 
 ## Create the lane
 
-1. Read `git status --short --branch`, `git worktree list`, `status`, and the
-   target `work show <id>`.
+1. Read `git status --short --branch`, `git worktree list`, `maestro status`, and the
+   target `maestro work show <id>`.
 2. Choose a unique branch and path from the intended base commit.
 3. Create it with normal git commands, then confirm branch, HEAD, and path.
-4. Send the lane, owned paths, and merge target to peers with `msg send` when
+4. Send the lane, owned paths, and merge target to peers with `maestro msg send` when
    another session may overlap.
 
 ## Work and verify

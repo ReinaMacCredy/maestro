@@ -8,7 +8,7 @@ hidden scheduler or a second lifecycle.
 
 ### Perceive
 
-Reconstruct state from `status`, `ready`, `work show`, decisions, and messages.
+Reconstruct state from `maestro status`, `maestro ready`, `maestro work show`, decisions, and messages.
 Do not rely on conversational memory.
 
 ### Choose
@@ -18,7 +18,7 @@ settled. If none is safe, return dry or blocked instead of inventing work.
 
 ### Act
 
-Use `recipe show work` to drive that one item. Stay within local reversible
+Use `maestro recipe show work` to drive that one item. Stay within local reversible
 actions unless the unattended grant explicitly covers a named external action.
 
 ### Observe

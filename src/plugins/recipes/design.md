@@ -7,9 +7,9 @@ locked and the user has approved the resulting scope.
 
 ## Working method
 
-- Read the current `work show`, linked decisions, notes, and relevant source.
+- Read the current `maestro work show`, linked decisions, notes, and relevant source.
 - Present one unresolved fork at a time with a concrete recommendation.
-- Record each choice with `decision draft` and `decision lock`; supersede an
+- Record each choice with `maestro decision draft` and `maestro decision lock`; supersede an
   old decision instead of rewriting its history.
 - Keep acceptance, non-goals, and authority visible on the work item.
 - Finish with the next decision, an explicit implementation gate, or a named
@@ -29,8 +29,8 @@ the options in plain language and state which one you recommend.
 
 ### Act
 
-Record the selected direction through `decision draft`, `decision lock`, or a
-scoped `work note`. Do not edit code during a design-only engagement.
+Record the selected direction through `maestro decision draft`, `maestro decision lock`, or a
+scoped `maestro work note`. Do not edit code during a design-only engagement.
 
 ### Observe
 
@@ -46,4 +46,4 @@ decision or work note; do not leave it only in chat.
 
 Return exactly one of: the next design fork, a request for explicit build
 approval, or a concrete blocker. Once the contract is settled and approved,
-use `recipe show work` for implementation.
+use `maestro recipe show work` for implementation.

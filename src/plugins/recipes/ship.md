@@ -8,7 +8,7 @@ external state changes.
 
 ### Perceive
 
-Read `work show <id>`, child state, evidence, current branch, HEAD, and dirty
+Read `maestro work show <id>`, child state, evidence, current branch, HEAD, and dirty
 tree. Re-read the user's exact delivery authority and target.
 
 ### Choose
