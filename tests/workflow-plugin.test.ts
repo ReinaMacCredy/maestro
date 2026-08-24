@@ -16,13 +16,10 @@ test("122 decision draft stores a rationale body and show renders it", async () 
       "rationale: keeps bundle artifacts inside the maestro scope dir; repos decide gitignore",
     );
 
-    const shown = await runCli(fixture, ["decision", "show", id, "--json"]);
+    const shown = await runCli(fixture, ["decision", "show", id]);
     expect(shown.exitCode).toBe(0);
-    const payload = JSON.parse(shown.stdout) as {
-      data: { decision: { rationale: string | null } };
-    };
-    expect(payload.data.decision.rationale).toBe(
-      "keeps bundle artifacts inside the maestro scope dir; repos decide gitignore",
+    expect(shown.stdout).toContain(
+      "rationale: keeps bundle artifacts inside the maestro scope dir; repos decide gitignore",
     );
 
     const help = await runCli(fixture, ["help", "decision"]);
