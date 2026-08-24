@@ -26,6 +26,8 @@ export const policyQaPlugin: BuiltInPlugin = {
   name: "policy-qa",
   defaultDisabled: true,
   inject: ["work"],
+  requires:
+    'gates work done on parents with children: requires a "qa: <behavior>" --claim with a non-empty --proof',
   apply(context) {
     const work = context.work as WorkService;
     context.effect(() =>

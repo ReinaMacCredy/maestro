@@ -57,6 +57,8 @@ function gateFor(work: WorkRecord, children: WorkRecord[]): Gate | null {
 export const policyBreakdownPlugin: BuiltInPlugin = {
   name: "policy-breakdown",
   inject: ["work"],
+  requires:
+    "gates work start/ready/done: parentless write-like work needs a child breakdown or --atomic-reason; open write-like children block their parent",
   apply(context) {
     for (const event of ["work.start", "work.ready", "work.done"] as const) {
       context.effect(() =>

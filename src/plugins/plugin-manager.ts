@@ -54,7 +54,8 @@ async function removeEntry(path: string, name: string): Promise<void> {
 
 function formatRecord(record: PluginRecord): string {
   const diagnostic = record.diagnostic ? ` (${record.diagnostic})` : "";
-  return `${record.name}\t${record.source}\t${record.status}${diagnostic}`;
+  const requires = record.requires ? `\t${record.requires}` : "";
+  return `${record.name}\t${record.source}\t${record.status}${diagnostic}${requires}`;
 }
 
 export const pluginManagerPlugin: BuiltInPlugin = {

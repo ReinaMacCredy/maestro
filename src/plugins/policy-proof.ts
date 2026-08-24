@@ -25,6 +25,8 @@ function recordPairs(input: CompletionInput): string {
 export const policyProofPlugin: BuiltInPlugin = {
   name: "policy-proof",
   inject: ["work"],
+  requires:
+    'gates work done: requires --evidence "<evidence>" or paired --claim "<claim>" --proof "<proof>"',
   apply(context) {
     context.effect(() =>
       context.cli.registerFlag("work done", "--claim", {

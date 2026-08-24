@@ -14,7 +14,9 @@ and repository instructions. Name the task-owned dirty paths before editing.
 ### Choose
 
 Select the smallest behavior that can be falsified at the accepted seam. For a
-behavior change, write the agreed failing test before production code.
+behavior change, write the agreed failing test before production code. When
+adding new or child work here, record `--acceptance "<observable result>"` so
+Observe has a target to review against.
 
 ### Act
 

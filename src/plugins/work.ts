@@ -145,7 +145,12 @@ function latestLeaseExpiration(
 
 function requireWork(context: PluginContext, id: string): WorkRecord {
   const work = getWork(context, id);
-  if (!work) throw new CliError("NOT_FOUND", `work not found: ${id}`, { id });
+  if (!work) {
+    throw new CliError("NOT_FOUND", `work not found: ${id}; run: maestro work list`, {
+      command: "maestro work list",
+      id,
+    });
+  }
   return work;
 }
 
@@ -322,7 +327,7 @@ export const workPlugin: BuiltInPlugin = {
             `${id} is cancelled (${work.cancelReason ?? "no reason recorded"}); add a new work item instead`,
           );
         }
-        const session = context.sessions.record("work.start");
+        const session = context.sessions.current();
         if (work.heldBy && work.heldBy !== session.id) {
           throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
             holder: work.heldBy,
@@ -355,6 +360,7 @@ export const workPlugin: BuiltInPlugin = {
             holder: current.heldBy,
           });
         }
+        context.sessions.record("work.start");
         context.log.append({
           type: "work.start",
           entityType: "work",
@@ -407,7 +413,10 @@ export const workPlugin: BuiltInPlugin = {
               `${id} is cancelled (${work.cancelReason ?? "no reason recorded"}); add a new work item instead`,
             );
           }
-          const sessionId = context.sessions.record("work.done").id;
+          if (work.state === "done") {
+            throw new CliError("INVALID_STATE", `${id} is already done; nothing to complete`);
+          }
+          const sessionId = context.sessions.current().id;
           if (work.heldBy !== sessionId) {
             if (work.heldBy) {
               throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
@@ -452,6 +461,7 @@ export const workPlugin: BuiltInPlugin = {
               "UPDATE work SET state = 'done', evidence = ?, held_by = NULL, updated_at = ? WHERE id = ?",
             )
             .run(recordedEvidence, now, id);
+          context.sessions.record("work.done");
           context.log.append({
             type: "work.done",
             entityType: "work",

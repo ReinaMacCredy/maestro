@@ -278,7 +278,11 @@ export class Cli {
         command === "search" ||
         command.endsWith(" list")
       )) {
-        throw new CliError("UNKNOWN_FLAG", "unknown flag: --json", { flag: "--json" });
+        const helpCommand = `maestro help ${command.split(" ")[0]}`;
+        throw new CliError("UNKNOWN_FLAG", `unknown flag: --json; run: ${helpCommand}`, {
+          command: helpCommand,
+          flag: "--json",
+        });
       }
       remaining.splice(jsonIndex, 1);
     }
@@ -324,7 +328,11 @@ export class Cli {
       }
       const definition = flags.get(token);
       if (!definition) {
-        throw new CliError("UNKNOWN_FLAG", `unknown flag: ${token}`, { flag: token });
+        const helpCommand = `maestro help ${command.split(" ")[0]}`;
+        throw new CliError("UNKNOWN_FLAG", `unknown flag: ${token}; run: ${helpCommand}`, {
+          command: helpCommand,
+          flag: token,
+        });
       }
       const key = token.slice(2);
       if (definition.value) {

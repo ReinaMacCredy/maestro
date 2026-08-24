@@ -22,6 +22,8 @@ export const policyResearchPlugin: BuiltInPlugin = {
   name: "policy-research",
   defaultDisabled: true,
   inject: ["work"],
+  requires:
+    'gates work start on parentless features: requires a "research: <finding>" note or a done research child',
   apply(context) {
     const work = context.work as WorkService;
     context.effect(() =>

@@ -42,6 +42,8 @@ export const policyWitnessPlugin: BuiltInPlugin = {
   name: "policy-witness",
   defaultDisabled: true,
   inject: ["work"],
+  requires:
+    'gates work done on parents with children: requires a "witness: <finding>" note from a different session',
   apply(context) {
     const work = context.work as WorkService;
     context.effect(() =>

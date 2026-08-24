@@ -13,6 +13,7 @@ export type PluginSource = "built-in" | "global" | "repo";
 export interface Plugin {
   name: string;
   inject?: string[];
+  requires?: string;
   apply(context: PluginContext, config?: unknown): void | Promise<void>;
 }
 
@@ -27,6 +28,7 @@ export interface PluginRecord {
   status: "active" | "disabled" | "error" | "unloaded";
   diagnostic?: string;
   path?: string;
+  requires?: string;
 }
 
 export interface PluginContext {
@@ -129,6 +131,7 @@ export class Loader {
           source: candidate.source,
           status: "disabled",
           path: candidate.path,
+          requires: candidate.plugin.requires,
         });
       } else {
         pending.push(candidate);
@@ -158,6 +161,7 @@ export class Loader {
           status: "unloaded",
           path: candidate.path,
           diagnostic: `missing service: ${missing.join(", ")}`,
+          requires: candidate.plugin.requires,
         });
       }
     }
@@ -214,6 +218,7 @@ export class Loader {
         source: candidate.source,
         status: "active",
         path: candidate.path,
+        requires: candidate.plugin.requires,
       });
     } catch (error) {
       await this.unload(candidate.plugin.name);
@@ -224,6 +229,7 @@ export class Loader {
         status: "error",
         path: candidate.path,
         diagnostic: error instanceof Error ? error.message : String(error),
+        requires: candidate.plugin.requires,
       });
     } finally {
       this.currentPlugin = null;

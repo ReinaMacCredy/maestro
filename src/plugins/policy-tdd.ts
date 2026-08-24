@@ -28,6 +28,8 @@ export const policyTddPlugin: BuiltInPlugin = {
   name: "policy-tdd",
   defaultDisabled: true,
   inject: ["work"],
+  requires:
+    'gates work done on write-like work: requires a "test: <claim>" --claim with a non-empty --proof',
   apply(context) {
     context.effect(() =>
       context.events.on<CompletionInput, CompletionResult>("work.done", async (input, next) => {

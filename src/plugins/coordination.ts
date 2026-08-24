@@ -354,22 +354,29 @@ export const coordinationPlugin: BuiltInPlugin = {
         "status",
         async (): Promise<CliResult> => {
           const sessions = context.sessions.list();
-          const peers = livePeers(sessions, work.list(), context.sessions.current().id);
+          const items = work.list();
+          const peers = livePeers(sessions, items, context.sessions.current().id);
           const advisory = await driftAdvisory(
             process.env.HOME ?? process.cwd(),
             resolve(import.meta.dir, "..", ".."),
           );
+          const holdsFor = (sessionId: string) =>
+            items.filter((item) => item.heldBy === sessionId).map((item) => item.id);
           const sessionText =
             sessions.length > 0
               ? sessions
                   .map(
                     (session) =>
-                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"}`,
+                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}`,
                   )
                   .join("\n")
               : "no sessions";
           return {
-            data: { livePeers: peers, sessions },
+            data: {
+              held: Object.fromEntries(sessions.map((session) => [session.id, holdsFor(session.id)])),
+              livePeers: peers,
+              sessions,
+            },
             text: [sessionText, formatLivePeers(peers), advisory].filter(Boolean).join("\n"),
           };
         },
