@@ -149,8 +149,7 @@ test("38 search returns tagged legacy title, file, and decision hits alongside n
     const decision = await runCli(fixture, ["search", "quorum"]);
     const perCardDecision = await runCli(fixture, ["search", "ultraviolet"]);
 
-    expect(title.stdout).toContain(`work ${idFrom(native)}`);
-    expect(title.stdout).toContain(`work ${idFrom(native)}: Native Aurora follow-up`);
+    expect(title.stdout).toContain(`${idFrom(native)} (task, open): Native Aurora follow-up`);
     expect(title.stdout).toContain(`[legacy] ${featureId}`);
     expect(file.stdout).toContain(`[legacy] ${featureId}`);
     expect(decision.stdout).toContain("[legacy] dec-root-sqlite");
