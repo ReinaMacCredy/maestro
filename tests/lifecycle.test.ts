@@ -244,6 +244,40 @@ test("47 update fast-forwards and resyncs while divergence and fetch failure cha
   });
 });
 
+test("64 update ignores untracked source files but still refuses tracked changes", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // Real installs leave untracked wiring in the source checkout (.claude/,
+    // .codex/); update must not treat those as dirt or it refuses forever.
+    await writeFile(join(source, "untracked-note.txt"), "scratch\n");
+    const packagePath = join(publisher, "package.json");
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+    packageJson.version = "0.1.2";
+    await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+    await git(publisher, ["add", "package.json"]);
+    await git(publisher, ["commit", "-m", "remote update"]);
+    await git(publisher, ["push", "origin", "main"]);
+    const remoteCommit = await git(publisher, ["rev-parse", "HEAD"]);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(updated.exitCode).toBe(0);
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(remoteCommit);
+    expect(existsSync(join(source, "untracked-note.txt"))).toBe(true);
+
+    const agentsPath = join(source, "AGENTS.md");
+    await writeFile(agentsPath, `${await readFile(agentsPath, "utf8")}\ntracked dirt\n`);
+    const dirtyHead = await git(source, ["rev-parse", "HEAD"]);
+    const refused = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("UPDATE_SOURCE_DIRTY");
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(dirtyHead);
+  });
+});
+
 test("48 status and hook brief report local drift unless auto-update checks are disabled", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);

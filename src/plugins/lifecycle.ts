@@ -116,7 +116,10 @@ async function update(): Promise<CliResult> {
       { fix: "run maestro install from a valid Maestro source checkout" },
     );
   }
-  const dirty = await command(source, ["git", "status", "--porcelain"]);
+  // Untracked files are ignored: install itself leaves untracked wiring
+  // (.claude/, .codex/) in a wired source checkout, and ff-only merges
+  // cannot lose them.
+  const dirty = await command(source, ["git", "status", "--porcelain", "--untracked-files=no"]);
   if (dirty.exitCode !== 0 || dirty.stdout) {
     throw new CliError(
       "UPDATE_SOURCE_DIRTY",
