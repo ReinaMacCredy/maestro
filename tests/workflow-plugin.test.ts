@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
@@ -193,5 +193,19 @@ test("131 an unstamped foreign skill dir is skipped, never clobbered", async () 
     expect(installed.exitCode).toBe(0);
     expect(await Bun.file(join(foreign, "SKILL.md")).text()).toBe("# user-owned design skill\n");
     expect(installed.stdout).toContain("skipped: maestro-design");
+  });
+});
+
+test("132 policy-lifecycle ships dark: disabled by default with an honest requires string", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    const config = JSON.parse(
+      await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
+    ) as { plugins: Array<{ disabled: boolean; name: string }> };
+    expect(config.plugins).toContainEqual({ name: "policy-lifecycle", disabled: true });
+    const listed = await runCli(fixture, ["plugin", "list"]);
+    expect(listed.stdout).toContain("policy-lifecycle\tbuilt-in\tdisabled");
+    expect(listed.stdout).toContain("reserved");
   });
 });
