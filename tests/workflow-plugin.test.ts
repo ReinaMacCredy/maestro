@@ -1,4 +1,7 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { idFrom, runCli, withFixture } from "./helpers.ts";
 
 test("122 decision draft stores a rationale body and show renders it", async () => {
@@ -34,5 +37,97 @@ test("123 decision without rationale stays valid and renders no rationale line",
     const shown = await runCli(fixture, ["decision", "show", idFrom(created)]);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).not.toContain("rationale:");
+  });
+});
+
+test("124 bundle open scaffolds the trio, records an active row, and links work", async () => {
+  await withFixture(async (fixture) => {
+    const work = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
+    const workId = idFrom(work);
+    const opened = await runCli(fixture, ["bundle", "open", "amp-wiring", "--work", workId]);
+    expect(opened.exitCode).toBe(0);
+    for (const name of ["SPEC.md", "NOTES.md", "VERIFY.md"]) {
+      const file = Bun.file(join(fixture.repo, ".maestro", "bundle", "amp-wiring", name));
+      expect(await file.exists()).toBe(true);
+    }
+    const listed = await runCli(fixture, ["bundle", "list"]);
+    expect(listed.stdout).toContain("amp-wiring [active]");
+  });
+});
+
+test("125 bundle close snapshots text into the store and search hits it after the dir dies", async () => {
+  await withFixture(async (fixture) => {
+    await runCli(fixture, ["bundle", "open", "amp-wiring"]);
+    const directory = join(fixture.repo, ".maestro", "bundle", "amp-wiring");
+    await writeFile(join(directory, "NOTES.md"), "# NOTES\n\nultraviolet copper handoff\n");
+    const closed = await runCli(fixture, ["bundle", "close", "amp-wiring"]);
+    expect(closed.exitCode).toBe(0);
+    expect(closed.stdout).toContain("archived");
+    expect(closed.stdout).toContain("hint:");
+    await rm(directory, { recursive: true, force: true });
+    const found = await runCli(fixture, ["search", "copper"]);
+    expect(found.exitCode).toBe(0);
+    expect(found.stdout).toContain("amp-wiring");
+    expect(found.stdout).toContain("(bundle, archived)");
+  });
+});
+
+test("126 bundle show composes prose, linked work, and decisions; snapshot survives close", async () => {
+  await withFixture(async (fixture) => {
+    const work = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
+    const workId = idFrom(work);
+    await runCli(fixture, ["bundle", "open", "amp-wiring", "--work", workId]);
+    await runCli(fixture, [
+      "decision",
+      "draft",
+      "use copper traces",
+      "--rationale",
+      "cheaper than silver",
+      "--work",
+      workId,
+    ]);
+    const directory = join(fixture.repo, ".maestro", "bundle", "amp-wiring");
+    await writeFile(join(directory, "SPEC.md"), "# SPEC\n\namplifier wiring contract\n");
+    const live = await runCli(fixture, ["bundle", "show", "amp-wiring"]);
+    expect(live.exitCode).toBe(0);
+    expect(live.stdout).toContain("amplifier wiring contract");
+    expect(live.stdout).toContain(workId);
+    expect(live.stdout).toContain("wire the amp");
+    expect(live.stdout).toContain("use copper traces");
+    await runCli(fixture, ["bundle", "close", "amp-wiring"]);
+    await rm(directory, { recursive: true, force: true });
+    const archived = await runCli(fixture, ["bundle", "show", "amp-wiring"]);
+    expect(archived.exitCode).toBe(0);
+    expect(archived.stdout).toContain("amplifier wiring contract");
+  });
+});
+
+test("127 anti-sprawl law: the bundles table only accepts active or archived", async () => {
+  await withFixture(async (fixture) => {
+    await runCli(fixture, ["bundle", "open", "amp-wiring"]);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      expect(() =>
+        database.run("UPDATE bundles SET state = 'doing' WHERE id = 'amp-wiring'"),
+      ).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("128 bundle save ingests a foreign trio dir straight to archived", async () => {
+  await withFixture(async (fixture) => {
+    const foreign = join(fixture.repo, "old-bundles", "card-sprawl");
+    await mkdir(foreign, { recursive: true });
+    await writeFile(join(foreign, "SPEC.md"), "# SPEC\n\ndissolve the card state machine\n");
+    await writeFile(join(foreign, "NOTES.md"), "# NOTES\n\ndone long ago\n");
+    await writeFile(join(foreign, "VERIFY.md"), "# VERIFY\n\nall rows pass\n");
+    const saved = await runCli(fixture, ["bundle", "save", foreign]);
+    expect(saved.exitCode).toBe(0);
+    expect(saved.stdout).toContain("card-sprawl [archived]");
+    const found = await runCli(fixture, ["search", "dissolve"]);
+    expect(found.stdout).toContain("card-sprawl");
+    expect(found.stdout).toContain("(bundle, archived)");
   });
 });
