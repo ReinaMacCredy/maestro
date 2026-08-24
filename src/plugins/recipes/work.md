@@ -35,5 +35,8 @@ failed approach. Keep ordinary command output out of notes.
 ### Continue
 
 Complete with `maestro work done <id>` and the evidence required by enabled policies.
-Use tag-prefixed claim/proof pairs such as `test:` or `qa:` when those gates
-are active. Otherwise return the next ready item or a concrete blocker.
+`--evidence` records one opaque blob; `--claim`/`--proof` record paired
+assertions and are preferred when a pair-checking gate is enabled. Use
+tag-prefixed pairs such as `test:` or `qa:` when those gates are active;
+the tag prefix goes on the claim. Otherwise return the next ready item or
+a concrete blocker.

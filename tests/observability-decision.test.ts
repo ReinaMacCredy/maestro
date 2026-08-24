@@ -104,7 +104,8 @@ test("20 gate blocks return nonzero with a structured reason on stderr", async (
     expect(error.ok).toBe(false);
     expect(error.error.code).toBe("GATE_BLOCKED");
     expect(error.error.origin).toBe("policy-proof");
-    expect(error.error.reason).toBeString();
+    expect(error.error.message).toBeString();
+    expect("reason" in error.error).toBe(false);
   });
 });
 

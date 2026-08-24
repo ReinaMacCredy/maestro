@@ -174,7 +174,7 @@ function formatWork(work: WorkRecord): string {
 function blockIfNeeded(result: GateResult): void {
   if (!result.blocked) return;
   const details = gateDetails(result);
-  throw new CliError("GATE_BLOCKED", details.reason, details);
+  throw new CliError("GATE_BLOCKED", details.reason, { origin: details.origin });
 }
 
 function gateDetails(result: GateResult): { origin: string; reason: string } {
@@ -407,7 +407,7 @@ export const workPlugin: BuiltInPlugin = {
               `${id} is cancelled (${work.cancelReason ?? "no reason recorded"}); add a new work item instead`,
             );
           }
-          const sessionId = context.sessions.current().id;
+          const sessionId = context.sessions.record("work.done").id;
           if (work.heldBy !== sessionId) {
             if (work.heldBy) {
               throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
@@ -431,11 +431,17 @@ export const workPlugin: BuiltInPlugin = {
           const claims = listOption(invocation, "claim");
           const proofs = listOption(invocation, "proof");
           const result = await context.events.waterfall<
-            { claims: string[]; evidence: string; proofs: string[]; work: WorkRecord },
+            {
+              children: WorkRecord[];
+              claims: string[];
+              evidence: string;
+              proofs: string[];
+              work: WorkRecord;
+            },
             GateResult
           >(
             "work.done",
-            { work, evidence, claims, proofs },
+            { work, children: service.children(id), evidence, claims, proofs },
             async (completion) => ({ blocked: false, evidence: completion.evidence }),
           );
           blockIfNeeded(result);
@@ -518,7 +524,14 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
-        return { data: { work }, text: formatWork(work) };
+        const children = service.children(work.id);
+        const childLines = children.map(
+          (child) => `child: ${child.id} [${child.state}] ${child.title}`,
+        );
+        return {
+          data: { work, children },
+          text: [formatWork(work), ...childLines].join("\n"),
+        };
       }, {
         description: "Show one work item and its recorded evidence.",
         positionals: [{ name: "id", required: true }],
@@ -530,9 +543,26 @@ export const workPlugin: BuiltInPlugin = {
         "work list",
         (): CliResult => {
           const works = service.list();
+          const known = new Set(works.map((work) => work.id));
+          const childrenByParent = new Map<string, WorkRecord[]>();
+          for (const work of works) {
+            if (!work.parentId || !known.has(work.parentId)) continue;
+            const siblings = childrenByParent.get(work.parentId) ?? [];
+            siblings.push(work);
+            childrenByParent.set(work.parentId, siblings);
+          }
+          const renderTree = (work: WorkRecord, depth: number): string[] => [
+            `${"  ".repeat(depth)}${work.id} [${work.state}] ${work.title}`,
+            ...(childrenByParent.get(work.id) ?? []).flatMap((child) =>
+              renderTree(child, depth + 1)
+            ),
+          ];
+          const roots = works.filter(
+            (work) => !work.parentId || !known.has(work.parentId),
+          );
           return {
             data: { works },
-            text: works.map((work) => `${work.id} [${work.state}] ${work.title}`).join("\n"),
+            text: roots.flatMap((work) => renderTree(work, 0)).join("\n"),
           };
         },
         { description: "List tracked work and current states." },
@@ -598,7 +628,9 @@ export const workPlugin: BuiltInPlugin = {
           ];
           return {
             data: { works, gated },
-            text: lines.length > 0 ? lines.join("\n") : "no ready work",
+            text: lines.length > 0
+              ? lines.join("\n")
+              : 'no ready work; add some: maestro work add "<title>"',
           };
         },
         { description: "List work unblocked and ready to start." },

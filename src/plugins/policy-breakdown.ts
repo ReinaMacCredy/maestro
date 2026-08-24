@@ -10,11 +10,23 @@ function needsBreakdown(work: WorkRecord, children: WorkRecord[]): boolean {
     !work.atomicReason;
 }
 
-function breakdownGate(work: WorkRecord): {
+// Only write-like children are execution units; idea-like children are scope
+// notes and never hold their parent open.
+function openChildren(children: WorkRecord[]): WorkRecord[] {
+  return children.filter(
+    (child) =>
+      writeLikeKinds.has(child.kind) &&
+      (child.state === "open" || child.state === "active"),
+  );
+}
+
+interface Gate {
   blocked: true;
   origin: string;
   reason: string;
-} {
+}
+
+function breakdownGate(work: WorkRecord): Gate {
   return {
     blocked: true,
     origin: "policy-breakdown",
@@ -25,29 +37,34 @@ function breakdownGate(work: WorkRecord): {
   };
 }
 
+function openChildrenGate(work: WorkRecord, open: WorkRecord[]): Gate {
+  const ids = open.map((child) => child.id);
+  return {
+    blocked: true,
+    origin: "policy-breakdown",
+    reason:
+      `${work.id} has open children: ${ids.join(", ")}; finish them first: ` +
+      `maestro work start ${ids[0]}`,
+  };
+}
+
+function gateFor(work: WorkRecord, children: WorkRecord[]): Gate | null {
+  if (needsBreakdown(work, children)) return breakdownGate(work);
+  const open = openChildren(children);
+  return open.length > 0 ? openChildrenGate(work, open) : null;
+}
+
 export const policyBreakdownPlugin: BuiltInPlugin = {
   name: "policy-breakdown",
   inject: ["work"],
   apply(context) {
-    context.effect(() =>
-      context.events.on<WorkGateInput>(
-        "work.start",
-        async (input, next) => {
-          return needsBreakdown(input.work, input.children)
-            ? breakdownGate(input.work)
-            : next();
-        },
-      ),
-    );
-    context.effect(() =>
-      context.events.on<WorkGateInput>(
-        "work.ready",
-        async (input, next) => {
-          return needsBreakdown(input.work, input.children)
-            ? breakdownGate(input.work)
-            : next();
-        },
-      ),
-    );
+    for (const event of ["work.start", "work.ready", "work.done"] as const) {
+      context.effect(() =>
+        context.events.on<WorkGateInput>(
+          event,
+          async (input, next) => gateFor(input.work, input.children) ?? next(),
+        )
+      );
+    }
   },
 };
