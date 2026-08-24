@@ -191,7 +191,7 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     );
     expect(cancelDone.exitCode).not.toBe(0);
 
-    // A held active item refuses cancel and names the way out.
+    // The current holder can abandon active work without recording a false completion.
     expect((await add("held item")).exitCode).toBe(0); // w5
     expect((await runCli(fixture, ["work", "start", "w5"], PEER)).exitCode).toBe(0);
     const cancelHeld = await runCli(
@@ -199,8 +199,10 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
       ["work", "cancel", "w5", "--reason", "mid-flight"],
       PEER,
     );
-    expect(cancelHeld.exitCode).not.toBe(0);
-    expect(cancelHeld.stderr + cancelHeld.stdout).toContain("work done");
+    expect(cancelHeld.exitCode).toBe(0);
+    const shownHeld = await runCli(fixture, ["work", "show", "w5"], PEER);
+    expect(shownHeld.stdout).toContain("[cancelled] held item");
+    expect(shownHeld.stdout).not.toContain("held by:");
   });
 });
 

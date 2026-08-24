@@ -325,3 +325,182 @@ test("108 help documents the kind vocabulary and ready's gated listing", async (
     expect(root.stdout).toContain("gated");
   });
 });
+
+test("109 current holders can abandon active work and dead holders recover before cancellation", async () => {
+  await withFixture(async (fixture) => {
+    const current = {
+      MAESTRO_SESSION_ID: "current-holder",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const peer = {
+      MAESTRO_SESSION_ID: "other-session",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const staleHolder = Bun.spawn(["sleep", "30"]);
+    try {
+      const stale = idFrom(
+        await runCli(fixture, ["work", "add", "stale lease", "--kind", "idea"], {
+          MAESTRO_SESSION_ID: "stale-holder",
+          MAESTRO_SESSION_PID: String(staleHolder.pid),
+        }),
+      );
+      expect(
+        (await runCli(fixture, ["work", "start", stale], {
+          MAESTRO_SESSION_ID: "stale-holder",
+          MAESTRO_SESSION_PID: String(staleHolder.pid),
+        })).exitCode,
+      ).toBe(0);
+      staleHolder.kill();
+      await staleHolder.exited;
+      expect(
+        (await runCli(fixture, ["work", "cancel", stale, "--reason", "holder died"], current))
+          .exitCode,
+      ).toBe(0);
+
+      const active = idFrom(
+        await runCli(fixture, ["work", "add", "abandoned attempt", "--kind", "idea"], current),
+      );
+      expect((await runCli(fixture, ["work", "start", active], current)).exitCode).toBe(0);
+
+      const foreign = await runCli(
+        fixture,
+        ["work", "cancel", active, "--reason", "not mine"],
+        peer,
+      );
+      expect(foreign.exitCode).not.toBe(0);
+      expect((JSON.parse(foreign.stderr) as { error: { code: string } }).error.code).toBe(
+        "LEASE_HELD",
+      );
+
+      const abandoned = await runCli(
+        fixture,
+        ["work", "cancel", active, "--reason", "approach is invalid"],
+        current,
+      );
+      expect(abandoned.exitCode).toBe(0);
+      const shown = await runCli(fixture, ["work", "show", active], current);
+      expect(shown.stdout).toContain(`[cancelled] abandoned attempt`);
+      expect(shown.stdout).toContain("cancel reason: approach is invalid");
+      expect(shown.stdout).not.toContain("held by:");
+      expect((await runCli(fixture, ["status"], current)).stdout).toContain("holds: none");
+    } finally {
+      staleHolder.kill();
+    }
+  });
+});
+
+test("110 terminal parents refuse new children and point at top-level work", async () => {
+  await withFixture(async (fixture) => {
+    const done = idFrom(await runCli(fixture, ["work", "add", "finished parent", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", done])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", done, "--evidence", "finished"])).exitCode).toBe(0);
+
+    const cancelled = idFrom(
+      await runCli(fixture, ["work", "add", "cancelled parent", "--kind", "idea"]),
+    );
+    expect(
+      (await runCli(fixture, ["work", "cancel", cancelled, "--reason", "obsolete"])).exitCode,
+    ).toBe(0);
+
+    for (const [parent, state] of [[done, "done"], [cancelled, "cancelled"]] as const) {
+      const child = await runCli(fixture, [
+        "work",
+        "add",
+        `child of ${state}`,
+        "--parent",
+        parent,
+        "--kind",
+        "task",
+      ]);
+      expect(child.exitCode).not.toBe(0);
+      const error = (JSON.parse(child.stderr) as { error: { code: string; message: string } }).error;
+      expect(error.code).toBe("INVALID_STATE");
+      expect(error.message).toContain(state);
+      expect(error.message).toContain("top-level work");
+    }
+
+    const list = await runCli(fixture, ["work", "list"]);
+    expect(list.stdout).not.toContain("child of done");
+    expect(list.stdout).not.toContain("child of cancelled");
+  });
+});
+
+test("111 work show renders recorded notes", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "learning loop", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "note", id, "first correction"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "note", id, "second correction"])).exitCode).toBe(0);
+
+    const shown = await runCli(fixture, ["work", "show", id]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("note: first correction");
+    expect(shown.stdout).toContain("note: second correction");
+  });
+});
+
+test("112 help documents --json only for commands that accept it", async () => {
+  await withFixture(async (fixture) => {
+    const supported = [
+      ["status"],
+      ["ready"],
+      ["msg", "send"],
+      ["search"],
+      ["work", "list"],
+      ["decision", "list"],
+      ["recipe", "list"],
+      ["plugin", "list"],
+    ];
+    for (const command of supported) {
+      const help = await runCli(fixture, ["help", ...command]);
+      expect(help.exitCode).toBe(0);
+      expect(help.stdout).toContain("--json");
+    }
+
+    for (const command of [["work", "show"], ["msg", "read"], ["trace"]]) {
+      const help = await runCli(fixture, ["help", ...command]);
+      expect(help.exitCode).toBe(0);
+      expect(help.stdout).not.toContain("--json");
+    }
+  });
+});
+
+test("113 proof without a claim names the missing matching claim", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "orphan proof", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const result = await runCli(fixture, ["work", "done", id, "--proof", "a test passed"]);
+    expect(result.exitCode).not.toBe(0);
+    const error = (JSON.parse(result.stderr) as {
+      error: { code: string; message: string; origin: string };
+    }).error;
+    expect(error.code).toBe("GATE_BLOCKED");
+    expect(error.origin).toBe("policy-proof");
+    expect(error.message).toContain("--proof requires a matching --claim");
+    expect(error.message).not.toContain("each claim requires");
+  });
+});
+
+test("114 decision help shows draft usage and edits name the previous title", async () => {
+  await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["help", "decision"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("usage: maestro decision draft <text-or-id> [replacement]");
+
+    const created = await runCli(fixture, ["decision", "draft", "initial direction"]);
+    expect(created.exitCode).toBe(0);
+    const id = created.stdout.match(/\bd\d+\b/)?.[0] ?? "";
+    const edited = await runCli(fixture, ["decision", "draft", id, "revised direction"]);
+    expect(edited.exitCode).toBe(0);
+    expect(edited.stdout).toContain("revised direction");
+    expect(edited.stdout).toContain("previous: initial direction");
+  });
+});
+
+test("115 msg read renders an explicit empty state", async () => {
+  await withFixture(async (fixture) => {
+    const empty = await runCli(fixture, ["msg", "read"]);
+    expect(empty.exitCode).toBe(0);
+    expect(empty.stdout.trim()).toBe("no new messages");
+  });
+});
