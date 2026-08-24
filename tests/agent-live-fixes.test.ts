@@ -22,6 +22,7 @@ test("92 gate envelope carries origin without a duplicated reason; lease keeps c
     expect(gateError.origin).toBe("policy-breakdown");
     expect(typeof gateError.message).toBe("string");
     expect("reason" in gateError).toBe(false);
+    expect("command" in gateError).toBe(false);
 
     const loose = idFrom(
       await runCli(fixture, ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"]),
@@ -716,5 +717,48 @@ test("119 ready tells the current holder to finish an active child", async () =>
     expect(gated.find((work) => work.id === verification)?.command).toBe(
       `maestro work done ${implementation}`,
     );
+  });
+});
+
+test("120 policy-breakdown exposes structured child blockers and one recovery command", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
+    );
+    const child = idFrom(
+      await runCli(fixture, ["work", "add", "active child", "--kind", "task", "--parent", parent]),
+    );
+    expect((await runCli(fixture, ["work", "start", child])).exitCode).toBe(0);
+
+    const ready = await runCli(fixture, ["ready", "--json"]);
+    expect(ready.exitCode).toBe(0);
+    const parentGate = (JSON.parse(ready.stdout) as {
+      data: {
+        gated: Array<{
+          blockers: Array<{ id: string; state: string }>;
+          command?: string;
+          id: string;
+          origin: string;
+        }>;
+      };
+    }).data.gated.find((work) => work.id === parent);
+    expect(parentGate?.origin).toBe("policy-breakdown");
+    expect(parentGate?.blockers).toEqual([{ id: child, state: "active" }]);
+    expect(parentGate?.command).toBe(`maestro work done ${child}`);
+
+    const blocked = await runCli(fixture, ["work", "start", parent]);
+    expect(blocked.exitCode).not.toBe(0);
+    const error = (JSON.parse(blocked.stderr) as {
+      error: {
+        blockers: Array<{ id: string; state: string }>;
+        code: string;
+        command: string;
+        origin: string;
+      };
+    }).error;
+    expect(error.code).toBe("GATE_BLOCKED");
+    expect(error.origin).toBe("policy-breakdown");
+    expect(error.blockers).toEqual([{ id: child, state: "active" }]);
+    expect(error.command).toBe(`maestro work done ${child}`);
   });
 });
