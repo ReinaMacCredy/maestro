@@ -124,11 +124,14 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     const ready = await runCli(fixture, ["ready", "--json"], PEER);
     expect(ready.exitCode).toBe(0);
     const readyData = JSON.parse(ready.stdout).data as {
-      gated: unknown[];
+      gated: Array<{ id: string; origin: string }>;
       works: Array<{ title: string }>;
     };
     expect(readyData.works.map((work) => work.title)).not.toContain("orphan stub");
-    expect(readyData.gated).toEqual([]);
+    expect(readyData.gated).toContainEqual(expect.objectContaining({
+      id: "w3",
+      origin: "work-blockers",
+    }));
 
     const startCancelled = await runCli(fixture, ["work", "start", "w1"], PEER);
     expect(startCancelled.exitCode).not.toBe(0);
@@ -156,11 +159,14 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     const readyBefore = await runCli(fixture, ["ready", "--json"], PEER);
     expect(readyBefore.exitCode).toBe(0);
     const beforeData = JSON.parse(readyBefore.stdout).data as {
-      gated: unknown[];
+      gated: Array<{ id: string; origin: string }>;
       works: Array<{ title: string }>;
     };
     expect(beforeData.works.map((work) => work.title)).not.toContain("dependent item");
-    expect(beforeData.gated).toEqual([]);
+    expect(beforeData.gated).toContainEqual(expect.objectContaining({
+      id: "w3",
+      origin: "work-blockers",
+    }));
     const cancelBlocker = await runCli(
       fixture,
       ["work", "cancel", "w2", "--reason", "blocker abandoned"],

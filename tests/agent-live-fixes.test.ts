@@ -586,3 +586,135 @@ test("117 ready distinguishes terminal and blocked ledgers from an empty ledger"
     expect(blocked.stdout).not.toContain("work add");
   });
 });
+
+test("118 explicit blockers prevent start and stay visible in ready", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
+    );
+    const tests = idFrom(
+      await runCli(fixture, ["work", "add", "red tests", "--kind", "task", "--parent", parent]),
+    );
+    const implementation = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "implementation",
+        "--kind",
+        "implement",
+        "--parent",
+        parent,
+        "--blocked-by",
+        tests,
+      ]),
+    );
+    const verification = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "verification",
+        "--kind",
+        "task",
+        "--parent",
+        parent,
+        "--blocked-by",
+        implementation,
+      ]),
+    );
+
+    const blockedStart = await runCli(fixture, ["work", "start", implementation]);
+    expect(blockedStart.exitCode).not.toBe(0);
+    const startError = (JSON.parse(blockedStart.stderr) as {
+      error: { blockers: string[]; code: string; command: string; message: string };
+    }).error;
+    expect(startError.code).toBe("BLOCKED");
+    expect(startError.blockers).toEqual([tests]);
+    expect(startError.command).toBe(`maestro work start ${tests}`);
+    expect(startError.message).toContain(tests);
+
+    const ready = await runCli(fixture, ["ready", "--json"]);
+    expect(ready.exitCode).toBe(0);
+    const data = (JSON.parse(ready.stdout) as {
+      data: {
+        gated: Array<{
+          blockers?: Array<{ id: string; state: string }>;
+          command?: string;
+          id: string;
+          origin: string;
+        }>;
+        works: Array<{ id: string }>;
+      };
+    }).data;
+    expect(data.works.map((work) => work.id)).toEqual([tests]);
+    expect(data.gated.map((work) => work.id)).toEqual([parent, implementation, verification]);
+    const gatedImplementation = data.gated.find((work) => work.id === implementation);
+    expect(gatedImplementation?.origin).toBe("work-blockers");
+    expect(gatedImplementation?.blockers).toEqual([{ id: tests, state: "open" }]);
+    expect(gatedImplementation?.command).toBe(`maestro work start ${tests}`);
+    const gatedVerification = data.gated.find((work) => work.id === verification);
+    expect(gatedVerification?.blockers).toEqual([{ id: implementation, state: "open" }]);
+    expect(gatedVerification?.command).toBe("maestro ready");
+
+    const human = await runCli(fixture, ["ready"]);
+    expect(human.stdout).toContain(`${implementation} implementation [gated by work-blockers:`);
+    expect(human.stdout).toContain(`${verification} verification [gated by work-blockers:`);
+    const trace = await runCli(fixture, ["trace", implementation]);
+    expect(trace.stdout).not.toContain("work.start");
+  });
+});
+
+test("119 ready tells the current holder to finish an active child", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
+    );
+    const tests = idFrom(
+      await runCli(fixture, ["work", "add", "red tests", "--kind", "task", "--parent", parent]),
+    );
+    const implementation = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "implementation",
+        "--kind",
+        "implement",
+        "--parent",
+        parent,
+        "--blocked-by",
+        tests,
+      ]),
+    );
+    const verification = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "verification",
+        "--kind",
+        "task",
+        "--parent",
+        parent,
+        "--blocked-by",
+        implementation,
+      ]),
+    );
+    expect((await runCli(fixture, ["work", "start", tests])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", tests, "--evidence", "red tests"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "start", implementation])).exitCode).toBe(0);
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    expect(ready.stdout).toContain(`maestro work done ${implementation}`);
+    expect(ready.stdout).not.toContain(`maestro work start ${implementation}`);
+
+    const json = await runCli(fixture, ["ready", "--json"]);
+    const gated = (JSON.parse(json.stdout) as {
+      data: { gated: Array<{ command?: string; id: string; reason: string }> };
+    }).data.gated;
+    expect(gated.find((work) => work.id === parent)?.reason).toContain(
+      `maestro work done ${implementation}`,
+    );
+    expect(gated.find((work) => work.id === verification)?.command).toBe(
+      `maestro work done ${implementation}`,
+    );
+  });
+});

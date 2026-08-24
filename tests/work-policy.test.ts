@@ -95,12 +95,28 @@ test("10 ready excludes blocked work and promotes it after its blocker completes
     const before = await runCli(fixture, ["ready", "--json"]);
     expect(before.exitCode).toBe(0);
     const beforeData = JSON.parse(before.stdout).data as {
-      gated: unknown[];
+      gated: Array<{
+        blockers: Array<{ id: string; state: string }>;
+        command?: string;
+        id: string;
+        origin: string;
+        reason: string;
+        title: string;
+      }>;
       works: Array<{ id: string }>;
     };
     expect(beforeData.works.map((work) => work.id)).toContain(first);
     expect(beforeData.works.map((work) => work.id)).not.toContain(second);
-    expect(beforeData.gated).toEqual([]);
+    expect(beforeData.gated).toContainEqual({
+      id: second,
+      origin: "work-blockers",
+      blockers: [{ id: first, state: "open" }],
+      command: `maestro work start ${first}`,
+      reason:
+        `${second} is blocked by unresolved work: ${first} [open]; ` +
+        `run: maestro work start ${first}`,
+      title: "second",
+    });
 
     expect((await runCli(fixture, ["work", "start", first])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", first, "--evidence", "finished"])).exitCode).toBe(0);
@@ -134,7 +150,13 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     const json = await runCli(fixture, ["ready", "--json"]);
     expect(json.exitCode).toBe(0);
     const data = JSON.parse(json.stdout).data as {
-      gated: Array<{ id: string; origin: string; reason: string; title: string }>;
+      gated: Array<{
+        blockers: Array<{ id: string; state: string }>;
+        id: string;
+        origin: string;
+        reason: string;
+        title: string;
+      }>;
       works: Array<{ id: string }>;
     };
 
@@ -146,7 +168,7 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     expect(blockedError.message).toBe(reason);
     expect(data.works.map((work) => work.id)).toEqual([startable]);
     expect(data.gated).toEqual([
-      { id: gated, title: "gated root", origin: "policy-breakdown", reason },
+      { id: gated, title: "gated root", origin: "policy-breakdown", reason, blockers: [] },
     ]);
     expect(human.stdout.indexOf(startable)).toBeLessThan(human.stdout.indexOf(gated));
     expect(human.stdout).toContain(reason);
