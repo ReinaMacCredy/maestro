@@ -139,7 +139,11 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     };
 
     expect(blocked.exitCode).not.toBe(0);
-    expect((JSON.parse(blocked.stderr) as { error: { reason: string } }).error.reason).toBe(reason);
+    const blockedError = (JSON.parse(blocked.stderr) as {
+      error: { message: string; origin: string };
+    }).error;
+    expect(blockedError.origin).toBe("policy-breakdown");
+    expect(blockedError.message).toBe(reason);
     expect(data.works.map((work) => work.id)).toEqual([startable]);
     expect(data.gated).toEqual([
       { id: gated, title: "gated root", origin: "policy-breakdown", reason },
@@ -147,19 +151,31 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     expect(human.stdout.indexOf(startable)).toBeLessThan(human.stdout.indexOf(gated));
     expect(human.stdout).toContain(reason);
 
+    const child = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "gated child",
+        "--kind",
+        "task",
+        "--parent",
+        gated,
+      ]),
+    );
+    // With an OPEN child the parent stays gated (open-children predicate).
+    const withOpenChild = await runCli(fixture, ["ready", "--json"]);
+    expect(withOpenChild.exitCode).toBe(0);
+    const openChildData = JSON.parse(withOpenChild.stdout).data as {
+      gated: Array<{ id: string }>;
+      works: Array<{ id: string }>;
+    };
+    expect(openChildData.gated.map((work) => work.id)).toContain(gated);
+
+    expect((await runCli(fixture, ["work", "start", child])).exitCode).toBe(0);
     expect(
-      (
-        await runCli(fixture, [
-          "work",
-          "add",
-          "gated child",
-          "--kind",
-          "task",
-          "--parent",
-          gated,
-        ])
-      ).exitCode,
+      (await runCli(fixture, ["work", "done", child, "--evidence", "child done"])).exitCode,
     ).toBe(0);
+
     const after = await runCli(fixture, ["ready", "--json"]);
     expect(after.exitCode).toBe(0);
     const afterData = JSON.parse(after.stdout).data as {
