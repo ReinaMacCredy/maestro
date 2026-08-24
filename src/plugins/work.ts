@@ -619,6 +619,7 @@ export const workPlugin: BuiltInPlugin = {
       context.cli.register("work show", (invocation): CliResult => {
         const work = requireWork(context, requirePosition(invocation, 0, "work id"));
         const children = service.children(work.id);
+        const blockers = blockersFor(context, work.id);
         const notes = context.store.database
           .query<WorkNoteRow, [string]>(
             "SELECT text, created_at FROM work_notes WHERE work_id = ? ORDER BY id",
@@ -628,12 +629,20 @@ export const workPlugin: BuiltInPlugin = {
         const childLines = children.map(
           (child) => `child: ${child.id} [${child.state}] ${child.title}`,
         );
+        const blockerLines = blockers.map(
+          (blocker) => `blocker: ${blocker.id} [${blocker.state}] ${blocker.title}`,
+        );
         return {
-          data: { work, children, notes },
-          text: [formatWork(work), ...childLines, ...notes.map((note) => `note: ${note.text}`)].join("\n"),
+          data: { work, children, blockers, notes },
+          text: [
+            formatWork(work),
+            ...blockerLines,
+            ...childLines,
+            ...notes.map((note) => `note: ${note.text}`),
+          ].join("\n"),
         };
       }, {
-        description: "Show one work item with its evidence, children, and notes.",
+        description: "Show one work item with its blockers, evidence, children, and notes.",
         positionals: [{ name: "id", required: true }],
       }),
     );
