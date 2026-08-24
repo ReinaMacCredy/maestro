@@ -50,6 +50,9 @@ const tools = [
   },
 ] as const;
 
+const verbResultLimit = 10;
+const recipeResultLimit = 5;
+
 function toolResult(value: unknown): McpToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(value) }],
@@ -77,31 +80,57 @@ function requiredString(
   return field;
 }
 
-function verbMatches(verb: CliCommandDescriptor, query: string): boolean {
-  const values = [
-    verb.name,
+function tokens(query: string): string[] {
+  return query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function verbScore(verb: CliCommandDescriptor, queryTokens: string[]): number {
+  const name = verb.name.toLowerCase();
+  const metadata = [
     verb.description,
     ...verb.flags.flatMap((flag) => [flag.name, flag.description]),
-  ];
-  return values.some((value) => value.toLowerCase().includes(query));
+  ].map((value) => value.toLowerCase());
+  return queryTokens.reduce((score, token) => {
+    if (name.includes(token)) return score + 2;
+    return metadata.some((value) => value.includes(token)) ? score + 1 : score;
+  }, 0);
+}
+
+function recipeScore(
+  entry: { description: string; name: string },
+  queryTokens: string[],
+): number {
+  const name = entry.name.toLowerCase();
+  const description = entry.description.toLowerCase();
+  return queryTokens.reduce((score, token) => {
+    if (name.includes(token)) return score + 2;
+    return description.includes(token) ? score + 1 : score;
+  }, 0);
 }
 
 function find(context: PluginContext, query: string): unknown {
-  const normalized = query.trim().toLowerCase();
-  const verbs = context.cli.describeCommands().filter((verb) => verbMatches(verb, normalized));
+  const queryTokens = tokens(query);
+  const verbs = context.cli.describeCommands()
+    .map((verb, index) => ({ index, score: verbScore(verb, queryTokens), verb }))
+    .filter((match) => match.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, verbResultLimit)
+    .map(({ verb }) => verb);
   const recipe = context.recipe as RecipeService | undefined;
   const recipes = (recipe?.list() ?? [])
-    .filter((entry) =>
-      [entry.name, entry.description].some((value) =>
-        value.toLowerCase().includes(normalized),
-      ),
-    )
-    .map(({ name, description }) => ({
+    .map((entry, index) => ({ index, score: recipeScore(entry, queryTokens), entry }))
+    .filter((match) => match.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, recipeResultLimit)
+    .map(({ entry: { name, description } }) => ({
       name,
       description,
       command: `maestro recipe show ${name}`,
     }));
-  return { query, verbs, recipes };
+  const hint = verbs.length === 0 && recipes.length === 0
+    ? "Run maestro help for the full verb list, or try shorter single-word keywords."
+    : undefined;
+  return { query, verbs, recipes, ...(hint ? { hint } : {}) };
 }
 
 function parseVerbLine(line: string): string[] {
