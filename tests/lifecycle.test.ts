@@ -278,6 +278,64 @@ test("64 update ignores untracked source files but still refuses tracked changes
   });
 });
 
+test("65 install writes wiring from the freshly synced runtime, not the stale running one", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // Change the wiring content in the source and commit it; the installed
+    // runtime still carries the old constant in its loaded code.
+    const installPath = join(source, "src", "plugins", "install.ts");
+    const installCode = await readFile(installPath, "utf8");
+    await writeFile(
+      installPath,
+      installCode.replace("method depth:", "method depth (v2-marker):"),
+    );
+    await git(source, ["add", "src/plugins/install.ts"]);
+    await git(source, ["commit", "-m", "wiring marker"]);
+    const newCommit = await git(source, ["rev-parse", "HEAD"]);
+
+    const installed = await runInstalled(fixture, runtime, source, ["install"]);
+
+    expect(installed.exitCode).toBe(0);
+    expect(await readFile(join(source, "AGENTS.md"), "utf8")).toContain("v2-marker");
+    expect(await readFile(join(source, "CLAUDE.md"), "utf8")).toContain("v2-marker");
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(newCommit);
+  });
+});
+
+test("66 update treats an ahead-only source as nothing to pull yet still refuses true divergence", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    await writeFile(join(source, "ahead-note.txt"), "local ahead\n");
+    await git(source, ["add", "ahead-note.txt"]);
+    await git(source, ["commit", "-m", "local ahead"]);
+    const aheadHead = await git(source, ["rev-parse", "HEAD"]);
+
+    const ahead = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(ahead.exitCode).toBe(0);
+    expect(ahead.stdout).toContain("nothing to pull");
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(aheadHead);
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(aheadHead);
+
+    await writeFile(join(publisher, "remote-note.txt"), "remote\n");
+    await git(publisher, ["add", "remote-note.txt"]);
+    await git(publisher, ["commit", "-m", "remote divergence"]);
+    await git(publisher, ["push", "origin", "main"]);
+
+    const diverged = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(diverged.exitCode).not.toBe(0);
+    expect(diverged.stderr).toContain("UPDATE_DIVERGED");
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(aheadHead);
+  });
+});
+
 test("48 status and hook brief report local drift unless auto-update checks are disabled", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);
