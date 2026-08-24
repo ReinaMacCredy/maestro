@@ -159,6 +159,56 @@ function requireWork(context: PluginContext, id: string): WorkRecord {
   return work;
 }
 
+function blockersFor(context: PluginContext, id: string): WorkRecord[] {
+  return context.store.database
+    .query<{ id: string }, [string]>(
+      `SELECT blocker_id AS id
+       FROM work_blockers
+       WHERE work_id = ?
+       ORDER BY CAST(SUBSTR(blocker_id, 2) AS INTEGER)`,
+    )
+    .all(id)
+    .map((blocker) => requireWork(context, blocker.id));
+}
+
+function unresolvedBlockers(context: PluginContext, id: string): WorkRecord[] {
+  return blockersFor(context, id).filter(
+    (blocker) => blocker.state !== "done" && blocker.state !== "cancelled",
+  );
+}
+
+function nextBlockerCommand(
+  context: PluginContext,
+  blocker: WorkRecord,
+  sessionId: string,
+): string {
+  if (blocker.state === "active") {
+    return blocker.heldBy === sessionId
+      ? `maestro work done ${blocker.id}`
+      : "maestro status";
+  }
+  return unresolvedBlockers(context, blocker.id).length === 0
+    ? `maestro work start ${blocker.id}`
+    : "maestro ready";
+}
+
+function blockerDetails(
+  context: PluginContext,
+  id: string,
+  blockers: WorkRecord[],
+  sessionId: string,
+): { blockers: string[]; command: string; reason: string } {
+  const command = nextBlockerCommand(context, blockers[0] as WorkRecord, sessionId);
+  return {
+    blockers: blockers.map((blocker) => blocker.id),
+    command,
+    reason:
+      `${id} is blocked by unresolved work: ` +
+      `${blockers.map((blocker) => `${blocker.id} [${blocker.state}]`).join(", ")}; ` +
+      `run: ${command}`,
+  };
+}
+
 function listWork(context: PluginContext): WorkRecord[] {
   return context.store.database
     .query<WorkRow, []>("SELECT * FROM work ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)")
@@ -350,6 +400,14 @@ export const workPlugin: BuiltInPlugin = {
             holder: work.heldBy,
           });
         }
+        const blockers = unresolvedBlockers(context, id);
+        if (blockers.length > 0) {
+          const details = blockerDetails(context, id, blockers, session.id);
+          throw new CliError("BLOCKED", details.reason, {
+            blockers: details.blockers,
+            command: details.command,
+          });
+        }
         const children = service.children(id);
         const result = await context.events.waterfall<
           WorkGateInput,
@@ -462,12 +520,13 @@ export const workPlugin: BuiltInPlugin = {
               claims: string[];
               evidence: string;
               proofs: string[];
+              sessionId: string;
               work: WorkRecord;
             },
             GateResult
           >(
             "work.done",
-            { work, children: service.children(id), evidence, claims, proofs },
+            { work, children: service.children(id), evidence, claims, proofs, sessionId },
             async (completion) => ({ blocked: false, evidence: completion.evidence }),
           );
           blockIfNeeded(result);
@@ -617,23 +676,23 @@ export const workPlugin: BuiltInPlugin = {
             childrenByParent.set(work.parentId, children);
           }
           const items = allWorks.map((work) => {
-            const blockers = context.store.database
-              .query<{ id: string; state: string; cancelled_at: string | null }, [string]>(
-                `SELECT blocker.id, blocker.state, blocker.cancelled_at
-                 FROM work_blockers edge
-                 JOIN work blocker ON blocker.id = edge.blocker_id
-                 WHERE edge.work_id = ?`,
-              )
-              .all(work.id)
-              .map((blocker) => ({
-                id: blocker.id,
-                state: blocker.cancelled_at ? "cancelled" : blocker.state,
-              }));
+            const blockers = blockersFor(context, work.id).map((blocker) => ({
+              heldBy: blocker.heldBy,
+              id: blocker.id,
+              state: blocker.state,
+            }));
             return { ...work, blockers };
           });
           const candidates = context.ready.project(items);
-          const works: WorkRecord[] = [];
-          const gated: Array<{ id: string; origin: string; reason: string; title: string }> = [];
+          const works: typeof items = [];
+          const gated: Array<{
+            blockers: Array<{ id: string; state: string }>;
+            command?: string;
+            id: string;
+            origin: string;
+            reason: string;
+            title: string;
+          }> = [];
           const sessionId = context.sessions.current().id;
           for (const work of candidates) {
             const result = await context.events.waterfall<
@@ -647,6 +706,10 @@ export const workPlugin: BuiltInPlugin = {
             if (result.blocked) {
               const details = gateDetails(result);
               gated.push({
+                blockers: work.blockers.map((blocker) => ({
+                  id: blocker.id,
+                  state: blocker.state,
+                })),
                 id: work.id,
                 title: work.title,
                 ...details,
@@ -654,6 +717,23 @@ export const workPlugin: BuiltInPlugin = {
             } else {
               works.push(work);
             }
+          }
+          for (const work of items) {
+            if (work.state !== "open") continue;
+            const blockers = work.blockers.filter(
+              (blocker) => blocker.state !== "done" && blocker.state !== "cancelled",
+            );
+            if (blockers.length === 0) continue;
+            const fullBlockers = blockers.map((blocker) => requireWork(context, blocker.id));
+            const details = blockerDetails(context, work.id, fullBlockers, sessionId);
+            gated.push({
+              id: work.id,
+              title: work.title,
+              origin: "work-blockers",
+              reason: details.reason,
+              blockers: blockers.map((blocker) => ({ id: blocker.id, state: blocker.state })),
+              command: details.command,
+            });
           }
           const lines = [
             ...works.map((work) => `${work.id} ${work.title}`),

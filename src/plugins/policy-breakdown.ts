@@ -39,21 +39,29 @@ function breakdownGate(work: WorkRecord): Gate {
   };
 }
 
-function openChildrenGate(work: WorkRecord, open: WorkRecord[]): Gate {
+function openChildrenGate(work: WorkRecord, open: WorkRecord[], sessionId: string): Gate {
   const ids = open.map((child) => child.id);
+  const next = open.find(
+    (child) => child.state === "active" && child.heldBy === sessionId,
+  ) ?? open.find((child) => child.state === "active") ?? open[0] as WorkRecord;
+  const command = next.state === "active"
+    ? next.heldBy === sessionId
+      ? `maestro work done ${next.id}`
+      : "maestro status"
+    : `maestro work start ${next.id}`;
   return {
     blocked: true,
     origin: "policy-breakdown",
     reason:
       `${work.id} has open children: ${ids.join(", ")}; finish them first: ` +
-      `maestro work start ${ids[0]}`,
+      command,
   };
 }
 
-function gateFor(work: WorkRecord, children: WorkRecord[]): Gate | null {
+function gateFor(work: WorkRecord, children: WorkRecord[], sessionId: string): Gate | null {
   if (needsBreakdown(work, children)) return breakdownGate(work);
   const open = openChildren(children);
-  return open.length > 0 ? openChildrenGate(work, open) : null;
+  return open.length > 0 ? openChildrenGate(work, open, sessionId) : null;
 }
 
 export const policyBreakdownPlugin: BuiltInPlugin = {
@@ -66,7 +74,7 @@ export const policyBreakdownPlugin: BuiltInPlugin = {
       context.effect(() =>
         context.events.on<WorkGateInput>(
           event,
-          async (input, next) => gateFor(input.work, input.children) ?? next(),
+          async (input, next) => gateFor(input.work, input.children, input.sessionId) ?? next(),
         )
       );
     }
