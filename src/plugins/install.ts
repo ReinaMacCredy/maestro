@@ -15,6 +15,7 @@ import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
+import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
@@ -462,6 +463,10 @@ export const installPlugin: BuiltInPlugin = {
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
 
+        const skillCommit = (await readGitHeadCommit(sourceRoot)) ??
+          (await readStampedCommit(runtimeRoot));
+        const skillSync = skillCommit ? await materializeSkills(home, skillCommit) : null;
+
         if (!installedRuntime) {
           await writeFile(
             shim,
@@ -482,6 +487,7 @@ export const installPlugin: BuiltInPlugin = {
             `maestro installed for ${repo}` +
             "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/, AGENTS.md, CLAUDE.md" +
             " (AGENTS.md and CLAUDE.md carry the same maestro block for Claude and Codex)" +
+            (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),

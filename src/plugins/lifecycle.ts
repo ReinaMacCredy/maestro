@@ -12,6 +12,7 @@ import {
   uninstallRepo,
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
+import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
 interface CommandResult {
@@ -212,11 +213,14 @@ async function update(): Promise<CliResult> {
   const packageJson = JSON.parse(
     await readFile(join(source, "package.json"), "utf8"),
   ) as PackageJson;
+  const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
+  const skillText = skillSync ? formatSkillSync(skillSync) : "";
   return {
     data: { aheadOnly, oldCommit, newCommit, version: packageJson.version },
-    text: aheadOnly
+    text: (aheadOnly
       ? `${oldCommit} up to date (source ahead of upstream; nothing to pull)\nmaestro ${packageJson.version}`
-      : `${oldCommit} -> ${newCommit}\nmaestro ${packageJson.version}`,
+      : `${oldCommit} -> ${newCommit}\nmaestro ${packageJson.version}`) +
+      (skillText ? `\n${skillText}` : ""),
   };
 }
 
