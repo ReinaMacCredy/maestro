@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture } from "./helpers.ts";
+import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 test("122 decision draft stores a rationale body and show renders it", async () => {
   await withFixture(async (fixture) => {
@@ -129,5 +129,69 @@ test("128 bundle save ingests a foreign trio dir straight to archived", async ()
     const found = await runCli(fixture, ["search", "dissolve"]);
     expect(found.stdout).toContain("card-sprawl");
     expect(found.stdout).toContain("(bundle, archived)");
+  });
+});
+
+test("129 install materializes the 4 maestro skills with a version stamp and refs", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const skillsRoot = join(fixture.home, ".agents", "skills");
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-ship"]) {
+      const skill = await Bun.file(join(skillsRoot, name, "SKILL.md")).text();
+      expect(skill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
+    }
+    for (const reference of [
+      join("maestro-design", "references", "unattended.md"),
+      join("maestro-work", "references", "worktree.md"),
+      join("maestro-work", "references", "conflict-handoff.md"),
+      join("maestro-work", "references", "tdd-antipatterns.md"),
+      join("maestro-ship", "references", "audit.md"),
+      join("maestro-ship", "references", "learning.md"),
+    ]) {
+      expect(await Bun.file(join(skillsRoot, reference)).exists()).toBe(true);
+    }
+    const antipatterns = await Bun.file(
+      join(skillsRoot, "maestro-work", "references", "tdd-antipatterns.md"),
+    ).text();
+    const entries = antipatterns.split("\n").filter((line) => /^\| .+ \| .+ \| .+ \|$/.test(line));
+    expect(entries.length).toBeGreaterThan(4);
+    expect(entries.length).toBeLessThanOrEqual(21);
+  });
+});
+
+test("130 skills re-materialize only on version change", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    const skillPath = join(fixture.home, ".agents", "skills", "maestro-bundle", "SKILL.md");
+    const original = await Bun.file(skillPath).text();
+    const edited = `${original}\nlocal drift marker\n`;
+    await writeFile(skillPath, edited);
+    await runCli(fixture, ["install"], { PATH: path });
+    expect(await Bun.file(skillPath).text()).toBe(edited);
+    const stale = edited.replace(
+      /<!-- maestro-skill-version: [0-9a-f]{40} -->/,
+      `<!-- maestro-skill-version: ${"0".repeat(40)} -->`,
+    );
+    await writeFile(skillPath, stale);
+    await runCli(fixture, ["install"], { PATH: path });
+    const refreshed = await Bun.file(skillPath).text();
+    expect(refreshed).not.toContain("local drift marker");
+    expect(refreshed).not.toContain("0".repeat(40));
+  });
+});
+
+test("131 an unstamped foreign skill dir is skipped, never clobbered", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const foreign = join(fixture.home, ".agents", "skills", "maestro-design");
+    await mkdir(foreign, { recursive: true });
+    await writeFile(join(foreign, "SKILL.md"), "# user-owned design skill\n");
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    expect(await Bun.file(join(foreign, "SKILL.md")).text()).toBe("# user-owned design skill\n");
+    expect(installed.stdout).toContain("skipped: maestro-design");
   });
 });
