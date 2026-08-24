@@ -6,6 +6,7 @@ import {
   cp,
   mkdir,
   readFile,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -386,8 +387,35 @@ export const installPlugin: BuiltInPlugin = {
 
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
+        const stampBefore = await readInstallStamp(runtimeRoot);
         await syncRuntime(sourceRoot, runtimeRoot);
         await stampRuntime(sourceRoot, runtimeRoot);
+        // Wiring content (mirror blocks, hook sources) lives as constants in
+        // the RUNNING process, which may still be the pre-sync runtime; when
+        // the synced code changed, re-exec install in the new runtime so the
+        // wiring it writes matches the code it installs.
+        const stampAfter = await readInstallStamp(runtimeRoot);
+        // import.meta.dir is symlink-resolved (e.g. /var -> /private/var);
+        // compare realpaths or the runtime never recognizes itself.
+        const runningRoot = resolve(import.meta.dir, "..", "..");
+        if (
+          !process.env.MAESTRO_INSTALL_REEXEC &&
+          runningRoot === (await realpath(runtimeRoot)) &&
+          stampBefore.status === "valid" &&
+          stampAfter.status === "valid" &&
+          stampBefore.stamp.commit !== stampAfter.stamp.commit
+        ) {
+          const child = Bun.spawnSync(
+            [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2)],
+            {
+              cwd: repo,
+              env: { ...process.env, MAESTRO_INSTALL_REEXEC: "1" },
+              stdout: "inherit",
+              stderr: "inherit",
+            },
+          );
+          process.exit(child.exitCode ?? 1);
+        }
         if (
           resolve(sourceRoot) !== resolve(runtimeRoot) &&
           (await readGitHeadCommit(sourceRoot)) !== null

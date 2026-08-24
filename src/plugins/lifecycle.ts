@@ -164,20 +164,35 @@ async function update(): Promise<CliResult> {
     oldCommit,
     upstream.stdout,
   ]);
+  let aheadOnly = false;
   if (ancestor.exitCode !== 0) {
-    throw new CliError(
-      "UPDATE_DIVERGED",
-      "Maestro source has diverged from its upstream; rebase or reset it, then run maestro update",
-      { fix: "rebase or reset the Maestro source branch, then run maestro update" },
-    );
+    // A source strictly ahead of its upstream has nothing to pull; still
+    // resync so the runtime converges on the current source commit.
+    const behind = await command(source, [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      upstream.stdout,
+      oldCommit,
+    ]);
+    if (behind.exitCode !== 0) {
+      throw new CliError(
+        "UPDATE_DIVERGED",
+        "Maestro source has diverged from its upstream; rebase or reset it, then run maestro update",
+        { fix: "rebase or reset the Maestro source branch, then run maestro update" },
+      );
+    }
+    aheadOnly = true;
   }
-  const merged = await command(source, ["git", "merge", "--ff-only", upstream.stdout]);
-  if (merged.exitCode !== 0) {
-    throw new CliError(
-      "UPDATE_MERGE_FAILED",
-      `cannot fast-forward the Maestro source: ${merged.stderr || "git merge --ff-only failed"}; fix the checkout, then run maestro update`,
-      { fix: "fix the source checkout, then run maestro update" },
-    );
+  if (!aheadOnly) {
+    const merged = await command(source, ["git", "merge", "--ff-only", upstream.stdout]);
+    if (merged.exitCode !== 0) {
+      throw new CliError(
+        "UPDATE_MERGE_FAILED",
+        `cannot fast-forward the Maestro source: ${merged.stderr || "git merge --ff-only failed"}; fix the checkout, then run maestro update`,
+        { fix: "fix the source checkout, then run maestro update" },
+      );
+    }
   }
   let staged: string | null = null;
   try {
@@ -198,8 +213,10 @@ async function update(): Promise<CliResult> {
     await readFile(join(source, "package.json"), "utf8"),
   ) as PackageJson;
   return {
-    data: { oldCommit, newCommit, version: packageJson.version },
-    text: `${oldCommit} -> ${newCommit}\nmaestro ${packageJson.version}`,
+    data: { aheadOnly, oldCommit, newCommit, version: packageJson.version },
+    text: aheadOnly
+      ? `${oldCommit} up to date (source ahead of upstream; nothing to pull)\nmaestro ${packageJson.version}`
+      : `${oldCommit} -> ${newCommit}\nmaestro ${packageJson.version}`,
   };
 }
 
