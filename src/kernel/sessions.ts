@@ -139,6 +139,7 @@ export class Sessions {
         break;
       }
       if (result.exitCode !== 0) break;
+      if (!result.stdout) break;
       const output = result.stdout.toString().trim();
       const match = output.match(/^(\d+)\s+(.+)$/);
       if (!match) break;

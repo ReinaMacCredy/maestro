@@ -60,7 +60,7 @@ test("1 recipe list prints the shipped catalog with one-line descriptions", asyn
     const lines = result.stdout.trim().split("\n");
 
     expect(result.exitCode).toBe(0);
-    expect(lines.map((line) => line.split("\t", 1)[0])).toEqual(recipeNames);
+    expect(lines.map((line) => line.split("\t", 1)[0])).toEqual([...recipeNames]);
     for (const line of lines) expect(line).toMatch(/^[^\t]+\t[^\n]+$/);
   });
 });

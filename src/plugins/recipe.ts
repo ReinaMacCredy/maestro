@@ -52,7 +52,9 @@ class Recipes implements RecipeService {
   register(entry: RecipeEntry): Disposer {
     if (this.entries.has(entry.name)) throw new Error(`recipe already registered: ${entry.name}`);
     this.entries.set(entry.name, entry);
-    return () => this.entries.delete(entry.name);
+    return () => {
+      this.entries.delete(entry.name);
+    };
   }
 }
 

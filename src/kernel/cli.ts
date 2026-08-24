@@ -161,7 +161,9 @@ export class Cli {
         ? this.oneLine(options.rootDescription, options.rootDescription)
         : undefined,
     });
-    return () => this.commands.delete(command);
+    return () => {
+      this.commands.delete(command);
+    };
   }
 
   registerFlag(command: string, flag: string, definition: FlagDefinition): Disposer {
