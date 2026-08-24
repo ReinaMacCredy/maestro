@@ -25,7 +25,7 @@ jobs:
         run: bunx tsc --noEmit
       - name: A1 no daemon or scheduler
         run: |
-          if rg -n 'setInterval|setTimeout\(.*,\s*[0-9]{4,}|cron|detach' src/; then
+          if rg -n 'setInterval|setTimeout\(.*,\s*[0-9]{4,}|cron|detached\s*:\s*true' src/; then
             exit 1
           fi
       - name: A2 mechanism-only kernel

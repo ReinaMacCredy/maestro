@@ -339,6 +339,7 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
   expect(workflow).toContain("bun test");
   expect(workflow).toContain("bunx tsc --noEmit");
   expect(workflow).toContain("setInterval");
+  expect(workflow).toContain("detached\\s*:\\s*true");
   expect(workflow).toContain("test-first");
   expect(workflow).toContain("--lane");
   expect(workflow).not.toMatch(/schedule:|cron:/);
