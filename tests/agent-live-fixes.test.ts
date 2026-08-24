@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { chmod, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
@@ -502,5 +502,87 @@ test("115 msg read renders an explicit empty state", async () => {
     const empty = await runCli(fixture, ["msg", "read"]);
     expect(empty.exitCode).toBe(0);
     expect(empty.stdout.trim()).toBe("no new messages");
+  });
+});
+
+test("116 repository install from the installed runtime avoids machine-global writes", async () => {
+  await withFixture(async (fixture) => {
+    const { path, shim } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const runtimeRoot = join(fixture.home, ".maestro", "runtime");
+    const runtimeCli = join(runtimeRoot, "bin", "maestro.ts");
+    const stamp = join(runtimeRoot, ".maestro-install.json");
+    const secondRepo = join(fixture.root, "second-repo");
+    await mkdir(secondRepo, { recursive: true });
+    const stampBefore = await readFile(stamp, "utf8");
+    const shimBefore = await readFile(shim, "utf8");
+
+    await chmod(stamp, 0o444);
+    await chmod(shim, 0o444);
+    try {
+      const child = Bun.spawn([process.execPath, runtimeCli, "install"], {
+        cwd: secondRepo,
+        env: {
+          ...process.env,
+          HOME: fixture.home,
+          PATH: path,
+          MAESTRO_SESSION_ID: "installed-runtime-test",
+          MAESTRO_SESSION_PID: String(process.pid),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout).toContain("maestro installed for");
+      expect(await readFile(stamp, "utf8")).toBe(stampBefore);
+      expect(await readFile(shim, "utf8")).toBe(shimBefore);
+      expect(await readFile(join(secondRepo, "AGENTS.md"), "utf8")).toContain("maestro:begin");
+    } finally {
+      if (await Bun.file(stamp).exists()) await chmod(stamp, 0o644);
+      if (await Bun.file(shim).exists()) await chmod(shim, 0o755);
+    }
+  });
+});
+
+test("117 ready distinguishes terminal and blocked ledgers from an empty ledger", async () => {
+  await withFixture(async (fixture) => {
+    const done = idFrom(await runCli(fixture, ["work", "add", "finished", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", done])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", done, "--evidence", "finished"])).exitCode).toBe(0);
+
+    const doneOnly = await runCli(fixture, ["ready"]);
+    expect(doneOnly.exitCode).toBe(0);
+    expect(doneOnly.stdout).toContain("no ready work; all tracked work is closed");
+    expect(doneOnly.stdout).not.toContain("work add");
+
+    const cancelled = idFrom(
+      await runCli(fixture, ["work", "add", "abandoned", "--kind", "idea"]),
+    );
+    expect(
+      (await runCli(fixture, ["work", "cancel", cancelled, "--reason", "obsolete"])).exitCode,
+    ).toBe(0);
+    const mixedTerminal = await runCli(fixture, ["ready"]);
+    expect(mixedTerminal.stdout).toContain("no ready work; all tracked work is closed");
+    expect(mixedTerminal.stdout).not.toContain("work add");
+
+    const peer = {
+      MAESTRO_SESSION_ID: "other-holder",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const active = idFrom(
+      await runCli(fixture, ["work", "add", "held elsewhere", "--kind", "idea"], peer),
+    );
+    expect((await runCli(fixture, ["work", "start", active], peer)).exitCode).toBe(0);
+    const blocked = await runCli(fixture, ["ready"]);
+    expect(blocked.stdout).toContain("no ready work; inspect tracked work: maestro work list");
+    expect(blocked.stdout).not.toContain("work add");
   });
 });
