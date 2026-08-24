@@ -762,3 +762,45 @@ test("120 policy-breakdown exposes structured child blockers and one recovery co
     expect(error.command).toBe(`maestro work done ${child}`);
   });
 });
+
+test("121 work show preserves declared blockers after they resolve", async () => {
+  await withFixture(async (fixture) => {
+    const blocker = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "red tests",
+        "--kind",
+        "task",
+        "--atomic-reason",
+        "focused contract",
+      ]),
+    );
+    const implementation = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "implementation",
+        "--kind",
+        "implement",
+        "--blocked-by",
+        blocker,
+      ]),
+    );
+
+    const open = await runCli(fixture, ["work", "show", implementation]);
+    expect(open.exitCode).toBe(0);
+    expect(open.stdout).toContain(`blocker: ${blocker} [open] red tests`);
+
+    expect((await runCli(fixture, ["work", "start", blocker])).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, ["work", "done", blocker, "--evidence", "red tests"])).exitCode,
+    ).toBe(0);
+    const resolved = await runCli(fixture, ["work", "show", implementation]);
+    expect(resolved.exitCode).toBe(0);
+    expect(resolved.stdout).toContain(`blocker: ${blocker} [done] red tests`);
+
+    const help = await runCli(fixture, ["help", "work", "show"]);
+    expect(help.stdout).toContain("blockers");
+  });
+});
