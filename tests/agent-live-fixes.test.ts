@@ -254,3 +254,74 @@ test("103 plugin list states what each policy requires", async () => {
     expect(text.stdout).toContain("test:");
   });
 });
+
+test("104 a cancelled child does not satisfy the breakdown gate", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]));
+    const child = idFrom(
+      await runCli(fixture, ["work", "add", "throwaway", "--kind", "task", "--parent", parent]),
+    );
+    expect(
+      (await runCli(fixture, ["work", "cancel", child, "--reason", "not doing this"])).exitCode,
+    ).toBe(0);
+
+    const blocked = await runCli(fixture, ["work", "start", parent]);
+    expect(blocked.exitCode).not.toBe(0);
+    const error = (JSON.parse(blocked.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("GATE_BLOCKED");
+    expect(error.origin).toBe("policy-breakdown");
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.stdout).toContain(`${parent} parent feature [gated by policy-breakdown`);
+  });
+});
+
+test("105 trace on an unknown id fails NOT_FOUND instead of empty success", async () => {
+  await withFixture(async (fixture) => {
+    const missing = await runCli(fixture, ["trace", "w99"]);
+    expect(missing.exitCode).not.toBe(0);
+    const error = (JSON.parse(missing.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("NOT_FOUND");
+    expect(error.command).toBe("maestro work list");
+  });
+});
+
+test("106 empty ready with held work points at finishing it", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(
+      await runCli(fixture, ["work", "add", "solo task", "--kind", "task", "--atomic-reason", "single edit"]),
+    );
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    expect(ready.stdout).toContain(`you hold ${id}`);
+    expect(ready.stdout).toContain(`maestro work done ${id}`);
+    expect(ready.stdout).not.toContain('work add "<title>"');
+  });
+});
+
+test("107 install reports what it wrote and names the dual-harness mirror", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    expect(installed.stdout).toContain(".claude/");
+    expect(installed.stdout).toContain(".codex/");
+    expect(installed.stdout).toContain("AGENTS.md");
+    expect(installed.stdout).toContain("CLAUDE.md");
+    expect(installed.stdout).toContain("same maestro block");
+  });
+});
+
+test("108 help documents the kind vocabulary and ready's gated listing", async () => {
+  await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["help", "work"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("feature|task|bug|chore|implement|idea|research");
+
+    const root = await runCli(fixture, ["help"]);
+    expect(root.exitCode).toBe(0);
+    expect(root.stdout).toContain("gated");
+  });
+});
