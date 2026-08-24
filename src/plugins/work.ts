@@ -92,8 +92,10 @@ function getWork(context: PluginContext, id: string): WorkRecord | null {
 }
 
 function expireDeadLease(context: PluginContext, work: WorkRecord): WorkRecord {
-  if (!work.heldBy || context.sessions.isAlive(work.heldBy)) return work;
+  if (!work.heldBy) return work;
   const previousHolder = work.heldBy;
+  const liveness = context.sessions.liveness(previousHolder);
+  if (liveness.live) return work;
   const updatedAt = new Date().toISOString();
   const result = context.store.database
     .query(
@@ -107,9 +109,28 @@ function expireDeadLease(context: PluginContext, work: WorkRecord): WorkRecord {
     type: "work.lease.expire",
     entityType: "work",
     entityId: work.id,
-    payload: { holder: previousHolder },
+    payload: { holder: previousHolder, reason: liveness.reason },
   });
   return { ...work, state: "open", heldBy: null, updatedAt };
+}
+
+function latestLeaseExpiration(
+  context: PluginContext,
+  id: string,
+): { holder: string; reason: string } | null {
+  const event = context.log
+    .list("work", id)
+    .filter((candidate) =>
+      candidate.type === "work.start" ||
+      candidate.type === "work.done" ||
+      candidate.type === "work.lease.expire"
+    )
+    .at(-1);
+  if (event?.type !== "work.lease.expire") return null;
+  const payload = event.payload as { holder?: unknown; reason?: unknown };
+  return typeof payload.holder === "string" && typeof payload.reason === "string"
+    ? { holder: payload.holder, reason: payload.reason }
+    : null;
 }
 
 function requireWork(context: PluginContext, id: string): WorkRecord {
@@ -339,7 +360,18 @@ export const workPlugin: BuiltInPlugin = {
                 holder: work.heldBy,
               });
             }
-            throw new CliError("LEASE_REQUIRED", `${id} must be started before completion`);
+            const command = `maestro work start ${id}`;
+            const expired = latestLeaseExpiration(context, id);
+            const explanation = expired
+              ? `; previous lease held by ${expired.holder} expired because ${expired.reason}`
+              : "";
+            throw new CliError(
+              "LEASE_REQUIRED",
+              `${id} must be started before completion; run: ${command}${explanation}`,
+              expired
+                ? { command, expiredHolder: expired.holder, expiredReason: expired.reason }
+                : { command },
+            );
           }
           const evidence = textOption(invocation, "evidence") ?? "";
           const claims = listOption(invocation, "claim");
