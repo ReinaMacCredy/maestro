@@ -97,9 +97,31 @@ function decisionHit(context: PluginContext, id: string, snippet: string): Searc
     : null;
 }
 
+function bundleHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
+  const bundle = context.store.database
+    .query<{ id: string; state: string }, [string]>(
+      "SELECT id, state FROM bundles WHERE id = ?",
+    )
+    .get(id);
+  return bundle
+    ? {
+        key: `native:bundle:${bundle.id}`,
+        snippets: snippet ? [snippet] : [],
+        summary: {
+          id: bundle.id,
+          kind: "bundle",
+          source: "native",
+          state: bundle.state,
+          title: bundle.id,
+        },
+      }
+    : null;
+}
+
 function nativeHit(context: PluginContext, match: SearchRow): SearchHit | null {
   if (match.surface === "work") return workHit(context, match.entity_id, match.text);
   if (match.surface === "decision") return decisionHit(context, match.entity_id, match.text);
+  if (match.surface === "bundle") return bundleHit(context, match.entity_id, match.text);
   if (match.surface === "note") {
     const owner = context.store.database
       .query<{ work_id: string }, [number]>("SELECT work_id FROM work_notes WHERE id = ?")
