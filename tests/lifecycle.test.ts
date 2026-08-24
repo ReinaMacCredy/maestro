@@ -343,3 +343,36 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
   expect(workflow).toContain("--lane");
   expect(workflow).not.toMatch(/schedule:|cron:/);
 });
+
+test("53 a clean install type-checks without runtime dependencies", async () => {
+  await withFixture(async (fixture) => {
+    const cleanCheckout = join(fixture.root, "clean-checkout");
+    await mkdir(cleanCheckout, { recursive: true });
+    for (const entry of ["package.json", "tsconfig.json", "bin", "src", "tests"]) {
+      await cp(join(projectRoot, entry), join(cleanCheckout, entry), { recursive: true });
+    }
+    const lockfile = join(projectRoot, "bun.lock");
+    if (existsSync(lockfile)) await cp(lockfile, join(cleanCheckout, "bun.lock"));
+
+    const installed = await runTool([process.execPath, "install"], cleanCheckout);
+    const typechecked = await runTool(
+      [process.execPath, "x", "tsc", "--noEmit"],
+      cleanCheckout,
+    );
+    const packageJson = JSON.parse(await readFile(join(cleanCheckout, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+
+    expect(installed.exitCode).toBe(0);
+    expect(typechecked).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+    expect(packageJson.dependencies ?? {}).toEqual({});
+    expect(Object.keys(packageJson.devDependencies ?? {}).sort()).toEqual([
+      "@types/bun",
+      "typescript",
+    ]);
+    for (const version of Object.values(packageJson.devDependencies ?? {})) {
+      expect(version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+    }
+  });
+});
