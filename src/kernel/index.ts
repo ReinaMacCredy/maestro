@@ -21,7 +21,7 @@ export async function run(args: string[]): Promise<number> {
   const events = new Events();
   const log = new EventLog(store);
   const ready = new Ready();
-  const sessions = new Sessions(store);
+  const sessions = new Sessions(store, storeLocation.root);
   const loader = new Loader(repo, home, builtInPlugins, {
     cli,
     events,
@@ -33,7 +33,9 @@ export async function run(args: string[]): Promise<number> {
 
   try {
     await loader.loadAll();
-    return await cli.dispatch(args);
+    const exitCode = await cli.dispatch(args);
+    sessions.refresh();
+    return exitCode;
   } finally {
     await loader.unloadAll();
     store.close();

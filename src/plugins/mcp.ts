@@ -199,6 +199,7 @@ async function callTool(
 }
 
 async function handleRequest(context: PluginContext, request: JsonRpcRequest): Promise<void> {
+  context.sessions.refresh();
   const hasId = Object.prototype.hasOwnProperty.call(request, "id");
   const id = request.id ?? null;
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {

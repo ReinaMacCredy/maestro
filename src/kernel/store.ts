@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 export interface StoreLocation {
   orphanPath: string | null;
   path: string;
+  root: string;
 }
 
 export function resolveStoreLocation(cwd: string): StoreLocation {
@@ -28,7 +29,7 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
       diagnostic.startsWith("fatal: not a git repository (or any of the parent directories):") ||
       diagnostic.startsWith("fatal: not a git repository (or any parent up to mount point ")
     ) {
-      return { orphanPath: null, path: fallback };
+      return { orphanPath: null, path: fallback, root: resolve(cwd) };
     }
     throw new Error(`cannot resolve git repository: ${diagnostic || `git exited ${result.exitCode}`}`);
   }
@@ -45,7 +46,7 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
   const path = join(commonRoot, ".maestro", "maestro.db");
   const privatePath = join(checkoutRoot, ".maestro", "maestro.db");
   const orphanPath = privatePath !== path && existsSync(privatePath) ? privatePath : null;
-  return { orphanPath, path };
+  return { orphanPath, path, root: checkoutRoot };
 }
 
 export class Store {
