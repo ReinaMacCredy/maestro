@@ -664,6 +664,9 @@ export const workPlugin: BuiltInPlugin = {
           const held = allWorks.filter(
             (work) => work.state === "active" && work.heldBy === sessionId,
           );
+          const allTerminal = allWorks.length > 0 && allWorks.every(
+            (work) => work.state === "done" || work.state === "cancelled",
+          );
           return {
             data: { works, gated },
             text: lines.length > 0
@@ -671,7 +674,11 @@ export const workPlugin: BuiltInPlugin = {
               : held.length > 0
               ? `no ready work; you hold ${held.map((work) => work.id).join(", ")}; ` +
                 `finish it: maestro work done ${held[0]?.id}`
-              : 'no ready work; add some: maestro work add "<title>"',
+              : allTerminal
+              ? "no ready work; all tracked work is closed"
+              : allWorks.length === 0
+              ? 'no ready work; add some: maestro work add "<title>"'
+              : "no ready work; inspect tracked work: maestro work list",
           };
         },
         { description: "List ready work and gated items with their blockers." },

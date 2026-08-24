@@ -290,8 +290,17 @@ process.exitCode = exitCode;
 `;
 }
 
+async function samePath(left: string, right: string): Promise<boolean> {
+  if (resolve(left) === resolve(right)) return true;
+  try {
+    return (await realpath(left)) === (await realpath(right));
+  } catch {
+    return false;
+  }
+}
+
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
-  if (resolve(sourceRoot) === resolve(runtimeRoot)) return;
+  if (await samePath(sourceRoot, runtimeRoot)) return;
   await rm(runtimeRoot, { recursive: true, force: true });
   await mkdir(runtimeRoot, { recursive: true });
   for (const entry of ["package.json", "tsconfig.json", "bin", "src"]) {
@@ -336,7 +345,7 @@ export async function stampRuntime(sourceRoot: string, runtimeRoot: string): Pro
     await readFile(join(sourceRoot, "package.json"), "utf8"),
   ) as PackageJson;
   let commit: string | null;
-  if (resolve(sourceRoot) === resolve(runtimeRoot)) {
+  if (await samePath(sourceRoot, runtimeRoot)) {
     commit = await readStampedCommit(sourceRoot);
   } else {
     commit = await readGitHeadCommit(sourceRoot);
@@ -365,62 +374,62 @@ export const installPlugin: BuiltInPlugin = {
         const localBin = join(home, ".local", "bin");
         const shim = join(localBin, "maestro");
         const legacy = join(localBin, "maestro-legacy");
-        const existingLegacy = await executable("maestro-legacy");
-        const existingMaestro = await executable("maestro");
-        if (!existingLegacy && !existingMaestro) {
-          throw new CliError(
-            "ROLLBACK_MISSING",
-            "maestro-legacy must exist on PATH, or an existing maestro must be available to preserve",
-          );
-        }
-        await mkdir(localBin, { recursive: true });
-        if (!existingLegacy && existingMaestro) {
-          await copyFile(existingMaestro, legacy);
-          await chmod(legacy, 0o755);
-        }
-        if (!(await executable("maestro-legacy"))) {
-          throw new CliError(
-            "ROLLBACK_NOT_ON_PATH",
-            `${legacy} was created but maestro-legacy is not available on PATH`,
-          );
-        }
-
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
-        const stampBefore = await readInstallStamp(runtimeRoot);
-        await syncRuntime(sourceRoot, runtimeRoot);
-        await stampRuntime(sourceRoot, runtimeRoot);
-        // Wiring content (mirror blocks, hook sources) lives as constants in
-        // the RUNNING process, which may still be the pre-sync runtime; when
-        // the synced code changed, re-exec install in the new runtime so the
-        // wiring it writes matches the code it installs.
-        const stampAfter = await readInstallStamp(runtimeRoot);
-        // import.meta.dir is symlink-resolved (e.g. /var -> /private/var);
-        // compare realpaths or the runtime never recognizes itself.
-        const runningRoot = resolve(import.meta.dir, "..", "..");
-        if (
-          !process.env.MAESTRO_INSTALL_REEXEC &&
-          runningRoot === (await realpath(runtimeRoot)) &&
-          stampBefore.status === "valid" &&
-          stampAfter.status === "valid" &&
-          stampBefore.stamp.commit !== stampAfter.stamp.commit
-        ) {
-          const child = Bun.spawnSync(
-            [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2)],
-            {
-              cwd: repo,
-              env: { ...process.env, MAESTRO_INSTALL_REEXEC: "1" },
-              stdout: "inherit",
-              stderr: "inherit",
-            },
-          );
-          process.exit(child.exitCode ?? 1);
-        }
-        if (
-          resolve(sourceRoot) !== resolve(runtimeRoot) &&
-          (await readGitHeadCommit(sourceRoot)) !== null
-        ) {
-          await writeSourceRecord(home, sourceRoot);
+        const installedRuntime = await samePath(sourceRoot, runtimeRoot);
+        if (!installedRuntime) {
+          const existingLegacy = await executable("maestro-legacy");
+          const existingMaestro = await executable("maestro");
+          if (!existingLegacy && !existingMaestro) {
+            throw new CliError(
+              "ROLLBACK_MISSING",
+              "maestro-legacy must exist on PATH, or an existing maestro must be available to preserve",
+            );
+          }
+          await mkdir(localBin, { recursive: true });
+          if (!existingLegacy && existingMaestro) {
+            await copyFile(existingMaestro, legacy);
+            await chmod(legacy, 0o755);
+          }
+          if (!(await executable("maestro-legacy"))) {
+            throw new CliError(
+              "ROLLBACK_NOT_ON_PATH",
+              `${legacy} was created but maestro-legacy is not available on PATH`,
+            );
+          }
+
+          const stampBefore = await readInstallStamp(runtimeRoot);
+          await syncRuntime(sourceRoot, runtimeRoot);
+          await stampRuntime(sourceRoot, runtimeRoot);
+          // Wiring content (mirror blocks, hook sources) lives as constants in
+          // the RUNNING process, which may still be the pre-sync runtime; when
+          // the synced code changed, re-exec install in the new runtime so the
+          // wiring it writes matches the code it installs.
+          const stampAfter = await readInstallStamp(runtimeRoot);
+          // import.meta.dir is symlink-resolved (e.g. /var -> /private/var);
+          // compare realpaths or the runtime never recognizes itself.
+          const runningRoot = resolve(import.meta.dir, "..", "..");
+          if (
+            !process.env.MAESTRO_INSTALL_REEXEC &&
+            runningRoot === (await realpath(runtimeRoot)) &&
+            stampBefore.status === "valid" &&
+            stampAfter.status === "valid" &&
+            stampBefore.stamp.commit !== stampAfter.stamp.commit
+          ) {
+            const child = Bun.spawnSync(
+              [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2)],
+              {
+                cwd: repo,
+                env: { ...process.env, MAESTRO_INSTALL_REEXEC: "1" },
+                stdout: "inherit",
+                stderr: "inherit",
+              },
+            );
+            process.exit(child.exitCode ?? 1);
+          }
+          if ((await readGitHeadCommit(sourceRoot)) !== null) {
+            await writeSourceRecord(home, sourceRoot);
+          }
         }
         await writePolicyConfig(join(repo, ".maestro", "config"));
         await writeManagedIgnore(join(repo, ".maestro", ".gitignore"));
@@ -453,11 +462,13 @@ export const installPlugin: BuiltInPlugin = {
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
 
-        await writeFile(
-          shim,
-          `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro.ts")).href)});\n`,
-        );
-        await chmod(shim, 0o755);
+        if (!installedRuntime) {
+          await writeFile(
+            shim,
+            `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro.ts")).href)});\n`,
+          );
+          await chmod(shim, 0o755);
+        }
         context.log.append({
           type: "install",
           entityType: "repo",
