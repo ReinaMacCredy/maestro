@@ -1,0 +1,472 @@
+<title>Maestro Pill</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  /* aicss tokens (task-list + approval-card), three-state theme */
+  :root {
+    --fg: #1a1a1a; --bg: #ffffff; --muted: #a1a1a1; --strong: #1a1a1a;
+    --check: #15a06a; --line: rgba(0,0,0,0.08); --hover: #fafafa;
+    --shadow: 0 0 0 0.5px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.02);
+    --shine: linear-gradient(90deg,#1a1a1a 0%,#1a1a1a 30%,rgba(26,26,26,.45) 45%,rgba(26,26,26,.45) 55%,#1a1a1a 70%,#1a1a1a 100%);
+    --blue: #3b82f6; --amber: #d98404; --green: #15a06a; --red: #dc4b4b;
+    --pill-bg: rgba(255,255,255,0.86); --pill-fg: #1a1a1a;
+    --desk-a: #cfd6e6; --desk-b: #e9d9d3; --dock: rgba(255,255,255,0.55); --dock-line: rgba(255,255,255,0.7);
+    --ctl-bg: rgba(255,255,255,0.7); --ctl-fg: #1a1a1a;
+    --cmd-bg: #f7f8fa;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fg: #f5f5f5; --bg: #1a1a1a; --muted: #737373; --strong: #f5f5f5;
+      --check: #34d399; --line: rgba(255,255,255,0.12); --hover: #222;
+      --shadow: 0 0 0 0.5px rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+      --shine: linear-gradient(90deg,#f5f5f5 0%,#f5f5f5 30%,rgba(245,245,245,.45) 45%,rgba(245,245,245,.45) 55%,#f5f5f5 70%,#f5f5f5 100%);
+      --blue: #60a5fa; --amber: #f2a33a; --green: #34d399; --red: #f07070;
+      --pill-bg: rgba(28,28,30,0.86); --pill-fg: #f5f5f5;
+      --desk-a: #2b2f3f; --desk-b: #3a2f3a; --dock: rgba(40,40,44,0.6); --dock-line: rgba(255,255,255,0.14);
+      --ctl-bg: rgba(20,20,22,0.7); --ctl-fg: #f5f5f5;
+      --cmd-bg: #111;
+    }
+  }
+  :root[data-theme="dark"] {
+    --fg: #f5f5f5; --bg: #1a1a1a; --muted: #737373; --strong: #f5f5f5;
+    --check: #34d399; --line: rgba(255,255,255,0.12); --hover: #222;
+    --shadow: 0 0 0 0.5px rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    --shine: linear-gradient(90deg,#f5f5f5 0%,#f5f5f5 30%,rgba(245,245,245,.45) 45%,rgba(245,245,245,.45) 55%,#f5f5f5 70%,#f5f5f5 100%);
+    --blue: #60a5fa; --amber: #f2a33a; --green: #34d399; --red: #f07070;
+    --pill-bg: rgba(28,28,30,0.86); --pill-fg: #f5f5f5;
+    --desk-a: #2b2f3f; --desk-b: #3a2f3a; --dock: rgba(40,40,44,0.6); --dock-line: rgba(255,255,255,0.14);
+    --ctl-bg: rgba(20,20,22,0.7); --ctl-fg: #f5f5f5;
+    --cmd-bg: #111;
+  }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: var(--sans); font-size: 13px; color: var(--fg);
+    background: var(--desk-a);
+    overflow: hidden;
+  }
+
+  /* ---------- mock desktop ---------- */
+  .desk {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(60% 50% at 20% 20%, var(--desk-b), transparent 70%),
+      radial-gradient(50% 60% at 85% 70%, var(--desk-b), transparent 70%),
+      var(--desk-a);
+  }
+  .dock {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    height: 58px; width: min(760px, 92vw); border-radius: 18px;
+    background: var(--dock); border: 0.5px solid var(--dock-line);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 12px;
+  }
+  .dock i { width: 40px; height: 40px; border-radius: 10px; display: block; opacity: .55;
+    background: linear-gradient(145deg, rgba(255,255,255,.7), rgba(120,120,140,.5)); }
+  .dock i:nth-child(3n) { background: linear-gradient(145deg,#8ab4ff,#4f6bd8); }
+  .dock i:nth-child(5n) { background: linear-gradient(145deg,#ff9f7a,#d85a4f); }
+  .dock i:nth-child(7n) { background: linear-gradient(145deg,#8fe0b0,#2f9d6a); }
+
+  /* ---------- controls (prototype only) ---------- */
+  .ctl {
+    position: fixed; top: 14px; right: 14px; z-index: 5;
+    display: flex; flex-direction: column; gap: 8px; width: 260px;
+    padding: 12px; border-radius: 12px; background: var(--ctl-bg); color: var(--ctl-fg);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow);
+    font-size: 12px;
+  }
+  .ctl h1 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .ctl .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ctl button {
+    font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 7px; cursor: pointer;
+    border: 0.5px solid var(--line); background: var(--bg); color: var(--fg);
+  }
+  .ctl button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: transparent; }
+  .ctl button:focus-visible, .pill:focus-visible, .copy:focus-visible, .todoHead:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .ctl p { margin: 0; color: var(--muted); line-height: 1.45; }
+  .ctl code { font-family: var(--mono); font-size: 11px; }
+
+  /* ---------- the widget ---------- */
+  .widget {
+    position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%);
+    z-index: 10; display: flex; flex-direction: column; align-items: center;
+    width: 380px;
+  }
+  .panelWrap {
+    width: 100%;
+    display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows 280ms cubic-bezier(.22,1,.36,1), opacity 200ms ease;
+    pointer-events: none;
+  }
+  .widget.open .panelWrap { grid-template-rows: 1fr; opacity: 1; pointer-events: auto; }
+  .panelInner { min-height: 0; overflow: hidden; }
+  .panel {
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: min(620px, 78vh); overflow-y: auto; padding: 8px 8px 10px;
+    border-radius: 16px; background: var(--bg); box-shadow: var(--shadow);
+    margin-bottom: 8px;
+  }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .panelFoot {
+    display: flex; justify-content: space-between; gap: 8px; padding: 2px 6px 0;
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .panelFoot code { font-family: var(--mono); font-size: 10.5px; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 30px; padding: 0 12px 0 10px; border-radius: 999px;
+    background: var(--pill-bg); color: var(--pill-fg); border: 0;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    box-shadow: var(--shadow); cursor: pointer; font: inherit; font-size: 12px; font-weight: 500;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+    transition: transform 160ms ease;
+  }
+  .pill:hover { transform: translateY(-1px); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .pill[data-state="working"] .dot { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent); }
+  .pill[data-state="attention"] .dot { background: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
+  .pill .sep { color: var(--muted); }
+  .pill .n { min-width: 1ch; }
+  .pill .bang { color: var(--amber); font-weight: 600; }
+  .pill .pin { display: none; width: 12px; height: 12px; color: var(--muted); margin-left: 2px; }
+  .widget.pinned .pill .pin { display: block; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 45%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+  /* ---------- section labels ---------- */
+  .sect {
+    display: flex; align-items: center; gap: 8px; padding: 6px 6px 0;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  }
+  .sect .cnt { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* ---------- aicss task-list (TodoList.module.css, verbatim tokens) ---------- */
+  .todo { width: 100%; font-size: 13px; color: var(--fg); background: var(--bg); border-radius: 12px; padding: 6px 12px 12px; box-shadow: var(--shadow); box-sizing: border-box; }
+  .todoHead { display: flex; width: 100%; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; cursor: pointer; color: var(--fg); font: inherit; font-size: 13px; min-height: 22px; }
+  .todoHeadIcon { position: relative; width: 16px; height: 16px; flex: none; color: var(--muted); }
+  .todoListIcon, .todoChevron, .todoHeadCheck { position: absolute; inset: 0; margin: auto; transition: opacity 140ms ease; }
+  .todoListIcon, .todoChevron { width: 13px; height: 13px; }
+  .todoHeadCheck { width: 16px; height: 16px; color: var(--check); }
+  .todoChevron { opacity: 0; transition: opacity 140ms ease, transform 220ms ease; }
+  .todoHead[aria-expanded="false"] .todoChevron { transform: rotate(-90deg); }
+  .todoHead:hover .todoListIcon, .todoHead:hover .todoHeadPie, .todoHead:hover .todoHeadCheck { opacity: 0; }
+  .todoHead:hover .todoChevron { opacity: 1; }
+  .todoTitle { font-weight: 500; }
+  .todoRepo { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .todoCount { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .todoCollapsible { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 280ms ease, opacity 200ms ease; }
+  .todoCollapsible.isCollapsed { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+  .todoInner { min-height: 0; overflow: hidden; }
+  .todoList { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 10px 0 0; }
+  .todoItem { display: flex; align-items: flex-start; gap: 9px; line-height: 18px; color: var(--muted); animation: todo-item-in 360ms ease backwards; animation-delay: calc(var(--i, 0) * 50ms); }
+  .todoItem.child { padding-left: 14px; }
+  @keyframes todo-item-in { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: translateY(0); } }
+  .todoIconWrap { position: relative; width: 16px; height: 16px; flex: none; margin-top: 1px; }
+  .todoIcon { position: absolute; inset: 0; width: 16px; height: 16px; color: var(--muted); opacity: 0; transition: opacity 320ms ease; }
+  .todoIcon.on { opacity: 1; }
+  .todoIcon.strong { color: var(--strong); }
+  .todoLabel { position: relative; font-weight: 400; color: var(--muted); transition: color 360ms ease; min-width: 0; }
+  .todoLabel::before { content: attr(data-label); position: absolute; inset: 0; background: var(--shine); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; opacity: 0; transition: opacity 360ms ease; pointer-events: none; }
+  .todoItem.active .todoLabel { color: transparent; }
+  .todoItem.active .todoLabel::before { opacity: 1; animation: todo-shine 2.25s cubic-bezier(.25,.1,.25,1) infinite; }
+  .todoItem.done .todoLabel { color: var(--muted); text-decoration: line-through; }
+  .todoItem.cancelled .todoLabel { color: var(--muted); text-decoration: line-through; opacity: .6; }
+  .todoItem.gated .todoLabel { color: var(--muted); }
+  @keyframes todo-shine { 0%,18% { background-position: 100% 0; } 82%,100% { background-position: 0% 0; } }
+  .todoMeta { margin-left: auto; flex: none; display: inline-flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding-top: 2px; }
+  .todoMeta .id { color: var(--muted); }
+  .todoMeta .who { padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
+  .todoMeta .who.codex { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+  .todoMeta .who.claude { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+  .todoMeta .lock { color: var(--muted); }
+  @property --todo-pie { syntax: "<percentage>"; inherits: true; initial-value: 0%; }
+  .todoHeadPie { position: absolute; inset: 0; margin: auto; width: 13px; height: 13px; border-radius: 50%; color: var(--strong); transition: opacity 140ms ease, --todo-pie 400ms ease; }
+  .todoHeadPieRing { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; color: var(--muted); }
+  .todoHeadPie::after { content: ""; position: absolute; inset: 2.6px; border-radius: 50%; background: conic-gradient(currentColor var(--todo-pie, 0%), transparent 0); }
+  .todoIdle { padding: 10px 0 0; color: var(--muted); font-size: 12.5px; }
+
+  /* ---------- aicss approval-card (ApprovalCard.module.css, tokens mapped) ---------- */
+  .card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--bg); box-shadow: var(--shadow); color: var(--fg); animation: ap-card-in 380ms cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+  @keyframes ap-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .head { display: flex; align-items: center; gap: 8px; height: 24px; }
+  .icon { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--cmd-bg); color: var(--fg); }
+  .icon svg { width: 14px; height: 14px; }
+  .icon[data-variant="decision"] { background: color-mix(in srgb, var(--blue) 12%, var(--bg)); color: var(--blue); }
+  .icon[data-variant="attention"] { background: color-mix(in srgb, var(--amber) 14%, var(--bg)); color: var(--amber); }
+  .icon[data-variant="gated"] { background: color-mix(in srgb, var(--fg) 8%, var(--bg)); color: var(--fg); }
+  .icon[data-variant="msg"] { background: color-mix(in srgb, var(--green) 12%, var(--bg)); color: var(--green); }
+  .headText { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+  .title { font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sub code { font-family: var(--mono); font-size: 10.5px; }
+  .age { flex: none; margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .age.hot { color: var(--amber); font-weight: 500; }
+  .planSummary { font-size: 12.5px; line-height: 1.45; color: var(--muted); white-space: pre-line; padding-left: 2px; }
+  .planSummary b { color: var(--fg); font-weight: 500; }
+  .cmdBlock { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 8px; background: var(--cmd-bg); border: 0.5px solid var(--line); }
+  .cmd { margin: 0; flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.4; color: var(--fg); white-space: nowrap; overflow-x: auto; }
+  .cmd::-webkit-scrollbar { display: none; }
+  .cmd .p { color: var(--muted); }
+  .copy { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 6px; border: 0; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 500; background: var(--fg); color: var(--bg); }
+  .copy svg { width: 12px; height: 12px; }
+  .copy[data-done="true"] { background: var(--green); color: #fff; }
+  .allClear { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--bg); box-shadow: var(--shadow); color: var(--muted); font-size: 12.5px; }
+  .allClear svg { width: 16px; height: 16px; color: var(--check); }
+
+  .toast { position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 8px); z-index: 20; padding: 6px 10px; border-radius: 8px; background: var(--fg); color: var(--bg); font-size: 12px; opacity: 0; transition: opacity 160ms ease, transform 160ms ease; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .todoItem, .card { animation: none; }
+    .todoIcon, .todoLabel, .todoLabel::before, .panelWrap, .todoCollapsible { transition: none; }
+    .todoItem.active .todoLabel::before { animation: none; }
+    .pill[data-state="attention"] .dot { animation: none; }
+  }
+  @media (max-width: 480px) { .widget { width: 94vw; } .ctl { width: auto; left: 14px; } }
+</style>
+
+<div class="desk" aria-hidden="true"></div>
+
+<aside class="ctl" aria-label="Prototype controls">
+  <h1>Prototype</h1>
+  <div class="row" id="scen">
+    <button data-s="now" aria-pressed="true">Now (store thật)</button>
+    <button data-s="quiet" aria-pressed="false">Yên</button>
+    <button data-s="attn" aria-pressed="false">Cần bạn</button>
+  </div>
+  <div class="row" id="theme">
+    <button data-t="" aria-pressed="true">Theme: hệ thống</button>
+    <button data-t="light" aria-pressed="false">Sáng</button>
+    <button data-t="dark" aria-pressed="false">Tối</button>
+  </div>
+  <p>Hover pill để bung, click để ghim. Dữ liệu maestro là snapshot <code>work list / ready / decision list --json</code> lúc 2026-08-25; astra, synara và packet STALLED_LEASE là giả để xem bố cục.</p>
+</aside>
+
+<div class="widget" id="widget">
+  <div class="panelWrap">
+    <div class="panelInner">
+      <div class="panel" id="panel"></div>
+    </div>
+  </div>
+  <button class="pill" id="pill" data-state="working" aria-expanded="false" aria-controls="panel">
+    <span class="dot"></span>
+    <span><span class="n" id="nActive">0</span> active</span>
+    <span class="sep">·</span>
+    <span><span class="n" id="nReady">0</span> ready</span>
+    <span class="sep" id="bangSep">·</span>
+    <span class="bang" id="bang"><span class="n" id="nAttn">0</span> !</span>
+    <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/></svg>
+  </button>
+</div>
+
+<div class="dock" aria-hidden="true">
+  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+</div>
+
+<div class="toast" id="toast">Đã copy</div>
+
+<script>
+// ---------- data: real snapshot (maestro) + fakes (astra, synara) ----------
+const SNAP_AT = new Date("2026-08-25T11:40:00Z");
+const SESSIONS = {
+  "01a03893-3def-7643-a2ac-6078976a34ef": { harness: "codex", live: true },
+  "4763685d-6962-4abb-bd85-c372c1d58508": { harness: "claude", live: true },
+};
+const REAL = {
+  repo: "maestro",
+  works: [
+    { id:"w15", title:"SLP doctrine adoption: envelope/handback, evidence layers, attention, supervisor", state:"open", parentId:null, heldBy:null, gated:[{id:"w21",state:"active"}] },
+    { id:"w16", title:"D1 text: maestro-work dispatch envelope, handback vocabulary", state:"done", parentId:"w15", heldBy:null },
+    { id:"w17", title:"D1 text: maestro-verify evidence layers + handback fields", state:"done", parentId:"w15", heldBy:null },
+    { id:"w18", title:"D1 text: maestro-design intake + council reconcile", state:"done", parentId:"w15", heldBy:null },
+    { id:"w19", title:"D2 maestro attention: 4 detectors, attention table, lease-chain routing", state:"done", parentId:"w15", heldBy:null },
+    { id:"w20", title:"D3 supervisor start|stop|status: detached tick loop, pid file", state:"done", parentId:"w15", heldBy:null },
+    { id:"w21", title:"D3 PostToolUse delivery: install wires the event for both harnesses", state:"active", parentId:"w15", heldBy:"01a03893-3def-7643-a2ac-6078976a34ef" },
+  ],
+  decisions: [
+    { id:"d10", state:"draft", text:"desktop shell: Tauri v2, macOS + Windows, pill anchored bottom-center of work_area", rationale:"Windows in scope drops the Swift shell; Electron rejected on ~150MB idle for a pill.", updatedAt:"2026-08-25T11:31:00Z" },
+    { id:"d13", state:"draft", text:"desktop approval-card v1 is read-only; app never mutates the store", rationale:"user asked for 'xem'; lock action rejected.", updatedAt:"2026-08-25T11:31:30Z" },
+  ],
+  attention: [],
+  msgs: [],
+};
+const ASTRA = {
+  repo: "astra", fake: true,
+  works: [
+    { id:"w3", title:"plugin-engine: hot-reload SLP plugins without restart", state:"active", parentId:null, heldBy:"4763685d-6962-4abb-bd85-c372c1d58508" },
+    { id:"w4", title:"web-debug recipe: capture console + network in one bundle", state:"open", parentId:null, heldBy:null },
+  ],
+  decisions: [], attention: [], msgs: [],
+};
+const SYNARA = { repo:"synara", fake:true, works: [], decisions: [], attention: [], msgs: [] };
+
+const ATTN_FAKE = { kind:"STALLED_LEASE", subject:"w21", session:"01a03893-3def-7643-a2ac-6078976a34ef", minutes:34, repo:"maestro" };
+const MSG_FAKE = { from:"01a03893-3def-7643-a2ac-6078976a34ef", to:"you", text:"w21 needs a ruling: keep PostToolUse p50 250ms budget or widen to 400ms for codex?", repo:"maestro", minutes:6 };
+
+const SCENARIOS = {
+  now:   () => [REAL, ASTRA, SYNARA],
+  quiet: () => [ { ...REAL, works: REAL.works.map(w => ({...w, state: w.id==="w21"?"done":w.state, heldBy:null, gated:undefined})).map(w => w.id==="w15"?{...w,state:"done"}:w), decisions: [], attention: [], msgs: [] }, { ...ASTRA, works: ASTRA.works.map(w=>({...w,state:"done",heldBy:null})) }, SYNARA ],
+  attn:  () => [ { ...REAL, attention:[ATTN_FAKE], msgs:[MSG_FAKE] }, ASTRA, SYNARA ],
+};
+
+// ---------- helpers ----------
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const short = id => id ? id.slice(0,8) : "";
+const who = id => { const s = SESSIONS[id]; return s ? `<span class="who ${s.harness}">${s.harness} ${short(id)}</span>` : `<span class="who">${short(id)}</span>`; };
+const ago = iso => { const m = Math.max(0, Math.round((SNAP_AT - new Date(iso)) / 60000)); return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m/60)}h` : `${Math.round(m/1440)}d`; };
+
+const ICONS = {
+  check: `<svg class="todoIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  arrow: `<svg class="todoIcon strong" viewBox="0 0 24 24" aria-hidden="true"><path d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  dashed: `<svg class="todoIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="1.8 3.6" stroke-linecap="round"/></svg>`,
+  lock: `<svg class="todoIcon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 12.5h6M9.5 12.5v-2a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  x: `<svg class="todoIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 9.5 5 5m0-5-5 5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  list: `<svg class="todoListIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5h8M13 12h8M13 19h8m-18-2 2 2 4-4M3 7l2 2 4-4"/></svg>`,
+  chevron: `<svg class="todoChevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m19.5 8.25-7.5 7.5-7.5-7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  headCheck: `<svg class="todoHeadCheck" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" fill="currentColor"/></svg>`,
+  copy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`,
+  tick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>`,
+  decision: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11h6M9 15h4M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
+  attention: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`,
+  gated: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`,
+  msg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.4A8 8 0 1 1 21 12z"/></svg>`,
+  clear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`,
+};
+
+// ---------- task-list per repo ----------
+const collapsed = new Set();
+function renderTodo(repo) {
+  const ws = repo.works;
+  const total = ws.length, done = ws.filter(w => w.state==="done").length;
+  const active = ws.filter(w => w.state==="active").length;
+  const allDone = total > 0 && done === total;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const isC = collapsed.has(repo.repo);
+  const headIcon = total === 0 ? ICONS.list : allDone ? ICONS.headCheck : active
+    ? `<span class="todoHeadPie" style="--todo-pie:${pct}%" aria-hidden="true"><svg class="todoHeadPieRing" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="2.2 4.4" stroke-linecap="round"/></svg></span>`
+    : ICONS.list;
+  const byParent = new Map();
+  for (const w of ws) { const k = w.parentId ?? null; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(w); }
+  const rows = []; let i = 0;
+  const visit = (pid, depth) => {
+    for (const w of byParent.get(pid) ?? []) {
+      const st = w.state === "open" && w.gated ? "gated" : w.state;
+      const icon = st==="done" ? ICONS.check : st==="active" ? ICONS.arrow : st==="cancelled" ? ICONS.x : st==="gated" ? ICONS.lock : ICONS.dashed;
+      const meta = st==="active" && w.heldBy ? who(w.heldBy) : st==="gated" ? `<span class="lock">chờ ${w.gated.map(g=>g.id).join(", ")}</span>` : "";
+      rows.push(`<li class="todoItem ${st} ${depth?"child":""}" style="--i:${i++}">
+        <span class="todoIconWrap">${icon.replace('class="todoIcon', 'class="todoIcon on')}</span>
+        <span class="todoLabel" data-label="${esc(w.title)}">${esc(w.title)}</span>
+        <span class="todoMeta"><span class="id">${w.id}</span>${meta}</span>
+      </li>`);
+      visit(w.id, depth+1);
+    }
+  };
+  visit(null, 0);
+  return `<div class="todo" data-repo="${repo.repo}">
+    <button type="button" class="todoHead" aria-expanded="${!isC}" aria-label="Toggle ${repo.repo}">
+      <span class="todoHeadIcon">${headIcon}${ICONS.chevron}</span>
+      <span class="todoTitle">${repo.repo}</span>
+      ${repo.fake ? `<span class="todoRepo">(giả)</span>` : ""}
+      <span class="todoCount">${total ? `${done}/${total}` : "idle"}</span>
+    </button>
+    <div class="todoCollapsible ${isC?"isCollapsed":""}"><div class="todoInner">
+      ${total ? `<ul class="todoList">${rows.join("")}</ul>` : `<div class="todoIdle">Không có work đang theo dõi.</div>`}
+    </div></div>
+  </div>`;
+}
+
+// ---------- approval cards (read-only + copy) ----------
+function cmdHtml(cmd) {
+  return `<div class="cmdBlock"><pre class="cmd"><span class="p">$ </span>${esc(cmd)}</pre><button type="button" class="copy" data-cmd="${esc(cmd)}">${ICONS.copy}Copy</button></div>`;
+}
+function card(variant, title, sub, body, cmd, age, hot, i) {
+  return `<div class="card" style="--i:${i}">
+    <div class="head"><span class="icon" data-variant="${variant}">${ICONS[variant]}</span>
+      <div class="headText"><div class="title">${title}</div><div class="sub">${sub}</div></div>
+      <span class="age ${hot?"hot":""}">${age}</span></div>
+    ${body ? `<div class="planSummary">${body}</div>` : ""}
+    ${cmdHtml(cmd)}
+  </div>`;
+}
+function renderCards(repos) {
+  const out = []; let i = 0;
+  for (const r of repos) {
+    for (const a of r.attention) {
+      out.push(card("attention", `${a.kind} ${a.subject}`, `<code>${r.repo}</code> · holder ${who(a.session)}`,
+        `Lease còn active nhưng session chưa tick <b>${a.minutes} phút</b> (ngưỡng 30). Không ai khác có thể start ${a.subject} cho tới khi lease hết hạn hoặc holder done.`,
+        `maestro trace ${a.subject}`, `${a.minutes}m`, true, i++));
+    }
+    for (const m of r.msgs) {
+      out.push(card("msg", `Tin từ ${short(m.from)}`, `<code>${r.repo}</code> · ${who(m.from)} → bạn`, esc(m.text),
+        `maestro msg send ${short(m.from)} "..."`, `${m.minutes}m`, false, i++));
+    }
+    for (const d of r.decisions.filter(d => d.state === "draft")) {
+      const h = Math.round((SNAP_AT - new Date(d.updatedAt)) / 3600000);
+      out.push(card("decision", `${d.id} chờ lock`, `<code>${r.repo}</code> · draft`, `<b>${esc(d.text)}</b>\n${esc(d.rationale)}`,
+        `maestro decision lock ${d.id}`, ago(d.updatedAt), h >= 24, i++));
+    }
+    for (const w of r.works.filter(w => w.gated)) {
+      out.push(card("gated", `${w.id} bị gate`, `<code>${r.repo}</code> · policy-breakdown`,
+        `Còn con chưa xong: <b>${w.gated.map(g => `${g.id} [${g.state}]`).join(", ")}</b>. ${w.id} chỉ done được khi các con đóng.`,
+        `maestro ready`, "", false, i++));
+    }
+  }
+  return out;
+}
+
+// ---------- panel + pill ----------
+let scenario = "now";
+function render() {
+  const repos = SCENARIOS[scenario]();
+  const cards = renderCards(repos);
+  const nActive = repos.reduce((n, r) => n + r.works.filter(w => w.state==="active").length, 0);
+  const nReady = repos.reduce((n, r) => n + r.works.filter(w => w.state==="open" && !w.gated).length, 0);
+  const nAttn = cards.length;
+  $("#nActive").textContent = nActive; $("#nReady").textContent = nReady; $("#nAttn").textContent = nAttn;
+  $("#bang").style.display = nAttn ? "" : "none"; $("#bangSep").style.display = nAttn ? "" : "none";
+  $("#pill").dataset.state = nAttn ? "attention" : nActive ? "working" : "idle";
+  $("#panel").innerHTML = `
+    <div class="sect">Cần bạn <span class="cnt">${nAttn}</span></div>
+    ${cards.length ? cards.join("") : `<div class="allClear">${ICONS.clear}Không có gì chờ bạn.</div>`}
+    <div class="sect">Work <span class="cnt">${nActive} active · ${nReady} ready</span></div>
+    ${repos.map(renderTodo).join("")}
+    <div class="panelFoot"><span>cập nhật 1s trước · poll 1s</span><span><code>${repos.length} repo</code> · read-only</span></div>`;
+}
+
+const widget = $("#widget"), pill = $("#pill");
+let openT, closeT, pinned = false;
+const setOpen = v => { widget.classList.toggle("open", v || pinned); pill.setAttribute("aria-expanded", String(v || pinned)); };
+widget.addEventListener("mouseenter", () => { clearTimeout(closeT); openT = setTimeout(() => setOpen(true), 120); });
+widget.addEventListener("mouseleave", () => { clearTimeout(openT); closeT = setTimeout(() => setOpen(false), 350); });
+pill.addEventListener("click", () => { pinned = !pinned; widget.classList.toggle("pinned", pinned); setOpen(pinned); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { pinned = false; widget.classList.remove("pinned"); setOpen(false); } });
+
+$("#panel").addEventListener("click", async e => {
+  const head = e.target.closest(".todoHead");
+  if (head) { const r = head.closest(".todo").dataset.repo; collapsed.has(r) ? collapsed.delete(r) : collapsed.add(r); render(); return; }
+  const btn = e.target.closest(".copy");
+  if (btn) {
+    try { await navigator.clipboard.writeText(btn.dataset.cmd); } catch {}
+    btn.dataset.done = "true"; btn.innerHTML = `${ICONS.tick}Đã copy`;
+    const t = $("#toast"); t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1200);
+    setTimeout(() => { btn.dataset.done = "false"; btn.innerHTML = `${ICONS.copy}Copy`; }, 1600);
+  }
+});
+
+$("#scen").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  scenario = b.dataset.s;
+  for (const x of $("#scen").children) x.setAttribute("aria-pressed", String(x === b));
+  render(); setOpen(true); pinned = true; widget.classList.add("pinned");
+});
+$("#theme").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.t) document.documentElement.dataset.theme = b.dataset.t; else delete document.documentElement.dataset.theme;
+  for (const x of $("#theme").children) x.setAttribute("aria-pressed", String(x === b));
+});
+
+render();
+</script>
