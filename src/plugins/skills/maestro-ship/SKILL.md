@@ -14,12 +14,15 @@ state changes.
 
 - Run every VERIFY.md scenario against its work item's acceptance/claims and
   fill the Result column; run each anti-goal check (grep, diff, readback).
-- For risky seams, spot-check assertion strength before filling PASS:
-  hand-flip 2-3 mutants in the new logic (invert a condition, off-by-one a
-  boundary, append text to an asserted message) and the suite must go red
-  each time; restore after each. A surviving mutant is a weak or missing
-  test and a FAIL of that scenario, not a side note - beware substring
-  matchers like `toThrow(string)` that pass on a changed message.
+- For risky seams, spot-check assertion strength before filling PASS.
+  Derive mutants from the record, not at random: bend the code toward each
+  alternative the linked decisions rejected - the suite must go red each
+  time, and a survivor is a weak or missing test and a FAIL of that
+  scenario, not a side note (beware substring matchers like
+  `toThrow(string)` that pass on a changed message). Then probe each input
+  edge no decision settled (whitespace, case, sign, empty): a suite that
+  stays green there is an open fork to record, not a pass. Restore after
+  each mutant.
 - Re-read the user's exact delivery authority and target before any gate.
 - Select one legal next gate at a time: final verification, independent QA or
   witness, scoped commit, local install, external delivery, or stop. Do not
