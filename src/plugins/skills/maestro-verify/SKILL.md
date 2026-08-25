@@ -24,14 +24,19 @@ state changes.
   back to `maestro-design` for a checkable rewrite - do not invent a
   substitute measurement.
 - For risky seams, spot-check assertion strength before filling PASS.
-  Derive mutants from the record, not at random: bend the code toward each
-  alternative the linked decisions rejected - the suite must go red each
-  time, and a survivor is a weak or missing test and a FAIL of that
-  scenario, not a side note (beware substring matchers like
-  `toThrow(string)` that pass on a changed message). Then probe each input
-  edge no decision settled (whitespace, case, sign, empty): a suite that
-  stays green there is an open fork to record, not a pass. Restore after
-  each mutant.
+  First check the tests assert the decided contract itself: the decided
+  error class, and the message when one was decided - a bare `toThrow()`
+  passes on any thrown value, and a substring matcher like
+  `toThrow(string)` passes on a changed message; a decided contract no
+  assertion pins is a FAIL. Then derive mutants from the record, not at
+  random: bend the code toward each alternative the linked decisions
+  rejected - the suite must go red each time, and a survivor is a weak or
+  missing test and a FAIL of that scenario, not a side note. Last, probe
+  each input edge no decision settled (whitespace, case, sign, empty) by
+  mutating the code (e.g. insert an `input.trim()`), never by only calling
+  the function - a call shows current behavior, a surviving mutant shows no
+  test pins it; a suite that stays green under an edge mutant is an open
+  fork to record, not a pass. Restore after each mutant.
 - Re-read the user's exact delivery authority and target before any gate.
 - Select one legal next gate at a time: final verification, independent QA or
   witness, scoped commit, local install, external delivery, or stop. Do not
