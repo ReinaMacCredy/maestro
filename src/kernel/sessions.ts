@@ -76,6 +76,7 @@ export class Sessions {
   }
 
   refresh(): void {
+    if (process.env.MAESTRO_SESSION_NONE === "1") return;
     const current = this.resolveCurrent();
     if (current.anchor === "pid") return;
     const recorded = this.row(current.id);
@@ -97,6 +98,17 @@ export class Sessions {
 
   record(event: string, harness?: Harness | null): SessionRecord {
     const current = this.resolveCurrent(harness);
+    if (process.env.MAESTRO_SESSION_NONE === "1") {
+      return {
+        anchor: current.anchor,
+        harness: current.harness,
+        id: current.id,
+        pid: current.pid,
+        lastEvent: event,
+        lastSeen: new Date().toISOString(),
+        live: true,
+      };
+    }
     const recorded = this.row(current.id);
     const lastSeen = new Date().toISOString();
     const recordedHarness = harness !== undefined
@@ -163,6 +175,16 @@ export class Sessions {
   private resolveCurrent(harness?: Harness | null): CurrentSession {
     if (this.resolved) {
       if (harness) this.resolved.harness = harness;
+      return this.resolved;
+    }
+    if (process.env.MAESTRO_SESSION_NONE === "1") {
+      this.resolved = {
+        anchor: "pid",
+        harness: null,
+        id: "supervisor",
+        pid: process.pid,
+        scope: this.scope,
+      };
       return this.resolved;
     }
     const explicitPid = Number(process.env.MAESTRO_SESSION_PID);

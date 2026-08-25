@@ -41,6 +41,7 @@ export interface WorkService {
   get(id: string): WorkRecord | null;
   list(): WorkRecord[];
   children(id: string): WorkRecord[];
+  snapshot(): WorkRecord[];
 }
 
 export interface WorkGateInput {
@@ -308,6 +309,11 @@ export const workPlugin: BuiltInPlugin = {
           .all(id)
           .map(toWork)
           .map((work) => expireDeadLease(context, work)),
+      snapshot: () =>
+        context.store.database
+          .query<WorkRow, []>("SELECT * FROM work ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)")
+          .all()
+          .map(toWork),
     };
     context.effect(() => context.provide("work", service));
 

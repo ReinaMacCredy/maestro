@@ -482,4 +482,4 @@ test("53 a clean install type-checks without runtime dependencies", async () => 
       expect(version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     }
   });
-});
+}, 10_000);

@@ -48,6 +48,21 @@ function backdateSession(fixture: Fixture, id: string, minutes: number): void {
   }
 }
 
+async function waitFor<T>(
+  read: () => T | Promise<T>,
+  accept: (value: T) => boolean,
+  timeoutMs = 5_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let value = await read();
+  while (!accept(value) && Date.now() < deadline) {
+    await Bun.sleep(50);
+    value = await read();
+  }
+  expect(accept(value)).toBe(true);
+  return value;
+}
+
 test("133 install materializes the dispatch, handback, dependency, and episode contracts", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
@@ -508,5 +523,155 @@ test("144 attention --json works without a supervisor pid file", async () => {
     expect(envelope.ok).toBe(true);
     expect(envelope.data.detections[0]?.kind).toBe("REPEATED_FAILURE");
     expect(envelope.data.detections[0]?.raised).toBe(true);
+  });
+});
+
+test("145 supervisor start, status, and stop own one advancing pid file", async () => {
+  await withFixture(async (fixture) => {
+    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
+    const controller = session("daemon-controller");
+    let daemonStarted = false;
+    try {
+      const started = await runCli(
+        fixture,
+        ["supervisor", "start", "--interval", "1"],
+        controller,
+      );
+      daemonStarted = started.exitCode === 0;
+      expect(started.exitCode).toBe(0);
+
+      const first = await waitFor(
+        async () =>
+          (await Bun.file(statePath).exists())
+            ? JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null; pid: number }
+            : null,
+        (state) => state !== null && typeof state.lastTick === "string",
+      );
+      expect(first?.pid).toBeGreaterThan(1);
+      const second = await waitFor(
+        async () => JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null },
+        (state) => state.lastTick !== first?.lastTick,
+      );
+      expect(second.lastTick).not.toBe(first?.lastTick);
+
+      const status = await runCli(fixture, ["supervisor", "status"], controller);
+      expect(status.exitCode).toBe(0);
+      expect(status.stdout).toContain("supervisor running");
+      expect(status.stdout).toContain(`pid: ${first?.pid}`);
+      expect(status.stdout).toContain("interval: 1s");
+      expect(status.stdout).toContain("last tick:");
+      expect(status.stdout).toContain("daemon commit: source");
+
+      const refused = await runCli(
+        fixture,
+        ["supervisor", "start", "--interval", "1"],
+        controller,
+      );
+      expect(refused.exitCode).not.toBe(0);
+      expect(refused.stderr).toContain("SUPERVISOR_RUNNING");
+      expect(refused.stderr).toContain(`pid: ${first?.pid}`);
+    } finally {
+      if (daemonStarted || (await Bun.file(statePath).exists())) {
+        const stopped = await runCli(fixture, ["supervisor", "stop"], controller);
+        expect(stopped.exitCode).toBe(0);
+      }
+    }
+
+    expect(await Bun.file(statePath).exists()).toBe(false);
+    const status = await runCli(fixture, ["supervisor", "status"], controller);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toBe("supervisor stopped\n");
+  });
+});
+
+test("146 supervisor reports a killed daemon as stale and permits replacement", async () => {
+  await withFixture(async (fixture) => {
+    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
+    const controller = session("daemon-controller");
+    let replacementStarted = false;
+    try {
+      expect(
+        (await runCli(fixture, ["supervisor", "start", "--interval", "1"], controller)).exitCode,
+      ).toBe(0);
+      const state = await waitFor(
+        async () =>
+          (await Bun.file(statePath).exists())
+            ? JSON.parse(await Bun.file(statePath).text()) as { pid: number }
+            : null,
+        (value) => value !== null,
+      );
+      process.kill(state?.pid as number, "SIGKILL");
+
+      const stale = await waitFor(
+        () => runCli(fixture, ["supervisor", "status"], controller),
+        (result) => result.stdout.includes("supervisor stale"),
+      );
+      expect(stale.stdout).toContain(`pid: ${state?.pid}`);
+      expect(stale.stdout).toContain("run: maestro supervisor stop");
+
+      const replacement = await runCli(
+        fixture,
+        ["supervisor", "start", "--interval", "1"],
+        controller,
+      );
+      expect(replacement.exitCode).toBe(0);
+      replacementStarted = true;
+      const replacementState = JSON.parse(await Bun.file(statePath).text()) as { pid: number };
+      expect(replacementState.pid).not.toBe(state?.pid);
+    } finally {
+      if (replacementStarted || (await Bun.file(statePath).exists())) {
+        await runCli(fixture, ["supervisor", "stop"], controller);
+      }
+    }
+  });
+});
+
+test("147 daemon ticks deliver as supervisor without creating a daemon session", async () => {
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "daemon parent");
+    await startWork(fixture, parent, "lead-session");
+    const child = await addWork(fixture, "daemon stalled child", parent);
+    await startWork(fixture, child, "subject-session");
+    backdateSession(fixture, "subject-session", 45);
+    const controller = session("daemon-controller");
+
+    try {
+      const started = await runCli(
+        fixture,
+        ["supervisor", "start", "--interval", "1"],
+        controller,
+      );
+      expect(started.exitCode).toBe(0);
+      const message = await waitFor(
+        () => {
+          const database = openDatabase(fixture);
+          try {
+            return database
+              .query<{ sender_session: string; target_session: string }, []>(
+                "SELECT sender_session, target_session FROM messages ORDER BY id DESC LIMIT 1",
+              )
+              .get() ?? null;
+          } finally {
+            database.close();
+          }
+        },
+        (value) => value?.sender_session === "supervisor",
+      );
+      expect(message?.target_session).toBe("lead-session");
+
+      const database = openDatabase(fixture);
+      try {
+        const ids = database
+          .query<{ id: string }, []>("SELECT id FROM sessions ORDER BY id")
+          .all()
+          .map((row) => row.id);
+        expect(ids).not.toContain("supervisor");
+        expect(ids).toEqual(["lead-session", "subject-session"]);
+      } finally {
+        database.close();
+      }
+    } finally {
+      await runCli(fixture, ["supervisor", "stop"], controller);
+    }
   });
 });
