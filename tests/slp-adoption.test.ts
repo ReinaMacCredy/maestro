@@ -675,3 +675,185 @@ test("147 daemon ticks deliver as supervisor without creating a daemon session",
     }
   });
 });
+
+test("148 install and uninstall manage idempotent PostToolUse wiring for both harnesses", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const first = await runCli(fixture, ["install"], { PATH: path });
+    expect(first.exitCode).toBe(0);
+
+    const hookPaths = [
+      join(fixture.repo, ".claude", "settings.json"),
+      join(fixture.repo, ".codex", "hooks.json"),
+    ];
+    const firstTexts = await Promise.all(hookPaths.map((hookPath) => Bun.file(hookPath).text()));
+    for (const text of firstTexts) {
+      const config = JSON.parse(text) as {
+        hooks: Record<string, Array<{ hooks: Array<Record<string, unknown>>; matcher?: unknown }>>;
+      };
+      expect(config.hooks.SessionStart).toBeArray();
+      expect(config.hooks.UserPromptSubmit).toBeArray();
+      expect(config.hooks.PostToolUse).toHaveLength(1);
+      const group = config.hooks.PostToolUse?.[0];
+      expect(group).not.toHaveProperty("matcher");
+      expect(group?.hooks).toHaveLength(1);
+      expect(group?.hooks[0]).not.toHaveProperty("statusMessage");
+    }
+
+    const second = await runCli(fixture, ["install"], { PATH: path });
+    expect(second.exitCode).toBe(0);
+    expect(await Promise.all(hookPaths.map((hookPath) => Bun.file(hookPath).text()))).toEqual(
+      firstTexts,
+    );
+
+    const uninstalled = await runCli(fixture, ["uninstall"], { PATH: path });
+    expect(uninstalled.exitCode).toBe(0);
+    for (const hookPath of hookPaths) {
+      if (!(await Bun.file(hookPath).exists())) continue;
+      const config = JSON.parse(await Bun.file(hookPath).text()) as {
+        hooks?: Record<string, unknown>;
+      };
+      expect(config.hooks?.PostToolUse).toBeUndefined();
+    }
+  });
+});
+
+test("149 PostToolUse is a mailbox-only JSON fast path that refreshes last_seen", async () => {
+  await withFixture(async (fixture) => {
+    await recordSession(fixture, "post-session");
+    backdateSession(fixture, "post-session", 10);
+    const database = openDatabase(fixture);
+    const eventCount = () =>
+      database.query<{ count: number }, []>("SELECT count(*) AS count FROM event_log").get()?.count ?? 0;
+    const lastSeen = () =>
+      database.query<{ last_seen: string }, []>(
+        "SELECT last_seen FROM sessions WHERE id = 'post-session'",
+      ).get()?.last_seen ?? "";
+    try {
+      const beforeEmpty = eventCount();
+      const oldLastSeen = lastSeen();
+      const empty = await runCli(
+        fixture,
+        ["hook", "record", "--event", "PostToolUse"],
+        session("post-session"),
+      );
+      expect(empty.exitCode).toBe(0);
+      expect(empty.stdout).toBe("");
+      expect(eventCount()).toBe(beforeEmpty);
+      expect(Date.parse(lastSeen())).toBeGreaterThan(Date.parse(oldLastSeen));
+
+      expect(
+        (await runCli(fixture, ["msg", "send", "post-session", "pending attention"])).exitCode,
+      ).toBe(0);
+      const beforePending = eventCount();
+      const delivered = await runCli(
+        fixture,
+        ["hook", "record", "--event", "PostToolUse"],
+        session("post-session"),
+      );
+      expect(delivered.exitCode).toBe(0);
+      const line = delivered.stdout.trimEnd();
+      expect(delivered.stdout).toBe(`${line}\n`);
+      expect(line).not.toContain("\n");
+      const output = JSON.parse(line) as {
+        hookSpecificOutput: { additionalContext: string; hookEventName: string };
+      };
+      expect(output.hookSpecificOutput.hookEventName).toBe("PostToolUse");
+      expect(output.hookSpecificOutput.additionalContext).toContain("pending attention");
+      expect(eventCount()).toBe(beforePending);
+      expect(
+        database.query<{ last_message_id: number }, []>(
+          "SELECT last_message_id FROM message_cursors WHERE session_id = 'post-session'",
+        ).get()?.last_message_id,
+      ).toBeGreaterThan(0);
+
+      const drained = await runCli(
+        fixture,
+        ["hook", "record", "--event", "PostToolUse"],
+        session("post-session"),
+      );
+      expect(drained.stdout).toBe("");
+      expect(eventCount()).toBe(beforePending);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("150 install stays inert and attention plus a daemon tick preserve work and decisions", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
+    expect(await Bun.file(statePath).exists()).toBe(false);
+    expect((await runCli(fixture, ["supervisor", "status"])).stdout).toBe(
+      "supervisor stopped\n",
+    );
+
+    const work = await addWork(fixture, "immutable supervisor subject");
+    await startWork(fixture, work, "worker-session");
+    for (const text of ["failed: first", "failed: second", "failed: third"]) {
+      await runCli(fixture, ["work", "note", work, text], session("worker-session"));
+    }
+    await runCli(fixture, ["decision", "draft", "unchanged draft", "--work", work]);
+    const database = openDatabase(fixture);
+    const snapshot = () => ({
+      work: JSON.stringify(database.query("SELECT * FROM work ORDER BY id").all()),
+      decisions: JSON.stringify(database.query("SELECT * FROM decisions ORDER BY id").all()),
+    });
+    try {
+      const before = snapshot();
+      expect((await runCli(fixture, ["attention"], session("scanner-session"))).exitCode).toBe(0);
+      const controller = session("daemon-controller");
+      try {
+        expect(
+          (await runCli(fixture, ["supervisor", "start", "--interval", "1"], controller)).exitCode,
+        ).toBe(0);
+        await waitFor(
+          async () =>
+            (await Bun.file(statePath).exists())
+              ? JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null }
+              : null,
+          (state) => typeof state?.lastTick === "string",
+        );
+      } finally {
+        await runCli(fixture, ["supervisor", "stop"], controller);
+      }
+      expect(snapshot()).toEqual(before);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("151 MAESTRO_SESSION_NONE records no session and sends messages as supervisor", async () => {
+  await withFixture(async (fixture) => {
+    await recordSession(fixture, "existing-session");
+    const none = { ...session("ignored-session"), MAESTRO_SESSION_NONE: "1" };
+    const status = await runCli(fixture, ["status"], none);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).not.toContain("supervisor");
+    const sent = await runCli(
+      fixture,
+      ["msg", "send", "existing-session", "supervised delivery"],
+      none,
+    );
+    expect(sent.exitCode).toBe(0);
+
+    const database = openDatabase(fixture);
+    try {
+      expect(
+        database.query<{ count: number }, []>(
+          "SELECT count(*) AS count FROM sessions WHERE id = 'supervisor'",
+        ).get()?.count,
+      ).toBe(0);
+      expect(
+        database.query<{ sender_session: string }, []>(
+          "SELECT sender_session FROM messages ORDER BY id DESC LIMIT 1",
+        ).get()?.sender_session,
+      ).toBe("supervisor");
+    } finally {
+      database.close();
+    }
+  });
+});

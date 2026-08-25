@@ -110,7 +110,7 @@ async function writePolicyConfig(path: string): Promise<void> {
 async function writeHookConfig(path: string, command: string): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
-  for (const event of ["SessionStart", "UserPromptSubmit"]) {
+  for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse"]) {
     const groups = config.hooks[event] ?? [];
     for (const group of groups) {
       group.hooks = group.hooks.filter(
@@ -118,16 +118,15 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
           !managedAdapters.some((adapter) => handler.command.includes(adapter)),
       );
     }
+    const handler: HookHandler = {
+      type: "command",
+      command,
+      ...(event === "PostToolUse" ? {} : { statusMessage: "Loading maestro state" }),
+    };
     config.hooks[event] = [
       ...groups.filter((group) => group.hooks.length > 0),
       {
-        hooks: [
-          {
-            type: "command",
-            command,
-            statusMessage: "Loading maestro state",
-          },
-        ],
+        hooks: [handler],
       },
     ];
   }

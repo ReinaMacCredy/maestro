@@ -402,6 +402,22 @@ export const coordinationPlugin: BuiltInPlugin = {
           }
           const harness = harnessOption(invocation);
           const session = context.sessions.record(event, harness ?? undefined);
+          if (event === "PostToolUse") {
+            const messages = mailbox.read(session.id);
+            if (messages.length === 0) {
+              return { data: { session, messages }, text: "" };
+            }
+            const additionalContext = formatMessages(messages);
+            return {
+              data: { session, messages },
+              text: JSON.stringify({
+                hookSpecificOutput: {
+                  hookEventName: "PostToolUse",
+                  additionalContext,
+                },
+              }),
+            };
+          }
           context.log.append({
             type: "hook.record",
             entityType: "session",

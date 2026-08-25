@@ -9,6 +9,7 @@ import {
   type Fixture,
   prepareInstallFixture,
   runCli,
+  runCliAt,
   runTool,
   withFixture,
 } from "./helpers.ts";
@@ -54,6 +55,13 @@ async function createSourceCheckout(fixture: Fixture): Promise<{
   await git(source, ["config", "user.email", "maestro-tests@example.invalid"]);
   await git(source, ["add", "."]);
   await git(source, ["commit", "-m", "initial source"]);
+  const installFixture = await prepareInstallFixture(fixture);
+  const materialized = await runCliAt(fixture, source, ["install"], {
+    PATH: installFixture.path,
+  });
+  expect(materialized).toMatchObject({ exitCode: 0 });
+  await git(source, ["add", ".claude", ".codex"]);
+  await git(source, ["commit", "-m", "materialize current wiring"]);
   await git(fixture.root, ["init", "--bare", "--initial-branch=main", bare]);
   await git(source, ["remote", "add", "origin", bare]);
   await git(source, ["push", "-u", "origin", "main"]);
