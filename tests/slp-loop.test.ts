@@ -313,3 +313,63 @@ test("157 search still finds fresh native surfaces and a legacy card", async () 
     }
   });
 });
+
+test("158 attention sends one packet to the most recently active of three live peers", async () => {
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "unheld attention parent");
+    const child = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "attention child",
+        "--parent",
+        parent,
+        "--kind",
+        "task",
+      ]),
+    );
+    expect((await runCli(fixture, ["work", "start", child], session("attention-subject"))).exitCode)
+      .toBe(0);
+    for (const peer of ["peer-old", "peer-new", "peer-middle"]) {
+      expect(
+        (
+          await runCli(
+            fixture,
+            ["hook", "record", "--event", "SessionStart"],
+            session(peer),
+          )
+        ).exitCode,
+      ).toBe(0);
+    }
+    const database = loopDatabase(fixture);
+    try {
+      const now = Date.now();
+      for (const [id, minutes] of [
+        ["attention-subject", 45],
+        ["peer-old", 3],
+        ["peer-new", 1],
+        ["peer-middle", 2],
+      ] satisfies Array<[string, number]>) {
+        database
+          .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+          .run(new Date(now - minutes * 60_000).toISOString(), id);
+      }
+    } finally {
+      database.close();
+    }
+
+    expect((await runCli(fixture, ["attention"], session("attention-scanner"))).exitCode).toBe(0);
+    const verified = loopDatabase(fixture);
+    try {
+      const targets = verified
+        .query<{ target_session: string }, []>("SELECT target_session FROM messages ORDER BY id")
+        .all()
+        .map((row) => row.target_session);
+      expect(targets).toEqual(["peer-new"]);
+      expect(verified.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
+        .toBe(1);
+    } finally {
+      verified.close();
+    }
+  });
+});

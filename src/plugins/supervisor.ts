@@ -168,10 +168,13 @@ function ordinaryTargets(
   if (parent?.heldBy && parent.heldBy !== subject && liveSessions.has(parent.heldBy)) {
     return [parent.heldBy];
   }
-  const peers = [...liveSessions.keys()]
-    .filter((id) => id !== subject)
-    .sort();
-  if (peers.length > 0) return peers;
+  const peer = [...liveSessions.values()]
+    .filter((session) => session.id !== subject)
+    .sort((left, right) => {
+      const recency = Date.parse(right.lastSeen) - Date.parse(left.lastSeen);
+      return recency !== 0 ? recency : left.id.localeCompare(right.id);
+    })[0];
+  if (peer) return [peer.id];
   return subject && liveSessions.has(subject) ? [subject] : [];
 }
 

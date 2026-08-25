@@ -292,14 +292,16 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
   });
 });
 
-test("139 attention broadcasts without a parent holder and falls back to the subject", async () => {
+test("139 attention routes without a parent holder, records no-recipient rows, and falls back to the subject", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "unheld parent");
-    const child = await addWork(fixture, "broadcast child", parent);
+    const child = await addWork(fixture, "routed child", parent);
     await startWork(fixture, child, "subject-session");
     await recordSession(fixture, "peer-one");
     await recordSession(fixture, "peer-two");
     backdateSession(fixture, "subject-session", 45);
+    backdateSession(fixture, "peer-one", 2);
+    backdateSession(fixture, "peer-two", 1);
 
     expect(
       (await runCli(fixture, ["attention"], session("scanner-session"))).exitCode,
@@ -307,12 +309,10 @@ test("139 attention broadcasts without a parent holder and falls back to the sub
     const database = openDatabase(fixture);
     try {
       const targets = database
-        .query<{ target_session: string }, []>(
-          "SELECT target_session FROM messages ORDER BY target_session",
-        )
+        .query<{ target_session: string }, []>("SELECT target_session FROM messages ORDER BY id")
         .all()
         .map((row) => row.target_session);
-      expect(targets).toEqual(["peer-one", "peer-two"]);
+      expect(targets).toEqual(["peer-two"]);
       expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
     } finally {
@@ -342,6 +342,45 @@ test("139 attention broadcasts without a parent holder and falls back to the sub
         .toBe(1);
     } finally {
       database.close();
+    }
+  });
+
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "decision without recipient");
+    const decision = idFrom(
+      await runCli(fixture, ["decision", "draft", "stale without recipient", "--work", work]),
+    );
+    const database = openDatabase(fixture);
+    try {
+      database
+        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+    } finally {
+      database.close();
+    }
+
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["attention", "--decision-stale", "24"],
+          session("scanner-session"),
+        )
+      ).exitCode,
+    ).toBe(0);
+    const recorded = openDatabase(fixture);
+    try {
+      expect(
+        recorded
+          .query<{ target_session: string | null }, []>(
+            "SELECT target_session FROM attention ORDER BY id DESC LIMIT 1",
+          )
+          .get()?.target_session,
+      ).toBeNull();
+      expect(recorded.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
+        .toBe(0);
+    } finally {
+      recorded.close();
     }
   });
 });
