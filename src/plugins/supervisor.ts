@@ -300,7 +300,21 @@ function decisionStaleDetections(
   });
 }
 
+// work.start prints an [overlap] banner to the session that starts second, so
+// only the earlier holder is missing the fact that a sibling lane opened.
+function earlierHolder(
+  context: PluginContext,
+  first: AttentionWorkRow,
+  second: AttentionWorkRow,
+): string {
+  const firstStart = latestStart(context, first.id)?.id ?? 0;
+  const secondStart = latestStart(context, second.id)?.id ?? 0;
+  const earlier = firstStart <= secondStart ? first : second;
+  return earlier.heldBy as string;
+}
+
 function scopeCollisionDetections(
+  context: PluginContext,
   works: AttentionWorkRow[],
   workById: Map<string, AttentionWorkRow>,
   liveSessions: Map<string, SessionRecord>,
@@ -324,7 +338,7 @@ function scopeCollisionDetections(
       const targets =
         parent?.heldBy && !holders.includes(parent.heldBy) && liveSessions.has(parent.heldBy)
           ? [parent.heldBy]
-          : holders;
+          : [earlierHolder(context, first, second)];
       detections.push({
         entityId: first.id,
         entityType: "work",
@@ -368,7 +382,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.decisionStaleHours,
     ),
-    ...scopeCollisionDetections(works, workById, liveSessions),
+    ...scopeCollisionDetections(context, works, workById, liveSessions),
   ];
 }
 
