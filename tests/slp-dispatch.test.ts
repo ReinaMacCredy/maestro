@@ -389,3 +389,81 @@ test("183 handoff renders returned handbacks into the packet", async () => {
     expect(notes).toContain("incidental findings: None");
   });
 });
+
+test("184 work done refuses an unreturned dispatch and cancel with a reason unblocks it", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "done gate", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session("holder"))).exitCode).toBe(0);
+    const dispatch = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+
+    const blocked = await runCli(
+      fixture,
+      ["work", "done", work, "--evidence", "source: fixture"],
+      session("holder"),
+    );
+    expect(blocked.exitCode).not.toBe(0);
+    const error = JSON.parse(blocked.stderr) as {
+      error: { code: string; message: string; origin: string };
+    };
+    expect(error.error.code).toBe("GATE_BLOCKED");
+    expect(error.error.origin).toBe("policy-dispatch");
+    expect(error.error.message).toContain(`maestro dispatch cancel ${dispatch} --reason`);
+
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "cancel",
+          dispatch,
+          "--reason",
+          "lane was abandoned",
+        ])
+      ).exitCode,
+    ).toBe(0);
+    const cancelled = await runCli(fixture, ["dispatch", "show", dispatch]);
+    expect(cancelled.stdout).toContain(`${dispatch} [cancelled]`);
+    expect(cancelled.stdout).toContain("cancel reason: lane was abandoned");
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["work", "done", work, "--evidence", "source: fixture"],
+          session("holder"),
+        )
+      ).exitCode,
+    ).toBe(0);
+  });
+});
+
+test("185 work start refuses a sealed council until its dispatches are resolved", async () => {
+  await withFixture(async (fixture) => {
+    const council = await openCouncil(fixture);
+    const blocked = await runCli(fixture, ["work", "start", council.work], session("implementer"));
+    expect(blocked.exitCode).not.toBe(0);
+    const error = JSON.parse(blocked.stderr) as {
+      error: { code: string; message: string; origin: string };
+    };
+    expect(error.error.code).toBe("GATE_BLOCKED");
+    expect(error.error.origin).toBe("policy-dispatch");
+    expect(error.error.message).toContain("sealed council");
+
+    for (const dispatch of council.dispatches) {
+      expect(
+        (
+          await runCli(fixture, [
+            "dispatch",
+            "cancel",
+            dispatch,
+            "--reason",
+            "council lane abandoned",
+          ])
+        ).exitCode,
+      ).toBe(0);
+    }
+    expect(
+      (await runCli(fixture, ["work", "start", council.work], session("implementer"))).exitCode,
+    ).toBe(0);
+  });
+});
