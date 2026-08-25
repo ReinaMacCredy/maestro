@@ -218,6 +218,7 @@ function repeatedFailureDetections(
   liveSessions: Map<string, SessionRecord>,
 ): Detection[] {
   return works.flatMap((work): Detection[] => {
+    if (work.state === "done" || work.state === "cancelled") return [];
     const start = latestStart(context, work.id);
     const notes = start
       ? context.store.database
