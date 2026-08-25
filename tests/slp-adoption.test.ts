@@ -1,6 +1,52 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import {
+  idFrom,
+  prepareInstallFixture,
+  runCli,
+  type Fixture,
+  withFixture,
+} from "./helpers.ts";
+
+function session(id: string): Record<string, string> {
+  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
+}
+
+async function addWork(fixture: Fixture, title: string, parent?: string): Promise<string> {
+  const args = ["work", "add", title, "--atomic-reason", "slp fixture"];
+  if (parent) args.push("--parent", parent);
+  return idFrom(await runCli(fixture, args));
+}
+
+async function startWork(fixture: Fixture, id: string, holder: string): Promise<void> {
+  const started = await runCli(fixture, ["work", "start", id], session(holder));
+  expect(started.exitCode).toBe(0);
+}
+
+async function recordSession(fixture: Fixture, id: string): Promise<void> {
+  const recorded = await runCli(
+    fixture,
+    ["hook", "record", "--event", "SessionStart"],
+    session(id),
+  );
+  expect(recorded.exitCode).toBe(0);
+}
+
+function openDatabase(fixture: Fixture): Database {
+  return new Database(join(fixture.repo, ".maestro", "maestro.db"));
+}
+
+function backdateSession(fixture: Fixture, id: string, minutes: number): void {
+  const database = openDatabase(fixture);
+  try {
+    database
+      .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+      .run(new Date(Date.now() - minutes * 60_000).toISOString(), id);
+  } finally {
+    database.close();
+  }
+}
 
 test("133 install materializes the dispatch, handback, dependency, and episode contracts", async () => {
   await withFixture(async (fixture) => {
@@ -172,5 +218,295 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
         "next: maestro ready\n" +
         "recipes: maestro recipe list; maestro recipe show <name>\n",
     );
+  });
+});
+
+test("138 attention raises and routes a STALLED_LEASE packet to the parent holder", async () => {
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "parent scope");
+    await startWork(fixture, parent, "lead-session");
+    const child = await addWork(fixture, "stalled child", parent);
+    await startWork(fixture, child, "subject-session");
+    backdateSession(fixture, "subject-session", 45);
+
+    const attention = await runCli(
+      fixture,
+      ["attention", "--stale", "30"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    for (const required of [
+      `attention STALLED_LEASE ${child}`,
+      "  observed:",
+      "  evidence:",
+      "  unknown:",
+      "  question:",
+      `  smallest action: maestro work show ${child}`,
+      "  human decision needed: no",
+    ]) {
+      expect(attention.stdout).toContain(required);
+    }
+
+    const database = openDatabase(fixture);
+    try {
+      const row = database
+        .query<{
+          fingerprint: string;
+          packet: string;
+          target_session: string;
+        }, []>("SELECT fingerprint, packet, target_session FROM attention")
+        .get();
+      const start = database
+        .query<{ id: number }, [string]>(
+          "SELECT id FROM event_log WHERE type = 'work.start' AND entity_id = ? ORDER BY id DESC LIMIT 1",
+        )
+        .get(child);
+      expect(row?.fingerprint).toBe(`stalled:${child}:${start?.id}`);
+      expect(row?.target_session).toBe("lead-session");
+      expect(row?.packet).toContain("unknown:");
+      const message = database
+        .query<{ target_session: string; text: string }, []>(
+          "SELECT target_session, text FROM messages ORDER BY id DESC LIMIT 1",
+        )
+        .get();
+      expect(message?.target_session).toBe("lead-session");
+      expect(message?.text).toBe(row?.packet);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("139 attention broadcasts without a parent holder and falls back to the subject", async () => {
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "unheld parent");
+    const child = await addWork(fixture, "broadcast child", parent);
+    await startWork(fixture, child, "subject-session");
+    await recordSession(fixture, "peer-one");
+    await recordSession(fixture, "peer-two");
+    backdateSession(fixture, "subject-session", 45);
+
+    expect(
+      (await runCli(fixture, ["attention"], session("scanner-session"))).exitCode,
+    ).toBe(0);
+    const database = openDatabase(fixture);
+    try {
+      const targets = database
+        .query<{ target_session: string }, []>(
+          "SELECT target_session FROM messages ORDER BY target_session",
+        )
+        .all()
+        .map((row) => row.target_session);
+      expect(targets).toEqual(["peer-one", "peer-two"]);
+      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
+        .toBe(1);
+    } finally {
+      database.close();
+    }
+  });
+
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "unheld parent");
+    const child = await addWork(fixture, "subject fallback", parent);
+    await startWork(fixture, child, "only-subject");
+    backdateSession(fixture, "only-subject", 45);
+
+    expect(
+      (await runCli(fixture, ["attention"], session("scanner-session"))).exitCode,
+    ).toBe(0);
+    const database = openDatabase(fixture);
+    try {
+      expect(
+        database
+          .query<{ target_session: string }, []>(
+            "SELECT target_session FROM messages ORDER BY id DESC LIMIT 1",
+          )
+          .get()?.target_session,
+      ).toBe("only-subject");
+      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
+        .toBe(1);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("140 attention fingerprints are one-shot and existing raises stay listed", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "deduplicated lease");
+    await startWork(fixture, work, "subject-session");
+    backdateSession(fixture, "subject-session", 45);
+
+    const first = await runCli(fixture, ["attention"], session("scanner-session"));
+    const second = await runCli(fixture, ["attention"], session("scanner-session"));
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toMatch(/raised \d{4}-\d{2}-\d{2}T/);
+
+    const database = openDatabase(fixture);
+    try {
+      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
+        .toBe(1);
+      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
+        .toBe(1);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("141 attention raises REPEATED_FAILURE only for the third failed note since start", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "three failed passes");
+    await startWork(fixture, work, "worker-session");
+    for (const text of ["failed: first", "failed: second", "failed: third", "failed: fourth"]) {
+      expect((await runCli(fixture, ["work", "note", work, text], session("worker-session"))).exitCode)
+        .toBe(0);
+    }
+    const attention = await runCli(fixture, ["attention"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).toContain(`attention REPEATED_FAILURE ${work}`);
+
+    const database = openDatabase(fixture);
+    try {
+      const third = database
+        .query<{ id: number }, [string]>(
+          "SELECT id FROM work_notes WHERE work_id = ? AND text LIKE 'failed: %' ORDER BY id LIMIT 1 OFFSET 2",
+        )
+        .get(work);
+      expect(
+        database.query<{ fingerprint: string }, []>(
+          "SELECT fingerprint FROM attention WHERE kind = 'REPEATED_FAILURE'",
+        ).get()?.fingerprint,
+      ).toBe(`repeat:${work}:${third?.id}`);
+    } finally {
+      database.close();
+    }
+  });
+
+  for (const notes of [
+    ["failed: first", "failed: second"],
+    ["failed:first", "Failed: second", "ordinary failure"],
+  ]) {
+    await withFixture(async (fixture) => {
+      const work = await addWork(fixture, "non-qualifying failures");
+      await startWork(fixture, work, "worker-session");
+      for (const text of notes) {
+        await runCli(fixture, ["work", "note", work, text], session("worker-session"));
+      }
+      const attention = await runCli(fixture, ["attention"], session("scanner-session"));
+      expect(attention.exitCode).toBe(0);
+      expect(attention.stdout).not.toContain("REPEATED_FAILURE");
+    });
+  }
+});
+
+test("142 attention raises DECISION_STALE only for old drafts linked to open work", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "open decision work");
+    const drafted = await runCli(fixture, ["decision", "draft", "old fork", "--work", work]);
+    const decision = idFrom(drafted);
+    const database = openDatabase(fixture);
+    try {
+      database
+        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+    } finally {
+      database.close();
+    }
+    const attention = await runCli(
+      fixture,
+      ["attention", "--decision-stale", "24"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).toContain(`attention DECISION_STALE ${decision}`);
+  });
+
+  for (const terminal of ["locked", "done"] as const) {
+    await withFixture(async (fixture) => {
+      const work = await addWork(fixture, `${terminal} decision work`);
+      const drafted = await runCli(fixture, ["decision", "draft", "old fork", "--work", work]);
+      const decision = idFrom(drafted);
+      if (terminal === "locked") {
+        await runCli(fixture, ["decision", "lock", decision]);
+      }
+      const database = openDatabase(fixture);
+      try {
+        database
+          .query("UPDATE decisions SET created_at = ? WHERE id = ?")
+          .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+        if (terminal === "done") {
+          database.query("UPDATE work SET state = 'done', held_by = NULL WHERE id = ?").run(work);
+        }
+      } finally {
+        database.close();
+      }
+      const attention = await runCli(
+        fixture,
+        ["attention", "--decision-stale", "24"],
+        session("scanner-session"),
+      );
+      expect(attention.exitCode).toBe(0);
+      expect(attention.stdout).not.toContain("DECISION_STALE");
+    });
+  }
+});
+
+test("143 attention raises sorted SCOPE_COLLISION and routes it to the parent holder", async () => {
+  await withFixture(async (fixture) => {
+    const parent = await addWork(fixture, "shared scope");
+    await startWork(fixture, parent, "lead-session");
+    const first = await addWork(fixture, "first sibling", parent);
+    const second = await addWork(fixture, "second sibling", parent);
+    await startWork(fixture, first, "holder-z");
+    await startWork(fixture, second, "holder-a");
+
+    const attention = await runCli(fixture, ["attention"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).toContain(`attention SCOPE_COLLISION ${first},${second}`);
+
+    const database = openDatabase(fixture);
+    try {
+      const row = database
+        .query<{ fingerprint: string; target_session: string }, []>(
+          "SELECT fingerprint, target_session FROM attention WHERE kind = 'SCOPE_COLLISION'",
+        )
+        .get();
+      expect(row?.fingerprint).toBe(`collision:${first}:${second}:holder-a:holder-z`);
+      expect(row?.target_session).toBe("lead-session");
+      expect(
+        database.query<{ target_session: string }, []>(
+          "SELECT target_session FROM messages ORDER BY id DESC LIMIT 1",
+        ).get()?.target_session,
+      ).toBe("lead-session");
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("144 attention --json works without a supervisor pid file", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "json failure");
+    await startWork(fixture, work, "worker-session");
+    for (const text of ["failed: first", "failed: second", "failed: third"]) {
+      await runCli(fixture, ["work", "note", work, text], session("worker-session"));
+    }
+    expect(await Bun.file(join(fixture.repo, ".maestro", "supervisor.json")).exists()).toBe(false);
+
+    const attention = await runCli(
+      fixture,
+      ["attention", "--json"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    const envelope = JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ kind: string; raised: boolean }> };
+      ok: boolean;
+    };
+    expect(envelope.ok).toBe(true);
+    expect(envelope.data.detections[0]?.kind).toBe("REPEATED_FAILURE");
+    expect(envelope.data.detections[0]?.raised).toBe(true);
   });
 });
