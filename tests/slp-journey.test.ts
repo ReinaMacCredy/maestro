@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, type Fixture, withFixture } from "./helpers.ts";
+import { mkdir, writeFile } from "node:fs/promises";
+import { idFrom, prepareInstallFixture, runCli, type Fixture, withFixture } from "./helpers.ts";
 
 function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
@@ -126,5 +127,27 @@ test("164 a scope collision tells the holder who never saw the overlap banner", 
     } finally {
       database.close();
     }
+  });
+});
+
+test("165 doctor reports whether Codex has been told to trust the repo hooks", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const untrusted = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(untrusted.exitCode).toBe(0);
+    expect(untrusted.stdout).toContain("codex hooks: not trusted");
+    expect(untrusted.stdout).toContain("/hooks");
+
+    await mkdir(join(fixture.home, ".codex"), { recursive: true });
+    await writeFile(
+      join(fixture.home, ".codex", "config.toml"),
+      `[hooks.state."${join(fixture.repo, ".codex", "hooks.json")}:post_tool_use:0:0"]\n` +
+        `trusted_hash = "sha256:deadbeef"\n`,
+    );
+    const trusted = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(trusted.exitCode).toBe(0);
+    expect(trusted.stdout).toContain("codex hooks: trusted");
   });
 });

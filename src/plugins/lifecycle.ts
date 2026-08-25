@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -244,6 +244,27 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
   }
 }
 
+// Codex skips repo-local hooks until their exact definition is trusted, and it
+// says so only inside its own UI, so a wired repo can stay silent for months.
+async function codexTrustCheck(repo: string): Promise<string> {
+  const hooks = join(repo, ".codex", "hooks.json");
+  if (!existsSync(hooks)) return "codex hooks: absent";
+  const config = join(process.env.HOME ?? repo, ".codex", "config.toml");
+  const text = existsSync(config) ? await readFile(config, "utf8") : "";
+  // macOS hands out both /var/... and /private/var/... for the same repo, and
+  // Codex records whichever form its own cwd had.
+  const paths = new Set<string>();
+  for (const candidate of [hooks, realpathSync(hooks)]) {
+    paths.add(candidate);
+    paths.add(
+      candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
+    );
+  }
+  return [...paths].some((path) => text.includes(`"${path}:`))
+    ? "codex hooks: trusted"
+    : "codex hooks: not trusted (Codex skips them; run /hooks in Codex once to trust)";
+}
+
 async function doctor(): Promise<CliResult> {
   const home = homeDirectory();
   const repo = resolve(process.cwd());
@@ -333,6 +354,7 @@ async function doctor(): Promise<CliResult> {
     issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed .maestro/.gitignore block" });
   }
   if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
+  checks.push(await codexTrustCheck(repo));
 
   const storePath = resolveStoreLocation(repo).path;
   if (!existsSync(storePath)) {
