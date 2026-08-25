@@ -14,6 +14,12 @@ state changes.
 
 - Run every VERIFY.md scenario against its work item's acceptance/claims and
   fill the Result column; run each anti-goal check (grep, diff, readback).
+- For risky seams, spot-check assertion strength before filling PASS:
+  hand-flip 2-3 mutants in the new logic (invert a condition, off-by-one a
+  boundary, append text to an asserted message) and the suite must go red
+  each time; restore after each. A surviving mutant is a weak or missing
+  test and a FAIL of that scenario, not a side note - beware substring
+  matchers like `toThrow(string)` that pass on a changed message.
 - Re-read the user's exact delivery authority and target before any gate.
 - Select one legal next gate at a time: final verification, independent QA or
   witness, scoped commit, local install, external delivery, or stop. Do not
