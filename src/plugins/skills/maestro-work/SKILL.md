@@ -10,6 +10,62 @@ Use for one accepted implementation unit. Keep the change inside the work
 item's acceptance and authority. If the scope is unclear or must expand, stop
 and return to `maestro-design`.
 
+## Dispatch
+
+When work is handed to a sub-agent, send this envelope:
+
+```text
+Objective: <observable outcome>
+Owned scope: <paths or responsibility>
+Excluded scope: <explicit non-goals>
+Mutation: <no-write | write-bounded: paths>
+Stop condition: <done or blocked boundary>
+Lane: <delivery | decision | challenge>
+Evidence required: <proof and layer>
+```
+
+A tiny task may collapse the envelope to three lines, but it never drops
+`Excluded scope` or `Mutation`.
+
+- `delivery` may write and is the only lane that holds the lease.
+- `decision` investigates, compares, and recommends without writing.
+- `challenge` breaks the premise or candidate and returns findings only, with
+  no fixes or redesign.
+
+The canonical parallel shapes are delivery and challenge on the same scope,
+or a council of two or three decision lanes.
+
+## Handback
+
+Return this packet when the lane stops:
+
+```text
+Status: <DONE | BLOCKED | UNTESTABLE | UNKNOWN | FAILED | CHALLENGE | REOPEN_REQUEST | DEPENDENCY_REQUEST>
+Claim: <what is now believed true>
+Proof: <evidence with its layer named>
+Assumptions not verified: <items or None>
+Residual risks: <items or None>
+Incidental findings: <items or None>
+```
+
+Unknown is a valid result; it is never rounded up to PASS.
+
+A peer that discovers a dependency stops the mutation that depends on the new
+assumption and hands back `DEPENDENCY_REQUEST` with evidence and impact. The
+Lead re-scopes the work. A never silently becomes A+B+C.
+
+After two or three failures on the same mechanism, stop and record an episode
+packet as `maestro work note <id> "failed: <one line>"`, carrying:
+
+```text
+Attempted: <approaches tried>
+Invariant assumed: <belief shared by the attempts>
+Exact failure: <literal evidence>
+What changed between attempts: <delta>
+What did not change: <stable conditions>
+Smallest new information needed: <next fact that would change the approach>
+```
+
 ## Loop
 
 1. **Perceive** - `maestro work show <id>`, `maestro ready`, relevant source,
