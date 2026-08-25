@@ -44,12 +44,31 @@ Mid-flight decisions: record via \`maestro decision draft "<text>" --rationale "
 `;
 }
 
-function notesTemplate(id: string): string {
+// git already knows the base; an empty Base line is the first thing a
+// successor finds missing when a session dies before writing its handoff.
+async function baseLine(root: string): Promise<string> {
+  const read = async (args: string[]): Promise<string | null> => {
+    const child = Bun.spawn(["git", ...args], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const [text, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+    const value = text.trim();
+    return code === 0 && value ? value : null;
+  };
+  const commit = await read(["rev-parse", "--short", "HEAD"]);
+  if (!commit) return "Base:";
+  const branch = await read(["branch", "--show-current"]);
+  return branch ? `Base: ${commit} (${branch})` : `Base: ${commit}`;
+}
+
+function notesTemplate(id: string, base: string): string {
   return `# NOTES — ${id}
 
 Overwritten handoff, never appended; history lives in trace and decisions.
 
-Base:
+${base}
 
 ## Current State
 
@@ -237,7 +256,7 @@ export const bundlePlugin: BuiltInPlugin = {
           mkdirSync(directory, { recursive: true });
           const templates = {
             "SPEC.md": specTemplate(id),
-            "NOTES.md": notesTemplate(id),
+            "NOTES.md": notesTemplate(id, await baseLine(root)),
             "VERIFY.md": verifyTemplate(id),
           };
           for (const name of trioFiles) {

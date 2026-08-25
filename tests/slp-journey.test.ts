@@ -2,7 +2,15 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { idFrom, prepareInstallFixture, runCli, type Fixture, withFixture } from "./helpers.ts";
+import {
+  idFrom,
+  initializeGitRepository,
+  prepareInstallFixture,
+  runCli,
+  runTool,
+  type Fixture,
+  withFixture,
+} from "./helpers.ts";
 
 function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
@@ -149,5 +157,28 @@ test("165 doctor reports whether Codex has been told to trust the repo hooks", a
     const trusted = await runCli(fixture, ["doctor"], { PATH: path });
     expect(trusted.exitCode).toBe(0);
     expect(trusted.stdout).toContain("codex hooks: trusted");
+  });
+});
+
+test("166 bundle open stamps the base commit git already knows", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const head = (await runTool(["git", "rev-parse", "--short", "HEAD"], fixture.repo)).stdout.trim();
+    const branch = (await runTool(["git", "branch", "--show-current"], fixture.repo)).stdout.trim();
+
+    expect((await runCli(fixture, ["bundle", "open", "stamped"])).exitCode).toBe(0);
+    const notes = await Bun.file(
+      join(fixture.repo, ".maestro", "bundle", "stamped", "NOTES.md"),
+    ).text();
+    expect(notes).toContain(`Base: ${head} (${branch})`);
+  });
+
+  await withFixture(async (fixture) => {
+    // A directory that is not a git checkout still scaffolds, with Base left blank.
+    expect((await runCli(fixture, ["bundle", "open", "unstamped"])).exitCode).toBe(0);
+    const notes = await Bun.file(
+      join(fixture.repo, ".maestro", "bundle", "unstamped", "NOTES.md"),
+    ).text();
+    expect(notes).toContain("Base:\n");
   });
 });
