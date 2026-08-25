@@ -483,6 +483,7 @@ export class Cli {
   private supportsJson(command: string): boolean {
     return command === "status" ||
       command === "ready" ||
+      command === "handoff" ||
       command === "msg send" ||
       command === "search" ||
       command.endsWith(" list");

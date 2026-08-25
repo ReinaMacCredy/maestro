@@ -73,5 +73,6 @@ retained, Failed approaches, and Do not repeat.
 
 ## Hand-off
 
+Run `maestro handoff <bundle-id>` to seed untouched NOTES.md sections before transferring ownership.
 Design lane -> use the `maestro-design` skill. Implementation -> `maestro-work`.
 Verification and close -> `maestro-verify`.

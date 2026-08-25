@@ -28,6 +28,15 @@ interface BundleRow {
 }
 
 const trioFiles = ["SPEC.md", "NOTES.md", "VERIFY.md"] as const;
+const handoffPlaceholder = "<!-- handoff: unfilled -->";
+const handoffSectionNames = [
+  "Current State",
+  "Next Action",
+  "Authority",
+  "Failed approaches",
+  "Do not repeat",
+] as const;
+type HandoffSectionName = typeof handoffSectionNames[number];
 
 function specTemplate(id: string): string {
   return `# SPEC — ${id}
@@ -203,6 +212,125 @@ function decisionsForWork(
     .all(...workIds);
 }
 
+function failedNotesForWork(
+  context: PluginContext,
+  workIds: string[],
+): Array<{ text: string; workId: string }> {
+  if (workIds.length === 0) return [];
+  const placeholders = workIds.map(() => "?").join(", ");
+  return context.store.database
+    .query<{ text: string; work_id: string }, string[]>(
+      `SELECT work_id, text FROM work_notes
+       WHERE work_id IN (${placeholders}) AND SUBSTR(text, 1, 8) = 'failed: '
+       ORDER BY id`,
+    )
+    .all(...workIds)
+    .map((row) => ({ text: row.text, workId: row.work_id }));
+}
+
+interface NotesSection {
+  body: string;
+  bodyEnd: number;
+  bodyStart: number;
+  name: string;
+}
+
+function notesSections(notes: string): NotesSection[] {
+  const headings = [...notes.matchAll(/^## ([^\n]+)\n/gm)];
+  return headings.map((heading, index) => {
+    const bodyStart = (heading.index ?? 0) + heading[0].length;
+    const bodyEnd = headings[index + 1]?.index ?? notes.length;
+    return {
+      body: notes.slice(bodyStart, bodyEnd),
+      bodyEnd,
+      bodyStart,
+      name: heading[1] ?? "",
+    };
+  });
+}
+
+function scaffoldBodies(id: string): Map<HandoffSectionName, string> {
+  const sections = notesSections(notesTemplate(id, "Base:"));
+  return new Map(
+    sections
+      .filter((section): section is NotesSection & { name: HandoffSectionName } =>
+        handoffSectionNames.includes(section.name as HandoffSectionName)
+      )
+      .map((section) => [section.name, section.body]),
+  );
+}
+
+function replaceUntouchedSections(
+  id: string,
+  notes: string,
+  content: Map<HandoffSectionName, string>,
+): { leftAlone: HandoffSectionName[]; notes: string; written: HandoffSectionName[] } {
+  const scaffold = scaffoldBodies(id);
+  const sections = notesSections(notes);
+  const replacements = new Map<number, string>();
+  const written: HandoffSectionName[] = [];
+  const leftAlone: HandoffSectionName[] = [];
+  for (const name of handoffSectionNames) {
+    const section = sections.find((candidate) => candidate.name === name);
+    if (!section || section.body !== scaffold.get(name)) {
+      leftAlone.push(name);
+      continue;
+    }
+    replacements.set(section.bodyStart, `\n${content.get(name) ?? handoffPlaceholder}\n\n`);
+    written.push(name);
+  }
+  let output = "";
+  let cursor = 0;
+  for (const section of sections) {
+    const replacement = replacements.get(section.bodyStart);
+    if (replacement === undefined) continue;
+    output += notes.slice(cursor, section.bodyStart) + replacement;
+    cursor = section.bodyEnd;
+  }
+  return { leftAlone, notes: output + notes.slice(cursor), written };
+}
+
+function replaceScaffoldBase(
+  notes: string,
+  base: string,
+): { notes: string; written: boolean } {
+  const match = notes.match(/^Base:(?: [0-9a-f]+(?: \([^\n)]+\))?)?$/m);
+  if (!match || match[0] === base) return { notes, written: false };
+  return { notes: notes.replace(match[0], base), written: true };
+}
+
+function handoffContent(context: PluginContext, workIds: string[]): Map<HandoffSectionName, string> {
+  const work = context.work as WorkService;
+  const byId = new Map(work.snapshot().map((record) => [record.id, record]));
+  const workLines = workIds.flatMap((workId) => {
+    const record = byId.get(workId);
+    return record
+      ? [
+          `- ${record.id} [${record.state}] ${record.title}`,
+          `  evidence: ${record.evidence || "none recorded"}`,
+        ]
+      : [];
+  });
+  const decisionLines = decisionsForWork(context, workIds).map(
+    (decision) => `- ${decision.id} [${decision.state}] ${decision.text}`,
+  );
+  const currentState = [
+    ...(workLines.length > 0 ? ["Work:", ...workLines] : []),
+    ...(workLines.length > 0 && decisionLines.length > 0 ? [""] : []),
+    ...(decisionLines.length > 0 ? ["Decisions:", ...decisionLines] : []),
+  ];
+  const failed = failedNotesForWork(context, workIds).map(
+    (note) => `- ${note.workId}: ${note.text}`,
+  );
+  return new Map([
+    ["Current State", currentState.join("\n") || handoffPlaceholder],
+    ["Next Action", handoffPlaceholder],
+    ["Authority", handoffPlaceholder],
+    ["Failed approaches", failed.join("\n") || handoffPlaceholder],
+    ["Do not repeat", handoffPlaceholder],
+  ]);
+}
+
 function headline(bundle: BundleRecord): string {
   return `${bundle.id} [${bundle.state}] ${bundle.directory}`;
 }
@@ -322,6 +450,14 @@ export const bundlePlugin: BuiltInPlugin = {
             throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`);
           }
           const trio = await readTrio(bundle.directory);
+          if (trio.notes?.includes(handoffPlaceholder)) {
+            const command = `maestro bundle close ${id}`;
+            throw new CliError(
+              "HANDOFF_INCOMPLETE",
+              `${id} NOTES.md still contains ${handoffPlaceholder}; replace every handoff placeholder, then run: ${command}`,
+              { command, id },
+            );
+          }
           const now = new Date().toISOString();
           context.store.database
             .query(
@@ -353,6 +489,75 @@ export const bundlePlugin: BuiltInPlugin = {
         {
           description: "Snapshot the trio text into the store and archive the bundle.",
           positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "handoff",
+        async (invocation): Promise<CliResult> => {
+          const id = required(invocation, 0, "bundle id");
+          const work = context.work as WorkService;
+          if (work.snapshot().some((record) => record.id === id)) {
+            const command = "maestro bundle list";
+            throw new CliError(
+              "INVALID_TARGET",
+              `handoff is bundle-scoped; ${id} is a work id; run: ${command}`,
+              { command, id },
+            );
+          }
+          const bundle = requireBundle(context, id);
+          if (bundle.state !== "active") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${id} is ${bundle.state}; handoff requires an active bundle`,
+            );
+          }
+          const notesPath = join(bundle.directory, "NOTES.md");
+          const file = Bun.file(notesPath);
+          if (!(await file.exists())) {
+            throw new CliError("NOT_FOUND", `NOTES.md not found: ${notesPath}`, { path: notesPath });
+          }
+          const original = await file.text();
+          const sectionResult = replaceUntouchedSections(
+            id,
+            original,
+            handoffContent(context, linkedWorkIds(context, id)),
+          );
+          const baseResult = replaceScaffoldBase(
+            sectionResult.notes,
+            await baseLine(resolveStoreLocation(process.cwd()).root),
+          );
+          const written = [
+            ...(baseResult.written ? ["Base"] : []),
+            ...sectionResult.written,
+          ];
+          const leftAlone = [
+            ...(!baseResult.written ? ["Base"] : []),
+            ...sectionResult.leftAlone,
+          ];
+          if (baseResult.notes !== original) await Bun.write(notesPath, baseResult.notes);
+          context.log.append({
+            type: "bundle.handoff",
+            entityType: "bundle",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { leftAlone, written },
+          });
+          return {
+            data: { bundle, leftAlone, notesPath, written },
+            text: [
+              `${id} handoff: ${notesPath}`,
+              `wrote: ${written.join(", ") || "none"}`,
+              `left alone: ${leftAlone.join(", ") || "none"}`,
+            ].join("\n"),
+          };
+        },
+        {
+          description: "Seed untouched NOTES.md sections from store and git evidence.",
+          positionals: [{ name: "bundle-id", required: true }],
+          rootDescription: "Prepare a factual bundle handoff without overwriting human notes.",
         },
       ),
     );
