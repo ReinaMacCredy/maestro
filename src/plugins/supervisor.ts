@@ -798,6 +798,13 @@ export const supervisorPlugin: BuiltInPlugin = {
             }
             const deadline = Date.now() + 2_000;
             while (pidAlive(state.pid) && Date.now() < deadline) await Bun.sleep(50);
+            if (pidAlive(state.pid)) {
+              throw new CliError(
+                "SUPERVISOR_STOP_TIMEOUT",
+                `supervisor did not exit (pid ${state.pid}); run: kill -9 ${state.pid}`,
+                { pid: state.pid },
+              );
+            }
           }
           await rm(paths.state, { force: true });
           return {
