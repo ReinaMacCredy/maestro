@@ -42,6 +42,27 @@ test("14 SessionStart brief contains held work, enabled policies, and pending me
   });
 });
 
+test("14b method map renders on SessionStart only, not on UserPromptSubmit", async () => {
+  await withFixture(async (fixture) => {
+    const start = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
+      MAESTRO_SESSION_ID: "map-session",
+      MAESTRO_SESSION_PID: String(process.pid),
+    });
+    const prompt = await runCli(fixture, ["hook", "record", "--event", "UserPromptSubmit"], {
+      MAESTRO_SESSION_ID: "map-session",
+      MAESTRO_SESSION_PID: String(process.pid),
+    });
+
+    expect(start.exitCode).toBe(0);
+    expect(start.stdout).toContain("method:");
+    expect(start.stdout).toContain("bundle open");
+    expect(start.stdout).toContain("decision draft");
+    expect(prompt.exitCode).toBe(0);
+    expect(prompt.stdout).not.toContain("method:");
+    expect(prompt.stdout).toContain("held work");
+  });
+});
+
 test("15 message reads advance a per-session cursor and return each message once", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["msg", "send", "target-session", "handoff context"])).exitCode).toBe(0);

@@ -41,21 +41,28 @@ interface WorkStartResult {
 
 type BriefContributor = (sessionId: string) => string | Promise<string>;
 
-export class BriefService {
-  private readonly contributors: BriefContributor[] = [];
+interface BriefEntry {
+  contributor: BriefContributor;
+  events?: string[];
+}
 
-  register(contributor: BriefContributor): Disposer {
-    this.contributors.push(contributor);
+export class BriefService {
+  private readonly entries: BriefEntry[] = [];
+
+  register(contributor: BriefContributor, opts?: { events?: string[] }): Disposer {
+    const entry: BriefEntry = { contributor, events: opts?.events };
+    this.entries.push(entry);
     return () => {
-      const index = this.contributors.indexOf(contributor);
-      if (index >= 0) this.contributors.splice(index, 1);
+      const index = this.entries.indexOf(entry);
+      if (index >= 0) this.entries.splice(index, 1);
     };
   }
 
-  async render(sessionId: string): Promise<string> {
+  async render(sessionId: string, event = "SessionStart"): Promise<string> {
     const sections: string[] = [];
-    for (const contributor of this.contributors) {
-      const section = await contributor(sessionId);
+    for (const entry of this.entries) {
+      if (entry.events && !entry.events.includes(event)) continue;
+      const section = await entry.contributor(sessionId);
       if (section) sections.push(section);
     }
     return sections.join("\n");
@@ -201,6 +208,19 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() => context.provide("brief", brief));
 
     context.effect(() =>
+      brief.register(
+        () =>
+          [
+            "method: design -> work -> verify; skills: ~/.agents/skills/maestro-{bundle,design,work,verify}/SKILL.md",
+            "  tier: one session, one branch, acceptance in a sentence -> maestro work add|start|done",
+            "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
+            '  forks: settle before tests - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
+            '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
+          ].join("\n"),
+        { events: ["SessionStart"] },
+      ),
+    );
+    context.effect(() =>
       brief.register((sessionId) => {
         const items = work.list();
         const held = items.filter((item) => item.heldBy === sessionId);
@@ -338,7 +358,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
-          const text = await brief.render(session.id);
+          const text = await brief.render(session.id, event);
           return { data: { session, brief: text }, text };
         },
         {
