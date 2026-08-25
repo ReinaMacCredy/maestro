@@ -401,7 +401,9 @@ test("141 attention raises REPEATED_FAILURE only for the third failed note since
 
   for (const notes of [
     ["failed: first", "failed: second"],
-    ["failed:first", "Failed: second", "ordinary failure"],
+    ["failed:first", "failed:second", "failed:third"],
+    ["Failed: first", "Failed: second", "Failed: third"],
+    ["failed first", "failed second", "ordinary failure"],
   ]) {
     await withFixture(async (fixture) => {
       const work = await addWork(fixture, "non-qualifying failures");
