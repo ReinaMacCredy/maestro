@@ -55,6 +55,29 @@ test("124 bundle open scaffolds the trio, records an active row, and links work"
   });
 });
 
+test("124b bundle open links every repeated --work flag, not only the last", async () => {
+  await withFixture(async (fixture) => {
+    const first = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
+    const second = await runCli(fixture, ["work", "add", "tune the amp", "--atomic-reason", "test"]);
+    const firstId = idFrom(first);
+    const secondId = idFrom(second);
+    const opened = await runCli(fixture, [
+      "bundle",
+      "open",
+      "amp-wiring",
+      "--work",
+      firstId,
+      "--work",
+      secondId,
+    ]);
+    expect(opened.exitCode).toBe(0);
+    expect(opened.stdout).toContain(`work: ${firstId}, ${secondId}`);
+    const shown = await runCli(fixture, ["bundle", "show", "amp-wiring"]);
+    expect(shown.stdout).toContain(firstId);
+    expect(shown.stdout).toContain(secondId);
+  });
+});
+
 test("125 bundle close snapshots text into the store and search hits it after the dir dies", async () => {
   await withFixture(async (fixture) => {
     await runCli(fixture, ["bundle", "open", "amp-wiring"]);

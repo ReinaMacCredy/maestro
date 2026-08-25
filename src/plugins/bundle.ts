@@ -272,8 +272,9 @@ export const bundlePlugin: BuiltInPlugin = {
           description: "Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.",
           flags: {
             "--work": {
-              description: "Link a work item to this bundle (repeatable).",
+              description: "Link a work item to this bundle.",
               value: true,
+              multiple: true,
             },
           },
           positionals: [{ name: "id", required: true }],
