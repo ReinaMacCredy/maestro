@@ -47,6 +47,7 @@ interface EventOwner {
 }
 
 const searchResultLimit = 20;
+const SEARCH_INDEX_VERSION = 1;
 
 function oneLine(value: string, limit: number): string {
   const compact = value.replaceAll(/\s+/g, " ").trim();
@@ -220,6 +221,9 @@ export const observabilityPlugin: BuiltInPlugin = {
         entity_id UNINDEXED,
         text
       );
+      CREATE TABLE IF NOT EXISTS search_index_state (
+        version INTEGER NOT NULL
+      );
       CREATE TRIGGER IF NOT EXISTS search_work_insert
       AFTER INSERT ON work BEGIN
         INSERT INTO search_index(surface, entity_id, text)
@@ -261,23 +265,42 @@ export const observabilityPlugin: BuiltInPlugin = {
         VALUES ('prompt', CAST(new.id AS TEXT), new.text);
       END;
     `);
-    context.store.database.run("DELETE FROM search_index");
-    context.store.database.run(`
-      INSERT INTO search_index(surface, entity_id, text)
-      SELECT 'work', id, title || ' ' || COALESCE(acceptance, '') || ' ' || COALESCE(evidence, '') FROM work
-    `);
-    context.store.database.run(
-      "INSERT INTO search_index(surface, entity_id, text) SELECT 'note', CAST(id AS TEXT), text FROM work_notes",
-    );
-    context.store.database.run(
-      "INSERT INTO search_index(surface, entity_id, text) SELECT 'decision', id, text FROM decisions",
-    );
-    context.store.database.run(
-      "INSERT INTO search_index(surface, entity_id, text) SELECT 'log', CAST(id AS TEXT), type || ' ' || payload FROM event_log",
-    );
-    context.store.database.run(
-      "INSERT INTO search_index(surface, entity_id, text) SELECT 'prompt', CAST(id AS TEXT), text FROM prompts",
-    );
+    const currentVersion = () =>
+      context.store.database
+        .query<{ version: number }, []>("SELECT version FROM search_index_state LIMIT 1")
+        .get()?.version;
+    if (currentVersion() !== SEARCH_INDEX_VERSION) {
+      context.store.database.exec("BEGIN IMMEDIATE");
+      try {
+        if (currentVersion() !== SEARCH_INDEX_VERSION) {
+          context.store.database.run("DELETE FROM search_index WHERE surface != '[legacy]'");
+          context.store.database.run(`
+            INSERT INTO search_index(surface, entity_id, text)
+            SELECT 'work', id, title || ' ' || COALESCE(acceptance, '') || ' ' || COALESCE(evidence, '') FROM work
+          `);
+          context.store.database.run(
+            "INSERT INTO search_index(surface, entity_id, text) SELECT 'note', CAST(id AS TEXT), text FROM work_notes",
+          );
+          context.store.database.run(
+            "INSERT INTO search_index(surface, entity_id, text) SELECT 'decision', id, text FROM decisions",
+          );
+          context.store.database.run(
+            "INSERT INTO search_index(surface, entity_id, text) SELECT 'log', CAST(id AS TEXT), type || ' ' || payload FROM event_log",
+          );
+          context.store.database.run(
+            "INSERT INTO search_index(surface, entity_id, text) SELECT 'prompt', CAST(id AS TEXT), text FROM prompts",
+          );
+          context.store.database.run("DELETE FROM search_index_state");
+          context.store.database
+            .query("INSERT INTO search_index_state(version) VALUES (?)")
+            .run(SEARCH_INDEX_VERSION);
+        }
+        context.store.database.exec("COMMIT");
+      } catch (error) {
+        context.store.database.exec("ROLLBACK");
+        throw error;
+      }
+    }
 
     context.effect(() =>
       context.cli.register(

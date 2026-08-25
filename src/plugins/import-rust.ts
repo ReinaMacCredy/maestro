@@ -193,6 +193,19 @@ function rebuildLegacySearch(context: PluginContext): void {
   `);
 }
 
+function legacySearchNeedsRebuild(context: PluginContext): boolean {
+  if (!hasTable(context.store.database, "search_index")) return false;
+  const hasLegacyCards = context.store.database
+    .query<{ present: number }, []>("SELECT 1 AS present FROM legacy_cards LIMIT 1")
+    .get() !== null;
+  if (!hasLegacyCards) return false;
+  return context.store.database
+    .query<{ present: number }, []>(
+      "SELECT 1 AS present FROM search_index WHERE surface = '[legacy]' LIMIT 1",
+    )
+    .get() === null;
+}
+
 function sourceData(path: string): {
   cards: SourceCard[];
   decisions: ImportedDecision[];
@@ -414,7 +427,7 @@ export const importRustPlugin: BuiltInPlugin = {
   name: "import-rust",
   apply(context) {
     initializeLegacyTables(context);
-    rebuildLegacySearch(context);
+    if (legacySearchNeedsRebuild(context)) rebuildLegacySearch(context);
     context.effect(() =>
       context.cli.register(
         "import rust",
