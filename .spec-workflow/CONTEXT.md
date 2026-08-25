@@ -74,3 +74,30 @@ code runs from source, open-world.
 **Legacy binary**:
 The last Rust maestro, kept installed as `maestro-legacy` as rollback during the
 transition.
+
+**Attention**:
+A candidate signal a cheap detector raises about a work item (stalled lease,
+repeated failure, stale decision, scope collision), recorded once per
+fingerprint and delivered as an open question through the mailbox. It names
+evidence and a smallest action; it never carries a verdict or a command
+(intervention ladder levels 1-2).
+_Avoid_: alert (implies severity), violation
+
+**Supervisor**:
+The opt-in timer daemon (`supervisor start|stop|status`) that runs the same
+scan `maestro attention` runs and delivers through the mailbox. Observes and
+asks only; has no verb that mutates work, decisions, or leases (ADR-0006).
+_Avoid_: watchdog, orchestrator
+
+**Lane**:
+A sub-agent dispatch with one named mandate: `delivery` (may write, holds the
+lease), `decision` (no-write recommendation), or `challenge` (adversarial
+findings, no fixes). The mandate is written in the dispatch envelope.
+_Avoid_: worker, role (roles derive from leases, not a field)
+
+**Envelope / Handback**:
+The dispatch contract given to a lane (objective, owned scope, excluded scope,
+mutation, stop condition, lane) and the structured return (status vocabulary,
+assumptions not verified, residual risks). Text in the skills, not a store
+entity.
+_Avoid_: prompt, report
