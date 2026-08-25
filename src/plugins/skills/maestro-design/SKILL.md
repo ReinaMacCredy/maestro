@@ -11,6 +11,35 @@ unsettled. Design is human-guided whenever a choice changes what will be
 built. Do not begin implementation until the relevant decisions are locked and
 the user has approved the resulting scope.
 
+## Intake
+
+Pin the problem before choosing a method:
+
+> For [who], reach [observable outcome] within [boundary], because [impact],
+> without [excluded effect].
+
+Route uncertainty to a lane:
+
+| Current uncertainty | Lane |
+|---|---|
+| state unknown | scout, no-write |
+| several architectures | two or three decision lanes |
+| contract clear | delivery |
+| candidate needs breaking | challenge |
+| hard-to-reverse fork | council |
+
+Score the ROI of independent judgment from 0 to 2 for each question:
+
+1. Would wrong framing be costly?
+2. Is the decision hard to reverse?
+3. Is the domain new to the owner?
+4. Can independent judgment produce a materially different option?
+5. Is human attention fragmented?
+
+Route totals of 0-2 to the direct session, 3-5 to a Lead plus one peer, 6-8 to
+several lanes, and 9-10 to a council. Before launching any lane, pin the
+branch and commit, active writers, and dirty paths.
+
 ## Recall pass first
 
 Before proposing anything, search the store for precedent:
@@ -34,6 +63,21 @@ re-deriving the argument.
   `--supersedes`; never rewrite its history.
 - Keep acceptance, non-goals, and authority visible on the work item.
 - Do not edit code during a design-only engagement.
+
+## Council
+
+Use a council only for a hard-to-reverse fork with wide blast radius. Dispatch
+two or three fresh-context decision lanes with the same neutral brief and no
+hint of the Lead's preference. Seal the council: the Lead reads no view until
+all views have returned.
+
+Reconcile the views through eight axes: `premise`, `mechanism`, `boundary`,
+`failure`, `reversibility`, `evidence`, `authority`, and `proof`. Never count
+votes. Draft the result with `maestro decision draft --rationale`, preserving
+the losing side's dissent in the rationale.
+
+The candidate under review stays frozen. A new finding creates a new candidate
+instead of silently changing the stable candidate mid-review.
 
 ## Exit
 

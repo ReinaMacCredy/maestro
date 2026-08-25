@@ -31,7 +31,9 @@ maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link wo
   `maestro decision draft "<text>" --rationale "<why>" --work <id>` and link
   the decision ids from SPEC.
 - `NOTES.md` is a pure handoff: current state, next action, base commit.
-  Overwrite it; never append. History lives in `maestro trace` and decisions.
+  It also names Authority transferred and retained, Failed approaches, and Do
+  not repeat. Overwrite it; never append. History lives in `maestro trace` and
+  decisions.
 - `VERIFY.md` is scenarios + results; each scenario points at a work item's
   acceptance or claim instead of restating it.
 
@@ -51,6 +53,23 @@ maestro search "<term>"                 # recall: hits labeled (bundle, ...)
 On resume, read the active bundle's NOTES.md first, then `maestro bundle show`
 for linked work and decisions. Never trust conversational memory over the
 bundle; the files and the store are the spec.
+
+## Compact or hand off
+
+Hand off instead of compacting when:
+
+- the owner changes
+- a dependency becomes its own branch
+- the role changes
+- the context is full of false starts
+
+Compact only when ownership, scope, and role stay stable and the history still
+helps the same writer continue.
+
+Use break-before-make when the writer on a moving scope changes: release the
+lease and overwrite NOTES.md before the new session starts. The handoff packet
+must preserve the base, Current State, Next Action, Authority transferred and
+retained, Failed approaches, and Do not repeat.
 
 ## Hand-off
 

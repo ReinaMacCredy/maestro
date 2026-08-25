@@ -54,6 +54,16 @@ Base:
 ## Current State
 
 ## Next Action
+
+## Authority
+
+Transferred:
+
+Retained:
+
+## Failed approaches
+
+## Do not repeat
 `;
 }
 
