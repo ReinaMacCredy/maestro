@@ -74,6 +74,7 @@ interface HandbackRow {
 }
 
 export interface DispatchService {
+  council(workId: string): CouncilStatus;
   get(id: string): DispatchRecord | null;
   list(workId?: string): DispatchRecord[];
 }
@@ -81,6 +82,16 @@ export interface DispatchService {
 export interface HandbackService {
   get(id: string): HandbackRecord | null;
   list(dispatchId: string): HandbackRecord[];
+}
+
+export interface CouncilStatus {
+  workId: string;
+  total: number;
+  returned: number;
+  resolved: number;
+  sealed: boolean;
+  unsealed: boolean;
+  unsealReason: string | null;
 }
 
 const handbackStatuses: readonly HandbackStatus[] = [
@@ -197,6 +208,37 @@ function listHandbacks(context: PluginContext, dispatchId: string): HandbackReco
     .map(fromHandbackRow);
 }
 
+function councilStatus(context: PluginContext, workId: string): CouncilStatus {
+  const counts = context.store.database
+    .query<{ resolved: number; returned: number; total: number }, [string]>(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN returned.dispatch_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS returned,
+              COALESCE(SUM(CASE
+                WHEN returned.dispatch_id IS NOT NULL OR dispatches.cancelled_at IS NOT NULL
+                THEN 1 ELSE 0 END), 0) AS resolved
+       FROM dispatches
+       LEFT JOIN (SELECT DISTINCT dispatch_id FROM handbacks) AS returned
+         ON returned.dispatch_id = dispatches.id
+       WHERE dispatches.work_id = ?`,
+    )
+    .get(workId) ?? { resolved: 0, returned: 0, total: 0 };
+  const unseal = context.store.database
+    .query<{ unseal_reason: string }, [string]>(
+      "SELECT unseal_reason FROM dispatch_councils WHERE work_id = ?",
+    )
+    .get(workId);
+  const unsealed = unseal !== null;
+  return {
+    workId,
+    total: counts.total,
+    returned: counts.returned,
+    resolved: counts.resolved,
+    sealed: counts.total > 1 && !unsealed && counts.resolved < counts.total,
+    unsealed,
+    unsealReason: unseal?.unseal_reason ?? null,
+  };
+}
+
 function nextId(context: PluginContext): string {
   const next =
     context.store.database
@@ -267,6 +309,12 @@ function formatHandback(handback: HandbackRecord): string {
   ].join("\n");
 }
 
+function formatCouncil(council: CouncilStatus): string | null {
+  if (council.total < 2) return null;
+  const state = council.unsealed ? "unsealed" : council.sealed ? "sealed" : "complete";
+  return `council: ${state} (${council.returned}/${council.total} returned)`;
+}
+
 export const dispatchPlugin: BuiltInPlugin = {
   name: "dispatch",
   inject: ["work"],
@@ -305,9 +353,15 @@ export const dispatchPlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id);
+      CREATE TABLE IF NOT EXISTS dispatch_councils (
+        work_id TEXT PRIMARY KEY REFERENCES work(id),
+        unsealed_at TEXT NOT NULL,
+        unseal_reason TEXT NOT NULL
+      );
     `);
 
     const service: DispatchService = {
+      council: (workId) => councilStatus(context, workId),
       get: (id) => getDispatch(context, id),
       list: (workId) => listDispatches(context, workId),
     };
@@ -487,14 +541,60 @@ export const dispatchPlugin: BuiltInPlugin = {
             if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
           }
           const dispatches = service.list(workId);
+          const council = workId ? service.council(workId) : null;
+          const councilLine = council ? formatCouncil(council) : null;
           return {
-            data: { dispatches },
-            text: dispatches.map(format).join("\n\n"),
+            data: { dispatches, council },
+            text: [councilLine, dispatches.map(format).join("\n\n")]
+              .filter((part): part is string => Boolean(part))
+              .join("\n\n"),
           };
         },
         {
           description: "List dispatch contracts, optionally for one work item.",
           positionals: [{ name: "work-id", required: false }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch unseal",
+        (invocation): CliResult => {
+          const workId = position(invocation, 0, "work id");
+          const work = context.work as WorkService;
+          if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+          const council = service.council(workId);
+          if (council.total < 2) {
+            throw new CliError("INVALID_STATE", `${workId} has no council to unseal`);
+          }
+          if (council.unsealed) {
+            throw new CliError("INVALID_STATE", `${workId} council is already unsealed`);
+          }
+          const reason = requiredOption(invocation, "--reason");
+          const unsealedAt = new Date().toISOString();
+          context.store.database
+            .query(
+              "INSERT INTO dispatch_councils(work_id, unsealed_at, unseal_reason) VALUES (?, ?, ?)",
+            )
+            .run(workId, unsealedAt, reason);
+          context.log.append({
+            type: "dispatch.unseal",
+            entityType: "work",
+            entityId: workId,
+            sessionId: context.sessions.current().id,
+            payload: { reason },
+          });
+          const opened = service.council(workId);
+          return {
+            data: { council: opened },
+            text: `${formatCouncil(opened)}\nreason: ${reason}`,
+          };
+        },
+        {
+          description: "Open a sealed council early and record why.",
+          flags: { "--reason": { description: "Record why the council opened early.", value: true } },
+          positionals: [{ name: "work-id", required: true }],
         },
       ),
     );
@@ -583,7 +683,26 @@ export const dispatchPlugin: BuiltInPlugin = {
         "handback show",
         (invocation): CliResult => {
           const handback = requireHandback(context, position(invocation, 0, "handback id"));
-          return { data: { handback }, text: formatHandback(handback) };
+          const dispatch = requireDispatch(context, handback.dispatchId);
+          const council = service.council(dispatch.workId);
+          if (council.sealed) {
+            throw new CliError(
+              "SEALED",
+              `council ${dispatch.workId} is SEALED (${council.returned}/${council.total} returned)`,
+              {
+                returned: council.returned,
+                total: council.total,
+                workId: dispatch.workId,
+              },
+            );
+          }
+          const councilLine = formatCouncil(council);
+          return {
+            data: { handback, council: councilLine ? council : null },
+            text: [formatHandback(handback), councilLine, council.unsealReason ? `reason: ${council.unsealReason}` : null]
+              .filter((line): line is string => line !== null)
+              .join("\n"),
+          };
         },
         {
           description: "Show one stored handback packet.",

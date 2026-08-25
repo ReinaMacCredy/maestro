@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { idFrom, runCli, withFixture } from "./helpers.ts";
+import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 function session(id: string): Record<string, string> {
   return {
@@ -36,7 +36,7 @@ function dispatchId(result: { stdout: string }): string {
   return match[1];
 }
 
-async function openDispatch(fixture: Parameters<Parameters<typeof withFixture>[0]>[0]): Promise<string> {
+async function openDispatch(fixture: Fixture): Promise<string> {
   const work = idFrom(
     await runCli(fixture, ["work", "add", "handback contract", "--atomic-reason", "fixture"]),
   );
@@ -63,6 +63,25 @@ function handbackFileArgs(dispatch: string): string[] {
     "--incidental-findings",
     "None",
   ];
+}
+
+function handbackId(result: { stdout: string }): string {
+  const match = result.stdout.match(/^(\S+) \[[A-Z_]+\]/);
+  if (!match?.[1]) throw new Error(`missing handback id in stdout: ${result.stdout}`);
+  return match[1];
+}
+
+async function openCouncil(
+  fixture: Fixture,
+): Promise<{ dispatches: [string, string]; work: string }> {
+  const work = idFrom(
+    await runCli(fixture, ["work", "add", "sealed council", "--atomic-reason", "fixture"]),
+  );
+  const first = await runCli(fixture, dispatchOpenArgs(work));
+  const second = await runCli(fixture, dispatchOpenArgs(work));
+  expect(first.exitCode).toBe(0);
+  expect(second.exitCode).toBe(0);
+  return { dispatches: [dispatchId(first), dispatchId(second)], work };
 }
 
 test("173 dispatch open refuses every missing or blank envelope field", async () => {
@@ -220,5 +239,67 @@ test("178 handback proof must name an evidence layer", async () => {
     for (const layer of ["source", "artifact", "installed", "live", "journey"]) {
       expect(filed.stderr).toContain(layer);
     }
+  });
+});
+
+test("179 a council stays sealed until every dispatch has returned", async () => {
+  await withFixture(async (fixture) => {
+    const council = await openCouncil(fixture);
+    const first = await runCli(fixture, handbackFileArgs(council.dispatches[0]));
+    expect(first.exitCode).toBe(0);
+    const firstHandback = handbackId(first);
+
+    const sealed = await runCli(fixture, ["handback", "show", firstHandback]);
+    expect(sealed.exitCode).not.toBe(0);
+    expect(sealed.stderr).toContain("SEALED");
+
+    const listed = await runCli(fixture, ["dispatch", "list", council.work]);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain("council: sealed (1/2 returned)");
+    expect(listed.stdout).not.toContain("claim:");
+
+    expect((await runCli(fixture, handbackFileArgs(council.dispatches[1]))).exitCode).toBe(0);
+    const opened = await runCli(fixture, ["handback", "show", firstHandback]);
+    expect(opened.exitCode).toBe(0);
+    expect(opened.stdout).toContain("claim: the contract is stored");
+  });
+});
+
+test("180 a single dispatch handback reads immediately", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const filed = await runCli(fixture, handbackFileArgs(dispatch));
+    expect(filed.exitCode).toBe(0);
+    const shown = await runCli(fixture, ["handback", "show", handbackId(filed)]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("claim: the contract is stored");
+    expect(shown.stdout).not.toContain("SEALED");
+  });
+});
+
+test("181 dispatch unseal records its reason and marks later reads unsealed", async () => {
+  await withFixture(async (fixture) => {
+    const council = await openCouncil(fixture);
+    const filed = await runCli(fixture, handbackFileArgs(council.dispatches[0]));
+    const id = handbackId(filed);
+    const reason = "owner ended the council early";
+
+    const unsealed = await runCli(fixture, [
+      "dispatch",
+      "unseal",
+      council.work,
+      "--reason",
+      reason,
+    ]);
+    expect(unsealed.exitCode).toBe(0);
+    const shown = await runCli(fixture, ["handback", "show", id]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("council: unsealed (1/2 returned)");
+    expect(shown.stdout).toContain(`reason: ${reason}`);
+
+    const trace = await runCli(fixture, ["trace", council.work]);
+    expect(trace.exitCode).toBe(0);
+    expect(trace.stdout).toContain("dispatch.unseal");
+    expect(trace.stdout).toContain(reason);
   });
 });
