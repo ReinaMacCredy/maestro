@@ -36,6 +36,35 @@ function dispatchId(result: { stdout: string }): string {
   return match[1];
 }
 
+async function openDispatch(fixture: Parameters<Parameters<typeof withFixture>[0]>[0]): Promise<string> {
+  const work = idFrom(
+    await runCli(fixture, ["work", "add", "handback contract", "--atomic-reason", "fixture"]),
+  );
+  const opened = await runCli(fixture, dispatchOpenArgs(work));
+  expect(opened.exitCode).toBe(0);
+  return dispatchId(opened);
+}
+
+function handbackFileArgs(dispatch: string): string[] {
+  return [
+    "handback",
+    "file",
+    dispatch,
+    "--status",
+    "DONE",
+    "--claim",
+    "the contract is stored",
+    "--proof",
+    "source: focused test passes",
+    "--assumptions",
+    "None",
+    "--residual-risks",
+    "None",
+    "--incidental-findings",
+    "None",
+  ];
+}
+
 test("173 dispatch open refuses every missing or blank envelope field", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
@@ -133,5 +162,63 @@ test("175 accepting dispatches never changes the work write lease", async () => 
     const shown = await runCli(fixture, ["work", "show", work]);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).not.toContain("held by:");
+  });
+});
+
+test("176 handback file refuses a status outside the eight-value vocabulary", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const args = handbackFileArgs(dispatch);
+    args[args.indexOf("--status") + 1] = "PASS";
+    const filed = await runCli(fixture, args);
+    expect(filed.exitCode).not.toBe(0);
+    for (const status of [
+      "DONE",
+      "BLOCKED",
+      "UNTESTABLE",
+      "UNKNOWN",
+      "FAILED",
+      "CHALLENGE",
+      "REOPEN_REQUEST",
+      "DEPENDENCY_REQUEST",
+    ]) {
+      expect(filed.stderr).toContain(status);
+    }
+  });
+});
+
+test("177 handback assumptions and residual risks must be explicit while None is valid", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    for (const field of ["--assumptions", "--residual-risks"]) {
+      const args = handbackFileArgs(dispatch);
+      args[args.indexOf(field) + 1] = "  ";
+      const blank = await runCli(fixture, args);
+      expect(blank.exitCode).not.toBe(0);
+      expect(blank.stderr).toContain(field);
+    }
+
+    const filed = await runCli(fixture, handbackFileArgs(dispatch));
+    expect(filed.exitCode).toBe(0);
+    const match = filed.stdout.match(/^(\S+) \[DONE\]/);
+    expect(match?.[1]).toBeTruthy();
+    const shown = await runCli(fixture, ["handback", "show", match?.[1] as string]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("assumptions not verified: None");
+    expect(shown.stdout).toContain("residual risks: None");
+    expect(shown.stdout).toContain("incidental findings: None");
+  });
+});
+
+test("178 handback proof must name an evidence layer", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const args = handbackFileArgs(dispatch);
+    args[args.indexOf("--proof") + 1] = "the check passed";
+    const filed = await runCli(fixture, args);
+    expect(filed.exitCode).not.toBe(0);
+    for (const layer of ["source", "artifact", "installed", "live", "journey"]) {
+      expect(filed.stderr).toContain(layer);
+    }
   });
 });

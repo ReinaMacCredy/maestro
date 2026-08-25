@@ -14,7 +14,7 @@ export interface DispatchRecord {
   evidenceRequired: string;
   targetSession: string | null;
   heldBy: string | null;
-  state: "open" | "cancelled";
+  state: "open" | "returned" | "cancelled";
   cancelReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -36,12 +36,63 @@ interface DispatchRow {
   cancel_reason: string | null;
   created_at: string;
   updated_at: string;
+  returned: number;
+}
+
+export type HandbackStatus =
+  | "DONE"
+  | "BLOCKED"
+  | "UNTESTABLE"
+  | "UNKNOWN"
+  | "FAILED"
+  | "CHALLENGE"
+  | "REOPEN_REQUEST"
+  | "DEPENDENCY_REQUEST";
+
+export interface HandbackRecord {
+  id: string;
+  dispatchId: string;
+  status: HandbackStatus;
+  claim: string;
+  proof: string;
+  assumptions: string;
+  residualRisks: string;
+  incidentalFindings: string;
+  createdAt: string;
+}
+
+interface HandbackRow {
+  id: string;
+  dispatch_id: string;
+  status: HandbackStatus;
+  claim: string;
+  proof: string;
+  assumptions: string;
+  residual_risks: string;
+  incidental_findings: string;
+  created_at: string;
 }
 
 export interface DispatchService {
   get(id: string): DispatchRecord | null;
   list(workId?: string): DispatchRecord[];
 }
+
+export interface HandbackService {
+  get(id: string): HandbackRecord | null;
+  list(dispatchId: string): HandbackRecord[];
+}
+
+const handbackStatuses: readonly HandbackStatus[] = [
+  "DONE",
+  "BLOCKED",
+  "UNTESTABLE",
+  "UNKNOWN",
+  "FAILED",
+  "CHALLENGE",
+  "REOPEN_REQUEST",
+  "DEPENDENCY_REQUEST",
+];
 
 function fromRow(row: DispatchRow): DispatchRecord {
   return {
@@ -56,7 +107,7 @@ function fromRow(row: DispatchRow): DispatchRecord {
     evidenceRequired: row.evidence_required,
     targetSession: row.target_session,
     heldBy: row.held_by,
-    state: row.cancelled_at ? "cancelled" : "open",
+    state: row.cancelled_at ? "cancelled" : row.returned ? "returned" : "open",
     cancelReason: row.cancel_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -65,7 +116,12 @@ function fromRow(row: DispatchRow): DispatchRecord {
 
 function getDispatch(context: PluginContext, id: string): DispatchRecord | null {
   const row = context.store.database
-    .query<DispatchRow, [string]>("SELECT * FROM dispatches WHERE id = ?")
+    .query<DispatchRow, [string]>(
+      `SELECT dispatches.*,
+              EXISTS(SELECT 1 FROM handbacks WHERE handbacks.dispatch_id = dispatches.id) AS returned
+       FROM dispatches
+       WHERE dispatches.id = ?`,
+    )
     .get(id);
   return row ? fromRow(row) : null;
 }
@@ -85,15 +141,60 @@ function listDispatches(context: PluginContext, workId?: string): DispatchRecord
   const rows = workId
     ? context.store.database
         .query<DispatchRow, [string]>(
-          "SELECT * FROM dispatches WHERE work_id = ? ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
+          `SELECT dispatches.*,
+                  EXISTS(SELECT 1 FROM handbacks WHERE handbacks.dispatch_id = dispatches.id) AS returned
+           FROM dispatches
+           WHERE dispatches.work_id = ?
+           ORDER BY CAST(SUBSTR(dispatches.id, 2) AS INTEGER)`,
         )
         .all(workId)
     : context.store.database
         .query<DispatchRow, []>(
-          "SELECT * FROM dispatches ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
+          `SELECT dispatches.*,
+                  EXISTS(SELECT 1 FROM handbacks WHERE handbacks.dispatch_id = dispatches.id) AS returned
+           FROM dispatches
+           ORDER BY CAST(SUBSTR(dispatches.id, 2) AS INTEGER)`,
         )
         .all();
   return rows.map(fromRow);
+}
+
+function fromHandbackRow(row: HandbackRow): HandbackRecord {
+  return {
+    id: row.id,
+    dispatchId: row.dispatch_id,
+    status: row.status,
+    claim: row.claim,
+    proof: row.proof,
+    assumptions: row.assumptions,
+    residualRisks: row.residual_risks,
+    incidentalFindings: row.incidental_findings,
+    createdAt: row.created_at,
+  };
+}
+
+function getHandback(context: PluginContext, id: string): HandbackRecord | null {
+  const row = context.store.database
+    .query<HandbackRow, [string]>("SELECT * FROM handbacks WHERE id = ?")
+    .get(id);
+  return row ? fromHandbackRow(row) : null;
+}
+
+function requireHandback(context: PluginContext, id: string): HandbackRecord {
+  const handback = getHandback(context, id);
+  if (!handback) {
+    throw new CliError("NOT_FOUND", `handback not found: ${id}`, { id });
+  }
+  return handback;
+}
+
+function listHandbacks(context: PluginContext, dispatchId: string): HandbackRecord[] {
+  return context.store.database
+    .query<HandbackRow, [string]>(
+      "SELECT * FROM handbacks WHERE dispatch_id = ? ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
+    )
+    .all(dispatchId)
+    .map(fromHandbackRow);
 }
 
 function nextId(context: PluginContext): string {
@@ -104,6 +205,16 @@ function nextId(context: PluginContext): string {
       )
       .get()?.next ?? 1;
   return `x${next}`;
+}
+
+function nextHandbackId(context: PluginContext): string {
+  const next =
+    context.store.database
+      .query<{ next: number }, []>(
+        "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM handbacks",
+      )
+      .get()?.next ?? 1;
+  return `h${next}`;
 }
 
 function position(invocation: CliInvocation, index: number, label: string): string {
@@ -144,6 +255,18 @@ function format(dispatch: DispatchRecord): string {
     .join("\n");
 }
 
+function formatHandback(handback: HandbackRecord): string {
+  return [
+    `${handback.id} [${handback.status}]`,
+    `dispatch: ${handback.dispatchId}`,
+    `claim: ${handback.claim}`,
+    `proof: ${handback.proof}`,
+    `assumptions not verified: ${handback.assumptions}`,
+    `residual risks: ${handback.residualRisks}`,
+    `incidental findings: ${handback.incidentalFindings}`,
+  ].join("\n");
+}
+
 export const dispatchPlugin: BuiltInPlugin = {
   name: "dispatch",
   inject: ["work"],
@@ -167,6 +290,21 @@ export const dispatchPlugin: BuiltInPlugin = {
         updated_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS dispatches_work_id ON dispatches(work_id);
+      CREATE TABLE IF NOT EXISTS handbacks (
+        id TEXT PRIMARY KEY,
+        dispatch_id TEXT NOT NULL REFERENCES dispatches(id),
+        status TEXT NOT NULL CHECK(status IN (
+          'DONE', 'BLOCKED', 'UNTESTABLE', 'UNKNOWN', 'FAILED', 'CHALLENGE',
+          'REOPEN_REQUEST', 'DEPENDENCY_REQUEST'
+        )),
+        claim TEXT NOT NULL,
+        proof TEXT NOT NULL,
+        assumptions TEXT NOT NULL,
+        residual_risks TEXT NOT NULL,
+        incidental_findings TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id);
     `);
 
     const service: DispatchService = {
@@ -174,6 +312,11 @@ export const dispatchPlugin: BuiltInPlugin = {
       list: (workId) => listDispatches(context, workId),
     };
     context.effect(() => context.provide("dispatch", service));
+    const handbackService: HandbackService = {
+      get: (id) => getHandback(context, id),
+      list: (dispatchId) => listHandbacks(context, dispatchId),
+    };
+    context.effect(() => context.provide("handback", handbackService));
 
     context.effect(() =>
       context.cli.register(
@@ -247,8 +390,8 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
           const dispatch = requireDispatch(context, id);
-          if (dispatch.state === "cancelled") {
-            throw new CliError("INVALID_STATE", `${id} is cancelled`);
+          if (dispatch.state !== "open") {
+            throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
           }
           const sessionId = context.sessions.current().id;
           if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
@@ -292,8 +435,8 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
           const dispatch = requireDispatch(context, id);
-          if (dispatch.state === "cancelled") {
-            throw new CliError("INVALID_STATE", `${id} is cancelled`);
+          if (dispatch.state !== "open") {
+            throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
           }
           const reason = requiredOption(invocation, "--reason");
           const now = new Date().toISOString();
@@ -352,6 +495,99 @@ export const dispatchPlugin: BuiltInPlugin = {
         {
           description: "List dispatch contracts, optionally for one work item.",
           positionals: [{ name: "work-id", required: false }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "handback file",
+        (invocation): CliResult => {
+          const dispatchId = position(invocation, 0, "dispatch id");
+          const dispatch = requireDispatch(context, dispatchId);
+          if (dispatch.state === "cancelled") {
+            throw new CliError("INVALID_STATE", `${dispatchId} is cancelled`);
+          }
+          const status = requiredOption(invocation, "--status");
+          if (!handbackStatuses.includes(status as HandbackStatus)) {
+            throw new CliError(
+              "INVALID_STATUS",
+              `invalid handback status ${status}; expected one of: ${handbackStatuses.join(", ")}`,
+              { statuses: handbackStatuses },
+            );
+          }
+          const claim = requiredOption(invocation, "--claim");
+          const proof = requiredOption(invocation, "--proof");
+          const layers = ["source", "artifact", "installed", "live", "journey"];
+          if (!layers.some((layer) => new RegExp(`\\b${layer}\\b`, "i").test(proof))) {
+            throw new CliError(
+              "EVIDENCE_LAYER_REQUIRED",
+              `proof must name an evidence layer: ${layers.join(", ")}`,
+              { layers },
+            );
+          }
+          const assumptions = requiredOption(invocation, "--assumptions");
+          const residualRisks = requiredOption(invocation, "--residual-risks");
+          const incidentalFindings = requiredOption(invocation, "--incidental-findings");
+          const id = nextHandbackId(context);
+          const createdAt = new Date().toISOString();
+          context.store.database
+            .query(
+              `INSERT INTO handbacks
+                (id, dispatch_id, status, claim, proof, assumptions, residual_risks,
+                 incidental_findings, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              id,
+              dispatchId,
+              status,
+              claim,
+              proof,
+              assumptions,
+              residualRisks,
+              incidentalFindings,
+              createdAt,
+            );
+          context.log.append({
+            type: "handback.file",
+            entityType: "handback",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { dispatchId, status },
+          });
+          const filed = handbackService.get(id) as HandbackRecord;
+          return { data: { handback: filed }, text: formatHandback(filed) };
+        },
+        {
+          description: "File a shape-checked return packet for a dispatch.",
+          flags: {
+            "--status": { description: "Set the handback status.", value: true },
+            "--claim": { description: "State what is now believed true.", value: true },
+            "--proof": { description: "Name layered evidence for the claim.", value: true },
+            "--assumptions": { description: "List unverified assumptions or None.", value: true },
+            "--residual-risks": { description: "List residual risks or None.", value: true },
+            "--incidental-findings": {
+              description: "List incidental findings or None.",
+              value: true,
+            },
+          },
+          positionals: [{ name: "dispatch-id", required: true }],
+          rootDescription: "File and read durable return packets.",
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "handback show",
+        (invocation): CliResult => {
+          const handback = requireHandback(context, position(invocation, 0, "handback id"));
+          return { data: { handback }, text: formatHandback(handback) };
+        },
+        {
+          description: "Show one stored handback packet.",
+          positionals: [{ name: "id", required: true }],
         },
       ),
     );
