@@ -3,6 +3,11 @@ import { basename, join, resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
+import type {
+  DispatchService,
+  HandbackRecord,
+  HandbackService,
+} from "./dispatch.ts";
 import type { WorkService } from "./work.ts";
 
 export interface BundleRecord {
@@ -228,6 +233,15 @@ function failedNotesForWork(
     .map((row) => ({ text: row.text, workId: row.work_id }));
 }
 
+function handbacksForWork(context: PluginContext, workIds: string[]): HandbackRecord[] {
+  const dispatch = context.dispatch as DispatchService;
+  const handback = context.handback as HandbackService;
+  return workIds.flatMap((workId) => {
+    if (dispatch.council(workId).sealed) return [];
+    return dispatch.list(workId).flatMap((record) => handback.list(record.id));
+  });
+}
+
 interface NotesSection {
   body: string;
   bodyEnd: number;
@@ -299,7 +313,11 @@ function replaceScaffoldBase(
   return { notes: notes.replace(match[0], base), written: true };
 }
 
-function handoffContent(context: PluginContext, workIds: string[]): Map<HandoffSectionName, string> {
+function handoffContent(
+  context: PluginContext,
+  workIds: string[],
+  handbacks: HandbackRecord[],
+): Map<HandoffSectionName, string> {
   const work = context.work as WorkService;
   const byId = new Map(work.snapshot().map((record) => [record.id, record]));
   const workLines = workIds.flatMap((workId) => {
@@ -314,10 +332,20 @@ function handoffContent(context: PluginContext, workIds: string[]): Map<HandoffS
   const decisionLines = decisionsForWork(context, workIds).map(
     (decision) => `- ${decision.id} [${decision.state}] ${decision.text}`,
   );
+  const handbackLines = handbacks.flatMap((handback) => [
+    `- ${handback.id} [${handback.status}] dispatch ${handback.dispatchId}`,
+    `  claim: ${handback.claim}`,
+    `  proof: ${handback.proof}`,
+    `  assumptions not verified: ${handback.assumptions}`,
+    `  residual risks: ${handback.residualRisks}`,
+    `  incidental findings: ${handback.incidentalFindings}`,
+  ]);
   const currentState = [
     ...(workLines.length > 0 ? ["Work:", ...workLines] : []),
     ...(workLines.length > 0 && decisionLines.length > 0 ? [""] : []),
     ...(decisionLines.length > 0 ? ["Decisions:", ...decisionLines] : []),
+    ...((workLines.length > 0 || decisionLines.length > 0) && handbackLines.length > 0 ? [""] : []),
+    ...(handbackLines.length > 0 ? ["Handbacks:", ...handbackLines] : []),
   ];
   const failed = failedNotesForWork(context, workIds).map(
     (note) => `- ${note.workId}: ${note.text}`,
@@ -337,7 +365,7 @@ function headline(bundle: BundleRecord): string {
 
 export const bundlePlugin: BuiltInPlugin = {
   name: "bundle",
-  inject: ["work", "decision"],
+  inject: ["work", "decision", "dispatch", "handback"],
   requires:
     "bundle open/close/list/show/save: scaffold a SPEC/NOTES/VERIFY trio, snapshot it into the store on close, recall it via search and bundle show",
   apply(context) {
@@ -520,10 +548,12 @@ export const bundlePlugin: BuiltInPlugin = {
             throw new CliError("NOT_FOUND", `NOTES.md not found: ${notesPath}`, { path: notesPath });
           }
           const original = await file.text();
+          const workIds = linkedWorkIds(context, id);
+          const handbacks = handbacksForWork(context, workIds);
           const sectionResult = replaceUntouchedSections(
             id,
             original,
-            handoffContent(context, linkedWorkIds(context, id)),
+            handoffContent(context, workIds, handbacks),
           );
           const baseResult = replaceScaffoldBase(
             sectionResult.notes,
@@ -546,7 +576,7 @@ export const bundlePlugin: BuiltInPlugin = {
             payload: { leftAlone, written },
           });
           return {
-            data: { bundle, leftAlone, notesPath, written },
+            data: { bundle, leftAlone, notesPath, written, handbacks },
             text: [
               `${id} handoff: ${notesPath}`,
               `wrote: ${written.join(", ") || "none"}`,

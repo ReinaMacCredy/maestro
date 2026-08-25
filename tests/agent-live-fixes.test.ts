@@ -447,6 +447,7 @@ test("112 help documents --json only for commands that accept it", async () => {
       ["msg", "send"],
       ["search"],
       ["work", "list"],
+      ["work", "show"],
       ["decision", "list"],
       ["recipe", "list"],
       ["plugin", "list"],
@@ -457,7 +458,7 @@ test("112 help documents --json only for commands that accept it", async () => {
       expect(help.stdout).toContain("--json");
     }
 
-    for (const command of [["work", "show"], ["msg", "read"], ["trace"]]) {
+    for (const command of [["msg", "read"], ["trace"]]) {
       const help = await runCli(fixture, ["help", ...command]);
       expect(help.exitCode).toBe(0);
       expect(help.stdout).not.toContain("--json");

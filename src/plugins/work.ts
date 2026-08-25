@@ -1,5 +1,7 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { DecisionService } from "./decision.ts";
+import type { DispatchService } from "./dispatch.ts";
 
 export interface WorkRecord {
   id: string;
@@ -653,13 +655,24 @@ export const workPlugin: BuiltInPlugin = {
         const blockerLines = blockers.map(
           (blocker) => `blocker: ${blocker.id} [${blocker.state}] ${blocker.title}`,
         );
+        const dispatches = (context.dispatch as DispatchService | undefined)?.list(work.id) ?? [];
+        const decisions = ((context.decision as DecisionService | undefined)?.list() ?? [])
+          .filter((decision) => decision.workId === work.id);
         return {
-          data: { work, children, blockers, notes },
+          data: { work, children, blockers, notes, dispatches, decisions },
           text: [
             formatWork(work),
             ...blockerLines,
             ...childLines,
             ...notes.map((note) => `note: ${note.text}`),
+            ...dispatches.map(
+              (dispatch) =>
+                `dispatch: ${dispatch.id} [${dispatch.state}] ${dispatch.lane}: ${dispatch.objective}`,
+            ),
+            ...decisions.map(
+              (decision) =>
+                `decision: ${decision.id} [${decision.state}] ${decision.text}`,
+            ),
           ].join("\n"),
         };
       }, {
@@ -778,6 +791,19 @@ export const workPlugin: BuiltInPlugin = {
               (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
             ),
           ];
+          const dispatches = ((context.dispatch as DispatchService | undefined)?.list() ?? [])
+            .filter(
+              (dispatch) =>
+                dispatch.state === "open" &&
+                dispatch.heldBy === null &&
+                (dispatch.targetSession === null || dispatch.targetSession === sessionId),
+            );
+          lines.push(
+            ...dispatches.map(
+              (dispatch) =>
+                `dispatch: ${dispatch.id} [takeable] ${dispatch.lane} for ${dispatch.workId}: ${dispatch.objective}`,
+            ),
+          );
           const held = allWorks.filter(
             (work) => work.state === "active" && work.heldBy === sessionId,
           );
@@ -785,7 +811,7 @@ export const workPlugin: BuiltInPlugin = {
             (work) => work.state === "done" || work.state === "cancelled",
           );
           return {
-            data: { works, gated },
+            data: { works, gated, dispatches },
             text: lines.length > 0
               ? lines.join("\n")
               : held.length > 0

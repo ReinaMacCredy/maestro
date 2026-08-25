@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { join } from "node:path";
+import {
+  idFrom,
+  initializeGitRepository,
+  runCli,
+  withFixture,
+  type Fixture,
+} from "./helpers.ts";
 
 function session(id: string): Record<string, string> {
   return {
@@ -301,5 +308,84 @@ test("181 dispatch unseal records its reason and marks later reads unsealed", as
     expect(trace.exitCode).toBe(0);
     expect(trace.stdout).toContain("dispatch.unseal");
     expect(trace.stdout).toContain(reason);
+  });
+});
+
+test("182 ready and work show add dispatches and linked decisions without changing existing lines", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "read path item", "--atomic-reason", "fixture"]),
+    );
+    const readyBefore = await runCli(fixture, ["ready"], session("lane-ready"));
+    const showBefore = await runCli(fixture, ["work", "show", work]);
+    const decision = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "keep dispatches attached to work",
+        "--work",
+        work,
+      ]),
+    );
+
+    const opened = await runCli(fixture, [
+      ...dispatchOpenArgs(work),
+      "--target-session",
+      "lane-ready",
+    ]);
+    const dispatch = dispatchId(opened);
+    const readyAfter = await runCli(fixture, ["ready"], session("lane-ready"));
+    const showAfter = await runCli(fixture, ["work", "show", work]);
+
+    expect(readyAfter.stdout.split("\n")[0]).toBe(readyBefore.stdout.split("\n")[0]);
+    expect(readyAfter.stdout).toContain(`dispatch: ${dispatch} [takeable]`);
+    expect(showAfter.stdout.startsWith(showBefore.stdout.trimEnd())).toBe(true);
+    expect(showAfter.stdout).toContain(`dispatch: ${dispatch} [open] delivery`);
+    expect(showAfter.stdout).toContain(`decision: ${decision} [draft] keep dispatches attached to work`);
+
+    const readyJson = JSON.parse(
+      (await runCli(fixture, ["ready", "--json"], session("lane-ready"))).stdout,
+    ) as { data: { dispatches: Array<{ id: string }> } };
+    expect(readyJson.data.dispatches.map((item) => item.id)).toContain(dispatch);
+    const showJson = await runCli(fixture, ["work", "show", work, "--json"]);
+    expect(showJson.exitCode).toBe(0);
+    const showEnvelope = JSON.parse(showJson.stdout) as {
+      data: { decisions: Array<{ id: string }>; dispatches: Array<{ id: string }> };
+    };
+    expect(showEnvelope.data.dispatches.map((item) => item.id)).toContain(dispatch);
+    expect(showEnvelope.data.decisions.map((item) => item.id)).toContain(decision);
+  });
+});
+
+test("183 handoff renders returned handbacks into the packet", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "handoff returns", "--atomic-reason", "fixture"]),
+    );
+    expect(
+      (await runCli(fixture, ["bundle", "open", "dispatch-handoff", "--work", work])).exitCode,
+    ).toBe(0);
+    const dispatch = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    expect((await runCli(fixture, handbackFileArgs(dispatch))).exitCode).toBe(0);
+
+    const handedOff = await runCli(fixture, ["handoff", "dispatch-handoff", "--json"]);
+    expect(handedOff.exitCode).toBe(0);
+    const envelope = JSON.parse(handedOff.stdout) as {
+      data: { handbacks: Array<{ dispatchId: string; status: string }> };
+    };
+    expect(envelope.data.handbacks).toEqual([
+      expect.objectContaining({ dispatchId: dispatch, status: "DONE" }),
+    ]);
+    const notes = await Bun.file(
+      join(fixture.repo, ".maestro", "bundle", "dispatch-handoff", "NOTES.md"),
+    ).text();
+    expect(notes).toContain("Handbacks:");
+    expect(notes).toContain(`[DONE] dispatch ${dispatch}`);
+    expect(notes).toContain("claim: the contract is stored");
+    expect(notes).toContain("proof: source: focused test passes");
+    expect(notes).toContain("assumptions not verified: None");
+    expect(notes).toContain("residual risks: None");
+    expect(notes).toContain("incidental findings: None");
   });
 });

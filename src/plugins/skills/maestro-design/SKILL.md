@@ -69,7 +69,9 @@ re-deriving the argument.
 Use a council only for a hard-to-reverse fork with wide blast radius. Dispatch
 two or three fresh-context decision lanes with the same neutral brief and no
 hint of the Lead's preference. Seal the council: the Lead reads no view until
-all views have returned.
+all views have returned. File one dispatch per lane on the same work item; every
+envelope line stays identical across lanes except `lane:`, and the shared
+question is each dispatch's objective.
 
 Reconcile the views through eight axes: `premise`, `mechanism`, `boundary`,
 `failure`, `reversibility`, `evidence`, `authority`, and `proof`. Never count
