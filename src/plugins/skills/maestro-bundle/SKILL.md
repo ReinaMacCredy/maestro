@@ -55,4 +55,4 @@ bundle; the files and the store are the spec.
 ## Hand-off
 
 Design lane -> use the `maestro-design` skill. Implementation -> `maestro-work`.
-Verification and close -> `maestro-ship`.
+Verification and close -> `maestro-verify`.

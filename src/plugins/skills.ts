@@ -6,7 +6,7 @@ export const skillNames = [
   "maestro-bundle",
   "maestro-design",
   "maestro-work",
-  "maestro-ship",
+  "maestro-verify",
 ] as const;
 
 const stampPattern = /<!-- maestro-skill-version: ([0-9a-f]{40}|dev) -->/;

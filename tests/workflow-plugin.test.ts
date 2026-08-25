@@ -161,7 +161,7 @@ test("129 install materializes the 4 maestro skills with a version stamp and ref
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
     const skillsRoot = join(fixture.home, ".agents", "skills");
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-ship"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
       const skill = await Bun.file(join(skillsRoot, name, "SKILL.md")).text();
       expect(skill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
     }
@@ -170,8 +170,8 @@ test("129 install materializes the 4 maestro skills with a version stamp and ref
       join("maestro-work", "references", "worktree.md"),
       join("maestro-work", "references", "conflict-handoff.md"),
       join("maestro-work", "references", "tdd-antipatterns.md"),
-      join("maestro-ship", "references", "audit.md"),
-      join("maestro-ship", "references", "learning.md"),
+      join("maestro-verify", "references", "audit.md"),
+      join("maestro-verify", "references", "learning.md"),
     ]) {
       expect(await Bun.file(join(skillsRoot, reference)).exists()).toBe(true);
     }
