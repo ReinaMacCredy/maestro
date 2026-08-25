@@ -78,8 +78,10 @@ Smallest new information needed: <next fact that would change the approach>
    for that behavior. No speculative abstractions or dependencies.
 4. **Observe** - run the focused test, then type/lint/build checks. Review the
    diff against acceptance; confirm the test could expose the defect.
-5. **Learn** - `maestro work note <id> "..."` only for a reusable correction or
-   failed approach.
+5. **Learn** - a pass that failed gets exactly one line,
+   `maestro work note <id> "failed: <one line>"`; the lowercase `failed: `
+   prefix is what `maestro attention` counts. Otherwise note only a reusable
+   correction.
 6. **Continue** - `maestro work done <id>` with `--claim`/`--proof` naming the
    real falsifier (the check that would have failed if the claim were wrong).
    In a bundle, overwrite NOTES.md (current state, next action, base commit)

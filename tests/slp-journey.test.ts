@@ -182,3 +182,16 @@ test("166 bundle open stamps the base commit git already knows", async () => {
     expect(notes).toContain("Base:\n");
   });
 });
+
+test("167 the implement loop names the failed-pass trace the detector reads", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const skill = await Bun.file(
+      join(fixture.home, ".agents", "skills", "maestro-work", "SKILL.md"),
+    ).text();
+    const loop = skill.slice(skill.indexOf("## Loop"), skill.indexOf("## Test-first"));
+    expect(loop).toContain('maestro work note <id> "failed: ');
+  });
+});
