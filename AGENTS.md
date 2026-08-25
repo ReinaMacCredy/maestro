@@ -1,12 +1,12 @@
 # maestro — TypeScript rewrite (greenfield branch)
 
 This branch is a from-scratch rewrite; the old Rust tree lives on `main`.
-The spec bundle is the only authority here. Read, in order:
+The spec bundles are the only authority here. Read, in order:
 
-1. `.spec-workflow/active/maestro-ts-rewrite/SPEC.md` — contract: red tests, verb surface, anti-goals
-2. `.spec-workflow/active/maestro-ts-rewrite/NOTES.md` — locked decisions + flagged defaults
-3. `.spec-workflow/adr/` — 0001–0004, the recorded why
-4. `.spec-workflow/active/maestro-ts-rewrite/VERIFY.md` — the checklist that defines done
+1. `.spec-workflow/MEMORY.md` — one index line per bundle and ADR, newest last
+2. `.spec-workflow/active/` — the open bundles: SPEC (contract), NOTES (handoff), VERIFY (done)
+3. `.spec-workflow/adr/` — 0001–0006, the recorded why
+4. `.spec-workflow/archive/` — shipped bundles, including the original `maestro-ts-rewrite`
 
 Rules:
 
