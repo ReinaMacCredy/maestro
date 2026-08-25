@@ -142,8 +142,8 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     );
     const reason =
       `parentless write-like work requires a child breakdown; run: maestro work add ` +
-      `"<child>" --parent ${gated} --kind task; for new atomic work use ` +
-      `--atomic-reason "<reason>"`;
+      `"<child>" --parent ${gated} --kind task; if ${gated} is genuinely atomic: ` +
+      `maestro work start ${gated} --atomic-reason "<reason>"`;
 
     const blocked = await runCli(fixture, ["work", "start", gated]);
     const human = await runCli(fixture, ["ready"]);

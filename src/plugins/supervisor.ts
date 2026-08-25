@@ -202,7 +202,8 @@ function stalledDetections(
         evidence: `work.start #${startId}, sessions.last_seen ${holder.lastSeen}`,
         unknown: "whether the session is thinking, blocked on a tool, or gone",
         question: "reclaim, re-scope, or wait?",
-        smallestAction: `maestro work show ${work.id}`,
+        // Observe and ask: the holder answers faster than the row explains.
+        smallestAction: `maestro msg send ${work.heldBy} "still on ${work.id}?"`,
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,

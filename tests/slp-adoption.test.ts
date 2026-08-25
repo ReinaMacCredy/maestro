@@ -256,7 +256,7 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
       "  evidence:",
       "  unknown:",
       "  question:",
-      `  smallest action: maestro work show ${child}`,
+      `  smallest action: maestro msg send subject-session "still on ${child}?"`,
       "  human decision needed: no",
     ]) {
       expect(attention.stdout).toContain(required);

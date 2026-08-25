@@ -36,8 +36,8 @@ function breakdownGate(work: WorkRecord): Gate {
     origin: "policy-breakdown",
     reason:
       `parentless write-like work requires a child breakdown; run: maestro work add ` +
-      `"<child>" --parent ${work.id} --kind task; for new atomic work use ` +
-      `--atomic-reason "<reason>"`,
+      `"<child>" --parent ${work.id} --kind task; if ${work.id} is genuinely atomic: ` +
+      `maestro work start ${work.id} --atomic-reason "<reason>"`,
   };
 }
 
