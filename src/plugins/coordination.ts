@@ -41,6 +41,13 @@ interface WorkStartResult {
 
 type BriefContributor = (sessionId: string) => string | Promise<string>;
 
+interface PromptRecord {
+  created_at: string;
+  id: number;
+  session_id: string;
+  text: string;
+}
+
 interface BriefEntry {
   contributor: BriefContributor;
   events?: string[];
@@ -200,6 +207,12 @@ export const coordinationPlugin: BuiltInPlugin = {
         session_id TEXT PRIMARY KEY,
         last_message_id INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
     `);
     const mailbox = new MailboxService(context);
     const brief = new BriefService();
@@ -343,6 +356,43 @@ export const coordinationPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       context.cli.register(
+        "prompt list",
+        (invocation): CliResult => {
+          const session = invocation.options.session;
+          const rows = (
+            typeof session === "string"
+              ? context.store.database
+                  .query<PromptRecord, [string]>(
+                    "SELECT id, session_id, text, created_at FROM prompts WHERE session_id = ? ORDER BY id DESC LIMIT 20",
+                  )
+                  .all(session)
+              : context.store.database
+                  .query<PromptRecord, []>(
+                    "SELECT id, session_id, text, created_at FROM prompts ORDER BY id DESC LIMIT 20",
+                  )
+                  .all()
+          );
+          const lines = rows.map(
+            (row) =>
+              `p${row.id} [${row.session_id}] ${row.text.replaceAll(/\s+/g, " ").slice(0, 200)}`,
+          );
+          return {
+            data: { prompts: rows },
+            text: lines.join("\n") || "no prompts recorded",
+          };
+        },
+        {
+          description: "List recorded user prompts, most recent first (20).",
+          flags: {
+            "--session": { description: "Only prompts from this session.", value: true },
+          },
+          rootDescription: "Recorded user prompts from harness hooks.",
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
         "hook record",
         async (invocation): Promise<CliResult> => {
           const event = invocation.options.event;
@@ -358,6 +408,27 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
+          if (event === "UserPromptSubmit" && !process.stdin.isTTY) {
+            const raw = (await Bun.stdin.text()).trim();
+            let payload: unknown;
+            try {
+              payload = raw ? JSON.parse(raw) : undefined;
+            } catch {
+              payload = undefined;
+            }
+            const prompt =
+              payload && typeof payload === "object" && "prompt" in payload &&
+              typeof (payload as { prompt: unknown }).prompt === "string"
+                ? (payload as { prompt: string }).prompt.trim()
+                : "";
+            if (prompt) {
+              context.store.database
+                .query(
+                  "INSERT INTO prompts (session_id, text, created_at) VALUES (?, ?, ?)",
+                )
+                .run(session.id, prompt, new Date().toISOString());
+            }
+          }
           const text = await brief.render(session.id, event);
           return { data: { session, brief: text }, text };
         },

@@ -278,6 +278,7 @@ const sessionId = typeof input.session_id === "string" ? input.session_id : unde
 const child = Bun.spawn(["maestro", "hook", "record", "--event", event, "--harness", "${harness}"], {
   cwd: typeof input.cwd === "string" ? input.cwd : process.cwd(),
   env: { ...process.env, ...(sessionId ? { MAESTRO_SESSION_ID: sessionId } : {}) },
+  stdin: new TextEncoder().encode(raw),
   stdout: "pipe",
   stderr: "pipe",
 });

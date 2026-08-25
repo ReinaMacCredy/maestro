@@ -128,6 +128,26 @@ function nativeHit(context: PluginContext, match: SearchRow): SearchHit | null {
       .get(Number(match.entity_id));
     return owner ? workHit(context, owner.work_id, match.text) : null;
   }
+  if (match.surface === "prompt") {
+    const prompt = context.store.database
+      .query<{ session_id: string; text: string }, [number]>(
+        "SELECT session_id, text FROM prompts WHERE id = ?",
+      )
+      .get(Number(match.entity_id));
+    return prompt
+      ? {
+          key: `native:prompt:${match.entity_id}`,
+          snippets: match.text ? [oneLine(match.text, 200)] : [],
+          summary: {
+            id: `p${match.entity_id}`,
+            kind: "prompt",
+            source: "native",
+            state: prompt.session_id,
+            title: oneLine(prompt.text, 120),
+          },
+        }
+      : null;
+  }
   if (match.surface !== "log") return null;
   const event = context.store.database
     .query<EventOwner, [number]>(
@@ -229,6 +249,17 @@ export const observabilityPlugin: BuiltInPlugin = {
         INSERT INTO search_index(surface, entity_id, text)
         VALUES ('log', CAST(new.id AS TEXT), new.type || ' ' || new.payload);
       END;
+      CREATE TABLE IF NOT EXISTS prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TRIGGER IF NOT EXISTS search_prompt_insert
+      AFTER INSERT ON prompts BEGIN
+        INSERT INTO search_index(surface, entity_id, text)
+        VALUES ('prompt', CAST(new.id AS TEXT), new.text);
+      END;
     `);
     context.store.database.run("DELETE FROM search_index");
     context.store.database.run(`
@@ -243,6 +274,9 @@ export const observabilityPlugin: BuiltInPlugin = {
     );
     context.store.database.run(
       "INSERT INTO search_index(surface, entity_id, text) SELECT 'log', CAST(id AS TEXT), type || ' ' || payload FROM event_log",
+    );
+    context.store.database.run(
+      "INSERT INTO search_index(surface, entity_id, text) SELECT 'prompt', CAST(id AS TEXT), text FROM prompts",
     );
 
     context.effect(() =>

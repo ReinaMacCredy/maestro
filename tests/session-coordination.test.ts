@@ -63,6 +63,37 @@ test("14b method map renders on SessionStart only, not on UserPromptSubmit", asy
   });
 });
 
+test("14c UserPromptSubmit records the prompt into a listable, searchable corpus", async () => {
+  await withFixture(async (fixture) => {
+    const submit = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      { MAESTRO_SESSION_ID: "prompt-session", MAESTRO_SESSION_PID: String(process.pid) },
+      JSON.stringify({
+        hook_event_name: "UserPromptSubmit",
+        prompt: "please fix the flaky login retry test",
+      }),
+    );
+    const start = await runCli(
+      fixture,
+      ["hook", "record", "--event", "SessionStart"],
+      { MAESTRO_SESSION_ID: "prompt-session", MAESTRO_SESSION_PID: String(process.pid) },
+      JSON.stringify({ hook_event_name: "SessionStart", prompt: "session start noise" }),
+    );
+    const listed = await runCli(fixture, ["prompt", "list", "--session", "prompt-session"]);
+    const found = await runCli(fixture, ["search", "flaky login retry"]);
+
+    expect(submit.exitCode).toBe(0);
+    expect(start.exitCode).toBe(0);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain("please fix the flaky login retry test");
+    expect(listed.stdout).not.toContain("session start noise");
+    expect(found.exitCode).toBe(0);
+    expect(found.stdout).toContain("(prompt");
+    expect(found.stdout).toContain("flaky login retry");
+  });
+});
+
 test("15 message reads advance a per-session cursor and return each message once", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["msg", "send", "target-session", "handoff context"])).exitCode).toBe(0);

@@ -44,8 +44,9 @@ export async function runCli(
   fixture: Fixture,
   args: string[],
   env: Record<string, string | undefined> = {},
+  stdin?: string,
 ): Promise<CliResult> {
-  return runCliAt(fixture, fixture.repo, args, env);
+  return runCliAt(fixture, fixture.repo, args, env, stdin);
 }
 
 export async function runCliAt(
@@ -53,6 +54,7 @@ export async function runCliAt(
   cwd: string,
   args: string[],
   env: Record<string, string | undefined> = {},
+  stdin?: string,
 ): Promise<CliResult> {
   const childEnvironment: Record<string, string | undefined> = {
     ...process.env,
@@ -70,6 +72,7 @@ export async function runCliAt(
   const child = Bun.spawn([process.execPath, cli, ...args], {
     cwd,
     env: childEnvironment,
+    stdin: stdin === undefined ? undefined : new TextEncoder().encode(stdin),
     stdout: "pipe",
     stderr: "pipe",
   });
