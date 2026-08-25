@@ -1,0 +1,12 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "focusable": false,
+        "skipTaskbar": true,
+        "visible": true
+      }
+    ]
+  }
+}
