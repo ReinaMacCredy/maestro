@@ -467,3 +467,70 @@ test("185 work start refuses a sealed council until its dispatches are resolved"
     ).toBe(0);
   });
 });
+
+test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one recipient", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "lead scope", "--kind", "idea"]),
+    );
+    expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
+      .toBe(0);
+    const child = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "lane question",
+        "--parent",
+        parent,
+        "--atomic-reason",
+        "fixture",
+      ]),
+    );
+    const opened = await runCli(fixture, [
+      ...dispatchOpenArgs(child),
+      "--target-session",
+      "worker-session",
+    ]);
+    const dispatch = dispatchId(opened);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session("worker-session"))).exitCode,
+    ).toBe(0);
+
+    const scan = () =>
+      runCli(
+        fixture,
+        ["attention", "--json", "--dispatch-stale", "0.000001"],
+        session("scanner-session"),
+      );
+    const first = await scan();
+    expect(first.exitCode).toBe(0);
+    const firstEnvelope = JSON.parse(first.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          kind: string;
+          raised: boolean;
+          targets: string[];
+        }>;
+      };
+    };
+    const firstDispatch = firstEnvelope.data.detections.filter(
+      (finding) => finding.kind === "DISPATCH_UNRETURNED",
+    );
+    expect(firstDispatch).toHaveLength(1);
+    expect(firstDispatch[0]?.raised).toBe(true);
+    expect(firstDispatch[0]?.targets).toEqual(["lead-session"]);
+    expect(firstDispatch[0]?.fingerprint).toContain(dispatch);
+
+    const secondEnvelope = JSON.parse((await scan()).stdout) as typeof firstEnvelope;
+    const secondDispatch = secondEnvelope.data.detections.filter(
+      (finding) => finding.kind === "DISPATCH_UNRETURNED",
+    );
+    expect(secondDispatch).toHaveLength(1);
+    expect(secondDispatch[0]?.raised).toBe(false);
+    expect(secondDispatch[0]?.targets).toEqual(["lead-session"]);
+
+    const mail = await runCli(fixture, ["msg", "read"], session("lead-session"));
+    expect(mail.stdout.match(/DISPATCH_UNRETURNED/g)).toHaveLength(1);
+  });
+});

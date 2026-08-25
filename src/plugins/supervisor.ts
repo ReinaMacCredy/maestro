@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
+import type { DispatchService } from "./dispatch.ts";
 import { readInstallStamp } from "./install-stamp.ts";
 import type { WorkService } from "./work.ts";
 
@@ -11,7 +12,8 @@ export type AttentionKind =
   | "STALLED_LEASE"
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
-  | "SCOPE_COLLISION";
+  | "SCOPE_COLLISION"
+  | "DISPATCH_UNRETURNED";
 
 interface AttentionWorkRow {
   heldBy: string | null;
@@ -47,7 +49,7 @@ interface Mailbox {
 
 interface Detection {
   entityId: string;
-  entityType: "decision" | "work";
+  entityType: "decision" | "dispatch" | "work";
   fingerprint: string;
   kind: AttentionKind;
   packet: string;
@@ -69,6 +71,7 @@ export interface AttentionFinding {
 
 export interface AttentionOptions {
   decisionStaleHours: number;
+  dispatchStaleHours: number;
   staleMinutes: number;
 }
 
@@ -78,6 +81,7 @@ export interface AttentionService {
 
 interface SupervisorState {
   decisionStale: number;
+  dispatchStale: number;
   interval: number;
   lastRaised: number;
   lastTick: string | null;
@@ -363,6 +367,44 @@ function scopeCollisionDetections(
   return detections;
 }
 
+function dispatchUnreturnedDetections(
+  context: PluginContext,
+  workById: Map<string, AttentionWorkRow>,
+  liveSessions: Map<string, SessionRecord>,
+  now: number,
+  dispatchStaleHours: number,
+): Detection[] {
+  const cutoff = now - dispatchStaleHours * 60 * 60_000;
+  const dispatch = context.dispatch as DispatchService;
+  return dispatch.list().flatMap((record): Detection[] => {
+    if (record.state !== "open" || Date.parse(record.createdAt) >= cutoff) return [];
+    const work = workById.get(record.workId);
+    if (!work) return [];
+    const subjectSession = record.heldBy ?? record.targetSession;
+    const routingWork = { ...work, heldBy: subjectSession };
+    return [{
+      entityId: record.id,
+      entityType: "dispatch",
+      fingerprint: `dispatch-unreturned:${record.id}`,
+      kind: "DISPATCH_UNRETURNED",
+      packet: packet("DISPATCH_UNRETURNED", record.id, {
+        observed:
+          `dispatch for ${record.workId} has no handback after ` +
+          `${minutesSince(record.createdAt, now)} minutes`,
+        evidence: `dispatches.created_at ${record.createdAt}; no handbacks row`,
+        unknown: "whether the lane is working, blocked, or abandoned",
+        question: "wait, contact the lane, cancel it, or re-scope?",
+        smallestAction: subjectSession
+          ? `maestro msg send ${subjectSession} "still on ${record.id}?"`
+          : `maestro dispatch show ${record.id}`,
+      }),
+      subjectSession,
+      subjectWork: record.workId,
+      targets: ordinaryTargets(routingWork, workById, liveSessions),
+    }];
+  });
+}
+
 function detect(context: PluginContext, options: AttentionOptions): Detection[] {
   const now = Date.now();
   const works = workRows(context);
@@ -386,6 +428,13 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       options.decisionStaleHours,
     ),
     ...scopeCollisionDetections(context, works, workById, liveSessions),
+    ...dispatchUnreturnedDetections(
+      context,
+      workById,
+      liveSessions,
+      now,
+      options.dispatchStaleHours,
+    ),
   ];
 }
 
@@ -482,6 +531,7 @@ function scanFromInvocation(
   return service.scan({
     staleMinutes: numericOption(invocation, "stale", 30),
     decisionStaleHours: numericOption(invocation, "decision-stale", 24),
+    dispatchStaleHours: numericOption(invocation, "dispatch-stale", 2),
   });
 }
 
@@ -491,6 +541,10 @@ const attentionFlags = {
     description: "Draft decision threshold in hours (default 24).",
     value: true,
   },
+  "--dispatch-stale": {
+    description: "Unreturned dispatch threshold in hours (default 2).",
+    value: true,
+  },
 } as const;
 
 const supervisorFlags = {
@@ -498,6 +552,10 @@ const supervisorFlags = {
   "--stale": { description: "Stalled lease threshold in minutes (default 30).", value: true },
   "--decision-stale": {
     description: "Draft decision threshold in hours (default 24).",
+    value: true,
+  },
+  "--dispatch-stale": {
+    description: "Unreturned dispatch threshold in hours (default 2).",
     value: true,
   },
   "--notify": { description: "Show one macOS notification per newly raised packet." },
@@ -527,6 +585,7 @@ async function readSupervisorState(path: string): Promise<SupervisorState | null
       typeof state.interval !== "number" ||
       typeof state.stale !== "number" ||
       typeof state.decisionStale !== "number" ||
+      !(state.dispatchStale === undefined || typeof state.dispatchStale === "number") ||
       typeof state.notify !== "boolean" ||
       typeof state.runtimeCommit !== "string" ||
       !(state.lastTick === null || typeof state.lastTick === "string") ||
@@ -534,7 +593,7 @@ async function readSupervisorState(path: string): Promise<SupervisorState | null
     ) {
       throw new Error("missing required fields");
     }
-    return state as SupervisorState;
+    return { ...state, dispatchStale: state.dispatchStale ?? 2 } as SupervisorState;
   } catch (error) {
     throw new CliError(
       "INVALID_SUPERVISOR_STATE",
@@ -572,6 +631,7 @@ function statusText(state: SupervisorState | null, currentCommit: string): strin
     `pid: ${state.pid}`,
     `started: ${state.startedAt}`,
     `interval: ${state.interval}s`,
+    `dispatch stale: ${state.dispatchStale}h`,
     `last tick: ${state.lastTick ?? "never"}`,
     `raised: ${state.lastRaised}`,
     `daemon commit: ${state.runtimeCommit}`,
@@ -621,7 +681,13 @@ function waitForTickOrStop(
 async function runSupervisorLoop(
   context: PluginContext,
   service: AttentionService,
-  options: { decisionStale: number; interval: number; notify: boolean; stale: number },
+  options: {
+    decisionStale: number;
+    dispatchStale: number;
+    interval: number;
+    notify: boolean;
+    stale: number;
+  },
 ): Promise<void> {
   const paths = supervisorPaths(context);
   let stopping = false;
@@ -643,6 +709,7 @@ async function runSupervisorLoop(
             interval: options.interval,
             stale: options.stale,
             decisionStale: options.decisionStale,
+            dispatchStale: options.dispatchStale,
             notify: options.notify,
             runtimeCommit: commit,
             lastTick: null,
@@ -652,6 +719,7 @@ async function runSupervisorLoop(
       const findings = service.scan({
         staleMinutes: options.stale,
         decisionStaleHours: options.decisionStale,
+        dispatchStaleHours: options.dispatchStale,
       });
       if (options.notify) notifyFindings(findings);
       state = {
@@ -672,7 +740,7 @@ async function runSupervisorLoop(
 
 export const supervisorPlugin: BuiltInPlugin = {
   name: "supervisor",
-  inject: ["work", "mailbox"],
+  inject: ["work", "dispatch", "mailbox"],
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS attention (
@@ -732,6 +800,7 @@ export const supervisorPlugin: BuiltInPlugin = {
           const interval = numericOption(invocation, "interval", 60);
           const stale = numericOption(invocation, "stale", 30);
           const decisionStale = numericOption(invocation, "decision-stale", 24);
+          const dispatchStale = numericOption(invocation, "dispatch-stale", 2);
           const notify = invocation.options.notify === true;
           const cliPath = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
           const command = [
@@ -745,6 +814,8 @@ export const supervisorPlugin: BuiltInPlugin = {
             String(stale),
             "--decision-stale",
             String(decisionStale),
+            "--dispatch-stale",
+            String(dispatchStale),
             ...(notify ? ["--notify"] : []),
           ];
           const descriptor = openSync(paths.log, "a");
@@ -768,6 +839,7 @@ export const supervisorPlugin: BuiltInPlugin = {
             interval,
             stale,
             decisionStale,
+            dispatchStale,
             notify,
             runtimeCommit: currentCommit,
             lastTick: null,
@@ -842,6 +914,7 @@ export const supervisorPlugin: BuiltInPlugin = {
             interval: numericOption(invocation, "interval", 60),
             stale: numericOption(invocation, "stale", 30),
             decisionStale: numericOption(invocation, "decision-stale", 24),
+            dispatchStale: numericOption(invocation, "dispatch-stale", 2),
             notify: invocation.options.notify === true,
           });
           return { data: { state: "stopped" }, text: "supervisor run stopped" };
