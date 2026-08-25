@@ -61,7 +61,7 @@ async function createSourceCheckout(fixture: Fixture): Promise<{
   });
   expect(materialized).toMatchObject({ exitCode: 0 });
   await git(source, ["add", ".claude", ".codex"]);
-  await git(source, ["commit", "-m", "materialize current wiring"]);
+  await git(source, ["commit", "--allow-empty", "-m", "materialize current wiring"]);
   await git(fixture.root, ["init", "--bare", "--initial-branch=main", bare]);
   await git(source, ["remote", "add", "origin", bare]);
   await git(source, ["push", "-u", "origin", "main"]);
