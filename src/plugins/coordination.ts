@@ -298,12 +298,20 @@ export const coordinationPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const target = required(invocation, 0, "target session");
           const text = required(invocation, 1, "message text");
+          const targetSession = context.sessions.get(target);
+          if (!targetSession) {
+            const command = "maestro status";
+            throw new CliError(
+              "UNKNOWN_SESSION",
+              `unknown session: ${target}; run: ${command}`,
+              { command, target },
+            );
+          }
           const message = mailbox.send(target, text);
           const sender = context.sessions.get(message.senderSession);
-          const targetSession = context.sessions.get(target);
           const nativeDelivery =
             sender?.harness === "claude" &&
-            targetSession?.harness === "claude" &&
+            targetSession.harness === "claude" &&
             targetSession.live;
           context.log.append({
             type: "msg.send",
@@ -315,6 +323,11 @@ export const coordinationPlugin: BuiltInPlugin = {
           const deliveryTip = nativeDelivery
             ? `[native-delivery] also use native SendMessage for session ${target}`
             : "";
+          if (!targetSession.live) {
+            process.stderr.write(
+              `[dead target] ${target} is not live; ${mailbox.pending(target)} message(s) now queued for it\n`,
+            );
+          }
           return {
             data: { message, nativeDelivery },
             text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),

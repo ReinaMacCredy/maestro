@@ -1,7 +1,13 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, type Fixture, withFixture } from "./helpers.ts";
+import {
+  idFrom,
+  prepareInstallFixture,
+  runCli,
+  type Fixture,
+  withFixture,
+} from "./helpers.ts";
 
 function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
@@ -368,6 +374,107 @@ test("158 attention sends one packet to the most recently active of three live p
       expect(targets).toEqual(["peer-new"]);
       expect(verified.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
+    } finally {
+      verified.close();
+    }
+  });
+});
+
+test("159 msg send rejects an unknown session without writing a message", async () => {
+  await withFixture(async (fixture) => {
+    const rejected = await runCli(fixture, ["msg", "send", "unknown-target", "lost text"]);
+    expect(rejected.exitCode).not.toBe(0);
+    const error = JSON.parse(rejected.stderr) as {
+      error: { code: string; command: string; message: string };
+    };
+    expect(error.error.code).toBe("UNKNOWN_SESSION");
+    expect(error.error.command).toBe("maestro status");
+    expect(error.error.message).toContain("unknown-target");
+    expect(error.error.message).toContain("maestro status");
+
+    const database = loopDatabase(fixture);
+    try {
+      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
+        .toBe(0);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("159b msg send queues for a recorded dead session with an exact warning", async () => {
+  await withFixture(async (fixture) => {
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          { MAESTRO_SESSION_ID: "dead-mailbox", MAESTRO_SESSION_PID: "99999999" },
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    const sent = await runCli(fixture, ["msg", "send", "dead-mailbox", "survives death"]);
+    expect(sent.exitCode).toBe(0);
+    expect(sent.stdout).toBe("message 1 sent to dead-mailbox\n");
+    expect(sent.stderr).toBe(
+      "[dead target] dead-mailbox is not live; 1 message(s) now queued for it\n",
+    );
+
+    const received = await runCli(
+      fixture,
+      ["msg", "read"],
+      { MAESTRO_SESSION_ID: "dead-mailbox", MAESTRO_SESSION_PID: "99999999" },
+    );
+    expect(received.exitCode).toBe(0);
+    expect(received.stdout).toContain("survives death");
+  });
+});
+
+test("159c doctor reports unread mail queued for dead sessions without changing it", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const clean = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(clean.exitCode).toBe(0);
+    const cleanLines = clean.stdout.trimEnd().split("\n");
+    const codexLine = cleanLines.findIndex((line) => line.startsWith("codex hooks:"));
+    expect(codexLine).toBeGreaterThanOrEqual(0);
+    expect(cleanLines[codexLine + 1]).toBe("mailbox: ok");
+
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          { MAESTRO_SESSION_ID: "doctor-dead", MAESTRO_SESSION_PID: "99999999" },
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "doctor-dead", "queued"])).exitCode)
+      .toBe(0);
+
+    const database = loopDatabase(fixture);
+    const before = database
+      .query<{ count: number }, []>(
+        "SELECT count(*) AS count FROM messages WHERE target_session = 'doctor-dead'",
+      )
+      .get()?.count;
+    database.close();
+
+    const queued = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(queued.exitCode).toBe(0);
+    expect(queued.stdout).toContain("mailbox: 1 message(s) queued for dead sessions");
+    const verified = loopDatabase(fixture);
+    try {
+      expect(
+        verified
+          .query<{ count: number }, []>(
+            "SELECT count(*) AS count FROM messages WHERE target_session = 'doctor-dead'",
+          )
+          .get()?.count,
+      ).toBe(before);
     } finally {
       verified.close();
     }

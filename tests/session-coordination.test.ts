@@ -96,6 +96,14 @@ test("14c UserPromptSubmit records the prompt into a listable, searchable corpus
 
 test("15 message reads advance a per-session cursor and return each message once", async () => {
   await withFixture(async (fixture) => {
+    expect(
+      (
+        await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
+          MAESTRO_SESSION_ID: "target-session",
+          MAESTRO_SESSION_PID: String(process.pid),
+        })
+      ).exitCode,
+    ).toBe(0);
     expect((await runCli(fixture, ["msg", "send", "target-session", "handoff context"])).exitCode).toBe(0);
 
     const first = await runCli(fixture, ["msg", "read"], {
