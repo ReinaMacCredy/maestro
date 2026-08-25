@@ -294,8 +294,8 @@ function replaceScaffoldBase(
   notes: string,
   base: string,
 ): { notes: string; written: boolean } {
-  const match = notes.match(/^Base:(?: [0-9a-f]+(?: \([^\n)]+\))?)?$/m);
-  if (!match || match[0] === base) return { notes, written: false };
+  const match = notes.match(/^Base:$/m);
+  if (!match) return { notes, written: false };
   return { notes: notes.replace(match[0], base), written: true };
 }
 

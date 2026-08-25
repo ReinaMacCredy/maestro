@@ -53,6 +53,8 @@ test("168 handoff renders every store-provable NOTES section", async () => {
         ])
       ).exitCode,
     ).toBe(0);
+    const baseHead = (await runTool(["git", "rev-parse", "--short", "HEAD"], fixture.repo)).stdout
+      .trim();
 
     await writeFile(join(fixture.repo, "base-marker.txt"), "new base\n");
     expect((await runTool(["git", "add", "base-marker.txt"], fixture.repo)).exitCode).toBe(0);
@@ -84,19 +86,19 @@ test("168 handoff renders every store-provable NOTES section", async () => {
     };
     expect(envelope.ok).toBe(true);
     expect(envelope.data.written).toEqual([
-      "Base",
       "Current State",
       "Next Action",
       "Authority",
       "Failed approaches",
       "Do not repeat",
     ]);
-    expect(envelope.data.leftAlone).toEqual([]);
+    expect(envelope.data.leftAlone).toEqual(["Base"]);
 
     const notes = await Bun.file(
       join(fixture.repo, ".maestro", "bundle", "handoff-render", "NOTES.md"),
     ).text();
-    expect(notes).toContain(`Base: ${head} (main)`);
+    expect(notes).toContain(`Base: ${baseHead} (main)`);
+    expect(notes).not.toContain(`Base: ${head} (main)`);
     expect(notes).toContain(`- ${done} [done] completed packet work\n  evidence: tests 2/2`);
     expect(notes).toContain(`- ${open} [open] open packet work\n  evidence: none recorded`);
     expect(notes).toContain(`- ${decision} [locked] keep the packet factual`);
