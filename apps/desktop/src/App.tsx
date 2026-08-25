@@ -17,14 +17,17 @@ export function App() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [configPath, setConfigPath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!inTauri) return;
     const unHover = listen<boolean>("hover", (e) => setOpen(e.payload));
     const unSnap = listen<RepoSnapshot[]>("snapshot", (e) => setRepos(e.payload));
+    const unCfg = listen<{ path: string }>("config", (e) => setConfigPath(e.payload.path));
     return () => {
       unHover.then((f) => f());
       unSnap.then((f) => f());
+      unCfg.then((f) => f());
     };
   }, []);
 
@@ -57,7 +60,7 @@ export function App() {
     <div className={`widget ${open ? "open" : ""} ${pinned ? "pinned" : ""}`}>
       <div className="panelWrap">
         <div className="panelInner">
-          <Panel repos={repos} cards={cardList} counts={c} sessions={sessions} now={now} collapsed={collapsed} onToggleRepo={toggleRepo} onCopied={copied} />
+          <Panel repos={repos} cards={cardList} counts={c} sessions={sessions} now={now} collapsed={collapsed} configPath={configPath} onToggleRepo={toggleRepo} onCopied={copied} />
         </div>
       </div>
       <Pill counts={c} state={pillState(c)} pinned={pinned} expanded={open} onClick={togglePin} />

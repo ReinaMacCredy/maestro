@@ -11,6 +11,7 @@ export function Panel({
   sessions,
   now,
   collapsed,
+  configPath,
   onToggleRepo,
   onCopied,
 }: {
@@ -20,6 +21,7 @@ export function Panel({
   sessions: Map<string, Session>;
   now: Date;
   collapsed: Set<string>;
+  configPath?: string | null;
   onToggleRepo: (repo: string) => void;
   onCopied?: () => void;
 }) {
@@ -42,7 +44,9 @@ export function Panel({
           <TaskList key={r.repo} repo={r} sessions={sessions} collapsed={collapsed.has(r.repo)} onToggle={() => onToggleRepo(r.repo)} />
         ))
       ) : (
-        <div className="allClear">Chưa có repo nào trong config.</div>
+        <div className="allClear">
+          {configPath ? `Thêm đường dẫn repo vào "repos" trong ${configPath}` : "Chưa có repo nào trong config."}
+        </div>
       )}
       <div className="panelFoot">
         <span>{at ? `cập nhật ${ago(at, now)} trước` : "chưa có dữ liệu"}</span>

@@ -35,10 +35,10 @@ describe("Panel", () => {
 
   test("shows all-clear when nothing needs the human", () => {
     const quiet = renderToString(
-      <Panel repos={[]} cards={[]} counts={{ active: 0, ready: 0, attention: 0 }} sessions={new Map()} now={FIXTURE_NOW} collapsed={new Set()} onToggleRepo={() => {}} />,
+      <Panel repos={[]} cards={[]} counts={{ active: 0, ready: 0, attention: 0 }} sessions={new Map()} now={FIXTURE_NOW} collapsed={new Set()} configPath="/tmp/cfg.json" onToggleRepo={() => {}} />,
     );
     expect(quiet).toContain("Không có gì chờ bạn.");
-    expect(quiet).toContain("Chưa có repo nào trong config.");
+    expect(quiet).toContain("Thêm đường dẫn repo vào &quot;repos&quot; trong /tmp/cfg.json");
   });
 });
 

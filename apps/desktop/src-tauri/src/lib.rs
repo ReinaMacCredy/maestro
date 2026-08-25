@@ -1,4 +1,7 @@
+mod data;
+
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State};
@@ -132,6 +135,11 @@ fn layout(app: &AppHandle, expanded: bool) -> tauri::Result<()> {
 }
 
 #[tauri::command]
+fn refresh(refresh: State<data::Refresh>) {
+    refresh.0.store(true, Ordering::SeqCst);
+}
+
+#[tauri::command]
 fn set_pinned(app: AppHandle, ui: State<Ui>, value: bool) {
     ui.pinned.store(value, Ordering::SeqCst);
     if !value && !cursor_inside(&app) {
@@ -145,7 +153,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_nspanel::init());
     builder
         .manage(Ui::default())
-        .invoke_handler(tauri::generate_handler![set_pinned])
+        .manage(data::Refresh(Arc::new(AtomicBool::new(false))))
+        .invoke_handler(tauri::generate_handler![set_pinned, refresh])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -154,6 +163,7 @@ pub fn run() {
             mac::make_panel(app.handle())?;
             #[cfg(not(target_os = "macos"))]
             app.get_webview_window("main").expect("main window").show()?;
+            data::start(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
