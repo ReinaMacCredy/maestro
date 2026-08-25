@@ -2,6 +2,7 @@ import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
+import { dispatchPlugin } from "./dispatch.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
 import { lifecyclePlugin } from "./lifecycle.ts";
@@ -24,6 +25,7 @@ import { watchPlugin } from "./watch.ts";
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
   workPlugin,
+  dispatchPlugin,
   decisionPlugin,
   coordinationPlugin,
   supervisorPlugin,

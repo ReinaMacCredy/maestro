@@ -1,0 +1,359 @@
+import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { WorkService } from "./work.ts";
+
+export interface DispatchRecord {
+  id: string;
+  workId: string;
+  objective: string;
+  ownedScope: string;
+  excludedScope: string;
+  mutation: string;
+  stopCondition: string;
+  lane: string;
+  evidenceRequired: string;
+  targetSession: string | null;
+  heldBy: string | null;
+  state: "open" | "cancelled";
+  cancelReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DispatchRow {
+  id: string;
+  work_id: string;
+  objective: string;
+  owned_scope: string;
+  excluded_scope: string;
+  mutation: string;
+  stop_condition: string;
+  lane: string;
+  evidence_required: string;
+  target_session: string | null;
+  held_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DispatchService {
+  get(id: string): DispatchRecord | null;
+  list(workId?: string): DispatchRecord[];
+}
+
+function fromRow(row: DispatchRow): DispatchRecord {
+  return {
+    id: row.id,
+    workId: row.work_id,
+    objective: row.objective,
+    ownedScope: row.owned_scope,
+    excludedScope: row.excluded_scope,
+    mutation: row.mutation,
+    stopCondition: row.stop_condition,
+    lane: row.lane,
+    evidenceRequired: row.evidence_required,
+    targetSession: row.target_session,
+    heldBy: row.held_by,
+    state: row.cancelled_at ? "cancelled" : "open",
+    cancelReason: row.cancel_reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function getDispatch(context: PluginContext, id: string): DispatchRecord | null {
+  const row = context.store.database
+    .query<DispatchRow, [string]>("SELECT * FROM dispatches WHERE id = ?")
+    .get(id);
+  return row ? fromRow(row) : null;
+}
+
+function requireDispatch(context: PluginContext, id: string): DispatchRecord {
+  const dispatch = getDispatch(context, id);
+  if (!dispatch) {
+    throw new CliError("NOT_FOUND", `dispatch not found: ${id}; run: maestro dispatch list`, {
+      command: "maestro dispatch list",
+      id,
+    });
+  }
+  return dispatch;
+}
+
+function listDispatches(context: PluginContext, workId?: string): DispatchRecord[] {
+  const rows = workId
+    ? context.store.database
+        .query<DispatchRow, [string]>(
+          "SELECT * FROM dispatches WHERE work_id = ? ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
+        )
+        .all(workId)
+    : context.store.database
+        .query<DispatchRow, []>(
+          "SELECT * FROM dispatches ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)",
+        )
+        .all();
+  return rows.map(fromRow);
+}
+
+function nextId(context: PluginContext): string {
+  const next =
+    context.store.database
+      .query<{ next: number }, []>(
+        "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM dispatches",
+      )
+      .get()?.next ?? 1;
+  return `x${next}`;
+}
+
+function position(invocation: CliInvocation, index: number, label: string): string {
+  const value = invocation.positionals[index];
+  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
+  return value;
+}
+
+function option(invocation: CliInvocation, name: string): string | null {
+  const value = invocation.options[name];
+  return typeof value === "string" ? value : null;
+}
+
+function requiredOption(invocation: CliInvocation, name: string): string {
+  const value = option(invocation, name.slice(2));
+  if (value === null || value.trim() === "") {
+    throw new CliError("MISSING_ARGUMENT", `missing or blank ${name}`, { field: name });
+  }
+  return value;
+}
+
+function format(dispatch: DispatchRecord): string {
+  return [
+    `${dispatch.id} [${dispatch.state}]`,
+    `work: ${dispatch.workId}`,
+    `objective: ${dispatch.objective}`,
+    `owned scope: ${dispatch.ownedScope}`,
+    `excluded scope: ${dispatch.excludedScope}`,
+    `mutation: ${dispatch.mutation}`,
+    `stop condition: ${dispatch.stopCondition}`,
+    `lane: ${dispatch.lane}`,
+    `evidence required: ${dispatch.evidenceRequired}`,
+    `target session: ${dispatch.targetSession ?? "none"}`,
+    `held by: ${dispatch.heldBy ?? "none"}`,
+    dispatch.cancelReason ? `cancel reason: ${dispatch.cancelReason}` : null,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+}
+
+export const dispatchPlugin: BuiltInPlugin = {
+  name: "dispatch",
+  inject: ["work"],
+  apply(context) {
+    context.store.migrate(`
+      CREATE TABLE IF NOT EXISTS dispatches (
+        id TEXT PRIMARY KEY,
+        work_id TEXT NOT NULL REFERENCES work(id),
+        objective TEXT NOT NULL,
+        owned_scope TEXT NOT NULL,
+        excluded_scope TEXT NOT NULL,
+        mutation TEXT NOT NULL,
+        stop_condition TEXT NOT NULL,
+        lane TEXT NOT NULL,
+        evidence_required TEXT NOT NULL,
+        target_session TEXT,
+        held_by TEXT,
+        cancelled_at TEXT,
+        cancel_reason TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS dispatches_work_id ON dispatches(work_id);
+    `);
+
+    const service: DispatchService = {
+      get: (id) => getDispatch(context, id),
+      list: (workId) => listDispatches(context, workId),
+    };
+    context.effect(() => context.provide("dispatch", service));
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch open",
+        (invocation): CliResult => {
+          const workId = position(invocation, 0, "work id");
+          const work = context.work as WorkService;
+          if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+          const objective = requiredOption(invocation, "--objective");
+          const ownedScope = requiredOption(invocation, "--owned-scope");
+          const excludedScope = requiredOption(invocation, "--excluded-scope");
+          const mutation = requiredOption(invocation, "--mutation");
+          const stopCondition = requiredOption(invocation, "--stop-condition");
+          const lane = requiredOption(invocation, "--lane");
+          const evidenceRequired = requiredOption(invocation, "--evidence-required");
+          const targetSession = option(invocation, "target-session");
+          const id = nextId(context);
+          const now = new Date().toISOString();
+          context.store.database
+            .query(
+              `INSERT INTO dispatches
+                (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
+                 lane, evidence_required, target_session, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              id,
+              workId,
+              objective,
+              ownedScope,
+              excludedScope,
+              mutation,
+              stopCondition,
+              lane,
+              evidenceRequired,
+              targetSession,
+              now,
+              now,
+            );
+          context.log.append({
+            type: "dispatch.open",
+            entityType: "dispatch",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { workId, targetSession },
+          });
+          const created = service.get(id) as DispatchRecord;
+          return { data: { dispatch: created }, text: format(created) };
+        },
+        {
+          description: "Store a complete lane contract on a work item.",
+          flags: {
+            "--objective": { description: "State the observable objective.", value: true },
+            "--owned-scope": { description: "Name the lane-owned scope.", value: true },
+            "--excluded-scope": { description: "Name the excluded scope.", value: true },
+            "--mutation": { description: "Declare the mutation boundary.", value: true },
+            "--stop-condition": { description: "State when the lane stops.", value: true },
+            "--lane": { description: "Name the lane type.", value: true },
+            "--evidence-required": { description: "Name the required evidence.", value: true },
+            "--target-session": { description: "Address a session if already known.", value: true },
+          },
+          positionals: [{ name: "work-id", required: true }],
+          rootDescription: "Store lane contracts and their return packets.",
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch accept",
+        (invocation): CliResult => {
+          const id = position(invocation, 0, "dispatch id");
+          const dispatch = requireDispatch(context, id);
+          if (dispatch.state === "cancelled") {
+            throw new CliError("INVALID_STATE", `${id} is cancelled`);
+          }
+          const sessionId = context.sessions.current().id;
+          if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
+            throw new CliError(
+              "TARGET_MISMATCH",
+              `${id} targets ${dispatch.targetSession}; current session is ${sessionId}`,
+              { id, targetSession: dispatch.targetSession },
+            );
+          }
+          if (dispatch.heldBy && dispatch.heldBy !== sessionId) {
+            throw new CliError("DISPATCH_HELD", `${id} is held by ${dispatch.heldBy}`, {
+              heldBy: dispatch.heldBy,
+              id,
+            });
+          }
+          if (!dispatch.heldBy) {
+            const now = new Date().toISOString();
+            context.store.database
+              .query("UPDATE dispatches SET held_by = ?, updated_at = ? WHERE id = ?")
+              .run(sessionId, now, id);
+            context.log.append({
+              type: "dispatch.accept",
+              entityType: "dispatch",
+              entityId: id,
+              sessionId,
+            });
+          }
+          const accepted = service.get(id) as DispatchRecord;
+          return { data: { dispatch: accepted }, text: format(accepted) };
+        },
+        {
+          description: "Accept a dispatch without taking the work write lease.",
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch cancel",
+        (invocation): CliResult => {
+          const id = position(invocation, 0, "dispatch id");
+          const dispatch = requireDispatch(context, id);
+          if (dispatch.state === "cancelled") {
+            throw new CliError("INVALID_STATE", `${id} is cancelled`);
+          }
+          const reason = requiredOption(invocation, "--reason");
+          const now = new Date().toISOString();
+          context.store.database
+            .query(
+              "UPDATE dispatches SET cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+            )
+            .run(now, reason, now, id);
+          context.log.append({
+            type: "dispatch.cancel",
+            entityType: "dispatch",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { reason },
+          });
+          const cancelled = service.get(id) as DispatchRecord;
+          return { data: { dispatch: cancelled }, text: format(cancelled) };
+        },
+        {
+          description: "Cancel a dispatch while keeping its row and reason.",
+          flags: { "--reason": { description: "Record why the lane was abandoned.", value: true } },
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch show",
+        (invocation): CliResult => {
+          const dispatch = requireDispatch(context, position(invocation, 0, "dispatch id"));
+          return { data: { dispatch }, text: format(dispatch) };
+        },
+        {
+          description: "Show one stored dispatch contract.",
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "dispatch list",
+        (invocation): CliResult => {
+          const workId = invocation.positionals[0];
+          if (workId) {
+            const work = context.work as WorkService;
+            if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+          }
+          const dispatches = service.list(workId);
+          return {
+            data: { dispatches },
+            text: dispatches.map(format).join("\n\n"),
+          };
+        },
+        {
+          description: "List dispatch contracts, optionally for one work item.",
+          positionals: [{ name: "work-id", required: false }],
+        },
+      ),
+    );
+  },
+};
