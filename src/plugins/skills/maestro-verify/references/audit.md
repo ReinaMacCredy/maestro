@@ -3,6 +3,9 @@
 Use this recipe for a review, risk scan, or verification request. Audit is
 read-only unless implementation is separately authorized.
 
+When the symptom does not yet name an owning layer, run the ordered
+[triage](triage.md) recipe before selecting probes.
+
 ## Loop anatomy
 
 ### Perceive

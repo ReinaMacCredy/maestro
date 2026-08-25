@@ -10,6 +10,26 @@ Use for close, commit, install, push, publish, release, or archive gates.
 Local implementation authority does not imply authority for remote or external
 state changes.
 
+## Evidence layers
+
+Proof follows five links. Claim only as far as the last proven link.
+
+- `source` - source-level tests, lint, type checks, or direct inspection.
+- `artifact` - the built or packaged output is present and has been read back.
+- `installed` - the installed stamp, version, or files match the intended artifact.
+- `live` - the running process, pid, or active runtime matches the installed layer.
+- `journey` - the real user path reaches the observable outcome end to end.
+
+"Tests pass" is a source claim. A claim that touches install or runtime must
+include a readback at that layer. Every proof and VERIFY result lists untested
+links explicitly as `NOT TESTED`, never by omission:
+
+```text
+proof: "suite 135 pass @ a52bd4a7 (source); runtime stamp readback a52bd4a7 (installed); live: NOT TESTED"
+Assumptions not verified: None
+Residual risks: None
+```
+
 ## Verify
 
 - Cross-check coverage before running anything: every behavior in scope has a
@@ -51,13 +71,15 @@ are reverted before reporting, and on FAIL it records the verdict and stops;
 routing back to implementation belongs to the parent turn that holds the
 user's ask.
 
-On FAIL, route back to `maestro-work` and leave a one-line failed-pass trace
-via `maestro work note`. A scenario still failing after three implement
+On FAIL, route back to `maestro-work` and leave the exact one-line failed-pass
+trace `maestro work note <id> "failed: <one line>"`. The prefix is the literal
+lowercase `failed:` followed by one space. A scenario still failing after three implement
 passes - counted from the work item's notes across sessions, not this
 session's memory - is a design problem, not an implementation one: stop and
 re-settle the decision via `maestro-design`.
 
-Read-only review method: [references/audit.md](references/audit.md).
+Read-only review method: [references/audit.md](references/audit.md). When the
+failure location is unclear, follow [references/triage.md](references/triage.md).
 
 ## Red flags
 
