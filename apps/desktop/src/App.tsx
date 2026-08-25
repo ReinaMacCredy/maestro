@@ -1,50 +1,67 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { Panel } from "./components/Panel";
+import { Pill } from "./components/Pill";
+import { FIXTURE } from "./fixture";
+import { cards, counts, pillState, sessionIndex, type RepoSnapshot } from "./model";
 
-// Spike build: pill + panel, hover driven by the native window (see lib.rs),
-// pin by clicking the pill, one copy button. UI port lands in w25.
+const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+// Hover open/close is owned by the native window (src-tauri/src/lib.rs) and
+// arrives as the "hover" event; outside Tauri (vite dev) the panel stays open.
 export function App() {
-  const [open, setOpen] = useState(false);
+  const [repos, setRepos] = useState<RepoSnapshot[]>(inTauri ? [] : FIXTURE);
+  const [open, setOpen] = useState(!inTauri);
   const [pinned, setPinned] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState(false);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const un = listen<boolean>("hover", (e) => setOpen(e.payload));
+    if (!inTauri) return;
+    const unHover = listen<boolean>("hover", (e) => setOpen(e.payload));
+    const unSnap = listen<RepoSnapshot[]>("snapshot", (e) => setRepos(e.payload));
     return () => {
-      un.then((f) => f());
+      unHover.then((f) => f());
+      unSnap.then((f) => f());
     };
   }, []);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const cardList = useMemo(() => cards(repos, now), [repos, now]);
+  const c = useMemo(() => counts(repos, cardList), [repos, cardList]);
+  const sessions = useMemo(() => sessionIndex(repos), [repos]);
 
   const togglePin = () => {
     const next = !pinned;
     setPinned(next);
-    invoke("set_pinned", { value: next }).catch(console.error);
+    if (inTauri) invoke("set_pinned", { value: next }).catch(console.error);
   };
-
-  const copy = async () => {
-    await navigator.clipboard.writeText("maestro ready");
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+  const toggleRepo = (repo: string) =>
+    setCollapsed((s) => {
+      const n = new Set(s);
+      n.has(repo) ? n.delete(repo) : n.add(repo);
+      return n;
+    });
+  const copied = () => {
+    setToast(true);
+    window.setTimeout(() => setToast(false), 1200);
   };
 
   return (
-    <div className="widget">
-      <div className={"panelWrap" + (open ? " open" : "")}>
-        <div className="panel">
-          <div className="section">Cần bạn</div>
-          <div className="card">
-            <div className="title">w15 gated by w21</div>
-            <button className="copy" onClick={copy} data-done={copied ? "1" : undefined}>
-              {copied ? "Đã copy" : "Copy"}
-            </button>
-          </div>
+    <div className={`widget ${open ? "open" : ""} ${pinned ? "pinned" : ""}`}>
+      <div className="panelWrap">
+        <div className="panelInner">
+          <Panel repos={repos} cards={cardList} counts={c} sessions={sessions} now={now} collapsed={collapsed} onToggleRepo={toggleRepo} onCopied={copied} />
         </div>
       </div>
-      <button className={"pill" + (pinned ? " pinned" : "")} onClick={togglePin}>
-        <span className="dot working" />
-        <span>2 active · 1 ready · 3 !</span>
-      </button>
+      <Pill counts={c} state={pillState(c)} pinned={pinned} expanded={open} onClick={togglePin} />
+      <div className={`toast ${toast ? "show" : ""}`}>Đã copy</div>
     </div>
   );
 }
