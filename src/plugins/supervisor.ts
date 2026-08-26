@@ -379,7 +379,7 @@ function dispatchUnreturnedDetections(
   return dispatch.list().flatMap((record): Detection[] => {
     if (record.state !== "open" || Date.parse(record.createdAt) >= cutoff) return [];
     const work = workById.get(record.workId);
-    if (!work) return [];
+    if (!work || work.state === "done" || work.state === "cancelled") return [];
     const subjectSession = record.heldBy ?? record.targetSession;
     const routingWork = { ...work, heldBy: subjectSession };
     return [{
