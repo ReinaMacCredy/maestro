@@ -4,6 +4,7 @@ import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
+import { dispatchLaneVocabulary } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
@@ -118,7 +119,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
             '  forks: settle before tests - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
             '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
-            "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge); ROI 0-10 -> tier",
+            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier`,
           ].join("\n"),
         { events: ["SessionStart"] },
       ),

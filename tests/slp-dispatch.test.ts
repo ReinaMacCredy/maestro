@@ -46,6 +46,35 @@ function dispatchId(result: { stdout: string }): string {
   return match[1];
 }
 
+function insertStoredDispatch(
+  fixture: Fixture,
+  input: { createdAt: string; id: string; lane: string; work: string },
+): void {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+  database
+    .query(
+      `INSERT INTO dispatches
+        (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
+         lane, evidence_required, pane, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.id,
+      input.work,
+      "historical record",
+      "fixture",
+      "product source",
+      "no-write",
+      "record remains readable",
+      input.lane,
+      "source: readback",
+      "w1:pZ",
+      input.createdAt,
+      input.createdAt,
+    );
+  database.close();
+}
+
 async function openDispatch(fixture: Fixture): Promise<string> {
   const work = idFrom(
     await runCli(fixture, ["work", "add", "handback contract", "--atomic-reason", "fixture"]),
@@ -425,12 +454,11 @@ test("279 a genuine later council seals only its own concurrent generation", asy
     const earlierReturn = await runCli(fixture, handbackFileArgs(earlier));
     expect(earlierReturn.exitCode).toBe(0);
 
-    const firstArgs = dispatchOpenArgs(work);
-    firstArgs[firstArgs.indexOf("--lane") + 1] = "design";
-    const secondArgs = dispatchOpenArgs(work);
-    secondArgs[secondArgs.indexOf("--lane") + 1] = "design";
-    const first = dispatchId(await runCli(fixture, firstArgs));
-    const second = dispatchId(await runCli(fixture, secondArgs));
+    const createdAt = new Date().toISOString();
+    insertStoredDispatch(fixture, { createdAt, id: "x2", lane: "design", work });
+    insertStoredDispatch(fixture, { createdAt, id: "x3", lane: "design", work });
+    const first = "x2";
+    const second = "x3";
     await acceptDispatch(fixture, first);
     await acceptDispatch(fixture, second);
     const firstReturn = await runCli(fixture, handbackFileArgs(first));
@@ -493,6 +521,72 @@ test("280 handoff exposes completed generations without leaking a sealed generat
     ).text();
     expect(notes).toContain("prior generation is complete");
     expect(notes).not.toContain("sealed generation partial return");
+  });
+});
+
+test("281 dispatch lanes share the brief vocabulary and preserve historical unknown values", async () => {
+  await withFixture(async (fixture) => {
+    const lanes = ["scout", "decision", "delivery", "challenge"] as const;
+    const brief = await runCli(
+      fixture,
+      ["hook", "record", "--event", "SessionStart"],
+      session("lane-vocabulary"),
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      "lane (scout no-write | decision x2-3 | delivery | challenge)",
+    );
+
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "lane validation", "--atomic-reason", "fixture"]),
+    );
+    const invalidArgs = dispatchOpenArgs(work);
+    invalidArgs[invalidArgs.indexOf("--lane") + 1] = "design";
+    const invalid = await runCli(fixture, invalidArgs);
+    expect(invalid.exitCode).not.toBe(0);
+    expect(invalid.stderr).toContain("INVALID_LANE");
+    expect(invalid.stderr).toContain(
+      "expected one of: scout, decision, delivery, challenge",
+    );
+
+    for (const lane of lanes) {
+      const args = dispatchOpenArgs(work);
+      args[args.indexOf("--lane") + 1] = lane;
+      const opened = await runCli(fixture, args);
+      expect(opened.exitCode).toBe(0);
+      expect(opened.stdout).toContain(`lane: ${lane}`);
+    }
+    const listed = JSON.parse(
+      (await runCli(fixture, ["dispatch", "list", "--json"])).stdout,
+    ) as { data: { dispatches: Array<{ lane: string; workId: string }> } };
+    expect(
+      listed.data.dispatches
+        .filter((dispatch) => dispatch.workId === work)
+        .map((dispatch) => dispatch.lane),
+    ).toEqual([...lanes]);
+
+    const historicalWork = idFrom(
+      await runCli(fixture, ["work", "add", "historical lane", "--atomic-reason", "fixture"]),
+    );
+    const now = new Date().toISOString();
+    insertStoredDispatch(fixture, {
+      createdAt: now,
+      id: "x900",
+      lane: "design",
+      work: historicalWork,
+    });
+
+    const historical = await runCli(fixture, ["dispatch", "show", "x900"]);
+    expect(historical.exitCode).toBe(0);
+    expect(historical.stdout).toContain("lane: design");
+    const readback = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      readback.query<{ lane: string }, [string]>("SELECT lane FROM dispatches WHERE id = ?")
+        .get("x900")?.lane,
+    ).toBe("design");
+    readback.close();
   });
 });
 

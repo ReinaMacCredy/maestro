@@ -3,6 +3,15 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
+export const dispatchLaneVocabulary = [
+  { brief: "scout no-write", name: "scout" },
+  { brief: "decision x2-3", name: "decision" },
+  { brief: "delivery", name: "delivery" },
+  { brief: "challenge", name: "challenge" },
+] as const;
+
+const dispatchLaneNames = dispatchLaneVocabulary.map(({ name }) => name);
+
 export interface DispatchRecord {
   id: string;
   workId: string;
@@ -488,6 +497,13 @@ export const dispatchPlugin: BuiltInPlugin = {
           const mutation = requiredOption(invocation, "--mutation");
           const stopCondition = requiredOption(invocation, "--stop-condition");
           const lane = requiredOption(invocation, "--lane");
+          if (!dispatchLaneNames.some((allowed) => allowed === lane)) {
+            throw new CliError(
+              "INVALID_LANE",
+              `invalid lane ${lane}; expected one of: ${dispatchLaneNames.join(", ")}`,
+              { lane, lanes: dispatchLaneNames },
+            );
+          }
           const evidenceRequired = requiredOption(invocation, "--evidence-required");
           const pane = requiredOption(invocation, "--pane");
           const targetSession = option(invocation, "target-session");
