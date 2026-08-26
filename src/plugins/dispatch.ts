@@ -458,7 +458,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             "--stop-condition": { description: "State when the lane stops.", value: true },
             "--lane": { description: "Name the lane type.", value: true },
             "--evidence-required": { description: "Name the required evidence.", value: true },
-            "--pane": { description: "Record the Herdr pane that owns the lane.", value: true },
+            "--pane": { description: "Record the pane that owns the lane.", value: true },
             "--target-session": { description: "Address a session if already known.", value: true },
           },
           positionals: [{ name: "work-id", required: true }],
