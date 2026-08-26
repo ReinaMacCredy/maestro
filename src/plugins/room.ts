@@ -1,5 +1,4 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const agents = `# Maestro chief-of-staff room
@@ -20,10 +19,12 @@ Start every session by reading \`OWNER.md\` and running \`maestro brief\`. Use t
 
 const owner = `# OWNER — stable model
 
-- Code lives in \`~/Code/\` on macOS; the terminal workspace manager is Herdr.
-- Speak with the owner in Vietnamese. Be direct and concise: no flattery, filler, or emoji.
-- Decide reversible implementation details, sequencing, test strategy, and retries without interrupting the owner.
-- Ask before destructive or costly actions, scope or success-criteria changes, publication, credentials, or security-sensitive choices.
+Use this file for stable facts the chief should carry across projects:
+
+- Working environment, project locations, tools, and recurring constraints.
+- Communication style, collaboration preferences, and standing boundaries.
+- Decisions the chief may make without interrupting the owner.
+- Actions that always require confirmation.
 
 Preferences that can change belong in the room store as decisions with rationale and supersede history, not as dated bullets in this file.
 
@@ -61,15 +62,11 @@ const shellrc = `function _maestro_home() {
 alias hm=_maestro_home
 `;
 
-const irinaRetiredLine =
-  "> RETIRED: The Chief of Staff role moved to `~/maestro`; do not act as Irina from this repository.";
-
 export async function scaffoldRoom(home: string): Promise<string> {
   const room = join(home, "maestro");
   await mkdir(room, { recursive: true });
   for (const [name, content] of [
     ["IDENTITY.md", identity],
-    ["OWNER.md", owner],
     ["AGENTS.md", agents],
     ["CLAUDE.md", agents],
     ["lane.md", lane],
@@ -77,16 +74,10 @@ export async function scaffoldRoom(home: string): Promise<string> {
   ] as const) {
     await writeFile(join(room, name), content);
   }
+  try {
+    await writeFile(join(room, "OWNER.md"), owner, { flag: "wx" });
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
+  }
   return room;
-}
-
-export async function retireIrina(home: string): Promise<string | null> {
-  const agents = join(home, "Code", "irina", "AGENTS.md");
-  if (!existsSync(agents)) return null;
-  const existing = await readFile(agents, "utf8");
-  const occurrences = existing.split("\n").filter((line) => line === irinaRetiredLine).length;
-  if (existing.startsWith(`${irinaRetiredLine}\n`) && occurrences === 1) return agents;
-  const retained = existing.split("\n").filter((line) => line !== irinaRetiredLine).join("\n");
-  await writeFile(agents, `${irinaRetiredLine}\n${retained}`);
-  return agents;
 }

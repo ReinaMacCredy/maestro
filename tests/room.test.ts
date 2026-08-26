@@ -14,8 +14,6 @@ import {
 
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
-const irinaRetiredLine =
-  "> RETIRED: The Chief of Staff role moved to `~/maestro`; do not act as Irina from this repository.";
 
 async function storeSnapshot(repo: string): Promise<Array<[string, number, string]>> {
   const directory = join(repo, ".maestro");
@@ -96,6 +94,45 @@ test("234 install twice preserves a first-edit shell backup and one managed sour
       .trim()
       .split("\n");
     expect(registry).toEqual([await realpath(fixture.repo)]);
+  });
+});
+
+test("267 reinstall preserves OWNER.md while refreshing generated room files", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const generatedNames = ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "lane.md", "shellrc"];
+    const generated = new Map(
+      await Promise.all(
+        generatedNames.map(async (name) => [name, await readFile(join(room, name), "utf8")] as const),
+      ),
+    );
+    const ownerEdit = "# OWNER\n\nOwner-authored content survives installs.\n";
+    await writeFile(join(room, "OWNER.md"), ownerEdit);
+    for (const name of generatedNames) {
+      await writeFile(join(room, name), `stale ${name}\n`);
+    }
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    expect(await readFile(join(room, "OWNER.md"), "utf8")).toBe(ownerEdit);
+    for (const name of generatedNames) {
+      expect(await readFile(join(room, name), "utf8")).toBe(generated.get(name) as string);
+    }
+  });
+});
+
+test("268 first install seeds a neutral OWNER.md", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const owner = await readFile(join(fixture.home, "maestro", "OWNER.md"), "utf8");
+
+    expect(owner).toContain("Working environment, project locations, tools, and recurring constraints.");
+    expect(owner).toContain("Communication style, collaboration preferences, and standing boundaries.");
+    expect(owner).not.toMatch(/~\/|\/Users\/|macOS|Windows|Linux|Vietnamese|English/);
   });
 });
 
@@ -763,7 +800,7 @@ test("243 install initializes the room store without turning the room into a git
   });
 });
 
-test("244 install marks the existing Irina instructions retired with one top line", async () => {
+test("244 install leaves existing Irina instructions byte-identical", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const agents = join(fixture.home, "Code", "irina", "AGENTS.md");
@@ -771,12 +808,12 @@ test("244 install marks the existing Irina instructions retired with one top lin
     await mkdir(join(agents, ".."), { recursive: true });
     await writeFile(agents, original);
 
-    await runCli(fixture, ["install"], { PATH: path });
-    await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path });
+    const first = await runCli(fixture, ["install"], { PATH: path });
+    const second = await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path });
 
-    const retired = await readFile(agents, "utf8");
-    expect(retired).toBe(`${irinaRetiredLine}\n${original}`);
-    expect(retired.split("\n").filter((line) => line === irinaRetiredLine)).toHaveLength(1);
+    expect(await readFile(agents, "utf8")).toBe(original);
+    expect(first.stdout).not.toContain("retired:");
+    expect(second.stdout).not.toContain("retired:");
   });
 });
 

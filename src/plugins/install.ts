@@ -15,7 +15,7 @@ import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
-import { retireIrina, scaffoldRoom } from "./room.ts";
+import { scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { writeSourceRecord } from "./source-record.ts";
@@ -579,7 +579,6 @@ export const installPlugin: BuiltInPlugin = {
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
         await writeShellSource(home);
-        const retiredIrina = await retireIrina(home);
         context.log.append({
           type: "install",
           entityType: "repo",
@@ -599,7 +598,6 @@ export const installPlugin: BuiltInPlugin = {
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
-            (retiredIrina ? `\nretired: ${retiredIrina}` : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),
