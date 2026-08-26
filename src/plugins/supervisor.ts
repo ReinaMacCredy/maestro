@@ -440,6 +440,18 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
 }
 
 function raise(context: PluginContext, detection: Detection): AttentionFinding {
+  if (context.store.readOnly) {
+    return {
+      fingerprint: detection.fingerprint,
+      kind: detection.kind,
+      packet: detection.packet,
+      raised: false,
+      raisedAt: "not recorded (read-only)",
+      subjectSession: detection.subjectSession,
+      subjectWork: detection.subjectWork,
+      targets: detection.targets,
+    };
+  }
   const existing = context.store.database
     .query<AttentionRow, [string]>("SELECT * FROM attention WHERE fingerprint = ?")
     .get(detection.fingerprint);

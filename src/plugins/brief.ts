@@ -4,24 +4,23 @@ import { join, resolve } from "node:path";
 import type { CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 
-interface WorkListEnvelope {
+interface AttentionEnvelope {
   data?: {
-    works?: WorkSummary[];
+    detections?: AttentionSummary[];
   };
   ok?: boolean;
 }
 
-interface WorkSummary {
-  id: string;
-  state: string;
-  title: string;
+interface AttentionSummary {
+  kind: string;
+  packet: string;
 }
 
 interface RepoBrief {
   error: boolean;
+  findings: AttentionSummary[];
   missing: boolean;
   repo: string;
-  works: WorkSummary[];
 }
 
 async function registeredRepos(home: string): Promise<string[]> {
@@ -31,9 +30,9 @@ async function registeredRepos(home: string): Promise<string[]> {
 }
 
 async function scanRepo(repo: string): Promise<RepoBrief> {
-  if (!existsSync(repo)) return { error: false, missing: true, repo, works: [] };
+  if (!existsSync(repo)) return { error: false, findings: [], missing: true, repo };
   const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
-  const child = Bun.spawn([process.execPath, cli, "work", "list", "--json"], {
+  const child = Bun.spawn([process.execPath, cli, "attention", "--json"], {
     cwd: repo,
     env: { ...process.env, MAESTRO_READ_ONLY: "1" },
     stdout: "pipe",
@@ -44,15 +43,17 @@ async function scanRepo(repo: string): Promise<RepoBrief> {
     new Response(child.stderr).text(),
     child.exited,
   ]);
-  if (exitCode !== 0) return { error: true, missing: false, repo, works: [] };
+  if (exitCode !== 0) return { error: true, findings: [], missing: false, repo };
   try {
-    const envelope = JSON.parse(stdout) as WorkListEnvelope;
-    const works = (envelope.data?.works ?? []).filter(
-      (work) => work.state === "open" || work.state === "active",
-    );
-    return { error: false, missing: false, repo, works };
+    const envelope = JSON.parse(stdout) as AttentionEnvelope;
+    return {
+      error: false,
+      findings: envelope.data?.detections ?? [],
+      missing: false,
+      repo,
+    };
   } catch {
-    return { error: true, missing: false, repo, works: [] };
+    return { error: true, findings: [], missing: false, repo };
   }
 }
 
@@ -65,9 +66,9 @@ export const briefPlugin: BuiltInPlugin = {
         async (): Promise<CliResult> => {
           const repos = await registeredRepos(process.env.HOME ?? process.cwd());
           const results = await Promise.all(repos.map(scanRepo));
-          const workLines = results.flatMap((result) =>
-            result.works.map(
-              (work) => `${result.repo}: ${work.id} [${work.state}] ${work.title}`,
+          const findingLines = results.flatMap((result) =>
+            result.findings.map(
+              (finding) => `${result.repo}: ${finding.packet.split("\n")[0] ?? finding.kind}`,
             )
           );
           const unavailableLines = results.flatMap((result) =>
@@ -77,7 +78,7 @@ export const briefPlugin: BuiltInPlugin = {
                 ? [`Unreadable repository: ${result.repo}`]
                 : []
           );
-          const attentionLines = [...workLines, ...unavailableLines];
+          const attentionLines = [...findingLines, ...unavailableLines];
           const text = attentionLines.length > 0
             ? ["Needs attention:", ...attentionLines].join("\n")
             : "All registered projects are running normally.";

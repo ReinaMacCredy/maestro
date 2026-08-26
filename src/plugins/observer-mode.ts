@@ -1,6 +1,8 @@
 import { CliError, type CliOptions } from "../kernel/cli.ts";
 
 const observerCommands = new Set([
+  "attention",
+  "attention --json",
   "brief",
   "bundle list",
   "bundle show",

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -8,6 +9,7 @@ import {
   runInstalledCliAt,
   runTool,
   withFixture,
+  type Fixture,
 } from "./helpers.ts";
 
 const shellSourceLine =
@@ -26,6 +28,52 @@ async function storeSnapshot(repo: string): Promise<Array<[string, number, strin
       return [name, (await stat(path)).mtimeMs, (await readFile(path)).toString("base64")];
     }),
   );
+}
+
+async function addBriefWork(
+  fixture: Fixture,
+  repo: string,
+  path: string,
+  title: string,
+  extra: string[] = [],
+): Promise<string> {
+  return idFrom(
+    await runInstalledCliAt(
+      fixture,
+      repo,
+      ["work", "add", title, "--atomic-reason", "brief fixture", ...extra],
+      { PATH: path },
+    ),
+  );
+}
+
+async function addRepeatedFailure(
+  fixture: Fixture,
+  repo: string,
+  path: string,
+  title: string,
+  holder: string,
+): Promise<string> {
+  const work = await addBriefWork(fixture, repo, path, title);
+  const environment = {
+    MAESTRO_SESSION_ID: holder,
+    MAESTRO_SESSION_PID: String(process.pid),
+    PATH: path,
+  };
+  expect(
+    (await runInstalledCliAt(fixture, repo, ["work", "start", work], environment)).exitCode,
+  ).toBe(0);
+  for (const note of ["failed: first", "failed: second", "failed: third"]) {
+    expect(
+      (await runInstalledCliAt(fixture, repo, ["work", "note", work, note], environment))
+        .exitCode,
+    ).toBe(0);
+  }
+  return work;
+}
+
+function openRepoDatabase(repo: string): Database {
+  return new Database(join(repo, ".maestro", "maestro.db"));
 }
 
 test("234 install twice preserves a first-edit shell backup and one managed source and registry line", async () => {
@@ -230,6 +278,8 @@ test("237 brief says every registered repository is running normally in one line
     const secondRepo = join(fixture.root, "normal-repo");
     await mkdir(secondRepo, { recursive: true });
     await runInstalledCliAt(fixture, secondRepo, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary alpha progress");
+    await addBriefWork(fixture, secondRepo, path, "ordinary beta progress");
 
     const brief = await runInstalledCliAt(
       fixture,
@@ -241,29 +291,35 @@ test("237 brief says every registered repository is running normally in one line
     expect(brief.exitCode).toBe(0);
     expect(brief.stderr).toBe("");
     expect(brief.stdout).toBe("All registered projects are running normally.\n");
+    expect(brief.stdout).not.toContain("ordinary alpha progress");
+    expect(brief.stdout).not.toContain("ordinary beta progress");
     expect(brief.stdout).not.toContain(await realpath(fixture.repo));
     expect(brief.stdout).not.toContain(await realpath(secondRepo));
   });
 });
 
-test("239 brief reports open work from two repositories without writing either store", async () => {
+test("239 brief reports detector findings from two repositories without writing either store", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     await runCli(fixture, ["install"], { PATH: path });
     const secondRepo = join(fixture.root, "open-repo");
     await mkdir(secondRepo, { recursive: true });
     await runInstalledCliAt(fixture, secondRepo, ["install"], { PATH: path });
-    await runInstalledCliAt(
+    await addBriefWork(fixture, fixture.repo, path, "ordinary alpha progress");
+    await addBriefWork(fixture, secondRepo, path, "ordinary beta progress");
+    const alpha = await addRepeatedFailure(
       fixture,
       fixture.repo,
-      ["work", "add", "prepare alpha", "--atomic-reason", "test"],
-      { PATH: path },
+      path,
+      "alpha repeatedly failing",
+      "alpha-holder",
     );
-    await runInstalledCliAt(
+    const beta = await addRepeatedFailure(
       fixture,
       secondRepo,
-      ["work", "add", "prepare beta", "--atomic-reason", "test"],
-      { PATH: path },
+      path,
+      "beta repeatedly failing",
+      "beta-holder",
     );
     const before = [await storeSnapshot(fixture.repo), await storeSnapshot(secondRepo)];
 
@@ -276,8 +332,14 @@ test("239 brief reports open work from two repositories without writing either s
 
     expect(brief.exitCode).toBe(0);
     expect(brief.stderr).toBe("");
-    expect(brief.stdout).toContain(`${await realpath(fixture.repo)}: w1 [open] prepare alpha`);
-    expect(brief.stdout).toContain(`${await realpath(secondRepo)}: w1 [open] prepare beta`);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE ${alpha}`,
+    );
+    expect(brief.stdout).toContain(
+      `${await realpath(secondRepo)}: attention REPEATED_FAILURE ${beta}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary alpha progress");
+    expect(brief.stdout).not.toContain("ordinary beta progress");
     expect([await storeSnapshot(fixture.repo), await storeSnapshot(secondRepo)]).toEqual(before);
   });
 });
@@ -286,12 +348,7 @@ test("240 brief names a deleted registered repository and continues", async () =
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     await runCli(fixture, ["install"], { PATH: path });
-    await runInstalledCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "add", "continue live work", "--atomic-reason", "test"],
-      { PATH: path },
-    );
+    await addBriefWork(fixture, fixture.repo, path, "ordinary live progress");
     const deletedRepo = join(fixture.root, "deleted-repo");
     await mkdir(deletedRepo, { recursive: true });
     await runInstalledCliAt(fixture, deletedRepo, ["install"], { PATH: path });
@@ -308,9 +365,200 @@ test("240 brief names a deleted registered repository and continues", async () =
     expect(brief.exitCode).toBe(0);
     expect(brief.stderr).toBe("");
     expect(brief.stdout).toContain(`Missing repository: ${deletedPath}`);
-    expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: w1 [open] continue live work`,
+    expect(brief.stdout).not.toContain("ordinary live progress");
+  });
+});
+
+test("251 brief reports DECISION_STALE and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary decision progress");
+    const work = await addBriefWork(fixture, fixture.repo, path, "owner decision needed");
+    const decision = idFrom(
+      await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        ["decision", "draft", "choose owner boundary", "--work", work],
+        { PATH: path },
+      ),
     );
+    const database = openRepoDatabase(fixture.repo);
+    database.query("UPDATE decisions SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+    database.close();
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention DECISION_STALE ${decision}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary decision progress");
+  });
+});
+
+test("252 brief reports STALLED_LEASE and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary stalled progress");
+    const work = await addBriefWork(fixture, fixture.repo, path, "stalled lane");
+    const environment = {
+      MAESTRO_SESSION_ID: "stalled-holder",
+      MAESTRO_SESSION_PID: String(process.pid),
+      PATH: path,
+    };
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["work", "start", work], environment))
+        .exitCode,
+    ).toBe(0);
+    const database = openRepoDatabase(fixture.repo);
+    database.query("UPDATE sessions SET pid = 1, anchor = 'pid', last_seen = ? WHERE id = ?")
+      .run(new Date(Date.now() - 31 * 60_000).toISOString(), "stalled-holder");
+    database.close();
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention STALLED_LEASE ${work}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary stalled progress");
+  });
+});
+
+test("253 brief reports REPEATED_FAILURE and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary retry progress");
+    const work = await addRepeatedFailure(
+      fixture,
+      fixture.repo,
+      path,
+      "repeatedly failing lane",
+      "failure-holder",
+    );
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE ${work}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary retry progress");
+  });
+});
+
+test("254 brief reports DISPATCH_UNRETURNED and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary dispatch progress");
+    const work = await addBriefWork(fixture, fixture.repo, path, "unreturned lane");
+    const opened = await runInstalledCliAt(
+      fixture,
+      fixture.repo,
+      [
+        "dispatch",
+        "open",
+        work,
+        "--objective",
+        "return the result",
+        "--owned-scope",
+        "scratch",
+        "--excluded-scope",
+        "product source",
+        "--mutation",
+        "no-write",
+        "--stop-condition",
+        "handback filed",
+        "--lane",
+        "delivery",
+        "--evidence-required",
+        "source",
+        "--pane",
+        "w1:pZ",
+      ],
+      { PATH: path },
+    );
+    expect(opened.exitCode).toBe(0);
+    const dispatch = opened.stdout.match(/^(x\d+)/)?.[1] as string;
+    const database = openRepoDatabase(fixture.repo);
+    database.query("UPDATE dispatches SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 3 * 60 * 60_000).toISOString(), dispatch);
+    database.close();
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention DISPATCH_UNRETURNED ${dispatch}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary dispatch progress");
+  });
+});
+
+test("255 brief reports SCOPE_COLLISION and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary collision progress");
+    const parent = await addBriefWork(fixture, fixture.repo, path, "shared mutation scope");
+    const first = await addBriefWork(
+      fixture,
+      fixture.repo,
+      path,
+      "first colliding lane",
+      ["--parent", parent],
+    );
+    const second = await addBriefWork(
+      fixture,
+      fixture.repo,
+      path,
+      "second colliding lane",
+      ["--parent", parent],
+    );
+    for (const [work, holder] of [[first, "collision-a"], [second, "collision-b"]] as const) {
+      expect(
+        (
+          await runInstalledCliAt(fixture, fixture.repo, ["work", "start", work], {
+            MAESTRO_SESSION_ID: holder,
+            MAESTRO_SESSION_PID: String(process.pid),
+            PATH: path,
+          })
+        ).exitCode,
+      ).toBe(0);
+    }
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention SCOPE_COLLISION ${first},${second}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary collision progress");
   });
 });
 
