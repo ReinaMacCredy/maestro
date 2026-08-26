@@ -150,6 +150,29 @@ esac
   },
 );
 
+test("237 brief says every registered repository is running normally in one line", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    const secondRepo = join(fixture.root, "normal-repo");
+    await mkdir(secondRepo, { recursive: true });
+    await runInstalledCliAt(fixture, secondRepo, ["install"], { PATH: path });
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stderr).toBe("");
+    expect(brief.stdout).toBe("All registered projects are running normally.\n");
+    expect(brief.stdout).not.toContain(await realpath(fixture.repo));
+    expect(brief.stdout).not.toContain(await realpath(secondRepo));
+  });
+});
+
 test.skipIf(process.env.HERDR_ENV !== "1")(
   "236 hm prints the read-only brief and returns without starting an agent",
   async () => {

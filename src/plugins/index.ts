@@ -1,4 +1,5 @@
 import type { BuiltInPlugin } from "../kernel/loader.ts";
+import { briefPlugin } from "./brief.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
@@ -25,6 +26,7 @@ import { watchPlugin } from "./watch.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
+  briefPlugin,
   workPlugin,
   dispatchPlugin,
   decisionPlugin,

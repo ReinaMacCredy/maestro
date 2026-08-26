@@ -1,6 +1,7 @@
 import { CliError, type CliOptions } from "../kernel/cli.ts";
 
 const observerCommands = new Set([
+  "brief",
   "bundle list",
   "bundle show",
   "decision list",
@@ -25,6 +26,7 @@ const observerCommands = new Set([
 ]);
 
 const observerPlugins = new Set([
+  "brief",
   "bundle",
   "coordination",
   "decision",
