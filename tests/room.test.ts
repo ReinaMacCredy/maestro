@@ -101,7 +101,8 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
       expect(claude.split("\n").filter(Boolean).length).toBeLessThanOrEqual(6);
       expect(lane).toContain("herdr pane split");
       expect(lane).toContain("herdr agent start");
-      expect(lane).toContain("events.wait");
+      expect(lane).toContain("herdr agent wait <name> --until done --until blocked");
+      expect(lane).not.toContain("events.wait");
       expect(lane).toContain("maestro handback file");
 
       const fakeBin = join(fixture.root, "fake-bin");
@@ -204,6 +205,21 @@ test("248 project harness files do not give agents room-only lane instructions",
       expect(projectInstructions).not.toContain("herdr pane");
       expect(projectInstructions).not.toContain("herdr agent");
     }
+  });
+});
+
+test("250 installed lane guidance names the runnable Herdr wait command", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
+
+    expect(lane).toContain(
+      "`herdr agent wait <name> --until done --until blocked` as a background command",
+    );
+    expect(lane).not.toContain("herdr events");
+    expect(lane).not.toContain("events.wait");
   });
 });
 

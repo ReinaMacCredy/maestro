@@ -37,7 +37,7 @@ Coordination requires a Herdr pane. Lanes are panes, never sub-agents, and the L
 1. Create or select the work item, then split an available shell with \`herdr pane split --current --direction right --cwd <repo> --no-focus\`.
 2. Record the seven-field contract with \`maestro dispatch open <work> --pane <pane-id> ...\`.
 3. Start the requested harness with \`herdr agent start <name> --kind <kind> --pane <pane-id>\`, then prompt it with the exact stored contract from \`maestro dispatch show <id>\`.
-4. The Lead waits in the background on Herdr's \`events.wait\` for \`pane_agent_status_changed\` with status \`done\`. An \`idle\` pane has merely been seen; \`blocked\` requires inspection.
+4. The Lead runs \`herdr agent wait <name> --until done --until blocked\` as a background command. An \`idle\` pane has merely been seen; \`blocked\` requires inspection.
 5. The lane accepts the dispatch, works only inside its mutation boundary, and files the six-field return with \`maestro handback file <dispatch> --status ... --claim ... --proof ... --assumptions ... --residual-risks ... --incidental-findings ...\`.
 6. A return packet is a claim. The Lead reads it, checks the named evidence, and alone decides whether the work item is complete.
 
