@@ -43,6 +43,7 @@ export interface WorkService {
   get(id: string): WorkRecord | null;
   list(): WorkRecord[];
   children(id: string): WorkRecord[];
+  release(id: string, holder: string, updatedAt: string): boolean;
   snapshot(): WorkRecord[];
 }
 
@@ -311,6 +312,12 @@ export const workPlugin: BuiltInPlugin = {
           .all(id)
           .map(toWork)
           .map((work) => expireDeadLease(context, work)),
+      release: (id, holder, updatedAt) =>
+        context.store.database
+          .query(
+            "UPDATE work SET state = 'open', held_by = NULL, updated_at = ? WHERE id = ? AND held_by = ?",
+          )
+          .run(updatedAt, id, holder).changes > 0,
       snapshot: () =>
         context.store.database
           .query<WorkRow, []>("SELECT * FROM work ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)")

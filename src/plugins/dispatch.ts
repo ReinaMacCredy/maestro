@@ -631,31 +631,36 @@ export const dispatchPlugin: BuiltInPlugin = {
           const incidentalFindings = requiredOption(invocation, "--incidental-findings");
           const id = nextHandbackId(context);
           const createdAt = new Date().toISOString();
-          context.store.database
-            .query(
-              `INSERT INTO handbacks
-                (id, dispatch_id, status, claim, proof, assumptions, residual_risks,
-                 incidental_findings, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            )
-            .run(
-              id,
-              dispatchId,
-              status,
-              claim,
-              proof,
-              assumptions,
-              residualRisks,
-              incidentalFindings,
-              createdAt,
-            );
-          context.log.append({
-            type: "handback.file",
-            entityType: "handback",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { dispatchId, status },
-          });
+          const sessionId = context.sessions.current().id;
+          const work = context.work as WorkService;
+          context.store.database.transaction(() => {
+            context.store.database
+              .query(
+                `INSERT INTO handbacks
+                  (id, dispatch_id, status, claim, proof, assumptions, residual_risks,
+                   incidental_findings, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              )
+              .run(
+                id,
+                dispatchId,
+                status,
+                claim,
+                proof,
+                assumptions,
+                residualRisks,
+                incidentalFindings,
+                createdAt,
+              );
+            work.release(dispatch.workId, sessionId, createdAt);
+            context.log.append({
+              type: "handback.file",
+              entityType: "handback",
+              entityId: id,
+              sessionId,
+              payload: { dispatchId, status },
+            });
+          })();
           const filed = handbackService.get(id) as HandbackRecord;
           return { data: { handback: filed }, text: formatHandback(filed) };
         },
