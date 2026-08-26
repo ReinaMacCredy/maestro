@@ -416,6 +416,7 @@ test("275 the installed room overlays Herdr agent status on work-scoped lane row
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const shellrc = await readFile(join(fixture.home, "maestro", "shellrc"), "utf8");
     expect(shellrc).toContain("function maestro_lanes()");
+    expect(shellrc).toContain("printf '%s\\n' \"$lanes\"");
 
     const fakeBin = join(fixture.root, "fake-bin-lanes");
     const maestroLog = join(fixture.root, "maestro-lanes.log");
