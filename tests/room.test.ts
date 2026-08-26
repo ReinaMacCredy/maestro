@@ -167,6 +167,28 @@ esac
   },
 );
 
+test("247 room harness files give agents the pane-lane contract without a lane skill", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const agents = await readFile(join(room, "AGENTS.md"), "utf8");
+    const claude = await readFile(join(room, "CLAUDE.md"), "utf8");
+
+    expect(agents).toBe(claude);
+    expect(agents).toContain("Lanes are Herdr panes, never sub-agents.");
+    expect(agents).toContain("read `lane.md`");
+    expect(agents).not.toContain("SKILL.md");
+    expect((await readdir(join(room, "skills"))).sort()).toEqual([
+      "maestro-bundle",
+      "maestro-design",
+      "maestro-verify",
+      "maestro-work",
+    ]);
+  });
+});
+
 test("237 brief says every registered repository is running normally in one line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

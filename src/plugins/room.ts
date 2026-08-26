@@ -5,6 +5,7 @@ import { join } from "node:path";
 const agents = `# Maestro chief-of-staff room
 
 Read \`IDENTITY.md\` and \`OWNER.md\`, then run \`maestro brief\`.
+Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
 `;
 
