@@ -189,6 +189,24 @@ test("247 room harness files give agents the pane-lane contract without a lane s
   });
 });
 
+test("248 project harness files do not give agents room-only lane instructions", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const roomAgents = await readFile(join(fixture.home, "maestro", "AGENTS.md"), "utf8");
+    expect(roomAgents).toContain("Lanes are Herdr panes, never sub-agents.");
+
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      const projectInstructions = await readFile(join(fixture.repo, name), "utf8");
+      expect(projectInstructions).not.toContain("Lanes are Herdr panes");
+      expect(projectInstructions).not.toContain("lane.md");
+      expect(projectInstructions).not.toContain("herdr pane");
+      expect(projectInstructions).not.toContain("herdr agent");
+    }
+  });
+});
+
 test("237 brief says every registered repository is running normally in one line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
