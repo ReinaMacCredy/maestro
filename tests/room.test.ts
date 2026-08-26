@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  idFrom,
   prepareInstallFixture,
   runCli,
   runInstalledCliAt,
@@ -290,6 +291,75 @@ test("241 install moves the four method skills into the room and links only thos
         join(fixture.home, "maestro", "skills", "maestro-verify", "references", "audit.md"),
       ).exists(),
     ).toBe(true);
+  });
+});
+
+test("242 owner preferences are room decisions whose reversals supersede the prior choice", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    const room = join(fixture.home, "maestro");
+    const owner = await readFile(join(room, "OWNER.md"), "utf8");
+    expect(owner).toContain("maestro decision draft");
+    expect(owner).toContain("--supersedes");
+
+    const first = await runInstalledCliAt(
+      fixture,
+      room,
+      [
+        "decision",
+        "draft",
+        "Prefer terse project briefs",
+        "--rationale",
+        "the owner asked for less noise",
+      ],
+      { PATH: path },
+    );
+    const firstId = idFrom(first);
+    expect((await runInstalledCliAt(fixture, room, ["decision", "lock", firstId], { PATH: path })).exitCode)
+      .toBe(0);
+    const reversal = await runInstalledCliAt(
+      fixture,
+      room,
+      [
+        "decision",
+        "draft",
+        "Prefer detailed project briefs",
+        "--rationale",
+        "the owner reversed the earlier preference",
+        "--supersedes",
+        firstId,
+      ],
+      { PATH: path },
+    );
+    const reversalId = idFrom(reversal);
+    expect(
+      (await runInstalledCliAt(fixture, room, ["decision", "lock", reversalId], { PATH: path }))
+        .exitCode,
+    ).toBe(0);
+
+    const listed = await runInstalledCliAt(
+      fixture,
+      room,
+      ["decision", "list", "--json"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    const envelope = JSON.parse(listed.stdout) as {
+      data: {
+        decisions: Array<{
+          id: string;
+          state: string;
+          supersededById: string | null;
+          supersedesId: string | null;
+        }>;
+      };
+    };
+    expect(envelope.data.decisions).toContainEqual(
+      expect.objectContaining({ id: firstId, state: "superseded", supersededById: reversalId }),
+    );
+    expect(envelope.data.decisions).toContainEqual(
+      expect.objectContaining({ id: reversalId, state: "locked", supersedesId: firstId }),
+    );
   });
 });
 

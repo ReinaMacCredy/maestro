@@ -24,6 +24,8 @@ const owner = `# OWNER — stable model
 - Ask before destructive or costly actions, scope or success-criteria changes, publication, credentials, or security-sensitive choices.
 
 Preferences that can change belong in the room store as decisions with rationale and supersede history, not as dated bullets in this file.
+
+When the owner states a preference, run \`maestro decision draft "<preference>" --rationale "<why>"\`, then lock the returned id. When the owner reverses it, draft the replacement with \`--supersedes <old-id>\` and lock the replacement; never leave both preferences side by side.
 `;
 
 const lane = `# Lanes
