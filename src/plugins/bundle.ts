@@ -8,6 +8,7 @@ import type {
   HandbackRecord,
   HandbackService,
 } from "./dispatch.ts";
+import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
 export interface BundleRecord {
@@ -395,7 +396,8 @@ export const bundlePlugin: BuiltInPlugin = {
     }
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "bundle open",
         async (invocation): Promise<CliResult> => {
           const id = required(invocation, 0, "bundle id");
@@ -469,7 +471,8 @@ export const bundlePlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "bundle close",
         async (invocation): Promise<CliResult> => {
           const id = required(invocation, 0, "bundle id");
@@ -522,7 +525,8 @@ export const bundlePlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "handoff",
         async (invocation): Promise<CliResult> => {
           const id = required(invocation, 0, "bundle id");
@@ -593,7 +597,8 @@ export const bundlePlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "bundle save",
         async (invocation): Promise<CliResult> => {
           const directory = resolve(required(invocation, 0, "bundle directory"));

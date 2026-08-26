@@ -6,6 +6,7 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
 import type { DispatchService } from "./dispatch.ts";
 import { readInstallStamp } from "./install-stamp.ts";
+import { supervisorSessionId } from "./coordination.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -44,7 +45,7 @@ interface FailedNoteRow {
 }
 
 interface Mailbox {
-  send(targetSession: string, text: string): unknown;
+  sendAsSupervisor(targetSession: string, text: string): unknown;
 }
 
 interface Detection {
@@ -479,7 +480,7 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       type: "attention.raise",
       entityType: detection.entityType,
       entityId: detection.entityId,
-      sessionId: context.sessions.current().id,
+      sessionId: supervisorSessionId,
       payload: {
         fingerprint: detection.fingerprint,
         kind: detection.kind,
@@ -487,7 +488,7 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       },
     });
     const mailbox = context.mailbox as Mailbox;
-    for (const target of detection.targets) mailbox.send(target, detection.packet);
+    for (const target of detection.targets) mailbox.sendAsSupervisor(target, detection.packet);
   });
   transaction();
   if (!inserted) {

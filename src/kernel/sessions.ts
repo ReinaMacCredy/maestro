@@ -184,7 +184,7 @@ export class Sessions {
       this.resolved = {
         anchor: "pid",
         harness: null,
-        id: "supervisor",
+        id: "session-none",
         pid: process.pid,
         scope: this.scope,
       };

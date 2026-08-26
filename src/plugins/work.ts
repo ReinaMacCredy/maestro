@@ -2,6 +2,7 @@ import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
+import { registerSessionCommand } from "./session-required.ts";
 
 export interface WorkRecord {
   id: string;
@@ -342,7 +343,8 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() => context.provide("work", service));
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "work add",
         (invocation): CliResult => {
           const title = requirePosition(invocation, 0, "work title");
@@ -420,7 +422,7 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("work start", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "work start", async (invocation): Promise<CliResult> => {
         const id = requirePosition(invocation, 0, "work id");
         const work = requireWork(context, id);
         if (work.state === "done") throw new CliError("INVALID_STATE", `${id} is already done`);
@@ -502,7 +504,7 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("work release", (invocation): CliResult => {
+      registerSessionCommand(context, "work release", (invocation): CliResult => {
         const id = requirePosition(invocation, 0, "work id");
         const work = requireWork(context, id);
         if (work.state === "done" || work.state === "cancelled") {
@@ -541,7 +543,7 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("work reclaim", (invocation): CliResult => {
+      registerSessionCommand(context, "work reclaim", (invocation): CliResult => {
         const id = requirePosition(invocation, 0, "work id");
         const reason = textOption(invocation, "reason");
         if (!reason?.trim()) {
@@ -598,7 +600,7 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("work note", (invocation): CliResult => {
+      registerSessionCommand(context, "work note", (invocation): CliResult => {
         const id = requirePosition(invocation, 0, "work id");
         const text = requirePosition(invocation, 1, "note text");
         requireWork(context, id);
@@ -624,7 +626,8 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "work done",
         async (invocation): Promise<CliResult> => {
           const id = requirePosition(invocation, 0, "work id");
@@ -708,7 +711,8 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "work cancel",
         async (invocation): Promise<CliResult> => {
           const id = requirePosition(invocation, 0, "work id");

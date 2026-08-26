@@ -8,6 +8,7 @@ import {
   type BuiltInPlugin,
   type PluginRecord,
 } from "../kernel/loader.ts";
+import { registerSessionCommand } from "./session-required.ts";
 
 interface ConfigEntry {
   config?: unknown;
@@ -82,7 +83,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("plugin enable", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "plugin enable", async (invocation): Promise<CliResult> => {
         const name = requireName(invocation);
         const record = context.loader.records.find((candidate) => candidate.name === name);
         if (!record || record.diagnostic === "plugin source not found") {
@@ -114,7 +115,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("plugin disable", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "plugin disable", async (invocation): Promise<CliResult> => {
         const name = requireName(invocation);
         await updateEntry(configPath, name, true);
         context.log.append({
@@ -132,7 +133,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("plugin new", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "plugin new", async (invocation): Promise<CliResult> => {
         const name = requireName(invocation);
         validateName(name);
         const directory = join(repo, ".maestro", "plugins");
@@ -158,7 +159,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("plugin add", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "plugin add", async (invocation): Promise<CliResult> => {
         const url = requireName(invocation, "git URL");
         const name = basename(url.replace(/\/$/, "")).replace(/\.git$/, "");
         validateName(name);
@@ -221,7 +222,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("plugin remove", async (invocation): Promise<CliResult> => {
+      registerSessionCommand(context, "plugin remove", async (invocation): Promise<CliResult> => {
         const name = requireName(invocation);
         const record = context.loader.records.find((candidate) => candidate.name === name);
         if (!record) throw new CliError("NOT_FOUND", `plugin not found: ${name}`);

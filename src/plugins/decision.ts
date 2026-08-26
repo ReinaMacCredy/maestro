@@ -1,5 +1,6 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
 export interface DecisionRecord {
@@ -138,7 +139,8 @@ export const decisionPlugin: BuiltInPlugin = {
     context.effect(() => context.provide("decision", service));
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "decision draft",
         (invocation): CliResult => {
           const first = required(invocation, 0, "decision text");
@@ -242,7 +244,7 @@ export const decisionPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("decision lock", (invocation): CliResult => {
+      registerSessionCommand(context, "decision lock", (invocation): CliResult => {
         const id = required(invocation, 0, "decision id");
         const decision = requireDecision(context, id);
         if (decision.state !== "draft") {

@@ -1,5 +1,6 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
 export interface DispatchRecord {
@@ -373,7 +374,8 @@ export const dispatchPlugin: BuiltInPlugin = {
     context.effect(() => context.provide("handback", handbackService));
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "dispatch open",
         (invocation): CliResult => {
           const workId = position(invocation, 0, "work id");
@@ -446,7 +448,8 @@ export const dispatchPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "dispatch accept",
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
@@ -491,7 +494,8 @@ export const dispatchPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "dispatch cancel",
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
@@ -565,7 +569,8 @@ export const dispatchPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "dispatch unseal",
         (invocation): CliResult => {
           const workId = position(invocation, 0, "work id");
@@ -607,7 +612,8 @@ export const dispatchPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "handback file",
         (invocation): CliResult => {
           const dispatchId = position(invocation, 0, "dispatch id");

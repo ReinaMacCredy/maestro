@@ -872,20 +872,13 @@ test("150 install stays inert and attention plus a daemon tick preserve work and
   });
 });
 
-test("151 MAESTRO_SESSION_NONE records no session and sends messages as supervisor", async () => {
+test("151 MAESTRO_SESSION_NONE records no session while status remains observable", async () => {
   await withFixture(async (fixture) => {
     await recordSession(fixture, "existing-session");
     const none = { ...session("ignored-session"), MAESTRO_SESSION_NONE: "1" };
     const status = await runCli(fixture, ["status"], none);
     expect(status.exitCode).toBe(0);
     expect(status.stdout).not.toContain("supervisor");
-    const sent = await runCli(
-      fixture,
-      ["msg", "send", "existing-session", "supervised delivery"],
-      none,
-    );
-    expect(sent.exitCode).toBe(0);
-
     const database = openDatabase(fixture);
     try {
       expect(
@@ -893,11 +886,6 @@ test("151 MAESTRO_SESSION_NONE records no session and sends messages as supervis
           "SELECT count(*) AS count FROM sessions WHERE id = 'supervisor'",
         ).get()?.count,
       ).toBe(0);
-      expect(
-        database.query<{ sender_session: string }, []>(
-          "SELECT sender_session FROM messages ORDER BY id DESC LIMIT 1",
-        ).get()?.sender_session,
-      ).toBe("supervisor");
     } finally {
       database.close();
     }

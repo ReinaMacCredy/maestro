@@ -16,6 +16,7 @@ import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
+import { registerSessionCommand } from "./session-required.ts";
 import { writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
@@ -370,7 +371,7 @@ export const installPlugin: BuiltInPlugin = {
   name: "install",
   apply(context) {
     context.effect(() =>
-      context.cli.register("install", async (): Promise<CliResult> => {
+      registerSessionCommand(context, "install", async (): Promise<CliResult> => {
         const repo = process.cwd();
         const home = process.env.HOME ?? repo;
         const localBin = join(home, ".local", "bin");

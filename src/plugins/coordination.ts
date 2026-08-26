@@ -5,6 +5,9 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { driftAdvisory } from "./lifecycle.ts";
+import { registerSessionCommand } from "./session-required.ts";
+
+export const supervisorSessionId = "supervisor";
 
 interface MessageRow {
   id: number;
@@ -112,7 +115,14 @@ class MailboxService {
   }
 
   send(targetSession: string, text: string): MessageRecord {
-    const senderSession = this.context.sessions.current().id;
+    return this.sendFrom(this.context.sessions.current().id, targetSession, text);
+  }
+
+  sendAsSupervisor(targetSession: string, text: string): MessageRecord {
+    return this.sendFrom(supervisorSessionId, targetSession, text);
+  }
+
+  private sendFrom(senderSession: string, targetSession: string, text: string): MessageRecord {
     const createdAt = new Date().toISOString();
     this.context.store.database
       .query(
@@ -293,7 +303,8 @@ export const coordinationPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "msg send",
         (invocation): CliResult => {
           const target = required(invocation, 0, "target session");
@@ -345,7 +356,8 @@ export const coordinationPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "msg read",
         (): CliResult => {
           const sessionId = context.sessions.current().id;
@@ -406,7 +418,8 @@ export const coordinationPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register(
+      registerSessionCommand(
+        context,
         "hook record",
         async (invocation): Promise<CliResult> => {
           const event = invocation.options.event;
