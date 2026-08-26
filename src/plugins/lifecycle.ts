@@ -274,7 +274,7 @@ function mailboxCheck(storePath: string, scope: string): string {
   if (!existsSync(storePath)) return "mailbox: ok";
   let store: Store | null = null;
   try {
-    store = new Store(storePath);
+    store = new Store(storePath, { readonly: true });
     const sessions = new Sessions(store, scope);
     const database = store.database;
     const tables = new Set(

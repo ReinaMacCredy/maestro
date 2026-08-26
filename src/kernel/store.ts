@@ -51,12 +51,19 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
 
 export class Store {
   readonly database: Database;
+  readonly readOnly: boolean;
 
-  constructor(readonly path: string) {
-    mkdirSync(dirname(path), { recursive: true });
-    this.database = new Database(path, { create: true, strict: true });
+  constructor(readonly path: string, options: { readonly?: boolean } = {}) {
+    this.readOnly = options.readonly ?? false;
+    if (!this.readOnly) mkdirSync(dirname(path), { recursive: true });
+    this.database = new Database(path, {
+      create: !this.readOnly,
+      readonly: this.readOnly,
+      strict: true,
+    });
     this.database.exec("PRAGMA busy_timeout = 5000");
     this.database.exec("PRAGMA foreign_keys = ON");
+    if (this.readOnly) return;
     try {
       this.database.exec("PRAGMA journal_mode = WAL");
     } catch (error) {

@@ -46,6 +46,7 @@ export class Sessions {
     private readonly store: Store,
     private readonly scope = process.cwd(),
   ) {
+    if (store.readOnly) return;
     store.migrate(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
@@ -171,7 +172,7 @@ export class Sessions {
     return this.store.database
       .query<SessionRow, []>("SELECT * FROM sessions ORDER BY id")
       .all()
-      .map((row) => this.fromRow(row));
+      .map((row) => this.fromRow(this.normalizeRow(row)));
   }
 
   private resolveCurrent(harness?: Harness | null): CurrentSession {
@@ -248,9 +249,18 @@ export class Sessions {
   }
 
   private row(id: string): SessionRow | null {
-    return this.store.database
+    const row = this.store.database
       .query<SessionRow, [string]>("SELECT * FROM sessions WHERE id = ?")
       .get(id) ?? null;
+    return row ? this.normalizeRow(row) : null;
+  }
+
+  private normalizeRow(row: SessionRow): SessionRow {
+    return {
+      ...row,
+      anchor: row.anchor === "ttl" ? "ttl" : "pid",
+      scope: row.scope ?? "",
+    };
   }
 
   private downgradeSharedPid(row: SessionRow): SessionRow {
@@ -258,12 +268,14 @@ export class Sessions {
     // A shared pid stops proving life, but a dead pid still proves death, so only
     // a live host process earns the fresh clock the TTL anchor is read against.
     const lastSeen = this.isPidAlive(row.pid) ? new Date().toISOString() : row.last_seen;
+    const downgraded = { ...row, anchor: "ttl" as const, last_seen: lastSeen };
+    if (this.store.readOnly) return downgraded;
     const result = this.store.database
       .query(
         "UPDATE sessions SET anchor = 'ttl', last_seen = ? WHERE id = ? AND pid = ? AND anchor = 'pid'",
       )
       .run(lastSeen, row.id, row.pid);
-    if (result.changes > 0) return { ...row, anchor: "ttl", last_seen: lastSeen };
+    if (result.changes > 0) return downgraded;
     return this.row(row.id) ?? row;
   }
 
