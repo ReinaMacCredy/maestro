@@ -5,8 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Cli, CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
-import { sessionTtlMs } from "../kernel/sessions.ts";
-import { resolveStoreLocation } from "../kernel/store.ts";
+import { Sessions } from "../kernel/sessions.ts";
+import { resolveStoreLocation, Store } from "../kernel/store.ts";
 import {
   readGitHeadCommit,
   stampRuntime,
@@ -267,26 +267,16 @@ async function codexTrustCheck(repo: string): Promise<string> {
 }
 
 interface UnreadMessageTarget {
-  anchor: "pid" | "ttl" | null;
-  last_seen: string | null;
-  pid: number | null;
+  target_session: string;
 }
 
-function pidIsAlive(pid: number | null): boolean {
-  if (pid === null) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
-function mailboxCheck(storePath: string): string {
+function mailboxCheck(storePath: string, scope: string): string {
   if (!existsSync(storePath)) return "mailbox: ok";
-  let database: Database | null = null;
+  let store: Store | null = null;
   try {
-    database = new Database(storePath, { readonly: true, strict: true });
+    store = new Store(storePath);
+    const sessions = new Sessions(store, scope);
+    const database = store.database;
     const tables = new Set(
       database
         .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -298,28 +288,20 @@ function mailboxCheck(storePath: string): string {
     }
     const unread = database
       .query<UnreadMessageTarget, []>(
-        `SELECT s.anchor, s.last_seen, s.pid
+        `SELECT m.target_session
          FROM messages m
          LEFT JOIN message_cursors c ON c.session_id = m.target_session
-         LEFT JOIN sessions s ON s.id = m.target_session
          WHERE m.id > COALESCE(c.last_message_id, 0)`,
       )
       .all();
-    const now = Date.now();
-    const queued = unread.filter((target) => {
-      if (target.anchor === "ttl") {
-        const lastSeen = Date.parse(target.last_seen ?? "");
-        return !Number.isFinite(lastSeen) || now - lastSeen > sessionTtlMs;
-      }
-      return !pidIsAlive(target.pid);
-    }).length;
+    const queued = unread.filter((target) => !sessions.liveness(target.target_session).live).length;
     return queued === 0
       ? "mailbox: ok"
       : `mailbox: ${queued} message(s) queued for dead sessions`;
   } catch {
     return "mailbox: ok";
   } finally {
-    database?.close();
+    store?.close();
   }
 }
 
@@ -415,7 +397,7 @@ async function doctor(): Promise<CliResult> {
   checks.push(await codexTrustCheck(repo));
 
   const storePath = resolveStoreLocation(repo).path;
-  checks.push(mailboxCheck(storePath));
+  checks.push(mailboxCheck(storePath, repo));
   if (!existsSync(storePath)) {
     issues.push({ component: "store", fix: "run maestro install", message: `store is missing: ${storePath}` });
   } else {

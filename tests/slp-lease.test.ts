@@ -1,7 +1,15 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { Sessions } from "../src/kernel/sessions.ts";
+import { Store } from "../src/kernel/store.ts";
+import {
+  idFrom,
+  prepareInstallFixture,
+  runCli,
+  withFixture,
+  type Fixture,
+} from "./helpers.ts";
 
 function session(id: string, pid = process.pid): Record<string, string> {
   return {
@@ -399,5 +407,56 @@ test("195 repeated work reads write a shared-pid downgrade exactly once", async 
     database.close();
     expect(writes).toBe(1);
     expect(anchor).toBe("ttl");
+  });
+});
+
+test("196 doctor counts the mailbox target that Sessions.liveness calls dead", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    for (const [id, pid] of [
+      ["shared-target", 99_999_999],
+      ["shared-peer", 99_999_999],
+      ["ttl-dead", 99_999_998],
+    ] as const) {
+      expect(
+        (
+          await runCli(
+            fixture,
+            ["hook", "record", "--event", "SessionStart", "--harness", "codex"],
+            session(id, pid),
+          )
+        ).exitCode,
+      ).toBe(0);
+    }
+    expect(
+      (await runCli(fixture, ["msg", "send", "shared-target", "shared queued"])).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "ttl-dead", "ttl queued"])).exitCode)
+      .toBe(0);
+
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const database = new Database(databasePath);
+    const stale = new Date(Date.now() - 61 * 60 * 1000).toISOString();
+    database
+      .query("UPDATE sessions SET anchor = 'pid', last_seen = ? WHERE id IN (?, ?)")
+      .run(stale, "shared-target", "shared-peer");
+    database
+      .query("UPDATE sessions SET anchor = 'ttl', last_seen = ? WHERE id = ?")
+      .run(stale, "ttl-dead");
+    database.close();
+
+    const doctor = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(doctor.exitCode).toBe(0);
+
+    const store = new Store(databasePath);
+    try {
+      const sessions = new Sessions(store, fixture.repo);
+      expect(sessions.liveness("shared-target").live).toBe(true);
+      expect(sessions.liveness("ttl-dead").live).toBe(false);
+    } finally {
+      store.close();
+    }
+    expect(doctor.stdout).toContain("mailbox: 1 message(s) queued for dead sessions");
   });
 });
