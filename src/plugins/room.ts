@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const agents = `# Maestro chief-of-staff room
@@ -56,6 +57,9 @@ const shellrc = `function _maestro_home() {
 alias hm=_maestro_home
 `;
 
+const irinaRetiredLine =
+  "> RETIRED: The Chief of Staff role moved to `~/maestro`; do not act as Irina from this repository.";
+
 export async function scaffoldRoom(home: string): Promise<string> {
   const room = join(home, "maestro");
   await mkdir(room, { recursive: true });
@@ -70,4 +74,15 @@ export async function scaffoldRoom(home: string): Promise<string> {
     await writeFile(join(room, name), content);
   }
   return room;
+}
+
+export async function retireIrina(home: string): Promise<string | null> {
+  const agents = join(home, "Code", "irina", "AGENTS.md");
+  if (!existsSync(agents)) return null;
+  const existing = await readFile(agents, "utf8");
+  const occurrences = existing.split("\n").filter((line) => line === irinaRetiredLine).length;
+  if (existing.startsWith(`${irinaRetiredLine}\n`) && occurrences === 1) return agents;
+  const retained = existing.split("\n").filter((line) => line !== irinaRetiredLine).join("\n");
+  await writeFile(agents, `${irinaRetiredLine}\n${retained}`);
+  return agents;
 }

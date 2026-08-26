@@ -12,6 +12,8 @@ import {
 
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
+const irinaRetiredLine =
+  "> RETIRED: The Chief of Staff role moved to `~/maestro`; do not act as Irina from this repository.";
 
 async function storeSnapshot(repo: string): Promise<Array<[string, number, string]>> {
   const directory = join(repo, ".maestro");
@@ -390,6 +392,23 @@ test("243 install initializes the room store without turning the room into a git
       { MAESTRO_READ_ONLY: "1", PATH: path },
     );
     expect(shown.stdout).toContain("unassigned owner idea");
+  });
+});
+
+test("244 install marks the existing Irina instructions retired with one top line", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const agents = join(fixture.home, "Code", "irina", "AGENTS.md");
+    const original = "# Irina — Chief of Staff\n\nOriginal instructions stay byte-for-byte below.\n";
+    await mkdir(join(agents, ".."), { recursive: true });
+    await writeFile(agents, original);
+
+    await runCli(fixture, ["install"], { PATH: path });
+    await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path });
+
+    const retired = await readFile(agents, "utf8");
+    expect(retired).toBe(`${irinaRetiredLine}\n${original}`);
+    expect(retired.split("\n").filter((line) => line === irinaRetiredLine)).toHaveLength(1);
   });
 });
 
