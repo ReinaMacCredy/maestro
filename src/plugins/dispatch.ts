@@ -13,6 +13,7 @@ export interface DispatchRecord {
   stopCondition: string;
   lane: string;
   evidenceRequired: string;
+  pane: string | null;
   targetSession: string | null;
   heldBy: string | null;
   state: "open" | "returned" | "cancelled";
@@ -31,6 +32,7 @@ interface DispatchRow {
   stop_condition: string;
   lane: string;
   evidence_required: string;
+  pane: string | null;
   target_session: string | null;
   held_by: string | null;
   cancelled_at: string | null;
@@ -117,6 +119,7 @@ function fromRow(row: DispatchRow): DispatchRecord {
     stopCondition: row.stop_condition,
     lane: row.lane,
     evidenceRequired: row.evidence_required,
+    pane: row.pane ?? null,
     targetSession: row.target_session,
     heldBy: row.held_by,
     state: row.cancelled_at ? "cancelled" : row.returned ? "returned" : "open",
@@ -290,6 +293,7 @@ function format(dispatch: DispatchRecord): string {
     `stop condition: ${dispatch.stopCondition}`,
     `lane: ${dispatch.lane}`,
     `evidence required: ${dispatch.evidenceRequired}`,
+    `pane: ${dispatch.pane ?? "none"}`,
     `target session: ${dispatch.targetSession ?? "none"}`,
     `held by: ${dispatch.heldBy ?? "none"}`,
     dispatch.cancelReason ? `cancel reason: ${dispatch.cancelReason}` : null,
@@ -331,6 +335,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         stop_condition TEXT NOT NULL,
         lane TEXT NOT NULL,
         evidence_required TEXT NOT NULL,
+        pane TEXT,
         target_session TEXT,
         held_by TEXT,
         cancelled_at TEXT,
@@ -360,6 +365,18 @@ export const dispatchPlugin: BuiltInPlugin = {
         unseal_reason TEXT NOT NULL
       );
     `);
+    const hasDispatchColumn = (name: string) =>
+      context.store.database
+        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
+        .all()
+        .some((column) => column.name === name);
+    if (!hasDispatchColumn("pane")) {
+      try {
+        context.store.migrate("ALTER TABLE dispatches ADD COLUMN pane TEXT");
+      } catch (error) {
+        if (!hasDispatchColumn("pane")) throw error;
+      }
+    }
 
     const service: DispatchService = {
       council: (workId) => councilStatus(context, workId),
@@ -395,7 +412,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           const stopCondition = requiredOption(invocation, "--stop-condition");
           const lane = requiredOption(invocation, "--lane");
           const evidenceRequired = requiredOption(invocation, "--evidence-required");
-          requiredOption(invocation, "--pane");
+          const pane = requiredOption(invocation, "--pane");
           const targetSession = option(invocation, "target-session");
           const id = nextId(context);
           const now = new Date().toISOString();
@@ -403,8 +420,8 @@ export const dispatchPlugin: BuiltInPlugin = {
             .query(
               `INSERT INTO dispatches
                 (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-                 lane, evidence_required, target_session, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 lane, evidence_required, pane, target_session, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               id,
@@ -416,6 +433,7 @@ export const dispatchPlugin: BuiltInPlugin = {
               stopCondition,
               lane,
               evidenceRequired,
+              pane,
               targetSession,
               now,
               now,
@@ -425,7 +443,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             entityType: "dispatch",
             entityId: id,
             sessionId: context.sessions.current().id,
-            payload: { workId, targetSession },
+            payload: { pane, workId, targetSession },
           });
           const created = service.get(id) as DispatchRecord;
           return { data: { dispatch: created }, text: format(created) };

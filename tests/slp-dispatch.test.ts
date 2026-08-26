@@ -553,3 +553,28 @@ test("245 dispatch open refuses a missing pane and names the flag", async () => 
     expect(opened.stderr).toContain("--pane");
   });
 });
+
+test("246 dispatch open stores the pane verbatim and dispatch show reports it", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "pane identity", "--atomic-reason", "fixture"]),
+    );
+    const pane = "  not/a-herdr-pane::verbatim  ";
+    const args = dispatchOpenArgs(work);
+    args[args.indexOf("--pane") + 1] = pane;
+    const opened = await runCli(fixture, args);
+    expect(opened.exitCode).toBe(0);
+    const id = dispatchId(opened);
+
+    const shown = await runCli(fixture, ["dispatch", "show", id]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`pane: ${pane}\n`);
+
+    const json = await runCli(fixture, ["dispatch", "list", work, "--json"]);
+    expect(json).toEqual(expect.objectContaining({ exitCode: 0, stderr: "" }));
+    const envelope = JSON.parse(json.stdout) as {
+      data: { dispatches: Array<{ id: string; pane: string }> };
+    };
+    expect(envelope.data.dispatches).toContainEqual(expect.objectContaining({ id, pane }));
+  });
+});
