@@ -42,11 +42,16 @@ export const policyDispatchPlugin: BuiltInPlugin = {
   name: "policy-dispatch",
   inject: ["work", "dispatch"],
   requires:
-    "gates work done while a dispatch lacks a handback and work start while a sealed council is open",
+    "gates work done and work cancel while a dispatch lacks a handback, and work start while a sealed council is open",
   apply(context) {
     const dispatch = context.dispatch as DispatchService;
     context.effect(() =>
       context.events.on<WorkGateInput>("work.done", async (input, next) =>
+        doneGate(dispatch, input.work.id) ?? next()
+      ),
+    );
+    context.effect(() =>
+      context.events.on<WorkGateInput>("work.cancel", async (input, next) =>
         doneGate(dispatch, input.work.id) ?? next()
       ),
     );

@@ -710,7 +710,7 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "work cancel",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           const id = requirePosition(invocation, 0, "work id");
           const work = requireWork(context, id);
           if (work.state === "cancelled") {
@@ -731,6 +731,12 @@ export const workPlugin: BuiltInPlugin = {
           if (!reason) {
             throw new CliError("MISSING_ARGUMENT", "work cancel requires --reason <text>");
           }
+          const result = await context.events.waterfall<WorkGateInput, GateResult>(
+            "work.cancel",
+            { work, children: service.children(id), sessionId: context.sessions.current().id },
+            async () => ({ blocked: false }),
+          );
+          blockIfNeeded(result);
           const now = new Date().toISOString();
           context.store.database
             .query(
