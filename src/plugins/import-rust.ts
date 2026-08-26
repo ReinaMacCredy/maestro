@@ -427,7 +427,7 @@ export const importRustPlugin: BuiltInPlugin = {
   name: "import-rust",
   apply(context) {
     initializeLegacyTables(context);
-    if (legacySearchNeedsRebuild(context)) rebuildLegacySearch(context);
+    if (!context.store.readOnly && legacySearchNeedsRebuild(context)) rebuildLegacySearch(context);
     context.effect(() =>
       context.cli.register(
         "import rust",

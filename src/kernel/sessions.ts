@@ -46,7 +46,7 @@ export class Sessions {
     private readonly store: Store,
     private readonly scope = process.cwd(),
   ) {
-    if (store.readOnly) return;
+    if (store.readOnly && !store.ephemeral) return;
     store.migrate(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
@@ -78,7 +78,7 @@ export class Sessions {
   }
 
   refresh(): void {
-    if (process.env.MAESTRO_SESSION_NONE === "1") return;
+    if (this.disabled()) return;
     const current = this.resolveCurrent();
     const recorded = this.row(current.id);
     if ((recorded?.anchor ?? current.anchor) === "pid") return;
@@ -100,7 +100,7 @@ export class Sessions {
 
   record(event: string, harness?: Harness | null): SessionRecord {
     const current = this.resolveCurrent(harness);
-    if (process.env.MAESTRO_SESSION_NONE === "1") {
+    if (this.disabled()) {
       return {
         anchor: current.anchor,
         harness: current.harness,
@@ -180,7 +180,7 @@ export class Sessions {
       if (harness) this.resolved.harness = harness;
       return this.resolved;
     }
-    if (process.env.MAESTRO_SESSION_NONE === "1") {
+    if (this.disabled()) {
       this.resolved = {
         anchor: "pid",
         harness: null,
@@ -348,6 +348,10 @@ export class Sessions {
       return "claude";
     }
     return null;
+  }
+
+  private disabled(): boolean {
+    return this.store.readOnly || process.env.MAESTRO_SESSION_NONE === "1";
   }
 
   private ensureColumn(name: string, migration: string): void {

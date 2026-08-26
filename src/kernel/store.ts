@@ -51,14 +51,16 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
 
 export class Store {
   readonly database: Database;
+  readonly ephemeral: boolean;
   readonly readOnly: boolean;
 
   constructor(readonly path: string, options: { readonly?: boolean } = {}) {
     this.readOnly = options.readonly ?? false;
+    this.ephemeral = this.readOnly && !existsSync(path);
     if (!this.readOnly) mkdirSync(dirname(path), { recursive: true });
-    this.database = new Database(path, {
-      create: !this.readOnly,
-      readonly: this.readOnly,
+    this.database = new Database(this.ephemeral ? ":memory:" : path, {
+      create: !this.readOnly || this.ephemeral,
+      readonly: this.readOnly && !this.ephemeral,
       strict: true,
     });
     this.database.exec("PRAGMA busy_timeout = 5000");
@@ -74,6 +76,7 @@ export class Store {
   }
 
   migrate(sql: string): void {
+    if (this.readOnly && !this.ephemeral) return;
     this.database.exec(sql);
   }
 

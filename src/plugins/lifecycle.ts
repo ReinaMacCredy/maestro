@@ -3,7 +3,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Cli, CliError, type CliResult } from "../kernel/cli.ts";
+import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { Sessions } from "../kernel/sessions.ts";
 import { resolveStoreLocation, Store } from "../kernel/store.ts";
@@ -452,9 +452,12 @@ function registerLifecycle(cli: Cli): void {
   });
 }
 
-export async function runLifecycleCommand(args: string[]): Promise<number | null> {
+export async function runLifecycleCommand(
+  args: string[],
+  cliOptions: CliOptions = {},
+): Promise<number | null> {
   if (!new Set(["doctor", "uninstall", "update"]).has(args[0] ?? "")) return null;
-  const cli = new Cli();
+  const cli = new Cli(cliOptions);
   registerLifecycle(cli);
   return cli.dispatch(args);
 }

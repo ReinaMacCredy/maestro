@@ -14,6 +14,12 @@ export interface CommandOptions {
   rootDescription?: string;
 }
 
+export interface CliOptions {
+  beforeInvoke?: (command: string) => Promise<void> | void;
+  beforeUnknown?: (args: readonly string[]) => Promise<void> | void;
+  helpFooter?: string;
+}
+
 export interface PositionalDefinition {
   name: string;
   required: boolean;
@@ -130,6 +136,8 @@ export function failureEnvelope(error: unknown): CliFailureEnvelope {
 export class Cli {
   private readonly commands = new Map<string, CommandDefinition>();
   private readonly extensions = new Map<string, Map<string, FlagDefinition>>();
+
+  constructor(private readonly options: CliOptions = {}) {}
 
   register(command: string, handler: CliHandler, options?: CommandOptions): Disposer;
   register(
@@ -259,6 +267,7 @@ export class Cli {
     }
     const found = this.findCommand(args);
     if (!found) {
+      await this.options.beforeUnknown?.(args);
       const { attempted, suggestions } = this.nearestCommands(args);
       throw new CliError(
         "UNKNOWN_VERB",
@@ -267,6 +276,7 @@ export class Cli {
       );
     }
     const { command, definition, consumed } = found;
+    await this.options.beforeInvoke?.(command);
     const remaining = args.slice(consumed);
     const jsonIndex = remaining.indexOf("--json");
     const wantsJson = jsonIndex >= 0;
@@ -360,7 +370,8 @@ export class Cli {
         label: verb,
         description: this.rootDescription(verb),
       }));
-      return `verbs:\n${this.formatRows(rows, "  ")}\n`;
+      const footer = this.options.helpFooter?.trim();
+      return `verbs:\n${this.formatRows(rows, "  ")}\n${footer ? `\n${footer}\n` : ""}`;
     }
 
     const entries = [...this.commands.entries()]

@@ -128,6 +128,8 @@ function expireDeadLease(context: PluginContext, work: WorkRecord): WorkRecord {
   const liveness = context.sessions.liveness(previousHolder);
   if (liveness.live) return work;
   const updatedAt = new Date().toISOString();
+  const expired = { ...work, state: "open" as const, heldBy: null, updatedAt };
+  if (context.store.readOnly) return expired;
   const result = context.store.database
     .query(
       `UPDATE work
@@ -142,7 +144,7 @@ function expireDeadLease(context: PluginContext, work: WorkRecord): WorkRecord {
     entityId: work.id,
     payload: { holder: previousHolder, reason: liveness.reason },
   });
-  return { ...work, state: "open", heldBy: null, updatedAt };
+  return expired;
 }
 
 function latestLeaseExpiration(

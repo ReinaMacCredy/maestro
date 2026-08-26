@@ -269,7 +269,7 @@ export const observabilityPlugin: BuiltInPlugin = {
       context.store.database
         .query<{ version: number }, []>("SELECT version FROM search_index_state LIMIT 1")
         .get()?.version;
-    if (currentVersion() !== SEARCH_INDEX_VERSION) {
+    if (!context.store.readOnly && currentVersion() !== SEARCH_INDEX_VERSION) {
       context.store.database.exec("BEGIN IMMEDIATE");
       try {
         if (currentVersion() !== SEARCH_INDEX_VERSION) {

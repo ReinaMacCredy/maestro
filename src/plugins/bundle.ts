@@ -389,10 +389,12 @@ export const bundlePlugin: BuiltInPlugin = {
     `);
     // Observability rebuilds search_index from scratch each startup and only
     // knows its own tables; re-insert archived snapshots (import-rust precedent).
-    for (const row of context.store.database
-      .query<BundleRow, []>("SELECT * FROM bundles WHERE state = 'archived'")
-      .all()) {
-      indexSnapshot(context, fromRow(row));
+    if (!context.store.readOnly) {
+      for (const row of context.store.database
+        .query<BundleRow, []>("SELECT * FROM bundles WHERE state = 'archived'")
+        .all()) {
+        indexSnapshot(context, fromRow(row));
+      }
     }
 
     context.effect(() =>

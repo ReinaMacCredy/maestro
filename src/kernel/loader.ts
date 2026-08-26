@@ -62,6 +62,10 @@ interface Candidate {
   defaultDisabled?: boolean;
 }
 
+export interface LoaderOptions {
+  loadExternalPlugins?: boolean;
+}
+
 export function resolvePluginEntrypoint(directory: string): string | null {
   const index = join(directory, "index.ts");
   if (existsSync(index)) return index;
@@ -103,6 +107,7 @@ export class Loader {
       sessions: Sessions;
       store: Store;
     },
+    private readonly options: LoaderOptions = {},
   ) {
     const base = {
       ...services,
@@ -260,8 +265,10 @@ export class Loader {
       source: "built-in" as const,
       defaultDisabled: plugin.defaultDisabled,
     }));
-    candidates.push(...(await this.discoverDirectory(join(this.home, ".maestro", "plugins"), "global")));
-    candidates.push(...(await this.discoverDirectory(join(this.repo, ".maestro", "plugins"), "repo")));
+    if (this.options.loadExternalPlugins ?? true) {
+      candidates.push(...(await this.discoverDirectory(join(this.home, ".maestro", "plugins"), "global")));
+      candidates.push(...(await this.discoverDirectory(join(this.repo, ".maestro", "plugins"), "repo")));
+    }
     return candidates;
   }
 
