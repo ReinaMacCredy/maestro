@@ -37,6 +37,8 @@ function dispatchOpenArgs(work: string, targetSession: string): string[] {
     "delivery",
     "--evidence-required",
     "source and live",
+    "--pane",
+    "w1:pB",
     "--target-session",
     targetSession,
   ];

@@ -34,6 +34,8 @@ function dispatchOpenArgs(work: string): string[] {
     "delivery",
     "--evidence-required",
     "source and live",
+    "--pane",
+    "w1:pA",
   ];
 }
 
@@ -104,6 +106,7 @@ test("173 dispatch open refuses every missing or blank envelope field", async ()
       "--stop-condition",
       "--lane",
       "--evidence-required",
+      "--pane",
     ];
 
     for (const field of fields) {
@@ -532,5 +535,21 @@ test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one
 
     const mail = await runCli(fixture, ["msg", "read"], session("lead-session"));
     expect(mail.stdout.match(/DISPATCH_UNRETURNED/g)).toHaveLength(1);
+  });
+});
+
+test("245 dispatch open refuses a missing pane and names the flag", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "pane required", "--atomic-reason", "fixture"]),
+    );
+    const args = dispatchOpenArgs(work);
+    const pane = args.indexOf("--pane");
+    args.splice(pane, 2);
+
+    const opened = await runCli(fixture, args);
+
+    expect(opened.exitCode).not.toBe(0);
+    expect(opened.stderr).toContain("--pane");
   });
 });

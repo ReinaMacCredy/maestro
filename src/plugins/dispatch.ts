@@ -395,6 +395,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           const stopCondition = requiredOption(invocation, "--stop-condition");
           const lane = requiredOption(invocation, "--lane");
           const evidenceRequired = requiredOption(invocation, "--evidence-required");
+          requiredOption(invocation, "--pane");
           const targetSession = option(invocation, "target-session");
           const id = nextId(context);
           const now = new Date().toISOString();
@@ -439,6 +440,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             "--stop-condition": { description: "State when the lane stops.", value: true },
             "--lane": { description: "Name the lane type.", value: true },
             "--evidence-required": { description: "Name the required evidence.", value: true },
+            "--pane": { description: "Record the Herdr pane that owns the lane.", value: true },
             "--target-session": { description: "Address a session if already known.", value: true },
           },
           positionals: [{ name: "work-id", required: true }],

@@ -344,6 +344,8 @@ test("230 concurrent dispatch acceptance has exactly one winner", async () => {
         "delivery",
         "--evidence-required",
         "source proof",
+        "--pane",
+        "w1:pD",
       ]);
       expect(opened.exitCode).toBe(0);
       const dispatch = opened.stdout.match(/\bx\d+\b/)?.[0];
