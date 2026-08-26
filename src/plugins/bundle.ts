@@ -237,10 +237,11 @@ function failedNotesForWork(
 function handbacksForWork(context: PluginContext, workIds: string[]): HandbackRecord[] {
   const dispatch = context.dispatch as DispatchService;
   const handback = context.handback as HandbackService;
-  return workIds.flatMap((workId) => {
-    if (dispatch.council(workId).sealed) return [];
-    return dispatch.list(workId).flatMap((record) => handback.list(record.id));
-  });
+  return workIds.flatMap((workId) =>
+    dispatch.list(workId).flatMap((record) =>
+      dispatch.council(workId, record.id).sealed ? [] : handback.list(record.id)
+    )
+  );
 }
 
 interface NotesSection {

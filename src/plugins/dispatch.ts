@@ -76,8 +76,15 @@ interface HandbackRow {
   created_at: string;
 }
 
+interface CouncilDispatchRow {
+  id: string;
+  created_at: string;
+  cancelled_at: string | null;
+  returned_at: string | null;
+}
+
 export interface DispatchService {
-  council(workId: string): CouncilStatus;
+  council(workId: string, dispatchId?: string): CouncilStatus;
   get(id: string): DispatchRecord | null;
   list(workId?: string): DispatchRecord[];
 }
@@ -212,20 +219,62 @@ function listHandbacks(context: PluginContext, dispatchId: string): HandbackReco
     .map(fromHandbackRow);
 }
 
-function councilStatus(context: PluginContext, workId: string): CouncilStatus {
-  const counts = context.store.database
-    .query<{ resolved: number; returned: number; total: number }, [string]>(
-      `SELECT COUNT(*) AS total,
-              COALESCE(SUM(CASE WHEN returned.dispatch_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS returned,
-              COALESCE(SUM(CASE
-                WHEN returned.dispatch_id IS NOT NULL OR dispatches.cancelled_at IS NOT NULL
-                THEN 1 ELSE 0 END), 0) AS resolved
+function councilStatus(
+  context: PluginContext,
+  workId: string,
+  dispatchId?: string,
+): CouncilStatus {
+  const rows = context.store.database
+    .query<CouncilDispatchRow, [string]>(
+      `SELECT dispatches.id,
+              dispatches.created_at,
+              dispatches.cancelled_at,
+              MIN(handbacks.created_at) AS returned_at
        FROM dispatches
-       LEFT JOIN (SELECT DISTINCT dispatch_id FROM handbacks) AS returned
-         ON returned.dispatch_id = dispatches.id
-       WHERE dispatches.work_id = ?`,
+       LEFT JOIN handbacks ON handbacks.dispatch_id = dispatches.id
+       WHERE dispatches.work_id = ?
+       GROUP BY dispatches.id, dispatches.created_at, dispatches.cancelled_at
+       ORDER BY dispatches.created_at, CAST(SUBSTR(dispatches.id, 2) AS INTEGER)`,
     )
-    .get(workId) ?? { resolved: 0, returned: 0, total: 0 };
+    .all(workId);
+  const generations: Array<{ end: number; start: number }> = [];
+  let generationStart = 0;
+  let hasUnresolved = false;
+  let latestResolution: string | null = null;
+  for (const [index, row] of rows.entries()) {
+    if (
+      index > 0 &&
+      !hasUnresolved &&
+      latestResolution !== null &&
+      latestResolution <= row.created_at
+    ) {
+      generations.push({ end: index, start: generationStart });
+      generationStart = index;
+    }
+    const resolution = row.cancelled_at ?? row.returned_at;
+    if (resolution === null) {
+      hasUnresolved = true;
+    } else if (latestResolution === null || resolution > latestResolution) {
+      latestResolution = resolution;
+    }
+  }
+  if (rows.length > 0) generations.push({ end: rows.length, start: generationStart });
+
+  let selected = generations[generations.length - 1] ?? null;
+  if (dispatchId) {
+    const anchor = rows.findIndex((row) => row.id === dispatchId);
+    selected = generations.find(({ end, start }) => anchor >= start && anchor < end) ?? null;
+  } else {
+    for (const generation of generations) {
+      if (generation.end - generation.start > 1) selected = generation;
+    }
+  }
+  const members = selected ? rows.slice(selected.start, selected.end) : [];
+  const counts = {
+    resolved: members.filter((row) => row.returned_at !== null || row.cancelled_at !== null).length,
+    returned: members.filter((row) => row.returned_at !== null).length,
+    total: members.length,
+  };
   const unseal = context.store.database
     .query<{ unseal_reason: string }, [string]>(
       "SELECT unseal_reason FROM dispatch_councils WHERE work_id = ?",
@@ -407,7 +456,7 @@ export const dispatchPlugin: BuiltInPlugin = {
     }
 
     const service: DispatchService = {
-      council: (workId) => councilStatus(context, workId),
+      council: (workId, dispatchId) => councilStatus(context, workId, dispatchId),
       get: (id) => getDispatch(context, id),
       list: (workId) => listDispatches(context, workId),
     };
@@ -795,7 +844,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const handback = requireHandback(context, position(invocation, 0, "handback id"));
           const dispatch = requireDispatch(context, handback.dispatchId);
-          const council = service.council(dispatch.workId);
+          const council = service.council(dispatch.workId, dispatch.id);
           if (council.sealed) {
             throw new CliError(
               "SEALED",

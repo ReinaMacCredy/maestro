@@ -340,6 +340,162 @@ test("274 work-scoped dispatch lists render compact lane state without changing 
   });
 });
 
+test("277 a delivery dispatch after a completed council does not reseal its handbacks", async () => {
+  await withFixture(async (fixture) => {
+    const council = await openCouncil(fixture);
+    const first = await runCli(fixture, handbackFileArgs(council.dispatches[0]));
+    expect(first.exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, handbackFileArgs(council.dispatches[1]))).exitCode,
+    ).toBe(0);
+    const firstHandback = handbackId(first);
+
+    const completed = await runCli(fixture, ["handback", "show", firstHandback]);
+    expect(completed.exitCode).toBe(0);
+    expect(completed.stdout).toContain("council: complete (2/2 returned)");
+
+    const followUp = dispatchId(await runCli(fixture, dispatchOpenArgs(council.work)));
+    const listed = await runCli(fixture, ["dispatch", "list", council.work]);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain("council: complete (2/2 returned)");
+    expect(listed.stdout).toContain(
+      `lane w1:pA | ${followUp} | delivery | dispatch=open | work=open | holder=none`,
+    );
+    expect(listed.stdout).not.toContain("council: sealed");
+
+    const stillReadable = await runCli(fixture, ["handback", "show", firstHandback]);
+    expect(stillReadable.exitCode).toBe(0);
+    expect(stillReadable.stdout).toContain("council: complete (2/2 returned)");
+  });
+});
+
+test("278 two sequential dispatches on one work item never form a council", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "sequential lanes", "--atomic-reason", "fixture"]),
+    );
+    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    await acceptDispatch(fixture, first);
+    const firstReturn = await runCli(fixture, handbackFileArgs(first));
+    expect(firstReturn.exitCode).toBe(0);
+
+    const second = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const whileOpen = await runCli(fixture, ["dispatch", "list", work]);
+    expect(whileOpen.exitCode).toBe(0);
+    expect(whileOpen.stdout).not.toContain("council:");
+    expect(
+      (await runCli(fixture, ["handback", "show", handbackId(firstReturn)])).exitCode,
+    ).toBe(0);
+
+    await acceptDispatch(fixture, second);
+    expect((await runCli(fixture, handbackFileArgs(second))).exitCode).toBe(0);
+    const completed = await runCli(fixture, ["dispatch", "list", work]);
+    expect(completed.exitCode).toBe(0);
+    expect(completed.stdout).not.toContain("council:");
+
+    const cancelledWork = idFrom(
+      await runCli(fixture, ["work", "add", "cancelled lane", "--atomic-reason", "fixture"]),
+    );
+    const cancelled = dispatchId(await runCli(fixture, dispatchOpenArgs(cancelledWork)));
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "cancel",
+          cancelled,
+          "--reason",
+          "resolved without a return",
+        ])
+      ).exitCode,
+    ).toBe(0);
+    dispatchId(await runCli(fixture, dispatchOpenArgs(cancelledWork)));
+    const afterCancellation = await runCli(fixture, ["dispatch", "list", cancelledWork]);
+    expect(afterCancellation.exitCode).toBe(0);
+    expect(afterCancellation.stdout).not.toContain("council:");
+  });
+});
+
+test("279 a genuine later council seals only its own concurrent generation", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "later council", "--atomic-reason", "fixture"]),
+    );
+    const earlier = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    await acceptDispatch(fixture, earlier);
+    const earlierReturn = await runCli(fixture, handbackFileArgs(earlier));
+    expect(earlierReturn.exitCode).toBe(0);
+
+    const firstArgs = dispatchOpenArgs(work);
+    firstArgs[firstArgs.indexOf("--lane") + 1] = "design";
+    const secondArgs = dispatchOpenArgs(work);
+    secondArgs[secondArgs.indexOf("--lane") + 1] = "design";
+    const first = dispatchId(await runCli(fixture, firstArgs));
+    const second = dispatchId(await runCli(fixture, secondArgs));
+    await acceptDispatch(fixture, first);
+    await acceptDispatch(fixture, second);
+    const firstReturn = await runCli(fixture, handbackFileArgs(first));
+    expect(firstReturn.exitCode).toBe(0);
+
+    const priorGeneration = await runCli(fixture, [
+      "handback",
+      "show",
+      handbackId(earlierReturn),
+    ]);
+    expect(priorGeneration.exitCode).toBe(0);
+    expect(priorGeneration.stdout).not.toContain("council:");
+
+    const sealed = await runCli(fixture, ["handback", "show", handbackId(firstReturn)]);
+    expect(sealed.exitCode).not.toBe(0);
+    expect(sealed.stderr).toContain("SEALED");
+    expect(sealed.stderr).toContain("1/2 returned");
+    const listed = await runCli(fixture, ["dispatch", "list", work]);
+    expect(listed.stdout).toContain("council: sealed (1/2 returned)");
+
+    expect((await runCli(fixture, handbackFileArgs(second))).exitCode).toBe(0);
+    const opened = await runCli(fixture, ["handback", "show", handbackId(firstReturn)]);
+    expect(opened.exitCode).toBe(0);
+    expect(opened.stdout).toContain("council: complete (2/2 returned)");
+  });
+});
+
+test("280 handoff exposes completed generations without leaking a sealed generation", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "generation handoff", "--atomic-reason", "fixture"]),
+    );
+    expect(
+      (await runCli(fixture, ["bundle", "open", "generation-handoff", "--work", work])).exitCode,
+    ).toBe(0);
+
+    const earlier = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    await acceptDispatch(fixture, earlier);
+    const earlierArgs = handbackFileArgs(earlier);
+    earlierArgs[earlierArgs.indexOf("--claim") + 1] = "prior generation is complete";
+    expect((await runCli(fixture, earlierArgs)).exitCode).toBe(0);
+
+    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const second = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    await acceptDispatch(fixture, first);
+    await acceptDispatch(fixture, second);
+    const currentArgs = handbackFileArgs(first);
+    currentArgs[currentArgs.indexOf("--claim") + 1] = "sealed generation partial return";
+    expect((await runCli(fixture, currentArgs)).exitCode).toBe(0);
+
+    const handedOff = await runCli(fixture, ["handoff", "generation-handoff", "--json"]);
+    expect(handedOff.exitCode).toBe(0);
+    const envelope = JSON.parse(handedOff.stdout) as {
+      data: { handbacks: Array<{ dispatchId: string }> };
+    };
+    expect(envelope.data.handbacks.map((handback) => handback.dispatchId)).toEqual([earlier]);
+    const notes = await Bun.file(
+      join(fixture.repo, ".maestro", "bundle", "generation-handoff", "NOTES.md"),
+    ).text();
+    expect(notes).toContain("prior generation is complete");
+    expect(notes).not.toContain("sealed generation partial return");
+  });
+});
+
 test("263 returned and cancelled dispatches clear their lane holder", async () => {
   await withFixture(async (fixture) => {
     const returned = await openDispatch(fixture);
