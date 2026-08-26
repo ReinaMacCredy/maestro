@@ -144,13 +144,15 @@ async function update(): Promise<CliResult> {
     "--symbolic-full-name",
     "@{upstream}",
   ]);
-  if (upstream.exitCode !== 0 || !upstream.stdout) {
-    throw new CliError(
-      "UPDATE_REMOTE_MISSING",
-      "Maestro source branch has no upstream; configure its git remote, then run maestro update",
-      { fix: "configure an upstream git remote, then run maestro update" },
-    );
-  }
+  // A branch nobody has pushed has nothing to pull, which is the same situation
+  // the ahead-only path below already rules is not an error. Resync the runtime
+  // and name the missing upstream so a real misconfiguration stays visible (d38).
+  const noUpstream = upstream.exitCode !== 0 || !upstream.stdout;
+  const sourceBranch = noUpstream
+    ? (await command(source, ["git", "rev-parse", "--abbrev-ref", "HEAD"])).stdout || "HEAD"
+    : "";
+  let aheadOnly = false;
+  if (!noUpstream) {
   const fetched = await command(source, ["git", "fetch", "--no-tags"]);
   if (fetched.exitCode !== 0) {
     throw new CliError(
@@ -166,7 +168,6 @@ async function update(): Promise<CliResult> {
     oldCommit,
     upstream.stdout,
   ]);
-  let aheadOnly = false;
   if (ancestor.exitCode !== 0) {
     // A source strictly ahead of its upstream has nothing to pull; still
     // resync so the runtime converges on the current source commit.
@@ -196,6 +197,7 @@ async function update(): Promise<CliResult> {
       );
     }
   }
+  }
   let staged: string | null = null;
   try {
     staged = await stageRuntime(source, runtime);
@@ -217,8 +219,10 @@ async function update(): Promise<CliResult> {
   const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
   const skillText = skillSync ? formatSkillSync(skillSync) : "";
   return {
-    data: { aheadOnly, oldCommit, newCommit, version: packageJson.version },
-    text: (aheadOnly
+    data: { aheadOnly, noUpstream, oldCommit, newCommit, version: packageJson.version },
+    text: (noUpstream
+      ? `${oldCommit} up to date (no upstream for ${sourceBranch}; nothing to pull)\nmaestro ${packageJson.version}`
+      : aheadOnly
       ? `${oldCommit} up to date (source ahead of upstream; nothing to pull)\nmaestro ${packageJson.version}`
       : `${oldCommit} -> ${newCommit}\nmaestro ${packageJson.version}`) +
       (skillText ? `\n${skillText}` : ""),

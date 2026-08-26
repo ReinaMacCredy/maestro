@@ -491,3 +491,27 @@ test("53 a clean install type-checks without runtime dependencies", async () => 
     }
   });
 }, 10_000);
+
+test("231 update on a source branch with no upstream resyncs instead of erroring", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // The local-development shape this repo has run in for hundreds of commits:
+    // a working branch nobody has pushed, so there is no upstream to pull from.
+    await git(source, ["checkout", "-b", "local-only"]);
+    await writeFile(join(source, "local-only-note.txt"), "local only\n");
+    await git(source, ["add", "local-only-note.txt"]);
+    await git(source, ["commit", "-m", "work with no upstream"]);
+    const head = await git(source, ["rev-parse", "HEAD"]);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(updated.exitCode).toBe(0);
+    expect(updated.stdout).toContain("nothing to pull");
+    expect(updated.stdout).toContain("no upstream");
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(head);
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(head);
+  });
+});
