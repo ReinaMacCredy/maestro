@@ -280,6 +280,7 @@ async function codexTrustCheck(repo: string): Promise<string> {
 }
 
 interface UnreadMessageTarget {
+  count: number;
   target_session: string;
 }
 
@@ -338,16 +339,22 @@ function mailboxCheck(storePath: string, scope: string): string {
     }
     const unread = database
       .query<UnreadMessageTarget, []>(
-        `SELECT m.target_session
+        `SELECT m.target_session, count(*) AS count
          FROM messages m
          LEFT JOIN message_cursors c ON c.session_id = m.target_session
-         WHERE m.id > COALESCE(c.last_message_id, 0)`,
+         WHERE m.id > COALESCE(c.last_message_id, 0)
+         GROUP BY m.target_session
+         ORDER BY m.target_session`,
       )
       .all();
-    const queued = unread.filter((target) => !sessions.liveness(target.target_session).live).length;
+    const dead = unread.filter((target) => !sessions.liveness(target.target_session).live);
+    const queued = dead.reduce((total, target) => total + target.count, 0);
     return queued === 0
       ? "mailbox: ok"
-      : `mailbox: ${queued} message(s) queued for dead sessions`;
+      :
+        `mailbox: ${queued} message(s) queued for dead sessions ` +
+        `(${dead.map((target) => `${target.target_session}: ${target.count}`).join(", ")}); ` +
+        "run: maestro msg discard <session> --reason <text>";
   } catch {
     return "mailbox: ok";
   } finally {

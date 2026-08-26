@@ -171,3 +171,115 @@ test("225 the codex check asks about the hook that carries delivery", async () =
     expect(stale.stdout).toContain("maestro install");
   });
 });
+
+test("226 dead-session mail is discarded by advancing its cursor with an audit record", async () => {
+  await withFixture(async (fixture) => {
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          session("dead-target", 99999999),
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "dead-target", "one"], session("lead"))).exitCode)
+      .toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "dead-target", "two"], session("lead"))).exitCode)
+      .toBe(0);
+
+    const discarded = await runCli(
+      fixture,
+      ["msg", "discard", "dead-target", "--reason", "session was abandoned"],
+      session("operator"),
+    );
+    expect(discarded.exitCode).toBe(0);
+    expect(discarded.stdout).toContain("discarded 2 message(s) for dead-target");
+    expect(discarded.stdout).toContain("reason: session was abandoned");
+
+    const database = probeDatabase(fixture);
+    try {
+      expect(
+        database
+          .query<{ count: number }, []>("SELECT count(*) AS count FROM messages")
+          .get()?.count,
+      ).toBe(2);
+      expect(
+        database
+          .query<{ last_message_id: number }, [string]>(
+            "SELECT last_message_id FROM message_cursors WHERE session_id = ?",
+          )
+          .get("dead-target")?.last_message_id,
+      ).toBe(2);
+      const event = database
+        .query<{ payload: string; session_id: string }, []>(
+          "SELECT session_id, payload FROM event_log WHERE type = 'msg.discard' ORDER BY id DESC LIMIT 1",
+        )
+        .get();
+      expect(event?.session_id).toBe("operator");
+      expect(JSON.parse(event?.payload ?? "{}"))
+        .toEqual({ count: 2, reason: "session was abandoned", throughMessageId: 2 });
+    } finally {
+      database.close();
+    }
+
+    expect((await runCli(fixture, ["msg", "read"], session("dead-target"))).stdout)
+      .toContain("no new messages");
+  });
+});
+
+test("227 msg discard refuses a live target and a blank reason", async () => {
+  await withFixture(async (fixture) => {
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          session("live-target"),
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "live-target", "keep"], session("lead"))).exitCode)
+      .toBe(0);
+
+    const live = await runCli(
+      fixture,
+      ["msg", "discard", "live-target", "--reason", "not allowed"],
+      session("operator"),
+    );
+    expect(live.exitCode).not.toBe(0);
+    expect(live.stderr).toContain("SESSION_LIVE");
+
+    const blank = await runCli(
+      fixture,
+      ["msg", "discard", "live-target", "--reason", "   "],
+      session("operator"),
+    );
+    expect(blank.exitCode).not.toBe(0);
+    expect(blank.stderr).toContain("MISSING_ARGUMENT");
+  });
+});
+
+test("228 doctor names each dead mailbox target and the audited discard command", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          session("doctor-dead", 99999999),
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "doctor-dead", "one"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["msg", "send", "doctor-dead", "two"])).exitCode).toBe(0);
+
+    const queued = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(queued.exitCode).toBe(0);
+    expect(queued.stdout).toContain("mailbox: 2 message(s) queued for dead sessions");
+    expect(queued.stdout).toContain("doctor-dead: 2");
+    expect(queued.stdout).toContain("maestro msg discard <session> --reason <text>");
+  });
+});

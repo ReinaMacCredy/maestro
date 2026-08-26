@@ -114,6 +114,30 @@ class MailboxService {
     return messages;
   }
 
+  discard(sessionId: string): { count: number; throughMessageId: number } {
+    const transaction = this.context.store.database.transaction(() => {
+      const cursor = this.cursor(sessionId);
+      const queued = this.context.store.database
+        .query<{ count: number; last_id: number | null }, [string, number]>(
+          `SELECT count(*) AS count, max(id) AS last_id
+           FROM messages WHERE target_session = ? AND id > ?`,
+        )
+        .get(sessionId, cursor) ?? { count: 0, last_id: null };
+      const throughMessageId = queued.last_id ?? cursor;
+      if (queued.count > 0) {
+        this.context.store.database
+          .query(
+            `INSERT INTO message_cursors (session_id, last_message_id)
+             VALUES (?, ?)
+             ON CONFLICT(session_id) DO UPDATE SET last_message_id = excluded.last_message_id`,
+          )
+          .run(sessionId, throughMessageId);
+      }
+      return { count: queued.count, throughMessageId };
+    });
+    return transaction.immediate();
+  }
+
   send(targetSession: string, text: string): MessageRecord {
     return this.sendFrom(this.context.sessions.current().id, targetSession, text);
   }
@@ -305,6 +329,62 @@ export const coordinationPlugin: BuiltInPlugin = {
         }
         return next();
       }),
+    );
+
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "msg discard",
+        (invocation): CliResult => {
+          const target = required(invocation, 0, "target session");
+          const reason = invocation.options.reason;
+          if (typeof reason !== "string" || reason.trim() === "") {
+            throw new CliError(
+              "MISSING_ARGUMENT",
+              "msg discard requires --reason <text>",
+            );
+          }
+          const targetSession = context.sessions.get(target);
+          if (!targetSession) {
+            const command = "maestro status";
+            throw new CliError(
+              "UNKNOWN_SESSION",
+              `unknown session: ${target}; run: ${command}`,
+              { command, target },
+            );
+          }
+          if (targetSession.live) {
+            throw new CliError(
+              "SESSION_LIVE",
+              `${target} is live; read its mail instead of discarding it`,
+              { target },
+            );
+          }
+          const discarded = mailbox.discard(target);
+          const sessionId = context.sessions.current().id;
+          context.log.append({
+            type: "msg.discard",
+            entityType: "session",
+            entityId: target,
+            sessionId,
+            payload: { ...discarded, reason },
+          });
+          return {
+            data: { target, ...discarded, reason },
+            text:
+              `discarded ${discarded.count} message(s) for ${target}\n` +
+              `reason: ${reason}`,
+          };
+        },
+        {
+          description: "Discard queued mail for one dead session with a recorded reason.",
+          flags: {
+            "--reason": { description: "Record why the queued mail is discarded.", value: true },
+          },
+          positionals: [{ name: "session", required: true }],
+          rootDescription: "Exchange repository-backed messages between sessions.",
+        },
+      ),
     );
 
     context.effect(() =>
