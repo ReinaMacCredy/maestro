@@ -453,37 +453,40 @@ export const dispatchPlugin: BuiltInPlugin = {
         "dispatch accept",
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
-          const dispatch = requireDispatch(context, id);
-          if (dispatch.state !== "open") {
-            throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
-          }
           const sessionId = context.sessions.current().id;
-          if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
-            throw new CliError(
-              "TARGET_MISMATCH",
-              `${id} targets ${dispatch.targetSession}; current session is ${sessionId}`,
-              { id, targetSession: dispatch.targetSession },
-            );
-          }
-          if (dispatch.heldBy && dispatch.heldBy !== sessionId) {
-            throw new CliError("DISPATCH_HELD", `${id} is held by ${dispatch.heldBy}`, {
-              heldBy: dispatch.heldBy,
-              id,
-            });
-          }
-          if (!dispatch.heldBy) {
-            const now = new Date().toISOString();
-            context.store.database
-              .query("UPDATE dispatches SET held_by = ?, updated_at = ? WHERE id = ?")
-              .run(sessionId, now, id);
-            context.log.append({
-              type: "dispatch.accept",
-              entityType: "dispatch",
-              entityId: id,
-              sessionId,
-            });
-          }
-          const accepted = service.get(id) as DispatchRecord;
+          const accept = context.store.database.transaction(() => {
+            const dispatch = requireDispatch(context, id);
+            if (dispatch.state !== "open") {
+              throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
+            }
+            if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
+              throw new CliError(
+                "TARGET_MISMATCH",
+                `${id} targets ${dispatch.targetSession}; current session is ${sessionId}`,
+                { id, targetSession: dispatch.targetSession },
+              );
+            }
+            if (dispatch.heldBy && dispatch.heldBy !== sessionId) {
+              throw new CliError("DISPATCH_HELD", `${id} is held by ${dispatch.heldBy}`, {
+                heldBy: dispatch.heldBy,
+                id,
+              });
+            }
+            if (!dispatch.heldBy) {
+              const now = new Date().toISOString();
+              context.store.database
+                .query("UPDATE dispatches SET held_by = ?, updated_at = ? WHERE id = ?")
+                .run(sessionId, now, id);
+              context.log.append({
+                type: "dispatch.accept",
+                entityType: "dispatch",
+                entityId: id,
+                sessionId,
+              });
+            }
+            return service.get(id) as DispatchRecord;
+          });
+          const accepted = accept.immediate();
           return { data: { dispatch: accepted }, text: format(accepted) };
         },
         {
