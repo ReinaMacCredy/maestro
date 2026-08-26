@@ -378,7 +378,14 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const workId = position(invocation, 0, "work id");
           const work = context.work as WorkService;
-          if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+          const subject = work.get(workId);
+          if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+          if (subject.state === "done" || subject.state === "cancelled") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${workId} is ${subject.state}; a lane contract binds live work`,
+            );
+          }
           const objective = requiredOption(invocation, "--objective");
           const ownedScope = requiredOption(invocation, "--owned-scope");
           const excludedScope = requiredOption(invocation, "--excluded-scope");
