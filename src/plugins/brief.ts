@@ -6,9 +6,22 @@ import type { BuiltInPlugin } from "../kernel/loader.ts";
 
 interface WorkListEnvelope {
   data?: {
-    works?: Array<{ state: string }>;
+    works?: WorkSummary[];
   };
   ok?: boolean;
+}
+
+interface WorkSummary {
+  id: string;
+  state: string;
+  title: string;
+}
+
+interface RepoBrief {
+  error: boolean;
+  missing: boolean;
+  repo: string;
+  works: WorkSummary[];
 }
 
 async function registeredRepos(home: string): Promise<string[]> {
@@ -17,8 +30,8 @@ async function registeredRepos(home: string): Promise<string[]> {
   return (await readFile(registry, "utf8")).split(/\r?\n/).filter(Boolean);
 }
 
-async function hasOpenWork(repo: string): Promise<boolean> {
-  if (!existsSync(repo)) return true;
+async function scanRepo(repo: string): Promise<RepoBrief> {
+  if (!existsSync(repo)) return { error: false, missing: true, repo, works: [] };
   const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
   const child = Bun.spawn([process.execPath, cli, "work", "list", "--json"], {
     cwd: repo,
@@ -31,14 +44,15 @@ async function hasOpenWork(repo: string): Promise<boolean> {
     new Response(child.stderr).text(),
     child.exited,
   ]);
-  if (exitCode !== 0) return true;
+  if (exitCode !== 0) return { error: true, missing: false, repo, works: [] };
   try {
     const envelope = JSON.parse(stdout) as WorkListEnvelope;
-    return (envelope.data?.works ?? []).some(
+    const works = (envelope.data?.works ?? []).filter(
       (work) => work.state === "open" || work.state === "active",
     );
+    return { error: false, missing: false, repo, works };
   } catch {
-    return true;
+    return { error: true, missing: false, repo, works: [] };
   }
 }
 
@@ -50,11 +64,18 @@ export const briefPlugin: BuiltInPlugin = {
         "brief",
         async (): Promise<CliResult> => {
           const repos = await registeredRepos(process.env.HOME ?? process.cwd());
-          const states = await Promise.all(repos.map(hasOpenWork));
-          const text = states.some(Boolean)
-            ? "Some registered projects need attention."
-            : "All registered projects are running normally.";
-          return { data: { repos: repos.length }, text };
+          const results = await Promise.all(repos.map(scanRepo));
+          const workLines = results.flatMap((result) =>
+            result.works.map(
+              (work) => `${result.repo}: ${work.id} [${work.state}] ${work.title}`,
+            )
+          );
+          const text = workLines.length > 0
+            ? ["Needs attention:", ...workLines].join("\n")
+            : results.some((result) => result.missing || result.error)
+              ? "Some registered projects need attention."
+              : "All registered projects are running normally.";
+          return { data: { results }, text };
         },
         { description: "Summarize registered repository work without changing project stores." },
       ),

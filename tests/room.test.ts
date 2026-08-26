@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   prepareInstallFixture,
@@ -10,6 +10,19 @@ import {
 
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
+
+async function storeSnapshot(repo: string): Promise<Array<[string, number, string]>> {
+  const directory = join(repo, ".maestro");
+  const names = (await readdir(directory))
+    .filter((name) => name === "maestro.db" || name === "maestro.db-wal")
+    .sort();
+  return Promise.all(
+    names.map(async (name) => {
+      const path = join(directory, name);
+      return [name, (await stat(path)).mtimeMs, (await readFile(path)).toString("base64")];
+    }),
+  );
+}
 
 test("234 install twice preserves a first-edit shell backup and one managed source and registry line", async () => {
   await withFixture(async (fixture) => {
@@ -170,6 +183,42 @@ test("237 brief says every registered repository is running normally in one line
     expect(brief.stdout).toBe("All registered projects are running normally.\n");
     expect(brief.stdout).not.toContain(await realpath(fixture.repo));
     expect(brief.stdout).not.toContain(await realpath(secondRepo));
+  });
+});
+
+test("239 brief reports open work from two repositories without writing either store", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    const secondRepo = join(fixture.root, "open-repo");
+    await mkdir(secondRepo, { recursive: true });
+    await runInstalledCliAt(fixture, secondRepo, ["install"], { PATH: path });
+    await runInstalledCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "prepare alpha", "--atomic-reason", "test"],
+      { PATH: path },
+    );
+    await runInstalledCliAt(
+      fixture,
+      secondRepo,
+      ["work", "add", "prepare beta", "--atomic-reason", "test"],
+      { PATH: path },
+    );
+    const before = [await storeSnapshot(fixture.repo), await storeSnapshot(secondRepo)];
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stderr).toBe("");
+    expect(brief.stdout).toContain(`${await realpath(fixture.repo)}: w1 [open] prepare alpha`);
+    expect(brief.stdout).toContain(`${await realpath(secondRepo)}: w1 [open] prepare beta`);
+    expect([await storeSnapshot(fixture.repo), await storeSnapshot(secondRepo)]).toEqual(before);
   });
 });
 
