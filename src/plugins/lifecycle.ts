@@ -270,6 +270,43 @@ interface UnreadMessageTarget {
   target_session: string;
 }
 
+// A repo migrating off the Rust build still carries .maestro/store.sqlite next to
+// the new store. Nothing else mentions it, so a migrating user reads "no ready
+// work" and concludes their history is gone (d35).
+function legacyStoreCheck(storePath: string): string | null {
+  const legacyPath = join(dirname(storePath), "store.sqlite");
+  if (!existsSync(legacyPath)) return null;
+  let legacy: Database | null = null;
+  let imported: Database | null = null;
+  try {
+    legacy = new Database(legacyPath, { readonly: true, strict: true });
+    const cards = legacy
+      .query<{ count: number }, []>("SELECT count(*) AS count FROM cards")
+      .get()?.count ?? 0;
+    if (cards === 0) return null;
+    if (existsSync(storePath)) {
+      imported = new Database(storePath, { readonly: true, strict: true });
+      const present = imported
+        .query<{ name: string }, []>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'legacy_cards'",
+        )
+        .get();
+      const alreadyImported = present
+        ? (imported
+          .query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_cards")
+          .get()?.count ?? 0)
+        : 0;
+      if (alreadyImported > 0) return `legacy store: imported (${alreadyImported} card(s))`;
+    }
+    return `legacy store: ${cards} card(s) not imported; run: maestro import rust`;
+  } catch {
+    return null;
+  } finally {
+    legacy?.close();
+    imported?.close();
+  }
+}
+
 function mailboxCheck(storePath: string, scope: string): string {
   if (!existsSync(storePath)) return "mailbox: ok";
   let store: Store | null = null;
@@ -410,6 +447,8 @@ async function doctor(): Promise<CliResult> {
         .get();
       database.close();
       checks.push(`store: ok (${tables?.count ?? 0} tables)`);
+      const legacy = legacyStoreCheck(storePath);
+      if (legacy) checks.push(legacy);
     } catch (error) {
       issues.push({
         component: "store",

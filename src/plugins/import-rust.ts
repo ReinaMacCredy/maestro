@@ -447,7 +447,12 @@ export const importRustPlugin: BuiltInPlugin = {
               textFiles,
               decisions: data.decisions.length,
             },
-            text: `imported legacy: ${data.cards.length} cards, ${data.files.length} files (${textFiles} text), ${data.decisions.length} decisions`,
+            text: [
+              `imported legacy: ${data.cards.length} cards, ${data.files.length} files (${textFiles} text), ${data.decisions.length} decisions`,
+              data.cards[0]
+                ? `read them: maestro legacy show ${data.cards[0].id}`
+                : null,
+            ].filter((line): line is string => line !== null).join("\n"),
           };
         },
         {

@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, type Fixture, withFixture } from "./helpers.ts";
+import { idFrom, prepareInstallFixture, runCli, type Fixture, withFixture } from "./helpers.ts";
 
 function session(id: string, pid = process.pid): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };
@@ -77,5 +77,61 @@ test("222 the inbox marks a packet the supervisor authored", async () => {
     const inbox = await runCli(fixture, ["msg", "read"], session("lead"));
     expect(inbox.exitCode).toBe(0);
     expect(inbox.stdout).toContain("from supervisor (system)");
+  });
+});
+
+const legacySchema = `
+  CREATE TABLE schema_version (version INTEGER NOT NULL);
+  INSERT INTO schema_version (version) VALUES (1);
+  CREATE TABLE cards (
+    id TEXT PRIMARY KEY NOT NULL, card_type TEXT NOT NULL, parent TEXT, status TEXT NOT NULL,
+    title TEXT NOT NULL, record_file TEXT NOT NULL, card_yaml TEXT NOT NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, imported_at TEXT NOT NULL
+  );
+  INSERT INTO cards VALUES ('old-card', 'feature', NULL, 'shipped', 'Old card', 'card.yaml',
+    'id: old-card', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+  CREATE TABLE card_files (
+    card_id TEXT NOT NULL, path TEXT NOT NULL, mode INTEGER NOT NULL, contents BLOB NOT NULL,
+    sha256 TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (card_id, path)
+  );
+`;
+
+function writeLegacyStore(fixture: Fixture): void {
+  const legacy = new Database(join(fixture.repo, ".maestro", "store.sqlite"), { create: true });
+  try {
+    legacy.exec(legacySchema);
+  } finally {
+    legacy.close();
+  }
+}
+
+test("223 doctor names the old store a migrating repo still carries", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const clean = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(clean.exitCode).toBe(0);
+    expect(clean.stdout).not.toContain("legacy store");
+
+    writeLegacyStore(fixture);
+    const carrying = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(carrying.exitCode).toBe(0);
+    expect(carrying.stdout).toContain("legacy store: 1 card(s) not imported");
+    expect(carrying.stdout).toContain("maestro import rust");
+
+    expect((await runCli(fixture, ["import", "rust"])).exitCode).toBe(0);
+    const imported = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(imported.stdout).toContain("legacy store: imported");
+    expect(imported.stdout).not.toContain("not imported");
+  });
+});
+
+test("224 the import says how to read what it just imported", async () => {
+  await withFixture(async (fixture) => {
+    writeLegacyStore(fixture);
+    const imported = await runCli(fixture, ["import", "rust"]);
+    expect(imported.exitCode).toBe(0);
+    expect(imported.stdout).toContain("read them: maestro legacy show old-card");
   });
 });
