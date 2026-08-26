@@ -136,6 +136,38 @@ test("268 first install seeds a neutral OWNER.md", async () => {
   });
 });
 
+test("269 install wires both room harnesses without overwriting OWNER.md", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const ownerEdit = "# OWNER\n\nRoom harness wiring preserves this owner edit.\n";
+    await writeFile(join(room, "OWNER.md"), ownerEdit);
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    expect(await readFile(join(room, "OWNER.md"), "utf8")).toBe(ownerEdit);
+    for (const [harness, configName] of [
+      ["claude", "settings.json"],
+      ["codex", "hooks.json"],
+    ] as const) {
+      const hookPath = join(room, `.${harness}`, "hooks", "maestro-record.ts");
+      const config = JSON.parse(
+        await readFile(join(room, `.${harness}`, configName), "utf8"),
+      ) as { hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>> };
+      expect(await readFile(hookPath, "utf8")).toContain(`--harness\", \"${harness}`);
+      expect(config.hooks.SessionStart?.at(-1)?.hooks[0]?.command).toBe(
+        `bun .${harness}/hooks/maestro-record.ts`,
+      );
+      expect(config.hooks.UserPromptSubmit?.at(-1)?.hooks[0]?.command).toBe(
+        `bun .${harness}/hooks/maestro-record.ts`,
+      );
+      expect(config.hooks.PostToolUse).toBeUndefined();
+    }
+  });
+});
+
 test("238 install registers each repository exactly once", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

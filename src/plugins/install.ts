@@ -365,6 +365,34 @@ process.exitCode = exitCode;
 `;
 }
 
+async function writeHarnessWiring(root: string): Promise<boolean> {
+  const codexConfigPath = join(root, ".codex", "hooks.json");
+  const codexHooksBefore = existsSync(codexConfigPath)
+    ? await readFile(codexConfigPath, "utf8")
+    : null;
+  const adapters = [
+    {
+      configPath: join(root, ".claude", "settings.json"),
+      harness: "claude" as const,
+      hookCommand: "bun .claude/hooks/maestro-record.ts",
+      hookPath: join(root, ".claude", "hooks", "maestro-record.ts"),
+    },
+    {
+      configPath: codexConfigPath,
+      harness: "codex" as const,
+      hookCommand: "bun .codex/hooks/maestro-record.ts",
+      hookPath: join(root, ".codex", "hooks", "maestro-record.ts"),
+    },
+  ];
+  for (const adapter of adapters) {
+    await mkdir(dirname(adapter.hookPath), { recursive: true });
+    await writeFile(adapter.hookPath, hookSource(adapter.harness));
+    await chmod(adapter.hookPath, 0o755);
+    await writeHookConfig(adapter.configPath, adapter.hookCommand);
+  }
+  return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
+}
+
 async function samePath(left: string, right: string): Promise<boolean> {
   if (resolve(left) === resolve(right)) return true;
   try {
@@ -525,30 +553,7 @@ export const installPlugin: BuiltInPlugin = {
         await writePolicyConfig(join(repo, ".maestro", "config"));
         await writeManagedIgnore(join(repo, ".maestro", ".gitignore"));
 
-        const codexConfigPath = join(repo, ".codex", "hooks.json");
-        const codexHooksBefore = existsSync(codexConfigPath)
-          ? await readFile(codexConfigPath, "utf8")
-          : null;
-        const adapters = [
-          {
-            configPath: join(repo, ".claude", "settings.json"),
-            harness: "claude" as const,
-            hookCommand: "bun .claude/hooks/maestro-record.ts",
-            hookPath: join(repo, ".claude", "hooks", "maestro-record.ts"),
-          },
-          {
-            configPath: join(repo, ".codex", "hooks.json"),
-            harness: "codex" as const,
-            hookCommand: "bun .codex/hooks/maestro-record.ts",
-            hookPath: join(repo, ".codex", "hooks", "maestro-record.ts"),
-          },
-        ];
-        for (const adapter of adapters) {
-          await mkdir(dirname(adapter.hookPath), { recursive: true });
-          await writeFile(adapter.hookPath, hookSource(adapter.harness));
-          await chmod(adapter.hookPath, 0o755);
-          await writeHookConfig(adapter.configPath, adapter.hookCommand);
-        }
+        const codexHooksChanged = await writeHarnessWiring(repo);
         const mainWorktree = await gitMainWorktree(repo);
         if (mainWorktree) {
           const mirrorHook = join(mainWorktree, ".codex", "hooks", "maestro-record.ts");
@@ -560,7 +565,6 @@ export const installPlugin: BuiltInPlugin = {
             "bun .codex/hooks/maestro-record.ts",
           );
         }
-        const codexHooksChanged = codexHooksBefore !== await readFile(codexConfigPath, "utf8");
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
 
@@ -576,6 +580,7 @@ export const installPlugin: BuiltInPlugin = {
           await chmod(shim, 0o755);
         }
         const room = await scaffoldRoom(home);
+        await writeHarnessWiring(room);
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
         await writeShellSource(home);
