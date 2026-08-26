@@ -271,6 +271,70 @@ test("250 installed lane guidance names the runnable Herdr wait command", async 
   });
 });
 
+test("265 every installed lane Maestro command parses against the real CLI", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
+    const commands = [...lane.matchAll(/`(maestro [^`\n]+)`/g)].map((match) => match[1] as string);
+
+    expect(lane).toContain(
+      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes --no-focus",
+    );
+    expect(lane).not.toContain("herdr pane split --current");
+    expect(lane).not.toMatch(/\.{3}|…/);
+    expect(commands).toEqual([
+      'maestro work add "<title>" --atomic-reason "<why>"',
+      'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
+      "maestro dispatch show <dispatch-id>",
+      "maestro dispatch list <work-id>",
+      "maestro dispatch accept <dispatch-id>",
+      'maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
+      "maestro status --live",
+      "maestro brief",
+    ]);
+
+    const replacements = new Map([
+      ["<title>", "lane drift fixture"],
+      ["<why>", "parser proof"],
+      ["<observable outcome>", "commands parse"],
+      ["<paths or responsibility>", "fixture store"],
+      ["<explicit non-goals>", "product source"],
+      ["<no-write or write-bounded paths>", "no-write"],
+      ["<done or blocked boundary>", "handback filed"],
+      ["<falsifier>", "real CLI accepted command"],
+      ["<pane-id>", "w1:pZ"],
+      ["<current belief>", "commands parse"],
+    ]);
+    const argumentsFor = (command: string): string[] => {
+      let rendered = command;
+      for (const [placeholder, value] of replacements) {
+        rendered = rendered.replaceAll(placeholder, value);
+      }
+      const tokens = rendered.match(/"[^"]*"|\S+/g) ?? [];
+      return tokens.slice(1).map((token) =>
+        token.startsWith('"') && token.endsWith('"') ? token.slice(1, -1) : token
+      );
+    };
+
+    for (const command of commands) {
+      const parsed = await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        argumentsFor(command),
+        { PATH: path },
+      );
+      expect(parsed.exitCode, `${command}\n${parsed.stderr}`).toBe(0);
+      if (command.startsWith("maestro work add ")) {
+        replacements.set("<work-id>", idFrom(parsed));
+      }
+      if (command.startsWith("maestro dispatch open ")) {
+        replacements.set("<dispatch-id>", parsed.stdout.match(/^(x\d+)/)?.[1] as string);
+      }
+    }
+  });
+});
+
 test("237 brief says every registered repository is running normally in one line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
