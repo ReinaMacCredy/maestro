@@ -149,3 +149,71 @@ esac
     });
   },
 );
+
+test.skipIf(process.env.HERDR_ENV !== "1")(
+  "236 hm prints the read-only brief and returns without starting an agent",
+  async () => {
+    await withFixture(async (fixture) => {
+      const { path } = await prepareInstallFixture(fixture);
+      await runCli(fixture, ["install"], { PATH: path });
+      const fakeBin = join(fixture.root, "fake-bin-brief");
+      const herdrLog = join(fixture.root, "herdr-brief.log");
+      const maestroLog = join(fixture.root, "maestro-brief.log");
+      await mkdir(fakeBin, { recursive: true });
+      await writeFile(
+        join(fakeBin, "herdr"),
+        `#!/bin/sh
+printf '%s\\n' "$*" >> "$HERDR_LOG"
+printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[{"label":"maestro","workspace_id":"w9"}]}}'
+`,
+      );
+      await chmod(join(fakeBin, "herdr"), 0o755);
+      await writeFile(
+        join(fakeBin, "maestro"),
+        `#!/bin/sh
+printf '%s read-only=%s cwd=%s\\n' "$*" "$MAESTRO_READ_ONLY" "$PWD" >> "$MAESTRO_LOG"
+printf '%s\\n' 'owner brief'
+`,
+      );
+      await chmod(join(fakeBin, "maestro"), 0o755);
+
+      const shell = Bun.spawn(
+        [
+          "/bin/zsh",
+          "-f",
+          "-c",
+          'source "$HOME/maestro/shellrc"; eval hm; printf "shell-returned\\n"',
+        ],
+        {
+          cwd: fixture.repo,
+          env: {
+            ...process.env,
+            HERDR_ENV: "1",
+            HERDR_LOG: herdrLog,
+            HOME: fixture.home,
+            MAESTRO_LOG: maestroLog,
+            PATH: `${fakeBin}:${path}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(shell.stdout).text(),
+        new Response(shell.stderr).text(),
+        shell.exited,
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout).toBe("owner brief\nshell-returned\n");
+      expect(await readFile(maestroLog, "utf8")).toBe(
+        `brief read-only=1 cwd=${join(fixture.home, "maestro")}\n`,
+      );
+      const herdrCommands = await readFile(herdrLog, "utf8");
+      expect(herdrCommands).toContain("workspace list");
+      expect(herdrCommands).toContain("workspace focus w9");
+      expect(herdrCommands).not.toContain("agent");
+    });
+  },
+);

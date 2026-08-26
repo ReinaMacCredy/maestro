@@ -48,6 +48,7 @@ const shellrc = `function _maestro_home() {
   else
     herdr workspace create --cwd "$HOME/maestro" --label maestro --focus >/dev/null
   fi
+  (cd "$HOME/maestro" && MAESTRO_READ_ONLY=1 maestro brief)
 }
 
 alias hm=_maestro_home
