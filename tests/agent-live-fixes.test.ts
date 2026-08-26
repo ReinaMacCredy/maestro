@@ -444,7 +444,6 @@ test("112 help documents --json only for commands that accept it", async () => {
     const supported = [
       ["status"],
       ["ready"],
-      ["msg", "send"],
       ["search"],
       ["work", "list"],
       ["work", "show"],
@@ -458,7 +457,7 @@ test("112 help documents --json only for commands that accept it", async () => {
       expect(help.stdout).toContain("--json");
     }
 
-    for (const command of [["msg", "read"], ["trace"]]) {
+    for (const command of [["trace"]]) {
       const help = await runCli(fixture, ["help", ...command]);
       expect(help.exitCode).toBe(0);
       expect(help.stdout).not.toContain("--json");
@@ -496,14 +495,6 @@ test("114 decision help shows draft usage and edits name the previous title", as
     expect(edited.exitCode).toBe(0);
     expect(edited.stdout).toContain("revised direction");
     expect(edited.stdout).toContain("previous: initial direction");
-  });
-});
-
-test("115 msg read renders an explicit empty state", async () => {
-  await withFixture(async (fixture) => {
-    const empty = await runCli(fixture, ["msg", "read"]);
-    expect(empty.exitCode).toBe(0);
-    expect(empty.stdout.trim()).toBe("no new messages");
   });
 });
 

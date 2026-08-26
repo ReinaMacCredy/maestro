@@ -85,7 +85,7 @@ test("42 MCP initialize carries the dynamic brief and lists exactly two meta-too
     expect(initialized.error).toBeUndefined();
     expect(initialized.result?.instructions).toContain("held work:");
     expect(initialized.result?.instructions).toContain("enabled policies:");
-    expect(initialized.result?.instructions).toContain("pending message");
+    expect(initialized.result?.instructions).not.toContain("pending message");
     expect(initialized.result?.instructions).toContain("recipes:");
     expect(tools.map((tool) => tool.name)).toEqual(["maestro_find", "maestro_run"]);
     expect(closed).toEqual({ exitCode: 0, stderr: "" });

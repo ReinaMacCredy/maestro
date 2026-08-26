@@ -471,7 +471,7 @@ test("185 work start refuses a sealed council until its dispatches are resolved"
   });
 });
 
-test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one recipient", async () => {
+test("186 attention records one DISPATCH_UNRETURNED packet per fingerprint without routing", async () => {
   await withFixture(async (fixture) => {
     const parent = idFrom(
       await runCli(fixture, ["work", "add", "lead scope", "--kind", "idea"]),
@@ -512,8 +512,9 @@ test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one
         detections: Array<{
           fingerprint: string;
           kind: string;
+          packet: string;
           raised: boolean;
-          targets: string[];
+          targets?: string[];
         }>;
       };
     };
@@ -522,8 +523,9 @@ test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one
     );
     expect(firstDispatch).toHaveLength(1);
     expect(firstDispatch[0]?.raised).toBe(true);
-    expect(firstDispatch[0]?.targets).toEqual(["lead-session"]);
+    expect(firstDispatch[0]?.targets).toBeUndefined();
     expect(firstDispatch[0]?.fingerprint).toContain(dispatch);
+    expect(firstDispatch[0]?.packet).toContain(`smallest action: maestro dispatch show ${dispatch}`);
 
     const secondEnvelope = JSON.parse((await scan()).stdout) as typeof firstEnvelope;
     const secondDispatch = secondEnvelope.data.detections.filter(
@@ -531,10 +533,7 @@ test("186 attention raises one DISPATCH_UNRETURNED packet per fingerprint to one
     );
     expect(secondDispatch).toHaveLength(1);
     expect(secondDispatch[0]?.raised).toBe(false);
-    expect(secondDispatch[0]?.targets).toEqual(["lead-session"]);
-
-    const mail = await runCli(fixture, ["msg", "read"], session("lead-session"));
-    expect(mail.stdout.match(/DISPATCH_UNRETURNED/g)).toHaveLength(1);
+    expect(secondDispatch[0]?.targets).toBeUndefined();
   });
 });
 

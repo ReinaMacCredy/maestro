@@ -330,7 +330,6 @@ test("60 every shipped recipe command example carries the maestro prefix", async
       "import",
       "install",
       "mcp",
-      "msg",
       "plugin",
       "publish",
       "ready",
@@ -341,7 +340,6 @@ test("60 every shipped recipe command example carries the maestro prefix", async
       "uninstall",
       "update",
       "version",
-      "watch",
       "work",
     ]);
 

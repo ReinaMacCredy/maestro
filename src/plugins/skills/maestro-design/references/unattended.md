@@ -8,7 +8,7 @@ hidden scheduler or a second lifecycle.
 
 ### Perceive
 
-Reconstruct state from `maestro status`, `maestro ready`, `maestro work show`, decisions, and messages.
+Reconstruct state from `maestro status`, `maestro ready`, `maestro work show`, decisions, and handbacks.
 Do not rely on conversational memory.
 
 ### Choose

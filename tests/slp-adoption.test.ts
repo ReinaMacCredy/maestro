@@ -53,21 +53,6 @@ function backdateSession(fixture: Fixture, id: string, minutes: number): void {
   }
 }
 
-async function waitFor<T>(
-  read: () => T | Promise<T>,
-  accept: (value: T) => boolean,
-  timeoutMs = 5_000,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  let value = await read();
-  while (!accept(value) && Date.now() < deadline) {
-    await Bun.sleep(50);
-    value = await read();
-  }
-  expect(accept(value)).toBe(true);
-  return value;
-}
-
 test("133 install materializes the dispatch, handback, dependency, and episode contracts", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
@@ -234,14 +219,13 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
     expect(prompt.stdout).toBe(
       "held work: none\n" +
         "enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof\n" +
-        "0 pending messages\n" +
         "next: maestro ready\n" +
         "recipes: maestro recipe list; maestro recipe show <name>\n",
     );
   });
 });
 
-test("138 attention raises and routes a STALLED_LEASE packet to the parent holder", async () => {
+test("138 attention raises and records a STALLED_LEASE packet at read time", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "parent scope");
     await startWork(fixture, parent, "lead-session");
@@ -261,7 +245,7 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
       "  evidence:",
       "  unknown:",
       "  question:",
-      `  smallest action: maestro msg send subject-session "still on ${child}?"`,
+      `  smallest action: maestro work show ${child}`,
       "  human decision needed: no",
     ]) {
       expect(attention.stdout).toContain(required);
@@ -273,8 +257,7 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
         .query<{
           fingerprint: string;
           packet: string;
-          target_session: string;
-        }, []>("SELECT fingerprint, packet, target_session FROM attention")
+        }, []>("SELECT fingerprint, packet FROM attention")
         .get();
       const start = database
         .query<{ id: number }, [string]>(
@@ -282,74 +265,14 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
         )
         .get(child);
       expect(row?.fingerprint).toBe(`stalled:${child}:${start?.id}`);
-      expect(row?.target_session).toBe("lead-session");
       expect(row?.packet).toContain("unknown:");
-      const message = database
-        .query<{ target_session: string; text: string }, []>(
-          "SELECT target_session, text FROM messages ORDER BY id DESC LIMIT 1",
-        )
-        .get();
-      expect(message?.target_session).toBe("lead-session");
-      expect(message?.text).toBe(row?.packet);
     } finally {
       database.close();
     }
   });
 });
 
-test("139 attention routes without a parent holder, records no-recipient rows, and falls back to the subject", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "unheld parent");
-    const child = await addWork(fixture, "routed child", parent);
-    await startWork(fixture, child, "subject-session");
-    await recordSession(fixture, "peer-one");
-    await recordSession(fixture, "peer-two");
-    backdateSession(fixture, "subject-session", 45);
-    backdateSession(fixture, "peer-one", 2);
-    backdateSession(fixture, "peer-two", 1);
-
-    expect(
-      (await runCli(fixture, ["attention"], session("scanner-session"))).exitCode,
-    ).toBe(0);
-    const database = openDatabase(fixture);
-    try {
-      const targets = database
-        .query<{ target_session: string }, []>("SELECT target_session FROM messages ORDER BY id")
-        .all()
-        .map((row) => row.target_session);
-      expect(targets).toEqual(["peer-two"]);
-      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
-        .toBe(1);
-    } finally {
-      database.close();
-    }
-  });
-
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "unheld parent");
-    const child = await addWork(fixture, "subject fallback", parent);
-    await startWork(fixture, child, "only-subject");
-    backdateSession(fixture, "only-subject", 45);
-
-    expect(
-      (await runCli(fixture, ["attention"], session("scanner-session"))).exitCode,
-    ).toBe(0);
-    const database = openDatabase(fixture);
-    try {
-      expect(
-        database
-          .query<{ target_session: string }, []>(
-            "SELECT target_session FROM messages ORDER BY id DESC LIMIT 1",
-          )
-          .get()?.target_session,
-      ).toBe("only-subject");
-      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
-        .toBe(1);
-    } finally {
-      database.close();
-    }
-  });
-
+test("139 attention records findings without delivery targets or mailbox tables", async () => {
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "decision without recipient");
     const decision = idFrom(
@@ -364,26 +287,26 @@ test("139 attention routes without a parent holder, records no-recipient rows, a
       database.close();
     }
 
-    expect(
-      (
-        await runCli(
-          fixture,
-          ["attention", "--decision-stale", "24"],
-          session("scanner-session"),
-        )
-      ).exitCode,
-    ).toBe(0);
+    const attention = await runCli(
+      fixture,
+      ["attention", "--json", "--decision-stale", "24"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    const detection = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<Record<string, unknown>> };
+    }).data.detections[0];
+    expect(detection).not.toHaveProperty("targets");
     const recorded = openDatabase(fixture);
     try {
-      expect(
-        recorded
-          .query<{ target_session: string | null }, []>(
-            "SELECT target_session FROM attention ORDER BY id DESC LIMIT 1",
-          )
-          .get()?.target_session,
-      ).toBeNull();
-      expect(recorded.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
-        .toBe(0);
+      expect(recorded.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
+        .toBe(1);
+      const retiredTables = recorded
+        .query<{ name: string }, []>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors')",
+        )
+        .all();
+      expect(retiredTables).toEqual([]);
     } finally {
       recorded.close();
     }
@@ -405,8 +328,6 @@ test("140 attention fingerprints are one-shot and existing raises stay listed", 
     const database = openDatabase(fixture);
     try {
       expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
-        .toBe(1);
-      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
         .toBe(1);
     } finally {
       database.close();
@@ -514,7 +435,7 @@ test("142 attention raises DECISION_STALE only for old drafts linked to open wor
   }
 });
 
-test("143 attention raises sorted SCOPE_COLLISION and routes it to the parent holder", async () => {
+test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "shared scope");
     await startWork(fixture, parent, "lead-session");
@@ -530,32 +451,24 @@ test("143 attention raises sorted SCOPE_COLLISION and routes it to the parent ho
     const database = openDatabase(fixture);
     try {
       const row = database
-        .query<{ fingerprint: string; target_session: string }, []>(
-          "SELECT fingerprint, target_session FROM attention WHERE kind = 'SCOPE_COLLISION'",
+        .query<{ fingerprint: string }, []>(
+          "SELECT fingerprint FROM attention WHERE kind = 'SCOPE_COLLISION'",
         )
         .get();
       expect(row?.fingerprint).toBe(`collision:${first}:${second}:holder-a:holder-z`);
-      expect(row?.target_session).toBe("lead-session");
-      expect(
-        database.query<{ target_session: string }, []>(
-          "SELECT target_session FROM messages ORDER BY id DESC LIMIT 1",
-        ).get()?.target_session,
-      ).toBe("lead-session");
     } finally {
       database.close();
     }
   });
 });
 
-test("144 attention --json works without a supervisor pid file", async () => {
+test("144 attention --json computes findings without background state", async () => {
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "json failure");
     await startWork(fixture, work, "worker-session");
     for (const text of ["failed: first", "failed: second", "failed: third"]) {
       await runCli(fixture, ["work", "note", work, text], session("worker-session"));
     }
-    expect(await Bun.file(join(fixture.repo, ".maestro", "supervisor.json")).exists()).toBe(false);
-
     const attention = await runCli(
       fixture,
       ["attention", "--json"],
@@ -572,157 +485,7 @@ test("144 attention --json works without a supervisor pid file", async () => {
   });
 });
 
-test("145 supervisor start, status, and stop own one advancing pid file", async () => {
-  await withFixture(async (fixture) => {
-    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
-    const controller = session("daemon-controller");
-    let daemonStarted = false;
-    try {
-      const started = await runCli(
-        fixture,
-        ["supervisor", "start", "--interval", "1"],
-        controller,
-      );
-      daemonStarted = started.exitCode === 0;
-      expect(started.exitCode).toBe(0);
-
-      const first = await waitFor(
-        async () =>
-          (await Bun.file(statePath).exists())
-            ? JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null; pid: number }
-            : null,
-        (state) => state !== null && typeof state.lastTick === "string",
-      );
-      expect(first?.pid).toBeGreaterThan(1);
-      const second = await waitFor(
-        async () => JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null },
-        (state) => state.lastTick !== first?.lastTick,
-      );
-      expect(second.lastTick).not.toBe(first?.lastTick);
-
-      const status = await runCli(fixture, ["supervisor", "status"], controller);
-      expect(status.exitCode).toBe(0);
-      expect(status.stdout).toContain("supervisor running");
-      expect(status.stdout).toContain(`pid: ${first?.pid}`);
-      expect(status.stdout).toContain("interval: 1s");
-      expect(status.stdout).toContain("last tick:");
-      expect(status.stdout).toContain("daemon commit: source");
-
-      const refused = await runCli(
-        fixture,
-        ["supervisor", "start", "--interval", "1"],
-        controller,
-      );
-      expect(refused.exitCode).not.toBe(0);
-      expect(refused.stderr).toContain("SUPERVISOR_RUNNING");
-      expect(refused.stderr).toContain(`pid: ${first?.pid}`);
-    } finally {
-      if (daemonStarted || (await Bun.file(statePath).exists())) {
-        const stopped = await runCli(fixture, ["supervisor", "stop"], controller);
-        expect(stopped.exitCode).toBe(0);
-      }
-    }
-
-    expect(await Bun.file(statePath).exists()).toBe(false);
-    const status = await runCli(fixture, ["supervisor", "status"], controller);
-    expect(status.exitCode).toBe(0);
-    expect(status.stdout).toBe("supervisor stopped\n");
-  });
-});
-
-test("146 supervisor reports a killed daemon as stale and permits replacement", async () => {
-  await withFixture(async (fixture) => {
-    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
-    const controller = session("daemon-controller");
-    let replacementStarted = false;
-    try {
-      expect(
-        (await runCli(fixture, ["supervisor", "start", "--interval", "1"], controller)).exitCode,
-      ).toBe(0);
-      const state = await waitFor(
-        async () =>
-          (await Bun.file(statePath).exists())
-            ? JSON.parse(await Bun.file(statePath).text()) as { pid: number }
-            : null,
-        (value) => value !== null,
-      );
-      process.kill(state?.pid as number, "SIGKILL");
-
-      const stale = await waitFor(
-        () => runCli(fixture, ["supervisor", "status"], controller),
-        (result) => result.stdout.includes("supervisor stale"),
-      );
-      expect(stale.stdout).toContain(`pid: ${state?.pid}`);
-      expect(stale.stdout).toContain("run: maestro supervisor stop");
-
-      const replacement = await runCli(
-        fixture,
-        ["supervisor", "start", "--interval", "1"],
-        controller,
-      );
-      expect(replacement.exitCode).toBe(0);
-      replacementStarted = true;
-      const replacementState = JSON.parse(await Bun.file(statePath).text()) as { pid: number };
-      expect(replacementState.pid).not.toBe(state?.pid);
-    } finally {
-      if (replacementStarted || (await Bun.file(statePath).exists())) {
-        await runCli(fixture, ["supervisor", "stop"], controller);
-      }
-    }
-  });
-});
-
-test("147 daemon ticks deliver as supervisor without creating a daemon session", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "daemon parent");
-    await startWork(fixture, parent, "lead-session");
-    const child = await addWork(fixture, "daemon stalled child", parent);
-    await startWork(fixture, child, "subject-session", 1);
-    backdateSession(fixture, "subject-session", 45);
-    const controller = session("daemon-controller");
-
-    try {
-      const started = await runCli(
-        fixture,
-        ["supervisor", "start", "--interval", "1"],
-        controller,
-      );
-      expect(started.exitCode).toBe(0);
-      const message = await waitFor(
-        () => {
-          const database = openDatabase(fixture);
-          try {
-            return database
-              .query<{ sender_session: string; target_session: string }, []>(
-                "SELECT sender_session, target_session FROM messages ORDER BY id DESC LIMIT 1",
-              )
-              .get() ?? null;
-          } finally {
-            database.close();
-          }
-        },
-        (value) => value?.sender_session === "supervisor",
-      );
-      expect(message?.target_session).toBe("lead-session");
-
-      const database = openDatabase(fixture);
-      try {
-        const ids = database
-          .query<{ id: string }, []>("SELECT id FROM sessions ORDER BY id")
-          .all()
-          .map((row) => row.id);
-        expect(ids).not.toContain("supervisor");
-        expect(ids).toEqual(["lead-session", "subject-session"]);
-      } finally {
-        database.close();
-      }
-    } finally {
-      await runCli(fixture, ["supervisor", "stop"], controller);
-    }
-  });
-});
-
-test("148 install and uninstall manage idempotent PostToolUse wiring for both harnesses", async () => {
+test("148 install and uninstall manage only session and prompt hook wiring", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const first = await runCli(fixture, ["install"], { PATH: path });
@@ -739,11 +502,7 @@ test("148 install and uninstall manage idempotent PostToolUse wiring for both ha
       };
       expect(config.hooks.SessionStart).toBeArray();
       expect(config.hooks.UserPromptSubmit).toBeArray();
-      expect(config.hooks.PostToolUse).toHaveLength(1);
-      const group = config.hooks.PostToolUse?.[0];
-      expect(group).not.toHaveProperty("matcher");
-      expect(group?.hooks).toHaveLength(1);
-      expect(group?.hooks[0]).not.toHaveProperty("statusMessage");
+      expect(config.hooks.PostToolUse).toBeUndefined();
     }
 
     const second = await runCli(fixture, ["install"], { PATH: path });
@@ -764,79 +523,12 @@ test("148 install and uninstall manage idempotent PostToolUse wiring for both ha
   });
 });
 
-test("149 PostToolUse is a mailbox-only JSON fast path that refreshes last_seen", async () => {
-  await withFixture(async (fixture) => {
-    await recordSession(fixture, "post-session");
-    backdateSession(fixture, "post-session", 10);
-    const database = openDatabase(fixture);
-    const eventCount = () =>
-      database.query<{ count: number }, []>("SELECT count(*) AS count FROM event_log").get()?.count ?? 0;
-    const lastSeen = () =>
-      database.query<{ last_seen: string }, []>(
-        "SELECT last_seen FROM sessions WHERE id = 'post-session'",
-      ).get()?.last_seen ?? "";
-    try {
-      const beforeEmpty = eventCount();
-      const oldLastSeen = lastSeen();
-      const empty = await runCli(
-        fixture,
-        ["hook", "record", "--event", "PostToolUse"],
-        session("post-session"),
-      );
-      expect(empty.exitCode).toBe(0);
-      expect(empty.stdout).toBe("");
-      expect(eventCount()).toBe(beforeEmpty);
-      expect(Date.parse(lastSeen())).toBeGreaterThan(Date.parse(oldLastSeen));
-
-      expect(
-        (await runCli(fixture, ["msg", "send", "post-session", "pending attention"])).exitCode,
-      ).toBe(0);
-      const beforePending = eventCount();
-      const delivered = await runCli(
-        fixture,
-        ["hook", "record", "--event", "PostToolUse"],
-        session("post-session"),
-      );
-      expect(delivered.exitCode).toBe(0);
-      const line = delivered.stdout.trimEnd();
-      expect(delivered.stdout).toBe(`${line}\n`);
-      expect(line).not.toContain("\n");
-      const output = JSON.parse(line) as {
-        hookSpecificOutput: { additionalContext: string; hookEventName: string };
-      };
-      expect(output.hookSpecificOutput.hookEventName).toBe("PostToolUse");
-      expect(output.hookSpecificOutput.additionalContext).toContain("pending attention");
-      expect(eventCount()).toBe(beforePending);
-      expect(
-        database.query<{ last_message_id: number }, []>(
-          "SELECT last_message_id FROM message_cursors WHERE session_id = 'post-session'",
-        ).get()?.last_message_id,
-      ).toBeGreaterThan(0);
-
-      const drained = await runCli(
-        fixture,
-        ["hook", "record", "--event", "PostToolUse"],
-        session("post-session"),
-      );
-      expect(drained.stdout).toBe("");
-      expect(eventCount()).toBe(beforePending);
-    } finally {
-      database.close();
-    }
-  });
-});
-
-test("150 install stays inert and attention plus a daemon tick preserve work and decisions", async () => {
+test("150 install stays inert and read-time attention preserves work and decisions", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
-    expect(await Bun.file(statePath).exists()).toBe(false);
-    expect((await runCli(fixture, ["supervisor", "status"])).stdout).toBe(
-      "supervisor stopped\n",
-    );
 
-    const work = await addWork(fixture, "immutable supervisor subject");
+    const work = await addWork(fixture, "immutable attention subject");
     await startWork(fixture, work, "worker-session");
     for (const text of ["failed: first", "failed: second", "failed: third"]) {
       await runCli(fixture, ["work", "note", work, text], session("worker-session"));
@@ -850,21 +542,6 @@ test("150 install stays inert and attention plus a daemon tick preserve work and
     try {
       const before = snapshot();
       expect((await runCli(fixture, ["attention"], session("scanner-session"))).exitCode).toBe(0);
-      const controller = session("daemon-controller");
-      try {
-        expect(
-          (await runCli(fixture, ["supervisor", "start", "--interval", "1"], controller)).exitCode,
-        ).toBe(0);
-        await waitFor(
-          async () =>
-            (await Bun.file(statePath).exists())
-              ? JSON.parse(await Bun.file(statePath).text()) as { lastTick: string | null }
-              : null,
-          (state) => typeof state?.lastTick === "string",
-        );
-      } finally {
-        await runCli(fixture, ["supervisor", "stop"], controller);
-      }
       expect(snapshot()).toEqual(before);
     } finally {
       database.close();
@@ -878,12 +555,11 @@ test("151 MAESTRO_SESSION_NONE records no session while status remains observabl
     const none = { ...session("ignored-session"), MAESTRO_SESSION_NONE: "1" };
     const status = await runCli(fixture, ["status"], none);
     expect(status.exitCode).toBe(0);
-    expect(status.stdout).not.toContain("supervisor");
     const database = openDatabase(fixture);
     try {
       expect(
         database.query<{ count: number }, []>(
-          "SELECT count(*) AS count FROM sessions WHERE id = 'supervisor'",
+          "SELECT count(*) AS count FROM sessions WHERE id = 'ignored-session'",
         ).get()?.count,
       ).toBe(0);
     } finally {

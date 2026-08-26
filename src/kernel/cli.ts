@@ -496,7 +496,6 @@ export class Cli {
       command === "ready" ||
       command === "handoff" ||
       command === "work show" ||
-      command === "msg send" ||
       command === "search" ||
       command.endsWith(" list");
   }

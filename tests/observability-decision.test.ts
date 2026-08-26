@@ -36,30 +36,6 @@ test("17 trace reconstructs ordered start, note, done, and evidence history", as
   });
 });
 
-test("18 watch --once renders the work tree and live sessions then exits", async () => {
-  await withFixture(async (fixture) => {
-    const parent = idFrom(await runCli(fixture, ["work", "add", "parent work", "--kind", "idea"]));
-    const child = idFrom(
-      await runCli(fixture, ["work", "add", "child work", "--kind", "idea", "--parent", parent]),
-    );
-    expect(
-      (
-        await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
-          MAESTRO_SESSION_ID: "watch-session",
-          MAESTRO_SESSION_PID: String(process.pid),
-        })
-      ).exitCode,
-    ).toBe(0);
-
-    const result = await runCli(fixture, ["watch", "--once"]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(parent);
-    expect(result.stdout).toContain(child);
-    expect(result.stdout).toContain("watch-session");
-  });
-});
-
 test("19 locked decisions reject edits while superseding links and child visibility remain", async () => {
   await withFixture(async (fixture) => {
     const parent = idFrom(await runCli(fixture, ["decision", "draft", "parent choice"]));

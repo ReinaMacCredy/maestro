@@ -5,8 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
-import { Sessions } from "../kernel/sessions.ts";
-import { resolveStoreLocation, Store } from "../kernel/store.ts";
+import { resolveStoreLocation } from "../kernel/store.ts";
 import {
   readGitHeadCommit,
   gitMainWorktree,
@@ -250,17 +249,14 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
   }
 }
 
-// Codex skips repo-local hooks until their exact definition is trusted, and it
-// says so only inside its own UI, so a wired repo can stay silent for months.
 async function codexTrustCheck(repo: string): Promise<string> {
-  // Codex resolves project hook config to the git main worktree, so a linked
-  // worktree's own copy is never the file it reads (d39).
   const mainWorktree = await gitMainWorktree(repo);
   const hooks = join(mainWorktree ?? repo, ".codex", "hooks.json");
   if (!existsSync(hooks)) return "codex hooks: absent";
-  // Trust is recorded per event, so ask about the one that carries mid-turn
-  // delivery. A checkout wired by an older runtime declares no PostToolUse at
-  // all, and every other event being trusted says nothing about that (d36).
+  const requiredHooks = [
+    { event: "SessionStart", trust: "session_start" },
+    { event: "UserPromptSubmit", trust: "user_prompt_submit" },
+  ] as const;
   let declared: string[] = [];
   try {
     const wiring = JSON.parse(await readFile(hooks, "utf8")) as { hooks?: Record<string, unknown> };
@@ -268,8 +264,9 @@ async function codexTrustCheck(repo: string): Promise<string> {
   } catch {
     declared = [];
   }
-  if (!declared.includes("PostToolUse")) {
-    return `codex hooks: stale (no PostToolUse in ${hooks}; run maestro install)`;
+  const missing = requiredHooks.filter(({ event }) => !declared.includes(event));
+  if (missing.length > 0) {
+    return `codex hooks: stale (missing ${missing.map(({ event }) => event).join(", ")} in ${hooks}; run maestro install)`;
   }
   const config = join(process.env.HOME ?? repo, ".codex", "config.toml");
   const text = existsSync(config) ? await readFile(config, "utf8") : "";
@@ -282,14 +279,11 @@ async function codexTrustCheck(repo: string): Promise<string> {
       candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
     );
   }
-  return [...paths].some((path) => text.includes(`"${path}:post_tool_use:`))
+  return requiredHooks.every(({ trust }) =>
+      [...paths].some((path) => text.includes(`"${path}:${trust}:`))
+    )
     ? "codex hooks: trusted"
     : "codex hooks: not trusted (Codex skips them; run /hooks in Codex once to trust)";
-}
-
-interface UnreadMessageTarget {
-  count: number;
-  target_session: string;
 }
 
 // A repo migrating off the Rust build still carries .maestro/store.sqlite next to
@@ -329,46 +323,6 @@ function legacyStoreCheck(storePath: string): string | null {
   }
 }
 
-function mailboxCheck(storePath: string, scope: string): string {
-  if (!existsSync(storePath)) return "mailbox: ok";
-  let store: Store | null = null;
-  try {
-    store = new Store(storePath, { readonly: true });
-    const sessions = new Sessions(store, scope);
-    const database = store.database;
-    const tables = new Set(
-      database
-        .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
-        .all()
-        .map((row) => row.name),
-    );
-    if (!["messages", "message_cursors", "sessions"].every((name) => tables.has(name))) {
-      return "mailbox: ok";
-    }
-    const unread = database
-      .query<UnreadMessageTarget, []>(
-        `SELECT m.target_session, count(*) AS count
-         FROM messages m
-         LEFT JOIN message_cursors c ON c.session_id = m.target_session
-         WHERE m.id > COALESCE(c.last_message_id, 0)
-         GROUP BY m.target_session
-         ORDER BY m.target_session`,
-      )
-      .all();
-    const dead = unread.filter((target) => !sessions.liveness(target.target_session).live);
-    const queued = dead.reduce((total, target) => total + target.count, 0);
-    return queued === 0
-      ? "mailbox: ok"
-      :
-        `mailbox: ${queued} message(s) queued for dead sessions ` +
-        `(${dead.map((target) => `${target.target_session}: ${target.count}`).join(", ")}); ` +
-        "run: maestro msg discard <session> --reason <text>";
-  } catch {
-    return "mailbox: ok";
-  } finally {
-    store?.close();
-  }
-}
 
 async function doctor(): Promise<CliResult> {
   const home = homeDirectory();
@@ -462,7 +416,6 @@ async function doctor(): Promise<CliResult> {
   checks.push(await codexTrustCheck(repo));
 
   const storePath = resolveStoreLocation(repo).path;
-  checks.push(mailboxCheck(storePath, repo));
   if (!existsSync(storePath)) {
     issues.push({ component: "store", fix: "run maestro install", message: `store is missing: ${storePath}` });
   } else {

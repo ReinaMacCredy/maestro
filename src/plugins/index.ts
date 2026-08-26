@@ -19,10 +19,9 @@ import { policyResearchPlugin } from "./policy-research.ts";
 import { policyTddPlugin } from "./policy-tdd.ts";
 import { policyWitnessPlugin } from "./policy-witness.ts";
 import { recipePlugin } from "./recipe.ts";
-import { supervisorPlugin } from "./supervisor.ts";
+import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
 import { workPlugin } from "./work.ts";
-import { watchPlugin } from "./watch.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
@@ -31,7 +30,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   dispatchPlugin,
   decisionPlugin,
   coordinationPlugin,
-  supervisorPlugin,
+  attentionPlugin,
   policyDispatchPlugin,
   policyProofPlugin,
   policyBreakdownPlugin,
@@ -45,7 +44,6 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   bundlePlugin,
   importRustPlugin,
   mcpPlugin,
-  watchPlugin,
   versionPlugin,
   installPlugin,
   lifecyclePlugin,

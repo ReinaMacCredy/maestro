@@ -114,7 +114,7 @@ async function writePolicyConfig(path: string): Promise<void> {
 async function writeHookConfig(path: string, command: string): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
-  for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse"]) {
+  for (const event of ["SessionStart", "UserPromptSubmit"]) {
     const groups = config.hooks[event] ?? [];
     for (const group of groups) {
       group.hooks = group.hooks.filter(
@@ -125,7 +125,7 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
     const handler: HookHandler = {
       type: "command",
       command,
-      ...(event === "PostToolUse" ? {} : { statusMessage: "Loading maestro state" }),
+      statusMessage: "Loading maestro state",
     };
     config.hooks[event] = [
       ...groups.filter((group) => group.hooks.length > 0),
@@ -133,6 +133,19 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
         hooks: [handler],
       },
     ];
+  }
+  const retiredGroups = (config.hooks.PostToolUse ?? [])
+    .map((group) => ({
+      ...group,
+      hooks: group.hooks.filter(
+        (handler) => !managedAdapters.some((adapter) => handler.command.includes(adapter)),
+      ),
+    }))
+    .filter((group) => group.hooks.length > 0);
+  if (retiredGroups.length > 0) {
+    config.hooks.PostToolUse = retiredGroups;
+  } else {
+    delete config.hooks.PostToolUse;
   }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);

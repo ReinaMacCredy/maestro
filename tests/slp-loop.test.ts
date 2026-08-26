@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import {
   idFrom,
-  prepareInstallFixture,
   runCli,
   type Fixture,
   withFixture,
@@ -11,21 +10,6 @@ import {
 
 function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
-}
-
-async function waitFor<T>(
-  read: () => T | Promise<T>,
-  accept: (value: T) => boolean,
-  timeoutMs = 5_000,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  let value = await read();
-  while (!accept(value) && Date.now() < deadline) {
-    await Bun.sleep(50);
-    value = await read();
-  }
-  expect(accept(value)).toBe(true);
-  return value;
 }
 
 async function addWork(fixture: Fixture, title: string): Promise<string> {
@@ -54,44 +38,6 @@ function insertLegacyCard(database: Database, id: string, title: string): void {
     )
     .run(id, title, `id: ${id}\ntitle: ${title}\n`, now, now, now);
 }
-
-test("152 supervisor stop preserves live daemon state and reports failure honestly", async () => {
-  await withFixture(async (fixture) => {
-    const controller = session("stop-controller");
-    const statePath = join(fixture.repo, ".maestro", "supervisor.json");
-    expect(
-      (await runCli(fixture, ["supervisor", "start", "--interval", "1"], controller)).exitCode,
-    ).toBe(0);
-    const state = await waitFor(
-      async () => JSON.parse(await Bun.file(statePath).text()) as {
-        lastTick: string | null;
-        pid: number;
-      },
-      (value) => typeof value.lastTick === "string",
-    );
-
-    process.kill(state.pid, "SIGSTOP");
-    try {
-      const stopped = await runCli(fixture, ["supervisor", "stop"], controller);
-      expect(stopped.exitCode).not.toBe(0);
-      expect(stopped.stderr).toContain(
-        `supervisor did not exit (pid ${state.pid}); run: kill -9 ${state.pid}`,
-      );
-      expect(await Bun.file(statePath).exists()).toBe(true);
-
-      const status = await runCli(fixture, ["supervisor", "status"], controller);
-      expect(status.exitCode).toBe(0);
-      expect(status.stdout).toContain("supervisor running");
-      expect(status.stdout).toContain(`pid: ${state.pid}`);
-    } finally {
-      process.kill(state.pid, "SIGCONT");
-      const cleanup = await runCli(fixture, ["supervisor", "stop"], controller);
-      expect(cleanup.exitCode).toBe(0);
-    }
-
-    expect(await Bun.file(statePath).exists()).toBe(false);
-  });
-});
 
 test("153 repeated-failure attention skips terminal work and retains open and active work", async () => {
   await withFixture(async (fixture) => {
@@ -320,7 +266,7 @@ test("157 search still finds fresh native surfaces and a legacy card", async () 
   });
 });
 
-test("158 attention sends one packet to the most recently active of three live peers", async () => {
+test("158 attention records one packet independently of live peer order", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "unheld attention parent");
     const child = idFrom(
@@ -367,114 +313,15 @@ test("158 attention sends one packet to the most recently active of three live p
     expect((await runCli(fixture, ["attention"], session("attention-scanner"))).exitCode).toBe(0);
     const verified = loopDatabase(fixture);
     try {
-      const targets = verified
-        .query<{ target_session: string }, []>("SELECT target_session FROM messages ORDER BY id")
-        .all()
-        .map((row) => row.target_session);
-      expect(targets).toEqual(["peer-new"]);
       expect(verified.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
-    } finally {
-      verified.close();
-    }
-  });
-});
-
-test("159 msg send rejects an unknown session without writing a message", async () => {
-  await withFixture(async (fixture) => {
-    const rejected = await runCli(fixture, ["msg", "send", "unknown-target", "lost text"]);
-    expect(rejected.exitCode).not.toBe(0);
-    const error = JSON.parse(rejected.stderr) as {
-      error: { code: string; command: string; message: string };
-    };
-    expect(error.error.code).toBe("UNKNOWN_SESSION");
-    expect(error.error.command).toBe("maestro status");
-    expect(error.error.message).toContain("unknown-target");
-    expect(error.error.message).toContain("maestro status");
-
-    const database = loopDatabase(fixture);
-    try {
-      expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM messages").get()?.count)
-        .toBe(0);
-    } finally {
-      database.close();
-    }
-  });
-});
-
-test("159b msg send queues for a recorded dead session with an exact warning", async () => {
-  await withFixture(async (fixture) => {
-    expect(
-      (
-        await runCli(
-          fixture,
-          ["hook", "record", "--event", "SessionStart"],
-          { MAESTRO_SESSION_ID: "dead-mailbox", MAESTRO_SESSION_PID: "99999999" },
-        )
-      ).exitCode,
-    ).toBe(0);
-
-    const sent = await runCli(fixture, ["msg", "send", "dead-mailbox", "survives death"]);
-    expect(sent.exitCode).toBe(0);
-    expect(sent.stdout).toBe("message 1 sent to dead-mailbox\n");
-    expect(sent.stderr).toBe(
-      "[dead target] dead-mailbox is not live; 1 message(s) now queued for it\n",
-    );
-
-    const received = await runCli(
-      fixture,
-      ["msg", "read"],
-      { MAESTRO_SESSION_ID: "dead-mailbox", MAESTRO_SESSION_PID: "99999999" },
-    );
-    expect(received.exitCode).toBe(0);
-    expect(received.stdout).toContain("survives death");
-  });
-});
-
-test("159c doctor reports unread mail queued for dead sessions without changing it", async () => {
-  await withFixture(async (fixture) => {
-    const { path } = await prepareInstallFixture(fixture);
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-
-    const clean = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(clean.exitCode).toBe(0);
-    const cleanLines = clean.stdout.trimEnd().split("\n");
-    const codexLine = cleanLines.findIndex((line) => line.startsWith("codex hooks:"));
-    expect(codexLine).toBeGreaterThanOrEqual(0);
-    expect(cleanLines[codexLine + 1]).toBe("mailbox: ok");
-
-    expect(
-      (
-        await runCli(
-          fixture,
-          ["hook", "record", "--event", "SessionStart"],
-          { MAESTRO_SESSION_ID: "doctor-dead", MAESTRO_SESSION_PID: "99999999" },
-        )
-      ).exitCode,
-    ).toBe(0);
-    expect((await runCli(fixture, ["msg", "send", "doctor-dead", "queued"])).exitCode)
-      .toBe(0);
-
-    const database = loopDatabase(fixture);
-    const before = database
-      .query<{ count: number }, []>(
-        "SELECT count(*) AS count FROM messages WHERE target_session = 'doctor-dead'",
-      )
-      .get()?.count;
-    database.close();
-
-    const queued = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(queued.exitCode).toBe(0);
-    expect(queued.stdout).toContain("mailbox: 1 message(s) queued for dead sessions");
-    const verified = loopDatabase(fixture);
-    try {
       expect(
         verified
           .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM messages WHERE target_session = 'doctor-dead'",
+            "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors')",
           )
           .get()?.count,
-      ).toBe(before);
+      ).toBe(0);
     } finally {
       verified.close();
     }

@@ -40,9 +40,9 @@ test("B3.1 work is shared between the main checkout and a linked worktree", asyn
   });
 });
 
-test("B3.2 mailbox delivery and cursor state are shared across worktrees", async () => {
+test("B3.2 session and prompt records are shared across worktrees", async () => {
   await withFixture(async (fixture) => {
-    const worktree = await linkedWorktree(fixture, "linked-mailbox");
+    const worktree = await linkedWorktree(fixture, "linked-session");
     expect(
       (
         await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
@@ -50,16 +50,16 @@ test("B3.2 mailbox delivery and cursor state are shared across worktrees", async
         })
       ).exitCode,
     ).toBe(0);
-    expect(
-      (
-        await runCliAt(fixture, worktree, ["msg", "send", "main-target", "cross-worktree"])
-      ).exitCode,
-    ).toBe(0);
-
-    const first = await runCli(fixture, ["msg", "read"], sessionEnvironment("main-target"));
-    const second = await runCli(fixture, ["msg", "read"], sessionEnvironment("main-target"));
-    expect(first.stdout).toContain("cross-worktree");
-    expect(second.stdout).not.toContain("cross-worktree");
+    const submitted = await runCliAt(
+      fixture,
+      worktree,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      sessionEnvironment("main-target"),
+      JSON.stringify({ prompt: "cross-worktree prompt" }),
+    );
+    const listed = await runCli(fixture, ["prompt", "list", "--session", "main-target"]);
+    expect(submitted.exitCode).toBe(0);
+    expect(listed.stdout).toContain("cross-worktree prompt");
   });
 });
 

@@ -19,7 +19,7 @@ locked and the user has approved the resulting scope.
 
 ### Perceive
 
-Read the current work, decisions, messages, and source evidence. Identify one
+Read the current work, decisions, handbacks, and source evidence. Identify one
 unsettled fork or contradiction. Stop if the requested authority is unclear.
 
 ### Choose

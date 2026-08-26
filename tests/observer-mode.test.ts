@@ -30,11 +30,6 @@ test("208 sessionless work start refuses a lease that cannot survive one read", 
           "SELECT held_by FROM work WHERE id = ?",
         ).get(work)?.held_by,
       ).toBeNull();
-      expect(
-        database.query<{ count: number }, []>(
-          "SELECT count(*) AS count FROM sessions WHERE id = 'supervisor'",
-        ).get()?.count,
-      ).toBe(0);
     } finally {
       database.close();
     }
@@ -62,8 +57,6 @@ test("209 every session-attributed write door shares the SESSION_REQUIRED gate",
       ["dispatch", "cancel"],
       ["dispatch", "unseal"],
       ["handback", "file"],
-      ["msg", "send"],
-      ["msg", "read"],
       ["hook", "record"],
       ["plugin", "enable"],
       ["plugin", "disable"],

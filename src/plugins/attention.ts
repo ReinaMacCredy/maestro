@@ -1,12 +1,7 @@
-import { closeSync, openSync } from "node:fs";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
 import type { DispatchService } from "./dispatch.ts";
-import { readInstallStamp } from "./install-stamp.ts";
-import { supervisorSessionId } from "./coordination.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -31,7 +26,6 @@ interface AttentionRow {
   packet: string;
   subject_session: string | null;
   subject_work: string | null;
-  target_session: string | null;
 }
 
 interface EventRow {
@@ -44,10 +38,6 @@ interface FailedNoteRow {
   id: number;
 }
 
-interface Mailbox {
-  sendAsSupervisor(targetSession: string, text: string): unknown;
-}
-
 interface Detection {
   entityId: string;
   entityType: "decision" | "dispatch" | "work";
@@ -56,7 +46,6 @@ interface Detection {
   packet: string;
   subjectSession: string | null;
   subjectWork: string | null;
-  targets: string[];
 }
 
 export interface AttentionFinding {
@@ -67,7 +56,6 @@ export interface AttentionFinding {
   raisedAt: string;
   subjectSession: string | null;
   subjectWork: string | null;
-  targets: string[];
 }
 
 export interface AttentionOptions {
@@ -78,24 +66,6 @@ export interface AttentionOptions {
 
 export interface AttentionService {
   scan(options: AttentionOptions): AttentionFinding[];
-}
-
-interface SupervisorState {
-  decisionStale: number;
-  dispatchStale: number;
-  interval: number;
-  lastRaised: number;
-  lastTick: string | null;
-  notify: boolean;
-  pid: number;
-  runtimeCommit: string;
-  stale: number;
-  startedAt: string;
-}
-
-interface SupervisorPaths {
-  log: string;
-  state: string;
 }
 
 function numericOption(
@@ -163,30 +133,9 @@ function liveSessionMap(sessions: SessionRecord[]): Map<string, SessionRecord> {
   return new Map(sessions.filter((session) => session.live).map((session) => [session.id, session]));
 }
 
-function ordinaryTargets(
-  work: AttentionWorkRow,
-  workById: Map<string, AttentionWorkRow>,
-  liveSessions: Map<string, SessionRecord>,
-): string[] {
-  const subject = work.heldBy;
-  const parent = work.parentId ? workById.get(work.parentId) : null;
-  if (parent?.heldBy && parent.heldBy !== subject && liveSessions.has(parent.heldBy)) {
-    return [parent.heldBy];
-  }
-  const peer = [...liveSessions.values()]
-    .filter((session) => session.id !== subject)
-    .sort((left, right) => {
-      const recency = Date.parse(right.lastSeen) - Date.parse(left.lastSeen);
-      return recency !== 0 ? recency : left.id.localeCompare(right.id);
-    })[0];
-  if (peer) return [peer.id];
-  return subject && liveSessions.has(subject) ? [subject] : [];
-}
-
 function stalledDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
-  workById: Map<string, AttentionWorkRow>,
   liveSessions: Map<string, SessionRecord>,
   now: number,
   staleMinutes: number,
@@ -210,12 +159,10 @@ function stalledDetections(
         evidence: `work.start #${startId}, sessions.last_seen ${holder.lastSeen}`,
         unknown: "whether the session is thinking, blocked on a tool, or gone",
         question: "reclaim, re-scope, or wait?",
-        // Observe and ask: the holder answers faster than the row explains.
-        smallestAction: `maestro msg send ${work.heldBy} "still on ${work.id}?"`,
+        smallestAction: `maestro work show ${work.id}`,
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
-      targets: ordinaryTargets(work, workById, liveSessions),
     }];
   });
 }
@@ -223,8 +170,6 @@ function stalledDetections(
 function repeatedFailureDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
-  workById: Map<string, AttentionWorkRow>,
-  liveSessions: Map<string, SessionRecord>,
 ): Detection[] {
   return works.flatMap((work): Detection[] => {
     if (work.state === "done" || work.state === "cancelled") return [];
@@ -261,7 +206,6 @@ function repeatedFailureDetections(
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
-      targets: ordinaryTargets(work, workById, liveSessions),
     }];
   });
 }
@@ -269,7 +213,6 @@ function repeatedFailureDetections(
 function decisionStaleDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
-  liveSessions: Map<string, SessionRecord>,
   now: number,
   decisionStaleHours: number,
 ): Detection[] {
@@ -303,28 +246,12 @@ function decisionStaleDetections(
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
-      targets: ordinaryTargets(work, workById, liveSessions),
     }];
   });
 }
 
-// work.start prints an [overlap] banner to the session that starts second, so
-// only the earlier holder is missing the fact that a sibling lane opened.
-function earlierHolder(
-  context: PluginContext,
-  first: AttentionWorkRow,
-  second: AttentionWorkRow,
-): string {
-  const firstStart = latestStart(context, first.id)?.id ?? 0;
-  const secondStart = latestStart(context, second.id)?.id ?? 0;
-  const earlier = firstStart <= secondStart ? first : second;
-  return earlier.heldBy as string;
-}
-
 function scopeCollisionDetections(
-  context: PluginContext,
   works: AttentionWorkRow[],
-  workById: Map<string, AttentionWorkRow>,
   liveSessions: Map<string, SessionRecord>,
 ): Detection[] {
   const active = works.filter(
@@ -342,11 +269,6 @@ function scopeCollisionDetections(
       const first = pair[0] as AttentionWorkRow;
       const second = pair[1] as AttentionWorkRow;
       const holders = [first.heldBy as string, second.heldBy as string].sort();
-      const parent = first.parentId ? workById.get(first.parentId) : null;
-      const targets =
-        parent?.heldBy && !holders.includes(parent.heldBy) && liveSessions.has(parent.heldBy)
-          ? [parent.heldBy]
-          : [earlierHolder(context, first, second)];
       detections.push({
         entityId: first.id,
         entityType: "work",
@@ -361,7 +283,6 @@ function scopeCollisionDetections(
         }),
         subjectSession: holders.join(","),
         subjectWork: first.id,
-        targets,
       });
     }
   }
@@ -371,7 +292,6 @@ function scopeCollisionDetections(
 function dispatchUnreturnedDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
-  liveSessions: Map<string, SessionRecord>,
   now: number,
   dispatchStaleHours: number,
 ): Detection[] {
@@ -382,7 +302,6 @@ function dispatchUnreturnedDetections(
     const work = workById.get(record.workId);
     if (!work || work.state === "done" || work.state === "cancelled") return [];
     const subjectSession = record.heldBy ?? record.targetSession;
-    const routingWork = { ...work, heldBy: subjectSession };
     return [{
       entityId: record.id,
       entityType: "dispatch",
@@ -395,13 +314,10 @@ function dispatchUnreturnedDetections(
         evidence: `dispatches.created_at ${record.createdAt}; no handbacks row`,
         unknown: "whether the lane is working, blocked, or abandoned",
         question: "wait, contact the lane, cancel it, or re-scope?",
-        smallestAction: subjectSession
-          ? `maestro msg send ${subjectSession} "still on ${record.id}?"`
-          : `maestro dispatch show ${record.id}`,
+        smallestAction: `maestro dispatch show ${record.id}`,
       }),
       subjectSession,
       subjectWork: record.workId,
-      targets: ordinaryTargets(routingWork, workById, liveSessions),
     }];
   });
 }
@@ -415,24 +331,21 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
     ...stalledDetections(
       context,
       works,
-      workById,
       liveSessions,
       now,
       options.staleMinutes,
     ),
-    ...repeatedFailureDetections(context, works, workById, liveSessions),
+    ...repeatedFailureDetections(context, works),
     ...decisionStaleDetections(
       context,
       workById,
-      liveSessions,
       now,
       options.decisionStaleHours,
     ),
-    ...scopeCollisionDetections(context, works, workById, liveSessions),
+    ...scopeCollisionDetections(works, liveSessions),
     ...dispatchUnreturnedDetections(
       context,
       workById,
-      liveSessions,
       now,
       options.dispatchStaleHours,
     ),
@@ -449,7 +362,6 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       raisedAt: "not recorded (read-only)",
       subjectSession: detection.subjectSession,
       subjectWork: detection.subjectWork,
-      targets: detection.targets,
     };
   }
   const existing = context.store.database
@@ -464,7 +376,6 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       raisedAt: existing.created_at,
       subjectSession: detection.subjectSession,
       subjectWork: detection.subjectWork,
-      targets: detection.targets,
     };
   }
 
@@ -474,15 +385,14 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
     const result = context.store.database
       .query(
         `INSERT OR IGNORE INTO attention
-          (kind, fingerprint, subject_work, subject_session, target_session, packet, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (kind, fingerprint, subject_work, subject_session, packet, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         detection.kind,
         detection.fingerprint,
         detection.subjectWork,
         detection.subjectSession,
-        detection.targets.join(",") || null,
         detection.packet,
         createdAt,
       );
@@ -492,15 +402,12 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       type: "attention.raise",
       entityType: detection.entityType,
       entityId: detection.entityId,
-      sessionId: supervisorSessionId,
+      sessionId: context.sessions.current().id,
       payload: {
         fingerprint: detection.fingerprint,
         kind: detection.kind,
-        targets: detection.targets,
       },
     });
-    const mailbox = context.mailbox as Mailbox;
-    for (const target of detection.targets) mailbox.sendAsSupervisor(target, detection.packet);
   });
   transaction();
   if (!inserted) {
@@ -515,7 +422,6 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       raisedAt: raced.created_at,
       subjectSession: detection.subjectSession,
       subjectWork: detection.subjectWork,
-      targets: detection.targets,
     };
   }
   return {
@@ -526,7 +432,6 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
     raisedAt: createdAt,
     subjectSession: detection.subjectSession,
     subjectWork: detection.subjectWork,
-    targets: detection.targets,
   };
 }
 
@@ -560,200 +465,9 @@ const attentionFlags = {
   },
 } as const;
 
-const supervisorFlags = {
-  "--interval": { description: "Scan interval in seconds (default 60).", value: true },
-  "--stale": { description: "Stalled lease threshold in minutes (default 30).", value: true },
-  "--decision-stale": {
-    description: "Draft decision threshold in hours (default 24).",
-    value: true,
-  },
-  "--dispatch-stale": {
-    description: "Unreturned dispatch threshold in hours (default 2).",
-    value: true,
-  },
-  "--notify": { description: "Show one macOS notification per newly raised packet." },
-} as const;
-
-function supervisorPaths(context: PluginContext): SupervisorPaths {
-  const directory = dirname(context.store.path);
-  return {
-    log: join(directory, "supervisor.log"),
-    state: join(directory, "supervisor.json"),
-  };
-}
-
-async function readSupervisorState(path: string): Promise<SupervisorState | null> {
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw error;
-  }
-  try {
-    const state = JSON.parse(text) as Partial<SupervisorState>;
-    if (
-      typeof state.pid !== "number" ||
-      typeof state.startedAt !== "string" ||
-      typeof state.interval !== "number" ||
-      typeof state.stale !== "number" ||
-      typeof state.decisionStale !== "number" ||
-      !(state.dispatchStale === undefined || typeof state.dispatchStale === "number") ||
-      typeof state.notify !== "boolean" ||
-      typeof state.runtimeCommit !== "string" ||
-      !(state.lastTick === null || typeof state.lastTick === "string") ||
-      typeof state.lastRaised !== "number"
-    ) {
-      throw new Error("missing required fields");
-    }
-    return { ...state, dispatchStale: state.dispatchStale ?? 2 } as SupervisorState;
-  } catch (error) {
-    throw new CliError(
-      "INVALID_SUPERVISOR_STATE",
-      `invalid supervisor pid file ${path}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-async function writeSupervisorState(path: string, state: SupervisorState): Promise<void> {
-  const staged = `${path}.${process.pid}.tmp`;
-  await writeFile(staged, `${JSON.stringify(state)}\n`);
-  await rename(staged, path);
-}
-
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
-async function runtimeCommit(): Promise<string> {
-  const root = resolve(import.meta.dir, "..", "..");
-  const stamp = await readInstallStamp(root);
-  return stamp.status === "valid" ? stamp.stamp.commit : "source";
-}
-
-function statusText(state: SupervisorState | null, currentCommit: string): string {
-  if (!state) return "supervisor stopped";
-  const status = pidAlive(state.pid) ? "running" : "stale";
-  const lines = [
-    `supervisor ${status}`,
-    `pid: ${state.pid}`,
-    `started: ${state.startedAt}`,
-    `interval: ${state.interval}s`,
-    `dispatch stale: ${state.dispatchStale}h`,
-    `last tick: ${state.lastTick ?? "never"}`,
-    `raised: ${state.lastRaised}`,
-    `daemon commit: ${state.runtimeCommit}`,
-  ];
-  if (state.runtimeCommit !== currentCommit) {
-    lines.push(
-      `runtime drift: daemon ${state.runtimeCommit} · runtime ${currentCommit}; restart to pick up`,
-    );
-  }
-  if (status === "stale") lines.push("run: maestro supervisor stop");
-  return lines.join("\n");
-}
-
-function notifyFindings(findings: AttentionFinding[]): void {
-  for (const finding of findings.filter((candidate) => candidate.raised)) {
-    if (process.platform !== "darwin") {
-      process.stdout.write(`notification skipped: ${finding.kind} ${finding.subjectWork ?? ""}\n`);
-      continue;
-    }
-    const title = `maestro ${finding.kind}`;
-    const body = finding.packet.split("\n")[0] ?? finding.kind;
-    Bun.spawnSync([
-      "osascript",
-      "-e",
-      `display notification ${JSON.stringify(body)} with title ${JSON.stringify(title)}`,
-    ]);
-  }
-}
-
-function waitForTickOrStop(
-  seconds: number,
-  installWake: (wake: (() => void) | null) => void,
-): Promise<void> {
-  return new Promise((resolveTick) => {
-    const timer = setTimeout(() => {
-      installWake(null);
-      resolveTick();
-    }, seconds * 1_000);
-    installWake(() => {
-      clearTimeout(timer);
-      installWake(null);
-      resolveTick();
-    });
-  });
-}
-
-async function runSupervisorLoop(
-  context: PluginContext,
-  service: AttentionService,
-  options: {
-    decisionStale: number;
-    dispatchStale: number;
-    interval: number;
-    notify: boolean;
-    stale: number;
-  },
-): Promise<void> {
-  const paths = supervisorPaths(context);
-  let stopping = false;
-  let wake: (() => void) | null = null;
-  const onSignal = () => {
-    stopping = true;
-    wake?.();
-  };
-  process.on("SIGTERM", onSignal);
-  try {
-    const commit = await runtimeCommit();
-    const existing = await readSupervisorState(paths.state);
-    let state: SupervisorState =
-      existing?.pid === process.pid
-        ? existing
-        : {
-            pid: process.pid,
-            startedAt: new Date().toISOString(),
-            interval: options.interval,
-            stale: options.stale,
-            decisionStale: options.decisionStale,
-            dispatchStale: options.dispatchStale,
-            notify: options.notify,
-            runtimeCommit: commit,
-            lastTick: null,
-            lastRaised: 0,
-          };
-    do {
-      const findings = service.scan({
-        staleMinutes: options.stale,
-        decisionStaleHours: options.decisionStale,
-        dispatchStaleHours: options.dispatchStale,
-      });
-      if (options.notify) notifyFindings(findings);
-      state = {
-        ...state,
-        lastTick: new Date().toISOString(),
-        lastRaised: findings.filter((finding) => finding.raised).length,
-      };
-      await writeSupervisorState(paths.state, state);
-      if (stopping) break;
-      await waitForTickOrStop(options.interval, (nextWake) => {
-        wake = nextWake;
-      });
-    } while (!stopping);
-  } finally {
-    process.off("SIGTERM", onSignal);
-  }
-}
-
-export const supervisorPlugin: BuiltInPlugin = {
-  name: "supervisor",
-  inject: ["work", "dispatch", "mailbox"],
+export const attentionPlugin: BuiltInPlugin = {
+  name: "attention",
+  inject: ["work", "dispatch"],
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS attention (
@@ -762,7 +476,6 @@ export const supervisorPlugin: BuiltInPlugin = {
         fingerprint TEXT NOT NULL UNIQUE,
         subject_work TEXT,
         subject_session TEXT,
-        target_session TEXT,
         packet TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
@@ -795,146 +508,6 @@ export const supervisorPlugin: BuiltInPlugin = {
         {
           description: "Scan store state and emit one compact JSON success envelope.",
           flags: attentionFlags,
-        },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "supervisor start",
-        async (invocation): Promise<CliResult> => {
-          const paths = supervisorPaths(context);
-          const currentCommit = await runtimeCommit();
-          const current = await readSupervisorState(paths.state);
-          if (current && pidAlive(current.pid)) {
-            throw new CliError("SUPERVISOR_RUNNING", statusText(current, currentCommit), {
-              pid: current.pid,
-            });
-          }
-          const interval = numericOption(invocation, "interval", 60);
-          const stale = numericOption(invocation, "stale", 30);
-          const decisionStale = numericOption(invocation, "decision-stale", 24);
-          const dispatchStale = numericOption(invocation, "dispatch-stale", 2);
-          const notify = invocation.options.notify === true;
-          const cliPath = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
-          const command = [
-            process.execPath,
-            cliPath,
-            "supervisor",
-            "run",
-            "--interval",
-            String(interval),
-            "--stale",
-            String(stale),
-            "--decision-stale",
-            String(decisionStale),
-            "--dispatch-stale",
-            String(dispatchStale),
-            ...(notify ? ["--notify"] : []),
-          ];
-          const descriptor = openSync(paths.log, "a");
-          let child: ReturnType<typeof Bun.spawn> | null = null;
-          try {
-            child = Bun.spawn(command, {
-              cwd: process.cwd(),
-              detached: true,
-              env: { ...process.env, MAESTRO_SESSION_NONE: "1" },
-              stdin: "ignore",
-              stdout: descriptor,
-              stderr: descriptor,
-            });
-            child.unref();
-          } finally {
-            closeSync(descriptor);
-          }
-          const state: SupervisorState = {
-            pid: child.pid,
-            startedAt: new Date().toISOString(),
-            interval,
-            stale,
-            decisionStale,
-            dispatchStale,
-            notify,
-            runtimeCommit: currentCommit,
-            lastTick: null,
-            lastRaised: 0,
-          };
-          try {
-            await writeSupervisorState(paths.state, state);
-          } catch (error) {
-            child.kill("SIGTERM");
-            throw error;
-          }
-          return {
-            data: { state },
-            text: `supervisor started\npid: ${state.pid}\ninterval: ${state.interval}s`,
-          };
-        },
-        {
-          description: "Start one detached attention loop; never started automatically.",
-          flags: supervisorFlags,
-          rootDescription: "Start, stop, and inspect the opt-in attention daemon.",
-        },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "supervisor status",
-        async (): Promise<CliResult> => {
-          const state = await readSupervisorState(supervisorPaths(context).state);
-          const currentCommit = await runtimeCommit();
-          return { data: { state }, text: statusText(state, currentCommit) };
-        },
-        { description: "Report stopped, running, or stale without starting anything." },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "supervisor stop",
-        async (): Promise<CliResult> => {
-          const paths = supervisorPaths(context);
-          const state = await readSupervisorState(paths.state);
-          if (!state) return { data: { state: "stopped" }, text: "supervisor stopped" };
-          if (pidAlive(state.pid)) {
-            try {
-              process.kill(state.pid, "SIGTERM");
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-            }
-            const deadline = Date.now() + 2_000;
-            while (pidAlive(state.pid) && Date.now() < deadline) await Bun.sleep(50);
-            if (pidAlive(state.pid)) {
-              throw new CliError(
-                "SUPERVISOR_STOP_TIMEOUT",
-                `supervisor did not exit (pid ${state.pid}); run: kill -9 ${state.pid}`,
-                { pid: state.pid },
-              );
-            }
-          }
-          await rm(paths.state, { force: true });
-          return {
-            data: { pid: state.pid, state: "stopped" },
-            text: `supervisor stopped\npid: ${state.pid}`,
-          };
-        },
-        { description: "Stop the recorded daemon and remove its pid file." },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "supervisor run",
-        async (invocation): Promise<CliResult> => {
-          await runSupervisorLoop(context, service, {
-            interval: numericOption(invocation, "interval", 60),
-            stale: numericOption(invocation, "stale", 30),
-            decisionStale: numericOption(invocation, "decision-stale", 24),
-            dispatchStale: numericOption(invocation, "dispatch-stale", 2),
-            notify: invocation.options.notify === true,
-          });
-          return { data: { state: "stopped" }, text: "supervisor run stopped" };
-        },
-        {
-          description: "Internal in-process attention loop used by supervisor start.",
-          flags: supervisorFlags,
         },
       ),
     );

@@ -8,8 +8,9 @@ expand, stop and return to the design recipe.
 
 ### Perceive
 
-Run `maestro work show <id>`, inspect `maestro ready`, read relevant messages, source, tests,
-and repository instructions. Name the task-owned dirty paths before editing.
+Run `maestro work show <id>`, inspect `maestro ready`, read relevant decisions,
+dispatches, handbacks, source, tests, and repository instructions. Name the
+task-owned dirty paths before editing.
 
 ### Choose
 

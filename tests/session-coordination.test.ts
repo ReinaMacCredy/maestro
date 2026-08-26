@@ -16,7 +16,7 @@ test("13 hook record persists a session event reflected by status", async () => 
   });
 });
 
-test("14 SessionStart brief contains held work, enabled policies, and pending message count", async () => {
+test("14 SessionStart brief contains held work and enabled policies without mailbox state", async () => {
   await withFixture(async (fixture) => {
     const id = idFrom(await runCli(fixture, ["work", "add", "held item", "--kind", "idea"]));
     expect(
@@ -27,8 +27,6 @@ test("14 SessionStart brief contains held work, enabled policies, and pending me
         })
       ).exitCode,
     ).toBe(0);
-    expect((await runCli(fixture, ["msg", "send", "brief-session", "check this"])).exitCode).toBe(0);
-
     const brief = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
       MAESTRO_SESSION_ID: "brief-session",
       MAESTRO_SESSION_PID: String(process.pid),
@@ -38,7 +36,7 @@ test("14 SessionStart brief contains held work, enabled policies, and pending me
     expect(brief.stdout).toContain(id);
     expect(brief.stdout).toContain("policy-proof");
     expect(brief.stdout).toContain("policy-breakdown");
-    expect(brief.stdout).toMatch(/1 pending message/);
+    expect(brief.stdout).not.toContain("pending message");
   });
 });
 
@@ -91,31 +89,5 @@ test("14c UserPromptSubmit records the prompt into a listable, searchable corpus
     expect(found.exitCode).toBe(0);
     expect(found.stdout).toContain("(prompt");
     expect(found.stdout).toContain("flaky login retry");
-  });
-});
-
-test("15 message reads advance a per-session cursor and return each message once", async () => {
-  await withFixture(async (fixture) => {
-    expect(
-      (
-        await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
-          MAESTRO_SESSION_ID: "target-session",
-          MAESTRO_SESSION_PID: String(process.pid),
-        })
-      ).exitCode,
-    ).toBe(0);
-    expect((await runCli(fixture, ["msg", "send", "target-session", "handoff context"])).exitCode).toBe(0);
-
-    const first = await runCli(fixture, ["msg", "read"], {
-      MAESTRO_SESSION_ID: "target-session",
-    });
-    const second = await runCli(fixture, ["msg", "read"], {
-      MAESTRO_SESSION_ID: "target-session",
-    });
-
-    expect(first.exitCode).toBe(0);
-    expect(first.stdout).toContain("handoff context");
-    expect(second.exitCode).toBe(0);
-    expect(second.stdout).not.toContain("handoff context");
   });
 });

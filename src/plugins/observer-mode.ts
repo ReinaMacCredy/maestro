@@ -19,10 +19,8 @@ const observerCommands = new Set([
   "recipe list",
   "recipe show",
   "status",
-  "supervisor status",
   "trace",
   "version",
-  "watch",
   "work list",
   "work show",
 ]);
@@ -46,9 +44,8 @@ const observerPlugins = new Set([
   "policy-tdd",
   "policy-witness",
   "recipe",
-  "supervisor",
+  "attention",
   "version",
-  "watch",
   "work",
 ]);
 

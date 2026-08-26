@@ -2,28 +2,10 @@ import { resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import { systemAuthorSession, type Harness, type SessionRecord } from "../kernel/sessions.ts";
+import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { registerSessionCommand } from "./session-required.ts";
-
-export const supervisorSessionId = "supervisor";
-
-interface MessageRow {
-  id: number;
-  target_session: string;
-  sender_session: string;
-  text: string;
-  created_at: string;
-}
-
-export interface MessageRecord {
-  id: number;
-  targetSession: string;
-  senderSession: string;
-  text: string;
-  createdAt: string;
-}
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -79,132 +61,11 @@ export class BriefService {
   }
 }
 
-class MailboxService {
-  constructor(private readonly context: PluginContext) {}
-
-  pending(sessionId: string): number {
-    const cursor = this.cursor(sessionId);
-    return (
-      this.context.store.database
-        .query<{ count: number }, [string, number]>(
-          "SELECT count(*) AS count FROM messages WHERE target_session = ? AND id > ?",
-        )
-        .get(sessionId, cursor)?.count ?? 0
-    );
-  }
-
-  read(sessionId: string): MessageRecord[] {
-    const cursor = this.cursor(sessionId);
-    const messages = this.context.store.database
-      .query<MessageRow, [string, number]>(
-        "SELECT * FROM messages WHERE target_session = ? AND id > ? ORDER BY id",
-      )
-      .all(sessionId, cursor)
-      .map((row) => this.fromRow(row));
-    const last = messages.at(-1)?.id;
-    if (last !== undefined) {
-      this.context.store.database
-        .query(
-          `INSERT INTO message_cursors (session_id, last_message_id)
-           VALUES (?, ?)
-           ON CONFLICT(session_id) DO UPDATE SET last_message_id = excluded.last_message_id`,
-        )
-        .run(sessionId, last);
-    }
-    return messages;
-  }
-
-  discard(sessionId: string): { count: number; throughMessageId: number } {
-    const transaction = this.context.store.database.transaction(() => {
-      const cursor = this.cursor(sessionId);
-      const queued = this.context.store.database
-        .query<{ count: number; last_id: number | null }, [string, number]>(
-          `SELECT count(*) AS count, max(id) AS last_id
-           FROM messages WHERE target_session = ? AND id > ?`,
-        )
-        .get(sessionId, cursor) ?? { count: 0, last_id: null };
-      const throughMessageId = queued.last_id ?? cursor;
-      if (queued.count > 0) {
-        this.context.store.database
-          .query(
-            `INSERT INTO message_cursors (session_id, last_message_id)
-             VALUES (?, ?)
-             ON CONFLICT(session_id) DO UPDATE SET last_message_id = excluded.last_message_id`,
-          )
-          .run(sessionId, throughMessageId);
-      }
-      return { count: queued.count, throughMessageId };
-    });
-    return transaction.immediate();
-  }
-
-  send(targetSession: string, text: string): MessageRecord {
-    return this.sendFrom(this.context.sessions.current().id, targetSession, text);
-  }
-
-  sendAsSupervisor(targetSession: string, text: string): MessageRecord {
-    return this.sendFrom(supervisorSessionId, targetSession, text);
-  }
-
-  private sendFrom(senderSession: string, targetSession: string, text: string): MessageRecord {
-    const createdAt = new Date().toISOString();
-    this.context.store.database
-      .query(
-        `INSERT INTO messages (target_session, sender_session, text, created_at)
-         VALUES (?, ?, ?, ?)`,
-      )
-      .run(targetSession, senderSession, text, createdAt);
-    const id = Number(
-      this.context.store.database
-        .query<{ id: number }, []>("SELECT last_insert_rowid() AS id")
-        .get()?.id,
-    );
-    return { id, targetSession, senderSession, text, createdAt };
-  }
-
-  private cursor(sessionId: string): number {
-    return (
-      this.context.store.database
-        .query<{ last_message_id: number }, [string]>(
-          "SELECT last_message_id FROM message_cursors WHERE session_id = ?",
-        )
-        .get(sessionId)?.last_message_id ?? 0
-    );
-  }
-
-  private fromRow(row: MessageRow): MessageRecord {
-    return {
-      id: row.id,
-      targetSession: row.target_session,
-      senderSession: row.sender_session,
-      text: row.text,
-      createdAt: row.created_at,
-    };
-  }
-}
-
-function required(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
-}
-
 function harnessOption(invocation: CliInvocation): Harness | null {
   const value = invocation.options.harness;
   if (value === undefined) return null;
   if (value === "claude" || value === "codex") return value;
   throw new CliError("INVALID_HARNESS", `invalid harness: ${String(value)}`);
-}
-
-function formatMessages(messages: MessageRecord[]): string {
-  return messages
-    .map((message) => {
-      const sender = message.senderSession === systemAuthorSession
-        ? `${message.senderSession} (system)`
-        : message.senderSession;
-      return `message ${message.id} from ${sender}: ${message.text}`;
-    })
-    .join("\n");
 }
 
 function livePeers(
@@ -235,17 +96,8 @@ export const coordinationPlugin: BuiltInPlugin = {
   inject: ["work"],
   apply(context) {
     context.store.migrate(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        target_session TEXT NOT NULL,
-        sender_session TEXT NOT NULL,
-        text TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS message_cursors (
-        session_id TEXT PRIMARY KEY,
-        last_message_id INTEGER NOT NULL
-      );
+      DROP TABLE IF EXISTS message_cursors;
+      DROP TABLE IF EXISTS messages;
       CREATE TABLE IF NOT EXISTS prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL,
@@ -253,10 +105,8 @@ export const coordinationPlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL
       );
     `);
-    const mailbox = new MailboxService(context);
     const brief = new BriefService();
     const work = context.work as WorkService;
-    context.effect(() => context.provide("mailbox", mailbox));
     context.effect(() => context.provide("brief", brief));
 
     context.effect(() =>
@@ -293,15 +143,6 @@ export const coordinationPlugin: BuiltInPlugin = {
         return `enabled policies: ${policies.join(", ") || "none"}`;
       }),
     );
-    context.effect(() =>
-      brief.register((sessionId) => {
-        const pending = mailbox.pending(sessionId);
-        const messages = mailbox.read(sessionId);
-        const count = `${pending} pending message${pending === 1 ? "" : "s"}`;
-        const delivered = formatMessages(messages);
-        return delivered ? `${count}\n${delivered}` : count;
-      }),
-    );
     context.effect(() => brief.register(() => "next: maestro ready"));
     context.effect(() =>
       brief.register(() =>
@@ -329,147 +170,6 @@ export const coordinationPlugin: BuiltInPlugin = {
         }
         return next();
       }),
-    );
-
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "msg discard",
-        (invocation): CliResult => {
-          const target = required(invocation, 0, "target session");
-          const reason = invocation.options.reason;
-          if (typeof reason !== "string" || reason.trim() === "") {
-            throw new CliError(
-              "MISSING_ARGUMENT",
-              "msg discard requires --reason <text>",
-            );
-          }
-          const targetSession = context.sessions.get(target);
-          if (!targetSession) {
-            const command = "maestro status";
-            throw new CliError(
-              "UNKNOWN_SESSION",
-              `unknown session: ${target}; run: ${command}`,
-              { command, target },
-            );
-          }
-          if (targetSession.live) {
-            throw new CliError(
-              "SESSION_LIVE",
-              `${target} is live; read its mail instead of discarding it`,
-              { target },
-            );
-          }
-          const discarded = mailbox.discard(target);
-          const sessionId = context.sessions.current().id;
-          context.log.append({
-            type: "msg.discard",
-            entityType: "session",
-            entityId: target,
-            sessionId,
-            payload: { ...discarded, reason },
-          });
-          return {
-            data: { target, ...discarded, reason },
-            text:
-              `discarded ${discarded.count} message(s) for ${target}\n` +
-              `reason: ${reason}`,
-          };
-        },
-        {
-          description: "Discard queued mail for one dead session with a recorded reason.",
-          flags: {
-            "--reason": { description: "Record why the queued mail is discarded.", value: true },
-          },
-          positionals: [{ name: "session", required: true }],
-          rootDescription: "Exchange repository-backed messages between sessions.",
-        },
-      ),
-    );
-
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "msg send",
-        (invocation): CliResult => {
-          const target = required(invocation, 0, "target session");
-          const text = required(invocation, 1, "message text");
-          if (target === systemAuthorSession) {
-            throw new CliError(
-              "SYSTEM_AUTHOR",
-              `${systemAuthorSession} authors attention packets and does not receive mail`,
-              { target },
-            );
-          }
-          const targetSession = context.sessions.get(target);
-          if (!targetSession) {
-            const command = "maestro status";
-            throw new CliError(
-              "UNKNOWN_SESSION",
-              `unknown session: ${target}; run: ${command}`,
-              { command, target },
-            );
-          }
-          const message = mailbox.send(target, text);
-          const sender = context.sessions.get(message.senderSession);
-          const nativeDelivery =
-            sender?.harness === "claude" &&
-            targetSession.harness === "claude" &&
-            targetSession.live;
-          context.log.append({
-            type: "msg.send",
-            entityType: "message",
-            entityId: String(message.id),
-            sessionId: message.senderSession,
-            payload: message,
-          });
-          const deliveryTip = nativeDelivery
-            ? `[native-delivery] also use native SendMessage for session ${target}`
-            : "";
-          if (!targetSession.live) {
-            process.stderr.write(
-              `[dead target] ${target} is not live; ${mailbox.pending(target)} message(s) now queued for it\n`,
-            );
-          }
-          return {
-            data: { message, nativeDelivery },
-            text: [`message ${message.id} sent to ${target}`, deliveryTip].filter(Boolean).join("\n"),
-          };
-        },
-        {
-          description: "Send a message to a recorded session; dead targets keep it queued.",
-          positionals: [
-            { name: "session", required: true },
-            { name: "message", required: true },
-          ],
-          rootDescription: "Exchange repository-backed messages between sessions.",
-        },
-      ),
-    );
-
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "msg read",
-        (): CliResult => {
-          const sessionId = context.sessions.current().id;
-          const messages = mailbox.read(sessionId);
-          if (messages.length > 0) {
-            context.log.append({
-              type: "msg.read",
-              entityType: "session",
-              entityId: sessionId,
-              sessionId,
-              payload: { messageIds: messages.map((message) => message.id) },
-            });
-          }
-          return {
-            data: { messages },
-            text: messages.length > 0 ? formatMessages(messages) : "no new messages",
-          };
-        },
-        { description: "Read new messages for the current session." },
-      ),
     );
 
     context.effect(() =>
@@ -520,22 +220,6 @@ export const coordinationPlugin: BuiltInPlugin = {
           }
           const harness = harnessOption(invocation);
           const session = context.sessions.record(event, harness ?? undefined);
-          if (event === "PostToolUse") {
-            const messages = mailbox.read(session.id);
-            if (messages.length === 0) {
-              return { data: { session, messages }, text: "" };
-            }
-            const additionalContext = formatMessages(messages);
-            return {
-              data: { session, messages },
-              text: JSON.stringify({
-                hookSpecificOutput: {
-                  hookEventName: "PostToolUse",
-                  additionalContext,
-                },
-              }),
-            };
-          }
           context.log.append({
             type: "hook.record",
             entityType: "session",
@@ -573,7 +257,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             "--event": { description: "Record this harness event name.", value: true },
             "--harness": { description: "Record the originating harness.", value: true },
           },
-          rootDescription: "Record harness events for session delivery.",
+          rootDescription: "Record harness events and print the current brief.",
         },
       ),
     );
@@ -581,8 +265,10 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "status",
-        async (): Promise<CliResult> => {
-          const sessions = context.sessions.list();
+        async (invocation): Promise<CliResult> => {
+          const sessions = context.sessions
+            .list()
+            .filter((session) => invocation.options.live !== true || session.live);
           const items = work.list();
           const peers = livePeers(sessions, items, context.sessions.current().id);
           const advisory = await driftAdvisory(
@@ -609,7 +295,10 @@ export const coordinationPlugin: BuiltInPlugin = {
             text: [sessionText, formatLivePeers(peers), advisory].filter(Boolean).join("\n"),
           };
         },
-        { description: "Show sessions, live peers, and held work." },
+        {
+          description: "Show sessions, live peers, and held work.",
+          flags: { "--live": { description: "Show live sessions only." } },
+        },
       ),
     );
   },

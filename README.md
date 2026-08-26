@@ -1,8 +1,8 @@
 # maestro
 
 Maestro is a local-first CLI for keeping human and agent work coordinated inside
-a repository. It stores durable work, decisions, sessions, evidence, and
-messages in the repository's shared Git root, then delivers the current state to
+a repository. It stores durable work, decisions, sessions, evidence, dispatches,
+and handbacks in the repository's shared Git root, then delivers the current state to
 supported agent harnesses through hooks. It runs on Bun and does not require a
 background service.
 
@@ -64,17 +64,17 @@ offline and never fetches. Set `MAESTRO_AUTO_UPDATE=0` to silence it.
 
 ## Verb tour
 
-- `maestro status` shows the current session view; `maestro ready` shows work
-  that can start now.
+- `maestro status` shows every session, or only live sessions with `--live`;
+  `maestro ready` shows work that can start now.
 - `maestro work add|start|note|done|show|list` manages the work tree, dependency
   edges, acceptance, leases, and evidence.
 - `maestro decision draft|lock|show|list` records choices with their own
   lifecycle.
-- `maestro msg send|read` uses the repository mailbox shared by live sessions.
+- `maestro dispatch open|accept|show|list` and `maestro handback file|show|list`
+  preserve lane contracts and return packets.
 - `maestro plugin list|enable|disable|new|add|remove` manages built-in and local
   extensions.
-- `maestro recipe list|show` serves the deeper working methods; `maestro watch`
-  renders live state.
+- `maestro recipe list|show` serves the deeper working methods.
 - `maestro install` refreshes the runtime and repository wiring; `maestro
   update`, `maestro uninstall`, and `maestro doctor` complete the distribution
   lifecycle. `maestro version`, `maestro --version`, and `maestro -v` report

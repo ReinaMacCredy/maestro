@@ -83,7 +83,7 @@ test("162 an atomic reason on start never bypasses the open-children gate", asyn
   });
 });
 
-test("163 a stalled-lease packet asks the silent holder instead of only reading the row", async () => {
+test("163 a stalled-lease packet points at the durable work record", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "parent scope", ["--atomic-reason", "fixture"]);
     expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
@@ -98,11 +98,11 @@ test("163 a stalled-lease packet asks the silent holder instead of only reading 
     const attention = await runCli(fixture, ["attention"], session("scanner"));
     expect(attention.exitCode).toBe(0);
     expect(attention.stdout).toContain("attention STALLED_LEASE");
-    expect(attention.stdout).toContain("smallest action: maestro msg send subject-session");
+    expect(attention.stdout).toContain(`smallest action: maestro work show ${child}`);
   });
 });
 
-test("164 a scope collision tells the holder who never saw the overlap banner", async () => {
+test("164 a scope collision is recorded once after the overlap banner", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "parent scope", ["--atomic-reason", "fixture"]);
     const first = idFrom(
@@ -124,11 +124,6 @@ test("164 a scope collision tells the holder who never saw the overlap banner", 
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     try {
-      const targets = database
-        .query<{ target_session: string }, []>("SELECT target_session FROM messages")
-        .all()
-        .map((row) => row.target_session);
-      expect(targets).toEqual(["early-holder"]);
       expect(
         database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count,
       ).toBe(1);
@@ -151,7 +146,9 @@ test("165 doctor reports whether Codex has been told to trust the repo hooks", a
     await mkdir(join(fixture.home, ".codex"), { recursive: true });
     await writeFile(
       join(fixture.home, ".codex", "config.toml"),
-      `[hooks.state."${join(fixture.repo, ".codex", "hooks.json")}:post_tool_use:0:0"]\n` +
+      `[hooks.state."${join(fixture.repo, ".codex", "hooks.json")}:session_start:0:0"]\n` +
+        `trusted_hash = "sha256:deadbeef"\n` +
+        `[hooks.state."${join(fixture.repo, ".codex", "hooks.json")}:user_prompt_submit:0:0"]\n` +
         `trusted_hash = "sha256:deadbeef"\n`,
     );
     const trusted = await runCli(fixture, ["doctor"], { PATH: path });
