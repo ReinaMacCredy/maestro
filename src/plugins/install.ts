@@ -1,4 +1,4 @@
-import { constants, existsSync } from "node:fs";
+import { constants, existsSync, realpathSync } from "node:fs";
 import {
   access,
   chmod,
@@ -69,6 +69,7 @@ const managedAdapters = [
   ".claude/hooks/maestro-record.ts",
   ".codex/hooks/maestro-record.ts",
 ];
+const requiredCodexHookTrust = ["session_start", "user_prompt_submit"] as const;
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
 
@@ -393,6 +394,23 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
   return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
 }
 
+export async function codexHooksTrusted(root: string, home: string): Promise<boolean> {
+  const hooks = join(root, ".codex", "hooks.json");
+  if (!existsSync(hooks)) return false;
+  const config = join(home, ".codex", "config.toml");
+  const text = existsSync(config) ? await readFile(config, "utf8") : "";
+  const paths = new Set<string>();
+  for (const candidate of [hooks, realpathSync(hooks)]) {
+    paths.add(candidate);
+    paths.add(
+      candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
+    );
+  }
+  return requiredCodexHookTrust.every((trust) =>
+    [...paths].some((path) => text.includes(`"${path}:${trust}:`)),
+  );
+}
+
 async function samePath(left: string, right: string): Promise<boolean> {
   if (resolve(left) === resolve(right)) return true;
   try {
@@ -581,6 +599,7 @@ export const installPlugin: BuiltInPlugin = {
         }
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);
+        const roomCodexHooksTrusted = await codexHooksTrusted(room, home);
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
         await writeShellSource(home);
@@ -603,6 +622,9 @@ export const installPlugin: BuiltInPlugin = {
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
+            (roomCodexHooksTrusted
+              ? ""
+              : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),

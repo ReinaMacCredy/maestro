@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -7,6 +7,7 @@ import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 import {
+  codexHooksTrusted,
   readGitHeadCommit,
   gitMainWorktree,
   stampRuntime,
@@ -268,20 +269,7 @@ async function codexTrustCheck(repo: string): Promise<string> {
   if (missing.length > 0) {
     return `codex hooks: stale (missing ${missing.map(({ event }) => event).join(", ")} in ${hooks}; run maestro install)`;
   }
-  const config = join(process.env.HOME ?? repo, ".codex", "config.toml");
-  const text = existsSync(config) ? await readFile(config, "utf8") : "";
-  // macOS hands out both /var/... and /private/var/... for the same repo, and
-  // Codex records whichever form its own cwd had.
-  const paths = new Set<string>();
-  for (const candidate of [hooks, realpathSync(hooks)]) {
-    paths.add(candidate);
-    paths.add(
-      candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
-    );
-  }
-  return requiredHooks.every(({ trust }) =>
-      [...paths].some((path) => text.includes(`"${path}:${trust}:`))
-    )
+  return await codexHooksTrusted(mainWorktree ?? repo, process.env.HOME ?? repo)
     ? "codex hooks: trusted"
     : "codex hooks: not trusted (Codex skips them; run /hooks in Codex once to trust)";
 }

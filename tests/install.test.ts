@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+
+const roomTrustPrefix = "room Codex setup:";
 
 test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
@@ -84,6 +86,36 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
         harness,
       );
     }
+  });
+});
+
+test("270 install prints room Codex trust steps only while its hooks are untrusted", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const room = join(fixture.home, "maestro");
+    const first = await runCli(fixture, ["install"], { PATH: path });
+
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain(
+      `${roomTrustPrefix} trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`,
+    );
+    for (const name of ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "lane.md"]) {
+      expect(await readFile(join(room, name), "utf8")).not.toContain(roomTrustPrefix);
+    }
+
+    const hooksPath = join(room, ".codex", "hooks.json");
+    const config =
+      `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n` +
+      `[hooks.state."${hooksPath}:user_prompt_submit:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`;
+    const configPath = join(fixture.home, ".codex", "config.toml");
+    await mkdir(join(configPath, ".."), { recursive: true });
+    await writeFile(configPath, config);
+
+    const repeated = await runCli(fixture, ["install"], { PATH: path });
+
+    expect(repeated.exitCode).toBe(0);
+    expect(repeated.stdout).not.toContain(roomTrustPrefix);
+    expect(await readFile(configPath, "utf8")).toBe(config);
   });
 });
 
