@@ -254,6 +254,45 @@ test("240 brief names a deleted registered repository and continues", async () =
   });
 });
 
+test("241 install moves the four method skills into the room and links only those into Claude", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const unrelatedAgentSkill = join(fixture.home, ".agents", "skills", "unrelated", "SKILL.md");
+    const excludedClaudeSkill = join(
+      fixture.home,
+      ".claude",
+      "skills",
+      "maestro-lifecycle-test",
+      "SKILL.md",
+    );
+    await mkdir(join(unrelatedAgentSkill, ".."), { recursive: true });
+    await mkdir(join(excludedClaudeSkill, ".."), { recursive: true });
+    await writeFile(unrelatedAgentSkill, "# unrelated agent skill\n");
+    await writeFile(excludedClaudeSkill, "# excluded Claude skill\n");
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+
+    expect(installed.exitCode).toBe(0);
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
+      const roomSkill = join(fixture.home, "maestro", "skills", name, "SKILL.md");
+      expect(await readFile(roomSkill, "utf8")).toMatch(
+        /<!-- maestro-skill-version: [0-9a-f]{40} -->/,
+      );
+      expect(await realpath(join(fixture.home, ".claude", "skills", name))).toBe(
+        await realpath(join(fixture.home, "maestro", "skills", name)),
+      );
+      expect(await Bun.file(join(fixture.home, ".agents", "skills", name)).exists()).toBe(false);
+    }
+    expect(await readFile(unrelatedAgentSkill, "utf8")).toBe("# unrelated agent skill\n");
+    expect(await readFile(excludedClaudeSkill, "utf8")).toBe("# excluded Claude skill\n");
+    expect(
+      await Bun.file(
+        join(fixture.home, "maestro", "skills", "maestro-verify", "references", "audit.md"),
+      ).exists(),
+    ).toBe(true);
+  });
+});
+
 test.skipIf(process.env.HERDR_ENV !== "1")(
   "236 hm prints the read-only brief and returns without starting an agent",
   async () => {

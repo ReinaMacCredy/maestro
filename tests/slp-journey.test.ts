@@ -189,7 +189,7 @@ test("167 the implement loop names the failed-pass trace the detector reads", as
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
     const skill = await Bun.file(
-      join(fixture.home, ".agents", "skills", "maestro-work", "SKILL.md"),
+      join(fixture.home, "maestro", "skills", "maestro-work", "SKILL.md"),
     ).text();
     const loop = skill.slice(skill.indexOf("## Loop"), skill.indexOf("## Test-first"));
     expect(loop).toContain('maestro work note <id> "failed: ');

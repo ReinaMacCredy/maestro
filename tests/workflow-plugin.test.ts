@@ -160,7 +160,7 @@ test("129 install materializes the 4 maestro skills with a version stamp and ref
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
-    const skillsRoot = join(fixture.home, ".agents", "skills");
+    const skillsRoot = join(fixture.home, "maestro", "skills");
     for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
       const skill = await Bun.file(join(skillsRoot, name, "SKILL.md")).text();
       expect(skill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
@@ -188,7 +188,7 @@ test("130 skills re-materialize only on version change", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     await runCli(fixture, ["install"], { PATH: path });
-    const skillPath = join(fixture.home, ".agents", "skills", "maestro-bundle", "SKILL.md");
+    const skillPath = join(fixture.home, "maestro", "skills", "maestro-bundle", "SKILL.md");
     const original = await Bun.file(skillPath).text();
     const edited = `${original}\nlocal drift marker\n`;
     await writeFile(skillPath, edited);
@@ -206,7 +206,7 @@ test("130 skills re-materialize only on version change", async () => {
   });
 });
 
-test("131 an unstamped foreign skill dir is skipped, never clobbered", async () => {
+test("131 an unstamped legacy skill dir is preserved while the room copy is installed", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const foreign = join(fixture.home, ".agents", "skills", "maestro-design");
@@ -215,7 +215,10 @@ test("131 an unstamped foreign skill dir is skipped, never clobbered", async () 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
     expect(await Bun.file(join(foreign, "SKILL.md")).text()).toBe("# user-owned design skill\n");
-    expect(installed.stdout).toContain("skipped: maestro-design");
+    expect(
+      await Bun.file(join(fixture.home, "maestro", "skills", "maestro-design", "SKILL.md")).exists(),
+    ).toBe(true);
+    expect(installed.stdout).toContain("legacy skill preserved: maestro-design");
   });
 });
 

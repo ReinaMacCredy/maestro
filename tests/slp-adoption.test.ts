@@ -75,7 +75,7 @@ test("133 install materializes the dispatch, handback, dependency, and episode c
     expect(installed.exitCode).toBe(0);
 
     const skill = await Bun.file(
-      join(fixture.home, ".agents", "skills", "maestro-work", "SKILL.md"),
+      join(fixture.home, "maestro", "skills", "maestro-work", "SKILL.md"),
     ).text();
     for (const required of [
       "## Dispatch",
@@ -109,7 +109,7 @@ test("134 install materializes layered proof, failed traces, learning, and triag
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
 
-    const verifyRoot = join(fixture.home, ".agents", "skills", "maestro-verify");
+    const verifyRoot = join(fixture.home, "maestro", "skills", "maestro-verify");
     const skill = await Bun.file(join(verifyRoot, "SKILL.md")).text();
     for (const required of [
       "source",
@@ -157,7 +157,7 @@ test("135 install materializes intake, council reconcile, and handoff doctrine",
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
 
-    const skillsRoot = join(fixture.home, ".agents", "skills");
+    const skillsRoot = join(fixture.home, "maestro", "skills");
     const design = await Bun.file(join(skillsRoot, "maestro-design", "SKILL.md")).text();
     expect(design.indexOf("## Intake")).toBeGreaterThan(-1);
     expect(design.indexOf("## Intake")).toBeLessThan(design.indexOf("## Recall pass first"));

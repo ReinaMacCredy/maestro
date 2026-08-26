@@ -263,7 +263,7 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: design -> work -> verify; skills: ~/.agents/skills/maestro-{bundle,design,work,verify}/SKILL.md",
+            "method: design -> work -> verify; skills: ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md",
             "  tier: one session, one branch, acceptance in a sentence -> maestro work add|start|done",
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
             '  forks: settle before tests - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
