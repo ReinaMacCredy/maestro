@@ -194,6 +194,47 @@ test("175 accepting dispatches never changes the work write lease", async () => 
   });
 });
 
+test("263 returned and cancelled dispatches clear their lane holder", async () => {
+  await withFixture(async (fixture) => {
+    const returned = await openDispatch(fixture);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", returned], session("returning-lane")))
+        .exitCode,
+    ).toBe(0);
+    expect(
+      (await runCli(fixture, handbackFileArgs(returned), session("returning-lane"))).exitCode,
+    ).toBe(0);
+
+    const cancelled = await openDispatch(fixture);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", cancelled], session("cancelled-lane")))
+        .exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "cancel",
+          cancelled,
+          "--reason",
+          "lane was abandoned",
+        ])
+      ).exitCode,
+    ).toBe(0);
+
+    const listed = await runCli(fixture, ["dispatch", "list", "--json"]);
+    expect(listed.exitCode).toBe(0);
+    const envelope = JSON.parse(listed.stdout) as {
+      data: { dispatches: Array<{ heldBy: string | null; id: string }> };
+    };
+    expect(
+      envelope.data.dispatches
+        .filter((dispatch) => [returned, cancelled].includes(dispatch.id))
+        .map((dispatch) => dispatch.heldBy),
+    ).toEqual([null, null]);
+  });
+});
+
 test("176 handback file refuses a status outside the eight-value vocabulary", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);

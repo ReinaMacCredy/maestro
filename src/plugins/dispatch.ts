@@ -530,7 +530,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           const now = new Date().toISOString();
           context.store.database
             .query(
-              "UPDATE dispatches SET cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+              "UPDATE dispatches SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ? WHERE id = ?",
             )
             .run(now, reason, now, id);
           context.log.append({
@@ -688,6 +688,9 @@ export const dispatchPlugin: BuiltInPlugin = {
                 incidentalFindings,
                 createdAt,
               );
+            context.store.database
+              .query("UPDATE dispatches SET held_by = NULL, updated_at = ? WHERE id = ?")
+              .run(createdAt, dispatchId);
             work.release(dispatch.workId, sessionId, createdAt);
             context.log.append({
               type: "handback.file",
