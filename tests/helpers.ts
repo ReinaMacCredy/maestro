@@ -56,6 +56,34 @@ export async function runCliAt(
   env: Record<string, string | undefined> = {},
   stdin?: string,
 ): Promise<CliResult> {
+  return runCliBinary(fixture, cli, cwd, args, env, stdin);
+}
+
+export async function runInstalledCliAt(
+  fixture: Fixture,
+  cwd: string,
+  args: string[],
+  env: Record<string, string | undefined> = {},
+  stdin?: string,
+): Promise<CliResult> {
+  return runCliBinary(
+    fixture,
+    join(fixture.home, ".local", "bin", "maestro"),
+    cwd,
+    args,
+    env,
+    stdin,
+  );
+}
+
+async function runCliBinary(
+  fixture: Fixture,
+  binary: string,
+  cwd: string,
+  args: string[],
+  env: Record<string, string | undefined>,
+  stdin?: string,
+): Promise<CliResult> {
   const childEnvironment: Record<string, string | undefined> = {
     ...process.env,
     HOME: fixture.home,
@@ -69,7 +97,8 @@ export async function runCliAt(
       childEnvironment[name] = value;
     }
   }
-  const child = Bun.spawn([process.execPath, cli, ...args], {
+  const command = binary === cli ? [process.execPath, binary, ...args] : [binary, ...args];
+  const child = Bun.spawn(command, {
     cwd,
     env: childEnvironment,
     stdin: stdin === undefined ? undefined : new TextEncoder().encode(stdin),

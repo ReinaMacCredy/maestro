@@ -68,6 +68,8 @@ const managedAdapters = [
   ".claude/hooks/maestro-record.ts",
   ".codex/hooks/maestro-record.ts",
 ];
+const shellSourceLine =
+  '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
 
 function emptyObject(value: Record<string, unknown>): boolean {
   return Object.keys(value).length === 0;
@@ -155,6 +157,34 @@ async function writeManagedIgnore(path: string): Promise<void> {
   );
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${managedIgnoreBlock}\n`);
+}
+
+async function registerRepository(home: string, repo: string): Promise<void> {
+  const registry = join(home, "maestro", "registry");
+  await mkdir(dirname(registry), { recursive: true });
+  const existing = existsSync(registry) ? await readFile(registry, "utf8") : "";
+  const entries = existing.split(/\r?\n/).filter(Boolean);
+  const next = [...new Set([...entries, resolve(repo)])];
+  const content = `${next.join("\n")}\n`;
+  if (content !== existing) await writeFile(registry, content);
+}
+
+async function writeShellSource(home: string): Promise<void> {
+  const shellRc = join(home, ".zshrc");
+  const backup = `${shellRc}.maestro.bak`;
+  const existing = existsSync(shellRc) ? await readFile(shellRc, "utf8") : "";
+  const managedCount = existing.split("\n").filter((line) => line === shellSourceLine).length;
+  if (managedCount === 1) return;
+  if (!existsSync(backup)) {
+    if (existsSync(shellRc)) {
+      await copyFile(shellRc, backup);
+    } else {
+      await writeFile(backup, "");
+    }
+  }
+  const retained = existing.split("\n").filter((line) => line !== shellSourceLine).join("\n");
+  const prefix = retained === "" || retained.endsWith("\n") ? retained : `${retained}\n`;
+  await writeFile(shellRc, `${prefix}${shellSourceLine}\n`);
 }
 
 async function removeManagedHooks(path: string): Promise<boolean> {
@@ -503,6 +533,8 @@ export const installPlugin: BuiltInPlugin = {
           );
           await chmod(shim, 0o755);
         }
+        await registerRepository(home, repo);
+        await writeShellSource(home);
         context.log.append({
           type: "install",
           entityType: "repo",
@@ -520,6 +552,7 @@ export const installPlugin: BuiltInPlugin = {
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
+            `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),
