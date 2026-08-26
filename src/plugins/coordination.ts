@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { Harness, SessionRecord } from "../kernel/sessions.ts";
+import { systemAuthorSession, type Harness, type SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -174,7 +174,12 @@ function harnessOption(invocation: CliInvocation): Harness | null {
 
 function formatMessages(messages: MessageRecord[]): string {
   return messages
-    .map((message) => `message ${message.id} from ${message.senderSession}: ${message.text}`)
+    .map((message) => {
+      const sender = message.senderSession === systemAuthorSession
+        ? `${message.senderSession} (system)`
+        : message.senderSession;
+      return `message ${message.id} from ${sender}: ${message.text}`;
+    })
     .join("\n");
 }
 
@@ -309,6 +314,13 @@ export const coordinationPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const target = required(invocation, 0, "target session");
           const text = required(invocation, 1, "message text");
+          if (target === systemAuthorSession) {
+            throw new CliError(
+              "SYSTEM_AUTHOR",
+              `${systemAuthorSession} authors attention packets and does not receive mail`,
+              { target },
+            );
+          }
           const targetSession = context.sessions.get(target);
           if (!targetSession) {
             const command = "maestro status";

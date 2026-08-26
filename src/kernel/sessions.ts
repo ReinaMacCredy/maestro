@@ -1,3 +1,4 @@
+import { CliError } from "./cli.ts";
 import type { Store } from "./store.ts";
 
 export type Harness = "claude" | "codex";
@@ -37,6 +38,10 @@ export interface SessionLiveness {
   live: boolean;
   reason: string;
 }
+
+// Attention packets are authored by the system, not by whoever ran the scan
+// (raise() always sends as this id), so no session may answer to it.
+export const systemAuthorSession = "supervisor";
 
 export class Sessions {
   private resolved: CurrentSession | null = null;
@@ -205,6 +210,13 @@ export class Sessions {
       process.env.CLAUDE_SESSION_ID ||
       process.env.CURSOR_SESSION_ID;
     const guessedHarness = harness ?? this.guessHarness();
+    if (environmentId === systemAuthorSession) {
+      throw new CliError(
+        "RESERVED_SESSION",
+        `${systemAuthorSession} is the reserved system author; set a different session id`,
+        { session: systemAuthorSession },
+      );
+    }
     if (environmentId) {
       this.resolved = { anchor, harness: guessedHarness, id: environmentId, pid, scope: this.scope };
       return this.resolved;
