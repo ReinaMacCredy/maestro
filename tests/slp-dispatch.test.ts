@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import {
   idFrom,
@@ -575,6 +576,78 @@ test("186 attention records one DISPATCH_UNRETURNED packet per fingerprint witho
     expect(secondDispatch).toHaveLength(1);
     expect(secondDispatch[0]?.raised).toBe(false);
     expect(secondDispatch[0]?.targets).toBeUndefined();
+  });
+});
+
+test("264 unreturned dispatch attention distinguishes dead, live, and unknown holders", async () => {
+  await withFixture(async (fixture) => {
+    const dead = await openDispatch(fixture);
+    const live = await openDispatch(fixture);
+    const unknown = await openDispatch(fixture);
+    expect((await runCli(fixture, ["dispatch", "accept", dead], session("dead-lane"))).exitCode)
+      .toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", live], session("live-lane"))).exitCode)
+      .toBe(0);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", unknown], session("unknown-lane"))).exitCode,
+    ).toBe(0);
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    const now = new Date().toISOString();
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', '')`,
+      )
+      .run("dead-lane", 2_147_483_647, now);
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', '')`,
+      )
+      .run("live-lane", process.pid, now);
+    database.close();
+
+    const stale = await runCli(
+      fixture,
+      ["attention", "--json", "--dispatch-stale", "0.000001"],
+      session("scanner-session"),
+    );
+    expect(stale.exitCode).toBe(0);
+    const staleEnvelope = JSON.parse(stale.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          packet: string;
+          subjectSession: string | null;
+        }>;
+      };
+    };
+    const detections = new Map(
+      staleEnvelope.data.detections.map((finding) => [finding.fingerprint, finding]),
+    );
+    expect(detections.get(`dispatch-unreturned:${dead}`)?.packet).toContain(
+      "holder session dead-lane is dead",
+    );
+    expect(detections.get(`dispatch-unreturned:${live}`)?.packet).toContain(
+      "holder session live-lane is live",
+    );
+    expect(detections.get(`dispatch-unreturned:${unknown}`)?.packet).toContain(
+      "unknown: whether the lane is working, blocked, or abandoned",
+    );
+
+    const fresh = await runCli(
+      fixture,
+      ["attention", "--json", "--dispatch-stale", "24"],
+      session("scanner-session"),
+    );
+    expect(fresh.exitCode).toBe(0);
+    const freshEnvelope = JSON.parse(fresh.stdout) as typeof staleEnvelope;
+    expect(
+      freshEnvelope.data.detections
+        .filter((finding) => finding.fingerprint.startsWith("dispatch-unreturned:"))
+        .map((finding) => finding.subjectSession),
+    ).toEqual(["dead-lane"]);
   });
 });
 

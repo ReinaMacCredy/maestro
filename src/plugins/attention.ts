@@ -129,22 +129,22 @@ function packet(
   ].join("\n");
 }
 
-function liveSessionMap(sessions: SessionRecord[]): Map<string, SessionRecord> {
-  return new Map(sessions.filter((session) => session.live).map((session) => [session.id, session]));
+function sessionMap(sessions: SessionRecord[]): Map<string, SessionRecord> {
+  return new Map(sessions.map((session) => [session.id, session]));
 }
 
 function stalledDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
-  liveSessions: Map<string, SessionRecord>,
+  sessions: Map<string, SessionRecord>,
   now: number,
   staleMinutes: number,
 ): Detection[] {
   const cutoff = now - staleMinutes * 60_000;
   return works.flatMap((work): Detection[] => {
     if (work.state !== "active" || !work.heldBy) return [];
-    const holder = liveSessions.get(work.heldBy);
-    if (!holder || Date.parse(holder.lastSeen) >= cutoff) return [];
+    const holder = sessions.get(work.heldBy);
+    if (!holder?.live || Date.parse(holder.lastSeen) >= cutoff) return [];
     const start = latestStart(context, work.id);
     const startId = start?.id ?? 0;
     return [{
@@ -252,12 +252,12 @@ function decisionStaleDetections(
 
 function scopeCollisionDetections(
   works: AttentionWorkRow[],
-  liveSessions: Map<string, SessionRecord>,
+  sessions: Map<string, SessionRecord>,
 ): Detection[] {
   const active = works.filter(
     (work) =>
       work.state === "active" && work.parentId && work.heldBy &&
-      liveSessions.has(work.heldBy),
+      sessions.get(work.heldBy)?.live,
   );
   const detections: Detection[] = [];
   for (let leftIndex = 0; leftIndex < active.length; leftIndex += 1) {
@@ -292,27 +292,41 @@ function scopeCollisionDetections(
 function dispatchUnreturnedDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
+  sessions: Map<string, SessionRecord>,
   now: number,
   dispatchStaleHours: number,
 ): Detection[] {
   const cutoff = now - dispatchStaleHours * 60 * 60_000;
   const dispatch = context.dispatch as DispatchService;
   return dispatch.list().flatMap((record): Detection[] => {
-    if (record.state !== "open" || Date.parse(record.createdAt) >= cutoff) return [];
+    if (record.state !== "open") return [];
     const work = workById.get(record.workId);
     if (!work || work.state === "done" || work.state === "cancelled") return [];
+    const holder = record.heldBy ? sessions.get(record.heldBy) : undefined;
+    if ((!holder || holder.live) && Date.parse(record.createdAt) >= cutoff) return [];
     const subjectSession = record.heldBy ?? record.targetSession;
+    const observed = holder
+      ? holder.live
+        ? `dispatch for ${record.workId} has no handback after ${minutesSince(record.createdAt, now)} minutes; holder session ${holder.id} is live`
+        : `dispatch for ${record.workId} has no handback; holder session ${holder.id} is dead`
+      : `dispatch for ${record.workId} has no handback after ${minutesSince(record.createdAt, now)} minutes`;
+    const evidence = holder
+      ? `dispatches.held_by ${holder.id}; sessions.live ${holder.live}; no handbacks row`
+      : `dispatches.created_at ${record.createdAt}; no handbacks row`;
+    const unknown = holder
+      ? holder.live
+        ? "whether the live lane is working, blocked, or needs more time"
+        : "why the dead holder stopped without filing a handback"
+      : "whether the lane is working, blocked, or abandoned";
     return [{
       entityId: record.id,
       entityType: "dispatch",
       fingerprint: `dispatch-unreturned:${record.id}`,
       kind: "DISPATCH_UNRETURNED",
       packet: packet("DISPATCH_UNRETURNED", record.id, {
-        observed:
-          `dispatch for ${record.workId} has no handback after ` +
-          `${minutesSince(record.createdAt, now)} minutes`,
-        evidence: `dispatches.created_at ${record.createdAt}; no handbacks row`,
-        unknown: "whether the lane is working, blocked, or abandoned",
+        observed,
+        evidence,
+        unknown,
         question: "wait, contact the lane, cancel it, or re-scope?",
         smallestAction: `maestro dispatch show ${record.id}`,
       }),
@@ -326,12 +340,12 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
   const now = Date.now();
   const works = workRows(context);
   const workById = new Map(works.map((work) => [work.id, work]));
-  const liveSessions = liveSessionMap(context.sessions.list());
+  const sessions = sessionMap(context.sessions.list());
   return [
     ...stalledDetections(
       context,
       works,
-      liveSessions,
+      sessions,
       now,
       options.staleMinutes,
     ),
@@ -342,10 +356,11 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.decisionStaleHours,
     ),
-    ...scopeCollisionDetections(works, liveSessions),
+    ...scopeCollisionDetections(works, sessions),
     ...dispatchUnreturnedDetections(
       context,
       workById,
+      sessions,
       now,
       options.dispatchStaleHours,
     ),
