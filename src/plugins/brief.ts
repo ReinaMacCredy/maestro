@@ -70,11 +70,17 @@ export const briefPlugin: BuiltInPlugin = {
               (work) => `${result.repo}: ${work.id} [${work.state}] ${work.title}`,
             )
           );
-          const text = workLines.length > 0
-            ? ["Needs attention:", ...workLines].join("\n")
-            : results.some((result) => result.missing || result.error)
-              ? "Some registered projects need attention."
-              : "All registered projects are running normally.";
+          const unavailableLines = results.flatMap((result) =>
+            result.missing
+              ? [`Missing repository: ${result.repo}`]
+              : result.error
+                ? [`Unreadable repository: ${result.repo}`]
+                : []
+          );
+          const attentionLines = [...workLines, ...unavailableLines];
+          const text = attentionLines.length > 0
+            ? ["Needs attention:", ...attentionLines].join("\n")
+            : "All registered projects are running normally.";
           return { data: { results }, text };
         },
         { description: "Summarize registered repository work without changing project stores." },

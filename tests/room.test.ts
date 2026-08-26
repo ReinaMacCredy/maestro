@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { chmod, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   prepareInstallFixture,
@@ -219,6 +219,38 @@ test("239 brief reports open work from two repositories without writing either s
     expect(brief.stdout).toContain(`${await realpath(fixture.repo)}: w1 [open] prepare alpha`);
     expect(brief.stdout).toContain(`${await realpath(secondRepo)}: w1 [open] prepare beta`);
     expect([await storeSnapshot(fixture.repo), await storeSnapshot(secondRepo)]).toEqual(before);
+  });
+});
+
+test("240 brief names a deleted registered repository and continues", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await runInstalledCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "continue live work", "--atomic-reason", "test"],
+      { PATH: path },
+    );
+    const deletedRepo = join(fixture.root, "deleted-repo");
+    await mkdir(deletedRepo, { recursive: true });
+    await runInstalledCliAt(fixture, deletedRepo, ["install"], { PATH: path });
+    const deletedPath = await realpath(deletedRepo);
+    await rm(deletedRepo, { recursive: true, force: true });
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stderr).toBe("");
+    expect(brief.stdout).toContain(`Missing repository: ${deletedPath}`);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: w1 [open] continue live work`,
+    );
   });
 });
 
