@@ -255,7 +255,9 @@ export class Sessions {
 
   private downgradeSharedPid(row: SessionRow): SessionRow {
     if (row.anchor !== "pid" || !this.sharedPids().has(row.pid)) return row;
-    const lastSeen = new Date().toISOString();
+    // A shared pid stops proving life, but a dead pid still proves death, so only
+    // a live host process earns the fresh clock the TTL anchor is read against.
+    const lastSeen = this.isPidAlive(row.pid) ? new Date().toISOString() : row.last_seen;
     const result = this.store.database
       .query(
         "UPDATE sessions SET anchor = 'ttl', last_seen = ? WHERE id = ? AND pid = ? AND anchor = 'pid'",

@@ -415,8 +415,9 @@ test("196 doctor counts the mailbox target that Sessions.liveness calls dead", a
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     for (const [id, pid] of [
-      ["shared-target", 99_999_999],
-      ["shared-peer", 99_999_999],
+      // A live host process: the shared pid is ambiguous, not dead.
+      ["shared-target", 1],
+      ["shared-peer", 1],
       ["ttl-dead", 99_999_998],
     ] as const) {
       expect(
@@ -458,5 +459,48 @@ test("196 doctor counts the mailbox target that Sessions.liveness calls dead", a
       store.close();
     }
     expect(doctor.stdout).toContain("mailbox: 1 message(s) queued for dead sessions");
+  });
+});
+
+test("197 a shared pid that is already dead downgrades without inventing liveness", async () => {
+  await withFixture(async (fixture) => {
+    const deadPid = 99_999_997;
+    const holder = "dead-shared-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "dead shared pid lease", "--atomic-reason", "fixture"]),
+    );
+    // The lease is taken while the host process is alive; the pid dies later.
+    expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
+
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const cold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    let database = new Database(databasePath);
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
+      )
+      .run("dead-shared-peer", deadPid, cold, fixture.repo);
+    database
+      .query("UPDATE sessions SET pid = ?, anchor = 'pid', last_seen = ? WHERE id = ?")
+      .run(deadPid, cold, holder);
+    database.close();
+
+    const shown = await runCli(fixture, ["work", "show", work, "--json"], session("observer"));
+    const workAfterDowngrade = (JSON.parse(shown.stdout) as {
+      data: { work: { heldBy: string | null; state: string } };
+    }).data.work;
+    expect(workAfterDowngrade).toEqual(expect.objectContaining({ heldBy: null, state: "open" }));
+
+    database = new Database(databasePath);
+    const stamped = database
+      .query<{ anchor: string; last_seen: string }, [string]>(
+        "SELECT anchor, last_seen FROM sessions WHERE id = ?",
+      )
+      .get(holder);
+    database.close();
+    // A shared pid stops proving life, but a dead pid still proves death: the
+    // anchor moves and the recorded clock is left where it was.
+    expect(stamped).toEqual({ anchor: "ttl", last_seen: cold });
   });
 });
