@@ -12,8 +12,8 @@ import {
   withFixture,
 } from "./helpers.ts";
 
-function session(id: string): Record<string, string> {
-  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
+function session(id: string, pid = process.pid): Record<string, string> {
+  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };
 }
 
 async function addWork(fixture: Fixture, title: string, extra: string[] = []): Promise<string> {
@@ -91,7 +91,7 @@ test("163 a stalled-lease packet asks the silent holder instead of only reading 
     const child = idFrom(
       await runCli(fixture, ["work", "add", "child scope", "--parent", parent, "--kind", "task"]),
     );
-    expect((await runCli(fixture, ["work", "start", child], session("subject-session"))).exitCode)
+    expect((await runCli(fixture, ["work", "start", child], session("subject-session", 1))).exitCode)
       .toBe(0);
     backdateSession(fixture, "subject-session", 45);
 

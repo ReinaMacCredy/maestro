@@ -145,8 +145,9 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
       expect((await runCli(fixture, ["work", "start", workId], environment)).exitCode).toBe(0);
     }
 
-    const deadPid = "99999999";
-    const pidEnvironment = sessionEnvironment("dead-pid", deadPid);
+    const sharedDeadPid = "99999999";
+    const exclusiveDeadPid = "99999998";
+    const pidEnvironment = sessionEnvironment("dead-pid", exclusiveDeadPid);
     expect(
       (
         await runCli(
@@ -160,8 +161,9 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     database.query("UPDATE sessions SET pid = ?, last_seen = ? WHERE id = ?")
-      .run(Number(deadPid), new Date(Date.now() - 61 * 60 * 1000).toISOString(), "stale-ttl");
-    database.query("UPDATE sessions SET pid = ? WHERE id = ?").run(Number(deadPid), "fresh-ttl");
+      .run(Number(sharedDeadPid), new Date(Date.now() - 61 * 60 * 1000).toISOString(), "stale-ttl");
+    database.query("UPDATE sessions SET pid = ? WHERE id = ?")
+      .run(Number(sharedDeadPid), "fresh-ttl");
     database.close();
 
     const observer = { ...noPs, ...sessionEnvironment("observer") };

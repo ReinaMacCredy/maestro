@@ -40,6 +40,7 @@ export interface SessionLiveness {
 
 export class Sessions {
   private resolved: CurrentSession | null = null;
+  private sharedPidCache: Set<number> | null = null;
 
   constructor(
     private readonly store: Store,
@@ -78,8 +79,8 @@ export class Sessions {
   refresh(): void {
     if (process.env.MAESTRO_SESSION_NONE === "1") return;
     const current = this.resolveCurrent();
-    if (current.anchor === "pid") return;
     const recorded = this.row(current.id);
+    if ((recorded?.anchor ?? current.anchor) === "pid") return;
     const lastSeen = new Date().toISOString();
     const harness = recorded?.harness ?? current.harness;
     this.store.database
@@ -110,9 +111,10 @@ export class Sessions {
       };
     }
     const recorded = this.row(current.id);
+    const anchor = recorded?.anchor === "ttl" ? "ttl" : current.anchor;
     const lastSeen = new Date().toISOString();
     const recordedHarness = harness !== undefined
-      ? harness === null && current.anchor === "ttl"
+      ? harness === null && anchor === "ttl"
         ? (recorded?.harness ?? current.harness)
         : harness
       : (recorded?.harness ?? current.harness);
@@ -134,11 +136,11 @@ export class Sessions {
         event,
         lastSeen,
         recordedHarness,
-        current.anchor,
+        anchor,
         current.scope,
       );
     const row: SessionRow = {
-      anchor: current.anchor,
+      anchor,
       harness: recordedHarness,
       id: current.id,
       pid: current.pid,
@@ -161,7 +163,7 @@ export class Sessions {
   liveness(id: string): SessionLiveness {
     const row = this.row(id);
     return row
-      ? this.rowLiveness(row)
+      ? this.rowLiveness(this.downgradeSharedPid(row))
       : { live: false, reason: `session ${id} is not recorded` };
   }
 
@@ -233,14 +235,15 @@ export class Sessions {
   }
 
   private fromRow(row: SessionRow): SessionRecord {
+    const current = this.downgradeSharedPid(row);
     return {
-      anchor: row.anchor,
-      harness: row.harness,
-      id: row.id,
-      pid: row.pid,
-      lastEvent: row.last_event,
-      lastSeen: row.last_seen,
-      live: this.rowLiveness(row).live,
+      anchor: current.anchor,
+      harness: current.harness,
+      id: current.id,
+      pid: current.pid,
+      lastEvent: current.last_event,
+      lastSeen: current.last_seen,
+      live: this.rowLiveness(current).live,
     };
   }
 
@@ -248,6 +251,30 @@ export class Sessions {
     return this.store.database
       .query<SessionRow, [string]>("SELECT * FROM sessions WHERE id = ?")
       .get(id) ?? null;
+  }
+
+  private downgradeSharedPid(row: SessionRow): SessionRow {
+    if (row.anchor !== "pid" || !this.sharedPids().has(row.pid)) return row;
+    const lastSeen = new Date().toISOString();
+    const result = this.store.database
+      .query(
+        "UPDATE sessions SET anchor = 'ttl', last_seen = ? WHERE id = ? AND pid = ? AND anchor = 'pid'",
+      )
+      .run(lastSeen, row.id, row.pid);
+    if (result.changes > 0) return { ...row, anchor: "ttl", last_seen: lastSeen };
+    return this.row(row.id) ?? row;
+  }
+
+  private sharedPids(): Set<number> {
+    if (this.sharedPidCache) return this.sharedPidCache;
+    // Liveness runs once per held work row, so this aggregation must stay per process.
+    const rows = this.store.database
+      .query<{ pid: number }, []>(
+        "SELECT pid FROM sessions GROUP BY pid HAVING COUNT(DISTINCT id) > 1",
+      )
+      .all();
+    this.sharedPidCache = new Set(rows.map((row) => row.pid));
+    return this.sharedPidCache;
   }
 
   private rowLiveness(row: SessionRow): SessionLiveness {

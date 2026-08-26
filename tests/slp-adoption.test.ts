@@ -9,8 +9,8 @@ import {
   withFixture,
 } from "./helpers.ts";
 
-function session(id: string): Record<string, string> {
-  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
+function session(id: string, pid = process.pid): Record<string, string> {
+  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };
 }
 
 async function addWork(fixture: Fixture, title: string, parent?: string): Promise<string> {
@@ -19,8 +19,13 @@ async function addWork(fixture: Fixture, title: string, parent?: string): Promis
   return idFrom(await runCli(fixture, args));
 }
 
-async function startWork(fixture: Fixture, id: string, holder: string): Promise<void> {
-  const started = await runCli(fixture, ["work", "start", id], session(holder));
+async function startWork(
+  fixture: Fixture,
+  id: string,
+  holder: string,
+  pid = process.pid,
+): Promise<void> {
+  const started = await runCli(fixture, ["work", "start", id], session(holder, pid));
   expect(started.exitCode).toBe(0);
 }
 
@@ -241,7 +246,7 @@ test("138 attention raises and routes a STALLED_LEASE packet to the parent holde
     const parent = await addWork(fixture, "parent scope");
     await startWork(fixture, parent, "lead-session");
     const child = await addWork(fixture, "stalled child", parent);
-    await startWork(fixture, child, "subject-session");
+    await startWork(fixture, child, "subject-session", 1);
     backdateSession(fixture, "subject-session", 45);
 
     const attention = await runCli(
@@ -672,7 +677,7 @@ test("147 daemon ticks deliver as supervisor without creating a daemon session",
     const parent = await addWork(fixture, "daemon parent");
     await startWork(fixture, parent, "lead-session");
     const child = await addWork(fixture, "daemon stalled child", parent);
-    await startWork(fixture, child, "subject-session");
+    await startWork(fixture, child, "subject-session", 1);
     backdateSession(fixture, "subject-session", 45);
     const controller = session("daemon-controller");
 

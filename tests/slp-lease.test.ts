@@ -3,10 +3,10 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
 
-function session(id: string): Record<string, string> {
+function session(id: string, pid = process.pid): Record<string, string> {
   return {
     MAESTRO_SESSION_ID: id,
-    MAESTRO_SESSION_PID: String(process.pid),
+    MAESTRO_SESSION_PID: String(pid),
   };
 }
 
@@ -244,5 +244,160 @@ test("192 work reclaim records both sessions and the reason without completing w
     expect(trace.stdout).toContain(`\"newHolder\":\"${newHolder}\"`);
     expect(trace.stdout).toContain(`\"reason\":\"${reason}\"`);
     expect(trace.stdout).not.toContain("work.done");
+  });
+});
+
+test("193 a shared-pid holder is stamped once onto TTL, keeps its lease, heartbeats, then expires", async () => {
+  await withFixture(async (fixture) => {
+    const sharedPid = 1;
+    const holder = "shared-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "shared pid lease", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
+      .toBe(0);
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    let database = new Database(databasePath);
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
+      )
+      .run("shared-peer", sharedPid, new Date().toISOString(), fixture.repo);
+    database.query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+      .run(new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), holder);
+    database.close();
+
+    const beforeDowngrade = Date.now();
+    const shown = await runCli(fixture, ["work", "show", work, "--json"], session("observer"));
+    const afterDowngrade = Date.now();
+    const workAfterDowngrade = (JSON.parse(shown.stdout) as {
+      data: { work: { heldBy: string | null; state: string } };
+    }).data.work;
+    expect(workAfterDowngrade).toEqual(
+      expect.objectContaining({ heldBy: holder, state: "active" }),
+    );
+    database = new Database(databasePath);
+    const stamped = database
+      .query<{ anchor: string; last_seen: string }, [string]>(
+        "SELECT anchor, last_seen FROM sessions WHERE id = ?",
+      )
+      .get(holder);
+    expect(stamped?.anchor).toBe("ttl");
+    expect(Date.parse(stamped?.last_seen ?? "")).toBeGreaterThanOrEqual(beforeDowngrade);
+    expect(Date.parse(stamped?.last_seen ?? "")).toBeLessThanOrEqual(afterDowngrade);
+
+    const halfWindow = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    database.query("UPDATE sessions SET last_seen = ? WHERE id = ?").run(halfWindow, holder);
+    database.close();
+    const beforeHeartbeat = Date.now();
+    expect(
+      (await runCli(fixture, ["work", "note", work, "heartbeat command"], session(holder, sharedPid)))
+        .exitCode,
+    ).toBe(0);
+    database = new Database(databasePath);
+    const heartbeat = database
+      .query<{ anchor: string; last_seen: string }, [string]>(
+        "SELECT anchor, last_seen FROM sessions WHERE id = ?",
+      )
+      .get(holder);
+    expect(heartbeat?.anchor).toBe("ttl");
+    expect(Date.parse(heartbeat?.last_seen ?? "")).toBeGreaterThanOrEqual(beforeHeartbeat);
+
+    database.query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+      .run(new Date(Date.now() - 61 * 60 * 1000).toISOString(), holder);
+    database.close();
+    const expired = JSON.parse(
+      (await runCli(fixture, ["work", "show", work, "--json"], session("observer"))).stdout,
+    ) as { data: { work: { heldBy: string | null; state: string } } };
+    expect(expired.data.work).toEqual(expect.objectContaining({ heldBy: null, state: "open" }));
+  });
+});
+
+test("194 an exclusive live pid stays pid-anchored even with a cold last_seen", async () => {
+  await withFixture(async (fixture) => {
+    const holder = "exclusive-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "exclusive pid lease", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder, 1))).exitCode).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    const cold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    database.query("UPDATE sessions SET last_seen = ? WHERE id = ?").run(cold, holder);
+    database.close();
+
+    const shown = JSON.parse(
+      (await runCli(fixture, ["work", "show", work, "--json"], session("observer"))).stdout,
+    ) as { data: { work: { heldBy: string | null; state: string } } };
+    expect(shown.data.work).toEqual(
+      expect.objectContaining({ heldBy: holder, state: "active" }),
+    );
+    const readback = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const anchor = readback
+      .query<{ anchor: string; last_seen: string }, [string]>(
+        "SELECT anchor, last_seen FROM sessions WHERE id = ?",
+      )
+      .get(holder);
+    readback.close();
+    expect(anchor).toEqual({ anchor: "pid", last_seen: cold });
+  });
+});
+
+test("195 repeated work reads write a shared-pid downgrade exactly once", async () => {
+  await withFixture(async (fixture) => {
+    const sharedPid = 1;
+    const holder = "one-write-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "one downgrade", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
+      .toBe(0);
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    let database = new Database(databasePath);
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
+      )
+      .run("one-write-peer", sharedPid, new Date().toISOString(), fixture.repo);
+    database.exec(`
+      CREATE TABLE downgrade_audit (session_id TEXT NOT NULL);
+      CREATE TRIGGER count_holder_downgrade
+      AFTER UPDATE OF anchor ON sessions
+      WHEN OLD.id = '${holder}' AND OLD.anchor = 'pid' AND NEW.anchor = 'ttl'
+      BEGIN
+        INSERT INTO downgrade_audit(session_id) VALUES (NEW.id);
+      END;
+    `);
+    database.close();
+
+    for (const command of [
+      ["work", "show", work],
+      ["work", "show", work],
+      ["work", "list"],
+      ["ready"],
+    ]) {
+      expect((await runCli(fixture, command, session("observer"))).exitCode).toBe(0);
+    }
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "UserPromptSubmit", "--harness", "codex"],
+          session(holder, sharedPid),
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["work", "show", work], session("observer"))).exitCode).toBe(0);
+    database = new Database(databasePath, { readonly: true });
+    const writes = database
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM downgrade_audit")
+      .get()?.count;
+    const anchor = database
+      .query<{ anchor: string }, [string]>("SELECT anchor FROM sessions WHERE id = ?")
+      .get(holder)?.anchor;
+    database.close();
+    expect(writes).toBe(1);
+    expect(anchor).toBe("ttl");
   });
 });
