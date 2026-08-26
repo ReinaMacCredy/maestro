@@ -352,9 +352,14 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     );
     expect(lane).not.toContain("herdr pane split --current");
     expect(lane).not.toMatch(/\.{3}|…/);
+    expect(lane).toContain("If Herdr supplies `agent_session.value` for the agent (Codex), use it.");
+    expect(lane).toContain(
+      "When it does not (Claude), ask the started lane to run maestro status --live and report its own current session id.",
+    );
+    expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
-      'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
+      'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
       "maestro dispatch accept <dispatch-id>",
@@ -373,6 +378,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       ["<done or blocked boundary>", "handback filed"],
       ["<falsifier>", "real CLI accepted command"],
       ["<pane-id>", "w1:pZ"],
+      ["<session-id>", "test-session"],
       ["<current belief>", "commands parse"],
     ]);
     const argumentsFor = (command: string): string[] => {

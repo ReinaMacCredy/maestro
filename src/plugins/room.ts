@@ -37,13 +37,14 @@ Coordination requires a dedicated, unwatched Herdr tab. Lanes are panes, never s
 
 1. Create or select the work item with \`maestro work add "<title>" --atomic-reason "<why>"\`, then create the lane tab with \`herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes --no-focus\`.
 2. Split more lane panes inside that tab with \`herdr pane split --pane <pane-id> --direction right --cwd <repo> --no-focus\`.
-3. Record the complete lane contract with \`maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>\`.
-4. Read the stored contract with \`maestro dispatch show <dispatch-id>\` and its work context with \`maestro dispatch list <work-id>\`.
-5. Start the requested harness with \`herdr agent start <name> --kind <kind> --pane <pane-id>\`, send the exact stored contract with \`herdr agent prompt <name> "<exact stored contract>"\`, and inspect lanes with \`herdr agent list\`.
-6. The Lead runs \`herdr agent wait <name> --until done --until blocked\` as a background command. Keep the lane tab unwatched: a watched lane reports \`idle\`, while an unwatched lane reports \`done\`; \`blocked\` requires inspection.
-7. The lane takes the contract with \`maestro dispatch accept <dispatch-id>\` and works only inside its mutation boundary.
-8. The lane files the complete return with \`maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"\`. A return packet is a claim; the Lead checks its evidence and decides whether the work item is complete.
-9. Read active sessions with \`maestro status --live\` and cross-project attention with \`maestro brief\`. For Maestro commands outside this set, use the command's help.
+3. Start the requested harness with \`herdr agent start <name> --kind <kind> --pane <pane-id>\` and inspect it with \`herdr agent list\`.
+4. Resolve the started agent's Maestro session before opening its dispatch. If Herdr supplies \`agent_session.value\` for the agent (Codex), use it. When it does not (Claude), ask the started lane to run maestro status --live and report its own current session id. Never treat the pane id as session identity.
+5. Record the complete lane contract with \`maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>\`.
+6. Read the stored contract with \`maestro dispatch show <dispatch-id>\` and its work context with \`maestro dispatch list <work-id>\`, then send the exact stored contract with \`herdr agent prompt <name> "<exact stored contract>"\`.
+7. The Lead runs \`herdr agent wait <name> --until done --until blocked\` as a background command. Keep the lane tab unwatched: a watched lane reports \`idle\`, while an unwatched lane reports \`done\`; \`blocked\` requires inspection.
+8. The lane takes the contract with \`maestro dispatch accept <dispatch-id>\` and works only inside its mutation boundary.
+9. The lane files the complete return with \`maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"\`. A return packet is a claim; the Lead checks its evidence and decides whether the work item is complete.
+10. Read active sessions with \`maestro status --live\` and cross-project attention with \`maestro brief\`. For Maestro commands outside this set, use the command's help.
 
 No Maestro verb pushes a brief into a pane or calls Herdr. Herdr owns topology, agent start, prompting, and wake-up; Maestro owns the durable contract and evidence record.
 `;

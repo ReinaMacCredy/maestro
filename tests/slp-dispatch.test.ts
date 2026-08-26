@@ -55,6 +55,15 @@ async function openDispatch(fixture: Fixture): Promise<string> {
   return dispatchId(opened);
 }
 
+async function acceptDispatch(
+  fixture: Fixture,
+  dispatch: string,
+  holder = "test-session",
+): Promise<void> {
+  expect((await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode)
+    .toBe(0);
+}
+
 function handbackFileArgs(dispatch: string): string[] {
   return [
     "handback",
@@ -91,7 +100,9 @@ async function openCouncil(
   const second = await runCli(fixture, dispatchOpenArgs(work));
   expect(first.exitCode).toBe(0);
   expect(second.exitCode).toBe(0);
-  return { dispatches: [dispatchId(first), dispatchId(second)], work };
+  const dispatches: [string, string] = [dispatchId(first), dispatchId(second)];
+  for (const dispatch of dispatches) await acceptDispatch(fixture, dispatch);
+  return { dispatches, work };
 }
 
 test("173 dispatch open refuses every missing or blank envelope field", async () => {
@@ -192,6 +203,72 @@ test("175 accepting dispatches never changes the work write lease", async () => 
     const shown = await runCli(fixture, ["work", "show", work]);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).not.toContain("held by:");
+  });
+});
+
+test("271 targeted accept requires equality while an untargeted dispatch stays compatible", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "targeted lane", "--atomic-reason", "fixture"]),
+    );
+    const targeted = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--target-session", "intended-lane"]),
+    );
+
+    const refused = await runCli(
+      fixture,
+      ["dispatch", "accept", targeted],
+      session("different-lane"),
+    );
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("TARGET_MISMATCH");
+    expect(refused.stderr).toContain("intended-lane");
+    expect(refused.stderr).toContain("different-lane");
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", targeted], session("intended-lane")))
+        .exitCode,
+    ).toBe(0);
+
+    const untargeted = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", untargeted], session("any-lane"))).exitCode,
+    ).toBe(0);
+  });
+});
+
+test("272 handback file refuses a session that is not the dispatch holder", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session("holding-lane"))).exitCode,
+    ).toBe(0);
+
+    const refused = await runCli(
+      fixture,
+      handbackFileArgs(dispatch),
+      session("different-lane"),
+    );
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("DISPATCH_HELD");
+    expect(refused.stderr).toContain("holding-lane");
+    expect(refused.stderr).toContain("different-lane");
+    expect(
+      (await runCli(fixture, handbackFileArgs(dispatch), session("holding-lane"))).exitCode,
+    ).toBe(0);
+  });
+});
+
+test("273 handback file refuses a second return for the same dispatch", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const holder = session("returning-lane");
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], holder)).exitCode).toBe(0);
+    expect((await runCli(fixture, handbackFileArgs(dispatch), holder)).exitCode).toBe(0);
+
+    const repeated = await runCli(fixture, handbackFileArgs(dispatch), holder);
+    expect(repeated.exitCode).not.toBe(0);
+    expect(repeated.stderr).toContain("HANDBACK_EXISTS");
+    expect(repeated.stderr).toContain(dispatch);
   });
 });
 
@@ -359,6 +436,7 @@ test("177 handback assumptions and residual risks must be explicit while None is
       expect(blank.stderr).toContain(field);
     }
 
+    await acceptDispatch(fixture, dispatch);
     const filed = await runCli(fixture, handbackFileArgs(dispatch));
     expect(filed.exitCode).toBe(0);
     const match = filed.stdout.match(/^(\S+) \[DONE\]/);
@@ -410,6 +488,7 @@ test("179 a council stays sealed until every dispatch has returned", async () =>
 test("180 a single dispatch handback reads immediately", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
+    await acceptDispatch(fixture, dispatch);
     const filed = await runCli(fixture, handbackFileArgs(dispatch));
     expect(filed.exitCode).toBe(0);
     const shown = await runCli(fixture, ["handback", "show", handbackId(filed)]);
@@ -502,6 +581,7 @@ test("183 handoff renders returned handbacks into the packet", async () => {
       (await runCli(fixture, ["bundle", "open", "dispatch-handoff", "--work", work])).exitCode,
     ).toBe(0);
     const dispatch = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    await acceptDispatch(fixture, dispatch);
     expect((await runCli(fixture, handbackFileArgs(dispatch))).exitCode).toBe(0);
 
     const handedOff = await runCli(fixture, ["handoff", "dispatch-handoff", "--json"]);

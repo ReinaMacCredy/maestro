@@ -688,11 +688,36 @@ export const dispatchPlugin: BuiltInPlugin = {
           const assumptions = requiredOption(invocation, "--assumptions");
           const residualRisks = requiredOption(invocation, "--residual-risks");
           const incidentalFindings = requiredOption(invocation, "--incidental-findings");
-          const id = nextHandbackId(context);
-          const createdAt = new Date().toISOString();
           const sessionId = context.sessions.current().id;
           const work = context.work as WorkService;
-          context.store.database.transaction(() => {
+          const file = context.store.database.transaction(() => {
+            const current = requireDispatch(context, dispatchId);
+            if (current.state === "cancelled") {
+              throw new CliError("INVALID_STATE", `${dispatchId} is cancelled`);
+            }
+            if (current.state === "returned") {
+              throw new CliError(
+                "HANDBACK_EXISTS",
+                `${dispatchId} already has a handback`,
+                { dispatchId },
+              );
+            }
+            if (!current.heldBy) {
+              throw new CliError(
+                "DISPATCH_UNHELD",
+                `${dispatchId} has not been accepted; run: maestro dispatch accept ${dispatchId}`,
+                { command: `maestro dispatch accept ${dispatchId}`, dispatchId },
+              );
+            }
+            if (current.heldBy !== sessionId) {
+              throw new CliError(
+                "DISPATCH_HELD",
+                `${dispatchId} is held by ${current.heldBy}; current session is ${sessionId}`,
+                { currentSession: sessionId, dispatchId, heldBy: current.heldBy },
+              );
+            }
+            const id = nextHandbackId(context);
+            const createdAt = new Date().toISOString();
             context.store.database
               .query(
                 `INSERT INTO handbacks
@@ -714,7 +739,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             context.store.database
               .query("UPDATE dispatches SET held_by = NULL, updated_at = ? WHERE id = ?")
               .run(createdAt, dispatchId);
-            work.release(dispatch.workId, sessionId, createdAt);
+            work.release(current.workId, sessionId, createdAt);
             context.log.append({
               type: "handback.file",
               entityType: "handback",
@@ -722,8 +747,9 @@ export const dispatchPlugin: BuiltInPlugin = {
               sessionId,
               payload: { dispatchId, status },
             });
-          })();
-          const filed = handbackService.get(id) as HandbackRecord;
+            return handbackService.get(id) as HandbackRecord;
+          });
+          const filed = file.immediate();
           return { data: { handback: filed }, text: formatHandback(filed) };
         },
         {
