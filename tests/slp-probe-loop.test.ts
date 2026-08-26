@@ -2,7 +2,17 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, prepareInstallFixture, runCli, type Fixture, withFixture } from "./helpers.ts";
+import { existsSync } from "node:fs";
+import {
+  idFrom,
+  initializeGitRepository,
+  prepareInstallFixture,
+  runCli,
+  runCliAt,
+  runTool,
+  type Fixture,
+  withFixture,
+} from "./helpers.ts";
 
 function session(id: string, pid = process.pid): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };
@@ -372,5 +382,55 @@ test("230 concurrent dispatch acceptance has exactly one winner", async () => {
         database.close();
       }
     }
+  });
+});
+
+test("232 install writes Codex wiring into the git main worktree, where Codex reads it", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const linked = join(fixture.root, "linked");
+    expect(
+      (await runTool(["git", "worktree", "add", "-b", "feature", linked], fixture.repo)).exitCode,
+    ).toBe(0);
+
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCliAt(fixture, linked, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+
+    // Codex resolves project config to the main worktree, so wiring written only
+    // into the linked worktree is never read (d39).
+    const mainWiring = JSON.parse(
+      await Bun.file(join(fixture.repo, ".codex", "hooks.json")).text(),
+    ) as { hooks: Record<string, unknown> };
+    expect(Object.keys(mainWiring.hooks)).toContain("PostToolUse");
+    expect(existsSync(join(fixture.repo, ".codex", "hooks", "maestro-record.ts"))).toBe(true);
+    expect(installed.stdout).toContain(join(fixture.repo, ".codex"));
+  });
+});
+
+test("233 the codex check reads the wiring Codex reads, not the linked worktree's copy", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const linked = join(fixture.root, "linked");
+    expect(
+      (await runTool(["git", "worktree", "add", "-b", "feature", linked], fixture.repo)).exitCode,
+    ).toBe(0);
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCliAt(fixture, linked, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const mainHooks = join(fixture.repo, ".codex", "hooks.json");
+    const wiring = JSON.parse(await Bun.file(mainHooks).text()) as
+      { hooks: Record<string, unknown> };
+    delete wiring.hooks.PostToolUse;
+    await writeFile(mainHooks, JSON.stringify(wiring, null, 2));
+
+    // The linked worktree's own copy still declares PostToolUse; the check must
+    // not be fooled by it.
+    const linkedWiring = JSON.parse(await Bun.file(join(linked, ".codex", "hooks.json")).text()) as
+      { hooks: Record<string, unknown> };
+    expect(Object.keys(linkedWiring.hooks)).toContain("PostToolUse");
+
+    const diagnosed = await runCliAt(fixture, linked, ["doctor"], { PATH: path });
+    expect(diagnosed.stdout).toContain("codex hooks: stale");
   });
 });

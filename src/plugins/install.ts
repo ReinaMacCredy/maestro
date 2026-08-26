@@ -10,7 +10,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
@@ -311,6 +311,22 @@ export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Prom
   }
 }
 
+// Codex resolves project hook config to the git MAIN worktree, so wiring written
+// only into a linked worktree is never read. Measured with Codex CLI v0.149.1
+// running in a linked worktree: its /hooks panel names the main checkout's file
+// and loads exactly one project config (d39).
+export async function gitMainWorktree(repo: string): Promise<string | null> {
+  const git = Bun.spawn(["git", "-C", repo, "rev-parse", "--git-common-dir"], {
+    stderr: "ignore",
+    stdout: "pipe",
+  });
+  const out = (await new Response(git.stdout).text()).trim();
+  if ((await git.exited) !== 0 || !out) return null;
+  const commonDir = resolve(repo, out);
+  const root = basename(commonDir) === ".git" ? dirname(commonDir) : commonDir;
+  return (await samePath(root, repo)) ? null : root;
+}
+
 export async function resolveSourceRoot(repo: string): Promise<string> {
   const loadedRoot = resolve(import.meta.dir, "..", "..");
   const packagePath = join(repo, "package.json");
@@ -461,6 +477,17 @@ export const installPlugin: BuiltInPlugin = {
           await chmod(adapter.hookPath, 0o755);
           await writeHookConfig(adapter.configPath, adapter.hookCommand);
         }
+        const mainWorktree = await gitMainWorktree(repo);
+        if (mainWorktree) {
+          const mirrorHook = join(mainWorktree, ".codex", "hooks", "maestro-record.ts");
+          await mkdir(dirname(mirrorHook), { recursive: true });
+          await writeFile(mirrorHook, hookSource("codex"));
+          await chmod(mirrorHook, 0o755);
+          await writeHookConfig(
+            join(mainWorktree, ".codex", "hooks.json"),
+            "bun .codex/hooks/maestro-record.ts",
+          );
+        }
         const codexHooksChanged = codexHooksBefore !== await readFile(codexConfigPath, "utf8");
         await writeMirror(join(repo, "AGENTS.md"));
         await writeMirror(join(repo, "CLAUDE.md"));
@@ -489,6 +516,9 @@ export const installPlugin: BuiltInPlugin = {
             `maestro installed for ${repo}` +
             "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/, AGENTS.md, CLAUDE.md" +
             " (AGENTS.md and CLAUDE.md carry the same maestro block for Claude and Codex)" +
+            (mainWorktree
+              ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
+              : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };

@@ -9,6 +9,7 @@ import { Sessions } from "../kernel/sessions.ts";
 import { resolveStoreLocation, Store } from "../kernel/store.ts";
 import {
   readGitHeadCommit,
+  gitMainWorktree,
   stampRuntime,
   uninstallRepo,
 } from "./install.ts";
@@ -252,7 +253,10 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
 // Codex skips repo-local hooks until their exact definition is trusted, and it
 // says so only inside its own UI, so a wired repo can stay silent for months.
 async function codexTrustCheck(repo: string): Promise<string> {
-  const hooks = join(repo, ".codex", "hooks.json");
+  // Codex resolves project hook config to the git main worktree, so a linked
+  // worktree's own copy is never the file it reads (d39).
+  const mainWorktree = await gitMainWorktree(repo);
+  const hooks = join(mainWorktree ?? repo, ".codex", "hooks.json");
   if (!existsSync(hooks)) return "codex hooks: absent";
   // Trust is recorded per event, so ask about the one that carries mid-turn
   // delivery. A checkout wired by an older runtime declares no PostToolUse at
@@ -265,7 +269,7 @@ async function codexTrustCheck(repo: string): Promise<string> {
     declared = [];
   }
   if (!declared.includes("PostToolUse")) {
-    return "codex hooks: stale (no PostToolUse; run maestro install in this checkout)";
+    return `codex hooks: stale (no PostToolUse in ${hooks}; run maestro install)`;
   }
   const config = join(process.env.HOME ?? repo, ".codex", "config.toml");
   const text = existsSync(config) ? await readFile(config, "utf8") : "";
