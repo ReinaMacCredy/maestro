@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, prepareInstallFixture, runCli, type Fixture, withFixture } from "./helpers.ts";
 
@@ -133,5 +134,40 @@ test("224 the import says how to read what it just imported", async () => {
     const imported = await runCli(fixture, ["import", "rust"]);
     expect(imported.exitCode).toBe(0);
     expect(imported.stdout).toContain("read them: maestro legacy show old-card");
+  });
+});
+
+test("225 the codex check asks about the hook that carries delivery", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const hooksPath = join(fixture.repo, ".codex", "hooks.json");
+    const installed = JSON.parse(await Bun.file(hooksPath).text()) as
+      { hooks: Record<string, unknown> };
+    expect(Object.keys(installed.hooks)).toContain("PostToolUse");
+
+    await mkdir(join(fixture.home, ".codex"), { recursive: true });
+    // Trusting one unrelated event is what the owner's /hooks pass recorded.
+    await writeFile(
+      join(fixture.home, ".codex", "config.toml"),
+      `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`,
+    );
+    const partial = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(partial.stdout).toContain("codex hooks: not trusted");
+
+    await writeFile(
+      join(fixture.home, ".codex", "config.toml"),
+      `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n` +
+        `[hooks.state."${hooksPath}:post_tool_use:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`,
+    );
+    const trusted = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(trusted.stdout).toContain("codex hooks: trusted");
+
+    // A checkout wired by an older runtime declares no PostToolUse at all.
+    delete installed.hooks.PostToolUse;
+    await writeFile(hooksPath, JSON.stringify(installed, null, 2));
+    const stale = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(stale.stdout).toContain("codex hooks: stale");
+    expect(stale.stdout).toContain("maestro install");
   });
 });

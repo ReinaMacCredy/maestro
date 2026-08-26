@@ -250,6 +250,19 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
 async function codexTrustCheck(repo: string): Promise<string> {
   const hooks = join(repo, ".codex", "hooks.json");
   if (!existsSync(hooks)) return "codex hooks: absent";
+  // Trust is recorded per event, so ask about the one that carries mid-turn
+  // delivery. A checkout wired by an older runtime declares no PostToolUse at
+  // all, and every other event being trusted says nothing about that (d36).
+  let declared: string[] = [];
+  try {
+    const wiring = JSON.parse(await readFile(hooks, "utf8")) as { hooks?: Record<string, unknown> };
+    declared = Object.keys(wiring.hooks ?? wiring);
+  } catch {
+    declared = [];
+  }
+  if (!declared.includes("PostToolUse")) {
+    return "codex hooks: stale (no PostToolUse; run maestro install in this checkout)";
+  }
   const config = join(process.env.HOME ?? repo, ".codex", "config.toml");
   const text = existsSync(config) ? await readFile(config, "utf8") : "";
   // macOS hands out both /var/... and /private/var/... for the same repo, and
@@ -261,7 +274,7 @@ async function codexTrustCheck(repo: string): Promise<string> {
       candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
     );
   }
-  return [...paths].some((path) => text.includes(`"${path}:`))
+  return [...paths].some((path) => text.includes(`"${path}:post_tool_use:`))
     ? "codex hooks: trusted"
     : "codex hooks: not trusted (Codex skips them; run /hooks in Codex once to trust)";
 }
