@@ -437,7 +437,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           };
         },
         {
-          description: "Send a message to another live session.",
+          description: "Send a message to a recorded session; dead targets keep it queued.",
           positionals: [
             { name: "session", required: true },
             { name: "message", required: true },

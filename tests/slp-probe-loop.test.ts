@@ -283,3 +283,26 @@ test("228 doctor names each dead mailbox target and the audited discard command"
     expect(queued.stdout).toContain("maestro msg discard <session> --reason <text>");
   });
 });
+
+test("229 msg send help admits that recorded dead targets keep mail queued", async () => {
+  await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["msg", "send", "--help"]);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("recorded session");
+    expect(help.stdout).toContain("dead targets keep it queued");
+    expect(help.stdout).not.toContain("another live session");
+
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["hook", "record", "--event", "SessionStart"],
+          session("help-dead", 99999999),
+        )
+      ).exitCode,
+    ).toBe(0);
+    const sent = await runCli(fixture, ["msg", "send", "help-dead", "queued"], session("lead"));
+    expect(sent.exitCode).toBe(0);
+    expect(sent.stderr).toContain("[dead target]");
+  });
+});
