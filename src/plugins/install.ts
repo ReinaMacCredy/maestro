@@ -188,6 +188,34 @@ async function writeShellSource(home: string): Promise<void> {
   await writeFile(shellRc, `${prefix}${shellSourceLine}\n`);
 }
 
+async function initializeRoomStore(home: string, room: string, runtimeRoot: string): Promise<void> {
+  const child = Bun.spawn(
+    [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), "version"],
+    {
+      cwd: room,
+      env: {
+        ...process.env,
+        HOME: home,
+        MAESTRO_READ_ONLY: "0",
+        MAESTRO_SESSION_NONE: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new CliError(
+      "ROOM_STORE_INIT",
+      `cannot initialize ${join(room, ".maestro", "maestro.db")}: ${stderr.trim()}`,
+    );
+  }
+}
+
 async function removeManagedHooks(path: string): Promise<boolean> {
   if (!existsSync(path)) return false;
   const config = await readJson<HookConfig>(path, { hooks: {} });
@@ -535,6 +563,7 @@ export const installPlugin: BuiltInPlugin = {
           await chmod(shim, 0o755);
         }
         const room = await scaffoldRoom(home);
+        await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
         await writeShellSource(home);
         context.log.append({

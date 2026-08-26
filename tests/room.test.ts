@@ -6,6 +6,7 @@ import {
   prepareInstallFixture,
   runCli,
   runInstalledCliAt,
+  runTool,
   withFixture,
 } from "./helpers.ts";
 
@@ -360,6 +361,35 @@ test("242 owner preferences are room decisions whose reversals supersede the pri
     expect(envelope.data.decisions).toContainEqual(
       expect.objectContaining({ id: reversalId, state: "locked", supersedesId: firstId }),
     );
+  });
+});
+
+test("243 install initializes the room store without turning the room into a git repository", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    const room = join(fixture.home, "maestro");
+
+    expect(installed.exitCode).toBe(0);
+    expect((await runTool(["git", "rev-parse", "--show-toplevel"], room)).exitCode).not.toBe(0);
+    expect(await Bun.file(join(room, ".git")).exists()).toBe(false);
+    expect(await Bun.file(join(room, ".maestro", "maestro.db")).exists()).toBe(true);
+    expect(await Bun.file(join(fixture.home, ".maestro", "maestro.db")).exists()).toBe(false);
+
+    const added = await runInstalledCliAt(
+      fixture,
+      room,
+      ["work", "add", "unassigned owner idea", "--atomic-reason", "room record"],
+      { PATH: path },
+    );
+    expect(added.exitCode).toBe(0);
+    const shown = await runInstalledCliAt(
+      fixture,
+      room,
+      ["work", "show", idFrom(added)],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(shown.stdout).toContain("unassigned owner idea");
   });
 });
 
