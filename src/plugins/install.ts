@@ -15,6 +15,7 @@ import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
+import { scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { writeSourceRecord } from "./source-record.ts";
@@ -533,6 +534,7 @@ export const installPlugin: BuiltInPlugin = {
           );
           await chmod(shim, 0o755);
         }
+        const room = await scaffoldRoom(home);
         await registerRepository(home, repo);
         await writeShellSource(home);
         context.log.append({
@@ -552,6 +554,7 @@ export const installPlugin: BuiltInPlugin = {
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
+            `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
