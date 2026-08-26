@@ -61,6 +61,16 @@ const shellrc = `function _maestro_home() {
 }
 
 alias hm=_maestro_home
+
+function maestro_lanes() {
+  if [[ $# -ne 1 ]]; then
+    printf '%s\n' 'usage: maestro_lanes <work-id>' >&2
+    return 2
+  fi
+  local lanes
+  lanes="$(maestro dispatch list "$1")" || return
+  printf '%s\n' "$lanes" | bun -e 'const input = await Bun.stdin.text(); let agents = []; try { const result = Bun.spawnSync(["herdr", "agent", "list"], { stdout: "pipe", stderr: "ignore" }); if (result.exitCode === 0) agents = JSON.parse(new TextDecoder().decode(result.stdout)).result?.agents ?? []; } catch {} const statuses = new Map(agents.map((agent) => [agent.pane_id, agent.agent_status])); process.stdout.write(input.split("\\n").map((line) => { const pane = line.startsWith("lane ") ? line.slice(5).split(" | ")[0] : null; return pane ? line + " | agent=" + (statuses.get(pane) ?? "unknown") : line; }).join("\\n"));'
+}
 `;
 
 export async function scaffoldRoom(home: string): Promise<string> {

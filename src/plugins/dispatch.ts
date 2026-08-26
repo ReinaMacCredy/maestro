@@ -320,6 +320,11 @@ function formatCouncil(council: CouncilStatus): string | null {
   return `council: ${state} (${council.returned}/${council.total} returned)`;
 }
 
+function formatLane(dispatch: DispatchRecord, workState: string, holderLive: boolean): string {
+  const holderState = dispatch.heldBy ? holderLive ? "live" : "dead" : "none";
+  return `lane ${dispatch.pane ?? "none"} | ${dispatch.id} | ${dispatch.lane} | dispatch=${dispatch.state} | work=${workState} | holder=${holderState}`;
+}
+
 export const dispatchPlugin: BuiltInPlugin = {
   name: "dispatch",
   inject: ["work"],
@@ -595,16 +600,29 @@ export const dispatchPlugin: BuiltInPlugin = {
           const workId = invocation.positionals[0];
           if (workId) {
             const work = context.work as WorkService;
-            if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            const subject = work.get(workId);
+            if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            const dispatches = service.list(workId);
+            const council = service.council(workId);
+            const councilLine = formatCouncil(council);
+            const lanes = dispatches.map((dispatch) =>
+              formatLane(
+                dispatch,
+                subject.state,
+                dispatch.heldBy ? context.sessions.isAlive(dispatch.heldBy) : false,
+              )
+            );
+            return {
+              data: { dispatches, council },
+              text: [councilLine, lanes.join("\n")]
+                .filter((part): part is string => Boolean(part))
+                .join("\n\n"),
+            };
           }
-          const dispatches = service.list(workId);
-          const council = workId ? service.council(workId) : null;
-          const councilLine = council ? formatCouncil(council) : null;
+          const dispatches = service.list();
           return {
-            data: { dispatches, council },
-            text: [councilLine, dispatches.map(format).join("\n\n")]
-              .filter((part): part is string => Boolean(part))
-              .join("\n\n"),
+            data: { dispatches, council: null },
+            text: dispatches.map(format).join("\n\n"),
           };
         },
         {

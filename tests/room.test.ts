@@ -410,6 +410,144 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
   });
 });
 
+test("275 the installed room overlays Herdr agent status on work-scoped lane rows once", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const shellrc = await readFile(join(fixture.home, "maestro", "shellrc"), "utf8");
+    expect(shellrc).toContain("function maestro_lanes()");
+
+    const fakeBin = join(fixture.root, "fake-bin-lanes");
+    const maestroLog = join(fixture.root, "maestro-lanes.log");
+    const herdrLog = join(fixture.root, "herdr-lanes.log");
+    await mkdir(fakeBin, { recursive: true });
+    await writeFile(
+      join(fakeBin, "maestro"),
+      `#!/bin/sh
+printf '%s\n' "$*" >> "$MAESTRO_LOG"
+printf '%s\n' 'council: sealed (0/2 returned)' '' 'lane w2:p2 | x11 | decision | dispatch=open | work=active | holder=live' 'lane w2:p3 | x12 | delivery | dispatch=open | work=active | holder=live'
+`,
+    );
+    await chmod(join(fakeBin, "maestro"), 0o755);
+    await writeFile(
+      join(fakeBin, "herdr"),
+      `#!/bin/sh
+printf '%s\n' "$*" >> "$HERDR_LOG"
+printf '%s\n' '{"result":{"agents":[{"pane_id":"w2:p2","agent_status":"working"},{"pane_id":"w2:p3","agent_status":"blocked"}]}}'
+`,
+    );
+    await chmod(join(fakeBin, "herdr"), 0o755);
+
+    const shell = Bun.spawn(
+      ["/bin/zsh", "-f", "-c", 'source "$HOME/maestro/shellrc"; maestro_lanes w81'],
+      {
+        cwd: fixture.repo,
+        env: {
+          ...process.env,
+          HERDR_LOG: herdrLog,
+          HOME: fixture.home,
+          MAESTRO_LOG: maestroLog,
+          PATH: `${fakeBin}:${path}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(shell.stdout).text(),
+      new Response(shell.stderr).text(),
+      shell.exited,
+    ]);
+
+    expect(exitCode, stderr).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toBe(
+      "council: sealed (0/2 returned)\n\n" +
+        "lane w2:p2 | x11 | decision | dispatch=open | work=active | holder=live | agent=working\n" +
+        "lane w2:p3 | x12 | delivery | dispatch=open | work=active | holder=live | agent=blocked\n",
+    );
+    expect(await readFile(maestroLog, "utf8")).toBe("dispatch list w81\n");
+    expect(await readFile(herdrLog, "utf8")).toBe("agent list\n");
+  });
+});
+
+test("276 brief omits lane rows while pane-bound dispatches are open", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const work = await addBriefWork(fixture, fixture.repo, path, "ordinary lane progress");
+    const dispatches: string[] = [];
+    for (const [pane, holder] of [["w1:pA", "lane-a"], ["w1:pB", "lane-b"]] as const) {
+      const opened = await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        [
+          "dispatch",
+          "open",
+          work,
+          "--objective",
+          "run an ordinary lane",
+          "--owned-scope",
+          "fixture",
+          "--excluded-scope",
+          "product source",
+          "--mutation",
+          "no-write",
+          "--stop-condition",
+          "handback filed",
+          "--lane",
+          "delivery",
+          "--evidence-required",
+          "source: fixture",
+          "--pane",
+          pane,
+        ],
+        { PATH: path },
+      );
+      expect(opened.exitCode).toBe(0);
+      const dispatch = opened.stdout.match(/^(x\d+)/)?.[1] as string;
+      dispatches.push(dispatch);
+      const environment = {
+        MAESTRO_SESSION_ID: holder,
+        MAESTRO_SESSION_PID: String(process.pid),
+        PATH: path,
+      };
+      expect(
+        (
+          await runInstalledCliAt(
+            fixture,
+            fixture.repo,
+            ["hook", "record", "--event", "SessionStart"],
+            environment,
+          )
+        ).exitCode,
+      ).toBe(0);
+      expect(
+        (
+          await runInstalledCliAt(
+            fixture,
+            fixture.repo,
+            ["dispatch", "accept", dispatch],
+            environment,
+          )
+        ).exitCode,
+      ).toBe(0);
+    }
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toBe("All registered projects are running normally.\n");
+    expect(brief.stdout).not.toContain("lane w1:");
+    expect(brief.stdout).not.toContain("ordinary lane progress");
+    for (const dispatch of dispatches) expect(brief.stdout).not.toContain(dispatch);
+  });
+});
+
 test("237 brief says every registered repository is running normally in one line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

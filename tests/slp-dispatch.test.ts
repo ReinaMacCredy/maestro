@@ -272,6 +272,74 @@ test("273 handback file refuses a second return for the same dispatch", async ()
   });
 });
 
+test("274 work-scoped dispatch lists render compact lane state without changing the archive", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "lane board", "--atomic-reason", "fixture"]),
+    );
+    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const secondArgs = dispatchOpenArgs(work);
+    secondArgs[secondArgs.indexOf("--pane") + 1] = "w1:pB";
+    const second = dispatchId(await runCli(fixture, secondArgs));
+    const liveHolder = session("live-lane");
+    expect(
+      (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], liveHolder))
+        .exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", first], liveHolder)).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", second], session("dead-lane"))).exitCode,
+    ).toBe(0);
+
+    const scoped = await runCli(fixture, ["dispatch", "list", work]);
+    expect(scoped.exitCode).toBe(0);
+    expect(scoped.stdout).toBe(
+      `council: sealed (0/2 returned)\n\n` +
+        `lane w1:pA | ${first} | delivery | dispatch=open | work=open | holder=live\n` +
+        `lane w1:pB | ${second} | delivery | dispatch=open | work=open | holder=dead\n`,
+    );
+    expect(scoped.stdout).not.toContain("claim:");
+
+    const archive = await runCli(fixture, ["dispatch", "list"]);
+    expect(archive.exitCode).toBe(0);
+    expect(archive.stdout).toContain(`work: ${work}`);
+    expect(archive.stdout).toContain("objective: Settle the storage boundary");
+    expect(archive.stdout).toContain("held by: live-lane");
+
+    const terminal = idFrom(
+      await runCli(fixture, ["work", "add", "finished lane", "--atomic-reason", "fixture"]),
+    );
+    const lead = session("lead");
+    expect((await runCli(fixture, ["work", "start", terminal], lead)).exitCode).toBe(0);
+    const cancelled = dispatchId(await runCli(fixture, dispatchOpenArgs(terminal), lead));
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["dispatch", "cancel", cancelled, "--reason", "lane completed elsewhere"],
+          lead,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["work", "done", terminal, "--evidence", "source: fixture"],
+          lead,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    const finished = await runCli(fixture, ["dispatch", "list", terminal]);
+    expect(finished.exitCode).toBe(0);
+    expect(finished.stdout).toBe(
+      `lane w1:pA | ${cancelled} | delivery | dispatch=cancelled | work=done | holder=none\n`,
+    );
+    expect(finished.stdout).not.toContain("[open]");
+  });
+});
+
 test("263 returned and cancelled dispatches clear their lane holder", async () => {
   await withFixture(async (fixture) => {
     const returned = await openDispatch(fixture);
