@@ -236,6 +236,96 @@ test("263 returned and cancelled dispatches clear their lane holder", async () =
   });
 });
 
+test("266 dispatch migration clears legacy terminal holders once", async () => {
+  await withFixture(async (fixture) => {
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const legacy = new Database(databasePath, { create: true });
+    legacy.exec(`
+      CREATE TABLE dispatches (
+        id TEXT PRIMARY KEY,
+        work_id TEXT NOT NULL REFERENCES work(id),
+        objective TEXT NOT NULL,
+        owned_scope TEXT NOT NULL,
+        excluded_scope TEXT NOT NULL,
+        mutation TEXT NOT NULL,
+        stop_condition TEXT NOT NULL,
+        lane TEXT NOT NULL,
+        evidence_required TEXT NOT NULL,
+        pane TEXT,
+        target_session TEXT,
+        held_by TEXT,
+        cancelled_at TEXT,
+        cancel_reason TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE handbacks (
+        id TEXT PRIMARY KEY,
+        dispatch_id TEXT NOT NULL REFERENCES dispatches(id),
+        status TEXT NOT NULL,
+        claim TEXT NOT NULL,
+        proof TEXT NOT NULL,
+        assumptions TEXT NOT NULL,
+        residual_risks TEXT NOT NULL,
+        incidental_findings TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO dispatches VALUES
+        ('legacy-returned', 'w1', 'o', 's', 'e', 'no-write', 'returned', 'delivery',
+         'source', 'w1:pA', NULL, 'returned-lane', NULL, NULL,
+         '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+        ('legacy-cancelled', 'w2', 'o', 's', 'e', 'no-write', 'cancelled', 'delivery',
+         'source', 'w1:pB', NULL, 'cancelled-lane', '2026-01-02T00:00:00.000Z', 'abandoned',
+         '2026-01-01T00:00:00.000Z', '2026-01-02T00:00:00.000Z'),
+        ('legacy-open', 'w3', 'o', 's', 'e', 'no-write', 'open', 'delivery',
+         'source', 'w1:pC', NULL, 'open-lane', NULL, NULL,
+         '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO handbacks VALUES
+        ('legacy-handback', 'legacy-returned', 'DONE', 'returned', 'source: fixture',
+         'None', 'None', 'None', '2026-01-02T00:00:00.000Z');
+    `);
+    expect(
+      legacy
+        .query<{ held_by: string | null }, []>(
+          "SELECT held_by FROM dispatches ORDER BY id",
+        )
+        .all()
+        .map((row) => row.held_by),
+    ).toEqual(["cancelled-lane", "open-lane", "returned-lane"]);
+    legacy.close();
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const migrated = new Database(databasePath);
+    expect(
+      migrated
+        .query<{ held_by: string | null }, []>(
+          "SELECT held_by FROM dispatches ORDER BY id",
+        )
+        .all()
+        .map((row) => row.held_by),
+    ).toEqual([null, "open-lane", null]);
+    expect(
+      migrated
+        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
+        .all()
+        .map((column) => column.name),
+    ).toContain("terminal_held_by_backfilled");
+    migrated.close();
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const repeated = new Database(databasePath, { readonly: true });
+    expect(
+      repeated
+        .query<{ held_by: string | null }, []>(
+          "SELECT held_by FROM dispatches ORDER BY id",
+        )
+        .all()
+        .map((row) => row.held_by),
+    ).toEqual([null, "open-lane", null]);
+    repeated.close();
+  });
+});
+
 test("176 handback file refuses a status outside the eight-value vocabulary", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
