@@ -130,3 +130,119 @@ test("188 a non-holder handback leaves another session's work lease alone", asyn
     );
   });
 });
+
+test("189 work release refuses a session that does not hold the lease", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "holder-only release", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session("release-holder"))).exitCode)
+      .toBe(0);
+
+    const refused = await runCli(fixture, ["work", "release", work], session("other-session"));
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("LEASE_HELD");
+    expect(refused.stderr).toContain("release-holder");
+    const shown = JSON.parse((await runCli(fixture, ["work", "show", work, "--json"])).stdout) as {
+      data: { work: { heldBy: string | null; state: string } };
+    };
+    expect(shown.data.work).toEqual(
+      expect.objectContaining({ heldBy: "release-holder", state: "active" }),
+    );
+  });
+});
+
+test("190 a holder releases open work without losing evidence and records the event", async () => {
+  await withFixture(async (fixture) => {
+    const holder = "release-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "voluntary release", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    database.query("UPDATE work SET evidence = ? WHERE id = ?").run("source: retained", work);
+    database.close();
+
+    const released = await runCli(fixture, ["work", "release", work], session(holder));
+    expect(released.exitCode).toBe(0);
+    const shown = JSON.parse((await runCli(fixture, ["work", "show", work, "--json"])).stdout) as {
+      data: { work: { evidence: string | null; heldBy: string | null; state: string } };
+    };
+    expect(shown.data.work).toEqual(
+      expect.objectContaining({ evidence: "source: retained", heldBy: null, state: "open" }),
+    );
+    const trace = await runCli(fixture, ["trace", work]);
+    expect(trace.stdout).toContain("work.release");
+    expect(trace.stdout).toContain(`\"holder\":\"${holder}\"`);
+    expect(trace.stdout).not.toContain("work.done");
+  });
+});
+
+test("191 work reclaim refuses a missing or blank reason", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "reasoned reclaim", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session("previous-holder"))).exitCode)
+      .toBe(0);
+
+    for (const args of [
+      ["work", "reclaim", work],
+      ["work", "reclaim", work, "--reason", "   "],
+    ]) {
+      const refused = await runCli(fixture, args, session("new-holder"));
+      expect(refused.exitCode).not.toBe(0);
+      expect(refused.stderr).toContain("--reason");
+    }
+  });
+});
+
+test("192 work reclaim records both sessions and the reason without completing work", async () => {
+  await withFixture(async (fixture) => {
+    const previousHolder = "previous-holder";
+    const newHolder = "new-holder";
+    const reason = "operator confirmed the prior lane stopped";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "take stopped lease", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(previousHolder))).exitCode)
+      .toBe(0);
+
+    const reclaimed = await runCli(
+      fixture,
+      ["work", "reclaim", work, "--reason", reason],
+      session(newHolder),
+    );
+    expect(reclaimed.exitCode).toBe(0);
+    const shown = await runCli(fixture, ["work", "show", work, "--json"]);
+    const envelope = JSON.parse(shown.stdout) as {
+      data: {
+        work: {
+          heldBy: string | null;
+          reclaimReason: string | null;
+          reclaimedBy: string | null;
+          reclaimedFrom: string | null;
+          state: string;
+        };
+      };
+    };
+    expect(envelope.data.work).toEqual(
+      expect.objectContaining({
+        heldBy: newHolder,
+        reclaimReason: reason,
+        reclaimedBy: newHolder,
+        reclaimedFrom: previousHolder,
+        state: "active",
+      }),
+    );
+    expect((await runCli(fixture, ["work", "show", work])).stdout).toContain(
+      `reclaim reason: ${reason}`,
+    );
+    const trace = await runCli(fixture, ["trace", work]);
+    expect(trace.stdout).toContain("work.reclaim");
+    expect(trace.stdout).toContain(`\"previousHolder\":\"${previousHolder}\"`);
+    expect(trace.stdout).toContain(`\"newHolder\":\"${newHolder}\"`);
+    expect(trace.stdout).toContain(`\"reason\":\"${reason}\"`);
+    expect(trace.stdout).not.toContain("work.done");
+  });
+});

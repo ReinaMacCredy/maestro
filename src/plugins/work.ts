@@ -13,6 +13,9 @@ export interface WorkRecord {
   atomicReason: string | null;
   evidence: string | null;
   heldBy: string | null;
+  reclaimedFrom: string | null;
+  reclaimedBy: string | null;
+  reclaimReason: string | null;
   cancelReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +31,9 @@ interface WorkRow {
   atomic_reason: string | null;
   evidence: string | null;
   held_by: string | null;
+  reclaimed_from: string | null;
+  reclaimed_by: string | null;
+  reclaim_reason: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   created_at: string;
@@ -73,6 +79,9 @@ function toWork(row: WorkRow): WorkRecord {
     atomicReason: row.atomic_reason,
     evidence: row.evidence,
     heldBy: row.held_by,
+    reclaimedFrom: row.reclaimed_from,
+    reclaimedBy: row.reclaimed_by,
+    reclaimReason: row.reclaim_reason,
     cancelReason: row.cancel_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -229,6 +238,9 @@ function formatWork(work: WorkRecord): string {
     `kind: ${work.kind}`,
     work.parentId ? `parent: ${work.parentId}` : null,
     work.heldBy ? `held by: ${work.heldBy}` : null,
+    work.reclaimedFrom ? `reclaimed from: ${work.reclaimedFrom}` : null,
+    work.reclaimedBy ? `reclaimed by: ${work.reclaimedBy}` : null,
+    work.reclaimReason ? `reclaim reason: ${work.reclaimReason}` : null,
     work.acceptance ? `acceptance: ${work.acceptance}` : null,
     work.atomicReason ? `atomic reason: ${work.atomicReason}` : null,
     work.cancelReason ? `cancel reason: ${work.cancelReason}` : null,
@@ -291,6 +303,9 @@ export const workPlugin: BuiltInPlugin = {
     for (const [name, migration] of [
       ["cancelled_at", "ALTER TABLE work ADD COLUMN cancelled_at TEXT"],
       ["cancel_reason", "ALTER TABLE work ADD COLUMN cancel_reason TEXT"],
+      ["reclaimed_from", "ALTER TABLE work ADD COLUMN reclaimed_from TEXT"],
+      ["reclaimed_by", "ALTER TABLE work ADD COLUMN reclaimed_by TEXT"],
+      ["reclaim_reason", "ALTER TABLE work ADD COLUMN reclaim_reason TEXT"],
     ] as const) {
       if (hasWorkColumn(name)) continue;
       try {
@@ -481,6 +496,102 @@ export const workPlugin: BuiltInPlugin = {
             description: "Declare this item atomic instead of breaking it down.",
             value: true,
           },
+        },
+        positionals: [{ name: "id", required: true }],
+      }),
+    );
+
+    context.effect(() =>
+      context.cli.register("work release", (invocation): CliResult => {
+        const id = requirePosition(invocation, 0, "work id");
+        const work = requireWork(context, id);
+        if (work.state === "done" || work.state === "cancelled") {
+          throw new CliError("INVALID_STATE", `${id} is ${work.state}; its lease cannot be released`);
+        }
+        const sessionId = context.sessions.current().id;
+        if (work.heldBy !== sessionId) {
+          if (work.heldBy) {
+            throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
+              holder: work.heldBy,
+            });
+          }
+          throw new CliError("LEASE_REQUIRED", `${id} has no lease to release`, { id });
+        }
+        const updatedAt = new Date().toISOString();
+        context.store.database.transaction(() => {
+          if (!service.release(id, sessionId, updatedAt)) {
+            const current = requireWork(context, id);
+            throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy ?? "none"}`, {
+              holder: current.heldBy,
+            });
+          }
+          context.log.append({
+            type: "work.release",
+            entityType: "work",
+            entityId: id,
+            sessionId,
+            payload: { holder: sessionId },
+          });
+        })();
+        return { data: { work: service.get(id) }, text: `${id} released by ${sessionId}` };
+      }, {
+        description: "Release the current session's lease without completing work.",
+        positionals: [{ name: "id", required: true }],
+      }),
+    );
+
+    context.effect(() =>
+      context.cli.register("work reclaim", (invocation): CliResult => {
+        const id = requirePosition(invocation, 0, "work id");
+        const reason = textOption(invocation, "reason");
+        if (!reason?.trim()) {
+          throw new CliError("MISSING_ARGUMENT", "work reclaim requires --reason <text>");
+        }
+        const work = requireWork(context, id);
+        if (work.state === "done" || work.state === "cancelled") {
+          throw new CliError("INVALID_STATE", `${id} is ${work.state}; its lease cannot be reclaimed`);
+        }
+        if (!work.heldBy) {
+          const command = `maestro work start ${id}`;
+          throw new CliError("LEASE_REQUIRED", `${id} has no lease to reclaim; run: ${command}`, {
+            command,
+          });
+        }
+        const previousHolder = work.heldBy;
+        const newHolder = context.sessions.current().id;
+        const updatedAt = new Date().toISOString();
+        context.store.database.transaction(() => {
+          context.sessions.record("work.reclaim");
+          const result = context.store.database
+            .query(
+              `UPDATE work
+               SET state = 'active', held_by = ?, reclaimed_from = ?, reclaimed_by = ?,
+                   reclaim_reason = ?, updated_at = ?
+               WHERE id = ? AND held_by = ? AND state = 'active'`,
+            )
+            .run(newHolder, previousHolder, newHolder, reason, updatedAt, id, previousHolder);
+          if (result.changes === 0) {
+            const current = requireWork(context, id);
+            throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy ?? "none"}`, {
+              holder: current.heldBy,
+            });
+          }
+          context.log.append({
+            type: "work.reclaim",
+            entityType: "work",
+            entityId: id,
+            sessionId: newHolder,
+            payload: { previousHolder, newHolder, reason },
+          });
+        })();
+        return {
+          data: { work: service.get(id) },
+          text: `${id} reclaimed by ${newHolder} from ${previousHolder}: ${reason}`,
+        };
+      }, {
+        description: "Take an existing lease with a recorded reason without completing work.",
+        flags: {
+          "--reason": { description: "Record why this lease is being reclaimed.", value: true },
         },
         positionals: [{ name: "id", required: true }],
       }),
