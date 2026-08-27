@@ -253,6 +253,7 @@ test("289 [lint] recipe slp presents the SLP roles and install mirrors state the
     }
     expect(recipe.stdout).toContain("## How maestro binds a session to a role");
     expect(recipe.stdout).toContain("HANDBACK_UNREVIEWED");
+    expect(recipe.stdout).toContain("LEAD_COLLISION");
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);

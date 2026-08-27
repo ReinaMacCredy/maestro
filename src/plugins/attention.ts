@@ -9,6 +9,7 @@ export type AttentionKind =
   | "STALLED_LEASE"
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
+  | "LEAD_COLLISION"
   | "SCOPE_COLLISION"
   | "DISPATCH_UNACCEPTED"
   | "DISPATCH_UNRETURNED"
@@ -73,6 +74,7 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
   STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
   DECISION_STALE: "decision",
+  LEAD_COLLISION: "work",
   SCOPE_COLLISION: "work",
   DISPATCH_UNACCEPTED: "dispatch",
   DISPATCH_UNRETURNED: "dispatch",
@@ -312,6 +314,61 @@ function scopeCollisionDetections(
   return detections;
 }
 
+function leadCollisionDetections(
+  context: PluginContext,
+  works: AttentionWorkRow[],
+  sessions: Map<string, SessionRecord>,
+): Detection[] {
+  const deliveryPeers = new Set(
+    (context.dispatch as DispatchService)
+      .list()
+      .filter(
+        (record) =>
+          record.state === "open" && record.lane === "delivery" && record.heldBy,
+      )
+      .map((record) => `${record.workId}:${record.heldBy}`),
+  );
+  const active = works
+    .filter(
+      (work) =>
+        work.state === "active" && !work.parentId && work.heldBy &&
+        sessions.get(work.heldBy)?.live &&
+        !deliveryPeers.has(`${work.id}:${work.heldBy}`),
+    )
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const detections: Detection[] = [];
+  for (let leftIndex = 0; leftIndex < active.length; leftIndex += 1) {
+    const first = active[leftIndex] as AttentionWorkRow;
+    for (let rightIndex = leftIndex + 1; rightIndex < active.length; rightIndex += 1) {
+      const second = active[rightIndex] as AttentionWorkRow;
+      if (first.heldBy === second.heldBy) continue;
+      const holders = [first.heldBy as string, second.heldBy as string].sort();
+      detections.push({
+        entityId: first.id,
+        entityType: "work",
+        fingerprint:
+          `lead-collision:${first.id}:${second.id}:${holders[0]}:${holders[1]}`,
+        kind: "LEAD_COLLISION",
+        packet: packet("LEAD_COLLISION", `${first.id},${second.id}`, {
+          observed:
+            `parent work ${first.id} held by ${first.heldBy}; ` +
+            `parent work ${second.id} held by ${second.heldBy}`,
+          evidence:
+            "both work items active and parentless; both sessions live; " +
+            "neither holder has an open delivery dispatch on its work item",
+          unknown:
+            "whether the work items are independent project dimensions or competing Lead scopes",
+          question: "keep both Leads, split scope, or release one lease?",
+          smallestAction: "maestro status --live",
+        }),
+        subjectSession: holders.join(","),
+        subjectWork: first.id,
+      });
+    }
+  }
+  return detections;
+}
+
 function dispatchUnreturnedDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
@@ -462,6 +519,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.decisionStaleHours,
     ),
+    ...leadCollisionDetections(context, works, sessions),
     ...scopeCollisionDetections(works, sessions),
     ...dispatchUnreturnedDetections(
       context,

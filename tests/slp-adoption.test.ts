@@ -501,6 +501,87 @@ test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
   });
 });
 
+test("414 attention raises LEAD_COLLISION without treating a delivery Peer as a Lead", async () => {
+  await withFixture(async (fixture) => {
+    const first = await addWork(fixture, "first Lead scope");
+    const second = await addWork(fixture, "second Lead scope");
+    await startWork(fixture, first, "lead-z");
+    await startWork(fixture, second, "lead-a");
+
+    const peerWork = await addWork(fixture, "delivery Peer scope");
+    const opened = await runCli(fixture, [
+      "dispatch",
+      "open",
+      peerWork,
+      "--objective",
+      "implement the accepted change",
+      "--owned-scope",
+      "product source",
+      "--excluded-scope",
+      "push, tag, publish",
+      "--mutation",
+      "write-bounded: product source",
+      "--stop-condition",
+      "verified handback filed",
+      "--lane",
+      "delivery",
+      "--evidence-required",
+      "source: focused regression",
+      "--pane",
+      "w1:pPeer",
+    ]);
+    const dispatch = opened.stdout.match(/^(x\d+) \[open\]/)?.[1];
+    expect(opened.exitCode).toBe(0);
+    expect(dispatch).toBeString();
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch as string], session("peer-session")))
+        .exitCode,
+    ).toBe(0);
+    await startWork(fixture, peerWork, "peer-session");
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          kind: string;
+          packet: string;
+          subjectSession: string | null;
+          subjectWork: string | null;
+        }>;
+      };
+    }).data.detections.filter((detection) => detection.kind === "LEAD_COLLISION");
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toEqual(expect.objectContaining({
+      fingerprint: `lead-collision:${first}:${second}:lead-a:lead-z`,
+      subjectSession: "lead-a,lead-z",
+      subjectWork: first,
+    }));
+    for (const required of [
+      `attention LEAD_COLLISION work ${first},${second}`,
+      "  observed:",
+      "  evidence:",
+      "  unknown:",
+      "  question:",
+      "  smallest action: maestro status --live",
+      "  human decision needed: no",
+    ]) {
+      expect(detections[0]?.packet).toContain(required);
+    }
+    expect(detections[0]?.packet).not.toContain(peerWork);
+    expect(detections[0]?.packet).not.toContain("peer-session");
+
+    const hook = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      session("scanner-session"),
+    );
+    expect(hook.exitCode).toBe(0);
+    expect(hook.stdout).toContain(`attention LEAD_COLLISION work ${first},${second}`);
+  });
+});
+
 test("144 attention --json computes findings without background state", async () => {
   await withFixture(async (fixture) => {
     const before = await retiredSupervisorSnapshot(fixture);

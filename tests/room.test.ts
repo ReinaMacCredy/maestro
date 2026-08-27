@@ -947,6 +947,39 @@ test("255 brief reports SCOPE_COLLISION and omits ordinary in-progress work", as
   });
 });
 
+test("415 brief reports LEAD_COLLISION and omits ordinary in-progress work", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary Lead progress");
+    const first = await addBriefWork(fixture, fixture.repo, path, "first Lead scope");
+    const second = await addBriefWork(fixture, fixture.repo, path, "second Lead scope");
+    for (const [work, holder] of [[first, "lead-a"], [second, "lead-b"]] as const) {
+      expect(
+        (
+          await runInstalledCliAt(fixture, fixture.repo, ["work", "start", work], {
+            MAESTRO_SESSION_ID: holder,
+            MAESTRO_SESSION_PID: String(process.pid),
+            PATH: path,
+          })
+        ).exitCode,
+      ).toBe(0);
+    }
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention LEAD_COLLISION work ${first},${second}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary Lead progress");
+  });
+});
+
 test("241 install moves the four method skills into the room and links only those into Claude", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
