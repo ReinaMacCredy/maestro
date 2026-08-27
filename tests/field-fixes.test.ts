@@ -227,3 +227,27 @@ test("63 install mirrors teach the work lifecycle", async () => {
     }
   });
 });
+
+test("289 recipe slp presents the SLP roles and the install mirrors bind a repository session to Lead", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const recipe = await runCli(fixture, ["recipe", "show", "slp"]);
+    expect(recipe.exitCode).toBe(0);
+    for (const heading of ["### Human", "### Supervisor", "### Lead", "### Peer"]) {
+      expect(recipe.stdout).toContain(heading);
+    }
+    expect(recipe.stdout).toContain("## How maestro binds a session to a role");
+    expect(recipe.stdout).toContain("HANDBACK_UNREVIEWED");
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      const mirror = await readFile(join(fixture.repo, name), "utf8");
+      expect(mirror).toContain(
+        "A session in this repository is its Lead; panes it opens with a dispatch are Peers; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.",
+      );
+    }
+    const room = await readFile(join(fixture.home, "maestro", "AGENTS.md"), "utf8");
+    expect(room).toContain("This room is the Supervisor; roles: `maestro recipe show slp`.");
+  });
+});

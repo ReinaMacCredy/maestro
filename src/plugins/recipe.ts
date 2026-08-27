@@ -26,6 +26,7 @@ const catalog = [
   ["learning", "Turn sourced corrections into durable, reusable project knowledge."],
   ["worktree", "Isolate concurrent work and return a verified branch for merge-back."],
   ["conflict-handoff", "Coordinate overlap through terminal panes, dispatches, and handbacks."],
+  ["slp", "Know which SLP role a session holds (Supervisor, Lead, Peer) and what it owns."],
   ["style-cpp", "Apply modern C++ ownership, interface, and verification conventions."],
   ["style-csharp", "Apply clear C# contracts, nullability, async, and testing conventions."],
   ["style-dart", "Apply idiomatic Dart typing, async, package, and testing conventions."],

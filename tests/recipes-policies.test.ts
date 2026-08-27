@@ -12,6 +12,7 @@ const recipeNames = [
   "learning",
   "worktree",
   "conflict-handoff",
+  "slp",
   "style-cpp",
   "style-csharp",
   "style-dart",
