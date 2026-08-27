@@ -87,19 +87,21 @@ export class Store {
   }
 
   ensureColumn(table: string, column: string, migration: string): void {
-    assertSqliteIdentifier(table);
-    assertSqliteIdentifier(column);
-    const hasColumn = () =>
-      this.database
-        .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
-        .all()
-        .some((entry) => entry.name === column);
-    if (hasColumn()) return;
+    if (this.hasColumn(table, column)) return;
     try {
       this.migrate(migration);
     } catch (error) {
-      if (!hasColumn()) throw error;
+      if (!this.hasColumn(table, column)) throw error;
     }
+  }
+
+  hasColumn(table: string, column: string): boolean {
+    assertSqliteIdentifier(table);
+    assertSqliteIdentifier(column);
+    return this.database
+      .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+      .all()
+      .some((entry) => entry.name === column);
   }
 
   nextPrefixedId(table: string, prefix: string): string {

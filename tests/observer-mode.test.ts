@@ -376,3 +376,36 @@ test("286 observer mode follows registered mutability and defaults fail-closed",
     }
   }
 });
+
+test("455 read-only attention and brief tolerate pre-decision-lifecycle schemas", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const path = join(fixture.repo, ".maestro", "maestro.db");
+    const database = new Database(path);
+    database.run("ALTER TABLE decisions DROP COLUMN needs_owner");
+    database.run("ALTER TABLE decisions DROP COLUMN review_at");
+    database.run("ALTER TABLE decisions DROP COLUMN withdrawn_at");
+    database.close();
+
+    const attention = await runCli(fixture, ["attention", "--json"], readOnly);
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stderr).toBe("");
+
+    const brief = await runCli(fixture, ["brief"], readOnly);
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stderr).toBe("");
+
+    const stored = new Database(path, { readonly: true });
+    try {
+      const columns = stored
+        .query<{ name: string }, []>("PRAGMA table_info(decisions)")
+        .all()
+        .map((column) => column.name);
+      expect(columns).not.toContain("needs_owner");
+      expect(columns).not.toContain("review_at");
+      expect(columns).not.toContain("withdrawn_at");
+    } finally {
+      stored.close();
+    }
+  });
+});

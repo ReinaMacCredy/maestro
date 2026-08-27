@@ -247,13 +247,16 @@ function decisionStaleDetections(
   decisionStaleHours: number,
 ): Detection[] {
   const cutoff = new Date(now - decisionStaleHours * 60 * 60_000).toISOString();
+  const activePredicate = context.store.hasColumn("decisions", "withdrawn_at")
+    ? "AND decisions.withdrawn_at IS NULL"
+    : "";
   const rows = context.store.database
     .query<{ created_at: string; id: string; work_id: string }, [string]>(
       `SELECT decisions.id, decisions.created_at, decisions.work_id
        FROM decisions
        JOIN work ON work.id = decisions.work_id
        WHERE decisions.state = 'draft'
-         AND decisions.withdrawn_at IS NULL
+         ${activePredicate}
          AND decisions.created_at < ?
          AND work.state != 'done'
          AND work.cancelled_at IS NULL
@@ -285,13 +288,17 @@ function humanDecisionRequiredDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
 ): Detection[] {
+  if (!context.store.hasColumn("decisions", "needs_owner")) return [];
+  const activePredicate = context.store.hasColumn("decisions", "withdrawn_at")
+    ? "AND decisions.withdrawn_at IS NULL"
+    : "";
   const rows = context.store.database
     .query<{ id: string; work_id: string }, []>(
       `SELECT decisions.id, decisions.work_id
        FROM decisions
        JOIN work ON work.id = decisions.work_id
        WHERE decisions.state = 'draft'
-         AND decisions.withdrawn_at IS NULL
+         ${activePredicate}
          AND decisions.needs_owner = 1
          AND work.state != 'done'
          AND work.cancelled_at IS NULL
@@ -325,6 +332,7 @@ function decisionReviewDueDetections(
   workById: Map<string, AttentionWorkRow>,
   now: number,
 ): Detection[] {
+  if (!context.store.hasColumn("decisions", "review_at")) return [];
   const rows = context.store.database
     .query<{ id: string; review_at: string; work_id: string | null }, []>(
       `SELECT id, review_at, work_id
