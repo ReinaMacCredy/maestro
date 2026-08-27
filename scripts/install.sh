@@ -8,6 +8,23 @@
 #   MAESTRO_SOURCE_DIR  where the checkout lives (default: ~/.maestro/source)
 set -eu
 
+case "${1:-}" in
+  -h|--help)
+    printf '%s\n' \
+      'usage: install.sh' \
+      '  Clone the maestro source checkout and run its installer for the current repository.' \
+      '  MAESTRO_REPO        git URL to clone (default: the GitHub repository)' \
+      '  MAESTRO_REF         branch to install and follow (default: main)' \
+      '  MAESTRO_SOURCE_DIR  where the checkout lives (default: ~/.maestro/source)'
+    exit 0
+    ;;
+  "") ;;
+  *)
+    printf 'maestro install: unknown argument %s (try --help)\n' "$1" >&2
+    exit 2
+    ;;
+esac
+
 REPO="${MAESTRO_REPO:-https://github.com/ReinaMacCredy/maestro.git}"
 REF="${MAESTRO_REF:-main}"
 SOURCE="${MAESTRO_SOURCE_DIR:-$HOME/.maestro/source}"

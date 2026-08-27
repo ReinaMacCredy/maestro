@@ -318,3 +318,32 @@ test("312 scripts/install.sh refuses a bun older than the lockfile's bun floor a
     expect(stderr).toContain("bun >= 1.4.0");
   });
 });
+
+test("313 scripts/install.sh --help prints usage and exits before touching the machine", async () => {
+  await withFixture(async (fixture) => {
+    const projectRoot = join(import.meta.dir, "..");
+    const run = async (arg: string) => {
+      const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh"), arg], {
+        cwd: fixture.repo,
+        env: { ...process.env, HOME: fixture.home },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode: await child.exited, stdout, stderr };
+    };
+    const help = await run("--help");
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("usage: install.sh");
+    expect(help.stdout).toContain("MAESTRO_SOURCE_DIR");
+    expect(existsSync(join(fixture.home, ".maestro", "source"))).toBe(false);
+
+    const unknown = await run("--bogus");
+    expect(unknown.exitCode).toBe(2);
+    expect(unknown.stderr).toContain("unknown argument --bogus");
+    expect(existsSync(join(fixture.home, ".maestro", "source"))).toBe(false);
+  });
+});
