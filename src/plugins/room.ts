@@ -45,6 +45,7 @@ Coordination requires a dedicated, unwatched Herdr tab. Lanes are panes, never s
 8. The lane takes the contract with \`maestro dispatch accept <dispatch-id>\` and works only inside its mutation boundary.
 9. The lane files the complete return with \`maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"\`. A return packet is a claim; the Lead checks its evidence and decides whether the work item is complete.
 10. Read active sessions with \`maestro status --live\` and cross-project attention with \`maestro brief\`. For Maestro commands outside this set, use the command's help.
+11. After reviewing the handback and closing or re-dispatching the work, close the lane with \`herdr pane close <pane-id>\`, then \`herdr tab close <tab-id>\` once the lanes tab is empty. The pane stays only when the same lane takes the next dispatch. Transcripts persist on disk, so closing loses no evidence.
 
 No Maestro verb pushes a brief into a pane or calls Herdr. Herdr owns topology, agent start, prompting, and wake-up; Maestro owns the durable contract and evidence record.
 `;

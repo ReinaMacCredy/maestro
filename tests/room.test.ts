@@ -223,6 +223,9 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
       expect(lane).not.toContain("--until done");
       expect(lane).toContain("re-arm");
       expect(lane).toContain("holder shown by `maestro status --live` is the authority");
+      expect(lane).toContain("herdr pane close <pane-id>");
+      expect(lane).toContain("herdr tab close <tab-id>");
+      expect(lane).toContain("stays only when the same lane takes the next dispatch");
       expect(lane).not.toContain("events.wait");
       expect(lane).toContain("maestro handback file");
 
