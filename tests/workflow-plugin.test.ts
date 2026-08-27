@@ -2,7 +2,20 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+
+test("287 maestro-work skill lane line matches the dispatch vocabulary", async () => {
+  const skill = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md"),
+    "utf8",
+  );
+  const laneLine = skill.split("\n").find((line) => line.startsWith("Lane: "));
+  expect(laneLine).toBeDefined();
+  expect(laneLine?.slice("Lane: ".length).split("|").map((name) => name.trim())).toEqual(
+    dispatchLaneVocabulary.map(({ name }) => name),
+  );
+});
 
 test("122 decision draft stores a rationale body and show renders it", async () => {
   await withFixture(async (fixture) => {

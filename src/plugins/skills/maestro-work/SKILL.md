@@ -12,7 +12,7 @@ and return to `maestro-design`.
 
 ## Dispatch
 
-When work is handed to a sub-agent, send this envelope:
+When work is handed to a lane (a Herdr pane in the room, or a sub-agent where no room exists), send this envelope:
 
 ```text
 Objective: <observable outcome>
@@ -20,13 +20,14 @@ Owned scope: <paths or responsibility>
 Excluded scope: <explicit non-goals>
 Mutation: <no-write | write-bounded: paths>
 Stop condition: <done or blocked boundary>
-Lane: <delivery | decision | challenge>
+Lane: scout | decision | delivery | challenge
 Evidence required: <proof and layer>
 ```
 
 A tiny task may collapse the envelope to three lines, but it never drops
 `Excluded scope` or `Mutation`.
 
+- `scout` reads and reports state, never writes.
 - `delivery` may write and is the only lane that holds the lease.
 - `decision` investigates, compares, and recommends without writing.
 - `challenge` breaks the premise or candidate and returns findings only, with
