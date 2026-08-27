@@ -8,6 +8,14 @@ interface PackageJson {
   version: string;
 }
 
+export async function readPackageVersion(): Promise<string> {
+  const root = resolve(import.meta.dir, "..", "..");
+  const packageJson = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8"),
+  ) as PackageJson;
+  return packageJson.version;
+}
+
 export const versionPlugin: BuiltInPlugin = {
   name: "version",
   apply(context) {
@@ -16,8 +24,8 @@ export const versionPlugin: BuiltInPlugin = {
         "version",
         async (): Promise<CliResult> => {
           const root = resolve(import.meta.dir, "..", "..");
-          const [packageText, stampRead] = await Promise.all([
-            readFile(join(root, "package.json"), "utf8"),
+          const [version, stampRead] = await Promise.all([
+            readPackageVersion(),
             readInstallStamp(root),
           ]);
           if (stampRead.status === "invalid") {
@@ -26,13 +34,12 @@ export const versionPlugin: BuiltInPlugin = {
               "runtime install stamp is invalid; run maestro install from the Maestro source checkout",
             );
           }
-          const packageJson = JSON.parse(packageText) as PackageJson;
           const stamp = stampRead.status === "valid" ? stampRead.stamp : null;
           return {
-            data: stamp ?? { version: packageJson.version, source: "dev" },
+            data: stamp ?? { version, source: "dev" },
             text: stamp
-              ? `maestro ${packageJson.version}\ncommit ${stamp.commit}\ninstalled ${stamp.installedAt}`
-              : `maestro ${packageJson.version} (source/dev)`,
+              ? `maestro ${version}\ncommit ${stamp.commit}\ninstalled ${stamp.installedAt}`
+              : `maestro ${version} (source/dev)`,
           };
         },
         { description: "Show the installed or source Maestro version.", mutates: false },

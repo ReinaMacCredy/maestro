@@ -7,6 +7,7 @@ import {
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { BriefService } from "./coordination.ts";
 import type { RecipeService } from "./recipe.ts";
+import { readPackageVersion } from "./version.ts";
 
 type JsonRpcId = number | string | null;
 
@@ -243,7 +244,7 @@ async function handleRequest(context: PluginContext, request: JsonRpcRequest): P
     writeResponse(id, {
       protocolVersion: "2025-06-18",
       capabilities: { tools: {} },
-      serverInfo: { name: "maestro", version: "0.1.0" },
+      serverInfo: { name: "maestro", version: await readPackageVersion() },
       instructions: await brief.render(session.id),
     });
     return;
