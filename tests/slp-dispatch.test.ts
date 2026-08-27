@@ -952,6 +952,18 @@ test("179 a council stays sealed until every dispatch has returned", async () =>
     expect(listed.stdout).toContain("council: sealed (1/2 returned)");
     expect(listed.stdout).not.toContain("claim:");
 
+    for (const target of [council.dispatches[0] as string, council.work]) {
+      const handbackList = await runCli(fixture, ["handback", "list", target]);
+      expect(handbackList.exitCode).toBe(0);
+      expect(handbackList.stdout).toContain(`${firstHandback} [SEALED]`);
+      expect(handbackList.stdout).not.toContain("the contract is stored");
+      const asJson = await runCli(fixture, ["handback", "list", target, "--json"]);
+      expect(asJson.stdout).not.toContain("the contract is stored");
+      expect(asJson.stdout).not.toContain('"status":"DONE"');
+    }
+    const scan = await runCli(fixture, ["attention", "--json"]);
+    expect(scan.stdout).not.toContain("HANDBACK_UNREVIEWED");
+
     expect((await runCli(fixture, handbackFileArgs(council.dispatches[1]))).exitCode).toBe(0);
     const opened = await runCli(fixture, ["handback", "show", firstHandback]);
     expect(opened.exitCode).toBe(0);

@@ -413,6 +413,9 @@ function handbackUnreviewedDetections(
     if (!work || work.state === "done" || work.state === "cancelled") return [];
     const latest = handbacks.list(record.id).at(-1);
     if (!latest) return [];
+    // A sealed council's packets are unreadable by design; the finding
+    // appears once the seal opens.
+    if (dispatch.council(record.workId, record.id).sealed) return [];
     const cites = new RegExp(`\\b${latest.id}\\b`);
     const reviewed = dispatches.some(
       (other) =>

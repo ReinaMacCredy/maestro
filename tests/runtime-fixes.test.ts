@@ -382,7 +382,7 @@ test("325 a dispatch opened before the handback cannot count as its review", asy
     const citing = dispatchOpenArgs(work, "citing-owner", "w1:p-cite").map((arg) =>
       arg === "Verify the runtime contract" ? "Verify the runtime contract after h1" : arg
     );
-    expect((await runCli(fixture, citing, owner)).exitCode).toBe(0);
+    const second = dispatchId((await runCli(fixture, citing, owner)).stdout);
     expect((await runCli(fixture, ["dispatch", "accept", first], owner)).exitCode).toBe(0);
     const filed = await runCli(
       fixture,
@@ -394,9 +394,18 @@ test("325 a dispatch opened before the handback cannot count as its review", asy
     );
     expect(filed.exitCode).toBe(0);
     expect(filed.stdout).toContain("h1");
+    // Return the citing lane too so the council unseals and the packets
+    // become reviewable; the premature citation must still not count.
+    expect((await runCli(fixture, ["dispatch", "accept", second], owner)).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, [
+        "handback", "file", second, "--status", "DONE", "--claim", "done", "--proof", "source: fixture",
+        "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
+      ], owner)).exitCode,
+    ).toBe(0);
 
     const scan = await runCli(fixture, ["attention", "--json"], owner);
-    const detections = (JSON.parse(scan.stdout) as { data: { detections: { kind: string }[] } }).data.detections;
-    expect(detections.filter((d) => d.kind === "HANDBACK_UNREVIEWED")).toHaveLength(1);
+    const detections = (JSON.parse(scan.stdout) as { data: { detections: { kind: string; fingerprint: string }[] } }).data.detections;
+    expect(detections.map((d) => d.fingerprint)).toContain(`handback-unreviewed:${first}`);
   });
 });

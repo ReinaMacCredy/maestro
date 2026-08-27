@@ -962,9 +962,21 @@ export const dispatchPlugin: BuiltInPlugin = {
                   .flatMap(({ id: dispatchId }) => handbackService.list(dispatchId))
                   .sort((left, right) => Number(left.id.slice(1)) - Number(right.id.slice(1)));
               })();
+          // A sealed council hides its first views from everyone, including
+          // this list and its --json form; only the id and the seal show.
+          const sealed: string[] = [];
+          const visible = handbacks.filter((handback) => {
+            const owner = service.get(handback.dispatchId);
+            if (!owner || !service.council(owner.workId, owner.id).sealed) return true;
+            sealed.push(handback.id);
+            return false;
+          });
           return {
-            data: { handbacks },
-            text: handbacks.map(formatHandbackSummary).join("\n"),
+            data: { handbacks: visible, sealed },
+            text: [
+              ...visible.map(formatHandbackSummary),
+              ...sealed.map((id) => `${id} [SEALED] council not yet returned`),
+            ].join("\n"),
           };
         },
         {
