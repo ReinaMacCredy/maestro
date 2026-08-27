@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,6 +16,10 @@ import {
 
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
+
+function sha256(bytes: Uint8Array | string): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
 
 async function storeSnapshot(repo: string): Promise<Array<[string, number, string]>> {
   const directory = join(repo, ".maestro");
@@ -107,11 +112,6 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
     const generatedNames = ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "lane.md", "shellrc"];
-    const generated = new Map(
-      await Promise.all(
-        generatedNames.map(async (name) => [name, await readFile(join(room, name), "utf8")] as const),
-      ),
-    );
     const ownerEdit = "# OWNER\n\nOwner-authored content survives installs.\n";
     await writeFile(join(room, "OWNER.md"), ownerEdit);
     for (const name of generatedNames) {
@@ -122,9 +122,18 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
     ).toBe(0);
     expect(await readFile(join(room, "OWNER.md"), "utf8")).toBe(ownerEdit);
-    for (const name of generatedNames) {
-      expect(await readFile(join(room, name), "utf8")).toBe(generated.get(name) as string);
-    }
+    const generatedHashes = Object.fromEntries(
+      await Promise.all(
+        generatedNames.map(async (name) => [name, sha256(await readFile(join(room, name)))]),
+      ),
+    );
+    expect(generatedHashes).toEqual({
+      "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
+      "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
+      "IDENTITY.md": "2101d1d76210f2770447e7634196bc43e88f5c8a93eef9d6f4a71f8dcfc8dc5f",
+      "lane.md": "0c708585fde7f6543858e24fbe606e723766ee610943024d125f3478254e6e58",
+      shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
+    });
   });
 });
 
@@ -233,8 +242,9 @@ test("238 install registers each repository exactly once", async () => {
 });
 
 test.skipIf(process.env.HERDR_ENV !== "1")(
-  "235 install scaffolds the room and hm creates then focuses one maestro workspace",
+  "235 [lint] install scaffolds the room and hm creates then focuses one maestro workspace",
   async () => {
+    // Shell-adapter lint: proves generated command wiring, not a real Herdr create/focus journey.
     await withFixture(async (fixture) => {
       const { path } = await prepareInstallFixture(fixture);
       const installed = await runCli(fixture, ["install"], { PATH: path });
@@ -327,7 +337,8 @@ esac
   },
 );
 
-test("247 room harness files give agents the pane-lane contract without a lane skill", async () => {
+test("247 [lint] room harness files give agents the pane-lane contract without a lane skill", async () => {
+  // Packaging lint: proves room instruction files contain the lane contract, not that a harness loads it.
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
@@ -349,7 +360,8 @@ test("247 room harness files give agents the pane-lane contract without a lane s
   });
 });
 
-test("248 project harness files do not give agents room-only lane instructions", async () => {
+test("248 [lint] project harness files do not give agents room-only lane instructions", async () => {
+  // Scope lint: proves project mirrors omit room-only text, not that parent instructions cannot inject it.
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
@@ -367,7 +379,8 @@ test("248 project harness files do not give agents room-only lane instructions",
   });
 });
 
-test("250 installed lane guidance names the runnable Herdr wait command", async () => {
+test("250 [lint] installed lane guidance names the runnable Herdr wait command", async () => {
+  // Documentation lint: proves the installed command text, not that the current Herdr parser accepts it.
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
@@ -491,7 +504,8 @@ test("283 status marks exactly the caller session in bare, live, and JSON output
   });
 });
 
-test("275 the installed room overlays Herdr agent status on work-scoped lane rows once", async () => {
+test("275 [lint] the installed room overlays Herdr agent status on work-scoped lane rows once", async () => {
+  // Shell-boundary lint: proves overlay behavior for fixture envelopes, not compatibility with real Herdr output.
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -1076,8 +1090,9 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
 });
 
 test.skipIf(process.env.HERDR_ENV !== "1")(
-  "236 hm prints the read-only brief and returns without starting an agent",
+  "236 [lint] hm prints the read-only brief and returns without starting an agent",
   async () => {
+    // Shell-boundary lint: proves the generated function's fake-command path, not real no-agent or no-store effects.
     await withFixture(async (fixture) => {
       const { path } = await prepareInstallFixture(fixture);
       await runCli(fixture, ["install"], { PATH: path });
