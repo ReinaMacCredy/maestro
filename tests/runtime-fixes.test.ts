@@ -369,3 +369,34 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
     expect(cleared.stdout).not.toContain("DISPATCH_UNACCEPTED");
   });
 });
+
+test("325 a dispatch opened before the handback cannot count as its review", async () => {
+  await withFixture(async (fixture) => {
+    const owner = session("citing-owner");
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "premature citation", "--atomic-reason", "fixture"], owner),
+    );
+    const first = dispatchId(
+      (await runCli(fixture, dispatchOpenArgs(work, "citing-owner"), owner)).stdout,
+    );
+    const citing = dispatchOpenArgs(work, "citing-owner", "w1:p-cite").map((arg) =>
+      arg === "Verify the runtime contract" ? "Verify the runtime contract after h1" : arg
+    );
+    expect((await runCli(fixture, citing, owner)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", first], owner)).exitCode).toBe(0);
+    const filed = await runCli(
+      fixture,
+      [
+        "handback", "file", first, "--status", "DONE", "--claim", "done", "--proof", "source: fixture",
+        "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
+      ],
+      owner,
+    );
+    expect(filed.exitCode).toBe(0);
+    expect(filed.stdout).toContain("h1");
+
+    const scan = await runCli(fixture, ["attention", "--json"], owner);
+    const detections = (JSON.parse(scan.stdout) as { data: { detections: { kind: string }[] } }).data.detections;
+    expect(detections.filter((d) => d.kind === "HANDBACK_UNREVIEWED")).toHaveLength(1);
+  });
+});

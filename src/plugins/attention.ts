@@ -416,7 +416,7 @@ function handbackUnreviewedDetections(
     const cites = new RegExp(`\\b${latest.id}\\b`);
     const reviewed = dispatches.some(
       (other) =>
-        other.workId === record.workId && other.createdAt > record.createdAt &&
+        other.workId === record.workId && other.createdAt > latest.createdAt &&
         (cites.test(other.objective) || cites.test(other.evidenceRequired)),
     );
     if (reviewed) return [];
