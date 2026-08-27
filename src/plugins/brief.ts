@@ -31,7 +31,9 @@ async function registeredRepos(home: string): Promise<string[]> {
 }
 
 async function scanRepo(repo: string): Promise<RepoBrief> {
-  if (!existsSync(repo)) return { error: false, findings: [], missing: true, repo };
+  if (!existsSync(repo) || !existsSync(join(repo, ".maestro"))) {
+    return { error: false, findings: [], missing: true, repo };
+  }
   const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
   const child = Bun.spawn([process.execPath, cli, "attention", "--json"], {
     cwd: repo,
@@ -79,7 +81,7 @@ export const briefPlugin: BuiltInPlugin = {
           );
           const unavailableLines = results.flatMap((result) =>
             result.missing
-              ? [`Missing repository: ${result.repo}`]
+              ? [`skipped: ${result.repo} (missing)`]
               : result.error
                 ? [`Unreadable repository: ${result.repo}`]
                 : []

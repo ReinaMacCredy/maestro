@@ -750,7 +750,7 @@ test("240 brief names a deleted registered repository and continues", async () =
 
     expect(brief.exitCode).toBe(0);
     expect(brief.stderr).toBe("");
-    expect(brief.stdout).toContain(`Missing repository: ${deletedPath}`);
+    expect(brief.stdout).toContain(`skipped: ${deletedPath} (missing)`);
     expect(brief.stdout).not.toContain("ordinary live progress");
   });
 });

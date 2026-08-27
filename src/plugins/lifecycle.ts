@@ -8,6 +8,7 @@ import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 import {
   codexHooksTrusted,
+  forgetRepository,
   readGitHeadCommit,
   gitMainWorktree,
   stampRuntime,
@@ -470,6 +471,7 @@ async function doctor(): Promise<CliResult> {
 async function uninstall(): Promise<CliResult> {
   const repo = resolve(process.cwd());
   const removed = await uninstallRepo(repo);
+  if (await forgetRepository(homeDirectory(), repo)) removed.push(`${repo} registry line`);
   return {
     data: { removed },
     text: removed.length > 0

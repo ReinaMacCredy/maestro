@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CliError, type CliResult } from "../kernel/cli.ts";
+import { CliError, requiredPosition, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
@@ -227,6 +227,21 @@ async function registerRepository(home: string, repo: string): Promise<void> {
   const content = `${next.join("\n")}\n`;
   if (content !== existing) await writeFile(registry, content);
   await chmod(registry, 0o600);
+}
+
+export async function forgetRepository(home: string, repo: string): Promise<boolean> {
+  const registry = join(home, "maestro", "registry");
+  if (!existsSync(registry)) return false;
+  const existing = await readFile(registry, "utf8");
+  const retained: string[] = [];
+  for (const entry of existing.split(/\r?\n/).filter(Boolean)) {
+    if (!(await samePath(entry, repo))) retained.push(entry);
+  }
+  const content = retained.length > 0 ? `${retained.join("\n")}\n` : "";
+  if (content === existing) return false;
+  await writeFile(registry, content);
+  await chmod(registry, 0o600);
+  return true;
 }
 
 async function writeShellSource(home: string): Promise<boolean> {
@@ -528,6 +543,26 @@ export async function stampRuntime(sourceRoot: string, runtimeRoot: string): Pro
 export const installPlugin: BuiltInPlugin = {
   name: "install",
   apply(context) {
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "room forget",
+        async (invocation): Promise<CliResult> => {
+          const path = resolve(requiredPosition(invocation, 0, "repository path"));
+          const forgotten = await forgetRepository(resolveHomeDirectory(), path);
+          return {
+            data: { forgotten, path },
+            text: forgotten ? `forgot: ${path}` : `not registered: ${path}`,
+          };
+        },
+        {
+          description: "Remove one repository from the room registry without uninstalling it.",
+          positionals: [{ name: "path", required: true }],
+          rootDescription: "Manage the room repository registry.",
+        },
+      ),
+    );
+
     context.effect(() =>
       registerSessionCommand(context, "install", async (): Promise<CliResult> => {
         const repo = process.cwd();
