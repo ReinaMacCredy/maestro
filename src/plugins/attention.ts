@@ -1,7 +1,8 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
-import type { DispatchService } from "./dispatch.ts";
+import type { BriefService } from "./coordination.ts";
+import type { DispatchService, HandbackService } from "./dispatch.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -9,7 +10,8 @@ export type AttentionKind =
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
   | "SCOPE_COLLISION"
-  | "DISPATCH_UNRETURNED";
+  | "DISPATCH_UNRETURNED"
+  | "HANDBACK_UNREVIEWED";
 
 interface AttentionWorkRow {
   heldBy: string | null;
@@ -336,6 +338,43 @@ function dispatchUnreturnedDetections(
   });
 }
 
+function handbackUnreviewedDetections(
+  context: PluginContext,
+  workById: Map<string, AttentionWorkRow>,
+  now: number,
+): Detection[] {
+  const dispatch = context.dispatch as DispatchService;
+  const handbacks = context.handback as HandbackService;
+  const dispatches = dispatch.list();
+  return dispatches.flatMap((record): Detection[] => {
+    if (record.state !== "returned") return [];
+    const work = workById.get(record.workId);
+    if (!work || work.state === "done" || work.state === "cancelled") return [];
+    const superseded = dispatches.some(
+      (other) => other.workId === record.workId && other.createdAt > record.createdAt,
+    );
+    if (superseded) return [];
+    const latest = handbacks.list(record.id).at(-1);
+    if (!latest) return [];
+    return [{
+      entityId: record.id,
+      entityType: "dispatch",
+      fingerprint: `handback-unreviewed:${record.id}`,
+      kind: "HANDBACK_UNREVIEWED",
+      packet: packet("HANDBACK_UNREVIEWED", record.id, {
+        observed:
+          `${record.id} returned ${latest.status} (${latest.id}) ${minutesSince(latest.createdAt, now)} minutes ago; work ${record.workId} is still ${work.state}`,
+        evidence: `handbacks row ${latest.id} status ${latest.status}; work.state ${work.state}; no later dispatch on ${record.workId}`,
+        unknown: "whether the Lead has read the return packet",
+        question: "close the work, re-dispatch, or cancel?",
+        smallestAction: `maestro handback show ${latest.id}`,
+      }),
+      subjectSession: record.heldBy ?? record.targetSession,
+      subjectWork: record.workId,
+    }];
+  });
+}
+
 function detect(context: PluginContext, options: AttentionOptions): Detection[] {
   const now = Date.now();
   const works = workRows(context);
@@ -364,6 +403,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.dispatchStaleHours,
     ),
+    ...handbackUnreviewedDetections(context, workById, now),
   ];
 }
 
@@ -499,6 +539,14 @@ export const attentionPlugin: BuiltInPlugin = {
       scan: (options) => detect(context, options).map((detection) => raise(context, detection)),
     };
     context.effect(() => context.provide("attention", service));
+    context.effect(() =>
+      (context.brief as BriefService).register(() =>
+        service
+          .scan({ staleMinutes: 30, decisionStaleHours: 24, dispatchStaleHours: 2 })
+          .map((finding) => finding.packet.split("\n")[0] ?? finding.kind)
+          .join("\n")
+      )
+    );
     context.effect(() =>
       context.cli.register(
         "attention",

@@ -1179,3 +1179,82 @@ test("246 dispatch open stores the pane verbatim and dispatch show reports it", 
     expect(envelope.data.dispatches).toContainEqual(expect.objectContaining({ id, pane }));
   });
 });
+
+test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and reaches the hook brief", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "lead scope", "--kind", "idea"]),
+    );
+    expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
+      .toBe(0);
+    const child = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "lane task",
+        "--parent",
+        parent,
+        "--atomic-reason",
+        "fixture",
+      ]),
+    );
+    const dispatch = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(child), "--target-session", "worker-session"]),
+    );
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session("worker-session"))).exitCode,
+    ).toBe(0);
+    const filed = await runCli(
+      fixture,
+      [
+        "handback",
+        "file",
+        dispatch,
+        "--status",
+        "BLOCKED",
+        "--claim",
+        "scope too narrow",
+        "--proof",
+        "source: dispatch show",
+        "--assumptions",
+        "None",
+        "--residual-risks",
+        "None",
+        "--incidental-findings",
+        "None",
+      ],
+      session("worker-session"),
+    );
+    expect(filed.exitCode).toBe(0);
+    const handback = filed.stdout.match(/^(h\d+)/)?.[1] as string;
+
+    const scan = () => runCli(fixture, ["attention", "--json"], session("lead-session"));
+    const first = JSON.parse((await scan()).stdout) as {
+      data: { detections: Array<{ fingerprint: string; kind: string; packet: string }> };
+    };
+    const unreviewed = first.data.detections.filter((f) => f.kind === "HANDBACK_UNREVIEWED");
+    expect(unreviewed).toHaveLength(1);
+    expect(unreviewed[0]?.fingerprint).toContain(dispatch);
+    expect(unreviewed[0]?.packet).toContain(`${dispatch} returned BLOCKED (${handback})`);
+    expect(unreviewed[0]?.packet).toContain(`smallest action: maestro handback show ${handback}`);
+
+    const hook = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      session("lead-session"),
+    );
+    expect(hook.exitCode).toBe(0);
+    expect(hook.stdout).toContain(`attention HANDBACK_UNREVIEWED ${dispatch}`);
+
+    const reopened = await runCli(fixture, [...dispatchOpenArgs(child), "--target-session", "worker-session"]);
+    expect(reopened.exitCode).toBe(0);
+    const second = JSON.parse((await scan()).stdout) as typeof first;
+    expect(second.data.detections.filter((f) => f.kind === "HANDBACK_UNREVIEWED")).toHaveLength(0);
+    const quiet = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      session("lead-session"),
+    );
+    expect(quiet.stdout).not.toContain("attention ");
+  });
+});
