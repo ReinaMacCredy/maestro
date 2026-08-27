@@ -5,6 +5,7 @@ import {
   idFrom,
   prepareInstallFixture,
   runCli,
+  runTool,
   type Fixture,
   withFixture,
 } from "./helpers.ts";
@@ -40,6 +41,35 @@ async function recordSession(fixture: Fixture, id: string): Promise<void> {
 
 function openDatabase(fixture: Fixture): Database {
   return new Database(join(fixture.repo, ".maestro", "maestro.db"));
+}
+
+async function retiredSupervisorSnapshot(fixture: Fixture) {
+  const processList = await runTool(["ps", "-axo", "pid=,command="], fixture.repo);
+  expect(processList.exitCode).toBe(0);
+  const processes = processList.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /\bmaestro(?:\.ts)?\s+supervisor(?:\s|$)/.test(line))
+    .sort();
+  const database = openDatabase(fixture);
+  let tables: Array<{ name: string }>;
+  try {
+    tables = database
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors') ORDER BY name",
+      )
+      .all();
+  } finally {
+    database.close();
+  }
+  return {
+    files: {
+      log: await Bun.file(join(fixture.repo, ".maestro", "supervisor.log")).exists(),
+      state: await Bun.file(join(fixture.repo, ".maestro", "supervisor.json")).exists(),
+    },
+    processes,
+    tables,
+  };
 }
 
 function backdateSession(fixture: Fixture, id: string, minutes: number): void {
@@ -274,6 +304,13 @@ test("138 attention raises and records a STALLED_LEASE packet at read time", asy
 
 test("139 attention records findings without delivery targets or mailbox tables", async () => {
   await withFixture(async (fixture) => {
+    const retired = openDatabase(fixture);
+    retired.exec(`
+      CREATE TABLE messages (id TEXT);
+      CREATE TABLE message_cursors (id TEXT);
+    `);
+    retired.close();
+
     const work = await addWork(fixture, "decision without recipient");
     const decision = idFrom(
       await runCli(fixture, ["decision", "draft", "stale without recipient", "--work", work]),
@@ -301,6 +338,13 @@ test("139 attention records findings without delivery targets or mailbox tables"
     try {
       expect(recorded.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
+      expect(
+        recorded
+          .query<{ name: string }, []>(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors') ORDER BY name",
+          )
+          .all(),
+      ).toEqual([]);
     } finally {
       recorded.close();
     }
@@ -458,6 +502,7 @@ test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
 
 test("144 attention --json computes findings without background state", async () => {
   await withFixture(async (fixture) => {
+    const before = await retiredSupervisorSnapshot(fixture);
     const work = await addWork(fixture, "json failure");
     await startWork(fixture, work, "worker-session");
     for (const text of ["failed: first", "failed: second", "failed: third"]) {
@@ -476,6 +521,7 @@ test("144 attention --json computes findings without background state", async ()
     expect(envelope.ok).toBe(true);
     expect(envelope.data.detections[0]?.kind).toBe("REPEATED_FAILURE");
     expect(envelope.data.detections[0]?.raised).toBe(true);
+    expect(await retiredSupervisorSnapshot(fixture)).toEqual(before);
   });
 });
 
@@ -520,26 +566,31 @@ test("148 install and uninstall manage only session and prompt hook wiring", asy
 test("150 install stays inert and read-time attention preserves work and decisions", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-
     const work = await addWork(fixture, "immutable attention subject");
     await startWork(fixture, work, "worker-session");
     for (const text of ["failed: first", "failed: second", "failed: third"]) {
       await runCli(fixture, ["work", "note", work, text], session("worker-session"));
     }
     await runCli(fixture, ["decision", "draft", "unchanged draft", "--work", work]);
-    const database = openDatabase(fixture);
-    const snapshot = () => ({
-      work: JSON.stringify(database.query("SELECT * FROM work ORDER BY id").all()),
-      decisions: JSON.stringify(database.query("SELECT * FROM decisions ORDER BY id").all()),
-    });
-    try {
-      const before = snapshot();
-      expect((await runCli(fixture, ["attention"], session("scanner-session"))).exitCode).toBe(0);
-      expect(snapshot()).toEqual(before);
-    } finally {
-      database.close();
-    }
+    const snapshot = () => {
+      const database = openDatabase(fixture);
+      try {
+        return {
+          work: JSON.stringify(database.query("SELECT * FROM work ORDER BY id").all()),
+          decisions: JSON.stringify(database.query("SELECT * FROM decisions ORDER BY id").all()),
+        };
+      } finally {
+        database.close();
+      }
+    };
+
+    const beforeInstall = snapshot();
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(snapshot()).toEqual(beforeInstall);
+
+    const beforeAttention = snapshot();
+    expect((await runCli(fixture, ["attention"], session("scanner-session"))).exitCode).toBe(0);
+    expect(snapshot()).toEqual(beforeAttention);
   });
 });
 
