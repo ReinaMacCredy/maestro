@@ -564,13 +564,45 @@ function yamlReferences(yaml: string, key: string): string[] {
   return [];
 }
 
+function yamlValue(yaml: string, key: string): string | null {
+  const lines = yaml.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const match = line.match(new RegExp(`^(\\s*)${key}:\\s*(.*?)\\s*$`));
+    if (!match) continue;
+    const inline = match[2] ?? "";
+    const block = inline.match(/^([|>])[-+]?$/);
+    if (!block) return inline ? scalar(inline) : null;
+
+    const fieldIndent = match[1]?.length ?? 0;
+    const blockLines: string[] = [];
+    for (const candidate of lines.slice(index + 1)) {
+      if (!candidate.trim()) {
+        blockLines.push("");
+        continue;
+      }
+      const indent = candidate.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= fieldIndent) break;
+      blockLines.push(candidate);
+    }
+    const contentIndent = Math.min(
+      ...blockLines.filter(Boolean).map((candidate) => candidate.match(/^\s*/)?.[0].length ?? 0),
+    );
+    if (!Number.isFinite(contentIndent)) return "";
+    const value = blockLines.map((candidate) => candidate.slice(contentIndent));
+    return block[1] === ">"
+      ? value.join("\n").replaceAll(/([^\n])\n(?=[^\n])/g, "$1 ").trimEnd()
+      : value.join("\n").trimEnd();
+  }
+  return null;
+}
+
 function payloadSummary(payload: string): string {
   let compact = payload;
   try {
     compact = JSON.stringify(JSON.parse(payload));
   } catch {}
-  compact = compact.replaceAll(/\s+/g, " ").trim();
-  return compact.length <= 240 ? compact : `${compact.slice(0, 239).trimEnd()}…`;
+  return compact.replaceAll(/\s+/g, " ").trim();
 }
 
 interface PromotionSummary {
@@ -736,7 +768,7 @@ function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionS
       const id = nativeIds.get(card.id) as string;
       const state = decisionState(card.status);
       const provenance = `imported from legacy card ${card.id}`;
-      const text = `${card.title} (${provenance})`;
+      const text = `${yamlValue(card.card_yaml, "decision") ?? card.title} (${provenance})`;
       const workId = card.parent && workCardIds.has(card.parent)
         ? nativeIds.get(card.parent) ?? null
         : null;
@@ -756,15 +788,6 @@ function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionS
         sessionId,
         payload: { text, workId, importedFrom: card.id },
       });
-      if (state !== "draft") {
-        context.log.append({
-          type: "decision.lock",
-          entityType: "decision",
-          entityId: id,
-          sessionId,
-          payload: { importedFrom: card.id, legacyStatus: card.status },
-        });
-      }
     }
 
     for (const card of decisionCards) {
@@ -789,6 +812,19 @@ function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionS
           payload: { supersedesId: nativeIds.get(predecessor), importedFrom: card.id },
         });
       }
+    }
+
+    for (const card of decisionCards) {
+      const state = decisionState(card.status);
+      if (state === "draft") continue;
+      const id = nativeIds.get(card.id) as string;
+      context.log.append({
+        type: "decision.lock",
+        entityType: "decision",
+        entityId: id,
+        sessionId,
+        payload: { importedFrom: card.id, legacyStatus: card.status },
+      });
     }
 
     let receiptsSkipped = 0;
@@ -903,7 +939,6 @@ function showLegacy(context: PluginContext, invocation: CliInvocation): CliResul
 
 export const importRustPlugin: BuiltInPlugin = {
   name: "import-rust",
-  inject: ["work", "decision"],
   apply(context) {
     initializeLegacyTables(context);
     initializePromotionTables(context);

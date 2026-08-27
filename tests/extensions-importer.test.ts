@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, setPlugin, withFixture, type Fixture } from "./helpers.ts";
 
 const featureId = "feature-legacy-aurora";
 
@@ -165,7 +165,7 @@ async function writePromotionStore(fixture: Fixture): Promise<string> {
       parent: featureId,
       status: "locked",
       title: "Legacy replacement ruling",
-      yaml: "id: dec-legacy-new\ntype: decision\nstatus: locked\nparent: feature-legacy-aurora\nextra:\n  supersedes:\n  - dec-legacy-old\n",
+      yaml: "id: dec-legacy-new\ntype: decision\nstatus: locked\nparent: feature-legacy-aurora\nextra:\n  decision: Use corrected replacement ruling\n  supersedes:\n  - dec-legacy-old\n",
     },
     {
       id: "dec-legacy-open",
@@ -207,7 +207,7 @@ async function writePromotionStore(fixture: Fixture): Promise<string> {
     "receipt-legacy-aurora",
     featureId,
     now,
-    JSON.stringify({ result: "pass", checks: 3 }),
+    JSON.stringify({ result: "pass", checks: 3, details: "proof ".repeat(80), tail: "preserved" }),
   );
   insertReceipt.run(
     "verification",
@@ -254,25 +254,34 @@ async function writeArchiveStore(fixture: Fixture): Promise<string> {
   offset += pathBytes.length;
   snapshot.set(contentBytes, offset);
   const compressed = Bun.zstdCompressSync(snapshot);
-  database
-    .query(
-      `INSERT INTO archived_snapshots
-        (id, archived_at, source_relpath, manifest_json, snapshot_zstd,
-         snapshot_sha256, search_text, last_checked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-    )
-    .run(
-      "snapshot-legacy-nebula",
-      "2026-06-30T00:00:00Z",
-      "archive/snapshot-legacy-nebula",
-      JSON.stringify({
-        format_version: "maestro.archive.snapshot.v1",
-        files: [{ path: archivePath, size: contentBytes.length, sha256: sha256(contentBytes) }],
-      }),
-      compressed,
-      sha256(compressed),
-      "title: Archived Nebula\ndescription: archivequasar remains searchable\n",
-    );
+  const insertSnapshot = database.query(
+    `INSERT INTO archived_snapshots
+      (id, archived_at, source_relpath, manifest_json, snapshot_zstd,
+       snapshot_sha256, search_text, last_checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+  );
+  insertSnapshot.run(
+    "snapshot-legacy-nebula",
+    "2026-06-30T00:00:00Z",
+    "archive/snapshot-legacy-nebula",
+    JSON.stringify({
+      format_version: "maestro.archive.snapshot.v1",
+      files: [{ path: archivePath, size: contentBytes.length, sha256: sha256(contentBytes) }],
+    }),
+    compressed,
+    sha256(compressed),
+    "title: Archived Nebula\ndescription: archivequasar remains searchable\n",
+  );
+  const corrupt = new Uint8Array([0x00, 0x01, 0x02]);
+  insertSnapshot.run(
+    "snapshot-legacy-fallback",
+    "2026-06-30T00:01:00Z",
+    "archive/snapshot-legacy-fallback",
+    JSON.stringify({ format_version: "maestro.archive.snapshot.v1", files: [] }),
+    corrupt,
+    sha256(corrupt),
+    "title: Archived Fallback\ndescription: fallbackneedle remains searchable\n",
+  );
   database.close();
   return path;
 }
@@ -498,11 +507,28 @@ test("300 --promote maps legacy cards, decisions, receipts, provenance, and even
       .all(featureWork)
       .map((row) => row.text);
     expect(workNotes).toContain(`imported from legacy card ${featureId}`);
-    expect(workNotes.some((note) => note.includes("verification") && note.includes('"result":"pass"')))
-      .toBe(true);
+    const receiptNote = workNotes.find((note) => note.startsWith("legacy receipt verification"));
+    expect(receiptNote).toBeString();
+    const receiptPayload = JSON.parse(receiptNote?.slice(receiptNote.indexOf(": ") + 2) ?? "null") as {
+      tail?: string;
+    };
+    expect(receiptPayload.tail).toBe("preserved");
     expect(
-      database.query<{ rationale: string }, [string]>("SELECT rationale FROM decisions WHERE id = ?").get(newDecision)?.rationale,
-    ).toBe("imported from legacy card dec-legacy-new");
+      database.query<{ rationale: string; text: string }, [string]>(
+        "SELECT text, rationale FROM decisions WHERE id = ?",
+      ).get(newDecision),
+    ).toEqual({
+      text: expect.stringContaining("Use corrected replacement ruling"),
+      rationale: "imported from legacy card dec-legacy-new",
+    });
+    expect(
+      database
+        .query<{ type: string }, [string]>(
+          "SELECT type FROM event_log WHERE entity_type = 'decision' AND entity_id = ? ORDER BY id",
+        )
+        .all(newDecision)
+        .map((event) => event.type),
+    ).toEqual(["decision.draft", "decision.supersede", "decision.lock"]);
     expect(
       database.query<{ count: number }, []>(
         "SELECT count(*) AS count FROM event_log WHERE entity_type IN ('work', 'decision')",
@@ -568,10 +594,13 @@ test("302 archive-only Rust stores decode snapshots into searchable legacy files
     const searched = await runCli(fixture, ["search", "archivequasar"]);
 
     expect(imported.exitCode).toBe(0);
-    expect(imported.stdout).toContain("1 archived snapshots");
-    expect(imported.stdout).toContain("0 compressed payloads skipped");
+    expect(imported.stdout).toContain("2 archived snapshots");
+    expect(imported.stdout).toContain("1 compressed payloads skipped");
     expect(searched.exitCode).toBe(0);
     expect(searched.stdout).toContain("[legacy] snapshot-legacy-nebula");
+    const fallback = await runCli(fixture, ["search", "fallbackneedle"]);
+    expect(fallback.exitCode).toBe(0);
+    expect(fallback.stdout).toContain("[legacy] snapshot-legacy-fallback");
     expect(sha256(await readFile(source))).toBe(before);
     const database = targetDatabase(fixture);
     expect(
@@ -583,6 +612,32 @@ test("302 archive-only Rust stores decode snapshots into searchable legacy files
       path: "archive/snapshot-legacy-nebula/notes.md",
       text_content: "# Archived Nebula\narchivequasar remains searchable\n",
     });
+    expect(
+      database
+        .query("SELECT path, text_content FROM legacy_files WHERE card_id = ?")
+        .get("snapshot-legacy-fallback"),
+    ).toEqual({
+      path: "archive/snapshot-legacy-fallback",
+      text_content: "title: Archived Fallback\ndescription: fallbackneedle remains searchable\n",
+    });
     database.close();
+  });
+});
+
+test("303 reference import stays available when native work promotion is disabled", async () => {
+  await withFixture(async (fixture) => {
+    await writeLegacyStore(fixture);
+    await setPlugin(fixture, "work", true);
+
+    const imported = await runCli(fixture, ["import", "rust"]);
+    const shown = await runCli(fixture, ["legacy", "show", featureId]);
+
+    expect(imported.exitCode).toBe(0);
+    expect(imported.stdout).toBe(
+      `imported legacy: 3 cards, 3 files (2 text), 2 decisions\n` +
+        `read them: maestro legacy show dec-aurora-color\n`,
+    );
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("title: Legacy Aurora");
   });
 });
