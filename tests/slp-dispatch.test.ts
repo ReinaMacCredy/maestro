@@ -1391,7 +1391,7 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
       session("lead-session"),
     );
     expect(hook.exitCode).toBe(0);
-    expect(hook.stdout).toContain(`attention HANDBACK_UNREVIEWED ${dispatch}`);
+    expect(hook.stdout).toContain(`attention HANDBACK_UNREVIEWED dispatch ${dispatch}`);
 
     const reopened = await runCli(fixture, [...dispatchOpenArgs(child), "--target-session", "worker-session"]);
     expect(reopened.exitCode).toBe(0);

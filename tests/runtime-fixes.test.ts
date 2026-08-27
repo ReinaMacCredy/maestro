@@ -321,7 +321,7 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
     const attention = await runCli(fixture, ["attention"]);
     expect(attention.exitCode).toBe(0);
     for (const line of [
-      `attention DISPATCH_UNACCEPTED ${oldDispatch}`,
+      `attention DISPATCH_UNACCEPTED dispatch ${oldDispatch}`,
       `observed: ${oldDispatch} opened 11 minutes ago on pane ${oldPane}, never accepted`,
       "evidence: dispatch state open; no session bound to the pane",
       "unknown: whether the brief reached the pane",
@@ -333,7 +333,7 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
     }
 
     const repeated = await runCli(fixture, ["attention"]);
-    expect(repeated.stdout).toContain(`attention DISPATCH_UNACCEPTED ${oldDispatch}`);
+    expect(repeated.stdout).toContain(`attention DISPATCH_UNACCEPTED dispatch ${oldDispatch}`);
     const recorded = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
       strict: true,
@@ -348,12 +348,12 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
     recorded.close();
 
     const hook = await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
-    expect(hook.stdout).toContain(`attention DISPATCH_UNACCEPTED ${oldDispatch}`);
+    expect(hook.stdout).toContain(`attention DISPATCH_UNACCEPTED dispatch ${oldDispatch}`);
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
     const brief = await runCli(fixture, ["brief"]);
     expect(brief.stdout).toContain(
-      `${fixture.repo}: attention DISPATCH_UNACCEPTED ${oldDispatch}`,
+      `${fixture.repo}: attention DISPATCH_UNACCEPTED dispatch ${oldDispatch}`,
     );
 
     expect(

@@ -125,7 +125,7 @@ HANDBACK_UNREVIEWED,
 each as a packet:
 
 ```
-attention <KIND> <id>
+attention <KIND> <subject-kind> <id>
   observed:
   evidence:
   unknown:

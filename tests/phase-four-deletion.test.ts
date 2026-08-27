@@ -429,6 +429,7 @@ test("260 every exported attention kind has an independent read-only detection s
         detections: Array<{
           fingerprint: string;
           kind: string;
+          packet: string;
           raised: boolean;
           raisedAt: string;
           subjectWork: string | null;
@@ -445,6 +446,15 @@ test("260 every exported attention kind has an independent read-only detection s
       SCOPE_COLLISION: collisionA,
       STALLED_LEASE: stalled,
     } satisfies Record<AttentionKind, string>;
+    const expectedPacketHeads = {
+      DECISION_STALE: `attention DECISION_STALE decision ${decision}`,
+      DISPATCH_UNACCEPTED: `attention DISPATCH_UNACCEPTED dispatch ${unacceptedDispatch}`,
+      DISPATCH_UNRETURNED: `attention DISPATCH_UNRETURNED dispatch ${dispatch}`,
+      HANDBACK_UNREVIEWED: `attention HANDBACK_UNREVIEWED dispatch ${handbackDispatch}`,
+      REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
+      SCOPE_COLLISION: `attention SCOPE_COLLISION work ${collisionA},${collisionB}`,
+      STALLED_LEASE: `attention STALLED_LEASE work ${stalled}`,
+    } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();
     const after = openDatabase(fixture);
     try {
@@ -456,6 +466,8 @@ test("260 every exported attention kind has an independent read-only detection s
       expect(observedKinds).toEqual(Object.keys(expectedSubjects).sort());
       for (const [kind, subjectWork] of Object.entries(expectedSubjects)) {
         expect(detections).toContainEqual(expect.objectContaining({ kind, subjectWork }));
+        expect(detections.find((detection) => detection.kind === kind)?.packet.split("\n")[0])
+          .toBe(expectedPacketHeads[kind as AttentionKind]);
       }
       expect(detections.every((detection) => detection.raised === false)).toBe(true);
       expect(detections.every((detection) => detection.raisedAt === "not recorded (read-only)"))

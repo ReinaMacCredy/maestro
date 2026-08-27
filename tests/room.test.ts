@@ -725,10 +725,10 @@ test("239 brief reports detector findings from two repositories without writing 
     expect(brief.exitCode).toBe(0);
     expect(brief.stderr).toBe("");
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE ${alpha}`,
+      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE work ${alpha}`,
     );
     expect(brief.stdout).toContain(
-      `${await realpath(secondRepo)}: attention REPEATED_FAILURE ${beta}`,
+      `${await realpath(secondRepo)}: attention REPEATED_FAILURE work ${beta}`,
     );
     expect(brief.stdout).not.toContain("ordinary alpha progress");
     expect(brief.stdout).not.toContain("ordinary beta progress");
@@ -788,7 +788,7 @@ test("251 brief reports DECISION_STALE and omits ordinary in-progress work", asy
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention DECISION_STALE ${decision}`,
+      `${await realpath(fixture.repo)}: attention DECISION_STALE decision ${decision}`,
     );
     expect(brief.stdout).not.toContain("ordinary decision progress");
   });
@@ -822,7 +822,7 @@ test("252 brief reports STALLED_LEASE and omits ordinary in-progress work", asyn
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention STALLED_LEASE ${work}`,
+      `${await realpath(fixture.repo)}: attention STALLED_LEASE work ${work}`,
     );
     expect(brief.stdout).not.toContain("ordinary stalled progress");
   });
@@ -849,7 +849,7 @@ test("253 brief reports REPEATED_FAILURE and omits ordinary in-progress work", a
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE ${work}`,
+      `${await realpath(fixture.repo)}: attention REPEATED_FAILURE work ${work}`,
     );
     expect(brief.stdout).not.toContain("ordinary retry progress");
   });
@@ -902,7 +902,7 @@ test("254 brief reports DISPATCH_UNRETURNED and omits ordinary in-progress work"
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention DISPATCH_UNRETURNED ${dispatch}`,
+      `${await realpath(fixture.repo)}: attention DISPATCH_UNRETURNED dispatch ${dispatch}`,
     );
     expect(brief.stdout).not.toContain("ordinary dispatch progress");
   });
@@ -948,7 +948,7 @@ test("255 brief reports SCOPE_COLLISION and omits ordinary in-progress work", as
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      `${await realpath(fixture.repo)}: attention SCOPE_COLLISION ${first},${second}`,
+      `${await realpath(fixture.repo)}: attention SCOPE_COLLISION work ${first},${second}`,
     );
     expect(brief.stdout).not.toContain("ordinary collision progress");
   });

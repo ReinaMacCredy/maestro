@@ -373,6 +373,7 @@ test("158 attention records one packet independently of live peer order", async 
         }).data.detections;
         const finding = detections.find((detection) => detection.kind === "STALLED_LEASE");
         expect(finding).toBeDefined();
+        expect(finding?.packet).toContain(`attention STALLED_LEASE work ${child}`);
         const verified = loopDatabase(fixture);
         try {
           const count = verified

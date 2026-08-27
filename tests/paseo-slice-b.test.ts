@@ -100,15 +100,15 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
       session("lead-viewer"),
     );
     expect(hook.exitCode).toBe(0);
-    expect(hook.stdout).toContain(`attention REPEATED_FAILURE ${peerWork}`);
-    expect(hook.stdout).not.toContain(`attention REPEATED_FAILURE ${leadWork}`);
+    expect(hook.stdout).toContain(`attention REPEATED_FAILURE work ${peerWork}`);
+    expect(hook.stdout).not.toContain(`attention REPEATED_FAILURE work ${leadWork}`);
 
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
     const room = await runCli(fixture, ["brief"], { MAESTRO_READ_ONLY: "1" });
     expect(room.exitCode).toBe(0);
-    expect(room.stdout).not.toContain(`attention REPEATED_FAILURE ${peerWork}`);
-    expect(room.stdout).toContain(`attention REPEATED_FAILURE ${leadWork}`);
+    expect(room.stdout).not.toContain(`attention REPEATED_FAILURE work ${peerWork}`);
+    expect(room.stdout).toContain(`attention REPEATED_FAILURE work ${leadWork}`);
 
     const attention = await runCli(fixture, ["attention", "--json"], session("scanner"));
     expect(attention.exitCode).toBe(0);

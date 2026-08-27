@@ -69,6 +69,16 @@ export interface AttentionService {
   scan(options: AttentionOptions): AttentionFinding[];
 }
 
+const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
+  STALLED_LEASE: "work",
+  REPEATED_FAILURE: "work",
+  DECISION_STALE: "decision",
+  SCOPE_COLLISION: "work",
+  DISPATCH_UNACCEPTED: "dispatch",
+  DISPATCH_UNRETURNED: "dispatch",
+  HANDBACK_UNREVIEWED: "dispatch",
+};
+
 function numericOption(
   invocation: CliInvocation,
   name: string,
@@ -121,7 +131,7 @@ function packet(
   },
 ): string {
   return [
-    `attention ${kind} ${subject}`,
+    `attention ${kind} ${subjectKind[kind]} ${subject}`,
     `  observed: ${fields.observed}`,
     ...(fields.holderRole ? [`  holder role: ${fields.holderRole}`] : []),
     `  evidence: ${fields.evidence}`,

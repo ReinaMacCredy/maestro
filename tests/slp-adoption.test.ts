@@ -271,7 +271,7 @@ test("138 attention raises and records a STALLED_LEASE packet at read time", asy
     );
     expect(attention.exitCode).toBe(0);
     for (const required of [
-      `attention STALLED_LEASE ${child}`,
+      `attention STALLED_LEASE work ${child}`,
       "  observed:",
       "  evidence:",
       "  unknown:",
@@ -384,7 +384,7 @@ test("141 attention raises REPEATED_FAILURE only for the third failed note since
     }
     const attention = await runCli(fixture, ["attention"], session("scanner-session"));
     expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention REPEATED_FAILURE ${work}`);
+    expect(attention.stdout).toContain(`attention REPEATED_FAILURE work ${work}`);
 
     const database = openDatabase(fixture);
     try {
@@ -441,7 +441,7 @@ test("142 attention raises DECISION_STALE only for old drafts linked to open wor
       session("scanner-session"),
     );
     expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention DECISION_STALE ${decision}`);
+    expect(attention.stdout).toContain(`attention DECISION_STALE decision ${decision}`);
   });
 
   for (const terminal of ["locked", "done"] as const) {
@@ -485,7 +485,7 @@ test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
 
     const attention = await runCli(fixture, ["attention"], session("scanner-session"));
     expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention SCOPE_COLLISION ${first},${second}`);
+    expect(attention.stdout).toContain(`attention SCOPE_COLLISION work ${first},${second}`);
 
     const database = openDatabase(fixture);
     try {

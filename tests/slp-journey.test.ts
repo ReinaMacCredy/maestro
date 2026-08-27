@@ -98,7 +98,7 @@ test("163 [lint] a stalled-lease packet renders the durable work command", async
 
     const attention = await runCli(fixture, ["attention"], session("scanner"));
     expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain("attention STALLED_LEASE");
+    expect(attention.stdout).toContain(`attention STALLED_LEASE work ${child}`);
     expect(attention.stdout).toContain(`smallest action: maestro work show ${child}`);
   });
 });
@@ -121,7 +121,7 @@ test("164 a scope collision is recorded once after the overlap banner", async ()
     expect(later.stderr).toContain("[overlap]");
 
     const attention = await runCli(fixture, ["attention"], session("scanner"));
-    expect(attention.stdout).toContain("attention SCOPE_COLLISION");
+    expect(attention.stdout).toContain(`attention SCOPE_COLLISION work ${first},${second}`);
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     try {
