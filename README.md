@@ -20,7 +20,17 @@ after 0.107.x, the final Rust release.
 
 ## Install, update, and remove
 
-Maestro is distributed from source. From a Maestro checkout, run:
+Maestro is distributed from source. Install with one command (needs `git`
+and [Bun](https://bun.sh)):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | sh
+```
+
+The script clones the repository into `~/.maestro/source` (override with
+`MAESTRO_SOURCE_DIR`; `MAESTRO_REF` picks the branch, default `main`) and runs
+the installer from that checkout, which `maestro update` then follows. From
+your own checkout, run the installer directly:
 
 ```sh
 bun bin/maestro.ts install

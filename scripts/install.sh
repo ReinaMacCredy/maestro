@@ -1,0 +1,43 @@
+#!/bin/sh
+# Install maestro from source: clone the checkout that `maestro update` follows,
+# then run its installer.
+#   curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | sh
+# Environment:
+#   MAESTRO_REPO        git URL to clone (default: the GitHub repository)
+#   MAESTRO_REF         branch to install and follow (default: main)
+#   MAESTRO_SOURCE_DIR  where the checkout lives (default: ~/.maestro/source)
+set -eu
+
+REPO="${MAESTRO_REPO:-https://github.com/ReinaMacCredy/maestro.git}"
+REF="${MAESTRO_REF:-main}"
+SOURCE="${MAESTRO_SOURCE_DIR:-$HOME/.maestro/source}"
+
+fail() {
+  printf 'maestro install: %s\n' "$1" >&2
+  exit 1
+}
+
+command -v git >/dev/null 2>&1 || fail "git is required."
+command -v bun >/dev/null 2>&1 || fail "bun is required: curl -fsSL https://bun.sh/install | bash"
+
+if [ -d "$SOURCE/.git" ]; then
+  printf 'maestro install: fast-forwarding the source checkout at %s\n' "$SOURCE"
+  git -C "$SOURCE" pull --ff-only --quiet || fail "the checkout at $SOURCE cannot fast-forward; resolve it or set MAESTRO_SOURCE_DIR."
+elif [ -e "$SOURCE" ]; then
+  fail "$SOURCE exists and is not a git checkout; set MAESTRO_SOURCE_DIR."
+else
+  mkdir -p "$(dirname "$SOURCE")"
+  printf 'maestro install: cloning %s (%s) into %s\n' "$REPO" "$REF" "$SOURCE"
+  git clone --quiet --branch "$REF" "$REPO" "$SOURCE"
+fi
+
+bun "$SOURCE/bin/maestro.ts" install
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) printf 'maestro install: add %s to PATH to run maestro\n' "$HOME/.local/bin" ;;
+esac
+
+if ! command -v herdr >/dev/null 2>&1; then
+  printf 'maestro install: SLP lanes need Herdr: curl -fsSL https://herdr.dev/install.sh | sh\n'
+fi

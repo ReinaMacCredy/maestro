@@ -9,6 +9,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The 0.107.x series was the Rust implementation. Version 0.108.0 begins the
 TypeScript-on-Bun line and continues the existing version sequence.
 
+## [Unreleased]
+
+### Added
+
+- `scripts/install.sh`: one-command source install
+  (`curl -fsSL .../scripts/install.sh | sh`) that clones the repository into
+  `~/.maestro/source` and runs the installer from it, so `maestro update`
+  keeps following that checkout.
+
 ## [0.108.0] - 2026-08-27
 
 ### Added

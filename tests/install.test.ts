@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
@@ -233,5 +233,62 @@ test("45 install mirrors name the manual hookless SessionStart bootstrap without
     expect(agents).toContain(bootstrap);
     expect(claude).toContain(bootstrap);
     expect(existsSync(join(fixture.repo, ".cursor"))).toBe(false);
+  });
+});
+
+test("310 scripts/install.sh clones the source checkout, installs from it, and fast-forwards on rerun", async () => {
+  await withFixture(async (fixture) => {
+    const projectRoot = join(import.meta.dir, "..");
+    const upstream = join(fixture.root, "upstream");
+    await mkdir(upstream, { recursive: true });
+    for (const entry of ["package.json", "tsconfig.json", "bin", "src", "scripts", ".gitignore"]) {
+      await cp(join(projectRoot, entry), join(upstream, entry), { recursive: true });
+    }
+    const git = (args: string[]) =>
+      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", ...args], {
+        cwd: upstream,
+        stdout: "pipe",
+        stderr: "pipe",
+      }).exited;
+    expect(await git(["init", "-q", "-b", "main"])).toBe(0);
+    expect(await git(["add", "."])).toBe(0);
+    expect(await git(["commit", "-q", "-m", "upstream"])).toBe(0);
+
+    const { path } = await prepareInstallFixture(fixture);
+    const source = join(fixture.home, ".maestro", "source");
+    const run = async () => {
+      const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
+        cwd: fixture.repo,
+        env: {
+          ...process.env,
+          HOME: fixture.home,
+          PATH: path,
+          SHELL: "/bin/zsh",
+          MAESTRO_REPO: upstream,
+          MAESTRO_SESSION_ID: "test-session",
+          MAESTRO_SESSION_PID: String(process.pid),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode: await child.exited, stdout, stderr };
+    };
+
+    const first = await run();
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain(`cloning ${upstream} (main) into ${source}`);
+    expect(first.stdout).toContain("herdr.dev/install.sh");
+    expect(existsSync(join(source, "bin", "maestro.ts"))).toBe(true);
+    const version = await runInstalledCliAt(fixture, fixture.repo, ["version"], { PATH: path });
+    expect(version.exitCode).toBe(0);
+    expect(version.stdout).toContain(`maestro ${JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8")).version}`);
+
+    const second = await run();
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toContain(`fast-forwarding the source checkout at ${source}`);
   });
 });
