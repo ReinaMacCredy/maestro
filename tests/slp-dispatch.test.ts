@@ -409,6 +409,24 @@ test("424 only the dispatch opener can confirm an untargeted claim", async () =>
   });
 });
 
+test("426 handback file and show round-trip an optional opaque candidate", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    await acceptDispatch(fixture, dispatch);
+    const candidate = "artifact digest: sha256:abc123";
+    const args = handbackFileArgs(dispatch);
+    args.push("--candidate", candidate);
+
+    const filed = await runCli(fixture, args);
+    expect(filed.exitCode).toBe(0);
+    expect(filed.stdout).toContain(`candidate: ${candidate}`);
+
+    const shown = await runCli(fixture, ["handback", "show", handbackId(filed)]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`candidate: ${candidate}`);
+  });
+});
+
 test("272 handback file refuses a session that is not the dispatch holder", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);

@@ -58,6 +58,35 @@ test("8 disabling policy-proof removes its flags while core evidence still compl
   });
 });
 
+test("427 work done and show round-trip an optional candidate into the completion event", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "candidate completion", "--kind", "idea"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work])).exitCode).toBe(0);
+    const candidate = "tree digest: sha256:def456";
+
+    const completed = await runCli(fixture, [
+      "work",
+      "done",
+      work,
+      "--evidence",
+      "source: candidate round-trip",
+      "--candidate",
+      candidate,
+    ]);
+    expect(completed.exitCode).toBe(0);
+
+    const shown = await runCli(fixture, ["work", "show", work]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`candidate: ${candidate}`);
+
+    const trace = await runCli(fixture, ["trace", work]);
+    expect(trace.exitCode).toBe(0);
+    expect(trace.stdout).toContain(`\"candidate\":\"${candidate}\"`);
+  });
+});
+
 test("9 policy-breakdown blocks only parentless childless write-like work", async () => {
   await withFixture(async (fixture) => {
     const root = idFrom(

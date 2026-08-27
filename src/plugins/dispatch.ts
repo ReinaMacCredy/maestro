@@ -88,6 +88,7 @@ export interface HandbackRecord {
   dispatchId: string;
   status: HandbackStatus;
   request: string | null;
+  candidate: string | null;
   claim: string;
   proof: string;
   assumptions: string;
@@ -101,6 +102,7 @@ interface HandbackRow {
   dispatch_id: string;
   status: HandbackStatus;
   request: string | null;
+  candidate: string | null;
   claim: string;
   proof: string;
   assumptions: string;
@@ -253,6 +255,7 @@ function fromHandbackRow(row: HandbackRow): HandbackRecord {
     dispatchId: row.dispatch_id,
     status: row.status,
     request: row.request ?? null,
+    candidate: row.candidate ?? null,
     claim: row.claim,
     proof: row.proof,
     assumptions: row.assumptions,
@@ -414,6 +417,7 @@ function formatHandback(handback: HandbackRecord): string {
     handback.request
       ? `${handback.status === "BLOCKED" ? "retry when" : "requested"}: ${handback.request}`
       : null,
+    handback.candidate !== null ? `candidate: ${handback.candidate}` : null,
     `claim: ${handback.claim}`,
     `proof: ${handback.proof}`,
     `assumptions not verified: ${handback.assumptions}`,
@@ -543,6 +547,11 @@ export const dispatchPlugin: BuiltInPlugin = {
       "handbacks",
       "request",
       "ALTER TABLE handbacks ADD COLUMN request TEXT",
+    );
+    context.store.ensureColumn(
+      "handbacks",
+      "candidate",
+      "ALTER TABLE handbacks ADD COLUMN candidate TEXT",
     );
     context.store.migrate(`
       UPDATE dispatches
@@ -961,6 +970,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           const request = handbackRequestStatuses.has(status as HandbackStatus)
             ? requiredOption(invocation, "--request")
             : requestValue?.trim() ? requestValue : null;
+          const candidate = stringOption(invocation, "candidate") ?? null;
           const claim = requiredOption(invocation, "--claim");
           const proof = requiredOption(invocation, "--proof");
           const layers = ["source", "artifact", "installed", "live", "journey"];
@@ -1015,15 +1025,16 @@ export const dispatchPlugin: BuiltInPlugin = {
             context.store.database
               .query(
                 `INSERT INTO handbacks
-                  (id, dispatch_id, status, request, claim, proof, assumptions, residual_risks,
-                   incidental_findings, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (id, dispatch_id, status, request, candidate, claim, proof, assumptions,
+                   residual_risks, incidental_findings, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .run(
                 id,
                 dispatchId,
                 status,
                 request,
+                candidate,
                 claim,
                 proof,
                 assumptions,
@@ -1051,6 +1062,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           flags: {
             "--status": { description: "Set the handback status.", value: true },
             "--request": { description: "State the retry condition or requested action.", value: true },
+            "--candidate": { description: "Record an opaque commit or digest.", value: true },
             "--claim": { description: "State what is now believed true.", value: true },
             "--proof": { description: "Name layered evidence for the claim.", value: true },
             "--assumptions": { description: "List unverified assumptions or None.", value: true },

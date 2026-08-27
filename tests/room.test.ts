@@ -406,6 +406,9 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     expect(lane).toContain(
       "runs `maestro dispatch cancel <dispatch-id> --reason wrong-holder` and opens a new dispatch",
     );
+    expect(lane).toContain(
+      "A delivery lane passes `--candidate <commit or digest>` with its DONE handback.",
+    );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
   });
@@ -447,7 +450,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       "maestro dispatch list <work-id>",
       "maestro recipe show slp",
       "maestro dispatch accept <dispatch-id>",
-      'maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
+      'maestro handback file <dispatch-id> --status DONE --candidate "<commit or digest>" --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
       'maestro work note <work-id> "after h<id>: <evidence>"',
       "maestro brief",
     ]);
@@ -463,6 +466,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       ["<falsifier>", "real CLI accepted command"],
       ["<pane-id>", "w1:pZ"],
       ["<session-id>", "test-session"],
+      ["<commit or digest>", "candidate-sha"],
       ["<current belief>", "commands parse"],
     ]);
     const argumentsFor = (command: string): string[] => {

@@ -19,6 +19,7 @@ export interface WorkRecord {
   acceptance: string | null;
   atomicReason: string | null;
   evidence: string | null;
+  candidate: string | null;
   heldBy: string | null;
   reclaimedFrom: string | null;
   reclaimedBy: string | null;
@@ -37,6 +38,7 @@ interface WorkRow {
   acceptance: string | null;
   atomic_reason: string | null;
   evidence: string | null;
+  candidate: string | null;
   held_by: string | null;
   reclaimed_from: string | null;
   reclaimed_by: string | null;
@@ -85,6 +87,7 @@ function toWork(row: WorkRow): WorkRecord {
     acceptance: row.acceptance,
     atomicReason: row.atomic_reason,
     evidence: row.evidence,
+    candidate: row.candidate ?? null,
     heldBy: row.held_by,
     reclaimedFrom: row.reclaimed_from,
     reclaimedBy: row.reclaimed_by,
@@ -228,6 +231,7 @@ function formatWork(work: WorkRecord): string {
     work.atomicReason ? `atomic reason: ${work.atomicReason}` : null,
     work.cancelReason ? `cancel reason: ${work.cancelReason}` : null,
     work.evidence !== null ? `evidence: ${work.evidence}` : null,
+    work.candidate !== null ? `candidate: ${work.candidate}` : null,
   ];
   return fields.filter((field): field is string => field !== null).join("\n");
 }
@@ -284,6 +288,7 @@ export const workPlugin: BuiltInPlugin = {
       ["reclaimed_from", "ALTER TABLE work ADD COLUMN reclaimed_from TEXT"],
       ["reclaimed_by", "ALTER TABLE work ADD COLUMN reclaimed_by TEXT"],
       ["reclaim_reason", "ALTER TABLE work ADD COLUMN reclaim_reason TEXT"],
+      ["candidate", "ALTER TABLE work ADD COLUMN candidate TEXT"],
     ] as const) {
       context.store.ensureColumn("work", name, migration);
     }
@@ -658,6 +663,7 @@ export const workPlugin: BuiltInPlugin = {
             );
           }
           const evidence = stringOption(invocation, "evidence") ?? "";
+          const candidate = stringOption(invocation, "candidate") ?? null;
           const claims = stringOptions(invocation, "claim");
           const proofs = stringOptions(invocation, "proof");
           const result = await context.events.waterfall<
@@ -705,10 +711,10 @@ export const workPlugin: BuiltInPlugin = {
             const completed = context.store.database
               .query(
                 `UPDATE work
-                 SET state = 'done', evidence = ?, held_by = NULL, updated_at = ?
+                 SET state = 'done', evidence = ?, candidate = ?, held_by = NULL, updated_at = ?
                  WHERE id = ? AND state = 'active' AND cancelled_at IS NULL AND held_by = ?`,
               )
-              .run(recordedEvidence, now, id, sessionId);
+              .run(recordedEvidence, candidate, now, id, sessionId);
             if (completed.changes === 0) {
               throw new CliError("INVALID_STATE", `${id} changed while completion was pending`);
             }
@@ -718,7 +724,7 @@ export const workPlugin: BuiltInPlugin = {
               entityType: "work",
               entityId: id,
               sessionId,
-              payload: { evidence: recordedEvidence, claims, proofs },
+              payload: { candidate, evidence: recordedEvidence, claims, proofs },
             });
             return service.get(id);
           });
@@ -730,6 +736,10 @@ export const workPlugin: BuiltInPlugin = {
           flags: {
             "--evidence": {
               description: "Record opaque completion evidence.",
+              value: true,
+            },
+            "--candidate": {
+              description: "Record an opaque commit or digest.",
               value: true,
             },
           },
