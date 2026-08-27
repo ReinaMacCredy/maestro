@@ -24,6 +24,21 @@ interface SourceFile {
   sha256: string;
 }
 
+interface SourceReceipt {
+  artifact_type: string;
+  card_id: string | null;
+  created_at: string;
+  id: string;
+  payload_json: string;
+}
+
+interface SourceData {
+  cards: SourceCard[];
+  decisions: ImportedDecision[];
+  files: ImportedFile[];
+  receipts: SourceReceipt[];
+}
+
 interface ImportedFile {
   cardId: string;
   path: string;
@@ -175,6 +190,16 @@ function initializeLegacyTables(context: PluginContext): void {
   `);
 }
 
+function initializePromotionTables(context: PluginContext): void {
+  context.store.migrate(`
+    CREATE TABLE IF NOT EXISTS legacy_map (
+      legacy_id TEXT PRIMARY KEY NOT NULL,
+      native_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL CHECK(entity_type IN ('work', 'decision'))
+    );
+  `);
+}
+
 function rebuildLegacySearch(context: PluginContext): void {
   if (!hasTable(context.store.database, "search_index")) return;
   context.store.database.run("DELETE FROM search_index WHERE surface = '[legacy]'");
@@ -206,11 +231,7 @@ function legacySearchNeedsRebuild(context: PluginContext): boolean {
     .get() === null;
 }
 
-function sourceData(path: string): {
-  cards: SourceCard[];
-  decisions: ImportedDecision[];
-  files: ImportedFile[];
-} {
+function sourceData(path: string): SourceData {
   if (!existsSync(path)) {
     throw new CliError("LEGACY_STORE_NOT_FOUND", `legacy Rust store not found: ${path}`, { path });
   }
@@ -272,7 +293,15 @@ function sourceData(path: string): {
         text: decoded,
       };
     });
-    return { cards, decisions: [...decisions.values()], files };
+    const receipts = hasTable(source, "receipt_artifacts")
+      ? source
+        .query<SourceReceipt, []>(
+          `SELECT artifact_type, id, card_id, created_at, payload_json
+             FROM receipt_artifacts ORDER BY artifact_type, id`,
+        )
+        .all()
+      : [];
+    return { cards, decisions: [...decisions.values()], files, receipts };
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CliError(
@@ -287,7 +316,7 @@ function sourceData(path: string): {
 
 function replaceLegacyRows(
   context: PluginContext,
-  data: ReturnType<typeof sourceData>,
+  data: SourceData,
 ): void {
   const database = context.store.database;
   database.exec("BEGIN IMMEDIATE");
@@ -340,6 +369,288 @@ function replaceLegacyRows(
     }
     rebuildLegacySearch(context);
     database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+const workKinds = new Set(["feature", "task", "idea", "bug", "progress"]);
+const doneStatuses = new Set(["shipped", "closed", "verified"]);
+const cancelledStatuses = new Set(["cancelled", "abandoned", "rejected", "dismissed"]);
+
+function workKind(cardType: string): string {
+  return cardType === "progress" ? "chore" : cardType;
+}
+
+function workState(status: string): "cancelled" | "done" | "open" {
+  if (doneStatuses.has(status)) return "done";
+  if (cancelledStatuses.has(status)) return "cancelled";
+  return "open";
+}
+
+function decisionState(status: string): "draft" | "locked" | "superseded" {
+  if (status === "open") return "draft";
+  if (status === "superseded") return "superseded";
+  return "locked";
+}
+
+function yamlReferences(yaml: string, key: string): string[] {
+  const lines = yaml.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const match = line.match(new RegExp(`^(\\s*)${key}:\\s*(.*?)\\s*$`));
+    if (!match) continue;
+    const inline = match[2] ?? "";
+    if (inline) {
+      if (inline.startsWith("[") && inline.endsWith("]")) {
+        return inline
+          .slice(1, -1)
+          .split(",")
+          .map(scalar)
+          .filter(Boolean);
+      }
+      return [scalar(inline)];
+    }
+    const fieldIndent = match[1]?.length ?? 0;
+    const values: string[] = [];
+    for (const candidate of lines.slice(index + 1)) {
+      if (!candidate.trim()) continue;
+      const item = candidate.match(/^(\s*)-\s+(.+?)\s*$/);
+      if (item && (item[1]?.length ?? 0) >= fieldIndent) {
+        values.push(scalar(item[2] ?? ""));
+        continue;
+      }
+      const indent = candidate.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= fieldIndent) break;
+    }
+    return values;
+  }
+  return [];
+}
+
+function payloadSummary(payload: string): string {
+  let compact = payload;
+  try {
+    compact = JSON.stringify(JSON.parse(payload));
+  } catch {}
+  compact = compact.replaceAll(/\s+/g, " ").trim();
+  return compact.length <= 240 ? compact : `${compact.slice(0, 239).trimEnd()}…`;
+}
+
+interface PromotionSummary {
+  decisions: number;
+  notes: number;
+  receiptsSkipped: number;
+  work: number;
+}
+
+function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionSummary {
+  const database = context.store.database;
+  const sessionId = context.sessions.current().id;
+  const nativeIds = new Map(
+    database
+      .query<{ legacy_id: string; native_id: string }, []>(
+        "SELECT legacy_id, native_id FROM legacy_map",
+      )
+      .all()
+      .map((row) => [row.legacy_id, row.native_id] as const),
+  );
+  const workCards = data.cards.filter((card) => workKinds.has(card.card_type));
+  const decisionCards = data.cards.filter((card) => card.card_type === "decision");
+  const workCardIds = new Set(workCards.map((card) => card.id));
+  let notes = 0;
+
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const remaining = new Map(workCards.map((card) => [card.id, card] as const));
+    while (remaining.size > 0) {
+      let progressed = false;
+      for (const card of [...remaining.values()]) {
+        if (card.parent && workCardIds.has(card.parent) && !nativeIds.has(card.parent)) continue;
+        const id = context.store.nextPrefixedId("work", "w");
+        const state = workState(card.status);
+        const parentId = card.parent ? nativeIds.get(card.parent) ?? null : null;
+        const provenance = `imported from legacy card ${card.id}`;
+        database
+          .query(
+            `INSERT INTO work
+              (id, title, kind, state, parent_id, acceptance, atomic_reason, evidence,
+               held_by, cancelled_at, cancel_reason, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            card.title,
+            workKind(card.card_type),
+            state === "done" ? "done" : "open",
+            parentId,
+            state === "cancelled" ? card.updated_at : null,
+            state === "cancelled" ? `imported legacy status: ${card.status}` : null,
+            card.created_at,
+            card.updated_at,
+          );
+        database
+          .query("INSERT INTO legacy_map (legacy_id, native_id, entity_type) VALUES (?, ?, 'work')")
+          .run(card.id, id);
+        database
+          .query("INSERT INTO work_notes (work_id, text, created_at) VALUES (?, ?, ?)")
+          .run(id, provenance, card.updated_at);
+        nativeIds.set(card.id, id);
+        remaining.delete(card.id);
+        notes += 1;
+        context.log.append({
+          type: "work.add",
+          entityType: "work",
+          entityId: id,
+          sessionId,
+          payload: { title: card.title, kind: workKind(card.card_type), parentId, importedFrom: card.id },
+        });
+        if (state === "done") {
+          context.log.append({
+            type: "work.done",
+            entityType: "work",
+            entityId: id,
+            sessionId,
+            payload: { importedFrom: card.id, legacyStatus: card.status },
+          });
+        } else if (state === "cancelled") {
+          context.log.append({
+            type: "work.cancel",
+            entityType: "work",
+            entityId: id,
+            sessionId,
+            payload: { importedFrom: card.id, reason: `imported legacy status: ${card.status}` },
+          });
+        }
+        context.log.append({
+          type: "work.note",
+          entityType: "work",
+          entityId: id,
+          sessionId,
+          payload: { text: provenance },
+        });
+        progressed = true;
+      }
+      if (!progressed) {
+        throw new CliError(
+          "INVALID_LEGACY_STORE",
+          `legacy work parent cycle: ${[...remaining.keys()].join(", ")}`,
+        );
+      }
+    }
+
+    let nextDecision = Number(context.store.nextPrefixedId("decisions", "d").slice(1));
+    for (const card of decisionCards) {
+      const id = `d${nextDecision}`;
+      nextDecision += 1;
+      nativeIds.set(card.id, id);
+      database
+        .query("INSERT INTO legacy_map (legacy_id, native_id, entity_type) VALUES (?, ?, 'decision')")
+        .run(card.id, id);
+    }
+
+    const supersedes = new Map<string, string>();
+    const supersededBy = new Map<string, string>();
+    for (const card of decisionCards) {
+      const predecessor = yamlReferences(card.card_yaml, "supersedes")[0];
+      const successor = yamlReferences(card.card_yaml, "superseded_by")[0];
+      if (predecessor && nativeIds.has(predecessor)) {
+        supersedes.set(card.id, predecessor);
+        supersededBy.set(predecessor, card.id);
+      }
+      if (successor && nativeIds.has(successor)) {
+        supersededBy.set(card.id, successor);
+        supersedes.set(successor, card.id);
+      }
+    }
+
+    for (const card of decisionCards) {
+      const id = nativeIds.get(card.id) as string;
+      const state = decisionState(card.status);
+      const provenance = `imported from legacy card ${card.id}`;
+      const text = `${card.title} (${provenance})`;
+      const workId = card.parent && workCardIds.has(card.parent)
+        ? nativeIds.get(card.parent) ?? null
+        : null;
+      database
+        .query(
+          `INSERT INTO decisions
+            (id, text, rationale, state, parent_id, work_id, supersedes_id,
+             superseded_by_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?)`,
+        )
+        .run(id, text, provenance, state, workId, card.created_at, card.updated_at);
+      notes += 1;
+      context.log.append({
+        type: "decision.draft",
+        entityType: "decision",
+        entityId: id,
+        sessionId,
+        payload: { text, workId, importedFrom: card.id },
+      });
+      if (state !== "draft") {
+        context.log.append({
+          type: "decision.lock",
+          entityType: "decision",
+          entityId: id,
+          sessionId,
+          payload: { importedFrom: card.id, legacyStatus: card.status },
+        });
+      }
+    }
+
+    for (const card of decisionCards) {
+      const id = nativeIds.get(card.id) as string;
+      const predecessor = supersedes.get(card.id);
+      const successor = supersededBy.get(card.id);
+      database
+        .query(
+          `UPDATE decisions SET supersedes_id = ?, superseded_by_id = ? WHERE id = ?`,
+        )
+        .run(
+          predecessor ? nativeIds.get(predecessor) ?? null : null,
+          successor ? nativeIds.get(successor) ?? null : null,
+          id,
+        );
+      if (predecessor) {
+        context.log.append({
+          type: "decision.supersede",
+          entityType: "decision",
+          entityId: id,
+          sessionId,
+          payload: { supersedesId: nativeIds.get(predecessor), importedFrom: card.id },
+        });
+      }
+    }
+
+    let receiptsSkipped = 0;
+    for (const receipt of data.receipts) {
+      const workId = receipt.card_id ? nativeIds.get(receipt.card_id) : null;
+      if (!workId || !workCardIds.has(receipt.card_id as string)) {
+        receiptsSkipped += 1;
+        continue;
+      }
+      const note = `legacy receipt ${receipt.artifact_type} ${receipt.id}: ${payloadSummary(receipt.payload_json)}`;
+      database
+        .query("INSERT INTO work_notes (work_id, text, created_at) VALUES (?, ?, ?)")
+        .run(workId, note, receipt.created_at);
+      context.log.append({
+        type: "work.note",
+        entityType: "work",
+        entityId: workId,
+        sessionId,
+        payload: { text: note },
+      });
+      notes += 1;
+    }
+    database.exec("COMMIT");
+    return {
+      work: workCards.length,
+      decisions: decisionCards.length,
+      notes,
+      receiptsSkipped,
+    };
   } catch (error) {
     database.exec("ROLLBACK");
     throw error;
@@ -425,8 +736,10 @@ function showLegacy(context: PluginContext, invocation: CliInvocation): CliResul
 
 export const importRustPlugin: BuiltInPlugin = {
   name: "import-rust",
+  inject: ["work", "decision"],
   apply(context) {
     initializeLegacyTables(context);
+    initializePromotionTables(context);
     if (!context.store.readOnly && legacySearchNeedsRebuild(context)) rebuildLegacySearch(context);
     context.effect(() =>
       context.cli.register(
@@ -439,7 +752,7 @@ export const importRustPlugin: BuiltInPlugin = {
           const data = sourceData(path);
           replaceLegacyRows(context, data);
           const textFiles = data.files.filter((file) => file.text !== null).length;
-          return {
+          const result: CliResult = {
             data: {
               path,
               cards: data.cards.length,
@@ -454,11 +767,21 @@ export const importRustPlugin: BuiltInPlugin = {
                 : null,
             ].filter((line): line is string => line !== null).join("\n"),
           };
+          if (invocation.options.promote !== true) return result;
+          const promoted = promoteLegacyRows(context, data);
+          return {
+            data: { ...(result.data as object), promoted },
+            text:
+              `${result.text}\npromoted native: ${promoted.work} work created, ` +
+              `${promoted.decisions} decisions created, ${promoted.notes} notes created, ` +
+              `${promoted.receiptsSkipped} receipts skipped`,
+          };
         },
         {
           description: "Import a legacy Rust card store read-only.",
           flags: {
             "--path": { description: "Read this legacy store.sqlite file.", value: true },
+            "--promote": { description: "Promote legacy cards into native work and decisions." },
           },
           rootDescription: "Import one-shot data from legacy Maestro stores.",
         },

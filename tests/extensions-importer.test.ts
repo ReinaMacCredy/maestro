@@ -109,6 +109,117 @@ async function writeLegacyStore(fixture: Fixture, extraCards = 0): Promise<strin
   return path;
 }
 
+async function writePromotionStore(fixture: Fixture): Promise<string> {
+  const path = await writeLegacyStore(fixture);
+  const database = new Database(path, { strict: true });
+  const now = "2026-08-27T00:00:00Z";
+  const insertCard = database.query(
+    `INSERT INTO cards
+      (id, card_type, parent, status, title, record_file, card_yaml, created_at, updated_at, imported_at)
+     VALUES (?, ?, ?, ?, ?, 'card.yaml', ?, ?, ?, ?)`,
+  );
+  for (const card of [
+    {
+      id: "task-legacy-child",
+      type: "task",
+      parent: featureId,
+      status: "draft",
+      title: "Legacy child task",
+      yaml: `id: task-legacy-child\ntype: task\nparent: ${featureId}\nstatus: draft\ntitle: Legacy child task\n`,
+    },
+    {
+      id: "idea-legacy-dismissed",
+      type: "idea",
+      parent: null,
+      status: "dismissed",
+      title: "Legacy dismissed idea",
+      yaml: "id: idea-legacy-dismissed\ntype: idea\nstatus: dismissed\ntitle: Legacy dismissed idea\n",
+    },
+    {
+      id: "bug-legacy-closed",
+      type: "bug",
+      parent: null,
+      status: "closed",
+      title: "Legacy closed bug",
+      yaml: "id: bug-legacy-closed\ntype: bug\nstatus: closed\ntitle: Legacy closed bug\n",
+    },
+    {
+      id: "progress-legacy-running",
+      type: "progress",
+      parent: null,
+      status: "in_progress",
+      title: "Legacy running progress",
+      yaml: "id: progress-legacy-running\ntype: progress\nstatus: in_progress\ntitle: Legacy running progress\n",
+    },
+    {
+      id: "dec-legacy-old",
+      type: "decision",
+      parent: featureId,
+      status: "superseded",
+      title: "Legacy old ruling",
+      yaml: "id: dec-legacy-old\ntype: decision\nstatus: superseded\nparent: feature-legacy-aurora\nextra:\n  superseded_by: dec-legacy-new\n",
+    },
+    {
+      id: "dec-legacy-new",
+      type: "decision",
+      parent: featureId,
+      status: "locked",
+      title: "Legacy replacement ruling",
+      yaml: "id: dec-legacy-new\ntype: decision\nstatus: locked\nparent: feature-legacy-aurora\nextra:\n  supersedes:\n  - dec-legacy-old\n",
+    },
+    {
+      id: "dec-legacy-open",
+      type: "decision",
+      parent: "missing-parent",
+      status: "open",
+      title: "Legacy open ruling",
+      yaml: "id: dec-legacy-open\ntype: decision\nstatus: open\nparent: missing-parent\n",
+    },
+  ]) {
+    insertCard.run(
+      card.id,
+      card.type,
+      card.parent,
+      card.status,
+      card.title,
+      card.yaml,
+      now,
+      now,
+      now,
+    );
+  }
+  database.exec(`
+    CREATE TABLE receipt_artifacts (
+      artifact_type TEXT NOT NULL,
+      id TEXT NOT NULL,
+      card_id TEXT,
+      created_at TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      PRIMARY KEY (artifact_type, id)
+    );
+  `);
+  const insertReceipt = database.query(
+    `INSERT INTO receipt_artifacts (artifact_type, id, card_id, created_at, payload_json)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  insertReceipt.run(
+    "verification",
+    "receipt-legacy-aurora",
+    featureId,
+    now,
+    JSON.stringify({ result: "pass", checks: 3 }),
+  );
+  insertReceipt.run(
+    "verification",
+    "receipt-orphan",
+    "missing-card",
+    now,
+    JSON.stringify({ result: "orphan" }),
+  );
+  database.close();
+  return path;
+}
+
 function targetDatabase(fixture: Fixture): Database {
   return new Database(join(fixture.repo, ".maestro", "maestro.db"), {
     readonly: true,
@@ -274,5 +385,77 @@ test("52 legacy search summaries and result count stay bounded", async () => {
       expect(hit.split(" — ").at(-1)?.length).toBeLessThanOrEqual(200);
       expect(hit).not.toContain("schema_version:");
     }
+  });
+});
+
+test("300 --promote maps legacy cards, decisions, receipts, provenance, and events", async () => {
+  await withFixture(async (fixture) => {
+    const source = await writePromotionStore(fixture);
+
+    const promoted = await runCli(fixture, ["import", "rust", "--path", source, "--promote"]);
+
+    expect(promoted.exitCode).toBe(0);
+    expect(promoted.stdout).toContain("5 work created");
+    expect(promoted.stdout).toContain("5 decisions created");
+    expect(promoted.stdout).toContain("11 notes created");
+    expect(promoted.stdout).toContain("1 receipts skipped");
+
+    const database = targetDatabase(fixture);
+    const mappings = database
+      .query<{ entity_type: string; legacy_id: string; native_id: string }, []>(
+        "SELECT legacy_id, native_id, entity_type FROM legacy_map ORDER BY legacy_id",
+      )
+      .all();
+    const nativeId = (legacyId: string): string => {
+      const id = mappings.find((mapping) => mapping.legacy_id === legacyId)?.native_id;
+      if (!id) throw new Error(`missing native mapping for ${legacyId}`);
+      return id;
+    };
+    const featureWork = nativeId(featureId);
+    const taskWork = nativeId("task-legacy-child");
+    const oldDecision = nativeId("dec-legacy-old");
+    const newDecision = nativeId("dec-legacy-new");
+    expect(mappings).toHaveLength(10);
+    expect(database.query("SELECT kind, state, held_by FROM work WHERE id = ?").get(featureWork))
+      .toEqual({ kind: "feature", state: "done", held_by: null });
+    expect(database.query("SELECT kind, state, parent_id, held_by FROM work WHERE id = ?").get(taskWork))
+      .toEqual({ kind: "task", state: "open", parent_id: featureWork, held_by: null });
+    expect(database.query("SELECT kind, state, cancelled_at FROM work WHERE id = ?").get(nativeId("idea-legacy-dismissed")))
+      .toEqual({ kind: "idea", state: "open", cancelled_at: expect.any(String) });
+    expect(database.query("SELECT kind, state FROM work WHERE id = ?").get(nativeId("bug-legacy-closed")))
+      .toEqual({ kind: "bug", state: "done" });
+    expect(database.query("SELECT kind, state, held_by FROM work WHERE id = ?").get(nativeId("progress-legacy-running")))
+      .toEqual({ kind: "chore", state: "open", held_by: null });
+    expect(
+      database.query("SELECT state, work_id, superseded_by_id FROM decisions WHERE id = ?").get(oldDecision),
+    ).toEqual({ state: "superseded", work_id: featureWork, superseded_by_id: newDecision });
+    expect(
+      database.query("SELECT state, work_id, supersedes_id FROM decisions WHERE id = ?").get(newDecision),
+    ).toEqual({ state: "locked", work_id: featureWork, supersedes_id: oldDecision });
+    expect(
+      database.query("SELECT state, work_id FROM decisions WHERE id = ?").get(nativeId("dec-legacy-open")),
+    ).toEqual({ state: "draft", work_id: null });
+
+    const workNotes = database
+      .query<{ text: string }, [string]>("SELECT text FROM work_notes WHERE work_id = ? ORDER BY id")
+      .all(featureWork)
+      .map((row) => row.text);
+    expect(workNotes).toContain(`imported from legacy card ${featureId}`);
+    expect(workNotes.some((note) => note.includes("verification") && note.includes('"result":"pass"')))
+      .toBe(true);
+    expect(
+      database.query<{ rationale: string }, [string]>("SELECT rationale FROM decisions WHERE id = ?").get(newDecision)?.rationale,
+    ).toBe("imported from legacy card dec-legacy-new");
+    expect(
+      database.query<{ count: number }, []>(
+        "SELECT count(*) AS count FROM event_log WHERE entity_type IN ('work', 'decision')",
+      ).get()?.count,
+    ).toBeGreaterThanOrEqual(10);
+    database.close();
+
+    const shownWork = await runCli(fixture, ["work", "show", featureWork]);
+    const decisions = await runCli(fixture, ["decision", "list"]);
+    expect(shownWork.stdout).toContain(`note: imported from legacy card ${featureId}`);
+    expect(decisions.stdout).toContain("imported from legacy card dec-legacy-new");
   });
 });
