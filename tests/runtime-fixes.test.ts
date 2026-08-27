@@ -1,10 +1,66 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { runCli, withFixture, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const storeCardId = "feature-runtime-store";
 const archiveCardId = "snapshot-runtime-archive";
+
+function session(id: string): Record<string, string> {
+  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
+}
+
+function dispatchOpenArgs(work: string, target: string): string[] {
+  return [
+    "dispatch",
+    "open",
+    work,
+    "--objective",
+    "Verify the runtime contract",
+    "--owned-scope",
+    "src/plugins/dispatch.ts",
+    "--excluded-scope",
+    "push, tag, release",
+    "--mutation",
+    "write-bounded: src/plugins/dispatch.ts",
+    "--stop-condition",
+    "the runtime assertion passes",
+    "--lane",
+    "delivery",
+    "--evidence-required",
+    "source: focused test",
+    "--pane",
+    "w1:p-test",
+    "--target-session",
+    target,
+  ];
+}
+
+function dispatchId(stdout: string): string {
+  const match = stdout.match(/^x\d+/);
+  if (!match) throw new Error(`missing dispatch id in stdout: ${stdout}`);
+  return match[0];
+}
+
+function handbackArgs(dispatch: string): string[] {
+  return [
+    "handback",
+    "file",
+    dispatch,
+    "--status",
+    "DONE",
+    "--claim",
+    "the runtime contract is verified",
+    "--proof",
+    "source: focused test passes",
+    "--assumptions",
+    "None",
+    "--residual-risks",
+    "None",
+    "--incidental-findings",
+    "None",
+  ];
+}
 
 async function writeStoreSource(fixture: Fixture): Promise<string> {
   const path = join(fixture.repo, "runtime-store.sqlite");
@@ -136,5 +192,40 @@ test("320 import rust keeps store and archive sources independently replaceable"
     expect(rerun.stdout).toContain("0 work created");
     expect(rerun.stdout).toContain("0 decisions created");
     expect((await runCli(fixture, ["legacy", "show", archiveCardId])).exitCode).toBe(0);
+  });
+});
+
+test("321 handback keeps the work lease until the owning session completes work", async () => {
+  await withFixture(async (fixture) => {
+    const owner = session("runtime-owner");
+    const other = session("runtime-other");
+    const work = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "handback lease", "--atomic-reason", "fixture"],
+        owner,
+      ),
+    );
+    expect((await runCli(fixture, ["work", "start", work], owner)).exitCode).toBe(0);
+    const opened = await runCli(fixture, dispatchOpenArgs(work, "runtime-owner"), owner);
+    const dispatch = dispatchId(opened.stdout);
+    expect(opened.exitCode).toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], owner)).exitCode).toBe(0);
+    expect((await runCli(fixture, handbackArgs(dispatch), owner)).exitCode).toBe(0);
+
+    const refused = await runCli(
+      fixture,
+      ["work", "done", work, "--evidence", "source: wrong session"],
+      other,
+    );
+    expect(refused.exitCode).not.toBe(0);
+    expect(JSON.parse(refused.stderr).error.code).toBe("LEASE_HELD");
+
+    const completed = await runCli(
+      fixture,
+      ["work", "done", work, "--evidence", "source: owner session"],
+      owner,
+    );
+    expect(completed.exitCode).toBe(0);
   });
 });

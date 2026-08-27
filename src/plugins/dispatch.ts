@@ -823,7 +823,6 @@ export const dispatchPlugin: BuiltInPlugin = {
           const residualRisks = requiredOption(invocation, "--residual-risks");
           const incidentalFindings = requiredOption(invocation, "--incidental-findings");
           const sessionId = context.sessions.current().id;
-          const work = context.work as WorkService;
           const file = context.store.database.transaction(() => {
             const current = requireDispatch(context, dispatchId);
             if (current.state === "cancelled") {
@@ -873,7 +872,6 @@ export const dispatchPlugin: BuiltInPlugin = {
             context.store.database
               .query("UPDATE dispatches SET held_by = NULL, updated_at = ? WHERE id = ?")
               .run(createdAt, dispatchId);
-            work.release(current.workId, sessionId, createdAt);
             context.log.append({
               type: "handback.file",
               entityType: "handback",
