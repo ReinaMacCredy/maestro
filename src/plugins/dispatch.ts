@@ -104,6 +104,7 @@ export interface HandbackService {
 }
 
 export interface CouncilStatus {
+  generationAnchor: string | null;
   workId: string;
   total: number;
   returned: number;
@@ -284,13 +285,30 @@ function councilStatus(
     returned: members.filter((row) => row.returned_at !== null).length,
     total: members.length,
   };
-  const unseal = context.store.database
-    .query<{ unseal_reason: string }, [string]>(
-      "SELECT unseal_reason FROM dispatch_councils WHERE work_id = ?",
-    )
-    .get(workId);
+  const generationAnchor = members[0]?.id ?? null;
+  const hasGenerationAnchor = context.store.database
+    .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
+    .all()
+    .some((column) => column.name === "generation_anchor");
+  const unseal = generationAnchor
+    ? hasGenerationAnchor
+      ? context.store.database
+          .query<{ unseal_reason: string }, [string, string]>(
+            `SELECT unseal_reason FROM dispatch_councils
+             WHERE work_id = ? AND generation_anchor = ?`,
+          )
+          .get(workId, generationAnchor)
+      : generationAnchor === rows[0]?.id
+        ? context.store.database
+            .query<{ unseal_reason: string }, [string]>(
+              "SELECT unseal_reason FROM dispatch_councils WHERE work_id = ?",
+            )
+            .get(workId)
+        : null
+    : null;
   const unsealed = unseal !== null;
   return {
+    generationAnchor,
     workId,
     total: counts.total,
     returned: counts.returned,
@@ -403,11 +421,55 @@ export const dispatchPlugin: BuiltInPlugin = {
       );
       CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id);
       CREATE TABLE IF NOT EXISTS dispatch_councils (
-        work_id TEXT PRIMARY KEY REFERENCES work(id),
+        work_id TEXT NOT NULL REFERENCES work(id),
+        generation_anchor TEXT NOT NULL REFERENCES dispatches(id),
         unsealed_at TEXT NOT NULL,
-        unseal_reason TEXT NOT NULL
+        unseal_reason TEXT NOT NULL,
+        PRIMARY KEY(work_id, generation_anchor)
       );
     `);
+    const hasCouncilGenerationAnchor = context.store.database
+      .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
+      .all()
+      .some((column) => column.name === "generation_anchor");
+    if (!context.store.readOnly && !hasCouncilGenerationAnchor) {
+      const migrateCouncils = context.store.database.transaction(() => {
+        const legacyRows = context.store.database
+          .query<
+            { unseal_reason: string; unsealed_at: string; work_id: string },
+            []
+          >("SELECT work_id, unsealed_at, unseal_reason FROM dispatch_councils")
+          .all();
+        context.store.database.exec(`
+          ALTER TABLE dispatch_councils RENAME TO dispatch_councils_legacy;
+          CREATE TABLE dispatch_councils (
+            work_id TEXT NOT NULL REFERENCES work(id),
+            generation_anchor TEXT NOT NULL REFERENCES dispatches(id),
+            unsealed_at TEXT NOT NULL,
+            unseal_reason TEXT NOT NULL,
+            PRIMARY KEY(work_id, generation_anchor)
+          );
+        `);
+        const insert = context.store.database.query(
+          `INSERT INTO dispatch_councils
+            (work_id, generation_anchor, unsealed_at, unseal_reason)
+           VALUES (?, ?, ?, ?)`,
+        );
+        for (const row of legacyRows) {
+          const anchor = context.store.database
+            .query<{ id: string }, [string]>(
+              `SELECT id FROM dispatches
+               WHERE work_id = ?
+               ORDER BY created_at, CAST(SUBSTR(id, 2) AS INTEGER)
+               LIMIT 1`,
+            )
+            .get(row.work_id)?.id;
+          if (anchor) insert.run(row.work_id, anchor, row.unsealed_at, row.unseal_reason);
+        }
+        context.store.database.exec("DROP TABLE dispatch_councils_legacy");
+      });
+      migrateCouncils.immediate();
+    }
     const hasDispatchColumn = (name: string) =>
       context.store.database
         .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
@@ -704,28 +766,36 @@ export const dispatchPlugin: BuiltInPlugin = {
           const workId = position(invocation, 0, "work id");
           const work = context.work as WorkService;
           if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
-          const council = service.council(workId);
-          if (council.total < 2) {
-            throw new CliError("INVALID_STATE", `${workId} has no council to unseal`);
-          }
-          if (council.unsealed) {
-            throw new CliError("INVALID_STATE", `${workId} council is already unsealed`);
-          }
           const reason = requiredOption(invocation, "--reason");
-          const unsealedAt = new Date().toISOString();
-          context.store.database
-            .query(
-              "INSERT INTO dispatch_councils(work_id, unsealed_at, unseal_reason) VALUES (?, ?, ?)",
-            )
-            .run(workId, unsealedAt, reason);
-          context.log.append({
-            type: "dispatch.unseal",
-            entityType: "work",
-            entityId: workId,
-            sessionId: context.sessions.current().id,
-            payload: { reason },
+          const unseal = context.store.database.transaction(() => {
+            const council = service.council(workId);
+            if (council.total < 2) {
+              throw new CliError("INVALID_STATE", `${workId} has no council to unseal`);
+            }
+            if (council.unsealed) {
+              throw new CliError("INVALID_STATE", `${workId} council is already unsealed`);
+            }
+            if (!council.sealed || !council.generationAnchor) {
+              throw new CliError("INVALID_STATE", `${workId} council is complete`);
+            }
+            const unsealedAt = new Date().toISOString();
+            context.store.database
+              .query(
+                `INSERT INTO dispatch_councils
+                  (work_id, generation_anchor, unsealed_at, unseal_reason)
+                 VALUES (?, ?, ?, ?)`,
+              )
+              .run(workId, council.generationAnchor, unsealedAt, reason);
+            context.log.append({
+              type: "dispatch.unseal",
+              entityType: "work",
+              entityId: workId,
+              sessionId: context.sessions.current().id,
+              payload: { generationAnchor: council.generationAnchor, reason },
+            });
+            return service.council(workId);
           });
-          const opened = service.council(workId);
+          const opened = unseal.immediate();
           return {
             data: { council: opened },
             text: `${formatCouncil(opened)}\nreason: ${reason}`,

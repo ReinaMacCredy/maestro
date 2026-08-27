@@ -486,6 +486,99 @@ test("279 a genuine later council seals only its own concurrent generation", asy
   });
 });
 
+test("296 unsealing one council generation never opens a later generation", async () => {
+  await withFixture(async (fixture) => {
+    const firstGeneration = await openCouncil(fixture);
+    const unsealed = await runCli(fixture, [
+      "dispatch",
+      "unseal",
+      firstGeneration.work,
+      "--reason",
+      "the first generation can be reviewed early",
+    ]);
+    expect(unsealed.exitCode).toBe(0);
+    expect(unsealed.stdout).toContain("council: unsealed (0/2 returned)");
+    for (const dispatch of firstGeneration.dispatches) {
+      expect((await runCli(fixture, handbackFileArgs(dispatch))).exitCode).toBe(0);
+    }
+
+    const secondGeneration = [
+      dispatchId(await runCli(fixture, dispatchOpenArgs(firstGeneration.work))),
+      dispatchId(await runCli(fixture, dispatchOpenArgs(firstGeneration.work))),
+    ];
+    for (const dispatch of secondGeneration) await acceptDispatch(fixture, dispatch);
+    const partial = await runCli(fixture, handbackFileArgs(secondGeneration[0] as string));
+    expect(partial.exitCode).toBe(0);
+    const sealed = await runCli(fixture, ["handback", "show", handbackId(partial)]);
+    expect(sealed.exitCode).not.toBe(0);
+    expect(sealed.stderr).toContain("SEALED");
+    const listed = await runCli(fixture, ["dispatch", "list", firstGeneration.work]);
+    expect(listed.stdout).toContain("council: sealed (1/2 returned)");
+    expect(listed.stdout).not.toContain("council: unsealed");
+
+    expect((await runCli(fixture, handbackFileArgs(secondGeneration[1] as string))).exitCode)
+      .toBe(0);
+    const completedUnseal = await runCli(fixture, [
+      "dispatch",
+      "unseal",
+      firstGeneration.work,
+      "--reason",
+      "completed generations cannot be unsealed",
+    ]);
+    expect(completedUnseal.exitCode).not.toBe(0);
+    expect(completedUnseal.stderr).toContain("INVALID_STATE");
+  });
+});
+
+test("297 legacy work-scoped council unseals migrate to the first generation anchor", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "legacy council unseal", "--atomic-reason", "fixture"]),
+    );
+    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    let database = new Database(databasePath);
+    database.exec(`
+      DROP TABLE dispatch_councils;
+      CREATE TABLE dispatch_councils (
+        work_id TEXT PRIMARY KEY REFERENCES work(id),
+        unsealed_at TEXT NOT NULL,
+        unseal_reason TEXT NOT NULL
+      );
+    `);
+    database
+      .query(
+        "INSERT INTO dispatch_councils(work_id, unsealed_at, unseal_reason) VALUES (?, ?, ?)",
+      )
+      .run(work, new Date().toISOString(), "legacy operator choice");
+    database.close();
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    database = new Database(databasePath, { readonly: true });
+    const columns = database
+      .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
+      .all()
+      .map((column) => column.name);
+    const migrated = database
+      .query<
+        { generation_anchor: string; unseal_reason: string; work_id: string },
+        []
+      >("SELECT work_id, generation_anchor, unseal_reason FROM dispatch_councils")
+      .get();
+    database.close();
+    expect(columns).toContain("generation_anchor");
+    expect(migrated).toEqual({
+      generation_anchor: first,
+      unseal_reason: "legacy operator choice",
+      work_id: work,
+    });
+    expect((await runCli(fixture, ["dispatch", "list", work])).stdout).toContain(
+      "council: unsealed (0/2 returned)",
+    );
+  });
+});
+
 test("280 handoff exposes completed generations without leaking a sealed generation", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
