@@ -1,23 +1,10 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { runCli, withFixture } from "./helpers.ts";
 
-async function sourceFiles(directory: string): Promise<string[]> {
-  const files: string[] = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await sourceFiles(path));
-    } else if (entry.isFile() && path.endsWith(".ts")) {
-      files.push(path);
-    }
-  }
-  return files;
-}
-
-test("249 liveness remains PID and TTL based and no binary code path names Herdr", async () => {
+test("249 persisted session liveness remains PID and TTL based", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
@@ -48,14 +35,11 @@ test("249 liveness remains PID and TTL based and no binary code path names Herdr
     expect(sessions.find((session) => session.id === "stale-ttl")?.live).toBe(false);
     expect(sessions.find((session) => session.id === "dead-pid")?.live).toBe(false);
   });
+});
 
-  const root = join(import.meta.dir, "..");
-  const files = [
-    ...await sourceFiles(join(root, "src")),
-    ...await sourceFiles(join(root, "bin")),
-  ];
-  for (const file of files) {
-    if (relative(root, file) === "src/plugins/room.ts") continue;
-    expect((await readFile(file, "utf8")).toLowerCase()).not.toContain("herdr");
-  }
+test("330 [lint] session liveness keeps a closed runtime dependency boundary", async () => {
+  // AST dependency lint: proves sessions.ts has no runtime imports, not that dynamic driver invocation is absent.
+  const sessions = await readFile(join(import.meta.dir, "..", "src", "kernel", "sessions.ts"), "utf8");
+  const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(sessions);
+  expect(imports.map((dependency) => dependency.path)).toEqual([]);
 });
