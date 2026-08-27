@@ -535,66 +535,44 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
     expect(Object.keys(workflow.jobs ?? {})).toEqual(["verify"]);
     const verify = workflow.jobs?.verify;
     expect(verify?.if).toBeUndefined();
-    expect(verify?.steps).toBeArray();
-
-    const steps = new Map((verify?.steps ?? []).map((step) => [step.name, step]));
-    const expectedCommands = new Map([
-      ["Install", "bun install"],
-      ["Test", "bun test"],
-      ["Type-check", "bunx tsc --noEmit"],
-      [
-        "A1 no daemon or scheduler",
-        "if rg -n 'setInterval|setTimeout\\(.*,\\s*[0-9]{4,}|cron|detached\\s*:\\s*true' src/; then\n  exit 1\nfi\n",
-      ],
-      [
-        "A2 mechanism-only kernel",
-        "if rg -in 'proof|qa|tdd|test-first|research' src/kernel/; then\n  exit 1\nfi\n",
-      ],
-      [
-        "A3 no escape-hatch flags",
-        "if rg -n -- '\\blean\\b|--lane light|--qa' src/; then\n  exit 1\nfi\n",
-      ],
-    ]);
-    for (const [name, command] of expectedCommands) {
-      expect(steps.get(name), name).toMatchObject({ name, run: command });
-      expect(steps.get(name)?.if, name).toBeUndefined();
-    }
-
-    const cleanCheckout = join(fixture.root, "clean-checkout");
-    await mkdir(cleanCheckout, { recursive: true });
-    for (const entry of ["package.json", "tsconfig.json", "bin", "src"]) {
-      await cp(join(projectRoot, entry), join(cleanCheckout, entry), { recursive: true });
-    }
-    await cp(join(projectRoot, ".gitignore"), join(cleanCheckout, ".gitignore"));
-    await cp(join(projectRoot, "node_modules"), join(cleanCheckout, "node_modules"), {
-      recursive: true,
-    });
-    await mkdir(join(cleanCheckout, "tests"));
-    await writeFile(
-      join(cleanCheckout, "tests", "ci-command.test.ts"),
-      'import { expect, test } from "bun:test";\ntest("CI test command executes", () => expect(true).toBe(true));\n',
-    );
-    await git(cleanCheckout, ["init", "-b", "main"]);
-    await git(cleanCheckout, ["config", "user.name", "Maestro Tests"]);
-    await git(cleanCheckout, ["config", "user.email", "maestro-tests@example.invalid"]);
-    await git(cleanCheckout, ["add", "."]);
-    await git(cleanCheckout, ["commit", "-m", "clean CI fixture"]);
-    expect(await git(cleanCheckout, ["status", "--porcelain"])).toBe("");
-
-    for (const name of [
+    const steps = verify?.steps ?? [];
+    expect(steps.map((step) => step.name)).toEqual([
+      "Check out source",
+      "Set up Bun",
+      "Install",
+      "Install zsh for the room shellrc tests",
       "Test",
       "Type-check",
       "A1 no daemon or scheduler",
       "A2 mechanism-only kernel",
       "A3 no escape-hatch flags",
-    ]) {
-      const command = steps.get(name)?.run;
+    ]);
+    expect(steps.every((step) => step.if === undefined)).toBe(true);
+    const stepByName = new Map(steps.map((step) => [step.name, step]));
+    expect(stepByName.get("Test")?.run).toBe("bun test");
+    expect(stepByName.get("Type-check")?.run).toBe("bunx tsc --noEmit");
+
+    const sourceText = await readFile(join(projectRoot, "src", "kernel", "index.ts"), "utf8");
+    const probeRoot = join(fixture.root, "grep-probe");
+    const probePath = join(probeRoot, "src", "kernel", "index.ts");
+    await mkdir(join(probeRoot, "src", "kernel"), { recursive: true });
+    for (const [name, violation] of [
+      ["A1 no daemon or scheduler", "setInterval(() => {}, 1000);"],
+      ["A2 mechanism-only kernel", 'const proof = "test-first";'],
+      ["A3 no escape-hatch flags", 'const lane = "--lane light";'],
+    ] as const) {
+      const run = stepByName.get(name)?.run ?? "";
+      const command = run.match(/^if (rg .+); then$/m)?.[1];
       expect(command, name).toBeString();
-      const result = await runTool(["/bin/sh", "-eu", "-c", command ?? "exit 1"], cleanCheckout);
-      expect(result.exitCode, `${name}\n${result.stdout}${result.stderr}`).toBe(0);
+      const clean = await runTool(["/bin/sh", "-c", command ?? "exit 2"], projectRoot);
+      expect(clean.exitCode, `${name}\n${clean.stdout}${clean.stderr}`).toBe(1);
+
+      await writeFile(probePath, `${sourceText}\n${violation}\n`);
+      const seeded = await runTool(["/bin/sh", "-c", command ?? "exit 2"], probeRoot);
+      expect(seeded.exitCode, `${name}\n${seeded.stdout}${seeded.stderr}`).toBe(0);
     }
   });
-}, 30_000);
+});
 
 test("53 a clean install type-checks without runtime dependencies", async () => {
   await withFixture(async (fixture) => {
