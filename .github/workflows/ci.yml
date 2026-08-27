@@ -19,24 +19,27 @@ jobs:
           bun-version: 1.4.0
       - name: Install
         run: bun install
-      - name: Install zsh for the room shellrc tests
-        run: sudo apt-get install -y zsh
+      - name: Install zsh and ripgrep for the shellrc tests and the anti-goal gates
+        run: sudo apt-get install -y zsh ripgrep
       - name: Test
         run: bun test
       - name: Type-check
         run: bunx tsc --noEmit
       - name: A1 no daemon or scheduler
         run: |
+          command -v rg >/dev/null
           if rg -n 'setInterval|setTimeout\(.*,\s*[0-9]{4,}|cron|detached\s*:\s*true' src/; then
             exit 1
           fi
       - name: A2 mechanism-only kernel
         run: |
+          command -v rg >/dev/null
           if rg -in 'proof|qa|tdd|test-first|research' src/kernel/; then
             exit 1
           fi
       - name: A3 no escape-hatch flags
         run: |
+          command -v rg >/dev/null
           if rg -n -- '\blean\b|--lane light|--qa' src/; then
             exit 1
           fi

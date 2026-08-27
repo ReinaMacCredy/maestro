@@ -540,7 +540,7 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
       "Check out source",
       "Set up Bun",
       "Install",
-      "Install zsh for the room shellrc tests",
+      "Install zsh and ripgrep for the shellrc tests and the anti-goal gates",
       "Test",
       "Type-check",
       "A1 no daemon or scheduler",
