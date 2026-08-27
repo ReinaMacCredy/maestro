@@ -3,7 +3,7 @@ title: CLI reference
 description: Every top-level verb reported by the installed Maestro shim at commit 99248adb.
 ---
 
-This reference was generated from the installed `maestro 0.108.0` shim at
+This reference was generated from the installed `maestro 0.109.0` shim at
 commit `99248adb71db640aa4f95cb45c91de770b24435a`.
 
 ```sh

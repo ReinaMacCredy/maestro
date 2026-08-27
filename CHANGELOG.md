@@ -11,28 +11,69 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.109.0] - 2026-08-28
+
 ### Added
 
 - `scripts/install.sh`: one-command source install
   (`curl -fsSL .../scripts/install.sh | sh`) that clones the repository into
   `~/.maestro/source` and runs the installer from it, so `maestro update`
-  keeps following that checkout.
+  keeps following that checkout; `install.sh --help`; a Bun 1.4 floor.
 - Expanded SLP with a no-write shadow lane, explicit `COUNCIL_REQUEST`
-  handbacks, sealed council cross-examination, one Lead per scope, and ordered
-  Lead handoff receipts.
-- Bound the single Supervisor's scope and authority in `IDENTITY.md` and deny
-  Claude sub-agent tools in the Supervisor room.
-- Added build-time Mermaid diagrams to the documentation site with no runtime
-  CDN dependency and kept lone Next pagination links in the right column.
+  handbacks, sealed council cross-examination, one Lead per scope, and
+  searchable Lead handoff receipts; `bundle open` refuses a successor whose
+  handoff packet still holds placeholders.
+- Bound the single Supervisor's scope and authority in `IDENTITY.md`, deny
+  Claude sub-agent tools in the Supervisor room, and seed `OWNER.md` with the
+  interview questions the room asks on its first session.
+- `~/maestro/lead.md`: the Supervisor hands owner intent to a repository Lead
+  through Herdr, prompting a live Lead or starting one, without writing to the
+  project store.
+- The intake contract (d700): the Lead scores the ROI questions from the
+  repository and the prompt, asks at most one owner-boundary question, and
+  announces the score, the route, the deciding fact, and the adjacent route
+  not taken with the phrase that switches to it.
+- Attention kinds `LEAD_COLLISION`, `HUMAN_DECISION_REQUIRED` (from
+  `decision draft --needs-owner`), and `DECISION_REVIEW_DUE` (from
+  `decision lock --review-at`); `SCOPE_COLLISION` now also compares the
+  declared scopes of open delivery dispatches across work items.
+- Typed return details: `handback file --request` is required for
+  `BLOCKED`, `DEPENDENCY_REQUEST`, `COUNCIL_REQUEST`, and `REOPEN_REQUEST`,
+  and `HANDBACK_UNREVIEWED` names the recovery path per status; optional
+  `--candidate` on `handback file` and `work done`; `--dissent` on decisions.
+- `dispatch confirm`: an untargeted dispatch accept records a claim that only
+  the opener can confirm before the lane can work or return.
+- A Claude `PreToolUse` hook denies sub-agents to a session that holds an
+  accepted open dispatch; Leads and Codex are unaffected.
+- `install` and `update` warn, and treat unreadable registered repositories as
+  unsafe, before replacing the shared runtime.
+- Method skills carry a `review-date`; `maestro doctor` reports overdue ones.
+- Docs: an owner-seat SLP scenarios guide, an enforced-versus-soft-audited
+  boundary table, build-time Mermaid diagrams with no runtime CDN dependency.
 
 ### Changed
 
 - Cross-role decisions now use Herdr for transport and Maestro decisions or
-  work notes as the durable record.
+  work notes as the durable record; one dispatch ends with exactly one
+  handback (d697).
 - Repeated failures now route Peer-held work to the Lead and Lead-held work to
   the Supervisor.
+- `decision draft --work` warns when that work's council is still sealed; the
+  recipe forbids storing the Lead's view before first views return.
+- The managed instruction block names the repository's own `AGENTS.md` and
+  `CLAUDE.md` as its Workspace Protocol.
 - Documented quickfix, Light, and Full method tiers with explicit handoff and
   evidence boundaries.
+
+### Fixed
+
+- Sealed council returns are hidden from `handback list --json` and attention;
+  a no-write lane holder cannot take the work lease; `--atomic-reason` is only
+  written when `work start` succeeds; `update` treats untracked `src/` and
+  `bin/` files as dirt; the doctor reads Codex hook trust from
+  `~/.codex/config.toml`.
 
 ## [0.108.0] - 2026-08-27
 
