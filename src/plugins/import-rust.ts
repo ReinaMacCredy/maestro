@@ -445,6 +445,38 @@ interface PromotionSummary {
   work: number;
 }
 
+function promotionAlreadyComplete(context: PluginContext, data: SourceData): boolean {
+  const expected = data.cards.filter((card) =>
+    workKinds.has(card.card_type) || card.card_type === "decision"
+  );
+  if (expected.length === 0) return false;
+  const mapped = new Map(
+    context.store.database
+      .query<{ entity_type: string; legacy_id: string }, []>(
+        "SELECT legacy_id, entity_type FROM legacy_map",
+      )
+      .all()
+      .map((row) => [row.legacy_id, row.entity_type] as const),
+  );
+  return expected.every((card) =>
+    mapped.get(card.id) === (card.card_type === "decision" ? "decision" : "work")
+  );
+}
+
+function zeroPromotionSummary(data: SourceData): PromotionSummary {
+  const workCardIds = new Set(
+    data.cards.filter((card) => workKinds.has(card.card_type)).map((card) => card.id),
+  );
+  return {
+    work: 0,
+    decisions: 0,
+    notes: 0,
+    receiptsSkipped: data.receipts.filter((receipt) =>
+      !receipt.card_id || !workCardIds.has(receipt.card_id)
+    ).length,
+  };
+}
+
 function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionSummary {
   const database = context.store.database;
   const sessionId = context.sessions.current().id;
@@ -750,7 +782,6 @@ export const importRustPlugin: BuiltInPlugin = {
             ? override
             : join(dirname(context.store.path), "store.sqlite");
           const data = sourceData(path);
-          replaceLegacyRows(context, data);
           const textFiles = data.files.filter((file) => file.text !== null).length;
           const result: CliResult = {
             data: {
@@ -767,6 +798,17 @@ export const importRustPlugin: BuiltInPlugin = {
                 : null,
             ].filter((line): line is string => line !== null).join("\n"),
           };
+          if (invocation.options.promote === true && promotionAlreadyComplete(context, data)) {
+            const promoted = zeroPromotionSummary(data);
+            return {
+              data: { ...(result.data as object), promoted },
+              text:
+                `promoted native: ${promoted.work} work created, ` +
+                `${promoted.decisions} decisions created, ${promoted.notes} notes created, ` +
+                `${promoted.receiptsSkipped} receipts skipped`,
+            };
+          }
+          replaceLegacyRows(context, data);
           if (invocation.options.promote !== true) return result;
           const promoted = promoteLegacyRows(context, data);
           return {

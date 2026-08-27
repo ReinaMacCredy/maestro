@@ -459,3 +459,45 @@ test("300 --promote maps legacy cards, decisions, receipts, provenance, and even
     expect(decisions.stdout).toContain("imported from legacy card dec-legacy-new");
   });
 });
+
+test("301 a repeated --promote run creates nothing and preserves native rows and events", async () => {
+  await withFixture(async (fixture) => {
+    const source = await writePromotionStore(fixture);
+    const first = await runCli(fixture, ["import", "rust", "--path", source, "--promote"]);
+    expect(first.exitCode).toBe(0);
+
+    const beforeDatabase = targetDatabase(fixture);
+    const before = beforeDatabase
+      .query<{ decisions: number; events: number; mappings: number; notes: number; work: number }, []>(
+        `SELECT
+          (SELECT count(*) FROM work) AS work,
+          (SELECT count(*) FROM decisions) AS decisions,
+          (SELECT count(*) FROM work_notes) AS notes,
+          (SELECT count(*) FROM event_log) AS events,
+          (SELECT count(*) FROM legacy_map) AS mappings`,
+      )
+      .get();
+    beforeDatabase.close();
+
+    const second = await runCli(fixture, ["import", "rust", "--path", source, "--promote"]);
+
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toContain("0 work created");
+    expect(second.stdout).toContain("0 decisions created");
+    expect(second.stdout).toContain("0 notes created");
+    expect(second.stdout).toContain("1 receipts skipped");
+    const afterDatabase = targetDatabase(fixture);
+    const after = afterDatabase
+      .query<{ decisions: number; events: number; mappings: number; notes: number; work: number }, []>(
+        `SELECT
+          (SELECT count(*) FROM work) AS work,
+          (SELECT count(*) FROM decisions) AS decisions,
+          (SELECT count(*) FROM work_notes) AS notes,
+          (SELECT count(*) FROM event_log) AS events,
+          (SELECT count(*) FROM legacy_map) AS mappings`,
+      )
+      .get();
+    afterDatabase.close();
+    expect(after).toEqual(before);
+  });
+});
