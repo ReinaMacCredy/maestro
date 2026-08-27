@@ -413,6 +413,21 @@ async function doctor(): Promise<CliResult> {
   }
   if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
   checks.push(await codexTrustCheck(repo, home));
+  const roomSettings = await readJsonObject(
+    join(home, "maestro", ".claude", "settings.json"),
+  );
+  const roomPermissions = roomSettings?.permissions;
+  const roomDeny = roomPermissions && typeof roomPermissions === "object" &&
+      !Array.isArray(roomPermissions)
+    ? (roomPermissions as Record<string, unknown>).deny
+    : null;
+  checks.push(
+    `room deny list: ${
+      Array.isArray(roomDeny) && roomDeny.includes("Agent") && roomDeny.includes("Task")
+        ? "ok"
+        : "missing"
+    }`,
+  );
 
   const storeLocation = resolveStoreLocation(repo);
   const storePath = storeLocation.path;

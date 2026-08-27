@@ -111,11 +111,21 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
-    const generatedNames = ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "lane.md", "shellrc"];
+    const generatedNames = [
+      "IDENTITY.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "lane.md",
+      "shellrc",
+      ".claude/settings.json",
+    ];
     const ownerEdit = "# OWNER\n\nOwner-authored content survives installs.\n";
     await writeFile(join(room, "OWNER.md"), ownerEdit);
     for (const name of generatedNames) {
-      await writeFile(join(room, name), `stale ${name}\n`);
+      await writeFile(
+        join(room, name),
+        name === ".claude/settings.json" ? "{}\n" : `stale ${name}\n`,
+      );
     }
 
     expect(
@@ -128,6 +138,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       ),
     );
     expect(generatedHashes).toEqual({
+      ".claude/settings.json": "aa504fa1492e28507d9699423bd2e727370359ffebae94797acaf263fca245ca",
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
@@ -189,6 +200,7 @@ test("303 reinstall repairs private room and machine-record permissions", async 
     const privateDirectories = [room, join(room, ".maestro")];
     const privateFiles = [
       join(room, "OWNER.md"),
+      join(room, ".claude", "settings.json"),
       join(room, "registry"),
       join(room, ".maestro", "maestro.db"),
       join(fixture.home, ".maestro", "source.json"),

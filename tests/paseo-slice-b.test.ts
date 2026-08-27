@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   idFrom,
+  prepareInstallFixture,
   runCli,
+  runInstalledCliAt,
   type Fixture,
   withFixture,
 } from "./helpers.ts";
@@ -53,6 +56,10 @@ async function addFailedNotes(
   for (const note of ["failed: first", "failed: second", "failed: third"]) {
     expect((await runCli(fixture, ["work", "note", work, note], environment)).exitCode).toBe(0);
   }
+}
+
+function sha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
 }
 
 test("390 REPEATED_FAILURE routes by the current holder role", async () => {
@@ -132,5 +139,77 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
         packet: expect.stringContaining("holder role: lead"),
       }),
     );
+  });
+});
+
+test("391 install creates the private room deny list and doctor reports it", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const settingsPath = join(fixture.home, "maestro", ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
+      permissions?: { deny?: string[] };
+    };
+    expect(settings.permissions?.deny).toEqual(["Agent", "Task"]);
+    expect((await stat(settingsPath)).mode & 0o777).toBe(0o600);
+
+    const doctor = await runInstalledCliAt(fixture, fixture.repo, ["doctor"], { PATH: path });
+    expect(doctor.exitCode).toBe(0);
+    expect(doctor.stdout).toContain("room deny list: ok");
+  });
+});
+
+test("392 install merges room deny entries without losing foreign settings", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const settingsPath = join(fixture.home, "maestro", ".claude", "settings.json");
+    await mkdir(join(fixture.home, "maestro", ".claude"), { recursive: true });
+    await writeFile(
+      settingsPath,
+      `${JSON.stringify({
+        foreign: { retained: true },
+        permissions: { allow: ["Read"], deny: ["CustomDeny"] },
+      }, null, 2)}\n`,
+    );
+
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
+      foreign?: { retained?: boolean };
+      permissions?: { allow?: string[]; deny?: string[] };
+    };
+    expect(settings.foreign).toEqual({ retained: true });
+    expect(settings.permissions?.allow).toEqual(["Read"]);
+    expect(settings.permissions?.deny).toEqual(["CustomDeny", "Agent", "Task"]);
+  });
+});
+
+test("393 a second install leaves the room settings hash unchanged", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const settingsPath = join(fixture.home, "maestro", ".claude", "settings.json");
+    const firstHash = sha256(await readFile(settingsPath, "utf8"));
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    expect(sha256(await readFile(settingsPath, "utf8"))).toBe(firstHash);
+  });
+});
+
+test("394 doctor reports a missing room deny list", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const settingsPath = join(fixture.home, "maestro", ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
+      permissions?: { deny?: string[] };
+    };
+    settings.permissions = { deny: ["Task"] };
+    await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+
+    const doctor = await runInstalledCliAt(fixture, fixture.repo, ["doctor"], { PATH: path });
+    expect(doctor.exitCode).toBe(0);
+    expect(doctor.stdout).toContain("room deny list: missing");
   });
 });

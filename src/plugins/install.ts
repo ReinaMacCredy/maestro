@@ -47,6 +47,13 @@ interface HookConfig {
   [key: string]: unknown;
 }
 
+interface RoomClaudeSettings extends HookConfig {
+  permissions?: {
+    deny?: unknown[];
+    [key: string]: unknown;
+  };
+}
+
 interface PackageJson {
   name?: string;
   version: string;
@@ -137,6 +144,31 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
   }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+async function writeRoomDenySettings(room: string): Promise<void> {
+  const path = join(room, ".claude", "settings.json");
+  const settings = await readJson<RoomClaudeSettings>(path, {});
+  const existingPermissions = settings.permissions;
+  if (
+    existingPermissions !== undefined &&
+    (typeof existingPermissions !== "object" ||
+      existingPermissions === null ||
+      Array.isArray(existingPermissions))
+  ) {
+    throw new CliError("INVALID_CONFIG", `cannot update invalid permissions in ${path}`);
+  }
+  const permissions = existingPermissions ?? {};
+  if (permissions.deny !== undefined && !Array.isArray(permissions.deny)) {
+    throw new CliError("INVALID_CONFIG", `cannot update non-array permissions.deny in ${path}`);
+  }
+  const deny = [...(permissions.deny ?? [])];
+  for (const tool of ["Agent", "Task"]) {
+    if (!deny.includes(tool)) deny.push(tool);
+  }
+  settings.permissions = { ...permissions, deny };
+  await writeFile(path, `${JSON.stringify(settings, null, 2)}\n`);
+  await chmod(path, 0o600);
 }
 
 function retainForeignHookGroups(groups: HookGroup[]): { changed: boolean; groups: HookGroup[] } {
@@ -592,6 +624,7 @@ export const installPlugin: BuiltInPlugin = {
         }
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);
+        await writeRoomDenySettings(room);
         const roomCodexHooksTrusted = await codexHooksTrusted(room, home);
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);

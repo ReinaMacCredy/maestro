@@ -473,6 +473,7 @@ test("49 doctor reports healthy components and structured fixable issues without
       expect(healthy.stdout).toContain(component);
     }
     expect(healthy.stdout).toContain(`source: ok ${sourcePath} ${sourceHead} clean`);
+    expect(healthy.stdout).toContain("room deny list: ok");
     expect(healthy.stdout).toContain(`store: ok (${tableCountBeforeSeed + 1} tables)`);
     expect(healthy.stdout).not.toContain("store: ok schema");
     expect(sha256(await readFile(databasePath))).toBe(databaseBefore);
