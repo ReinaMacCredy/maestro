@@ -132,6 +132,14 @@ test("382 accepting a shadow dispatch never takes the work write lease", async (
     expect(shown.exitCode).toBe(0);
     const envelope = JSON.parse(shown.stdout) as { data: { work: { heldBy: string | null } } };
     expect(envelope.data.work.heldBy).toBeNull();
+
+    // A no-write lane cannot take the lease by hand either.
+    const grabbed = await runCli(fixture, ["work", "start", work], session("shadow-holder"));
+    expect(grabbed.exitCode).not.toBe(0);
+    expect(grabbed.stderr).toContain("GATE_BLOCKED");
+    expect(grabbed.stderr).toContain("shadow lane");
+    const still = JSON.parse((await runCli(fixture, ["work", "show", work, "--json"])).stdout) as typeof envelope;
+    expect(still.data.work.heldBy).toBeNull();
   });
 });
 
