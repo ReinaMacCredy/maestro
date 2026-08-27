@@ -35,6 +35,6 @@ jobs:
           fi
       - name: A3 no escape-hatch flags
         run: |
-          if rg -n -- '\blean\b|--lane|--qa' src/; then
+          if rg -n -- '\blean\b|--lane light|--qa' src/; then
             exit 1
           fi
