@@ -208,15 +208,8 @@ export const decisionPlugin: BuiltInPlugin = {
                  VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
               )
               .run(id, text, rationale, parentId, workId, supersedesId, now, now);
-            if (supersedesId) {
-              context.store.database
-                .query(
-                  "UPDATE decisions SET state = 'superseded', superseded_by_id = ?, updated_at = ? WHERE id = ?",
-                )
-                .run(id, now, supersedesId);
-            }
             context.log.append({
-              type: supersedesId ? "decision.supersede" : "decision.draft",
+              type: "decision.draft",
               entityType: "decision",
               entityId: id,
               sessionId: context.sessions.current().id,
@@ -247,21 +240,68 @@ export const decisionPlugin: BuiltInPlugin = {
     context.effect(() =>
       registerSessionCommand(context, "decision lock", (invocation): CliResult => {
         const id = required(invocation, 0, "decision id");
-        const decision = requireDecision(context, id);
-        if (decision.state !== "draft") {
-          throw new CliError("INVALID_STATE", `${id} is ${decision.state}`);
-        }
-        const updatedAt = new Date().toISOString();
-        context.store.database
-          .query("UPDATE decisions SET state = 'locked', updated_at = ? WHERE id = ?")
-          .run(updatedAt, id);
-        context.log.append({
-          type: "decision.lock",
-          entityType: "decision",
-          entityId: id,
-          sessionId: context.sessions.current().id,
+        const lock = context.store.database.transaction(() => {
+          const decision = requireDecision(context, id);
+          if (decision.state !== "draft") {
+            throw new CliError("INVALID_STATE", `${id} is ${decision.state}`);
+          }
+          const updatedAt = new Date().toISOString();
+          if (decision.supersedesId) {
+            const predecessor = requireDecision(context, decision.supersedesId);
+            if (predecessor.state !== "locked") {
+              throw new CliError(
+                "SUPERSESSION_CONFLICT",
+                `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${predecessor.supersededById ?? "another decision"}`,
+                {
+                  id,
+                  predecessorId: predecessor.id,
+                  supersededById: predecessor.supersededById,
+                },
+              );
+            }
+            const superseded = context.store.database
+              .query(
+                `UPDATE decisions
+                 SET state = 'superseded', superseded_by_id = ?, updated_at = ?
+                 WHERE id = ? AND state = 'locked' AND superseded_by_id IS NULL`,
+              )
+              .run(id, updatedAt, predecessor.id);
+            if (superseded.changes === 0) {
+              const current = requireDecision(context, predecessor.id);
+              throw new CliError(
+                "SUPERSESSION_CONFLICT",
+                `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${current.supersededById ?? "another decision"}`,
+                {
+                  id,
+                  predecessorId: predecessor.id,
+                  supersededById: current.supersededById,
+                },
+              );
+            }
+            context.log.append({
+              type: "decision.supersede",
+              entityType: "decision",
+              entityId: id,
+              sessionId: context.sessions.current().id,
+              payload: { supersedesId: predecessor.id },
+            });
+          }
+          const locked = context.store.database
+            .query("UPDATE decisions SET state = 'locked', updated_at = ? WHERE id = ? AND state = 'draft'")
+            .run(updatedAt, id);
+          if (locked.changes === 0) {
+            const current = requireDecision(context, id);
+            throw new CliError("INVALID_STATE", `${id} is ${current.state}`);
+          }
+          context.log.append({
+            type: "decision.lock",
+            entityType: "decision",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+          });
+          return service.get(id) as DecisionRecord;
         });
-        const locked = service.get(id) as DecisionRecord;
+        const locked = lock.immediate();
         return { data: { decision: locked }, text: format(locked) };
       }, {
         description: "Lock a draft decision against further edits.",

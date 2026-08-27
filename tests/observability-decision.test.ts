@@ -68,6 +68,56 @@ test("19 locked decisions reject edits while superseding links and child visibil
   });
 });
 
+test("298 a replacement supersedes its predecessor only when the replacement locks", async () => {
+  await withFixture(async (fixture) => {
+    const predecessor = idFrom(
+      await runCli(fixture, ["decision", "draft", "binding strategy A"]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", predecessor])).exitCode).toBe(0);
+    const firstReplacement = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "candidate strategy B",
+        "--supersedes",
+        predecessor,
+      ]),
+    );
+    const secondReplacement = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "candidate strategy C",
+        "--supersedes",
+        predecessor,
+      ]),
+    );
+
+    const beforeLockResult = await runCli(fixture, ["decision", "show", predecessor]);
+    expect(beforeLockResult.exitCode).toBe(0);
+    expect(beforeLockResult.stdout).toContain(`${predecessor} [locked]`);
+    expect(beforeLockResult.stdout).not.toContain("superseded by:");
+
+    expect((await runCli(fixture, ["decision", "lock", firstReplacement])).exitCode).toBe(0);
+    const afterLockResult = await runCli(fixture, ["decision", "show", predecessor]);
+    expect(afterLockResult.exitCode).toBe(0);
+    expect(afterLockResult.stdout).toContain(`${predecessor} [superseded]`);
+    expect(afterLockResult.stdout).toContain(`superseded by: ${firstReplacement}`);
+
+    const conflict = await runCli(fixture, ["decision", "lock", secondReplacement]);
+    expect(conflict.exitCode).not.toBe(0);
+    expect(conflict.stderr).toContain("SUPERSESSION_CONFLICT");
+    expect(conflict.stderr).toContain(firstReplacement);
+    const losingDraftResult = await runCli(fixture, [
+      "decision",
+      "show",
+      secondReplacement,
+    ]);
+    expect(losingDraftResult.exitCode).toBe(0);
+    expect(losingDraftResult.stdout).toContain(`${secondReplacement} [draft]`);
+  });
+});
+
 test("20 gate blocks return nonzero with a structured reason on stderr", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(await runCli(fixture, ["work", "add", "gate", "--kind", "idea"]));
