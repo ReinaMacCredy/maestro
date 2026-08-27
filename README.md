@@ -70,8 +70,9 @@ offline and never fetches. Set `MAESTRO_AUTO_UPDATE=0` to silence it.
   edges, acceptance, leases, and evidence.
 - `maestro decision draft|lock|show|list` records choices with their own
   lifecycle.
-- `maestro dispatch open|accept|show|list` and `maestro handback file|show|list`
-  preserve lane contracts and return packets.
+- `maestro dispatch open|accept|show|list` and `maestro handback file|show`
+  preserve lane contracts and return packets; inspect the archive with
+  `maestro dispatch list <work-id>` and `maestro handback show <id>`.
 - `maestro plugin list|enable|disable|new|add|remove` manages built-in and local
   extensions.
 - `maestro recipe list|show` serves the deeper working methods.

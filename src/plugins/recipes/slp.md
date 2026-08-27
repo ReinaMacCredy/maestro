@@ -50,11 +50,13 @@ it alone.
 
 Independent judgment or delivery inside one bounded assignment. Owns technical
 judgment inside the lease, the right to investigate deeply, to confirm, to
-challenge the premise, to return BLOCKED, REOPEN_REQUEST, DEPENDENCY_REQUEST or
-COUNCIL_REQUEST, and proof for its own writes. Does not own topology, agent
-creation, scope beyond the assignment, project acceptance, or external effects.
-CONFIRM, PARTIAL and CHALLENGE are all valid answers; independence is evidence,
-not theatre.
+challenge the premise, to return DONE, BLOCKED, UNTESTABLE, UNKNOWN, FAILED,
+CHALLENGE, REOPEN_REQUEST or DEPENDENCY_REQUEST, and proof for its own writes.
+Does not own topology, agent creation, scope beyond the assignment, project
+acceptance, or external effects. A topology dependency returns
+DEPENDENCY_REQUEST. Confirmation and partial progress belong in claim and
+residual-risk text under the appropriate return status; independence is
+evidence, not theatre.
 
 ## Topology invariants
 
