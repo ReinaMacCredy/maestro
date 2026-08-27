@@ -175,7 +175,8 @@ When the views conflict or the risk warrants it, the Lead opens a second
 generation of dispatches on the same work item, one per Peer, and pastes the
 other Peers' handbacks into each contract verbatim together with one targeted
 question ("B claims X; where does that contradict your view?"). Each Peer
-answers by handback: CONFIRM, CHALLENGE, or REOPEN_REQUEST, with evidence.
+answers by handback: DONE with a CONFIRM claim, CHALLENGE, or REOPEN_REQUEST,
+with evidence (CONFIRM is claim text, not a status).
 Peers never prompt each other; every word of the debate is a dispatch or a
 handback, so the Lead sees all of it. The Lead reconciles the round into a
 decision plus recorded dissent and the next proof. No third round without a
