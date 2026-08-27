@@ -174,7 +174,7 @@ function initializeLegacyTables(context: PluginContext): void {
   context.store.migrate(`
     CREATE TABLE IF NOT EXISTS legacy_cards (
       id TEXT PRIMARY KEY NOT NULL,
-      source TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'store',
       card_type TEXT NOT NULL,
       parent TEXT,
       status TEXT NOT NULL,
@@ -187,7 +187,7 @@ function initializeLegacyTables(context: PluginContext): void {
     );
     CREATE TABLE IF NOT EXISTS legacy_files (
       card_id TEXT NOT NULL,
-      source TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'store',
       path TEXT NOT NULL,
       sha256 TEXT NOT NULL,
       size INTEGER NOT NULL,
@@ -197,7 +197,7 @@ function initializeLegacyTables(context: PluginContext): void {
     );
     CREATE TABLE IF NOT EXISTS legacy_decisions (
       id TEXT PRIMARY KEY NOT NULL,
-      source TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'store',
       card_id TEXT NOT NULL,
       title TEXT NOT NULL,
       status TEXT NOT NULL,
