@@ -1,8 +1,29 @@
 ---
 title: maestro
-description: Local-first coordination for human and agent work.
+description: Local-first coordination for human and agent work, with durable work, decisions, and evidence in each repository.
 ---
 
-# maestro
+Maestro is a local-first coordination system for human and agent work. It keeps
+durable work, decisions, sessions, evidence, dispatches, and handbacks in each
+repository's shared Git root. It is written in TypeScript, runs on Bun, and does
+not require a background service.
 
-Documentation scaffold for maestro.
+## Install
+
+Install Maestro from its source repository:
+
+```sh
+curl -fsSL https://maestro.maccredyreina.me/install.sh | sh
+```
+
+The installer creates a source checkout that `maestro update` can
+fast-forward, installs the runtime and shim, wires the current repository, and
+registers it with the Supervisor room.
+
+## Start here
+
+- [Install Maestro](/getting-started/install/) and verify the runtime.
+- [Run a first work session](/getting-started/quick-start/).
+- Learn the [three layers](/concepts/three-layers/) and the
+  [Supervisor, Lead, and Peer roles](/concepts/roles/).
+- Use the generated [CLI reference](/reference/cli/) for current verbs and flags.

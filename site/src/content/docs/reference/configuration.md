@@ -1,5 +1,69 @@
 ---
 title: Configuration
+description: Repository plugin configuration, runtime environment variables, and machine layout.
 ---
 
-# Configuration
+## `.maestro/config`
+
+Repository configuration is JSON with a `plugins` array. Each item has a plugin
+`name` and optional `disabled` boolean. `maestro install` writes the managed
+policy defaults; `maestro plugin enable <name>` and `maestro plugin disable
+<name>` own lifecycle changes.
+
+The default policy state is:
+
+| Plugin | State |
+| --- | --- |
+| `policy-proof` | enabled |
+| `policy-breakdown` | enabled |
+| `policy-tdd` | disabled |
+| `policy-qa` | disabled |
+| `policy-research` | disabled |
+| `policy-witness` | disabled |
+| `policy-lifecycle` | disabled |
+
+`policy-dispatch` is a built-in active gate and is not one of the installer
+managed entries in this file.
+
+## Environment variables read by `src/`
+
+The source inventory was generated with the repository's required exhaustive
+search:
+
+```sh
+rg -o 'process\.env\.[A-Z_]+' src/ | sort -u
+```
+
+| Variable | Runtime use |
+| --- | --- |
+| `HOME` | Resolve user-level runtime, source, plugin, room, and registry paths. |
+| `PATH` | Locate installed tools and the shim directory. |
+| `SHELL` | Choose `.zshrc` or `.bashrc` for the one managed source line. |
+| `MAESTRO_READ_ONLY` | With value `1`, enable fail-closed observer mode. |
+| `MAESTRO_AUTO_UPDATE` | With value `0`, suppress the source/runtime drift advisory. |
+| `MAESTRO_INSTALL_REEXEC` | Internal guard for installer re-execution after runtime sync. |
+| `MAESTRO_SESSION_ID` | Explicit Maestro session identity, highest precedence. |
+| `MAESTRO_SESSION_PID` | Explicit positive host PID for session liveness. |
+| `MAESTRO_SESSION_NONE` | With value `1`, disable session persistence for a process. |
+| `CODEX_SESSION_ID`, `CODEX_THREAD_ID` | Codex session identity candidates. |
+| `CLAUDE_CODE_SESSION_ID`, `CLAUDE_SESSION_ID` | Claude session identity candidates. |
+| `CURSOR_SESSION_ID` | Cursor session identity candidate. |
+| `CODEX_CI`, `CODEX_SHELL` | Signals used to classify an otherwise unnamed session as Codex. |
+
+The curl installer also reads `MAESTRO_SOURCE_DIR` and `MAESTRO_REF`; those
+variables live in `scripts/install.sh`, not under `src/`.
+
+## Machine layout
+
+| Path | Purpose |
+| --- | --- |
+| `~/.maestro/source/` | Default Git checkout followed by `maestro update`. |
+| `~/.maestro/source.json` | Recorded source checkout metadata. |
+| `~/.maestro/runtime/` | Installed TypeScript runtime and install stamp. |
+| `~/.local/bin/maestro` | Bun shim that loads the installed runtime. |
+| `~/maestro/` | Supervisor room. |
+| `~/maestro/.maestro/maestro.db` | Supervisor room store. |
+| `~/maestro/registry` | Registered repository paths read by `maestro brief`. |
+| `~/maestro/skills/` | The four managed Maestro method skills. |
+| `~/maestro/shellrc` | Maestro-owned shell functions sourced by one managed rc line. |
+| `<git-common-root>/.maestro/maestro.db` | Repository store shared by linked worktrees. |
