@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
-test("287 maestro-work skill lane line matches the dispatch vocabulary", async () => {
+test("287 [lint] maestro-work skill lane line matches the dispatch vocabulary", async () => {
+  // Proves source documentation parity, not independent runtime lane acceptance or rejection.
   const skill = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md"),
     "utf8",
@@ -193,8 +194,9 @@ test("128 bundle save ingests a foreign trio dir straight to archived", async ()
   });
 });
 
-test("129 install materializes the 4 maestro skills with a version stamp and refs", async () => {
+test("129 [lint] install materializes the 4 maestro skills with a version stamp and refs", async () => {
   await withFixture(async (fixture) => {
+    // Proves installed artifact shape, not harness discovery or loading of those skills.
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
