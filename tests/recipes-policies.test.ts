@@ -542,3 +542,15 @@ test("425 [lint] recipe slp, lanes.md and roles.md say which boundaries are enfo
   expect(lanes).not.toContain("performs no-write discovery and reports state.");
   expect(roles.replace(/\s+/g, " ")).toContain("Write authority and acceptance authority are soft-audited");
 });
+
+test("437 [lint] recipe slp names the repository Workspace Protocol surface", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const workspaceProtocol =
+    recipe.split("\n").find((line) => line.startsWith("| Workspace protocol |")) ?? "";
+
+  expect(workspaceProtocol).toContain("`AGENTS.md` and `CLAUDE.md` text outside the managed block");
+  expect(workspaceProtocol).toContain("Workspace Protocol");
+  for (const localRule of ["protected areas", "hotspots", "restart rules", "local verification"]) {
+    expect(workspaceProtocol).toContain(localRule);
+  }
+});

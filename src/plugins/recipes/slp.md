@@ -139,7 +139,7 @@ Human
 |---|---|---|
 | Core policy | What does the runtime always protect? | kernel, policies, leases, event log |
 | Role profile | Who is this role, always? | this recipe; `~/maestro/IDENTITY.md` for the Supervisor |
-| Workspace protocol | How does this repository coordinate? | the repo `AGENTS.md` maestro block, `.maestro/config`, enabled policies |
+| Workspace protocol | How does this repository coordinate? | the repository's own `AGENTS.md` and `CLAUDE.md` text outside the managed block is its Workspace Protocol: protected areas, hotspots, restart rules, and local verification |
 | Assignment | What does the agent do this time? | `maestro dispatch open` envelope: objective, owned and excluded scope, mutation, stop condition, lane, evidence required |
 | Evidence | What actually happened? | `maestro handback file`, work claims and proofs, the event log |
 

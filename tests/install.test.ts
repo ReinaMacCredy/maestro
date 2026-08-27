@@ -238,6 +238,24 @@ test("45 install mirrors name the manual hookless SessionStart bootstrap without
   });
 });
 
+test("436 install mirrors identify the repository Workspace Protocol", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    const workspaceProtocol =
+      "The repository's own `AGENTS.md` and `CLAUDE.md` text outside this block is its Workspace Protocol and may declare protected areas, hotspots, restart rules, and local verification; read it before taking work or opening a dispatch.";
+
+    expect(installed.exitCode).toBe(0);
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      const instructions = await readFile(join(fixture.repo, name), "utf8");
+      const managedBlock =
+        instructions.split("<!-- maestro:begin -->")[1]?.split("<!-- maestro:end -->")[0] ?? "";
+      expect(managedBlock).toContain(workspaceProtocol);
+    }
+  });
+});
+
 test("310 scripts/install.sh clones the source checkout, installs from it, and fast-forwards on rerun", async () => {
   await withFixture(async (fixture) => {
     const projectRoot = join(import.meta.dir, "..");
