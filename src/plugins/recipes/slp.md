@@ -139,6 +139,11 @@ the Lead's pane through Herdr, or left for the Lead's next brief), a
 recommendation, a decision in the owner's name, or a freeze. It never acts on
 the packet by editing the project itself.
 
+REPEATED_FAILURE routes by holder role (d693): failures on a Peer-held lease
+appear only in the repository hook brief, for the Lead; failures on a
+Lead-held lease appear only in `maestro brief`, for the Supervisor;
+`maestro attention` still lists both with `holder role` and `route`.
+
 ## Cross-examination
 
 A Peer that finds the assignment needs a council rather than one judgment
@@ -187,6 +192,10 @@ decisions, recorded only when novel or material, aggregated by pattern. When
 it is stuck it does not spawn a second Supervisor; it escalates with a packet
 whose `human decision needed: yes` and waits. STOP, FREEZE, and replacing a
 Lead need an explicit recovery lease from the owner.
+The installer manages `~/maestro/.claude/settings.json` so `permissions.deny`
+contains `Agent` and `Task` (d694): a Claude Supervisor cannot spawn
+sub-agents even by mistake; Codex has no equivalent hook and stays bound by
+this text.
 
 ## Talking across roles
 
