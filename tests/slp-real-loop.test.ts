@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   idFrom,
@@ -61,6 +60,39 @@ async function terminalWork(fixture: Fixture, terminal: "cancelled" | "done"): P
   return work;
 }
 
+async function recreatePreAnchorSessionStore(
+  fixture: Fixture,
+): Promise<{ databasePath: string; schemaBefore: unknown[] }> {
+  const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+  const database = new Database(databasePath);
+  database.exec(`
+    DROP TABLE sessions;
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      pid INTEGER NOT NULL,
+      last_event TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      harness TEXT
+    );
+  `);
+  const lastSeen = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  database
+    .query(
+      "INSERT INTO sessions (id, pid, last_event, last_seen, harness) VALUES (?, ?, 'SessionStart', ?, 'codex')",
+    )
+    .run("legacy-live", process.pid, lastSeen);
+  database
+    .query(
+      "INSERT INTO sessions (id, pid, last_event, last_seen, harness) VALUES (?, ?, 'SessionStart', ?, 'codex')",
+    )
+    .run("legacy-dead", 2_147_483_647, lastSeen);
+  const schemaBefore = database
+    .query("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name")
+    .all();
+  database.close();
+  return { databasePath, schemaBefore };
+}
+
 test("198 unreturned dispatch attention ignores done and cancelled work", async () => {
   await withFixture(async (fixture) => {
     // d30 closed the door these rows came through, so the detector's suppression
@@ -106,40 +138,43 @@ test("198 unreturned dispatch attention ignores done and cancelled work", async 
   });
 });
 
-test("200 doctor treats a pre-anchor session row as PID-anchored without migrating it", async () => {
+test("200 read-only status treats pre-anchor session rows as PID-anchored", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-
-    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
-    await Promise.all([
-      rm(databasePath, { force: true }),
-      rm(`${databasePath}-shm`, { force: true }),
-      rm(`${databasePath}-wal`, { force: true }),
-    ]);
-    const database = new Database(databasePath, { create: true });
-    database.exec(`
-      CREATE TABLE sessions (
-        id TEXT PRIMARY KEY,
-        pid INTEGER NOT NULL,
-        last_event TEXT NOT NULL,
-        last_seen TEXT NOT NULL,
-        harness TEXT
-      );
-    `);
-    database
-      .query(
-        "INSERT INTO sessions (id, pid, last_event, last_seen, harness) VALUES (?, 1, 'SessionStart', ?, 'codex')",
-      )
-      .run("legacy-live", new Date(Date.now() - 2 * 60 * 60_000).toISOString());
-    const schemaBefore = database
-      .query("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name")
-      .all();
-    database.close();
+    await recreatePreAnchorSessionStore(fixture);
 
     const diagnosed = await runCli(fixture, ["doctor"], { PATH: path });
     expect(diagnosed.exitCode).toBe(0);
-    expect(diagnosed.stdout).not.toContain("mailbox");
+    const all = await runCli(fixture, ["status", "--json"], { MAESTRO_READ_ONLY: "1" });
+    const live = await runCli(fixture, ["status", "--live", "--json"], {
+      MAESTRO_READ_ONLY: "1",
+    });
+    expect(all.exitCode).toBe(0);
+    expect(live.exitCode).toBe(0);
+    const allSessions = (JSON.parse(all.stdout) as {
+      data: { sessions: Array<{ id: string; live: boolean }> };
+    }).data.sessions;
+    const liveSessions = (JSON.parse(live.stdout) as {
+      data: { sessions: Array<{ id: string; live: boolean }> };
+    }).data.sessions;
+    expect(allSessions).toContainEqual(expect.objectContaining({ id: "legacy-live", live: true }));
+    expect(allSessions).toContainEqual(expect.objectContaining({ id: "legacy-dead", live: false }));
+    expect(liveSessions).toContainEqual(expect.objectContaining({ id: "legacy-live", live: true }));
+    expect(liveSessions.some((session) => session.id === "legacy-dead")).toBe(false);
+  });
+});
+
+test("352 [closeout-only] doctor and read-only status do not migrate the pre-anchor schema", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const { databasePath, schemaBefore } = await recreatePreAnchorSessionStore(fixture);
+
+    expect((await runCli(fixture, ["doctor"], { PATH: path })).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, ["status", "--json"], { MAESTRO_READ_ONLY: "1" })).exitCode,
+    ).toBe(0);
 
     const verified = new Database(databasePath, { readonly: true });
     const schemaAfter = verified
@@ -152,6 +187,7 @@ test("200 doctor treats a pre-anchor session row as PID-anchored without migrati
     verified.close();
     expect(schemaAfter).toEqual(schemaBefore);
     expect(columns).not.toContain("anchor");
+    expect(columns).not.toContain("scope");
   });
 });
 
