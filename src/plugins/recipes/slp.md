@@ -133,6 +133,10 @@ Human
 5. Human decisions reach the Lead; Peers receive scope changes through the Lead.
 6. Every large branch has its own owner, stop condition and handback.
 
+For Claude panes, the `PreToolUse` hook enforces invariant 4 when a session
+holds an open dispatch; Codex has no `PreToolUse` hook and stays bound by this
+text.
+
 ## Instruction stack
 
 | Layer | Question | In maestro |

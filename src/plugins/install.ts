@@ -120,7 +120,11 @@ async function writePolicyConfig(path: string): Promise<void> {
   await writeFile(path, `${JSON.stringify(config)}\n`);
 }
 
-async function writeHookConfig(path: string, command: string): Promise<void> {
+async function writeHookConfig(
+  path: string,
+  command: string,
+  harness: "claude" | "codex",
+): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
   for (const event of ["SessionStart", "UserPromptSubmit"]) {
@@ -134,6 +138,16 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
       ...retained.groups,
       {
         hooks: [handler],
+      },
+    ];
+  }
+  if (harness === "claude") {
+    const retained = retainForeignHookGroups(config.hooks.PreToolUse ?? []);
+    config.hooks.PreToolUse = [
+      ...retained.groups,
+      {
+        matcher: "Agent",
+        hooks: [{ type: "command", command }],
       },
     ];
   }
@@ -442,7 +456,7 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
     await mkdir(dirname(adapter.hookPath), { recursive: true });
     await writeFile(adapter.hookPath, hookSource(adapter.harness));
     await chmod(adapter.hookPath, 0o755);
-    await writeHookConfig(adapter.configPath, adapter.hookCommand);
+    await writeHookConfig(adapter.configPath, adapter.hookCommand, adapter.harness);
   }
   return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
 }
@@ -662,6 +676,7 @@ export const installPlugin: BuiltInPlugin = {
           await writeHookConfig(
             join(mainWorktree, ".codex", "hooks.json"),
             "bun .codex/hooks/maestro-record.ts",
+            "codex",
           );
         }
         await writeMirror(join(repo, "AGENTS.md"));

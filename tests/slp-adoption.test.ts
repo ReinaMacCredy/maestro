@@ -919,41 +919,164 @@ test("144 attention --json computes findings without background state", async ()
   });
 });
 
-test("148 install and uninstall manage only session and prompt hook wiring", async () => {
+test("148 install and uninstall manage Claude PreToolUse without changing Codex hooks", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const first = await runCli(fixture, ["install"], { PATH: path });
     expect(first.exitCode).toBe(0);
 
-    const hookPaths = [
-      join(fixture.repo, ".claude", "settings.json"),
-      join(fixture.repo, ".codex", "hooks.json"),
-    ];
-    const firstTexts = await Promise.all(hookPaths.map((hookPath) => Bun.file(hookPath).text()));
-    for (const text of firstTexts) {
-      const config = JSON.parse(text) as {
-        hooks: Record<string, Array<{ hooks: Array<Record<string, unknown>>; matcher?: unknown }>>;
-      };
+    type HookConfig = {
+      hooks: Record<
+        string,
+        Array<{ hooks: Array<{ command: string; type: string }>; matcher?: string }>
+      >;
+    };
+    const claudePath = join(fixture.repo, ".claude", "settings.json");
+    const codexPath = join(fixture.repo, ".codex", "hooks.json");
+    const firstClaude = JSON.parse(await Bun.file(claudePath).text()) as HookConfig;
+    const firstCodex = JSON.parse(await Bun.file(codexPath).text()) as HookConfig;
+    for (const config of [firstClaude, firstCodex]) {
       expect(config.hooks.SessionStart).toBeArray();
       expect(config.hooks.UserPromptSubmit).toBeArray();
       expect(config.hooks.PostToolUse).toBeUndefined();
     }
+    const managedPreToolUse = {
+      matcher: "Agent",
+      hooks: [{ type: "command", command: "bun .claude/hooks/maestro-record.ts" }],
+    };
+    const firstClaudePreToolUse = firstClaude.hooks.PreToolUse ?? [];
+    expect(firstClaudePreToolUse).toEqual([managedPreToolUse]);
+    expect(firstCodex.hooks.PreToolUse).toBeUndefined();
+
+    const foreignPreToolUse = {
+      matcher: "Write",
+      hooks: [{ type: "command", command: "foreign-pre-tool-hook" }],
+    };
+    firstClaudePreToolUse.unshift(foreignPreToolUse);
+    await Bun.write(claudePath, `${JSON.stringify(firstClaude, null, 2)}\n`);
 
     const second = await runCli(fixture, ["install"], { PATH: path });
     expect(second.exitCode).toBe(0);
-    expect(await Promise.all(hookPaths.map((hookPath) => Bun.file(hookPath).text()))).toEqual(
-      firstTexts,
-    );
+    const secondClaudeText = await Bun.file(claudePath).text();
+    const secondClaude = JSON.parse(secondClaudeText) as HookConfig;
+    expect(secondClaude.hooks.PreToolUse).toEqual([foreignPreToolUse, managedPreToolUse]);
+    expect((JSON.parse(await Bun.file(codexPath).text()) as HookConfig).hooks.PreToolUse)
+      .toBeUndefined();
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(await Bun.file(claudePath).text()).toBe(secondClaudeText);
 
     const uninstalled = await runCli(fixture, ["uninstall"], { PATH: path });
     expect(uninstalled.exitCode).toBe(0);
-    for (const hookPath of hookPaths) {
-      if (!(await Bun.file(hookPath).exists())) continue;
-      const config = JSON.parse(await Bun.file(hookPath).text()) as {
-        hooks?: Record<string, unknown>;
-      };
-      expect(config.hooks?.PostToolUse).toBeUndefined();
-    }
+    const remainingClaude = JSON.parse(await Bun.file(claudePath).text()) as HookConfig;
+    expect(remainingClaude.hooks.PreToolUse).toEqual([foreignPreToolUse]);
+    expect(remainingClaude.hooks.SessionStart).toBeUndefined();
+    expect(remainingClaude.hooks.UserPromptSubmit).toBeUndefined();
+    expect(remainingClaude.hooks.PostToolUse).toBeUndefined();
+    expect(await Bun.file(codexPath).exists()).toBe(false);
+  });
+});
+
+test("447 PreToolUse denies Agent for an accepted dispatch holder without recording a session event", async () => {
+  await withFixture(async (fixture) => {
+    const holder = "peer-hook-holder";
+    await recordSession(fixture, holder);
+    const work = await addWork(fixture, "deny peer sub-topology");
+    const dispatch = await openAttentionDispatch(
+      fixture,
+      work,
+      "delivery",
+      "src/plugins/coordination.ts",
+      "all other files",
+    );
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          dispatch,
+          "--session",
+          holder,
+        ])
+      ).exitCode,
+    ).toBe(0);
+
+    const denied = await runCli(
+      fixture,
+      ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+      session(holder),
+    );
+
+    expect(denied.exitCode).toBe(0);
+    expect(denied.stderr).toBe("");
+    expect(JSON.parse(denied.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          `${dispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
+      },
+    });
+    const status = await runCli(fixture, ["status", "--json"], session(holder));
+    const sessions = (JSON.parse(status.stdout) as {
+      data: { sessions: Array<{ id: string; lastEvent: string }> };
+    }).data.sessions;
+    expect(sessions.find((candidate) => candidate.id === holder)?.lastEvent).toBe(
+      "SessionStart",
+    );
+  });
+});
+
+test("448 PreToolUse stays silent for a Lead that opened but does not hold a dispatch", async () => {
+  await withFixture(async (fixture) => {
+    const lead = "lead-with-unaccepted-dispatch";
+    await recordSession(fixture, lead);
+    const work = await addWork(fixture, "keep the Lead outside Peer enforcement");
+    const opened = await runCli(
+      fixture,
+      [
+        "dispatch",
+        "open",
+        work,
+        "--objective",
+        "leave the dispatch unaccepted",
+        "--owned-scope",
+        "tests/slp-adoption.test.ts",
+        "--excluded-scope",
+        "product source",
+        "--mutation",
+        "no-write",
+        "--stop-condition",
+        "PreToolUse remains silent",
+        "--lane",
+        "scout",
+        "--evidence-required",
+        "source: hook stdout",
+        "--pane",
+        "w1:p-lead-hook",
+      ],
+      session(lead),
+    );
+    expect(opened.exitCode).toBe(0);
+
+    const allowed = await runCli(
+      fixture,
+      ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+      session(lead),
+    );
+
+    expect(allowed.exitCode).toBe(0);
+    expect(allowed.stdout).toBe("");
+    expect(allowed.stderr).toBe("");
+    const status = await runCli(fixture, ["status", "--json"], session(lead));
+    const sessions = (JSON.parse(status.stdout) as {
+      data: { sessions: Array<{ id: string; lastEvent: string }> };
+    }).data.sessions;
+    expect(sessions.find((candidate) => candidate.id === lead)?.lastEvent).toBe(
+      "SessionStart",
+    );
   });
 });
 

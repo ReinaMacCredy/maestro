@@ -616,3 +616,14 @@ test("446 [lint] recipe slp explains the global unreturned-dispatch threshold", 
   expect(flat).toContain("the Lead reads `maestro attention --dispatch-stale <h>` for it");
   expect(flat).toContain("`maestro brief` in the room uses the default.");
 });
+
+test("449 [lint] recipe slp states the harness boundary for topology invariant 4", async () => {
+  const recipe = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  const topology = recipe.split("## Topology invariants")[1]?.split("\n## ")[0] ?? "";
+  expect(topology.replace(/\s+/g, " ")).toContain(
+    "For Claude panes, the `PreToolUse` hook enforces invariant 4 when a session holds an open dispatch; Codex has no `PreToolUse` hook and stays bound by this text.",
+  );
+});

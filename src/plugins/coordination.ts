@@ -4,7 +4,7 @@ import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
-import { dispatchLaneVocabulary } from "./dispatch.ts";
+import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
@@ -94,7 +94,7 @@ function formatLivePeers(peers: LivePeer[]): string {
 
 export const coordinationPlugin: BuiltInPlugin = {
   name: "coordination",
-  inject: ["work"],
+  inject: ["work", "dispatch"],
   apply(context) {
     context.store.migrate(`
       DROP TABLE IF EXISTS message_cursors;
@@ -222,6 +222,22 @@ export const coordinationPlugin: BuiltInPlugin = {
             throw new CliError("MISSING_ARGUMENT", "missing hook event");
           }
           const harness = harnessOption(invocation);
+          if (event === "PreToolUse") {
+            const sessionId = context.sessions.current().id;
+            const held = (context.dispatch as DispatchService)
+              .list()
+              .find((dispatch) => dispatch.state === "open" && dispatch.heldBy === sessionId);
+            if (!held) return { data: {}, text: "" };
+            const output = {
+              hookSpecificOutput: {
+                hookEventName: "PreToolUse",
+                permissionDecision: "deny",
+                permissionDecisionReason:
+                  `${held.id}: a Peer does not create sub-topology (SLP invariant 4)`,
+              },
+            };
+            return { data: output, text: JSON.stringify(output) };
+          }
           const session = context.sessions.record(event, harness ?? undefined);
           context.log.append({
             type: "hook.record",
