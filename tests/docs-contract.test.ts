@@ -116,7 +116,8 @@ function documentedCommands(readme: string): string[][] {
     });
 }
 
-test("309 every README verb-tour command resolves through the CLI", async () => {
+test("309 [lint] every README verb-tour command resolves through CLI help", async () => {
+  // Proves documentation-to-registry resolution, not valid-fixture execution of each command family.
   const readme = await Bun.file(join(import.meta.dir, "..", "README.md")).text();
   const commands = documentedCommands(readme);
   expect(commands).toContainEqual(["dispatch", "list"]);
