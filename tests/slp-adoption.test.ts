@@ -940,6 +940,37 @@ test("414 attention raises LEAD_COLLISION without treating a delivery Peer as a 
   });
 });
 
+test("458 delivery acceptance after work start does not hide a Lead collision", async () => {
+  await withFixture(async (fixture) => {
+    const first = await addWork(fixture, "first established Lead");
+    const second = await addWork(fixture, "second established Lead");
+    await startWork(fixture, first, "lead-a");
+    await startWork(fixture, second, "lead-b");
+
+    const dispatch = await openAttentionDispatch(
+      fixture,
+      second,
+      "delivery",
+      "src/plugins/attention.ts",
+      "tests only",
+    );
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session("lead-b"))).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, ["dispatch", "confirm", dispatch, "--session", "lead-b"])
+      ).exitCode,
+    ).toBe(0);
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).toContain(
+      `lead-collision:${first}:${second}:lead-a:lead-b`,
+    );
+  });
+});
+
 test("144 attention --json computes findings without background state", async () => {
   await withFixture(async (fixture) => {
     const before = await retiredSupervisorSnapshot(fixture);

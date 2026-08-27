@@ -2,7 +2,7 @@ import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
 import type { BriefService } from "./coordination.ts";
-import type { DispatchService, HandbackService } from "./dispatch.ts";
+import type { DispatchRecord, DispatchService, HandbackService } from "./dispatch.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -118,6 +118,20 @@ function latestStart(context: PluginContext, workId: string): EventRow | null {
        ORDER BY id DESC LIMIT 1`,
     )
     .get(workId) ?? null;
+}
+
+function acceptedBeforeLatestStart(context: PluginContext, dispatch: DispatchRecord): boolean {
+  const start = latestStart(context, dispatch.workId);
+  if (!start) return false;
+  const acceptance = context.store.database
+    .query<EventRow, [string]>(
+      `SELECT id, created_at FROM event_log
+       WHERE entity_type = 'dispatch' AND entity_id = ?
+         AND type IN ('dispatch.accept', 'dispatch.confirm')
+       ORDER BY id DESC LIMIT 1`,
+    )
+    .get(dispatch.id);
+  return acceptance !== null && acceptance.id < start.id;
 }
 
 function minutesSince(iso: string, now: number): number {
@@ -471,7 +485,8 @@ function leadCollisionDetections(
       .list()
       .filter(
         (record) =>
-          record.state === "open" && record.lane === "delivery" && record.heldBy,
+          record.state === "open" && record.lane === "delivery" && record.heldBy &&
+          acceptedBeforeLatestStart(context, record),
       )
       .map((record) => `${record.workId}:${record.heldBy}`),
   );
