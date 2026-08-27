@@ -16,6 +16,7 @@ import {
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
+import { scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -230,6 +231,9 @@ async function update(): Promise<CliResult> {
   ) as PackageJson;
   const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
   const skillText = skillSync ? formatSkillSync(skillSync) : "";
+  // The room's generated files (lane.md, IDENTITY.md, wiring) ship with the
+  // runtime; without this, only a reinstall refreshed them after an update.
+  await scaffoldRoom(home);
   return {
     data: { aheadOnly, noUpstream, oldCommit, newCommit, version: packageJson.version },
     text: (noUpstream

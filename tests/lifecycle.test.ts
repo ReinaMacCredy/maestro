@@ -631,3 +631,22 @@ test("231 update on a source branch with no upstream resyncs instead of erroring
     expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(head);
   });
 });
+
+test("411 update regenerates the room's generated files and keeps OWNER.md", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const room = join(fixture.home, "maestro");
+    const owner = join(room, "OWNER.md");
+    await writeFile(owner, "# owner notes\nkeep me\n");
+    await writeFile(join(room, "lane.md"), "stale lane text\n");
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(updated.exitCode).toBe(0);
+    const lane = await readFile(join(room, "lane.md"), "utf8");
+    expect(lane).not.toContain("stale lane text");
+    expect(lane).toContain("a lane with a second stop point needs a second dispatch");
+    expect(await readFile(owner, "utf8")).toBe("# owner notes\nkeep me\n");
+  });
+});
