@@ -11,8 +11,18 @@ matching skill; this skill owns the bundle lifecycle itself.
 
 ## Tier rule
 
-Work directly with `maestro work add|start|done` (no bundle) when the change is
-one session, one branch, and its acceptance fits in a sentence.
+Decide the tier from the request alone, before any recon: no bundle files, no
+code reading, no store lookups until the tier is known.
+
+- quickfix: the diff fits in one sentence and hits no Full trigger below. Do it
+  directly, verify inline (run the smallest check that can falsify it), no
+  skill, no record. If it grows past one sentence, stop, `maestro work add`,
+  and continue as Light.
+- Light: one session, one branch, and the acceptance fits in a sentence. Work
+  directly with `maestro work add|start|done` (no bundle). The work item is the
+  floor because `maestro ready`, attention, and the Supervisor's brief read the
+  store, not a session task list.
+- Full: any trigger below. Open a bundle.
 
 Open a bundle when ANY trigger holds:
 - the work spans multiple sessions or must survive a context reset

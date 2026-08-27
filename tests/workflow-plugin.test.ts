@@ -273,3 +273,29 @@ test("132 policy-lifecycle ships dark: disabled by default with an honest requir
     expect(listed.stdout).toContain("reserved");
   });
 });
+
+test("311 the brief and the bundle skill state three tiers: quickfix without a record, Light as a work item, Full as a bundle", async () => {
+  const skill = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-bundle", "SKILL.md"),
+    "utf8",
+  );
+  const tierRule = skill.split("## Tier rule")[1]?.split("\n## ")[0] ?? "";
+  expect(tierRule).toContain("quickfix");
+  expect(tierRule).toContain("no record");
+  expect(tierRule).toContain("`maestro work add|start|done`");
+  expect(tierRule).toContain("maestro bundle open");
+  expect(tierRule).toMatch(/before .*recon/i);
+  expect(tierRule).toMatch(/grows past one sentence/i);
+
+  await withFixture(async (fixture) => {
+    const start = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
+      MAESTRO_SESSION_ID: "tier-brief",
+    });
+    expect(start.exitCode).toBe(0);
+    const tierLines = start.stdout.split("\n").filter((line) => /^\s+(tier:|quickfix|one session|multi-session)/.test(line));
+    expect(tierLines.join("\n")).toContain("quickfix");
+    expect(tierLines.join("\n")).toContain("no record");
+    expect(tierLines.join("\n")).toContain("maestro work add|start|done");
+    expect(tierLines.join("\n")).toContain("maestro bundle open <id> --work <id>");
+  });
+});
