@@ -1,18 +1,29 @@
 import { expect, test } from "bun:test";
 import { idFrom, runCli, withFixture } from "./helpers.ts";
 
-test("16 search finds matching work, decision, and note text", async () => {
+test("16 search JSON binds unique work, decision, and note tokens to explicit results", async () => {
   await withFixture(async (fixture) => {
-    const work = idFrom(await runCli(fixture, ["work", "add", "nebula work", "--kind", "idea"]));
-    expect((await runCli(fixture, ["decision", "draft", "nebula decision"])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "note", work, "nebula note"])).exitCode).toBe(0);
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "work-surface-ember", "--kind", "idea"]),
+    );
+    const decision = idFrom(
+      await runCli(fixture, ["decision", "draft", "decision-surface-cobalt"]),
+    );
+    expect((await runCli(fixture, ["work", "note", work, "note-surface-violet"])).exitCode)
+      .toBe(0);
 
-    const result = await runCli(fixture, ["search", "nebula"]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("work");
-    expect(result.stdout).toContain("decision");
-    expect(result.stdout).toContain("note");
+    for (const [token, expected] of [
+      ["work-surface-ember", { id: work, kind: "idea" }],
+      ["decision-surface-cobalt", { id: decision, kind: "decision" }],
+      ["note-surface-violet", { id: work, kind: "idea" }],
+    ] satisfies Array<[string, { id: string; kind: string }]>) {
+      const result = await runCli(fixture, ["search", token, "--json"]);
+      expect(result.exitCode).toBe(0);
+      const matches = (JSON.parse(result.stdout) as {
+        data: { matches: Array<{ id: string; kind: string }> };
+      }).data.matches;
+      expect(matches).toContainEqual(expect.objectContaining(expected));
+    }
   });
 });
 
