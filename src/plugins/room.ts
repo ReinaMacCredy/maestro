@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const agents = `# Maestro chief-of-staff room
 
-Read \`IDENTITY.md\` and \`OWNER.md\`, then run \`maestro brief\`.
+Read \`IDENTITY.md\` and \`OWNER.md\`. While \`OWNER.md\` still holds unanswered questions, interview the owner and write the answers there before anything else; then run \`maestro brief\`.
 This room is the Supervisor; roles: \`maestro recipe show slp\`.
 Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
@@ -34,12 +34,21 @@ The room store is the notebook: record only novel or material observations, aggr
 
 const owner = `# OWNER — stable model
 
+This file belongs to the owner: the installer writes it once and it is never overwritten. Until the questions below are answered it is a template, and the Supervisor's first session is an interview: ask them, write the answers here, and only then run \`maestro brief\`.
+
 Use this file for stable facts the chief should carry across projects:
 
 - Working environment, project locations, tools, and recurring constraints.
+  - Where does code live, and which terminal workspace manager opens panes?
+  - Which harnesses run here, and which one for which kind of work?
+  - What is always true about this machine: toolchains, shared checkouts, commands that must never run?
 - Communication style, collaboration preferences, and standing boundaries.
+  - Which language, how terse, and what should never appear in a reply?
+  - How should questions be put: one at a time, with options, in prose?
 - Decisions the chief may make without interrupting the owner.
+  - Which of these are free: implementation details, sequencing, test strategy, retries, opening lanes?
 - Actions that always require confirmation.
+  - Which of these are gated: push, tag, publish, deploy, delete, spend, credentials, scope changes?
 
 Preferences that can change belong in the room store as decisions with rationale and supersede history, not as dated bullets in this file.
 

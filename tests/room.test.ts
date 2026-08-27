@@ -1169,3 +1169,21 @@ printf '%s\\n' 'owner brief'
     });
   },
 );
+
+test("412 first install seeds OWNER.md with the interview questions and the room asks them before the brief", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const owner = await readFile(join(room, "OWNER.md"), "utf8");
+    const questions = owner.split("\n").filter((line) => /^  - .*\?$/.test(line));
+
+    expect(questions.length).toBeGreaterThanOrEqual(6);
+    expect(owner).toContain("never overwritten");
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      const text = await readFile(join(room, name), "utf8");
+      expect(text).toContain("interview the owner");
+      expect(text.indexOf("interview the owner")).toBeLessThan(text.indexOf("maestro brief"));
+    }
+  });
+});
