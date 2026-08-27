@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -166,7 +167,7 @@ test("170 bundle close refuses handoff placeholders and passes after replacement
   });
 });
 
-test("444 successor bundle open refuses an existing incomplete handoff packet", async () => {
+test("462 successor bundle access gates incomplete handoff and resumes a complete packet", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     const predecessor = {
@@ -191,6 +192,14 @@ test("444 successor bundle open refuses an existing incomplete handoff packet", 
     );
     expect(JSON.parse(predecessorReopen.stderr).error.code).toBe("DUPLICATE");
 
+    const blockedShow = await runCli(
+      fixture,
+      ["bundle", "show", "successor-gate"],
+      successor,
+    );
+    expect(blockedShow.exitCode).not.toBe(0);
+    expect(JSON.parse(blockedShow.stderr).error.code).toBe("HANDOFF_INCOMPLETE");
+
     const blocked = await runCli(
       fixture,
       ["bundle", "open", "successor-gate"],
@@ -198,7 +207,7 @@ test("444 successor bundle open refuses an existing incomplete handoff packet", 
     );
     expect(blocked.exitCode).not.toBe(0);
     const error = JSON.parse(blocked.stderr) as {
-      error: { code: string; message: string; sections: string[] };
+      error: { code: string; command: string; message: string; sections: string[] };
     };
     expect(error.error.code).toBe("HANDOFF_INCOMPLETE");
     expect(error.error.sections).toEqual([
@@ -211,6 +220,37 @@ test("444 successor bundle open refuses an existing incomplete handoff packet", 
     expect(error.error.message).toContain(
       "Current State, Next Action, Authority, Failed approaches, Do not repeat",
     );
+
+    const notesPath = join(fixture.repo, ".maestro", "bundle", "successor-gate", "NOTES.md");
+    await writeFile(
+      notesPath,
+      (await Bun.file(notesPath).text()).replaceAll(placeholder, "filled by predecessor"),
+    );
+    const resumed = await runCli(
+      fixture,
+      error.error.command.split(" ").slice(1),
+      successor,
+    );
+    expect(resumed.exitCode).toBe(0);
+    expect(resumed.stdout).toContain("successor-gate [active]");
+    expect(resumed.stdout).toContain("--- SPEC.md");
+    expect(resumed.stdout).toContain("--- NOTES.md");
+    expect(resumed.stdout).toContain("--- VERIFY.md");
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    try {
+      expect(
+        database
+          .query<{ session_id: string; type: string }, []>(
+            "SELECT type, session_id FROM event_log WHERE entity_type = 'bundle' AND entity_id = 'successor-gate' ORDER BY id DESC LIMIT 1",
+          )
+          .get(),
+      ).toEqual({ session_id: "handoff-successor", type: "bundle.resume" });
+    } finally {
+      database.close();
+    }
   });
 });
 

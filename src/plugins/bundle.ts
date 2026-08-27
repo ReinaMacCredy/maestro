@@ -274,6 +274,36 @@ function handoffPlaceholders(notes: string | null): {
   };
 }
 
+function bundleOwnerSession(context: PluginContext, id: string): string | null {
+  return context.log
+    .list("bundle", id)
+    .filter((event) => event.type === "bundle.open" || event.type === "bundle.resume")
+    .at(-1)?.sessionId ?? null;
+}
+
+function requireCompleteHandoff(id: string, notes: string | null): void {
+  const incomplete = handoffPlaceholders(notes).sections;
+  if (incomplete.length === 0) return;
+  const command = `maestro bundle open ${id}`;
+  throw new CliError(
+    "HANDOFF_INCOMPLETE",
+    `${id} NOTES.md handoff sections are incomplete: ${incomplete.join(", ")}; replace every handoff placeholder, then run: ${command}`,
+    { command, id, sections: incomplete },
+  );
+}
+
+function trioSections(trio: {
+  notes: string | null;
+  spec: string | null;
+  verify: string | null;
+}): string[] {
+  const parts = [trio.spec, trio.notes, trio.verify];
+  return trioFiles.flatMap((name, index) => {
+    const text = parts[index];
+    return typeof text === "string" ? [`--- ${name}\n${text.trimEnd()}`] : [];
+  });
+}
+
 function scaffoldBodies(id: string): Map<HandoffSectionName, string> {
   const sections = notesSections(notesTemplate(id, "Base:"));
   return new Map(
@@ -416,23 +446,28 @@ export const bundlePlugin: BuiltInPlugin = {
           const existing = getBundle(context, id);
           const root = resolveStoreLocation(process.cwd()).root;
           const directory = existing?.directory ?? join(root, ".maestro", "bundle", id);
-          if (existsSync(directory)) {
-            const lastBundleEvent = context.log
-              .list("bundle", id)
-              .filter((event) => event.type === "bundle.open" || event.type === "bundle.close")
-              .at(-1);
-            const currentSession = context.sessions.current().id;
-            if (lastBundleEvent?.sessionId && lastBundleEvent.sessionId !== currentSession) {
-              const incomplete = handoffPlaceholders((await readTrio(directory)).notes).sections;
-              if (incomplete.length > 0) {
-                const command = `maestro bundle open ${id}`;
-                throw new CliError(
-                  "HANDOFF_INCOMPLETE",
-                  `${id} NOTES.md handoff sections are incomplete: ${incomplete.join(", ")}; replace every handoff placeholder, then run: ${command}`,
-                  { command, id, sections: incomplete },
-                );
-              }
-            }
+          const currentSession = context.sessions.current().id;
+          const ownerSession = existing?.state === "active"
+            ? bundleOwnerSession(context, id)
+            : null;
+          if (
+            existing?.state === "active" && existsSync(directory) && ownerSession &&
+            ownerSession !== currentSession
+          ) {
+            const trio = await readTrio(directory);
+            requireCompleteHandoff(id, trio.notes);
+            const workIds = linkedWorkIds(context, id);
+            context.log.append({
+              type: "bundle.resume",
+              entityType: "bundle",
+              entityId: id,
+              sessionId: currentSession,
+              payload: { directory },
+            });
+            return {
+              data: { bundle: existing, workIds },
+              text: [headline(existing), ...trioSections(trio)].join("\n"),
+            };
           }
           if (existing) {
             throw new CliError("DUPLICATE", `bundle already exists: ${id}`, { id });
@@ -698,6 +733,12 @@ export const bundlePlugin: BuiltInPlugin = {
           const trio = bundle.state === "active"
             ? await readTrio(bundle.directory)
             : { spec: bundle.spec, notes: bundle.notes, verify: bundle.verify };
+          const ownerSession = bundle.state === "active"
+            ? bundleOwnerSession(context, id)
+            : null;
+          if (ownerSession && ownerSession !== context.sessions.current().id) {
+            requireCompleteHandoff(id, trio.notes);
+          }
           const workIds = linkedWorkIds(context, id);
           const work = context.work as WorkService;
           const workLines = workIds
@@ -708,11 +749,7 @@ export const bundlePlugin: BuiltInPlugin = {
           const decisionLines = decisions.map(
             (decision) => `${decision.id} [${decision.state}] ${decision.text}`,
           );
-          const parts = [trio.spec, trio.notes, trio.verify];
-          const sections = trioFiles.flatMap((name, index) => {
-            const text = parts[index];
-            return typeof text === "string" ? [`--- ${name}\n${text.trimEnd()}`] : [];
-          });
+          const sections = trioSections(trio);
           return {
             data: { bundle, decisions, workIds },
             text: [
