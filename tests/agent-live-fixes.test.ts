@@ -115,7 +115,8 @@ test("95 status reflects completion instead of pinning the last start", async ()
   });
 });
 
-test("96 installed harness docs name the stderr JSON failure envelope", async () => {
+test("96 [lint] installed harness docs name the stderr JSON failure envelope", async () => {
+  // Documentation lint: proves the installed guidance text, not the runtime failure stream or envelope shape.
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -126,7 +127,8 @@ test("96 installed harness docs name the stderr JSON failure envelope", async ()
   });
 });
 
-test("97 work recipe disambiguates claim tagging and evidence forms", async () => {
+test("97 [lint] work recipe disambiguates claim tagging and evidence forms", async () => {
+  // Documentation lint: proves the recipe contains both terms, not that their surrounding syntax is unambiguous.
   await withFixture(async (fixture) => {
     const recipe = await runCli(fixture, ["recipe", "show", "work"]);
     expect(recipe.exitCode).toBe(0);
@@ -138,6 +140,14 @@ test("97 work recipe disambiguates claim tagging and evidence forms", async () =
 test("98 session lastEvent records what happened, not what was attempted", async () => {
   await withFixture(async (fixture) => {
     const session = { MAESTRO_SESSION_ID: "honest-session", MAESTRO_SESSION_PID: String(process.pid) };
+    const lastEvent = async (): Promise<string | undefined> => {
+      const status = await runCli(fixture, ["status", "--json"], session);
+      expect(status.exitCode).toBe(0);
+      const sessions = (JSON.parse(status.stdout) as {
+        data: { sessions: Array<{ id: string; lastEvent: string }> };
+      }).data.sessions;
+      return sessions.find((candidate) => candidate.id === session.MAESTRO_SESSION_ID)?.lastEvent;
+    };
     expect(
       (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session)).exitCode,
     ).toBe(0);
@@ -146,9 +156,7 @@ test("98 session lastEvent records what happened, not what was attempted", async
       await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"], session),
     );
     expect((await runCli(fixture, ["work", "start", gated], session)).exitCode).not.toBe(0);
-    const afterRefusedStart = await runCli(fixture, ["status"], session);
-    expect(afterRefusedStart.stdout).toContain("SessionStart");
-    expect(afterRefusedStart.stdout).not.toContain("work.start");
+    expect(await lastEvent()).toBe("SessionStart");
 
     const item = idFrom(
       await runCli(
@@ -159,14 +167,12 @@ test("98 session lastEvent records what happened, not what was attempted", async
     );
     expect((await runCli(fixture, ["work", "start", item], session)).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", item], session)).exitCode).not.toBe(0);
-    const afterRefusedDone = await runCli(fixture, ["status"], session);
-    expect(afterRefusedDone.stdout).toContain("work.start");
-    expect(afterRefusedDone.stdout).not.toContain("work.done");
+    expect(await lastEvent()).toBe("work.start");
 
     expect(
       (await runCli(fixture, ["work", "done", item, "--evidence", "done"], session)).exitCode,
     ).toBe(0);
-    expect((await runCli(fixture, ["status"], session)).stdout).toContain("work.done");
+    expect(await lastEvent()).toBe("work.done");
   });
 });
 
@@ -482,7 +488,7 @@ test("113 proof without a claim names the missing matching claim", async () => {
   });
 });
 
-test("114 decision help shows draft usage and edits name the previous title", async () => {
+test("114 decision help shows draft usage and an edit persists the revised title", async () => {
   await withFixture(async (fixture) => {
     const help = await runCli(fixture, ["help", "decision"]);
     expect(help.exitCode).toBe(0);
@@ -495,6 +501,12 @@ test("114 decision help shows draft usage and edits name the previous title", as
     expect(edited.exitCode).toBe(0);
     expect(edited.stdout).toContain("revised direction");
     expect(edited.stdout).toContain("previous: initial direction");
+    const listed = await runCli(fixture, ["decision", "list", "--json"]);
+    expect(listed.exitCode).toBe(0);
+    const decisions = (JSON.parse(listed.stdout) as {
+      data: { decisions: Array<{ id: string; text: string }> };
+    }).data.decisions;
+    expect(decisions.find((decision) => decision.id === id)?.text).toBe("revised direction");
   });
 });
 
@@ -780,19 +792,29 @@ test("121 work show preserves declared blockers after they resolve", async () =>
       ]),
     );
 
-    const open = await runCli(fixture, ["work", "show", implementation]);
+    const open = await runCli(fixture, ["work", "show", implementation, "--json"]);
     expect(open.exitCode).toBe(0);
-    expect(open.stdout).toContain(`blocker: ${blocker} [open] red tests`);
+    const openBlockers = (JSON.parse(open.stdout) as {
+      data: { blockers: Array<{ id: string; state: string; title: string }> };
+    }).data.blockers;
+    expect(openBlockers).toEqual([
+      expect.objectContaining({ id: blocker, state: "open", title: "red tests" }),
+    ]);
 
     expect((await runCli(fixture, ["work", "start", blocker])).exitCode).toBe(0);
     expect(
       (await runCli(fixture, ["work", "done", blocker, "--evidence", "red tests"])).exitCode,
     ).toBe(0);
-    const resolved = await runCli(fixture, ["work", "show", implementation]);
+    const resolved = await runCli(fixture, ["work", "show", implementation, "--json"]);
     expect(resolved.exitCode).toBe(0);
-    expect(resolved.stdout).toContain(`blocker: ${blocker} [done] red tests`);
+    const resolvedBlockers = (JSON.parse(resolved.stdout) as {
+      data: { blockers: Array<{ id: string; state: string; title: string }> };
+    }).data.blockers;
+    expect(resolvedBlockers).toEqual([
+      expect.objectContaining({ id: blocker, state: "done", title: "red tests" }),
+    ]);
 
-    const help = await runCli(fixture, ["help", "work", "show"]);
-    expect(help.stdout).toContain("blockers");
+    const rendered = await runCli(fixture, ["work", "show", implementation]);
+    expect(rendered.stdout).toContain(`blocker: ${blocker} [done] red tests`);
   });
 });
