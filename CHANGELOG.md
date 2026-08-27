@@ -17,6 +17,22 @@ TypeScript-on-Bun line and continues the existing version sequence.
   (`curl -fsSL .../scripts/install.sh | sh`) that clones the repository into
   `~/.maestro/source` and runs the installer from it, so `maestro update`
   keeps following that checkout.
+- Expanded SLP with a no-write shadow lane, explicit `COUNCIL_REQUEST`
+  handbacks, sealed council cross-examination, one Lead per scope, and ordered
+  Lead handoff receipts.
+- Bound the single Supervisor's scope and authority in `IDENTITY.md` and deny
+  Claude sub-agent tools in the Supervisor room.
+- Added build-time Mermaid diagrams to the documentation site with no runtime
+  CDN dependency and kept lone Next pagination links in the right column.
+
+### Changed
+
+- Cross-role decisions now use Herdr for transport and Maestro decisions or
+  work notes as the durable record.
+- Repeated failures now route Peer-held work to the Lead and Lead-held work to
+  the Supervisor.
+- Documented quickfix, Light, and Full method tiers with explicit handoff and
+  evidence boundaries.
 
 ## [0.108.0] - 2026-08-27
 

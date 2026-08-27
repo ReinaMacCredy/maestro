@@ -67,16 +67,29 @@ mechanical.
 
 ## Roles and lanes
 
-Maestro uses three durable agent roles:
+Maestro uses four durable roles. The **Human** owns purpose, risk, priority,
+and external effects. The single **Supervisor** in `~/maestro` represents the
+Human across registered projects, but works through each project's Lead and
+does not edit project code, dispatch Peers directly, or accept technical work.
+Its owner, scope, observation boundary, and denied write, acceptance,
+transcript, and recovery authorities are explicit in `~/maestro/IDENTITY.md`;
+the installer also denies Claude's `Agent` and `Task` tools in that room.
 
-- The **Supervisor** lives in `~/maestro`. It represents the owner across
-  projects, filters attention, and works through each project's Lead. It does
-  not edit project code, dispatch Peers directly, or accept technical work.
-- A repository session is its **Lead**. The Lead owns the project outcome,
-  contracts, topology, integration, and technical acceptance.
-- A pane opened with a dispatch is a **Peer**. The Peer owns independent
-  judgment or bounded delivery inside the stored contract, then returns a
-  handback with layered evidence.
+A repository session is the **Lead** for that scope. The Lead owns the outcome,
+contracts, topology, one write owner per moving scope, integration, and
+technical acceptance. A pane opened with a dispatch becomes a **Peer** when it
+accepts the stored contract. The Peer owns independent judgment or bounded
+delivery and returns a handback with layered evidence.
+
+```mermaid
+flowchart TB
+  Human --> Supervisor
+  Human --> Lead
+  Supervisor -. "owner authority through Lead" .-> Lead
+  Lead --> PeerA["Peer: bounded scope A"]
+  Lead --> PeerB["Peer: bounded scope B"]
+  Lead --> PeerC["Peer: independent review"]
+```
 
 Read the full authority model with `maestro recipe show slp`.
 
@@ -94,11 +107,18 @@ the lane contract with `maestro dispatch open`, the Peer takes it with
 wake-up, and pane closure; Maestro owns the durable contract and evidence.
 The room's `~/maestro/lane.md` contains the complete lane procedure.
 
-The four lane types are `scout` for no-write discovery, `decision` for a
-recommendation, `delivery` for bounded writes, and `challenge` for trying to
-break a premise or candidate. Concurrent dispatches on one work item form a
-council. The council stays sealed until every member returns, so no view can
-bias another and work cannot begin on a partial result.
+The five lane types are `scout` for no-write discovery, `decision` for a
+recommendation, `delivery` for bounded writes, `challenge` for trying to break
+a premise or candidate, and `shadow` for no-write comparison evidence that is
+never a candidate. Concurrent dispatches on one work item form a sealed
+council. If the first views conflict, the Lead can open a targeted second
+generation that quotes the other handbacks; Peers answer by handback and never
+prompt each other.
+
+Each moving scope has one Lead. Continuing or replacing that Lead requires a
+frozen handoff packet and the ordered receipts `packet_ready`,
+`successor_authorized`, `successor_acknowledged`, and
+`predecessor_released` before the predecessor stops writing.
 
 ## Work, decisions, and evidence
 
@@ -106,13 +126,27 @@ bias another and work cannot begin on a partial result.
   `maestro ready` shows work that can start and the gates blocking other work.
 - `maestro work` manages work trees, dependencies, leases, notes, cancellation,
   claims, and proof.
+- Method depth is **quickfix** for a one-sentence diff with inline verification
+  and no record, **Light** for one session and branch tracked with a work item,
+  and **Full** for multi-session, shared-scope, high-risk, or repeated work
+  tracked with a SPEC/NOTES/VERIFY bundle.
 - `maestro decision` records draft, locked, and superseded choices with their
   rationale and work links. Supersession takes effect when the replacement is
   locked, not while it is still a draft.
+- Cross-role decisions are drafted in the store before a Herdr prompt names the
+  sender role and decision id. The answer is the locked or superseding record;
+  non-decision questions and answers are work notes.
 - `maestro dispatch` stores lane contracts and council state;
-  `maestro handback` stores shape-checked return packets.
+  `maestro handback` stores shape-checked return packets, including explicit
+  dependency, council, challenge, reopen, unknown, and failure outcomes.
 - `maestro search` searches native work, decisions, notes, events, bundles, and
   imported Rust records.
+
+Proof is layered as `source`, `artifact`, `installed`, `live`, and `journey`.
+Claims stop at the last proven layer and name untested links rather than
+rounding them up to completion. Repeated failures route by holder: Peer-held
+work reaches the Lead through the repository brief; Lead-held work reaches the
+Supervisor through the room brief.
 
 Failed commands emit a JSON error envelope on stderr and exit nonzero. Empty or
 whitespace-only required arguments are rejected rather than interpreted as
