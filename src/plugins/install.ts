@@ -184,12 +184,15 @@ async function registerRepository(home: string, repo: string): Promise<void> {
   if (content !== existing) await writeFile(registry, content);
 }
 
-async function writeShellSource(home: string): Promise<void> {
-  const shellRc = join(home, ".zshrc");
+async function writeShellSource(home: string): Promise<boolean> {
+  const shell = basename(process.env.SHELL ?? "");
+  const rcName = shell === "zsh" ? ".zshrc" : shell === "bash" ? ".bashrc" : null;
+  if (!rcName) return false;
+  const shellRc = join(home, rcName);
   const backup = `${shellRc}.maestro.bak`;
   const existing = existsSync(shellRc) ? await readFile(shellRc, "utf8") : "";
   const managedCount = existing.split("\n").filter((line) => line === shellSourceLine).length;
-  if (managedCount === 1) return;
+  if (managedCount === 1) return true;
   if (!existsSync(backup)) {
     if (existsSync(shellRc)) {
       await copyFile(shellRc, backup);
@@ -200,6 +203,7 @@ async function writeShellSource(home: string): Promise<void> {
   const retained = existing.split("\n").filter((line) => line !== shellSourceLine).join("\n");
   const prefix = retained === "" || retained.endsWith("\n") ? retained : `${retained}\n`;
   await writeFile(shellRc, `${prefix}${shellSourceLine}\n`);
+  return true;
 }
 
 async function initializeRoomStore(home: string, room: string, runtimeRoot: string): Promise<void> {
@@ -517,18 +521,14 @@ export const installPlugin: BuiltInPlugin = {
         if (!installedRuntime) {
           const existingLegacy = await executable("maestro-legacy");
           const existingMaestro = await executable("maestro");
-          if (!existingLegacy && !existingMaestro) {
-            throw new CliError(
-              "ROLLBACK_MISSING",
-              "maestro-legacy must exist on PATH, or an existing maestro must be available to preserve",
-            );
-          }
           await mkdir(localBin, { recursive: true });
+          let createdLegacy = false;
           if (!existingLegacy && existingMaestro) {
             await copyFile(existingMaestro, legacy);
             await chmod(legacy, 0o755);
+            createdLegacy = true;
           }
-          if (!(await executable("maestro-legacy"))) {
+          if (createdLegacy && !(await executable("maestro-legacy"))) {
             throw new CliError(
               "ROLLBACK_NOT_ON_PATH",
               `${legacy} was created but maestro-legacy is not available on PATH`,
@@ -602,7 +602,7 @@ export const installPlugin: BuiltInPlugin = {
         const roomCodexHooksTrusted = await codexHooksTrusted(room, home);
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
-        await writeShellSource(home);
+        const shellSourceWritten = await writeShellSource(home);
         context.log.append({
           type: "install",
           entityType: "repo",
@@ -622,6 +622,7 @@ export const installPlugin: BuiltInPlugin = {
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
+            (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +
             (roomCodexHooksTrusted
               ? ""
               : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +

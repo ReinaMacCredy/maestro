@@ -1,10 +1,50 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import { dirname, join } from "node:path";
+import { prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
+const shellSourceLine =
+  '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
+
+test("282 first install needs no rollback binary and targets the detected shell", async () => {
+  const cleanPath = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+
+  await withFixture(async (fixture) => {
+    const installed = await runCli(fixture, ["install"], {
+      PATH: cleanPath,
+      SHELL: "/bin/zsh",
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro")).exists()).toBe(true);
+  });
+
+  await withFixture(async (fixture) => {
+    const environment = { PATH: cleanPath, SHELL: "/bin/bash" };
+    expect((await runCli(fixture, ["install"], environment)).exitCode).toBe(0);
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], environment)).exitCode,
+    ).toBe(0);
+
+    const bashrc = await readFile(join(fixture.home, ".bashrc"), "utf8");
+    expect(bashrc.split("\n").filter((line) => line === shellSourceLine)).toHaveLength(1);
+    expect(await Bun.file(join(fixture.home, ".zshrc")).exists()).toBe(false);
+  });
+
+  await withFixture(async (fixture) => {
+    const installed = await runCli(fixture, ["install"], {
+      PATH: cleanPath,
+      SHELL: "/usr/bin/fish",
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(await Bun.file(join(fixture.home, ".zshrc")).exists()).toBe(false);
+    expect(await Bun.file(join(fixture.home, ".bashrc")).exists()).toBe(false);
+    expect(installed.stdout).toContain(shellSourceLine);
+  });
+});
 
 test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
