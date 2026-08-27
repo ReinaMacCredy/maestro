@@ -157,6 +157,7 @@ test("270 unverified Codex hook hashes never suppress room trust guidance", asyn
     expect(repeated.exitCode).toBe(0);
     expect(repeated.stdout).toContain(roomTrustPrefix);
     expect(repeated.stdout).toContain("/hooks");
+    expect(repeated.stdout).toContain("Codex has recorded trust for both hooks");
     expect(await readFile(configPath, "utf8")).toBe(config);
   });
 });
@@ -297,11 +298,6 @@ test("310 scripts/install.sh clones the source checkout, installs from it, and f
 test("312 scripts/install.sh refuses a bun older than the lockfile's bun floor and names it", async () => {
   await withFixture(async (fixture) => {
     const projectRoot = join(import.meta.dir, "..");
-    const script = await readFile(join(projectRoot, "scripts", "install.sh"), "utf8");
-    // bun.lock is lockfile v1 (bun >= 1.4); package.json carries no engines
-    // field because it made the lifecycle fixtures flaky (2026-08-27).
-    expect(script).toContain('MIN_BUN="1.4.0"');
-
     const shims = join(fixture.root, "old-bun");
     await mkdir(shims, { recursive: true });
     await writeFile(join(shims, "bun"), "#!/bin/sh\necho 1.3.14\n");

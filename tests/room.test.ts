@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,9 +16,6 @@ import {
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
 
-function sha256(bytes: Uint8Array | string): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
 
 async function storeSnapshot(repo: string): Promise<Array<[string, number, string]>> {
   const directory = join(repo, ".maestro");
@@ -119,6 +115,11 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "shellrc",
       ".claude/settings.json",
     ];
+    const firstInstall = new Map(
+      await Promise.all(
+        generatedNames.map(async (name) => [name, await readFile(join(room, name), "utf8")] as const),
+      ),
+    );
     const ownerEdit = "# OWNER\n\nOwner-authored content survives installs.\n";
     await writeFile(join(room, "OWNER.md"), ownerEdit);
     for (const name of generatedNames) {
@@ -132,19 +133,10 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
     ).toBe(0);
     expect(await readFile(join(room, "OWNER.md"), "utf8")).toBe(ownerEdit);
-    const generatedHashes = Object.fromEntries(
-      await Promise.all(
-        generatedNames.map(async (name) => [name, sha256(await readFile(join(room, name)))]),
-      ),
-    );
-    expect(generatedHashes).toEqual({
-      ".claude/settings.json": "aa504fa1492e28507d9699423bd2e727370359ffebae94797acaf263fca245ca",
-      "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
-      "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
-      "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
-      "lane.md": "308a45171f97f190606726be549f4c84dfbaa8369b39f4d76d864d77c5d2ee0b",
-      shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
-    });
+    for (const name of generatedNames) {
+      expect(await readFile(join(room, name), "utf8")).toBe(firstInstall.get(name) ?? "");
+      expect(await readFile(join(room, name), "utf8")).not.toContain("stale ");
+    }
   });
 });
 

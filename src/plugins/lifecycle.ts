@@ -7,7 +7,7 @@ import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 import {
-  codexHooksTrusted,
+  codexHookTrustRecorded,
   forgetRepository,
   readGitHeadCommit,
   gitMainWorktree,
@@ -231,8 +231,8 @@ async function update(): Promise<CliResult> {
   ) as PackageJson;
   const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
   const skillText = skillSync ? formatSkillSync(skillSync) : "";
-  // The room's generated files (lane.md, IDENTITY.md, wiring) ship with the
-  // runtime; without this, only a reinstall refreshed them after an update.
+  // Refresh the generated room templates after an update; previously only
+  // install did this.
   await scaffoldRoom(home);
   return {
     data: { aheadOnly, noUpstream, oldCommit, newCommit, version: packageJson.version },
@@ -285,7 +285,7 @@ async function codexTrustCheck(repo: string, home: string): Promise<string> {
   if (missing.length > 0) {
     return `codex hooks: stale (missing ${missing.map(({ event }) => event).join(", ")} in ${hooks}; run maestro install)`;
   }
-  return await codexHooksTrusted(mainWorktree ?? repo, home)
+  return await codexHookTrustRecorded(mainWorktree ?? repo, home)
     ? "codex hooks: recorded by Codex (both events trusted in ~/.codex/config.toml; hash not verifiable)"
     : "codex hooks: unverified (Codex trust hash contract unavailable; run /hooks in Codex to verify)";
 }

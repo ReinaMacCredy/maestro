@@ -1,11 +1,6 @@
 #!/bin/sh
-# Install maestro from source: clone the checkout that `maestro update` follows,
-# then run its installer.
 #   curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | sh
-# Environment:
-#   MAESTRO_REPO        git URL to clone (default: the GitHub repository)
-#   MAESTRO_REF         branch to install and follow (default: main)
-#   MAESTRO_SOURCE_DIR  where the checkout lives (default: ~/.maestro/source)
+# Options and environment: install.sh --help
 set -eu
 
 case "${1:-}" in

@@ -451,23 +451,22 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
 // (Codex CLI 0.149, read 2026-08-27). The hashed bytes are undocumented, so
 // this only proves Codex recorded trust for both events at this path; it never
 // verifies the hash.
-export async function codexHooksTrusted(root: string, home: string): Promise<boolean> {
+export async function codexHookTrustRecorded(root: string, home: string): Promise<boolean> {
   const config = join(home, ".codex", "config.toml");
   if (!existsSync(config)) return false;
   const text = await readFile(config, "utf8");
   const hooks = join(root, ".codex", "hooks.json");
-  const entries = [...text.matchAll(/^\[hooks\.state\."(.+?):([a-z_]+):0:0"\]\n((?:(?!\n\[)[\s\S])*)/gm)];
-  const recorded = async (event: string): Promise<boolean> => {
-    for (const [, path, entryEvent, body] of entries) {
-      if (entryEvent !== event || !path || !body) continue;
-      if (!/^\s*trusted_hash\s*=\s*"sha256:[0-9a-f]+"/m.test(body)) continue;
-      // Codex records the path as it saw it; the fixture and macOS /tmp can
-      // differ by a symlink, so compare resolved paths.
-      if (await samePath(path, hooks)) return true;
-    }
-    return false;
-  };
-  return (await recorded("session_start")) && (await recorded("user_prompt_submit"));
+  const missing = new Set(["session_start", "user_prompt_submit"]);
+  for (const [, path, event, body] of text.matchAll(
+    /^\[hooks\.state\."(.+?):([a-z_]+):0:0"\]\n((?:(?!\n\[)[\s\S])*)/gm,
+  )) {
+    if (!event || !missing.has(event) || !path || !body) continue;
+    if (!/^\s*trusted_hash\s*=\s*"sha256:[0-9a-f]+"/m.test(body)) continue;
+    // Codex records the path as it saw it; the fixture and macOS /tmp can
+    // differ by a symlink, so compare resolved paths.
+    if (await samePath(path, hooks)) missing.delete(event);
+  }
+  return missing.size === 0;
 }
 
 async function samePath(left: string, right: string): Promise<boolean> {
@@ -680,7 +679,7 @@ export const installPlugin: BuiltInPlugin = {
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
-        const roomCodexHooksTrusted = await codexHooksTrusted(room, home);
+        const roomCodexHookTrustRecorded = await codexHookTrustRecorded(room, home);
         await initializeRoomStore(home, room, runtimeRoot);
         await registerRepository(home, repo);
         const shellSourceWritten = await writeShellSource(home);
@@ -705,7 +704,7 @@ export const installPlugin: BuiltInPlugin = {
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +
             `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward` +
-            (roomCodexHooksTrusted ? " (Codex has recorded trust for both hooks; the hash is not verifiable here)" : "") +
+            (roomCodexHookTrustRecorded ? " (Codex has recorded trust for both hooks; the hash is not verifiable here)" : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),
