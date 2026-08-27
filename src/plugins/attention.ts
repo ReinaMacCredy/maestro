@@ -354,7 +354,31 @@ function decisionReviewDueDetections(
   });
 }
 
+function scopeTokens(scope: string): string[] {
+  return scope
+    .split(/[\s,]+/)
+    .filter((token) => token.includes("/") || token.includes("."));
+}
+
+function matchingScopeTokens(left: string[], right: string[]): string[] {
+  const matches = new Set<string>();
+  for (const leftToken of left) {
+    for (const rightToken of right) {
+      if (
+        leftToken === rightToken ||
+        leftToken.startsWith(`${rightToken}/`) ||
+        rightToken.startsWith(`${leftToken}/`)
+      ) {
+        matches.add(leftToken);
+        matches.add(rightToken);
+      }
+    }
+  }
+  return [...matches].sort();
+}
+
 function scopeCollisionDetections(
+  context: PluginContext,
   works: AttentionWorkRow[],
   sessions: Map<string, SessionRecord>,
 ): Detection[] {
@@ -387,6 +411,40 @@ function scopeCollisionDetections(
         }),
         subjectSession: holders.join(","),
         subjectWork: first.id,
+      });
+    }
+  }
+  const dispatches = (context.dispatch as DispatchService)
+    .list()
+    .filter((dispatch) => dispatch.state === "open");
+  for (let leftIndex = 0; leftIndex < dispatches.length; leftIndex += 1) {
+    const left = dispatches[leftIndex];
+    if (!left) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < dispatches.length; rightIndex += 1) {
+      const right = dispatches[rightIndex];
+      if (!right || left.workId === right.workId) continue;
+      if (left.lane !== "delivery" && right.lane !== "delivery") continue;
+      const leftExcluded = new Set(scopeTokens(left.excludedScope));
+      const rightExcluded = new Set(scopeTokens(right.excludedScope));
+      const matches = matchingScopeTokens(
+        scopeTokens(left.ownedScope).filter((token) => !rightExcluded.has(token)),
+        scopeTokens(right.ownedScope).filter((token) => !leftExcluded.has(token)),
+      );
+      if (matches.length === 0) continue;
+      detections.push({
+        entityId: left.id,
+        entityType: "dispatch",
+        fingerprint: `collision:dispatch:${left.id}:${right.id}`,
+        kind: "SCOPE_COLLISION",
+        packet: packet("SCOPE_COLLISION", `${left.id},${right.id}`, {
+          observed: `open dispatches on ${left.workId} and ${right.workId} have overlapping owned scopes`,
+          evidence: `owned_scope tokens ${matches.join(", ")}`,
+          unknown: "whether the scopes intentionally overlap or compete for the same mutation",
+          question: "keep both lanes, split scope, or cancel one dispatch?",
+          smallestAction: `maestro dispatch show ${left.id}`,
+        }),
+        subjectSession: null,
+        subjectWork: left.workId,
       });
     }
   }
@@ -616,7 +674,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
     ...decisionReviewDueDetections(context, workById, now),
     ...humanDecisionRequiredDetections(context, workById),
     ...leadCollisionDetections(context, works, sessions),
-    ...scopeCollisionDetections(works, sessions),
+    ...scopeCollisionDetections(context, works, sessions),
     ...dispatchUnreturnedDetections(
       context,
       workById,

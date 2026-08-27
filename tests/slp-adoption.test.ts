@@ -20,6 +20,40 @@ async function addWork(fixture: Fixture, title: string, parent?: string): Promis
   return idFrom(await runCli(fixture, args));
 }
 
+async function openAttentionDispatch(
+  fixture: Fixture,
+  work: string,
+  lane: "decision" | "delivery" | "scout",
+  ownedScope: string,
+  excludedScope: string,
+): Promise<string> {
+  const opened = await runCli(fixture, [
+    "dispatch",
+    "open",
+    work,
+    "--objective",
+    "exercise dispatch scope attention",
+    "--owned-scope",
+    ownedScope,
+    "--excluded-scope",
+    excludedScope,
+    "--mutation",
+    lane === "delivery" ? "write-bounded to the owned scope" : "no-write",
+    "--stop-condition",
+    "attention observed",
+    "--lane",
+    lane,
+    "--evidence-required",
+    "source: attention packet",
+    "--pane",
+    `w1:p-${work}`,
+  ]);
+  expect(opened.exitCode).toBe(0);
+  const dispatch = opened.stdout.match(/^(x\d+) \[open\]/)?.[1];
+  expect(dispatch).toBeString();
+  return dispatch as string;
+}
+
 async function startWork(
   fixture: Fixture,
   id: string,
@@ -657,6 +691,114 @@ test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
     } finally {
       database.close();
     }
+  });
+});
+
+test("432 attention raises SCOPE_COLLISION for delivery dispatch paths across work items", async () => {
+  await withFixture(async (fixture) => {
+    const firstWork = await addWork(fixture, "first unrelated dispatch work");
+    const secondWork = await addWork(fixture, "second unrelated dispatch work");
+    const first = await openAttentionDispatch(
+      fixture,
+      firstWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "tests only",
+    );
+    const second = await openAttentionDispatch(
+      fixture,
+      secondWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "docs only",
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ fingerprint: string; kind: string; packet: string }> };
+    }).data.detections.filter((detection) => detection.kind === "SCOPE_COLLISION");
+    expect(detections).toHaveLength(1);
+    expect(detections[0]?.fingerprint).toBe(`collision:dispatch:${first}:${second}`);
+    expect(detections[0]?.packet).toContain(`attention SCOPE_COLLISION work ${first},${second}`);
+    expect(detections[0]?.packet).toContain("evidence: owned_scope tokens src/plugins/dispatch.ts");
+    expect(detections[0]?.packet).toContain(`smallest action: maestro dispatch show ${first}`);
+  });
+});
+
+test("433 dispatch scope collision ignores a path excluded by the other lane", async () => {
+  await withFixture(async (fixture) => {
+    const firstWork = await addWork(fixture, "first excluded dispatch work");
+    const secondWork = await addWork(fixture, "second excluded dispatch work");
+    const first = await openAttentionDispatch(
+      fixture,
+      firstWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "tests only",
+    );
+    const second = await openAttentionDispatch(
+      fixture,
+      secondWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "src/plugins/dispatch.ts",
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).not.toContain(`collision:dispatch:${first}:${second}`);
+  });
+});
+
+test("434 dispatch scope collision ignores overlap between two no-write lanes", async () => {
+  await withFixture(async (fixture) => {
+    const firstWork = await addWork(fixture, "first no-write dispatch work");
+    const secondWork = await addWork(fixture, "second no-write dispatch work");
+    const first = await openAttentionDispatch(
+      fixture,
+      firstWork,
+      "decision",
+      "src/plugins/dispatch.ts",
+      "product writes",
+    );
+    const second = await openAttentionDispatch(
+      fixture,
+      secondWork,
+      "scout",
+      "src/plugins/dispatch.ts",
+      "product writes",
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).not.toContain(`collision:dispatch:${first}:${second}`);
+  });
+});
+
+test("435 dispatch scope collision matches a directory token to its descendant path", async () => {
+  await withFixture(async (fixture) => {
+    const firstWork = await addWork(fixture, "directory dispatch work");
+    const secondWork = await addWork(fixture, "descendant dispatch work");
+    const first = await openAttentionDispatch(
+      fixture,
+      firstWork,
+      "delivery",
+      "src/plugins",
+      "tests only",
+    );
+    const second = await openAttentionDispatch(
+      fixture,
+      secondWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "docs only",
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).toContain(`collision:dispatch:${first}:${second}`);
+    expect(attention.stdout).toContain("owned_scope tokens src/plugins, src/plugins/dispatch.ts");
   });
 });
 
