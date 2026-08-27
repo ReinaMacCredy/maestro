@@ -411,12 +411,15 @@ function handbackUnreviewedDetections(
     if (record.state !== "returned") return [];
     const work = workById.get(record.workId);
     if (!work || work.state === "done" || work.state === "cancelled") return [];
-    const superseded = dispatches.some(
-      (other) => other.workId === record.workId && other.createdAt > record.createdAt,
-    );
-    if (superseded) return [];
     const latest = handbacks.list(record.id).at(-1);
     if (!latest) return [];
+    const cites = new RegExp(`\\b${latest.id}\\b`);
+    const reviewed = dispatches.some(
+      (other) =>
+        other.workId === record.workId && other.createdAt > record.createdAt &&
+        (cites.test(other.objective) || cites.test(other.evidenceRequired)),
+    );
+    if (reviewed) return [];
     return [{
       entityId: record.id,
       entityType: "dispatch",
@@ -425,7 +428,7 @@ function handbackUnreviewedDetections(
       packet: packet("HANDBACK_UNREVIEWED", record.id, {
         observed:
           `${record.id} returned ${latest.status} (${latest.id}) ${minutesSince(latest.createdAt, now)} minutes ago; work ${record.workId} is still ${work.state}`,
-        evidence: `handbacks row ${latest.id} status ${latest.status}; work.state ${work.state}; no later dispatch on ${record.workId}`,
+        evidence: `handbacks row ${latest.id} status ${latest.status}; work.state ${work.state}; no later dispatch on ${record.workId} cites ${latest.id}`,
         unknown: "whether the Lead has read the return packet",
         question: "close the work, re-dispatch, or cancel?",
         smallestAction: `maestro handback show ${latest.id}`,

@@ -122,7 +122,9 @@ The room reads, it is not pushed to: `maestro brief` runs `maestro attention`
 in every registered repository. Findings are STALLED_LEASE, REPEATED_FAILURE,
 DECISION_STALE, SCOPE_COLLISION, DISPATCH_UNACCEPTED, DISPATCH_UNRETURNED and
 HANDBACK_UNREVIEWED,
-each as a packet:
+each as a packet. HANDBACK_UNREVIEWED clears only when the work closes or a
+later dispatch on the same work item names the handback id in its objective or
+evidence requirement; opening an unrelated follow-on does not count as review.
 
 ```
 attention <KIND> <subject-kind> <id>

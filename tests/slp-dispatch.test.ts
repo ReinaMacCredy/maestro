@@ -1395,7 +1395,15 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
     expect(hook.exitCode).toBe(0);
     expect(hook.stdout).toContain(`attention HANDBACK_UNREVIEWED dispatch ${dispatch}`);
 
-    const reopened = await runCli(fixture, [...dispatchOpenArgs(child), "--target-session", "worker-session"]);
+    const unrelated = await runCli(fixture, [...dispatchOpenArgs(child), "--target-session", "worker-session"]);
+    expect(unrelated.exitCode).toBe(0);
+    const still = JSON.parse((await scan()).stdout) as typeof first;
+    expect(still.data.detections.filter((f) => f.kind === "HANDBACK_UNREVIEWED")).toHaveLength(1);
+
+    const citing = dispatchOpenArgs(child).map((arg) =>
+      arg === "Settle the storage boundary" ? `Settle the storage boundary after ${handback}` : arg
+    );
+    const reopened = await runCli(fixture, [...citing, "--target-session", "worker-session"]);
     expect(reopened.exitCode).toBe(0);
     const second = JSON.parse((await scan()).stdout) as typeof first;
     expect(second.data.detections.filter((f) => f.kind === "HANDBACK_UNREVIEWED")).toHaveLength(0);
