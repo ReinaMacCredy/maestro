@@ -37,8 +37,14 @@ jobs:
       - name: Copy installer
         run: cp scripts/install.sh site/public/install.sh
 
+      - name: Install site dependencies
+        run: cd site && bun install --frozen-lockfile
+
+      - name: Install Chromium for Mermaid rendering
+        run: cd site && bun x playwright install --with-deps chromium
+
       - name: Build site
-        run: cd site && bun install --frozen-lockfile && bun run build
+        run: cd site && bun run build
 
       - name: Configure Pages
         uses: actions/configure-pages@v6.0.0
