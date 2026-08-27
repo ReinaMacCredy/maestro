@@ -13,10 +13,9 @@ interface DispatchEnvelope {
 
 interface StatusEnvelope {
   data?: {
-    held?: Record<string, unknown>;
-    sessions?: Array<{
+    livePeers?: Array<{
+      heldWork?: unknown[];
       id?: string;
-      live?: boolean;
     }>;
   };
 }
@@ -74,20 +73,21 @@ async function scanRepo(repo: string, caller: string): Promise<RepoActivationSca
   ]);
   const status = statusValue as StatusEnvelope | null;
   const dispatch = dispatchValue as DispatchEnvelope | null;
-  if (!Array.isArray(status?.data?.sessions) || !Array.isArray(dispatch?.data?.dispatches)) {
+  // status --live excludes dead sessions; under MAESTRO_READ_ONLY the caller
+  // is not the child's current session, so it is excluded here.
+  const peers = status?.data?.livePeers;
+  if (!Array.isArray(peers) || !Array.isArray(dispatch?.data?.dispatches)) {
     return { holders: 0, repo, unsafe: true };
   }
-  const held = status.data?.held;
-  if (!held || typeof held !== "object") return { holders: 0, repo, unsafe: true };
   const openDispatchHolders = new Set(
     dispatch.data.dispatches
       .filter((item) => item?.state === "open" && typeof item.heldBy === "string")
       .map((item) => item.heldBy as string),
   );
-  const holders = status.data.sessions.filter((session) => {
-    if (!session?.live || typeof session.id !== "string" || session.id === caller) return false;
-    const heldWork = held[session.id];
-    return (Array.isArray(heldWork) && heldWork.length > 0) || openDispatchHolders.has(session.id);
+  const holders = peers.filter((peer) => {
+    if (typeof peer?.id !== "string" || peer.id === caller) return false;
+    return (Array.isArray(peer.heldWork) && peer.heldWork.length > 0) ||
+      openDispatchHolders.has(peer.id);
   }).length;
   return { holders, repo, unsafe: false };
 }
