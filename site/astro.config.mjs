@@ -1,9 +1,58 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import rehypeMermaid from 'rehype-mermaid';
 
 export default defineConfig({
   site: 'https://maestro.maccredyreina.me',
   base: '/',
+  markdown: {
+    rehypePlugins: [
+      [
+        rehypeMermaid,
+        {
+          strategy: 'inline-svg',
+          mermaidConfig: {
+            theme: 'base',
+            themeVariables: {
+              background: '#ffffff',
+              primaryColor: '#334155',
+              primaryTextColor: '#ffffff',
+              primaryBorderColor: '#64748b',
+              secondaryColor: '#475569',
+              secondaryTextColor: '#ffffff',
+              secondaryBorderColor: '#64748b',
+              tertiaryColor: '#e2e8f0',
+              tertiaryTextColor: '#0f172a',
+              tertiaryBorderColor: '#64748b',
+              lineColor: '#64748b',
+              textColor: '#334155',
+            },
+            themeCSS: `
+              .node rect, .node circle, .node ellipse, .node polygon, .node path {
+                fill: var(--sl-color-bg-accent) !important;
+                stroke: var(--sl-color-accent) !important;
+              }
+              .nodeLabel, .label text, .cluster-label text {
+                color: var(--sl-color-text) !important;
+                fill: var(--sl-color-text) !important;
+              }
+              .edgePath .path, .flowchart-link {
+                stroke: var(--sl-color-gray-3) !important;
+              }
+              .arrowheadPath, marker path {
+                fill: var(--sl-color-gray-3) !important;
+                stroke: var(--sl-color-gray-3) !important;
+              }
+              .edgeLabel {
+                background-color: var(--sl-color-bg) !important;
+                color: var(--sl-color-text) !important;
+              }
+            `,
+          },
+        },
+      ],
+    ],
+  },
   integrations: [
     starlight({
       title: 'maestro',
