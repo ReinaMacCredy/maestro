@@ -8,8 +8,8 @@ import {
   withFixture,
 } from "./helpers.ts";
 
-function session(id: string): Record<string, string> {
-  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
+function session(id: string, pid = process.pid): Record<string, string> {
+  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };
 }
 
 async function addWork(fixture: Fixture, title: string): Promise<string> {
@@ -87,30 +87,53 @@ test("153 repeated-failure attention skips terminal work and retains open and ac
   });
 });
 
-test("154 a current search backfill version preserves sentinel rows across boots", async () => {
+test("154 a stale-to-current search backfill runs once and then preserves current rows", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
     const database = loopDatabase(fixture);
     try {
+      database.query("UPDATE search_index_state SET version = 0").run();
       database
-        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'keep', 'keep sentinel')")
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'remove', 'remove sentinel')")
         .run();
     } finally {
       database.close();
     }
 
     expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
-    const verified = loopDatabase(fixture);
+    const afterRebuild = loopDatabase(fixture);
     try {
       expect(
-        verified
+        afterRebuild
+          .query<{ count: number }, []>(
+            "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'remove'",
+          )
+          .get()?.count,
+      ).toBe(0);
+      expect(
+        afterRebuild
+          .query<{ version: number }, []>("SELECT version FROM search_index_state")
+          .get()?.version,
+      ).toBe(1);
+      afterRebuild
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'keep', 'keep sentinel')")
+        .run();
+    } finally {
+      afterRebuild.close();
+    }
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const stable = loopDatabase(fixture);
+    try {
+      expect(
+        stable
           .query<{ count: number }, []>(
             "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'keep'",
           )
           .get()?.count,
       ).toBe(1);
     } finally {
-      verified.close();
+      stable.close();
     }
   });
 });
@@ -267,56 +290,125 @@ test("157 search still finds fresh native surfaces and a legacy card", async () 
 });
 
 test("158 attention records one packet independently of live peer order", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "unheld attention parent");
-    const child = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "attention child",
-        "--parent",
-        parent,
-        "--kind",
-        "task",
-      ]),
-    );
-    expect((await runCli(fixture, ["work", "start", child], session("attention-subject"))).exitCode)
-      .toBe(0);
-    for (const peer of ["peer-old", "peer-new", "peer-middle"]) {
-      expect(
-        (
-          await runCli(
-            fixture,
-            ["hook", "record", "--event", "SessionStart"],
-            session(peer),
-          )
-        ).exitCode,
-      ).toBe(0);
-    }
-    const database = loopDatabase(fixture);
-    try {
-      const now = Date.now();
-      for (const [id, minutes] of [
-        ["attention-subject", 45],
-        ["peer-old", 3],
-        ["peer-new", 1],
-        ["peer-middle", 2],
-      ] satisfies Array<[string, number]>) {
-        database
-          .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
-          .run(new Date(now - minutes * 60_000).toISOString(), id);
-      }
-    } finally {
-      database.close();
-    }
+  const subjectSeen = new Date(Date.now() - 45 * 60_000).toISOString();
+  const scan = async (
+    peerOrder: string[],
+    peerMinutes: Record<string, number>,
+  ): Promise<{
+    count: number;
+    finding: {
+      fingerprint: string;
+      kind: string;
+      packet: string;
+      subjectSession: string | null;
+      subjectWork: string | null;
+      targets?: string[];
+    };
+  }> =>
+    await withFixture(async (fixture) => {
+      const processes = Array.from({ length: 4 }, () =>
+        Bun.spawn(["sleep", "30"], { stderr: "ignore", stdout: "ignore" })
+      );
+      try {
+        const parent = await addWork(fixture, "unheld attention parent");
+        const child = idFrom(
+          await runCli(fixture, [
+            "work",
+            "add",
+            "attention child",
+            "--parent",
+            parent,
+            "--kind",
+            "task",
+          ]),
+        );
+        expect(
+          (
+            await runCli(
+              fixture,
+              ["work", "start", child],
+              session("attention-subject", processes[0]?.pid),
+            )
+          ).exitCode,
+        ).toBe(0);
+        for (const [index, peer] of peerOrder.entries()) {
+          expect(
+            (
+              await runCli(
+                fixture,
+                ["hook", "record", "--event", "SessionStart"],
+                session(peer, processes[index + 1]?.pid),
+              )
+            ).exitCode,
+          ).toBe(0);
+        }
+        const database = loopDatabase(fixture);
+        try {
+          database
+            .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+            .run(subjectSeen, "attention-subject");
+          const now = Date.now();
+          for (const [id, minutes] of Object.entries(peerMinutes)) {
+            database
+              .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+              .run(new Date(now - minutes * 60_000).toISOString(), id);
+          }
+        } finally {
+          database.close();
+        }
 
-    expect((await runCli(fixture, ["attention"], session("attention-scanner"))).exitCode).toBe(0);
-    const verified = loopDatabase(fixture);
-    try {
-      expect(verified.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
-        .toBe(1);
-    } finally {
-      verified.close();
-    }
-  });
+        const attention = await runCli(fixture, ["attention", "--json"], session("scanner"));
+        expect(attention.exitCode).toBe(0);
+        const detections = (JSON.parse(attention.stdout) as {
+          data: {
+            detections: Array<{
+              fingerprint: string;
+              kind: string;
+              packet: string;
+              subjectSession: string | null;
+              subjectWork: string | null;
+              targets?: string[];
+            }>;
+          };
+        }).data.detections;
+        const finding = detections.find((detection) => detection.kind === "STALLED_LEASE");
+        expect(finding).toBeDefined();
+        const verified = loopDatabase(fixture);
+        try {
+          const count = verified
+            .query<{ count: number }, []>("SELECT count(*) AS count FROM attention")
+            .get()?.count ?? 0;
+          return {
+            count,
+            finding: {
+              fingerprint: finding!.fingerprint,
+              kind: finding!.kind,
+              packet: finding!.packet,
+              subjectSession: finding!.subjectSession,
+              subjectWork: finding!.subjectWork,
+              targets: finding!.targets,
+            },
+          };
+        } finally {
+          verified.close();
+        }
+      } finally {
+        for (const child of processes) child.kill();
+      }
+    });
+
+  const first = await scan(
+    ["peer-old", "peer-middle", "peer-new"],
+    { "peer-old": 3, "peer-middle": 2, "peer-new": 1 },
+  );
+  const reversed = await scan(
+    ["peer-new", "peer-middle", "peer-old"],
+    { "peer-old": 1, "peer-middle": 2, "peer-new": 3 },
+  );
+
+  expect(first.count).toBe(1);
+  expect(reversed.count).toBe(1);
+  expect(reversed.finding).toEqual(first.finding);
+  expect(first.finding.subjectSession).toBe("attention-subject");
+  expect(first.finding.targets).toBeUndefined();
 });
