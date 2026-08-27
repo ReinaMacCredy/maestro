@@ -301,26 +301,6 @@ function councilStatus(
   };
 }
 
-function nextId(context: PluginContext): string {
-  const next =
-    context.store.database
-      .query<{ next: number }, []>(
-        "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM dispatches",
-      )
-      .get()?.next ?? 1;
-  return `x${next}`;
-}
-
-function nextHandbackId(context: PluginContext): string {
-  const next =
-    context.store.database
-      .query<{ next: number }, []>(
-        "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM handbacks",
-      )
-      .get()?.next ?? 1;
-  return `h${next}`;
-}
-
 function position(invocation: CliInvocation, index: number, label: string): string {
   const value = invocation.positionals[index];
   if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
@@ -483,14 +463,6 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const workId = position(invocation, 0, "work id");
           const work = context.work as WorkService;
-          const subject = work.get(workId);
-          if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
-          if (subject.state === "done" || subject.state === "cancelled") {
-            throw new CliError(
-              "INVALID_STATE",
-              `${workId} is ${subject.state}; a lane contract binds live work`,
-            );
-          }
           const objective = requiredOption(invocation, "--objective");
           const ownedScope = requiredOption(invocation, "--owned-scope");
           const excludedScope = requiredOption(invocation, "--excluded-scope");
@@ -507,38 +479,49 @@ export const dispatchPlugin: BuiltInPlugin = {
           const evidenceRequired = requiredOption(invocation, "--evidence-required");
           const pane = requiredOption(invocation, "--pane");
           const targetSession = option(invocation, "target-session");
-          const id = nextId(context);
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              `INSERT INTO dispatches
-                (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-                 lane, evidence_required, pane, target_session, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            )
-            .run(
-              id,
-              workId,
-              objective,
-              ownedScope,
-              excludedScope,
-              mutation,
-              stopCondition,
-              lane,
-              evidenceRequired,
-              pane,
-              targetSession,
-              now,
-              now,
-            );
-          context.log.append({
-            type: "dispatch.open",
-            entityType: "dispatch",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { pane, workId, targetSession },
+          const open = context.store.database.transaction(() => {
+            const subject = work.get(workId);
+            if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            if (subject.state === "done" || subject.state === "cancelled") {
+              throw new CliError(
+                "INVALID_STATE",
+                `${workId} is ${subject.state}; a lane contract binds live work`,
+              );
+            }
+            const id = context.store.nextPrefixedId("dispatches", "x");
+            const now = new Date().toISOString();
+            context.store.database
+              .query(
+                `INSERT INTO dispatches
+                  (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
+                   lane, evidence_required, pane, target_session, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              )
+              .run(
+                id,
+                workId,
+                objective,
+                ownedScope,
+                excludedScope,
+                mutation,
+                stopCondition,
+                lane,
+                evidenceRequired,
+                pane,
+                targetSession,
+                now,
+                now,
+              );
+            context.log.append({
+              type: "dispatch.open",
+              entityType: "dispatch",
+              entityId: id,
+              sessionId: context.sessions.current().id,
+              payload: { pane, workId, targetSession },
+            });
+            return service.get(id) as DispatchRecord;
           });
-          const created = service.get(id) as DispatchRecord;
+          const created = open.immediate();
           return { data: { dispatch: created }, text: format(created) };
         },
         {
@@ -615,25 +598,39 @@ export const dispatchPlugin: BuiltInPlugin = {
         "dispatch cancel",
         (invocation): CliResult => {
           const id = position(invocation, 0, "dispatch id");
-          const dispatch = requireDispatch(context, id);
-          if (dispatch.state !== "open") {
-            throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
-          }
           const reason = requiredOption(invocation, "--reason");
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              "UPDATE dispatches SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ? WHERE id = ?",
-            )
-            .run(now, reason, now, id);
-          context.log.append({
-            type: "dispatch.cancel",
-            entityType: "dispatch",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { reason },
+          const cancel = context.store.database.transaction(() => {
+            const dispatch = requireDispatch(context, id);
+            if (dispatch.state === "returned") {
+              throw new CliError("HANDBACK_EXISTS", `${id} already has a handback`, {
+                dispatchId: id,
+              });
+            }
+            if (dispatch.state !== "open") {
+              throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
+            }
+            const now = new Date().toISOString();
+            const cancelled = context.store.database
+              .query(
+                `UPDATE dispatches
+                 SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ?
+                 WHERE id = ? AND cancelled_at IS NULL
+                   AND NOT EXISTS(SELECT 1 FROM handbacks WHERE dispatch_id = dispatches.id)`,
+              )
+              .run(now, reason, now, id);
+            if (cancelled.changes === 0) {
+              throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
+            }
+            context.log.append({
+              type: "dispatch.cancel",
+              entityType: "dispatch",
+              entityId: id,
+              sessionId: context.sessions.current().id,
+              payload: { reason },
+            });
+            return service.get(id) as DispatchRecord;
           });
-          const cancelled = service.get(id) as DispatchRecord;
+          const cancelled = cancel.immediate();
           return { data: { dispatch: cancelled }, text: format(cancelled) };
         },
         {
@@ -801,7 +798,7 @@ export const dispatchPlugin: BuiltInPlugin = {
                 { currentSession: sessionId, dispatchId, heldBy: current.heldBy },
               );
             }
-            const id = nextHandbackId(context);
+            const id = context.store.nextPrefixedId("handbacks", "h");
             const createdAt = new Date().toISOString();
             context.store.database
               .query(

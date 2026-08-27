@@ -106,15 +106,6 @@ function requirePosition(invocation: CliInvocation, index: number, label: string
   return value;
 }
 
-function nextId(context: PluginContext): string {
-  const row = context.store.database
-    .query<{ next: number }, []>(
-      "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM work",
-    )
-    .get();
-  return `w${row?.next ?? 1}`;
-}
-
 function getWork(context: PluginContext, id: string): WorkRecord | null {
   const row = context.store.database
     .query<WorkRow, [string]>("SELECT * FROM work WHERE id = ?")
@@ -369,7 +360,7 @@ export const workPlugin: BuiltInPlugin = {
                 );
               }
             }
-            id = nextId(context);
+            id = context.store.nextPrefixedId("work", "w");
             context.store.database
               .query(
                 `INSERT INTO work
@@ -467,32 +458,57 @@ export const workPlugin: BuiltInPlugin = {
           async () => ({ blocked: false }),
         );
         blockIfNeeded(result);
-        const now = new Date().toISOString();
-        const claimed = context.store.database
-          .query(
-            `UPDATE work
-             SET state = 'active', held_by = ?, updated_at = ?
-             WHERE id = ? AND state != 'done' AND (held_by IS NULL OR held_by = ?)`,
-          )
-          .run(session.id, now, id, session.id);
-        if (claimed.changes === 0) {
+        const claim = context.store.database.transaction(() => {
           const current = requireWork(context, id);
           if (current.state === "done") {
             throw new CliError("INVALID_STATE", `${id} is already done`);
           }
-          throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy}`, {
-            holder: current.heldBy,
+          if (current.state === "cancelled") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${id} is cancelled (${current.cancelReason ?? "no reason recorded"}); add a new work item instead`,
+            );
+          }
+          if (current.heldBy && current.heldBy !== session.id) {
+            throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy}`, {
+              holder: current.heldBy,
+            });
+          }
+          const currentBlockers = unresolvedBlockers(context, id);
+          if (currentBlockers.length > 0) {
+            const details = blockerDetails(context, id, currentBlockers, session.id);
+            throw new CliError("BLOCKED", details.reason, {
+              blockers: details.blockers,
+              command: details.command,
+            });
+          }
+          context.sessions.record("work.start");
+          const now = new Date().toISOString();
+          const claimed = context.store.database
+            .query(
+              `UPDATE work
+               SET state = 'active', held_by = ?, updated_at = ?
+               WHERE id = ? AND state != 'done' AND cancelled_at IS NULL
+                 AND (held_by IS NULL OR held_by = ?)`,
+            )
+            .run(session.id, now, id, session.id);
+          if (claimed.changes === 0) {
+            const refreshed = requireWork(context, id);
+            throw new CliError("LEASE_HELD", `${id} is held by ${refreshed.heldBy}`, {
+              holder: refreshed.heldBy,
+            });
+          }
+          context.log.append({
+            type: "work.start",
+            entityType: "work",
+            entityId: id,
+            sessionId: session.id,
+            payload: { holder: session.id },
           });
-        }
-        context.sessions.record("work.start");
-        context.log.append({
-          type: "work.start",
-          entityType: "work",
-          entityId: id,
-          sessionId: session.id,
-          payload: { holder: session.id },
+          return service.get(id);
         });
-        return { data: { work: service.get(id) }, text: `${id} started by ${session.id}` };
+        const claimed = claim.immediate();
+        return { data: { work: claimed }, text: `${id} started by ${session.id}` };
       }, {
         description: "Start work and claim its live session lease.",
         flags: {
@@ -683,21 +699,53 @@ export const workPlugin: BuiltInPlugin = {
           );
           blockIfNeeded(result);
           const recordedEvidence = result.evidence ?? evidence;
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              "UPDATE work SET state = 'done', evidence = ?, held_by = NULL, updated_at = ? WHERE id = ?",
-            )
-            .run(recordedEvidence, now, id);
-          context.sessions.record("work.done");
-          context.log.append({
-            type: "work.done",
-            entityType: "work",
-            entityId: id,
-            sessionId,
-            payload: { evidence: recordedEvidence, claims, proofs },
+          const complete = context.store.database.transaction(() => {
+            const current = requireWork(context, id);
+            if (current.state === "cancelled") {
+              throw new CliError(
+                "INVALID_STATE",
+                `${id} is cancelled (${current.cancelReason ?? "no reason recorded"}); add a new work item instead`,
+              );
+            }
+            if (current.state === "done") {
+              throw new CliError("INVALID_STATE", `${id} is already done; nothing to complete`);
+            }
+            if (current.heldBy !== sessionId) {
+              if (current.heldBy) {
+                throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy}`, {
+                  holder: current.heldBy,
+                });
+              }
+              const command = `maestro work start ${id}`;
+              throw new CliError(
+                "LEASE_REQUIRED",
+                `${id} must be started before completion; run: ${command}`,
+                { command },
+              );
+            }
+            const now = new Date().toISOString();
+            const completed = context.store.database
+              .query(
+                `UPDATE work
+                 SET state = 'done', evidence = ?, held_by = NULL, updated_at = ?
+                 WHERE id = ? AND state = 'active' AND cancelled_at IS NULL AND held_by = ?`,
+              )
+              .run(recordedEvidence, now, id, sessionId);
+            if (completed.changes === 0) {
+              throw new CliError("INVALID_STATE", `${id} changed while completion was pending`);
+            }
+            context.sessions.record("work.done");
+            context.log.append({
+              type: "work.done",
+              entityType: "work",
+              entityId: id,
+              sessionId,
+              payload: { evidence: recordedEvidence, claims, proofs },
+            });
+            return service.get(id);
           });
-          return { data: { work: service.get(id) }, text: `${id} done` };
+          const completed = complete.immediate();
+          return { data: { work: completed }, text: `${id} done` };
         },
         {
           description: "Complete held work with policy-checked evidence.",
@@ -743,20 +791,41 @@ export const workPlugin: BuiltInPlugin = {
             async () => ({ blocked: false }),
           );
           blockIfNeeded(result);
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              "UPDATE work SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ? WHERE id = ?",
-            )
-            .run(now, reason, now, id);
-          context.log.append({
-            type: "work.cancel",
-            entityType: "work",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { reason },
+          const sessionId = context.sessions.current().id;
+          const cancel = context.store.database.transaction(() => {
+            const current = requireWork(context, id);
+            if (current.state === "cancelled") {
+              throw new CliError("INVALID_STATE", `${id} is already cancelled`);
+            }
+            if (current.state === "done") {
+              throw new CliError("INVALID_STATE", `${id} is done; completed work cannot be cancelled`);
+            }
+            if (current.state !== work.state || current.heldBy !== work.heldBy) {
+              throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
+            }
+            const now = new Date().toISOString();
+            const cancelled = context.store.database
+              .query(
+                `UPDATE work
+                 SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ?
+                 WHERE id = ? AND state = ? AND cancelled_at IS NULL AND held_by IS ?`,
+              )
+              .run(now, reason, now, id, work.state === "active" ? "active" : "open", work.heldBy);
+            if (cancelled.changes === 0) {
+              throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
+            }
+            context.sessions.record("work.cancel");
+            context.log.append({
+              type: "work.cancel",
+              entityType: "work",
+              entityId: id,
+              sessionId,
+              payload: { reason },
+            });
+            return service.get(id);
           });
-          return { data: { work: service.get(id) }, text: `${id} cancelled: ${reason}` };
+          const cancelled = cancel.immediate();
+          return { data: { work: cancelled }, text: `${id} cancelled: ${reason}` };
         },
         {
           description: "Cancel open or currently held work permanently with a recorded reason.",

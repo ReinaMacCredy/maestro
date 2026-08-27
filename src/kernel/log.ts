@@ -42,6 +42,12 @@ export class EventLog {
       BEGIN
         SELECT RAISE(ABORT, 'event log is append-only');
       END;
+      CREATE TRIGGER IF NOT EXISTS event_log_no_replace
+      BEFORE INSERT ON event_log
+      WHEN EXISTS(SELECT 1 FROM event_log WHERE id = NEW.id)
+      BEGIN
+        SELECT RAISE(ABORT, 'event log is append-only');
+      END;
     `);
   }
 

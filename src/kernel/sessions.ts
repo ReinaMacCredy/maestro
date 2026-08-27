@@ -267,15 +267,25 @@ export class Sessions {
     if (row.anchor !== "pid" || !this.sharedPids().has(row.pid)) return row;
     // A shared pid stops proving life, but a dead pid still proves death, so only
     // a live host process earns the fresh clock the TTL anchor is read against.
-    const lastSeen = this.isPidAlive(row.pid) ? new Date().toISOString() : row.last_seen;
+    const pidAlive = this.isPidAlive(row.pid);
+    const lastSeen = pidAlive ? new Date().toISOString() : row.last_seen;
     const downgraded = { ...row, anchor: "ttl" as const, last_seen: lastSeen };
     if (this.store.readOnly) return downgraded;
-    const result = this.store.database
-      .query(
-        "UPDATE sessions SET anchor = 'ttl', last_seen = ? WHERE id = ? AND pid = ? AND anchor = 'pid'",
-      )
-      .run(lastSeen, row.id, row.pid);
-    if (result.changes > 0) return downgraded;
+    const result = pidAlive
+      ? this.store.database
+          .query(
+            `UPDATE sessions
+             SET anchor = 'ttl',
+                 last_seen = CASE WHEN last_seen < ? THEN ? ELSE last_seen END
+             WHERE id = ? AND pid = ? AND anchor = 'pid'`,
+          )
+          .run(lastSeen, lastSeen, row.id, row.pid)
+      : this.store.database
+          .query(
+            "UPDATE sessions SET anchor = 'ttl' WHERE id = ? AND pid = ? AND anchor = 'pid'",
+          )
+          .run(row.id, row.pid);
+    if (result.changes > 0) return this.row(row.id) ?? downgraded;
     return this.row(row.id) ?? row;
   }
 

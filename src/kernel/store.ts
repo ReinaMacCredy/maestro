@@ -80,6 +80,21 @@ export class Store {
     this.database.exec(sql);
   }
 
+  nextPrefixedId(table: string, prefix: string): string {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
+      throw new Error(`invalid SQLite identifier: ${table}`);
+    }
+    if (!/^[A-Za-z]$/.test(prefix)) {
+      throw new Error(`invalid ID prefix: ${prefix}`);
+    }
+    const next = this.database
+      .query<{ next: number }, []>(
+        `SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM ${table}`,
+      )
+      .get()?.next ?? 1;
+    return `${prefix}${next}`;
+  }
+
   close(): void {
     this.database.close();
   }

@@ -276,6 +276,38 @@ test("12 write verbs append events and the store rejects mutation of prior log r
   });
 });
 
+test("294 INSERT OR REPLACE cannot rewrite an existing event log row", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["work", "add", "append-only replacement", "--kind", "idea"])).exitCode)
+      .toBe(0);
+    const { Store } = await import("../src/kernel/store.ts");
+    const store = new Store(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      const original = store.database
+        .query<Record<string, unknown> & { id: number }, []>("SELECT * FROM event_log ORDER BY id LIMIT 1")
+        .get();
+      expect(original).not.toBeNull();
+      if (!original) throw new Error("missing original event log row");
+      expect(() =>
+        store.database
+          .query(
+            `INSERT OR REPLACE INTO event_log
+              (id, type, entity_type, entity_id, session_id, payload, created_at)
+             VALUES (?, 'rewritten', NULL, NULL, NULL, '{}', ?)`,
+          )
+          .run(original?.id, new Date().toISOString())
+      ).toThrow("event log is append-only");
+      expect(
+        store.database
+          .query<Record<string, unknown>, [number]>("SELECT * FROM event_log WHERE id = ?")
+          .get(original?.id),
+      ).toEqual(original);
+    } finally {
+      store.close();
+    }
+  });
+});
+
 test("22 paired claims and proofs complete work and are recorded in evidence", async () => {
   await withFixture(async (fixture) => {
     const id = idFrom(await runCli(fixture, ["work", "add", "paired proof", "--kind", "idea"]));

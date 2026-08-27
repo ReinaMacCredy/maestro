@@ -62,16 +62,6 @@ function requireDecision(context: PluginContext, id: string): DecisionRecord {
   return decision;
 }
 
-function nextId(context: PluginContext): string {
-  const next =
-    context.store.database
-      .query<{ next: number }, []>(
-        "SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) + 1 AS next FROM decisions",
-      )
-      .get()?.next ?? 1;
-  return `d${next}`;
-}
-
 function option(invocation: CliInvocation, name: string): string | null {
   const value = invocation.options[name];
   return typeof value === "string" ? value : null;
@@ -197,9 +187,20 @@ export const decisionPlugin: BuiltInPlugin = {
               throw new CliError("INVALID_STATE", `${supersedesId} must be locked before superseding`);
             }
           }
-          const id = nextId(context);
           const now = new Date().toISOString();
           const transaction = context.store.database.transaction(() => {
+            if (parentId) requireDecision(context, parentId);
+            if (workId) {
+              const work = context.work as WorkService;
+              if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            }
+            if (supersedesId) {
+              const superseded = requireDecision(context, supersedesId);
+              if (superseded.state !== "locked") {
+                throw new CliError("INVALID_STATE", `${supersedesId} must be locked before superseding`);
+              }
+            }
+            const id = context.store.nextPrefixedId("decisions", "d");
             context.store.database
               .query(
                 `INSERT INTO decisions
@@ -214,16 +215,16 @@ export const decisionPlugin: BuiltInPlugin = {
                 )
                 .run(id, now, supersedesId);
             }
+            context.log.append({
+              type: supersedesId ? "decision.supersede" : "decision.draft",
+              entityType: "decision",
+              entityId: id,
+              sessionId: context.sessions.current().id,
+              payload: { text, parentId, workId, supersedesId },
+            });
+            return service.get(id) as DecisionRecord;
           });
-          transaction();
-          context.log.append({
-            type: supersedesId ? "decision.supersede" : "decision.draft",
-            entityType: "decision",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { text, parentId, workId, supersedesId },
-          });
-          const created = service.get(id) as DecisionRecord;
+          const created = transaction.immediate();
           return { data: { decision: created }, text: format(created) };
         },
         {

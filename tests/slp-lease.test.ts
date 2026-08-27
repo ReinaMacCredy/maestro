@@ -451,3 +451,38 @@ test("197 a shared pid that is already dead downgrades without inventing livenes
     expect(stamped).toEqual({ anchor: "ttl", last_seen: cold });
   });
 });
+
+test("295 shared-pid downgrade never decreases a newer persisted heartbeat", async () => {
+  await withFixture(async (fixture) => {
+    const sharedPid = 1;
+    const holder = "monotonic-holder";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "monotonic downgrade", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
+      .toBe(0);
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const newerHeartbeat = new Date(Date.now() + 60_000).toISOString();
+    let database = new Database(databasePath);
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES (?, ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
+      )
+      .run("monotonic-peer", sharedPid, new Date().toISOString(), fixture.repo);
+    database
+      .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
+      .run(newerHeartbeat, holder);
+    database.close();
+
+    expect((await runCli(fixture, ["work", "show", work], session("observer"))).exitCode).toBe(0);
+    database = new Database(databasePath, { readonly: true });
+    const persisted = database
+      .query<{ anchor: string; last_seen: string }, [string]>(
+        "SELECT anchor, last_seen FROM sessions WHERE id = ?",
+      )
+      .get(holder);
+    database.close();
+    expect(persisted).toEqual({ anchor: "ttl", last_seen: newerHeartbeat });
+  });
+});
