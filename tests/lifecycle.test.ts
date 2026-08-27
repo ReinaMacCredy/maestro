@@ -453,14 +453,15 @@ test("49 doctor reports healthy components and structured fixable issues without
     const { source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
     const databasePath = join(source, ".maestro", "maestro.db");
-    const databaseBefore = sha256(await readFile(databasePath));
-    const database = new Database(databasePath, { readonly: true, strict: true });
-    const tableCount = database
+    const database = new Database(databasePath, { strict: true });
+    const tableCountBeforeSeed = database
       .query<{ count: number }, []>(
         "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
       )
       .get()?.count ?? 0;
+    database.exec("CREATE TABLE doctor_independent_probe (id INTEGER PRIMARY KEY)");
     database.close();
+    const databaseBefore = sha256(await readFile(databasePath));
     await writeFile(join(source, "doctor-untracked.txt"), "scratch\n");
     const sourcePath = await realpath(source);
     const sourceHead = await git(source, ["rev-parse", "HEAD"]);
@@ -472,7 +473,7 @@ test("49 doctor reports healthy components and structured fixable issues without
       expect(healthy.stdout).toContain(component);
     }
     expect(healthy.stdout).toContain(`source: ok ${sourcePath} ${sourceHead} clean`);
-    expect(healthy.stdout).toContain(`store: ok (${tableCount} tables)`);
+    expect(healthy.stdout).toContain(`store: ok (${tableCountBeforeSeed + 1} tables)`);
     expect(healthy.stdout).not.toContain("store: ok schema");
     expect(sha256(await readFile(databasePath))).toBe(databaseBefore);
 
@@ -515,20 +516,85 @@ test("50 source installs record a machine-scoped checkout without leaking paths 
 });
 
 test("51 CI runs tests, type-check, and anti-goal greps on push and pull requests only", async () => {
-  const workflowPath = join(projectRoot, ".github", "workflows", "ci.yml");
-  expect(existsSync(workflowPath)).toBe(true);
-  const workflow = await readFile(workflowPath, "utf8");
+  await withFixture(async (fixture) => {
+    const workflowPath = join(projectRoot, ".github", "workflows", "ci.yml");
+    expect(existsSync(workflowPath)).toBe(true);
+    const workflowText = await readFile(workflowPath, "utf8");
+    const workflow = Bun.YAML.parse(workflowText) as {
+      jobs?: Record<
+        string,
+        {
+          if?: boolean | string;
+          steps?: Array<{ if?: boolean | string; name?: string; run?: string; uses?: string }>;
+        }
+      >;
+      on?: Record<string, unknown>;
+    };
 
-  expect(workflow).toMatch(/push:/);
-  expect(workflow).toMatch(/pull_request:/);
-  expect(workflow).toContain("bun test");
-  expect(workflow).toContain("bunx tsc --noEmit");
-  expect(workflow).toContain("setInterval");
-  expect(workflow).toContain("detached\\s*:\\s*true");
-  expect(workflow).toContain("test-first");
-  expect(workflow).toContain("--lane");
-  expect(workflow).not.toMatch(/schedule:|cron:/);
-});
+    expect(Object.keys(workflow.on ?? {}).sort()).toEqual(["pull_request", "push"]);
+    expect(Object.keys(workflow.jobs ?? {})).toEqual(["verify"]);
+    const verify = workflow.jobs?.verify;
+    expect(verify?.if).toBeUndefined();
+    expect(verify?.steps).toBeArray();
+
+    const steps = new Map((verify?.steps ?? []).map((step) => [step.name, step]));
+    const expectedCommands = new Map([
+      ["Install", "bun install"],
+      ["Test", "bun test"],
+      ["Type-check", "bunx tsc --noEmit"],
+      [
+        "A1 no daemon or scheduler",
+        "if rg -n 'setInterval|setTimeout\\(.*,\\s*[0-9]{4,}|cron|detached\\s*:\\s*true' src/; then\n  exit 1\nfi\n",
+      ],
+      [
+        "A2 mechanism-only kernel",
+        "if rg -in 'proof|qa|tdd|test-first|research' src/kernel/; then\n  exit 1\nfi\n",
+      ],
+      [
+        "A3 no escape-hatch flags",
+        "if rg -n -- '\\blean\\b|--lane light|--qa' src/; then\n  exit 1\nfi\n",
+      ],
+    ]);
+    for (const [name, command] of expectedCommands) {
+      expect(steps.get(name), name).toMatchObject({ name, run: command });
+      expect(steps.get(name)?.if, name).toBeUndefined();
+    }
+
+    const cleanCheckout = join(fixture.root, "clean-checkout");
+    await mkdir(cleanCheckout, { recursive: true });
+    for (const entry of ["package.json", "tsconfig.json", "bin", "src"]) {
+      await cp(join(projectRoot, entry), join(cleanCheckout, entry), { recursive: true });
+    }
+    await cp(join(projectRoot, ".gitignore"), join(cleanCheckout, ".gitignore"));
+    await cp(join(projectRoot, "node_modules"), join(cleanCheckout, "node_modules"), {
+      recursive: true,
+    });
+    await mkdir(join(cleanCheckout, "tests"));
+    await writeFile(
+      join(cleanCheckout, "tests", "ci-command.test.ts"),
+      'import { expect, test } from "bun:test";\ntest("CI test command executes", () => expect(true).toBe(true));\n',
+    );
+    await git(cleanCheckout, ["init", "-b", "main"]);
+    await git(cleanCheckout, ["config", "user.name", "Maestro Tests"]);
+    await git(cleanCheckout, ["config", "user.email", "maestro-tests@example.invalid"]);
+    await git(cleanCheckout, ["add", "."]);
+    await git(cleanCheckout, ["commit", "-m", "clean CI fixture"]);
+    expect(await git(cleanCheckout, ["status", "--porcelain"])).toBe("");
+
+    for (const name of [
+      "Test",
+      "Type-check",
+      "A1 no daemon or scheduler",
+      "A2 mechanism-only kernel",
+      "A3 no escape-hatch flags",
+    ]) {
+      const command = steps.get(name)?.run;
+      expect(command, name).toBeString();
+      const result = await runTool(["/bin/sh", "-eu", "-c", command ?? "exit 1"], cleanCheckout);
+      expect(result.exitCode, `${name}\n${result.stdout}${result.stderr}`).toBe(0);
+    }
+  });
+}, 30_000);
 
 test("53 a clean install type-checks without runtime dependencies", async () => {
   await withFixture(async (fixture) => {
