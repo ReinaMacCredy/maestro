@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, symlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { idFrom, runCli, withFixture, writeConfig, writePlugin, type Fixture } from "./helpers.ts";
 
 interface JsonRpcResponse {

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
-import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { BuiltInPlugin } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { dispatchLaneVocabulary } from "./dispatch.ts";

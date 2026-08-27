@@ -523,6 +523,7 @@ export class Cli {
     return command === "status" ||
       command === "ready" ||
       command === "handoff" ||
+      command === "bundle show" ||
       command === "work show" ||
       command === "search" ||
       command.endsWith(" list");

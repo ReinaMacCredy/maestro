@@ -124,7 +124,7 @@ test("126 bundle show composes prose, linked work, and decisions; snapshot survi
     const work = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
     const workId = idFrom(work);
     await runCli(fixture, ["bundle", "open", "amp-wiring", "--work", workId]);
-    await runCli(fixture, [
+    const decision = await runCli(fixture, [
       "decision",
       "draft",
       "use copper traces",
@@ -133,6 +133,7 @@ test("126 bundle show composes prose, linked work, and decisions; snapshot survi
       "--work",
       workId,
     ]);
+    const decisionId = idFrom(decision);
     const directory = join(fixture.repo, ".maestro", "bundle", "amp-wiring");
     await writeFile(join(directory, "SPEC.md"), "# SPEC\n\namplifier wiring contract\n");
     const live = await runCli(fixture, ["bundle", "show", "amp-wiring"]);
@@ -141,6 +142,13 @@ test("126 bundle show composes prose, linked work, and decisions; snapshot survi
     expect(live.stdout).toContain(workId);
     expect(live.stdout).toContain("wire the amp");
     expect(live.stdout).toContain("use copper traces");
+    expect(live.stdout.match(new RegExp(decisionId, "g"))).toHaveLength(1);
+    const json = await runCli(fixture, ["bundle", "show", "amp-wiring", "--json"]);
+    expect(json.exitCode).toBe(0);
+    const envelope = JSON.parse(json.stdout) as {
+      data: { decisions: Array<{ id: string }> };
+    };
+    expect(envelope.data.decisions.filter((entry) => entry.id === decisionId)).toHaveLength(1);
     await runCli(fixture, ["bundle", "close", "amp-wiring"]);
     await rm(directory, { recursive: true, force: true });
     const archived = await runCli(fixture, ["bundle", "show", "amp-wiring"]);

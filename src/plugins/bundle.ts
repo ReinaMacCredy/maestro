@@ -669,7 +669,8 @@ export const bundlePlugin: BuiltInPlugin = {
             .map((workId) => work.get(workId))
             .filter((record): record is NonNullable<typeof record> => record !== null)
             .map((record) => `${record.id} [${record.state}] ${record.title}`);
-          const decisionLines = decisionsForWork(context, workIds).map(
+          const decisions = decisionsForWork(context, workIds);
+          const decisionLines = decisions.map(
             (decision) => `${decision.id} [${decision.state}] ${decision.text}`,
           );
           const parts = [trio.spec, trio.notes, trio.verify];
@@ -678,7 +679,7 @@ export const bundlePlugin: BuiltInPlugin = {
             return typeof text === "string" ? [`--- ${name}\n${text.trimEnd()}`] : [];
           });
           return {
-            data: { bundle, decisions: decisionsForWork(context, workIds), workIds },
+            data: { bundle, decisions, workIds },
             text: [
               headline(bundle),
               ...sections,
