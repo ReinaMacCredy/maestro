@@ -447,7 +447,7 @@ function scopeCollisionDetections(
     for (let rightIndex = leftIndex + 1; rightIndex < dispatches.length; rightIndex += 1) {
       const right = dispatches[rightIndex];
       if (!right || left.workId === right.workId) continue;
-      if (left.lane !== "delivery" && right.lane !== "delivery") continue;
+      if (left.lane !== "delivery" || right.lane !== "delivery") continue;
       const leftExcluded = new Set(scopeTokens(left.excludedScope));
       const rightExcluded = new Set(scopeTokens(right.excludedScope));
       const matches = matchingScopeTokens(

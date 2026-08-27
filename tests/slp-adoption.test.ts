@@ -23,7 +23,7 @@ async function addWork(fixture: Fixture, title: string, parent?: string): Promis
 async function openAttentionDispatch(
   fixture: Fixture,
   work: string,
-  lane: "decision" | "delivery" | "scout",
+  lane: "decision" | "delivery" | "scout" | "shadow",
   ownedScope: string,
   excludedScope: string,
 ): Promise<string> {
@@ -819,6 +819,31 @@ test("434 dispatch scope collision ignores overlap between two no-write lanes", 
     const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
     expect(attention.exitCode).toBe(0);
     expect(attention.stdout).not.toContain(`collision:dispatch:${first}:${second}`);
+  });
+});
+
+test("459 dispatch scope collision ignores delivery overlap with a shadow lane", async () => {
+  await withFixture(async (fixture) => {
+    const deliveryWork = await addWork(fixture, "delivery dispatch work");
+    const shadowWork = await addWork(fixture, "shadow dispatch work");
+    const delivery = await openAttentionDispatch(
+      fixture,
+      deliveryWork,
+      "delivery",
+      "src/plugins/dispatch.ts",
+      "tests only",
+    );
+    const shadow = await openAttentionDispatch(
+      fixture,
+      shadowWork,
+      "shadow",
+      "src/plugins/dispatch.ts",
+      "product writes",
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    expect(attention.stdout).not.toContain(`collision:dispatch:${delivery}:${shadow}`);
   });
 });
 
