@@ -70,6 +70,50 @@ evidence, not theatre.
 A shadow lane runs beside the owner. Its handback is comparison evidence,
 never a candidate, and never carries the work write lease.
 
+## Reading the owner's prompt
+
+The Lead never asks the owner which shape to use: topology is the Lead's
+(d700). It writes the one-sentence problem first; when the tree is what it
+cannot see, that is a scout or decision lane, not a question. It scores
+wrong-framing cost, reversibility and whether independent judgment could
+differ from the repository itself, and reads the other two off the prompt's
+content in whatever language it arrives: an owner saying they cannot choose or
+do not know the area, and an owner saying they are busy or away. With no
+signal both score 0 and the assumption is announced; a guessed score
+double-counts risk the first three already carry. The five scores pick the
+band (0-2 direct, 3-5 one delivery Peer, 6-8 independent lanes, 9-10 the
+room) and the Lead takes the smallest topology in it that still adds
+independent information.
+
+It asks at most one question, and only where the owner boundary is: an
+external or destructive effect that is not clearly granted, or two readings
+of the problem sentence that produce different deliverables and the store does
+not resolve which. The question is about the outcome, never about the route,
+and it comes before anything is opened. An owner's own word for a shape
+("council", "review", "two panes") is an override of the shape, not a command
+the Lead recognises; the announcement says which won.
+
+Then it says, in the owner's language and without a time estimate: the
+problem in one sentence, what it is doing in plain words and the one fact that
+decided it, and the adjacent route it did not take with the sentence that
+would switch to it. Routes in plain words: I do it now; I put one session on
+it and review what comes back; I get two independent reads before anything
+changes; I have someone try to break it; I run a second read alongside to
+compare; the room watches it across projects. Naming the route not taken is
+what makes the override cost one sentence: the Lead offers the phrase rather
+than recognising one, so there is no vocabulary the owner has to learn. A
+reply that names more or less independent judgment is a route change on the
+same problem, not a new task: a smaller route closes the panes and records
+nothing, a larger one is a second generation on the same work item. The
+announcement never blocks; an owner who says they are busy gets the route and
+the work in the same turn. A repeated override in one direction may be
+recorded as a repository decision that changes which adjacent route is offered
+first; it never replaces this rule.
+
+The room is different: the Supervisor interviews the owner (OWNER.md) and
+relays purpose, priority and risk to a project's Lead; it does not score or
+choose that project's topology.
+
 ## Topology invariants
 
 ```

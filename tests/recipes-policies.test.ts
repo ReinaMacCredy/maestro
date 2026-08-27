@@ -500,3 +500,29 @@ test("413 [lint] recipe slp records the Lead view before a council is sealed", a
       "The Lead writes its own first view outside the store (NOTES or a private file) and drafts it as a decision only after the seal opens; a draft on the council's work item while it is sealed is visible to every lane.",
   );
 });
+
+test("422 [lint] recipe slp and the scenarios page carry the intake contract (d700)", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const section = recipe.split("## Reading the owner's prompt")[1]?.split("\n## ")[0] ?? "";
+  const flat = section.replace(/\s+/g, " ");
+  for (const phrase of [
+    "never asks the owner which shape to use",
+    "With no signal both score 0",
+    "about the outcome, never about the route",
+    "the adjacent route it did not take",
+    "without a time estimate",
+    "The announcement never blocks",
+  ]) {
+    expect(flat).toContain(phrase);
+  }
+  expect(recipe.indexOf("## Reading the owner's prompt")).toBeLessThan(recipe.indexOf("## Topology invariants"));
+  const docs = await readFile(
+    join(import.meta.dir, "..", "site", "src", "content", "docs", "guides", "slp-scenarios.md"),
+    "utf8",
+  );
+  const page = docs.split("## How the Lead reads a prompt")[1]?.split("\n## ")[0] ?? "";
+  const flatPage = page.replace(/\s+/g, " ");
+  expect(flatPage).toContain("You never name a shape");
+  expect(flatPage).toContain("It never asks how many lanes to open");
+  expect(flatPage).toContain("the route it did not take");
+});

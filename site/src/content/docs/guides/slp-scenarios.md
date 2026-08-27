@@ -28,21 +28,45 @@ are playing Lead by hand.
 
 ## How the Lead reads a prompt
 
-Before opening anything, the Lead turns your prompt into one sentence:
+You never name a shape. The Lead turns your prompt into one sentence:
 
 ```text
 For <person or system>, reach <observable outcome> inside <boundary>,
 because <impact>, without <excluded effect>.
 ```
 
-If it cannot write that sentence, the request is still fog and it opens a
-scout or decision lane before touching code. Then it scores five questions, 0
-to 2 each: is a wrong framing expensive; is the change hard to reverse; is
-the domain new to you; could an independent judgment really disagree; is your
-attention split. Score 0-2 means it does the work itself, 3-5 one delivery
-Peer, 6-8 several independent lanes, 9-10 the room. You do not score anything;
-knowing the rule tells you why the session answered the way it did, and lets
-you override it in a sentence ("do it yourself", "get a second opinion").
+If it cannot write that sentence because it does not know the code, it opens a
+read-only lane to find out; it does not ask you to explain the codebase. Then
+it scores five questions, 0 to 2 each. Three it answers from the repository:
+is a wrong framing expensive, is the change hard to reverse, could an
+independent judgment really disagree. Two it reads off what you wrote, in any
+language: did you say you do not know this area or cannot choose; did you say
+you are busy or away. With no signal those two score 0, and it tells you it
+assumed so. Score 0-2 means it does the work itself, 3-5 one delivery Peer,
+6-8 several independent lanes, 9-10 the room.
+
+It asks you at most one question, and only when the answer is yours to give:
+the work implies a push, publish, spend or delete you have not granted, or
+your sentence has two readings that would produce different results and the
+store does not settle which. It never asks how many lanes to open.
+
+Then, before it opens anything, it tells you in three lines: the problem as
+it understood it, what it is doing and the one thing that decided it, and the
+route it did not take with the phrase that switches to it:
+
+```text
+Fifteen audit gaps, one option each, no code yet.
+Two independent reads on the same brief, sealed, because you said you cannot
+choose and every gap has more than one defensible answer; I assumed you are
+around. The other route is that I pick and report; say "just pick" and I will.
+```
+
+Your reply is the override. Echo the phrase, or say anything that asks for
+more or less independent judgment, and the route changes on the same problem;
+panes already open close and nothing from them is recorded. If you name a
+shape yourself ("two panes", "a review"), that is an override too; the three
+lines say which won. The announcement never waits for you: if you said you are
+busy, the route and the work start in the same turn.
 
 ## Case 0: the first session in the room
 

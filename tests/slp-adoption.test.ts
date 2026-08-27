@@ -238,7 +238,7 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain(
       '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"\n' +
-        "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); ROI 0-10 -> tier\n",
+        "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); ROI 0-10 -> tier; say the route and the one not taken\n",
     );
 
     const prompt = await runCli(
