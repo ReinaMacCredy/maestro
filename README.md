@@ -68,6 +68,13 @@ Maestro uses three durable agent roles:
 
 Read the full authority model with `maestro recipe show slp`.
 
+Using SLP requires [Herdr](https://herdr.dev), which hosts the Supervisor
+room and every lane pane. Install it with:
+
+```sh
+curl -fsSL https://herdr.dev/install.sh | sh
+```
+
 Lanes are Herdr panes, not subprocess agents created by Maestro. A Lead stores
 the lane contract with `maestro dispatch open`, the Peer takes it with
 `maestro dispatch accept`, and the Peer returns a packet with
