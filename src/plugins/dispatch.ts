@@ -401,6 +401,16 @@ function formatHandback(handback: HandbackRecord): string {
   ].join("\n");
 }
 
+function formatHandbackIds(handbacks: HandbackRecord[]): string | null {
+  if (handbacks.length === 0) return null;
+  const ids = handbacks.map(({ id }) => id).join(", ");
+  return `${handbacks.length === 1 ? "handback" : "handbacks"}: ${ids}`;
+}
+
+function formatHandbackSummary(handback: HandbackRecord): string {
+  return `${handback.id} [${handback.status}] ${handback.claim.split("\n")[0] ?? ""}`;
+}
+
 function formatCouncil(council: CouncilStatus): string | null {
   if (council.total < 2) return null;
   const state = council.unsealed ? "unsealed" : council.sealed ? "sealed" : "complete";
@@ -714,7 +724,13 @@ export const dispatchPlugin: BuiltInPlugin = {
         "dispatch show",
         (invocation): CliResult => {
           const dispatch = requireDispatch(context, requiredPosition(invocation, 0, "dispatch id"));
-          return { data: { dispatch }, text: format(dispatch) };
+          const handbacks = handbackService.list(dispatch.id);
+          return {
+            data: { dispatch, handbacks },
+            text: [format(dispatch), formatHandbackIds(handbacks)]
+              .filter((line): line is string => line !== null)
+              .join("\n"),
+          };
         },
         {
           description: "Show one stored dispatch contract.",
@@ -922,7 +938,39 @@ export const dispatchPlugin: BuiltInPlugin = {
             },
           },
           positionals: [{ name: "dispatch-id", required: true }],
-          rootDescription: "File and read durable return packets.",
+          rootDescription: "File, list, and read durable return packets.",
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "handback list",
+        (invocation): CliResult => {
+          const id = requiredPosition(invocation, 0, "dispatch or work id");
+          const dispatch = service.get(id);
+          const handbacks = dispatch
+            ? handbackService.list(dispatch.id)
+            : (() => {
+                const work = (context.work as WorkService).get(id);
+                if (!work) {
+                  throw new CliError("NOT_FOUND", `dispatch or work not found: ${id}`, { id });
+                }
+                return service
+                  .list(id)
+                  .flatMap(({ id: dispatchId }) => handbackService.list(dispatchId))
+                  .sort((left, right) => Number(left.id.slice(1)) - Number(right.id.slice(1)));
+              })();
+          return {
+            data: { handbacks },
+            text: handbacks.map(formatHandbackSummary).join("\n"),
+          };
+        },
+        {
+          description: "List handbacks for one dispatch or work item.",
+          mutates: false,
+          positionals: [{ name: "dispatch-or-work-id", required: true }],
+          rootDescription: "File, list, and read durable return packets.",
         },
       ),
     );
@@ -931,7 +979,16 @@ export const dispatchPlugin: BuiltInPlugin = {
       context.cli.register(
         "handback show",
         (invocation): CliResult => {
-          const handback = requireHandback(context, requiredPosition(invocation, 0, "handback id"));
+          const id = requiredPosition(invocation, 0, "handback or dispatch id");
+          const handback = handbackService.get(id) ?? (() => {
+            const dispatch = service.get(id);
+            if (!dispatch) return requireHandback(context, id);
+            const latest = handbackService.list(dispatch.id).at(-1);
+            if (!latest) {
+              throw new CliError("NOT_FOUND", `dispatch has no handback: ${id}`, { id });
+            }
+            return latest;
+          })();
           const dispatch = requireDispatch(context, handback.dispatchId);
           const council = service.council(dispatch.workId, dispatch.id);
           if (council.sealed) {
@@ -954,7 +1011,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           };
         },
         {
-          description: "Show one stored handback packet.",
+          description: "Show the handback for a handback or dispatch id.",
           mutates: false,
           positionals: [{ name: "id", required: true }],
         },
