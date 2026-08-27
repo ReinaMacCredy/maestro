@@ -70,6 +70,7 @@ async function fileHandback(
     dispatch,
     "--status",
     status,
+    ...(status === "BLOCKED" ? ["--request", "the blocker is resolved"] : []),
     "--claim",
     claim,
     "--proof",

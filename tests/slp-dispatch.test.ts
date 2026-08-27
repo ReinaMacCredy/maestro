@@ -899,6 +899,59 @@ test("176 handback file refuses a status outside the nine-value vocabulary", asy
   });
 });
 
+test("419 request statuses require a nonblank --request", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    for (const status of [
+      "BLOCKED",
+      "DEPENDENCY_REQUEST",
+      "COUNCIL_REQUEST",
+      "REOPEN_REQUEST",
+    ]) {
+      for (const request of [undefined, "  "]) {
+        const args = handbackFileArgs(dispatch);
+        args[args.indexOf("--status") + 1] = status;
+        if (request !== undefined) args.push("--request", request);
+        const filed = await runCli(fixture, args);
+        expect(filed.exitCode).not.toBe(0);
+        const error = (JSON.parse(filed.stderr) as {
+          error: { code: string; field: string; message: string };
+        }).error;
+        expect(error).toEqual(expect.objectContaining({
+          code: "MISSING_ARGUMENT",
+          field: "--request",
+        }));
+        expect(error.message).toContain("--request");
+      }
+    }
+  });
+});
+
+test("420 handback show renders retry conditions and requested actions", async () => {
+  await withFixture(async (fixture) => {
+    for (const [status, label] of [
+      ["BLOCKED", "retry when"],
+      ["DEPENDENCY_REQUEST", "requested"],
+      ["COUNCIL_REQUEST", "requested"],
+      ["REOPEN_REQUEST", "requested"],
+    ] as const) {
+      const dispatch = await openDispatch(fixture);
+      await acceptDispatch(fixture, dispatch);
+      const request = `${status.toLowerCase()} condition`;
+      const args = handbackFileArgs(dispatch);
+      args[args.indexOf("--status") + 1] = status;
+      args.push("--request", request);
+      const filed = await runCli(fixture, args);
+      expect(filed.exitCode).toBe(0);
+      expect(filed.stdout).toContain(`${label}: ${request}`);
+
+      const shown = await runCli(fixture, ["handback", "show", handbackId(filed)]);
+      expect(shown.exitCode).toBe(0);
+      expect(shown.stdout).toContain(`${label}: ${request}`);
+    }
+  });
+});
+
 test("177 handback assumptions and residual risks must be explicit while None is valid", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
@@ -1373,6 +1426,8 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
         dispatch,
         "--status",
         "BLOCKED",
+        "--request",
+        "the mutation scope includes the required boundary",
         "--claim",
         "scope too narrow",
         "--proof",
@@ -1397,7 +1452,9 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
     expect(unreviewed).toHaveLength(1);
     expect(unreviewed[0]?.fingerprint).toContain(dispatch);
     expect(unreviewed[0]?.packet).toContain(`${dispatch} returned BLOCKED (${handback})`);
-    expect(unreviewed[0]?.packet).toContain(`smallest action: maestro handback show ${handback}`);
+    expect(unreviewed[0]?.packet).toContain(
+      "smallest action: re-dispatch on the same pane or cancel",
+    );
 
     const hook = await runCli(
       fixture,
@@ -1425,6 +1482,69 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
       session("lead-session"),
     );
     expect(quiet.stdout).not.toContain("attention ");
+  });
+});
+
+test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchanged", async () => {
+  await withFixture(async (fixture) => {
+    const cases = [
+      {
+        status: "BLOCKED",
+        question: "retry condition met?",
+        smallestAction: "re-dispatch on the same pane or cancel",
+      },
+      {
+        status: "DEPENDENCY_REQUEST",
+        question: "accept or decline the dependency request?",
+        smallestAction: "open the dependency as a work item in the other scope",
+      },
+      {
+        status: "COUNCIL_REQUEST",
+        question: "open another council generation or decline?",
+        smallestAction: "open a second generation (d688) or decline with a work note",
+      },
+      {
+        status: "REOPEN_REQUEST",
+        question: "grant another lease or decline?",
+        smallestAction: "grant a new lease or decline",
+      },
+      {
+        status: "DONE",
+        question: "close the work, re-dispatch, or cancel?",
+        smallestAction: null,
+      },
+    ] as const;
+    const dispatches = new Map<
+      string,
+      { branch: (typeof cases)[number]; handback: string }
+    >();
+    for (const branch of cases) {
+      const dispatch = await openDispatch(fixture);
+      await acceptDispatch(fixture, dispatch);
+      const args = handbackFileArgs(dispatch);
+      args[args.indexOf("--status") + 1] = branch.status;
+      if (branch.status !== "DONE") args.push("--request", `${branch.status} detail`);
+      const filed = await runCli(fixture, args);
+      expect(filed.exitCode).toBe(0);
+      dispatches.set(dispatch, { branch, handback: handbackId(filed) });
+    }
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("lead-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ fingerprint: string; kind: string; packet: string }> };
+    }).data.detections;
+    for (const [dispatch, { branch, handback }] of dispatches) {
+      const packet = detections.find(
+        (detection) => detection.fingerprint === `handback-unreviewed:${dispatch}`,
+      )?.packet;
+      expect(packet).toBeString();
+      expect(packet).toContain(`question: ${branch.question}`);
+      expect(packet).toContain(
+        `smallest action: ${branch.smallestAction ?? `maestro handback show ${handback}`}`,
+      );
+      expect(packet).toContain("attention HANDBACK_UNREVIEWED dispatch");
+    }
   });
 });
 

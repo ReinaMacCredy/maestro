@@ -521,6 +521,21 @@ function handbackUnreviewedDetections(
         (cites.test(other.objective) || cites.test(other.evidenceRequired)),
     );
     if (reviewed) return [];
+    let question = "close the work, re-dispatch, or cancel?";
+    let smallestAction = `maestro handback show ${latest.id}`;
+    if (latest.status === "BLOCKED") {
+      question = "retry condition met?";
+      smallestAction = "re-dispatch on the same pane or cancel";
+    } else if (latest.status === "DEPENDENCY_REQUEST") {
+      question = "accept or decline the dependency request?";
+      smallestAction = "open the dependency as a work item in the other scope";
+    } else if (latest.status === "COUNCIL_REQUEST") {
+      question = "open another council generation or decline?";
+      smallestAction = "open a second generation (d688) or decline with a work note";
+    } else if (latest.status === "REOPEN_REQUEST") {
+      question = "grant another lease or decline?";
+      smallestAction = "grant a new lease or decline";
+    }
     return [{
       entityId: record.id,
       entityType: "dispatch",
@@ -531,8 +546,8 @@ function handbackUnreviewedDetections(
           `${record.id} returned ${latest.status} (${latest.id}) ${minutesSince(latest.createdAt, now)} minutes ago; work ${record.workId} is still ${work.state}`,
         evidence: `handbacks row ${latest.id} status ${latest.status}; work.state ${work.state}; no later dispatch on ${record.workId} cites ${latest.id}`,
         unknown: "whether the Lead has read the return packet",
-        question: "close the work, re-dispatch, or cancel?",
-        smallestAction: `maestro handback show ${latest.id}`,
+        question,
+        smallestAction,
       }),
       subjectSession: record.heldBy ?? record.targetSession,
       subjectWork: record.workId,

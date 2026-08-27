@@ -51,6 +51,9 @@ function handbackFileArgs(dispatch: string, status: string): string[] {
     dispatch,
     "--status",
     status,
+    ...(status === "COUNCIL_REQUEST"
+      ? ["--request", "open a second council generation"]
+      : []),
     "--claim",
     status === "COUNCIL_REQUEST" ? "the assignment needs a council" : "the lane is complete",
     "--proof",
@@ -246,7 +249,12 @@ test("387 an eight-status store migrates in place and preserves prior handbacks"
         incidental_findings TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
-      INSERT INTO handbacks SELECT * FROM handbacks_current_vocabulary;
+      INSERT INTO handbacks
+        (id, dispatch_id, status, claim, proof, assumptions, residual_risks,
+         incidental_findings, created_at)
+      SELECT id, dispatch_id, status, claim, proof, assumptions, residual_risks,
+             incidental_findings, created_at
+      FROM handbacks_current_vocabulary;
       DROP TABLE handbacks_current_vocabulary;
       CREATE INDEX handbacks_dispatch_id ON handbacks(dispatch_id);
     `);

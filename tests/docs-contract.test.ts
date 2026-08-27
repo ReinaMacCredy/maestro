@@ -14,6 +14,13 @@ const handbackStatuses = [
   "COUNCIL_REQUEST",
 ] as const;
 
+const requestStatuses = new Set<string>([
+  "BLOCKED",
+  "REOPEN_REQUEST",
+  "DEPENDENCY_REQUEST",
+  "COUNCIL_REQUEST",
+]);
+
 function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
 }
@@ -81,6 +88,9 @@ test("308 SLP Peer return statuses are exactly the runtime vocabulary", async ()
           dispatch,
           "--status",
           status,
+          ...(requestStatuses.has(status)
+            ? ["--request", `documented ${status} request`]
+            : []),
           "--claim",
           status === "DEPENDENCY_REQUEST"
             ? "topology dependency requested through the Lead"

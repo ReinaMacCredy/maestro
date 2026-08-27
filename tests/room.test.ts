@@ -394,6 +394,9 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     expect(lane).toContain(
       "`herdr agent wait <name>` with no `--until` as a background command",
     );
+    expect(lane).toContain(
+      "`BLOCKED`, `DEPENDENCY_REQUEST`, `COUNCIL_REQUEST`, and `REOPEN_REQUEST` also pass `--request \"<retry condition or requested action>\"`.",
+    );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
   });
