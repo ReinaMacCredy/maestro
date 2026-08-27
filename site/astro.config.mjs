@@ -91,6 +91,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'SLP scenarios', slug: 'guides/slp-scenarios' },
             { label: 'Attention and brief', slug: 'guides/attention-and-brief' },
             { label: 'Observer mode', slug: 'guides/observer-mode' },
             { label: 'Harness integration', slug: 'guides/harness-integration' },
