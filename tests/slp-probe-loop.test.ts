@@ -176,7 +176,7 @@ test("230 concurrent dispatch acceptance has exactly one winner", async () => {
       const losers = contenders.filter((result) => result.exitCode !== 0);
       expect(winners).toHaveLength(1);
       expect(losers).toHaveLength(1);
-      expect(losers[0]?.stderr).toContain("DISPATCH_HELD");
+      expect(losers[0]?.stderr).toContain("DISPATCH_CLAIMED");
       const winnerSession = contenders[0]?.exitCode === 0
         ? `accept-a-${attempt}`
         : `accept-b-${attempt}`;
@@ -185,11 +185,11 @@ test("230 concurrent dispatch acceptance has exactly one winner", async () => {
       try {
         expect(
           database
-            .query<{ held_by: string }, [string]>(
-              "SELECT held_by FROM dispatches WHERE id = ?",
+            .query<{ claimed_by: string | null; held_by: string | null }, [string]>(
+              "SELECT claimed_by, held_by FROM dispatches WHERE id = ?",
             )
-            .get(dispatch)?.held_by,
-        ).toBe(winnerSession);
+            .get(dispatch),
+        ).toEqual({ claimed_by: winnerSession, held_by: null });
         expect(
           database
             .query<{ count: number }, [string]>(
@@ -199,6 +199,37 @@ test("230 concurrent dispatch acceptance has exactly one winner", async () => {
         ).toBe(1);
       } finally {
         database.close();
+      }
+
+      expect(
+        (
+          await runCli(fixture, [
+            "dispatch",
+            "confirm",
+            dispatch,
+            "--session",
+            winnerSession,
+          ])
+        ).exitCode,
+      ).toBe(0);
+      const confirmed = probeDatabase(fixture);
+      try {
+        expect(
+          confirmed
+            .query<{ claimed_by: string | null; held_by: string | null }, [string]>(
+              "SELECT claimed_by, held_by FROM dispatches WHERE id = ?",
+            )
+            .get(dispatch),
+        ).toEqual({ claimed_by: null, held_by: winnerSession });
+        expect(
+          confirmed
+            .query<{ count: number }, [string]>(
+              "SELECT count(*) AS count FROM event_log WHERE type = 'dispatch.confirm' AND entity_id = ?",
+            )
+            .get(dispatch)?.count,
+        ).toBe(1);
+      } finally {
+        confirmed.close();
       }
     }
   });

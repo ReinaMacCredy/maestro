@@ -397,6 +397,15 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     expect(lane).toContain(
       "`BLOCKED`, `DEPENDENCY_REQUEST`, `COUNCIL_REQUEST`, and `REOPEN_REQUEST` also pass `--request \"<retry condition or requested action>\"`.",
     );
+    expect(lane).toContain(
+      "verify that `claimed by` or `held by` equals the pane's session",
+    );
+    expect(lane).toContain(
+      "runs `maestro dispatch confirm <dispatch-id> --session <session-id>`",
+    );
+    expect(lane).toContain(
+      "runs `maestro dispatch cancel <dispatch-id> --reason wrong-holder` and opens a new dispatch",
+    );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
   });
@@ -420,7 +429,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(lane).toContain("the session whose pid matches in `maestro status --live`");
     expect(lane).toContain("Codex runs SessionStart on its first turn");
     expect(lane).toContain("without `--target-session`");
-    expect(lane).toContain("`held by` equals the pane's session");
+    expect(lane).toContain("`claimed by` or `held by` equals the pane's session");
     expect(lane).not.toContain("Reply with the single word");
     expect(lane).not.toContain("ask the started lane");
     expect(lane).toContain(
@@ -430,6 +439,8 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
       "maestro status --live",
+      "maestro dispatch confirm <dispatch-id> --session <session-id>",
+      "maestro dispatch cancel <dispatch-id> --reason wrong-holder",
       "maestro work release <work-id>",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
       "maestro dispatch show <dispatch-id>",
@@ -466,6 +477,35 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     };
 
     for (const command of commands) {
+      if (
+        command.startsWith("maestro dispatch confirm ") &&
+        !replacements.has("<dispatch-id>")
+      ) {
+        const openCommand = commands.find((candidate) =>
+          candidate.startsWith("maestro dispatch open ")
+        ) as string;
+        const openArgs = argumentsFor(openCommand);
+        openArgs.splice(openArgs.indexOf("--target-session"), 2);
+        const opened = await runInstalledCliAt(
+          fixture,
+          fixture.repo,
+          openArgs,
+          { PATH: path },
+        );
+        expect(opened.exitCode).toBe(0);
+        const dispatch = opened.stdout.match(/^(x\d+)/)?.[1] as string;
+        replacements.set("<dispatch-id>", dispatch);
+        expect(
+          (
+            await runInstalledCliAt(
+              fixture,
+              fixture.repo,
+              ["dispatch", "accept", dispatch],
+              { PATH: path },
+            )
+          ).exitCode,
+        ).toBe(0);
+      }
       const parsed = await runInstalledCliAt(
         fixture,
         fixture.repo,

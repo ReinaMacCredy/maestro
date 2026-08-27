@@ -31,6 +31,8 @@ export interface DispatchRecord {
   evidenceRequired: string;
   pane: string | null;
   targetSession: string | null;
+  openedBy: string | null;
+  claimedBy: string | null;
   heldBy: string | null;
   state: "open" | "returned" | "cancelled";
   cancelReason: string | null;
@@ -50,6 +52,8 @@ interface DispatchRow {
   evidence_required: string;
   pane: string | null;
   target_session: string | null;
+  opened_by: string | null;
+  claimed_by: string | null;
   held_by: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
@@ -188,6 +192,8 @@ function fromRow(row: DispatchRow): DispatchRecord {
     evidenceRequired: row.evidence_required,
     pane: row.pane ?? null,
     targetSession: row.target_session,
+    openedBy: row.opened_by ?? null,
+    claimedBy: row.claimed_by ?? null,
     heldBy: row.held_by,
     state: row.cancelled_at ? "cancelled" : row.returned ? "returned" : "open",
     cancelReason: row.cancel_reason,
@@ -392,6 +398,8 @@ function format(dispatch: DispatchRecord): string {
     `evidence required: ${dispatch.evidenceRequired}`,
     `pane: ${dispatch.pane ?? "none"}`,
     `target session: ${dispatch.targetSession ?? "none"}`,
+    `opened by: ${dispatch.openedBy ?? "none"}`,
+    `claimed by: ${dispatch.claimedBy ?? "none"}`,
     `held by: ${dispatch.heldBy ?? "none"}`,
     dispatch.cancelReason ? `cancel reason: ${dispatch.cancelReason}` : null,
   ]
@@ -454,6 +462,8 @@ export const dispatchPlugin: BuiltInPlugin = {
         evidence_required TEXT NOT NULL,
         pane TEXT,
         target_session TEXT,
+        opened_by TEXT,
+        claimed_by TEXT,
         held_by TEXT,
         cancelled_at TEXT,
         cancel_reason TEXT,
@@ -520,13 +530,23 @@ export const dispatchPlugin: BuiltInPlugin = {
       "ALTER TABLE dispatches ADD COLUMN pane TEXT",
     );
     context.store.ensureColumn(
+      "dispatches",
+      "opened_by",
+      "ALTER TABLE dispatches ADD COLUMN opened_by TEXT",
+    );
+    context.store.ensureColumn(
+      "dispatches",
+      "claimed_by",
+      "ALTER TABLE dispatches ADD COLUMN claimed_by TEXT",
+    );
+    context.store.ensureColumn(
       "handbacks",
       "request",
       "ALTER TABLE handbacks ADD COLUMN request TEXT",
     );
     context.store.migrate(`
       UPDATE dispatches
-      SET held_by = NULL
+      SET held_by = NULL, claimed_by = NULL
       WHERE held_by IS NOT NULL
         AND (
           cancelled_at IS NOT NULL OR
@@ -577,6 +597,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             );
           }
           const targetSession = targetSessionValue ?? null;
+          const openedBy = context.sessions.current().id;
           const open = context.store.database.transaction(() => {
             const subject = work.get(workId);
             if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
@@ -592,8 +613,8 @@ export const dispatchPlugin: BuiltInPlugin = {
               .query(
                 `INSERT INTO dispatches
                   (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-                   lane, evidence_required, pane, target_session, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   lane, evidence_required, pane, target_session, opened_by, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .run(
                 id,
@@ -607,6 +628,7 @@ export const dispatchPlugin: BuiltInPlugin = {
                 evidenceRequired,
                 pane,
                 targetSession,
+                openedBy,
                 now,
                 now,
               );
@@ -614,7 +636,7 @@ export const dispatchPlugin: BuiltInPlugin = {
               type: "dispatch.open",
               entityType: "dispatch",
               entityId: id,
-              sessionId: context.sessions.current().id,
+              sessionId: openedBy,
               payload: { pane, workId, targetSession },
             });
             return service.get(id) as DispatchRecord;
@@ -666,10 +688,17 @@ export const dispatchPlugin: BuiltInPlugin = {
                 id,
               });
             }
-            if (!dispatch.heldBy) {
+            if (dispatch.claimedBy && dispatch.claimedBy !== sessionId) {
+              throw new CliError("DISPATCH_CLAIMED", `${id} is claimed by ${dispatch.claimedBy}`, {
+                claimedBy: dispatch.claimedBy,
+                id,
+              });
+            }
+            if (!dispatch.heldBy && !dispatch.claimedBy) {
               const now = new Date().toISOString();
+              const column = dispatch.targetSession ? "held_by" : "claimed_by";
               context.store.database
-                .query("UPDATE dispatches SET held_by = ?, updated_at = ? WHERE id = ?")
+                .query(`UPDATE dispatches SET ${column} = ?, updated_at = ? WHERE id = ?`)
                 .run(sessionId, now, id);
               context.log.append({
                 type: "dispatch.accept",
@@ -685,6 +714,64 @@ export const dispatchPlugin: BuiltInPlugin = {
         },
         {
           description: "Accept a dispatch without taking the work write lease.",
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "dispatch confirm",
+        (invocation): CliResult => {
+          const id = requiredPosition(invocation, 0, "dispatch id");
+          const claimedSession = requiredOption(invocation, "--session");
+          const openerSession = context.sessions.current().id;
+          const confirm = context.store.database.transaction(() => {
+            const dispatch = requireDispatch(context, id);
+            if (dispatch.state !== "open") {
+              throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
+            }
+            if (dispatch.openedBy !== openerSession) {
+              throw new CliError(
+                "DISPATCH_CONFIRM_FORBIDDEN",
+                `${id} was opened by ${dispatch.openedBy ?? "an unknown session"}; current session is ${openerSession}`,
+                { currentSession: openerSession, id, openedBy: dispatch.openedBy },
+              );
+            }
+            if (dispatch.claimedBy !== claimedSession) {
+              throw new CliError(
+                "CLAIM_MISMATCH",
+                `${id} is claimed by ${dispatch.claimedBy ?? "no session"}; requested confirmation is ${claimedSession}`,
+                { claimedBy: dispatch.claimedBy, id, requestedSession: claimedSession },
+              );
+            }
+            const now = new Date().toISOString();
+            const updated = context.store.database
+              .query(
+                `UPDATE dispatches
+                 SET claimed_by = NULL, held_by = ?, updated_at = ?
+                 WHERE id = ? AND claimed_by = ? AND held_by IS NULL`,
+              )
+              .run(claimedSession, now, id, claimedSession);
+            if (updated.changes !== 1) {
+              throw new CliError("INVALID_STATE", `${id} changed while confirmation was pending`);
+            }
+            context.log.append({
+              type: "dispatch.confirm",
+              entityType: "dispatch",
+              entityId: id,
+              sessionId: openerSession,
+              payload: { sessionId: claimedSession },
+            });
+            return service.get(id) as DispatchRecord;
+          });
+          const confirmed = confirm.immediate();
+          return { data: { dispatch: confirmed }, text: format(confirmed) };
+        },
+        {
+          description: "Confirm an untargeted dispatch claim as its opener.",
+          flags: { "--session": { description: "Name the claimed session to confirm.", value: true } },
           positionals: [{ name: "id", required: true }],
         },
       ),
@@ -711,7 +798,8 @@ export const dispatchPlugin: BuiltInPlugin = {
             const cancelled = context.store.database
               .query(
                 `UPDATE dispatches
-                 SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ?
+                 SET cancelled_at = ?, cancel_reason = ?, claimed_by = NULL, held_by = NULL,
+                     updated_at = ?
                  WHERE id = ? AND cancelled_at IS NULL
                    AND NOT EXISTS(SELECT 1 FROM handbacks WHERE dispatch_id = dispatches.id)`,
               )
@@ -898,6 +986,14 @@ export const dispatchPlugin: BuiltInPlugin = {
                 "HANDBACK_EXISTS",
                 `${dispatchId} already returned ${latest?.id ?? "a handback"}; a second stop point is a second dispatch: ask the Lead ([from peer][${dispatchId}]) or record late evidence with: maestro work note ${current.workId} "after ${latest?.id ?? "<h-id>"}: <evidence>"`,
                 { dispatchId, handbackId: latest?.id, workId: current.workId },
+              );
+            }
+            if (current.claimedBy) {
+              const command = `maestro dispatch confirm ${dispatchId} --session ${current.claimedBy}`;
+              throw new CliError(
+                "DISPATCH_UNCONFIRMED",
+                `${dispatchId} is claimed but not held; the opener must run: ${command}`,
+                { claimedBy: current.claimedBy, command, dispatchId },
               );
             }
             if (!current.heldBy) {

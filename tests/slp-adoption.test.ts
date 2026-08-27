@@ -595,6 +595,17 @@ test("414 attention raises LEAD_COLLISION without treating a delivery Peer as a 
       (await runCli(fixture, ["dispatch", "accept", dispatch as string], session("peer-session")))
         .exitCode,
     ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          dispatch as string,
+          "--session",
+          "peer-session",
+        ])
+      ).exitCode,
+    ).toBe(0);
     await startWork(fixture, peerWork, "peer-session");
 
     const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));

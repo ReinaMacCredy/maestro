@@ -89,6 +89,17 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
     expect(
       (await runCli(fixture, ["dispatch", "accept", dispatchId(opened.stdout)], peer)).exitCode,
     ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          dispatchId(opened.stdout),
+          "--session",
+          "peer-holder",
+        ])
+      ).exitCode,
+    ).toBe(0);
     expect((await runCli(fixture, ["work", "start", peerWork], peer)).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "start", leadWork], lead)).exitCode).toBe(0);
     await addFailedNotes(fixture, peerWork, peer);

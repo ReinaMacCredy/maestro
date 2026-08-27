@@ -80,6 +80,17 @@ test("308 SLP Peer return statuses are exactly the runtime vocabulary", async ()
       const dispatch = await openDispatch(fixture, index);
       const holder = session(`docs-holder-${index}`);
       expect((await runCli(fixture, ["dispatch", "accept", dispatch], holder)).exitCode).toBe(0);
+      expect(
+        (
+          await runCli(fixture, [
+            "dispatch",
+            "confirm",
+            dispatch,
+            "--session",
+            `docs-holder-${index}`,
+          ])
+        ).exitCode,
+      ).toBe(0);
       const filed = await runCli(
         fixture,
         [

@@ -64,6 +64,17 @@ async function fileHandback(
   status = "DONE",
 ): Promise<string> {
   expect((await runCli(fixture, ["dispatch", "accept", dispatch])).exitCode).toBe(0);
+  expect(
+    (
+      await runCli(fixture, [
+        "dispatch",
+        "confirm",
+        dispatch,
+        "--session",
+        "test-session",
+      ])
+    ).exitCode,
+  ).toBe(0);
   const filed = await runCli(fixture, [
     "handback",
     "file",
@@ -156,6 +167,8 @@ test("401 dispatch show pins singular and plural handback lines", async () => {
       "evidence required: source: CLI regression",
       "pane: w1:pA",
       "target session: none",
+      "opened by: test-session",
+      "claimed by: none",
       "held by: none",
     ];
 
@@ -360,6 +373,17 @@ test("408 attention and hook briefs prefix dispatch subjects with their kind", a
     );
     const unreturned = await openDispatch(fixture, unreturnedWork);
     expect((await runCli(fixture, ["dispatch", "accept", unreturned])).exitCode).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          unreturned,
+          "--session",
+          "test-session",
+        ])
+      ).exitCode,
+    ).toBe(0);
     const returnedWork = idFrom(
       await runCli(fixture, ["work", "add", "returned", "--atomic-reason", "fixture"]),
     );

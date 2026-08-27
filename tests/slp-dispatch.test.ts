@@ -55,8 +55,8 @@ function insertStoredDispatch(
     .query(
       `INSERT INTO dispatches
         (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-         lane, evidence_required, pane, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         lane, evidence_required, pane, opened_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.id,
@@ -69,6 +69,7 @@ function insertStoredDispatch(
       input.lane,
       "source: readback",
       "w1:pZ",
+      "test-session",
       input.createdAt,
       input.createdAt,
     );
@@ -91,6 +92,19 @@ async function acceptDispatch(
 ): Promise<void> {
   expect((await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode)
     .toBe(0);
+  await confirmDispatch(fixture, dispatch, holder);
+}
+
+async function confirmDispatch(
+  fixture: Fixture,
+  dispatch: string,
+  holder: string,
+): Promise<void> {
+  expect(
+    (
+      await runCli(fixture, ["dispatch", "confirm", dispatch, "--session", holder])
+    ).exitCode,
+  ).toBe(0);
 }
 
 function handbackFileArgs(dispatch: string): string[] {
@@ -225,6 +239,8 @@ test("174 [lint] dispatch show and list render the complete stored contract and 
         "lane: delivery",
         "evidence required: source and live",
         "target session: lane-one",
+        "opened by: test-session",
+        "claimed by: none",
         "held by: none",
       ]) {
         expect(rendered.stdout).toContain(line);
@@ -302,12 +318,104 @@ test("271 targeted accept requires equality while an untargeted dispatch stays c
   });
 });
 
+test("423 an unconfirmed dispatch claim cannot file a handback or take its delivery work lease", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const claimant = session("claiming-lane");
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], claimant)).exitCode).toBe(0);
+
+    const shown = await runCli(fixture, ["dispatch", "show", dispatch]);
+    expect(shown.stdout).toContain("claimed by: claiming-lane");
+    expect(shown.stdout).toContain("held by: none");
+
+    const refused = await runCli(fixture, handbackFileArgs(dispatch), claimant);
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain('"code":"DISPATCH_UNCONFIRMED"');
+    expect(refused.stderr).toContain(
+      `maestro dispatch confirm ${dispatch} --session claiming-lane`,
+    );
+  });
+
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "unconfirmed delivery", "--atomic-reason", "fixture"]),
+    );
+    const dispatch = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const claimant = session("claiming-lane");
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], claimant)).exitCode).toBe(0);
+
+    const refused = await runCli(fixture, ["work", "start", work], claimant);
+    expect(refused.exitCode).not.toBe(0);
+    const error = JSON.parse(refused.stderr) as {
+      error: { code: string; message: string; origin: string };
+    };
+    expect(error.error.code).toBe("GATE_BLOCKED");
+    expect(error.error.origin).toBe("policy-dispatch");
+    expect(error.error.message).toContain(
+      `maestro dispatch confirm ${dispatch} --session claiming-lane`,
+    );
+  });
+});
+
+test("424 only the dispatch opener can confirm an untargeted claim", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await openDispatch(fixture);
+    const claimant = session("claiming-lane");
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], claimant)).exitCode).toBe(0);
+
+    const refused = await runCli(
+      fixture,
+      ["dispatch", "confirm", dispatch, "--session", "claiming-lane"],
+      session("different-opener"),
+    );
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain('"code":"DISPATCH_CONFIRM_FORBIDDEN"');
+
+    const mismatch = await runCli(fixture, [
+      "dispatch",
+      "confirm",
+      dispatch,
+      "--session",
+      "different-claimant",
+    ]);
+    expect(mismatch.exitCode).not.toBe(0);
+    expect(mismatch.stderr).toContain('"code":"CLAIM_MISMATCH"');
+
+    const confirmed = await runCli(fixture, [
+      "dispatch",
+      "confirm",
+      dispatch,
+      "--session",
+      "claiming-lane",
+    ]);
+    expect(confirmed.exitCode).toBe(0);
+    expect(confirmed.stdout).toContain("opened by: test-session");
+    expect(confirmed.stdout).toContain("claimed by: none");
+    expect(confirmed.stdout).toContain("held by: claiming-lane");
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const event = database
+      .query<{ payload: string; session_id: string }, [string]>(
+        "SELECT payload, session_id FROM event_log WHERE type = 'dispatch.confirm' AND entity_id = ?",
+      )
+      .get(dispatch);
+    database.close();
+    expect(event?.session_id).toBe("test-session");
+    expect(JSON.parse(event?.payload ?? "null")).toEqual({ sessionId: "claiming-lane" });
+
+    expect((await runCli(fixture, handbackFileArgs(dispatch), claimant)).exitCode).toBe(0);
+  });
+});
+
 test("272 handback file refuses a session that is not the dispatch holder", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
     expect(
       (await runCli(fixture, ["dispatch", "accept", dispatch], session("holding-lane"))).exitCode,
     ).toBe(0);
+    await confirmDispatch(fixture, dispatch, "holding-lane");
 
     const refused = await runCli(
       fixture,
@@ -329,6 +437,7 @@ test("273 handback file refuses a second return for the same dispatch", async ()
     const dispatch = await openDispatch(fixture);
     const holder = session("returning-lane");
     expect((await runCli(fixture, ["dispatch", "accept", dispatch], holder)).exitCode).toBe(0);
+    await confirmDispatch(fixture, dispatch, "returning-lane");
     expect((await runCli(fixture, handbackFileArgs(dispatch), holder)).exitCode).toBe(0);
 
     const repeated = await runCli(fixture, handbackFileArgs(dispatch), holder);
@@ -355,9 +464,11 @@ test("274 work-scoped dispatch lists render compact lane state without changing 
         .exitCode,
     ).toBe(0);
     expect((await runCli(fixture, ["dispatch", "accept", first], liveHolder)).exitCode).toBe(0);
+    await confirmDispatch(fixture, first, "live-lane");
     expect(
       (await runCli(fixture, ["dispatch", "accept", second], session("dead-lane"))).exitCode,
     ).toBe(0);
+    await confirmDispatch(fixture, second, "dead-lane");
 
     const databaseBefore = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
@@ -758,6 +869,7 @@ test("263 returned and cancelled dispatches clear their lane holder", async () =
       (await runCli(fixture, ["dispatch", "accept", returned], session("returning-lane")))
         .exitCode,
     ).toBe(0);
+    await confirmDispatch(fixture, returned, "returning-lane");
     expect(
       (await runCli(fixture, handbackFileArgs(returned), session("returning-lane"))).exitCode,
     ).toBe(0);
@@ -767,6 +879,7 @@ test("263 returned and cancelled dispatches clear their lane holder", async () =
       (await runCli(fixture, ["dispatch", "accept", cancelled], session("cancelled-lane")))
         .exitCode,
     ).toBe(0);
+    await confirmDispatch(fixture, cancelled, "cancelled-lane");
     expect(
       (
         await runCli(fixture, [
@@ -1304,11 +1417,14 @@ test("264 unreturned dispatch attention distinguishes dead, live, and unknown ho
     const unknown = await openDispatch(fixture);
     expect((await runCli(fixture, ["dispatch", "accept", dead], session("dead-lane"))).exitCode)
       .toBe(0);
+    await confirmDispatch(fixture, dead, "dead-lane");
     expect((await runCli(fixture, ["dispatch", "accept", live], session("live-lane"))).exitCode)
       .toBe(0);
+    await confirmDispatch(fixture, live, "live-lane");
     expect(
       (await runCli(fixture, ["dispatch", "accept", unknown], session("unknown-lane"))).exitCode,
     ).toBe(0);
+    await confirmDispatch(fixture, unknown, "unknown-lane");
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     const now = new Date().toISOString();

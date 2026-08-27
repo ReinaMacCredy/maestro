@@ -319,6 +319,17 @@ test("260 every exported attention kind has an independent read-only detection s
         })
       ).exitCode,
     ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          dispatch as string,
+          "--session",
+          "unreturned-holder",
+        ])
+      ).exitCode,
+    ).toBe(0);
 
     const unacceptedWork = await addWork(fixture, "undelivered lane");
     const unacceptedOpened = await runCli(fixture, [
@@ -377,6 +388,17 @@ test("260 every exported attention kind has an independent read-only detection s
           MAESTRO_SESSION_ID: "handback-holder",
           MAESTRO_SESSION_PID: String(process.pid),
         })
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "dispatch",
+          "confirm",
+          handbackDispatch as string,
+          "--session",
+          "handback-holder",
+        ])
       ).exitCode,
     ).toBe(0);
     expect(

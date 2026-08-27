@@ -77,6 +77,11 @@ async function openAcceptedDispatch(
   expect((await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode).toBe(
     0,
   );
+  expect(
+    (
+      await runCli(fixture, ["dispatch", "confirm", dispatch, "--session", holder])
+    ).exitCode,
+  ).toBe(0);
   return { dispatch, work };
 }
 
@@ -129,7 +134,18 @@ test("382 accepting a shadow dispatch never takes the work write lease", async (
       session("shadow-holder"),
     );
     expect(accepted.exitCode).toBe(0);
-    expect(accepted.stdout).toContain("held by: shadow-holder");
+    expect(accepted.stdout).toContain("claimed by: shadow-holder");
+    expect(accepted.stdout).toContain("held by: none");
+    const confirmed = await runCli(fixture, [
+      "dispatch",
+      "confirm",
+      dispatch,
+      "--session",
+      "shadow-holder",
+    ]);
+    expect(confirmed.exitCode).toBe(0);
+    expect(confirmed.stdout).toContain("claimed by: none");
+    expect(confirmed.stdout).toContain("held by: shadow-holder");
 
     const shown = await runCli(fixture, ["work", "show", work, "--json"]);
     expect(shown.exitCode).toBe(0);

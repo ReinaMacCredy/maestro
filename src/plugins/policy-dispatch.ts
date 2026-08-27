@@ -40,6 +40,32 @@ function laneGate(dispatch: DispatchService, workId: string, sessionId: string):
   };
 }
 
+function unconfirmedDeliveryGate(
+  dispatch: DispatchService,
+  workId: string,
+  sessionId: string,
+): Gate | null {
+  const claimed = dispatch
+    .list(workId)
+    .find(
+      (record) =>
+        record.state === "open" &&
+        record.claimedBy === sessionId &&
+        record.heldBy === null &&
+        record.lane === "delivery",
+    );
+  if (!claimed) return null;
+  const command = `maestro dispatch confirm ${claimed.id} --session ${sessionId}`;
+  return {
+    blocked: true,
+    command,
+    origin: "policy-dispatch",
+    reason:
+      `${sessionId} has an unconfirmed claim on ${claimed.id}; ` +
+      `the dispatch opener must confirm it before work starts: ${command}`,
+  };
+}
+
 function startGate(dispatch: DispatchService, workId: string): Gate | null {
   const council = dispatch.council(workId);
   if (!council.sealed) return null;
@@ -58,7 +84,7 @@ export const policyDispatchPlugin: BuiltInPlugin = {
   name: "policy-dispatch",
   inject: ["work", "dispatch"],
   requires:
-    "gates work done and work cancel while a dispatch lacks a handback, and work start while a sealed council is open or the session holds a no-write lane",
+    "gates work done and work cancel while a dispatch lacks a handback, and work start while a council is sealed, a delivery claim is unconfirmed, or the session holds a no-write lane",
   apply(context) {
     const dispatch = context.dispatch as DispatchService;
     context.effect(() =>
@@ -73,7 +99,10 @@ export const policyDispatchPlugin: BuiltInPlugin = {
     );
     context.effect(() =>
       context.events.on<WorkGateInput>("work.start", async (input, next) =>
-        startGate(dispatch, input.work.id) ?? laneGate(dispatch, input.work.id, input.sessionId) ?? next()
+        startGate(dispatch, input.work.id) ??
+        unconfirmedDeliveryGate(dispatch, input.work.id, input.sessionId) ??
+        laneGate(dispatch, input.work.id, input.sessionId) ??
+        next()
       ),
     );
   },

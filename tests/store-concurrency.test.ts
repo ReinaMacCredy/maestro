@@ -236,6 +236,7 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     expect(council.stdout).toContain("council: sealed (0/2 returned)");
 
     const holders = ["handback-a", "handback-b"];
+    const openers = ["dispatch-open-a", "dispatch-open-b"];
     for (const [index, dispatch] of dispatchIds.entries()) {
       expect(
         (
@@ -243,6 +244,15 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
             fixture,
             ["dispatch", "accept", dispatch],
             sessionEnvironment(holders[index] as string),
+          )
+        ).exitCode,
+      ).toBe(0);
+      expect(
+        (
+          await runCli(
+            fixture,
+            ["dispatch", "confirm", dispatch, "--session", holders[index] as string],
+            sessionEnvironment(openers[index] as string),
           )
         ).exitCode,
       ).toBe(0);
@@ -407,6 +417,17 @@ test("293 dispatch cancel and handback file have one terminal winner", async () 
             ["dispatch", "accept", dispatch],
             sessionEnvironment(holder),
           )
+        ).exitCode,
+      ).toBe(0);
+      expect(
+        (
+          await runCli(fixture, [
+            "dispatch",
+            "confirm",
+            dispatch,
+            "--session",
+            holder,
+          ])
         ).exitCode,
       ).toBe(0);
       const outcomes = await Promise.all([
