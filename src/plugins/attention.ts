@@ -39,18 +39,22 @@ interface Detection {
   entityId: string;
   entityType: "decision" | "dispatch" | "work";
   fingerprint: string;
+  holderRole?: "lead" | "peer";
   kind: AttentionKind;
   packet: string;
+  route?: "lead" | "supervisor";
   subjectSession: string | null;
   subjectWork: string | null;
 }
 
 export interface AttentionFinding {
   fingerprint: string;
+  holderRole?: "lead" | "peer";
   kind: AttentionKind;
   packet: string;
   raised: boolean;
   raisedAt: string;
+  route?: "lead" | "supervisor";
   subjectSession: string | null;
   subjectWork: string | null;
 }
@@ -109,6 +113,7 @@ function packet(
   subject: string,
   fields: {
     evidence: string;
+    holderRole?: "lead" | "peer";
     observed: string;
     question: string;
     smallestAction: string;
@@ -118,6 +123,7 @@ function packet(
   return [
     `attention ${kind} ${subject}`,
     `  observed: ${fields.observed}`,
+    ...(fields.holderRole ? [`  holder role: ${fields.holderRole}`] : []),
     `  evidence: ${fields.evidence}`,
     `  unknown: ${fields.unknown}`,
     `  question: ${fields.question}`,
@@ -168,6 +174,7 @@ function repeatedFailureDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
 ): Detection[] {
+  const dispatch = context.dispatch as DispatchService;
   return works.flatMap((work): Detection[] => {
     if (work.state === "done" || work.state === "cancelled") return [];
     const start = latestStart(context, work.id);
@@ -188,19 +195,28 @@ function repeatedFailureDetections(
           .all(work.id);
     const third = notes[2];
     if (!third) return [];
+    const holderRole = work.heldBy && dispatch
+        .list(work.id)
+        .some((record) => record.state === "open" && record.heldBy === work.heldBy)
+      ? "peer"
+      : "lead";
+    const route = holderRole === "peer" ? "lead" : "supervisor";
     const startEvidence = start ? `work.start #${start.id}` : "no work.start on record";
     return [{
       entityId: work.id,
       entityType: "work",
       fingerprint: `repeat:${work.id}:${third.id}`,
+      holderRole,
       kind: "REPEATED_FAILURE",
       packet: packet("REPEATED_FAILURE", work.id, {
         observed: `${notes.length} failed passes since the latest lease`,
+        holderRole,
         evidence: `${startEvidence}; third failed note #${third.id}`,
         unknown: "whether the failures share one mechanism or need a new decision",
         question: "inspect the episode, re-scope, or revisit the decision?",
         smallestAction: `maestro work show ${work.id}`,
       }),
+      route,
       subjectSession: work.heldBy,
       subjectWork: work.id,
     }];
@@ -447,10 +463,12 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
   if (context.store.readOnly) {
     return {
       fingerprint: detection.fingerprint,
+      holderRole: detection.holderRole,
       kind: detection.kind,
       packet: detection.packet,
       raised: false,
       raisedAt: "not recorded (read-only)",
+      route: detection.route,
       subjectSession: detection.subjectSession,
       subjectWork: detection.subjectWork,
     };
@@ -492,10 +510,12 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
   const result = transaction.immediate();
   return {
     fingerprint: detection.fingerprint,
+    holderRole: detection.holderRole,
     kind: detection.kind,
     packet: detection.packet,
     raised: result.raised,
     raisedAt: result.raisedAt,
+    route: detection.route,
     subjectSession: detection.subjectSession,
     subjectWork: detection.subjectWork,
   };
@@ -554,6 +574,7 @@ export const attentionPlugin: BuiltInPlugin = {
       (context.brief as BriefService).register(() =>
         service
           .scan({ staleMinutes: 30, decisionStaleHours: 24, dispatchStaleHours: 2 })
+          .filter((finding) => finding.kind !== "REPEATED_FAILURE" || finding.route === "lead")
           .map((finding) => finding.packet.split("\n")[0] ?? finding.kind)
           .join("\n")
       )
