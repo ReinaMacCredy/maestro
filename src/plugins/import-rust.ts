@@ -174,6 +174,7 @@ function initializeLegacyTables(context: PluginContext): void {
   context.store.migrate(`
     CREATE TABLE IF NOT EXISTS legacy_cards (
       id TEXT PRIMARY KEY NOT NULL,
+      source TEXT NOT NULL,
       card_type TEXT NOT NULL,
       parent TEXT,
       status TEXT NOT NULL,
@@ -186,6 +187,7 @@ function initializeLegacyTables(context: PluginContext): void {
     );
     CREATE TABLE IF NOT EXISTS legacy_files (
       card_id TEXT NOT NULL,
+      source TEXT NOT NULL,
       path TEXT NOT NULL,
       sha256 TEXT NOT NULL,
       size INTEGER NOT NULL,
@@ -195,12 +197,34 @@ function initializeLegacyTables(context: PluginContext): void {
     );
     CREATE TABLE IF NOT EXISTS legacy_decisions (
       id TEXT PRIMARY KEY NOT NULL,
+      source TEXT NOT NULL,
       card_id TEXT NOT NULL,
       title TEXT NOT NULL,
       status TEXT NOT NULL,
       source_path TEXT NOT NULL,
       decision_yaml TEXT NOT NULL
     );
+  `);
+  context.store.ensureColumn(
+    "legacy_cards",
+    "source",
+    "ALTER TABLE legacy_cards ADD COLUMN source TEXT NOT NULL DEFAULT 'store'",
+  );
+  context.store.ensureColumn(
+    "legacy_files",
+    "source",
+    "ALTER TABLE legacy_files ADD COLUMN source TEXT NOT NULL DEFAULT 'store'",
+  );
+  context.store.ensureColumn(
+    "legacy_decisions",
+    "source",
+    "ALTER TABLE legacy_decisions ADD COLUMN source TEXT NOT NULL DEFAULT 'store'",
+  );
+  context.store.migrate(`
+    UPDATE legacy_cards SET source = 'archive' WHERE card_type = 'archive';
+    UPDATE legacy_files
+    SET source = 'archive'
+    WHERE card_id IN (SELECT id FROM legacy_cards WHERE source = 'archive');
   `);
 }
 
@@ -454,22 +478,25 @@ function replaceLegacyRows(
   data: SourceData,
 ): void {
   const database = context.store.database;
+  const source = data.sourceKind === "archive" ? "archive" : "store";
   database.exec("BEGIN IMMEDIATE");
   try {
     if (hasTable(database, "search_index")) {
       database.run("DELETE FROM search_index WHERE surface = '[legacy]'");
     }
-    database.run("DELETE FROM legacy_decisions");
-    database.run("DELETE FROM legacy_files");
-    database.run("DELETE FROM legacy_cards");
+    database.query("DELETE FROM legacy_decisions WHERE source = ?").run(source);
+    database.query("DELETE FROM legacy_files WHERE source = ?").run(source);
+    database.query("DELETE FROM legacy_cards WHERE source = ?").run(source);
     const insertCard = database.query(
       `INSERT INTO legacy_cards
-        (id, card_type, parent, status, title, record_file, card_yaml, created_at, updated_at, imported_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, source, card_type, parent, status, title, record_file, card_yaml,
+         created_at, updated_at, imported_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const card of data.cards) {
       insertCard.run(
         card.id,
+        source,
         card.card_type,
         card.parent,
         card.status,
@@ -482,19 +509,21 @@ function replaceLegacyRows(
       );
     }
     const insertFile = database.query(
-      `INSERT INTO legacy_files (card_id, path, sha256, size, text_content)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO legacy_files (card_id, source, path, sha256, size, text_content)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     for (const file of data.files) {
-      insertFile.run(file.cardId, file.path, file.sha256, file.size, file.text);
+      insertFile.run(file.cardId, source, file.path, file.sha256, file.size, file.text);
     }
     const insertDecision = database.query(
-      `INSERT INTO legacy_decisions (id, card_id, title, status, source_path, decision_yaml)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO legacy_decisions
+        (id, source, card_id, title, status, source_path, decision_yaml)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const decision of data.decisions) {
       insertDecision.run(
         decision.id,
+        source,
         decision.cardId,
         decision.title,
         decision.status,
