@@ -212,8 +212,9 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
   });
 });
 
-test("63 install mirrors teach the work lifecycle", async () => {
+test("63 [lint] install mirrors teach the work lifecycle", async () => {
   await withFixture(async (fixture) => {
+    // Proves mirror documentation content, not that an agent loads or follows the lifecycle.
     const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
@@ -228,8 +229,9 @@ test("63 install mirrors teach the work lifecycle", async () => {
   });
 });
 
-test("289 recipe slp presents the SLP roles and the install mirrors bind a repository session to Lead", async () => {
+test("289 [lint] recipe slp presents the SLP roles and install mirrors state the role bindings", async () => {
   await withFixture(async (fixture) => {
+    // Proves doctrine text, not runtime enforcement of dispatch or session role ownership.
     const { path } = await prepareInstallFixture(fixture);
     const recipe = await runCli(fixture, ["recipe", "show", "slp"]);
     expect(recipe.exitCode).toBe(0);
