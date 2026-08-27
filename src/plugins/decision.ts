@@ -395,7 +395,8 @@ export const decisionPlugin: BuiltInPlugin = {
         if (!reason?.trim()) {
           throw new CliError(
             "MISSING_ARGUMENT",
-            "decision withdraw requires --reason <text>",
+            `decision withdraw requires --reason <text>; run: maestro decision withdraw ${id} --reason "<why>"`,
+            { command: `maestro decision withdraw ${id} --reason "<why>"`, id },
           );
         }
         const withdraw = context.store.database.transaction(() => {

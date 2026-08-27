@@ -278,7 +278,7 @@ test("452 withdrawn decisions refuse edits, locks, supersession, and invalid wit
       expect(missing.exitCode).not.toBe(0);
       expect(JSON.parse(missing.stderr).error).toEqual(expect.objectContaining({
         code: "MISSING_ARGUMENT",
-        message: "decision withdraw requires --reason <text>",
+        message: expect.stringContaining("decision withdraw requires --reason <text>; run: maestro decision withdraw"),
       }));
     }
 

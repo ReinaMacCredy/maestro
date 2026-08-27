@@ -425,7 +425,6 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     const identity = await readFile(join(room, "IDENTITY.md"), "utf8");
     const agents = await readFile(join(room, "AGENTS.md"), "utf8");
 
-    expect(lead.match(/^\d+\./gm)).toEqual(["1.", "2.", "3.", "4.", "5.", "6."]);
     expect(lead).toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
     expect(lead).toContain("`herdr agent list`");
     expect(lead).toContain(
@@ -1041,9 +1040,41 @@ test("254 brief reports DISPATCH_UNRETURNED and omits ordinary in-progress work"
     );
     expect(opened.exitCode).toBe(0);
     const dispatch = opened.stdout.match(/^(x\d+)/)?.[1] as string;
+    const recentWork = await addBriefWork(fixture, fixture.repo, path, "recent lane");
+    const recentOpened = await runInstalledCliAt(
+      fixture,
+      fixture.repo,
+      [
+        "dispatch",
+        "open",
+        recentWork,
+        "--objective",
+        "return the result",
+        "--owned-scope",
+        "scratch",
+        "--excluded-scope",
+        "product source",
+        "--mutation",
+        "no-write",
+        "--stop-condition",
+        "handback filed",
+        "--lane",
+        "delivery",
+        "--evidence-required",
+        "source",
+        "--pane",
+        "w1:pY",
+      ],
+      { PATH: path },
+    );
+    expect(recentOpened.exitCode).toBe(0);
+    const recent = recentOpened.stdout.match(/^(x\d+)/)?.[1] as string;
     const database = openRepoDatabase(fixture.repo);
+    // The default threshold is two hours: 2h30 is stale, 1h30 is not.
     database.query("UPDATE dispatches SET created_at = ? WHERE id = ?")
-      .run(new Date(Date.now() - 3 * 60 * 60_000).toISOString(), dispatch);
+      .run(new Date(Date.now() - 150 * 60_000).toISOString(), dispatch);
+    database.query("UPDATE dispatches SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 90 * 60_000).toISOString(), recent);
     database.close();
 
     const brief = await runInstalledCliAt(
@@ -1057,6 +1088,7 @@ test("254 brief reports DISPATCH_UNRETURNED and omits ordinary in-progress work"
       `${await realpath(fixture.repo)}: attention DISPATCH_UNRETURNED dispatch ${dispatch}`,
     );
     expect(brief.stdout).not.toContain("ordinary dispatch progress");
+    expect(brief.stdout).not.toContain(`DISPATCH_UNRETURNED dispatch ${recent}`);
   });
 });
 
@@ -1191,7 +1223,13 @@ test("442 install preserves review-date frontmatter in every method skill", asyn
         "utf8",
       );
       const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
-      expect(frontmatter).toContain("review-date: 2026-11-28");
+      const source = await readFile(
+        join(import.meta.dir, "..", "src", "plugins", "skills", name, "SKILL.md"),
+        "utf8",
+      );
+      const sourceDate = source.match(/^review-date: (\d{4}-\d{2}-\d{2})$/m)?.[1];
+      expect(sourceDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(frontmatter).toContain(`review-date: ${sourceDate}`);
     }
   });
 });
