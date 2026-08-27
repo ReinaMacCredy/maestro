@@ -527,6 +527,7 @@ function dispatchUnreturnedDetections(
   const dispatch = context.dispatch as DispatchService;
   return dispatch.list().flatMap((record): Detection[] => {
     if (record.state !== "open") return [];
+    if (record.claimedBy) return [];
     const work = workById.get(record.workId);
     if (!work || work.state === "done" || work.state === "cancelled") return [];
     const holder = record.heldBy ? sessions.get(record.heldBy) : undefined;
@@ -566,6 +567,7 @@ function dispatchUnreturnedDetections(
 function dispatchUnacceptedDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
+  sessions: Map<string, SessionRecord>,
   now: number,
 ): Detection[] {
   const cutoff = now - 10 * 60_000;
@@ -578,26 +580,33 @@ function dispatchUnacceptedDetections(
     ) {
       return [];
     }
+    const claimant = record.claimedBy ? sessions.get(record.claimedBy) : undefined;
+    if (claimant?.live) return [];
     const work = workById.get(record.workId);
     if (!work || work.state === "done" || work.state === "cancelled") return [];
     const pane = record.pane ?? "none";
+    const pendingClaim = record.claimedBy !== null;
     return [{
       entityId: record.id,
       entityType: "dispatch",
       fingerprint: `dispatch-unaccepted:${record.id}`,
       kind: "DISPATCH_UNACCEPTED",
       packet: packet("DISPATCH_UNACCEPTED", record.id, {
-        observed:
-          `${record.id} opened ${minutesSince(record.createdAt, now)} minutes ago ` +
-          `on pane ${pane}, never accepted`,
-        evidence: "dispatch state open; no session bound to the pane",
-        unknown: "whether the brief reached the pane",
-        question: "was the stored contract delivered?",
-        smallestAction:
-          `herdr agent list, then herdr agent prompt <name> with the stored contract from ` +
-          `maestro dispatch show ${record.id}`,
+        observed: pendingClaim
+          ? `${record.id} has an unconfirmed claim by ${record.claimedBy}; claimant is not live`
+          : `${record.id} opened ${minutesSince(record.createdAt, now)} minutes ago on pane ${pane}, never accepted`,
+        evidence: pendingClaim
+          ? `dispatches.claimed_by ${record.claimedBy}; sessions.live false; confirmation pending`
+          : "dispatch state open; no session bound to the pane",
+        unknown: pendingClaim
+          ? "why the claim was not confirmed before the claimant stopped"
+          : "whether the brief reached the pane",
+        question: pendingClaim ? "confirm the claim or cancel and reopen?" : "was the stored contract delivered?",
+        smallestAction: pendingClaim
+          ? `maestro dispatch confirm ${record.id} --session ${record.claimedBy}`
+          : `herdr agent list, then herdr agent prompt <name> with the stored contract from maestro dispatch show ${record.id}`,
       }),
-      subjectSession: record.targetSession,
+      subjectSession: record.claimedBy ?? record.targetSession,
       subjectWork: record.workId,
     }];
   });
@@ -692,7 +701,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.dispatchStaleHours,
     ),
-    ...dispatchUnacceptedDetections(context, workById, now),
+    ...dispatchUnacceptedDetections(context, workById, sessions, now),
     ...handbackUnreviewedDetections(context, workById, now),
   ];
 }

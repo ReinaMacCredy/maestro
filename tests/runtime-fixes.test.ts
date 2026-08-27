@@ -370,6 +370,58 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
   });
 });
 
+test("457 pending claims suppress stale attention while live and route dead claims to confirm", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "pending claim attention", "--atomic-reason", "fixture"]),
+    );
+    const openArgs = dispatchOpenArgs(work, "unused").slice(0, -2);
+    const dispatch = dispatchId((await runCli(fixture, openArgs)).stdout);
+    const claimant = session("pending-claimant");
+    expect(
+      (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], claimant)).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], claimant)).exitCode).toBe(0);
+
+    const path = join(fixture.repo, ".maestro", "maestro.db");
+    const database = new Database(path);
+    database
+      .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 11 * 60_000).toISOString(), dispatch);
+    database
+      .query("UPDATE sessions SET anchor = 'ttl' WHERE id = ?")
+      .run("pending-claimant");
+    database.close();
+
+    const live = await runCli(
+      fixture,
+      ["attention", "--json", "--dispatch-stale", "0.000001"],
+      session("scanner"),
+    );
+    expect(live.exitCode).toBe(0);
+    expect(live.stdout).not.toContain("DISPATCH_UNACCEPTED");
+    expect(live.stdout).not.toContain("DISPATCH_UNRETURNED");
+
+    const stored = new Database(path);
+    stored
+      .query("UPDATE sessions SET anchor = 'pid', pid = ? WHERE id = ?")
+      .run(2147483647, "pending-claimant");
+    stored.close();
+
+    const dead = await runCli(
+      fixture,
+      ["attention", "--json", "--dispatch-stale", "0.000001"],
+      session("scanner"),
+    );
+    expect(dead.exitCode).toBe(0);
+    expect(dead.stdout).toContain("DISPATCH_UNACCEPTED");
+    expect(dead.stdout).not.toContain("DISPATCH_UNRETURNED");
+    expect(dead.stdout).toContain(
+      `maestro dispatch confirm ${dispatch} --session pending-claimant`,
+    );
+  });
+});
+
 test("325 a dispatch opened before the handback cannot count as its review", async () => {
   await withFixture(async (fixture) => {
     const owner = session("citing-owner");
