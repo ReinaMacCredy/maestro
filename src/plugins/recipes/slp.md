@@ -108,7 +108,8 @@ split-brain: the later one must stop and read `maestro status`.
 
 The room reads, it is not pushed to: `maestro brief` runs `maestro attention`
 in every registered repository. Findings are STALLED_LEASE, REPEATED_FAILURE,
-DECISION_STALE, SCOPE_COLLISION, DISPATCH_UNRETURNED and HANDBACK_UNREVIEWED,
+DECISION_STALE, SCOPE_COLLISION, DISPATCH_UNACCEPTED, DISPATCH_UNRETURNED and
+HANDBACK_UNREVIEWED,
 each as a packet:
 
 ```

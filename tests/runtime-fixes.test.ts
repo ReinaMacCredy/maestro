@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
 
@@ -10,7 +11,7 @@ function session(id: string): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
 }
 
-function dispatchOpenArgs(work: string, target: string): string[] {
+function dispatchOpenArgs(work: string, target: string, pane = "w1:p-test"): string[] {
   return [
     "dispatch",
     "open",
@@ -30,7 +31,7 @@ function dispatchOpenArgs(work: string, target: string): string[] {
     "--evidence-required",
     "source: focused test",
     "--pane",
-    "w1:p-test",
+    pane,
     "--target-session",
     target,
   ];
@@ -278,5 +279,93 @@ test("323 cancelled dispatches leave the live council before work start", async 
     const listed = await runCli(fixture, ["dispatch", "list", work], owner);
     expect(listed.exitCode).toBe(0);
     expect(listed.stdout).not.toContain("council:");
+  });
+});
+
+test("324 unaccepted dispatch attention appears after ten minutes and clears on accept", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, [
+        "work",
+        "add",
+        "unaccepted dispatch attention",
+        "--atomic-reason",
+        "fixture",
+      ]),
+    );
+    const oldPane = "w1:p-unaccepted";
+    const oldDispatch = dispatchId(
+      (
+        await runCli(
+          fixture,
+          dispatchOpenArgs(work, "unaccepted-holder", oldPane),
+        )
+      ).stdout,
+    );
+    dispatchId(
+      (
+        await runCli(
+          fixture,
+          dispatchOpenArgs(work, "young-holder", "w1:p-young"),
+        )
+      ).stdout,
+    );
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      strict: true,
+    });
+    database
+      .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 11 * 60_000).toISOString(), oldDispatch);
+    database.close();
+
+    const attention = await runCli(fixture, ["attention"]);
+    expect(attention.exitCode).toBe(0);
+    for (const line of [
+      `attention DISPATCH_UNACCEPTED ${oldDispatch}`,
+      `observed: ${oldDispatch} opened 11 minutes ago on pane ${oldPane}, never accepted`,
+      "evidence: dispatch state open; no session bound to the pane",
+      "unknown: whether the brief reached the pane",
+      "question: was the stored contract delivered?",
+      `smallest action: herdr agent list, then herdr agent prompt <name> with the stored contract from maestro dispatch show ${oldDispatch}`,
+      "human decision needed: no",
+    ]) {
+      expect(attention.stdout).toContain(line);
+    }
+
+    const repeated = await runCli(fixture, ["attention"]);
+    expect(repeated.stdout).toContain(`attention DISPATCH_UNACCEPTED ${oldDispatch}`);
+    const recorded = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+      strict: true,
+    });
+    expect(
+      recorded
+        .query<{ count: number }, []>(
+          "SELECT count(*) AS count FROM attention WHERE kind = 'DISPATCH_UNACCEPTED'",
+        )
+        .get()?.count,
+    ).toBe(1);
+    recorded.close();
+
+    const hook = await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
+    expect(hook.stdout).toContain(`attention DISPATCH_UNACCEPTED ${oldDispatch}`);
+    await mkdir(join(fixture.home, "maestro"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
+    const brief = await runCli(fixture, ["brief"]);
+    expect(brief.stdout).toContain(
+      `${fixture.repo}: attention DISPATCH_UNACCEPTED ${oldDispatch}`,
+    );
+
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["dispatch", "accept", oldDispatch],
+          session("unaccepted-holder"),
+        )
+      ).exitCode,
+    ).toBe(0);
+    const cleared = await runCli(fixture, ["attention"]);
+    expect(cleared.stdout).not.toContain("DISPATCH_UNACCEPTED");
   });
 });

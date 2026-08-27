@@ -10,6 +10,7 @@ export type AttentionKind =
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
   | "SCOPE_COLLISION"
+  | "DISPATCH_UNACCEPTED"
   | "DISPATCH_UNRETURNED"
   | "HANDBACK_UNREVIEWED";
 
@@ -332,6 +333,46 @@ function dispatchUnreturnedDetections(
   });
 }
 
+function dispatchUnacceptedDetections(
+  context: PluginContext,
+  workById: Map<string, AttentionWorkRow>,
+  now: number,
+): Detection[] {
+  const cutoff = now - 10 * 60_000;
+  const dispatch = context.dispatch as DispatchService;
+  return dispatch.list().flatMap((record): Detection[] => {
+    if (
+      record.state !== "open" ||
+      record.heldBy !== null ||
+      Date.parse(record.createdAt) > cutoff
+    ) {
+      return [];
+    }
+    const work = workById.get(record.workId);
+    if (!work || work.state === "done" || work.state === "cancelled") return [];
+    const pane = record.pane ?? "none";
+    return [{
+      entityId: record.id,
+      entityType: "dispatch",
+      fingerprint: `dispatch-unaccepted:${record.id}`,
+      kind: "DISPATCH_UNACCEPTED",
+      packet: packet("DISPATCH_UNACCEPTED", record.id, {
+        observed:
+          `${record.id} opened ${minutesSince(record.createdAt, now)} minutes ago ` +
+          `on pane ${pane}, never accepted`,
+        evidence: "dispatch state open; no session bound to the pane",
+        unknown: "whether the brief reached the pane",
+        question: "was the stored contract delivered?",
+        smallestAction:
+          `herdr agent list, then herdr agent prompt <name> with the stored contract from ` +
+          `maestro dispatch show ${record.id}`,
+      }),
+      subjectSession: record.targetSession,
+      subjectWork: record.workId,
+    }];
+  });
+}
+
 function handbackUnreviewedDetections(
   context: PluginContext,
   workById: Map<string, AttentionWorkRow>,
@@ -397,6 +438,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.dispatchStaleHours,
     ),
+    ...dispatchUnacceptedDetections(context, workById, now),
     ...handbackUnreviewedDetections(context, workById, now),
   ];
 }
