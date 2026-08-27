@@ -321,32 +321,22 @@ test("59 native search bounds entities, collapses logs, and keeps JSON summaries
 
 test("60 every shipped recipe command example carries the maestro prefix", async () => {
   await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["help"]);
+    expect(help.exitCode).toBe(0);
+    const roots = new Set(
+      [...help.stdout.matchAll(/^  (\S+)\s{2,}\S/gm)].map((match) => match[1] ?? ""),
+    );
+    expect(roots.size).toBeGreaterThan(0);
     const listed = await runCli(fixture, ["recipe", "list"]);
     const recipeNames = listed.stdout.trim().split("\n").map((line) => line.split("\t", 1)[0] ?? "");
-    const roots = new Set([
-      "decision",
-      "doctor",
-      "hook",
-      "import",
-      "install",
-      "mcp",
-      "plugin",
-      "publish",
-      "ready",
-      "recipe",
-      "search",
-      "status",
-      "trace",
-      "uninstall",
-      "update",
-      "version",
-      "work",
-    ]);
 
     for (const name of recipeNames) {
       const shown = await runCli(fixture, ["recipe", "show", name]);
       const inline = [...shown.stdout.matchAll(/`([^`\n]+)`/g)].map((match) => match[1] ?? "");
-      const commands = inline.filter((example) => roots.has(example.trim().split(/\s+/, 1)[0] ?? ""));
+      const commands = inline.filter((example) => {
+        const trimmed = example.trim();
+        return roots.has(trimmed.split(/\s+/, 1)[0] ?? "") && !trimmed.startsWith("maestro ");
+      });
       expect(commands, name).toEqual([]);
     }
   });
