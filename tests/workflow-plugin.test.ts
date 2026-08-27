@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
@@ -15,6 +15,17 @@ test("287 maestro-work skill lane line matches the dispatch vocabulary", async (
   expect(laneLine?.slice("Lane: ".length).split("|").map((name) => name.trim())).toEqual(
     dispatchLaneVocabulary.map(({ name }) => name),
   );
+});
+
+test("288 repo memory names every archived spec-workflow bundle", async () => {
+  const workflowRoot = join(import.meta.dir, "..", ".spec-workflow");
+  const archived = (await readdir(join(workflowRoot, "archive"), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const memory = await readFile(join(workflowRoot, "MEMORY.md"), "utf8");
+
+  expect(archived.filter((name) => !memory.includes(`archive/${name}/`))).toEqual([]);
 });
 
 test("122 decision draft stores a rationale body and show renders it", async () => {
