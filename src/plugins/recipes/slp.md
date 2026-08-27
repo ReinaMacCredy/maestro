@@ -136,10 +136,14 @@ sender's role and the record it is about, and the answer is the record.
 - A question that needs an owner or Supervisor decision is drafted first:
   `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,
   then sent with `herdr agent prompt <name> "[from <role>][ask d<id>] <question>"`.
-  The Supervisor answers by `maestro decision lock d<id>` when it relays the
-  owner's word, or by drafting a superseding decision whose rationale says
-  "supervisor default, not owner instruction" when it advises. The reply
-  prompt names the record; the record, not the prompt, is what the Lead acts on.
+  When the Supervisor relays the owner's word it locks that draft in the
+  repository store (`maestro decision lock d<id>`, the one write it makes
+  there). When it advises, it answers by prompt only and the Lead records the
+  answer: lock the draft, or supersede it, with a rationale that starts
+  "supervisor default, not owner instruction". Cross-project observations the
+  Supervisor wants to keep go to the room store, never the project's. The
+  reply prompt names the record; the record, not the prompt, is what the Lead
+  acts on.
 - A question that is not a decision is a note: `maestro work note <id> "<question>"`,
   sent the same way; the answer is a note on the same work.
 - An unanswered draft surfaces as DECISION_STALE in attention; nobody polls.
