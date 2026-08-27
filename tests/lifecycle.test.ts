@@ -6,6 +6,7 @@ import { chmod, cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/pro
 import { join, resolve } from "node:path";
 import {
   addLinkedWorktree,
+  idFrom,
   initializeGitRepository,
   type CliResult,
   type Fixture,
@@ -278,6 +279,66 @@ test("47 update fast-forwards and resyncs while divergence and fetch failure cha
     expect(unreachable.stderr).toContain("fix");
     expect(await git(source, ["rev-parse", "HEAD"])).toBe(unreachableHead);
     expect(await readFile(stampPath)).toEqual(unreachableStamp);
+  });
+});
+
+test("438 update warns about live holders and still completes", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const holder = {
+      MAESTRO_SESSION_ID: "activation-peer",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const caller = {
+      MAESTRO_SESSION_ID: "lifecycle-session",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const work = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "live activation work", "--atomic-reason", "fixture"],
+        holder,
+      ),
+    );
+    expect((await runCli(fixture, ["work", "start", work], holder)).exitCode).toBe(0);
+    const callerWork = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "caller activation work", "--atomic-reason", "fixture"],
+        caller,
+      ),
+    );
+    expect((await runCli(fixture, ["work", "start", callerWork], caller)).exitCode).toBe(0);
+    await writeFile(join(fixture.home, "maestro", "registry"), `${source}\n${fixture.repo}\n`);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(updated.exitCode).toBe(0);
+    expect(updated.stderr).toContain(
+      `[update] 1 live session holds work or an open dispatch (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
+    );
+  });
+});
+
+test("440 update treats an unreadable registered repository as unsafe and continues", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const unreadableRepo = join(fixture.root, "unreadable-repo");
+    await mkdir(unreadableRepo, { recursive: true });
+    await writeFile(join(unreadableRepo, ".maestro"), "not a directory\n");
+    await writeFile(
+      join(fixture.home, "maestro", "registry"),
+      `${source}\n${unreadableRepo}\n`,
+    );
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(updated.exitCode).toBe(0);
+    expect(updated.stderr).toContain(
+      `[update] 1 registered repository unreadable (repos: ${unreadableRepo}); treating as unsafe`,
+    );
   });
 });
 

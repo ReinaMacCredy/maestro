@@ -14,6 +14,7 @@ import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CliError, requiredPosition, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
+import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { scaffoldRoom } from "./room.ts";
@@ -615,6 +616,7 @@ export const installPlugin: BuiltInPlugin = {
           }
 
           const stampBefore = await readInstallStamp(runtimeRoot);
+          await warnBeforeRuntimeActivation(home, "install");
           await syncRuntime(sourceRoot, runtimeRoot);
           await stampRuntime(sourceRoot, runtimeRoot);
           // Wiring content (mirror blocks, hook sources) lives as constants in

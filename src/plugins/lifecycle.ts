@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
+import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import {
   codexHookTrustRecorded,
   forgetRepository,
@@ -210,6 +211,7 @@ async function update(): Promise<CliResult> {
   }
   let staged: string | null = null;
   try {
+    await warnBeforeRuntimeActivation(home, "update");
     staged = await stageRuntime(source, runtime);
     await swapRuntime(staged, runtime);
     staged = null;

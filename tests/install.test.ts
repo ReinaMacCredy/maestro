@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
+import { idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
 const shellSourceLine =
@@ -44,6 +44,75 @@ test("282 first install needs no rollback binary and targets the detected shell"
     expect(await Bun.file(join(fixture.home, ".zshrc")).exists()).toBe(false);
     expect(await Bun.file(join(fixture.home, ".bashrc")).exists()).toBe(false);
     expect(installed.stdout).toContain(shellSourceLine);
+  });
+});
+
+test("439 install warns about a live dispatch holder and still completes", async () => {
+  await withFixture(async (fixture) => {
+    const peer = {
+      MAESTRO_SESSION_ID: "activation-install-peer",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    expect(
+      (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], peer)).exitCode,
+    ).toBe(0);
+    const added = await runCli(
+      fixture,
+      [
+        "work",
+        "add",
+        "live install dispatch",
+        "--atomic-reason",
+        "fixture",
+      ],
+      peer,
+    );
+    expect(added.exitCode).toBe(0);
+    const work = idFrom(added);
+    const opened = await runCli(
+      fixture,
+      [
+        "dispatch",
+        "open",
+        work,
+        "--objective",
+        "hold a live dispatch during install",
+        "--owned-scope",
+        "fixture",
+        "--excluded-scope",
+        "product source",
+        "--mutation",
+        "no-write",
+        "--stop-condition",
+        "install completes",
+        "--lane",
+        "scout",
+        "--evidence-required",
+        "source: fixture",
+        "--pane",
+        "fixture:p1",
+        "--target-session",
+        peer.MAESTRO_SESSION_ID,
+      ],
+      peer,
+    );
+    expect(opened).toEqual(expect.objectContaining({ exitCode: 0 }));
+    const dispatch = opened.stdout.match(/^x\d+/)?.[0];
+    if (!dispatch) throw new Error(`missing dispatch id in stdout: ${opened.stdout}`);
+    expect((await runCli(fixture, ["dispatch", "accept", dispatch], peer)).exitCode).toBe(0);
+    await mkdir(join(fixture.home, "maestro"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
+    const { path } = await prepareInstallFixture(fixture);
+
+    const installed = await runCli(fixture, ["install"], {
+      MAESTRO_SESSION_ID: "activation-installer",
+      PATH: path,
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(installed.stderr).toContain(
+      `[install] 1 live session holds work or an open dispatch (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
+    );
   });
 });
 
