@@ -446,8 +446,28 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
   return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
 }
 
-export async function codexHooksTrusted(_root: string, _home: string): Promise<boolean> {
-  return false;
+// Codex records hook trust in ~/.codex/config.toml as
+// [hooks.state."<hooks.json>:<event>:<group>:<index>"] trusted_hash = "sha256:..."
+// (Codex CLI 0.149, read 2026-08-27). The hashed bytes are undocumented, so
+// this only proves Codex recorded trust for both events at this path; it never
+// verifies the hash.
+export async function codexHooksTrusted(root: string, home: string): Promise<boolean> {
+  const config = join(home, ".codex", "config.toml");
+  if (!existsSync(config)) return false;
+  const text = await readFile(config, "utf8");
+  const hooks = join(root, ".codex", "hooks.json");
+  const entries = [...text.matchAll(/^\[hooks\.state\."(.+?):([a-z_]+):0:0"\]\n((?:(?!\n\[)[\s\S])*)/gm)];
+  const recorded = async (event: string): Promise<boolean> => {
+    for (const [, path, entryEvent, body] of entries) {
+      if (entryEvent !== event || !path || !body) continue;
+      if (!/^\s*trusted_hash\s*=\s*"sha256:[0-9a-f]+"/m.test(body)) continue;
+      // Codex records the path as it saw it; the fixture and macOS /tmp can
+      // differ by a symlink, so compare resolved paths.
+      if (await samePath(path, hooks)) return true;
+    }
+    return false;
+  };
+  return (await recorded("session_start")) && (await recorded("user_prompt_submit"));
 }
 
 async function samePath(left: string, right: string): Promise<boolean> {

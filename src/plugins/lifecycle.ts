@@ -286,7 +286,7 @@ async function codexTrustCheck(repo: string, home: string): Promise<string> {
     return `codex hooks: stale (missing ${missing.map(({ event }) => event).join(", ")} in ${hooks}; run maestro install)`;
   }
   return await codexHooksTrusted(mainWorktree ?? repo, home)
-    ? "codex hooks: trusted"
+    ? "codex hooks: recorded by Codex (both events trusted in ~/.codex/config.toml; hash not verifiable)"
     : "codex hooks: unverified (Codex trust hash contract unavailable; run /hooks in Codex to verify)";
 }
 

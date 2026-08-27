@@ -122,9 +122,9 @@ test("225 the codex check verifies hook declarations but never guesses trusted h
       `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n` +
         `[hooks.state."${hooksPath}:user_prompt_submit:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`,
     );
-    const stillUnverified = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(stillUnverified.stdout).toContain("codex hooks: unverified");
-    expect(stillUnverified.stdout).toContain("/hooks");
+    const recorded = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(recorded.stdout).toContain("codex hooks: recorded by Codex");
+    expect(recorded.stdout).not.toContain("codex hooks: trusted");
 
     delete installed.hooks.UserPromptSubmit;
     await writeFile(hooksPath, JSON.stringify(installed, null, 2));

@@ -134,7 +134,7 @@ test("164 a scope collision is recorded once after the overlap banner", async ()
   });
 });
 
-test("165 doctor reports Codex hook trust as unverified without a documented hash contract", async () => {
+test("165 doctor reports Codex hook trust as unverified until Codex records both events, never as verified", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -152,10 +152,11 @@ test("165 doctor reports Codex hook trust as unverified without a documented has
         `[hooks.state."${join(fixture.repo, ".codex", "hooks.json")}:user_prompt_submit:0:0"]\n` +
         `trusted_hash = "sha256:deadbeef"\n`,
     );
-    const stillUnverified = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(stillUnverified.exitCode).toBe(0);
-    expect(stillUnverified.stdout).toContain("codex hooks: unverified");
-    expect(stillUnverified.stdout).toContain("/hooks");
+    const recorded = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(recorded.exitCode).toBe(0);
+    expect(recorded.stdout).toContain("codex hooks: recorded by Codex");
+    expect(recorded.stdout).toContain("hash not verifiable");
+    expect(recorded.stdout).not.toContain("codex hooks: trusted");
   });
 });
 
