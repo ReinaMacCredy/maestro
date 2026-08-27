@@ -120,7 +120,7 @@ split-brain: the later one must stop and read `maestro status`.
 
 The room reads, it is not pushed to: `maestro brief` runs `maestro attention`
 in every registered repository. Findings are STALLED_LEASE, REPEATED_FAILURE,
-DECISION_STALE, LEAD_COLLISION, SCOPE_COLLISION, DISPATCH_UNACCEPTED,
+DECISION_STALE, HUMAN_DECISION_REQUIRED, LEAD_COLLISION, SCOPE_COLLISION, DISPATCH_UNACCEPTED,
 DISPATCH_UNRETURNED and HANDBACK_UNREVIEWED,
 each as a packet. HANDBACK_UNREVIEWED clears only when the work closes or a
 later dispatch on the same work item names the handback id in its objective or

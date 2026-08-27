@@ -8,6 +8,7 @@ export interface DecisionRecord {
   id: string;
   text: string;
   rationale: string | null;
+  needsOwner: boolean;
   state: "draft" | "locked" | "superseded";
   parentId: string | null;
   workId: string | null;
@@ -21,6 +22,7 @@ interface DecisionRow {
   id: string;
   text: string;
   rationale: string | null;
+  needs_owner: number;
   state: "draft" | "locked" | "superseded";
   parent_id: string | null;
   work_id: string | null;
@@ -40,6 +42,7 @@ function fromRow(row: DecisionRow): DecisionRecord {
     id: row.id,
     text: row.text,
     rationale: row.rationale,
+    needsOwner: row.needs_owner === 1,
     state: row.state,
     parentId: row.parent_id,
     workId: row.work_id,
@@ -78,6 +81,7 @@ function format(decision: DecisionRecord): string {
   return [
     `${decision.id} [${decision.state}] ${decision.text}`,
     decision.rationale ? `rationale: ${decision.rationale}` : null,
+    decision.needsOwner ? "needs owner: yes" : null,
     decision.parentId ? `parent: ${decision.parentId}` : null,
     decision.workId ? `work: ${decision.workId}` : null,
     decision.supersedesId ? `supersedes: ${decision.supersedesId}` : null,
@@ -117,6 +121,11 @@ export const decisionPlugin: BuiltInPlugin = {
         if (!hasDecisionColumn("rationale")) throw error;
       }
     }
+    context.store.ensureColumn(
+      "decisions",
+      "needs_owner",
+      "ALTER TABLE decisions ADD COLUMN needs_owner INTEGER NOT NULL DEFAULT 0",
+    );
     const service: DecisionService = {
       get: (id) => getDecision(context, id),
       list: () =>
@@ -137,6 +146,7 @@ export const decisionPlugin: BuiltInPlugin = {
           const first = required(invocation, 0, "decision text");
           const second = invocation.positionals[1];
           const existing = getDecision(context, first);
+          const needsOwner = invocation.options["needs-owner"] === true;
           if (existing && second !== undefined) {
             if (existing.state !== "draft") {
               throw new CliError(
@@ -150,9 +160,9 @@ export const decisionPlugin: BuiltInPlugin = {
             const updatedAt = new Date().toISOString();
             context.store.database
               .query(
-                "UPDATE decisions SET text = ?, rationale = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
+                "UPDATE decisions SET text = ?, rationale = ?, needs_owner = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
               )
-              .run(text, rationale, updatedAt, existing.id);
+              .run(text, rationale, needsOwner || existing.needsOwner ? 1 : 0, updatedAt, existing.id);
             context.log.append({
               type: "decision.draft",
               entityType: "decision",
@@ -209,10 +219,10 @@ export const decisionPlugin: BuiltInPlugin = {
             context.store.database
               .query(
                 `INSERT INTO decisions
-                  (id, text, rationale, state, parent_id, work_id, supersedes_id, created_at, updated_at)
-                 VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+                  (id, text, rationale, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
               )
-              .run(id, text, rationale, parentId, workId, supersedesId, now, now);
+              .run(id, text, rationale, needsOwner ? 1 : 0, parentId, workId, supersedesId, now, now);
             context.log.append({
               type: "decision.draft",
               entityType: "decision",
@@ -240,6 +250,7 @@ export const decisionPlugin: BuiltInPlugin = {
           description: "Create or edit a draft decision.",
           flags: {
             "--rationale": { description: "Record why this decision was made.", value: true },
+            "--needs-owner": { description: "Mark this draft as requiring an owner decision." },
             "--parent": { description: "Attach this draft beneath a parent decision.", value: true },
             "--work": { description: "Link this draft to a work item.", value: true },
             "--supersedes": { description: "Supersede a locked decision with this draft.", value: true },

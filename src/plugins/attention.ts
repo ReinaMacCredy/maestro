@@ -9,6 +9,7 @@ export type AttentionKind =
   | "STALLED_LEASE"
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
+  | "HUMAN_DECISION_REQUIRED"
   | "LEAD_COLLISION"
   | "SCOPE_COLLISION"
   | "DISPATCH_UNACCEPTED"
@@ -74,6 +75,7 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
   STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
   DECISION_STALE: "decision",
+  HUMAN_DECISION_REQUIRED: "decision",
   LEAD_COLLISION: "work",
   SCOPE_COLLISION: "work",
   DISPATCH_UNACCEPTED: "dispatch",
@@ -126,6 +128,7 @@ function packet(
   fields: {
     evidence: string;
     holderRole?: "lead" | "peer";
+    humanDecision?: boolean;
     observed: string;
     question: string;
     smallestAction: string;
@@ -140,7 +143,7 @@ function packet(
     `  unknown: ${fields.unknown}`,
     `  question: ${fields.question}`,
     `  smallest action: ${fields.smallestAction}`,
-    "  human decision needed: no",
+    `  human decision needed: ${fields.humanDecision ? "yes" : "no"}`,
   ].join("\n");
 }
 
@@ -268,6 +271,44 @@ function decisionStaleDetections(
         unknown: "whether the fork is still active, blocked, or abandoned",
         question: "lock, supersede, re-scope, or keep investigating?",
         smallestAction: `maestro decision show ${decision.id}`,
+      }),
+      subjectSession: work.heldBy,
+      subjectWork: work.id,
+    }];
+  });
+}
+
+function humanDecisionRequiredDetections(
+  context: PluginContext,
+  workById: Map<string, AttentionWorkRow>,
+): Detection[] {
+  const rows = context.store.database
+    .query<{ id: string; work_id: string }, []>(
+      `SELECT decisions.id, decisions.work_id
+       FROM decisions
+       JOIN work ON work.id = decisions.work_id
+       WHERE decisions.state = 'draft'
+         AND decisions.needs_owner = 1
+         AND work.state != 'done'
+         AND work.cancelled_at IS NULL
+       ORDER BY decisions.id`,
+    )
+    .all();
+  return rows.flatMap((decision): Detection[] => {
+    const work = workById.get(decision.work_id);
+    if (!work) return [];
+    return [{
+      entityId: decision.id,
+      entityType: "decision",
+      fingerprint: `human-decision:${decision.id}`,
+      kind: "HUMAN_DECISION_REQUIRED",
+      packet: packet("HUMAN_DECISION_REQUIRED", decision.id, {
+        observed: `draft linked to ${decision.work_id} requires an owner decision`,
+        evidence: "decisions.needs_owner = 1",
+        unknown: "which option the owner will choose",
+        question: "what should the owner decide?",
+        smallestAction: `maestro decision show ${decision.id}`,
+        humanDecision: true,
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
@@ -519,6 +560,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.decisionStaleHours,
     ),
+    ...humanDecisionRequiredDetections(context, workById),
     ...leadCollisionDetections(context, works, sessions),
     ...scopeCollisionDetections(works, sessions),
     ...dispatchUnreturnedDetections(

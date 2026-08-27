@@ -105,6 +105,31 @@ test("19 locked decisions reject edits while superseding links and child visibil
   });
 });
 
+test("417 decision draft --needs-owner round-trips an explicit owner requirement", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(await runCli(fixture, ["work", "add", "owner choice", "--kind", "idea"]));
+    const marked = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "the owner must choose",
+        "--needs-owner",
+        "--work",
+        work,
+      ]),
+    );
+    const ordinary = idFrom(
+      await runCli(fixture, ["decision", "draft", "ordinary technical choice", "--work", work]),
+    );
+
+    for (const [id, needsOwner] of [[marked, true], [ordinary, false]] as const) {
+      const shown = await runCli(fixture, ["decision", "show", id]);
+      expect(shown.exitCode).toBe(0);
+      expect(shown.stdout.includes("needs owner: yes")).toBe(needsOwner);
+    }
+  });
+});
+
 test("410 decision draft warns and records the generation when its work council is sealed", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(

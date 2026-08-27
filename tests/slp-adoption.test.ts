@@ -474,6 +474,64 @@ test("142 attention raises DECISION_STALE only for old drafts linked to open wor
   }
 });
 
+test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked drafts", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "owner decision needed");
+    const ordinary = idFrom(
+      await runCli(fixture, ["decision", "draft", "ordinary fork", "--work", work]),
+    );
+    const marked = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "owner must choose",
+        "--needs-owner",
+        "--work",
+        work,
+      ]),
+    );
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          kind: string;
+          packet: string;
+          subjectWork: string | null;
+        }>;
+      };
+    }).data.detections.filter((detection) => detection.kind === "HUMAN_DECISION_REQUIRED");
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toEqual(expect.objectContaining({
+      fingerprint: `human-decision:${marked}`,
+      subjectWork: work,
+    }));
+    for (const required of [
+      `attention HUMAN_DECISION_REQUIRED decision ${marked}`,
+      "  observed:",
+      "  evidence:",
+      "  unknown:",
+      "  question:",
+      `  smallest action: maestro decision show ${marked}`,
+      "  human decision needed: yes",
+    ]) {
+      expect(detections[0]?.packet).toContain(required);
+    }
+    expect(detections[0]?.packet).not.toContain(ordinary);
+    expect(attention.stdout).not.toContain("DECISION_STALE");
+
+    const hook = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      session("scanner-session"),
+    );
+    expect(hook.exitCode).toBe(0);
+    expect(hook.stdout).toContain(`attention HUMAN_DECISION_REQUIRED decision ${marked}`);
+  });
+});
+
 test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "shared scope");

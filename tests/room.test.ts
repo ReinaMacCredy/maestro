@@ -787,6 +787,35 @@ test("251 brief reports DECISION_STALE and omits ordinary in-progress work", asy
   });
 });
 
+test("418 brief reports HUMAN_DECISION_REQUIRED and omits ordinary progress", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary decision progress");
+    const work = await addBriefWork(fixture, fixture.repo, path, "owner decision needed");
+    const decision = idFrom(
+      await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        ["decision", "draft", "choose owner boundary", "--needs-owner", "--work", work],
+        { PATH: path },
+      ),
+    );
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention HUMAN_DECISION_REQUIRED decision ${decision}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary decision progress");
+  });
+});
+
 test("252 brief reports STALLED_LEASE and omits ordinary in-progress work", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

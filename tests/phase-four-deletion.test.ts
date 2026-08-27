@@ -269,7 +269,14 @@ test("260 every exported attention kind has an independent read-only detection s
 
     const decisionWork = await addWork(fixture, "owner decision needed");
     const decision = idFrom(
-      await runCli(fixture, ["decision", "draft", "choose the boundary", "--work", decisionWork]),
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "choose the boundary",
+        "--needs-owner",
+        "--work",
+        decisionWork,
+      ]),
     );
 
     const collisionParent = await addWork(fixture, "shared mutation scope");
@@ -442,6 +449,7 @@ test("260 every exported attention kind has an independent read-only detection s
       DISPATCH_UNACCEPTED: unacceptedWork,
       DISPATCH_UNRETURNED: dispatchWork,
       HANDBACK_UNREVIEWED: handbackWork,
+      HUMAN_DECISION_REQUIRED: decisionWork,
       LEAD_COLLISION: stalled,
       REPEATED_FAILURE: repeated,
       SCOPE_COLLISION: collisionA,
@@ -452,6 +460,7 @@ test("260 every exported attention kind has an independent read-only detection s
       DISPATCH_UNACCEPTED: `attention DISPATCH_UNACCEPTED dispatch ${unacceptedDispatch}`,
       DISPATCH_UNRETURNED: `attention DISPATCH_UNRETURNED dispatch ${dispatch}`,
       HANDBACK_UNREVIEWED: `attention HANDBACK_UNREVIEWED dispatch ${handbackDispatch}`,
+      HUMAN_DECISION_REQUIRED: `attention HUMAN_DECISION_REQUIRED decision ${decision}`,
       LEAD_COLLISION: `attention LEAD_COLLISION work ${stalled},${repeated}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
       SCOPE_COLLISION: `attention SCOPE_COLLISION work ${collisionA},${collisionB}`,
