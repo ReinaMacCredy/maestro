@@ -258,6 +258,22 @@ function notesSections(notes: string): NotesSection[] {
   });
 }
 
+function handoffPlaceholders(notes: string | null): {
+  any: boolean;
+  sections: HandoffSectionName[];
+} {
+  if (!notes) return { any: false, sections: [] };
+  const sections = notesSections(notes);
+  return {
+    any: notes.includes(handoffPlaceholder),
+    sections: handoffSectionNames.filter((name) =>
+      sections.some(
+        (section) => section.name === name && section.body.includes(handoffPlaceholder),
+      )
+    ),
+  };
+}
+
 function scaffoldBodies(id: string): Map<HandoffSectionName, string> {
   const sections = notesSections(notesTemplate(id, "Base:"));
   return new Map(
@@ -397,7 +413,28 @@ export const bundlePlugin: BuiltInPlugin = {
         "bundle open",
         async (invocation): Promise<CliResult> => {
           const id = requiredPosition(invocation, 0, "bundle id");
-          if (getBundle(context, id)) {
+          const existing = getBundle(context, id);
+          const root = resolveStoreLocation(process.cwd()).root;
+          const directory = existing?.directory ?? join(root, ".maestro", "bundle", id);
+          if (existsSync(directory)) {
+            const lastBundleEvent = context.log
+              .list("bundle", id)
+              .filter((event) => event.type === "bundle.open" || event.type === "bundle.close")
+              .at(-1);
+            const currentSession = context.sessions.current().id;
+            if (lastBundleEvent?.sessionId && lastBundleEvent.sessionId !== currentSession) {
+              const incomplete = handoffPlaceholders((await readTrio(directory)).notes).sections;
+              if (incomplete.length > 0) {
+                const command = `maestro bundle open ${id}`;
+                throw new CliError(
+                  "HANDOFF_INCOMPLETE",
+                  `${id} NOTES.md handoff sections are incomplete: ${incomplete.join(", ")}; replace every handoff placeholder, then run: ${command}`,
+                  { command, id, sections: incomplete },
+                );
+              }
+            }
+          }
+          if (existing) {
             throw new CliError("DUPLICATE", `bundle already exists: ${id}`, { id });
           }
           const workIds = stringOptions(invocation, "work");
@@ -405,8 +442,6 @@ export const bundlePlugin: BuiltInPlugin = {
           for (const workId of workIds) {
             if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
           }
-          const root = resolveStoreLocation(process.cwd()).root;
-          const directory = join(root, ".maestro", "bundle", id);
           mkdirSync(directory, { recursive: true });
           const templates = {
             "SPEC.md": specTemplate(id),
@@ -477,7 +512,7 @@ export const bundlePlugin: BuiltInPlugin = {
             throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`);
           }
           const trio = await readTrio(bundle.directory);
-          if (trio.notes?.includes(handoffPlaceholder)) {
+          if (handoffPlaceholders(trio.notes).any) {
             const command = `maestro bundle close ${id}`;
             throw new CliError(
               "HANDOFF_INCOMPLETE",

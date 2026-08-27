@@ -245,11 +245,14 @@ A Lead is continued or replaced only through a frozen handoff packet, written
 by the outgoing Lead at a bounded stop point into the bundle NOTES and the
 store: objective, scope, current state, current write owner, accepted
 decisions, failed approaches, successful patterns, evidence index, active
-risks and blockers, exact resume point. Receipts, in order, each a decision or
-note in the store: `packet_ready` (outgoing Lead), `successor_authorized`
-(owner, through the Supervisor), `successor_acknowledged` (the successor,
-who may reject an incomplete packet), `predecessor_released` (owner). The
-predecessor stops writing at release; a narrative-only packet is rejected.
+risks and blockers, exact resume point. Each receipt is drafted as
+`maestro decision draft "<receipt> <bundle-id>" --work <id>` and then locked.
+Its literal first token is `packet_ready` (outgoing Lead),
+`successor_authorized` (owner, through the Supervisor),
+`successor_acknowledged` (the successor, who may reject an incomplete packet),
+or `predecessor_released` (owner), so `maestro search "packet_ready"` finds the
+chain. The predecessor stops writing at release; a narrative-only packet is
+rejected.
 
 ## Supervisor binding
 

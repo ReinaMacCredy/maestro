@@ -166,6 +166,54 @@ test("170 bundle close refuses handoff placeholders and passes after replacement
   });
 });
 
+test("444 successor bundle open refuses an existing incomplete handoff packet", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const predecessor = {
+      MAESTRO_SESSION_ID: "handoff-predecessor",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    const successor = {
+      MAESTRO_SESSION_ID: "handoff-successor",
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+    expect(
+      (await runCli(fixture, ["bundle", "open", "successor-gate"], predecessor)).exitCode,
+    ).toBe(0);
+    expect(
+      (await runCli(fixture, ["handoff", "successor-gate"], predecessor)).exitCode,
+    ).toBe(0);
+
+    const predecessorReopen = await runCli(
+      fixture,
+      ["bundle", "open", "successor-gate"],
+      predecessor,
+    );
+    expect(JSON.parse(predecessorReopen.stderr).error.code).toBe("DUPLICATE");
+
+    const blocked = await runCli(
+      fixture,
+      ["bundle", "open", "successor-gate"],
+      successor,
+    );
+    expect(blocked.exitCode).not.toBe(0);
+    const error = JSON.parse(blocked.stderr) as {
+      error: { code: string; message: string; sections: string[] };
+    };
+    expect(error.error.code).toBe("HANDOFF_INCOMPLETE");
+    expect(error.error.sections).toEqual([
+      "Current State",
+      "Next Action",
+      "Authority",
+      "Failed approaches",
+      "Do not repeat",
+    ]);
+    expect(error.error.message).toContain(
+      "Current State, Next Action, Authority, Failed approaches, Do not repeat",
+    );
+  });
+});
+
 test("171 handoff rejects work ids and unknown bundles with the next command", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(

@@ -87,7 +87,10 @@ owner, accepted decisions, failed approaches, successful patterns, evidence
 index, active risks and blockers, and exact resume point. A narrative summary
 without those fields is incomplete.
 
-The store receipts are ordered:
+Each receipt is drafted as
+`maestro decision draft "<receipt> <bundle-id>" --work <id>` and then locked.
+Its literal first token is `packet_ready`, `successor_authorized`,
+`successor_acknowledged`, or `predecessor_released`.
 
 ```mermaid
 flowchart LR
@@ -100,3 +103,4 @@ The outgoing Lead records `packet_ready`. The owner, through the Supervisor,
 records `successor_authorized`; the successor may reject an incomplete packet
 before recording `successor_acknowledged`; the owner then records
 `predecessor_released`. The predecessor stops writing at release.
+Packet completeness, receipt order, and break-before-make are soft-audited.

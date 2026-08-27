@@ -568,3 +568,33 @@ test("443 [lint] recipe slp defines the Supervisor episode-to-rule review loop",
   expect(flat).toContain("A rule it promotes records owner, review date, evidence, and removal trigger.");
   expect(flat).toContain("A rule past its review date is reviewed or deleted.");
 });
+
+test("445 [lint] handoff receipts are exact, searchable decisions with soft-audited ordering", async () => {
+  const recipe = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  const roles = await readFile(
+    join(import.meta.dir, "..", "site", "src", "content", "docs", "concepts", "roles.md"),
+    "utf8",
+  );
+  const scope = recipe.split("## One Lead per scope")[1]?.split("\n## ")[0] ?? "";
+  const handoff = roles.split("## Lead handoff")[1]?.split("\n## ")[0] ?? "";
+  const draft = 'maestro decision draft "<receipt> <bundle-id>" --work <id>';
+
+  for (const text of [scope, handoff]) {
+    expect(text).toContain(draft);
+    for (const receipt of [
+      "packet_ready",
+      "successor_authorized",
+      "successor_acknowledged",
+      "predecessor_released",
+    ]) {
+      expect(text).toContain(receipt);
+    }
+  }
+  expect(scope).toContain('maestro search "packet_ready"');
+  expect(handoff.replace(/\s+/g, " ")).toContain(
+    "Packet completeness, receipt order, and break-before-make are soft-audited.",
+  );
+});
