@@ -145,7 +145,10 @@ Human
 
 Effective permission is capability, intersected with role contract, workspace
 policy, assignment lease and lifecycle state. A full-access process under a
-no-write lease is no-write.
+no-write lease is no-write by contract; maestro enforces the lease (LEASE_HELD,
+the lane gate on work start), not the filesystem. The lane, seal, and
+external-effect boundaries that the runtime cannot intercept are soft-audited:
+binding on the role, checkable after the fact, not prevented.
 
 ## How maestro binds a session to a role
 

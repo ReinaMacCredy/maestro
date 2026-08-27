@@ -526,3 +526,17 @@ test("422 [lint] recipe slp and the scenarios page carry the intake contract (d7
   expect(flatPage).toContain("It never asks how many lanes to open");
   expect(flatPage).toContain("the route it did not take");
 });
+
+test("425 [lint] recipe slp, lanes.md and roles.md say which boundaries are enforced and which are soft-audited (w494)", async () => {
+  const docs = join(import.meta.dir, "..", "site", "src", "content", "docs", "concepts");
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const lanes = await readFile(join(docs, "lanes.md"), "utf8");
+  const roles = await readFile(join(docs, "roles.md"), "utf8");
+  for (const text of [recipe, lanes, roles]) expect(text).toContain("soft-audited");
+  expect(recipe.replace(/\s+/g, " ")).toContain(
+    "A full-access process under a no-write lease is no-write by contract; maestro enforces the lease (LEASE_HELD, the lane gate on work start), not the filesystem.",
+  );
+  expect(lanes).toContain("| Boundary | Enforced by | Soft-audited |");
+  expect(lanes).not.toContain("performs no-write discovery and reports state.");
+  expect(roles.replace(/\s+/g, " ")).toContain("Write authority and acceptance authority are soft-audited");
+});

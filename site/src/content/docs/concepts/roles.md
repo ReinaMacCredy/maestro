@@ -28,6 +28,11 @@ write authority, acceptance authority, recovery or replacement lease, and
 review date. Raw transcript access, project writes, technical acceptance, and
 recovery are denied unless the owner explicitly changes that binding.
 
+Write authority and acceptance authority are soft-audited: the room's `hm`
+brief runs read-only (`MAESTRO_READ_ONLY=1`), but a session that changes
+directory into a project can run write verbs there. The binding is the
+contract, not a gate.
+
 The installer also denies Claude's `Agent` and `Task` tools in the Supervisor
 room. Codex has no equivalent hook and remains bound by the role contract.
 

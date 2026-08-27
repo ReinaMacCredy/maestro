@@ -23,12 +23,30 @@ that claim before the pane closes.
 
 ## Lane types
 
-- `scout` performs no-write discovery and reports state.
-- `decision` investigates alternatives and recommends without writing.
+- `scout` holds a no-write lease: discovery only, reports state.
+- `decision` holds a no-write lease: investigates alternatives and recommends.
 - `delivery` owns bounded writes inside the declared mutation scope.
-- `challenge` tries to break a premise or candidate and returns findings, not fixes.
-- `shadow` runs beside the owner without writing and returns comparison
+- `challenge` holds a no-write lease: tries to break a premise or candidate and
+  returns findings, not fixes.
+- `shadow` holds a no-write lease beside the owner and returns comparison
   evidence that is never a candidate or a work write lease.
+
+A no-write lease is enforced at the store, not at the filesystem: the lane
+gate refuses `work start` to a session holding a no-write dispatch, and
+nothing intercepts what the harness writes. The table says which boundary is
+which. A soft-audited boundary is binding on the role and checkable after
+the fact, not prevented.
+
+| Boundary | Enforced by | Soft-audited |
+|---|---|---|
+| work write lease | `LEASE_HELD` on `work start`; the lane gate for no-write dispatch holders | file writes by the harness |
+| council seal | `handback show`, `handback list`, and attention hide sealed returns | the SQLite file and note files on disk stay readable |
+| one handback per dispatch | `HANDBACK_EXISTS` | the truth of the claim |
+| untargeted accept | opener confirmation before work or handback | which pane the brief reached |
+| Supervisor sub-agents | `Agent` and `Task` denied in the room's Claude settings | Codex, and any Peer pane in a repository |
+| Supervisor project writes | `MAESTRO_READ_ONLY=1` on the `hm` brief | every other verb the room session runs |
+| external effects (push, tag, publish, deploy, spend, delete) | nothing | the Human gate in the role contract |
+| tool and call budgets | nothing | the assignment text |
 
 ## Open a dispatch
 
@@ -96,8 +114,9 @@ votes.
 When the returned views conflict or the risk warrants cross-examination, the
 Lead opens a second generation on the same work item. Each new dispatch quotes
 the other Peers' handbacks verbatim and asks one targeted question. Peers never
-prompt each other. They answer by handback with `CONFIRM`, `CHALLENGE`, or
-`REOPEN_REQUEST`, and the Lead records the final decision, dissent, and next
+prompt each other. They answer by handback with `DONE` and a `CONFIRM` claim,
+`CHALLENGE`, or `REOPEN_REQUEST` (`CONFIRM` is claim text, not a status), and
+the Lead records the final decision, dissent, and next
 proof. A third round requires a new question.
 
 ```mermaid
@@ -105,7 +124,7 @@ flowchart LR
   Gen1["Generation 1 sealed"] --> Returns["Every handback returned"]
   Returns --> Unsealed["Views unsealed"]
   Unsealed --> Gen2["Generation 2 targeted dispatches"]
-  Gen2 --> Answers["CONFIRM / CHALLENGE / REOPEN_REQUEST"]
+  Gen2 --> Answers["DONE with CONFIRM claim / CHALLENGE / REOPEN_REQUEST"]
   Answers --> Reconcile["Lead reconciles decision, dissent, proof"]
 ```
 
