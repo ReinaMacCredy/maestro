@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
@@ -291,5 +291,30 @@ test("310 scripts/install.sh clones the source checkout, installs from it, and f
     const second = await run();
     expect(second.exitCode).toBe(0);
     expect(second.stdout).toContain(`fast-forwarding the source checkout at ${source}`);
+  });
+});
+
+test("312 scripts/install.sh refuses a bun older than the lockfile's bun floor and names it", async () => {
+  await withFixture(async (fixture) => {
+    const projectRoot = join(import.meta.dir, "..");
+    const script = await readFile(join(projectRoot, "scripts", "install.sh"), "utf8");
+    // bun.lock is lockfile v1 (bun >= 1.4); package.json carries no engines
+    // field because it made the lifecycle fixtures flaky (2026-08-27).
+    expect(script).toContain('MIN_BUN="1.4.0"');
+
+    const shims = join(fixture.root, "old-bun");
+    await mkdir(shims, { recursive: true });
+    await writeFile(join(shims, "bun"), "#!/bin/sh\necho 1.3.14\n");
+    await chmod(join(shims, "bun"), 0o755);
+    const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
+      cwd: fixture.repo,
+      env: { ...process.env, HOME: fixture.home, PATH: `${shims}:${process.env.PATH ?? ""}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stderr = await new Response(child.stderr).text();
+    expect(await child.exited).toBe(1);
+    expect(stderr).toContain("bun 1.3.14 is too old");
+    expect(stderr).toContain("bun >= 1.4.0");
   });
 });
