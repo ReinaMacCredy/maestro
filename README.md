@@ -95,3 +95,7 @@ When a sandbox blocks process inspection, Maestro falls back to a 60-minute
 session anchor refreshed only by commands that session runs. Two concurrent
 sandboxed sessions from the same harness in one worktree cannot be
 distinguished; the most recently active session receives subsequent commands.
+
+## Rust-era data
+
+The stores from the Rust line live under `legacy/rust/`; `maestro import rust --path legacy/rust/store.sqlite` makes the old cards, files and decisions searchable and readable with `maestro legacy show`. See `legacy/rust/README.md`.
