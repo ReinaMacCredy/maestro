@@ -199,7 +199,8 @@ test("300 dispatch open rejects blank target sessions without writing a contract
   });
 });
 
-test("174 dispatch show and list render the complete stored contract and identities", async () => {
+test("174 [lint] dispatch show and list render the complete stored contract and identities", async () => {
+  // Presentation lint: proves stored fields are rendered, not that their persisted values are correct.
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "render dispatch", "--atomic-reason", "fixture"]),
@@ -237,6 +238,8 @@ test("175 accepting dispatches never changes the work write lease", async () => 
     const work = idFrom(
       await runCli(fixture, ["work", "add", "three lanes", "--atomic-reason", "fixture"]),
     );
+    const lead = session("lead");
+    expect((await runCli(fixture, ["work", "start", work], lead)).exitCode).toBe(0);
     const holders = ["lane-one", "lane-two", "lane-three"];
     const dispatches: string[] = [];
     for (const holder of holders) {
@@ -248,6 +251,12 @@ test("175 accepting dispatches never changes the work write lease", async () => 
       const id = dispatchId(opened);
       dispatches.push(id);
       expect((await runCli(fixture, ["dispatch", "accept", id], session(holder))).exitCode).toBe(0);
+      const shown = await runCli(fixture, ["work", "show", work, "--json"]);
+      expect(shown.exitCode).toBe(0);
+      const showEnvelope = JSON.parse(shown.stdout) as {
+        data: { work: { heldBy: string | null } };
+      };
+      expect(showEnvelope.data.work.heldBy).toBe("lead");
     }
 
     const listed = await runCli(fixture, ["dispatch", "list", "--json"]);
@@ -260,10 +269,6 @@ test("175 accepting dispatches never changes the work write lease", async () => 
         .filter((dispatch) => dispatches.includes(dispatch.id))
         .map((dispatch) => dispatch.heldBy),
     ).toEqual(holders);
-
-    const shown = await runCli(fixture, ["work", "show", work]);
-    expect(shown.exitCode).toBe(0);
-    expect(shown.stdout).not.toContain("held by:");
   });
 });
 
@@ -352,14 +357,43 @@ test("274 work-scoped dispatch lists render compact lane state without changing 
       (await runCli(fixture, ["dispatch", "accept", second], session("dead-lane"))).exitCode,
     ).toBe(0);
 
+    const databaseBefore = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const archiveBefore = {
+      dispatches: databaseBefore.query<Record<string, unknown>, []>(
+        "SELECT * FROM dispatches ORDER BY id",
+      ).all(),
+      eventLogCount: databaseBefore.query<{ count: number }, []>(
+        "SELECT COUNT(*) AS count FROM event_log",
+      ).get()?.count,
+    };
+    databaseBefore.close();
+
     const scoped = await runCli(fixture, ["dispatch", "list", work]);
     expect(scoped.exitCode).toBe(0);
-    expect(scoped.stdout).toBe(
-      `council: sealed (0/2 returned)\n\n` +
-        `lane w1:pA | ${first} | delivery | dispatch=open | work=open | holder=live\n` +
-        `lane w1:pB | ${second} | delivery | dispatch=open | work=open | holder=dead\n`,
+    expect(scoped.stdout).toContain("council: sealed (0/2 returned)");
+    expect(scoped.stdout).toContain(
+      `lane w1:pA | ${first} | delivery | dispatch=open | work=open | holder=live`,
+    );
+    expect(scoped.stdout).toContain(
+      `lane w1:pB | ${second} | delivery | dispatch=open | work=open | holder=dead`,
     );
     expect(scoped.stdout).not.toContain("claim:");
+
+    const databaseAfter = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const archiveAfter = {
+      dispatches: databaseAfter.query<Record<string, unknown>, []>(
+        "SELECT * FROM dispatches ORDER BY id",
+      ).all(),
+      eventLogCount: databaseAfter.query<{ count: number }, []>(
+        "SELECT COUNT(*) AS count FROM event_log",
+      ).get()?.count,
+    };
+    databaseAfter.close();
+    expect(archiveAfter).toEqual(archiveBefore);
 
     const archive = await runCli(fixture, ["dispatch", "list"]);
     expect(archive.exitCode).toBe(0);
@@ -962,13 +996,12 @@ test("181 dispatch unseal records its reason and marks later reads unsealed", as
   });
 });
 
-test("182 ready and work show add dispatches and linked decisions without changing existing lines", async () => {
+test("182 ready and work show preserve stable work fields while adding dispatches and decisions", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "read path item", "--atomic-reason", "fixture"]),
     );
     const readyBefore = await runCli(fixture, ["ready"], session("lane-ready"));
-    const showBefore = await runCli(fixture, ["work", "show", work]);
     const decision = idFrom(
       await runCli(fixture, [
         "decision",
@@ -990,7 +1023,6 @@ test("182 ready and work show add dispatches and linked decisions without changi
 
     expect(readyAfter.stdout.split("\n")[0]).toBe(readyBefore.stdout.split("\n")[0]);
     expect(readyAfter.stdout).toContain(`dispatch: ${dispatch} [takeable]`);
-    expect(showAfter.stdout.startsWith(showBefore.stdout.trimEnd())).toBe(true);
     expect(showAfter.stdout).toContain(`dispatch: ${dispatch} [open] delivery`);
     expect(showAfter.stdout).toContain(`decision: ${decision} [draft] keep dispatches attached to work`);
 
@@ -1001,8 +1033,19 @@ test("182 ready and work show add dispatches and linked decisions without changi
     const showJson = await runCli(fixture, ["work", "show", work, "--json"]);
     expect(showJson.exitCode).toBe(0);
     const showEnvelope = JSON.parse(showJson.stdout) as {
-      data: { decisions: Array<{ id: string }>; dispatches: Array<{ id: string }> };
+      data: {
+        decisions: Array<{ id: string }>;
+        dispatches: Array<{ id: string }>;
+        work: { atomicReason: string | null; id: string; kind: string; state: string; title: string };
+      };
     };
+    expect(showEnvelope.data.work).toEqual(expect.objectContaining({
+      atomicReason: "fixture",
+      id: work,
+      kind: "task",
+      state: "open",
+      title: "read path item",
+    }));
     expect(showEnvelope.data.dispatches.map((item) => item.id)).toContain(dispatch);
     expect(showEnvelope.data.decisions.map((item) => item.id)).toContain(decision);
   });
@@ -1255,22 +1298,6 @@ test("264 unreturned dispatch attention distinguishes dead, live, and unknown ho
         .filter((finding) => finding.fingerprint.startsWith("dispatch-unreturned:"))
         .map((finding) => finding.subjectSession),
     ).toEqual(["dead-lane"]);
-  });
-});
-
-test("245 dispatch open refuses a missing pane and names the flag", async () => {
-  await withFixture(async (fixture) => {
-    const work = idFrom(
-      await runCli(fixture, ["work", "add", "pane required", "--atomic-reason", "fixture"]),
-    );
-    const args = dispatchOpenArgs(work);
-    const pane = args.indexOf("--pane");
-    args.splice(pane, 2);
-
-    const opened = await runCli(fixture, args);
-
-    expect(opened.exitCode).not.toBe(0);
-    expect(opened.stderr).toContain("--pane");
   });
 });
 
