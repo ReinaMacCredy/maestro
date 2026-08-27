@@ -33,14 +33,51 @@ To replace a locked decision, draft a new one with `--supersedes
 <decision-id>` and lock the replacement. Supersession takes effect at lock,
 not while the replacement remains a draft. History is never rewritten.
 
-## Bundles
+## Talking across roles
 
-Decide the tier from the request before any recon. A quickfix, a diff that
-fits in one sentence and hits no bundle trigger, is done directly with inline
-verification and no record; if it grows past one sentence, stop and add a work
-item. Direct work with a work item is appropriate for one session, one branch,
-and acceptance that fits in a sentence. Open a bundle when work spans sessions
-or branches, shares a moving scope, carries high risk, or repeats a failed fix:
+Herdr carries the words; the store carries the truth. A prompt alone has no
+durable provenance, so a question that needs an owner or Supervisor decision
+starts as a draft linked to the work:
+
+```sh
+maestro decision draft "<choice>" --rationale "<why, options>" --work <work-id>
+herdr agent prompt <name> "[from lead][ask <decision-id>] <question>"
+```
+
+The answer is recorded, not merely prompted. When the Supervisor relays an
+owner instruction, it locks the draft with
+`maestro decision lock <decision-id>`. Supervisor advice is a default, not an
+owner instruction: the Lead locks the matching draft or drafts a superseding
+decision whose rationale starts `supervisor default, not owner instruction`.
+
+Questions that are not decisions are notes on the same work item:
+
+```sh
+maestro work note <work-id> "<question>"
+```
+
+Peers prompt only the Lead and prefix the message with `[from peer]` and the
+dispatch id. Peers never prompt the Supervisor, and the Supervisor never
+prompts a Peer.
+
+```mermaid
+flowchart LR
+  Draft["decision draft --work"] --> Prompt["Herdr prompt names role and decision"]
+  Prompt --> Record["lock or superseding decision in store"]
+```
+
+## Method tiers
+
+Decide the tier from the request before any recon:
+
+- **quickfix**: the diff fits in one sentence and hits no Full trigger. Work
+  directly, verify inline, and create no store record. If the change grows
+  beyond that sentence, stop and add a work item.
+- **Light**: the work lasts one session on one branch and its acceptance fits
+  in one sentence. Use `maestro work add`, `maestro work start`, and
+  `maestro work done` so ready, attention, and brief can see it.
+- **Full**: the work spans sessions, branches, or agents on the same moving
+  scope, is high risk, or repeats a failed fix. Link the work to a bundle:
 
 ```sh
 maestro bundle open <bundle-id> --work <work-id>

@@ -16,6 +16,7 @@ mailbox message and does not require a daemon. The detector set is:
 - `REPEATED_FAILURE`
 - `DECISION_STALE`
 - `SCOPE_COLLISION`
+- `DISPATCH_UNACCEPTED`
 - `DISPATCH_UNRETURNED`
 - `HANDBACK_UNREVIEWED`
 
@@ -24,6 +25,22 @@ For a compact machine-readable result, run:
 
 ```sh
 maestro attention --json
+```
+
+## Failure routing
+
+`REPEATED_FAILURE` follows the holder role. Failures on a Peer-held lease go
+only to the repository hook brief, where the Lead owns recovery. Failures on a
+Lead-held lease go only to the room brief, where the Supervisor owns the next
+governance question. `maestro attention` still lists both and names the holder
+role and route.
+
+```mermaid
+flowchart LR
+  PeerFailure["Peer-held repeated failure"] --> Hook["Repository hook brief"]
+  Hook --> Lead
+  LeadFailure["Lead-held repeated failure"] --> Room["maestro brief in room"]
+  Room --> Supervisor
 ```
 
 ## Brief all registered repositories
@@ -39,3 +56,8 @@ the brief says so in one line instead of listing ordinary progress.
 
 The Supervisor room's `hm` shell function focuses the `maestro` Herdr workspace
 and prints this brief. It returns to the shell and does not start an agent.
+
+The Supervisor separates observation, hypothesis, and verdict. It answers an
+attention packet with an open question to the Lead, a recommendation, a
+decision relayed in the owner's name, or a freeze when the owner granted that
+recovery lease. It does not inspect raw pane transcripts or edit the project.

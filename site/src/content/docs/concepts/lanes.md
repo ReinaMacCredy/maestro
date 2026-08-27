@@ -7,12 +7,28 @@ Coordination lanes are Herdr panes, never subprocess agents created by Maestro.
 The Lead owns topology and delivery; Maestro owns the durable contract and
 return packet.
 
+## Lane lifecycle
+
+```mermaid
+flowchart LR
+  Open["dispatch open"] --> Accept["dispatch accept"]
+  Accept --> Handback["handback file"]
+  Handback --> Review["Lead reviews claim and proof"]
+  Review --> Close["Herdr pane close"]
+```
+
+The stored dispatch is the assignment. Acceptance binds its session to the
+Peer role, the handback returns a claim, and only the Lead's review can accept
+that claim before the pane closes.
+
 ## Lane types
 
 - `scout` performs no-write discovery and reports state.
 - `decision` investigates alternatives and recommends without writing.
 - `delivery` owns bounded writes inside the declared mutation scope.
 - `challenge` tries to break a premise or candidate and returns findings, not fixes.
+- `shadow` runs beside the owner without writing and returns comparison
+  evidence that is never a candidate or a work write lease.
 
 ## Open a dispatch
 
@@ -56,7 +72,10 @@ maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --p
 
 The Lead reads the handback, checks its evidence, decides whether the work is
 complete, and only then closes or reuses the lane pane. A handback is a claim,
-not acceptance.
+not acceptance. A Peer that discovers a topology dependency returns
+`DEPENDENCY_REQUEST`; one that discovers the assignment needs several
+independent judgments returns `COUNCIL_REQUEST`. The Lead either opens the
+required work or council, or records why it declined with `maestro work note`.
 
 ## Herdr procedure
 
@@ -72,5 +91,23 @@ pushes a brief into a pane or calls Herdr.
 Concurrent dispatches in one generation on the same work item form a council.
 The council remains sealed until every lane returns, which prevents one view
 from biasing another. The Lead reconciles the complete set; it does not count
-votes. Implementation of the ruling belongs on separate work, not as a later
+votes.
+
+When the returned views conflict or the risk warrants cross-examination, the
+Lead opens a second generation on the same work item. Each new dispatch quotes
+the other Peers' handbacks verbatim and asks one targeted question. Peers never
+prompt each other. They answer by handback with `CONFIRM`, `CHALLENGE`, or
+`REOPEN_REQUEST`, and the Lead records the final decision, dissent, and next
+proof. A third round requires a new question.
+
+```mermaid
+flowchart LR
+  Gen1["Generation 1 sealed"] --> Returns["Every handback returned"]
+  Returns --> Unsealed["Views unsealed"]
+  Unsealed --> Gen2["Generation 2 targeted dispatches"]
+  Gen2 --> Answers["CONFIRM / CHALLENGE / REOPEN_REQUEST"]
+  Answers --> Reconcile["Lead reconciles decision, dissent, proof"]
+```
+
+Implementation of the ruling belongs on separate work, not as a later
 dispatch that silently changes council membership.
