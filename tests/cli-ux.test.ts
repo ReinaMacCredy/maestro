@@ -1,5 +1,36 @@
 import { expect, test } from "bun:test";
+import {
+  CliError,
+  requiredPosition,
+  stringOption,
+  stringOptions,
+  type CliInvocation,
+} from "../src/kernel/cli.ts";
 import { runCli, withFixture, writePlugin } from "./helpers.ts";
+
+test("299 CLI value decoders preserve positional, scalar, repeated, and absent contracts", () => {
+  const invocation: CliInvocation = {
+    command: "fixture",
+    options: { absent: false, repeated: ["first", "second"], scalar: "value" },
+    positionals: ["position"],
+  };
+  expect(requiredPosition(invocation, 0, "fixture id")).toBe("position");
+  expect(stringOption(invocation, "scalar")).toBe("value");
+  expect(stringOption(invocation, "absent")).toBeUndefined();
+  expect(stringOptions(invocation, "repeated")).toEqual(["first", "second"]);
+  expect(stringOptions(invocation, "scalar")).toEqual(["value"]);
+  expect(stringOptions(invocation, "absent")).toEqual([]);
+  try {
+    requiredPosition(invocation, 1, "fixture id");
+    throw new Error("missing positional was accepted");
+  } catch (error) {
+    expect(error).toBeInstanceOf(CliError);
+    expect(error).toEqual(expect.objectContaining({
+      code: "MISSING_ARGUMENT",
+      message: "missing fixture id",
+    }));
+  }
+});
 
 test("25 bare and help invocations list verbs while unknown verbs suggest the nearest verb", async () => {
   await withFixture(async (fixture) => {

@@ -113,6 +113,27 @@ export class CliError extends Error {
   }
 }
 
+export function requiredPosition(
+  invocation: CliInvocation,
+  index: number,
+  label: string,
+): string {
+  const value = invocation.positionals[index];
+  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
+  return value;
+}
+
+export function stringOption(invocation: CliInvocation, name: string): string | undefined {
+  const value = invocation.options[name];
+  return typeof value === "string" ? value : undefined;
+}
+
+export function stringOptions(invocation: CliInvocation, name: string): string[] {
+  const value = invocation.options[name];
+  if (Array.isArray(value)) return value;
+  return typeof value === "string" ? [value] : [];
+}
+
 export function normalizeCliError(error: unknown): CliError {
   return error instanceof CliError
     ? error

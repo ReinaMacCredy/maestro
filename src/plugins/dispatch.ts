@@ -1,4 +1,10 @@
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import {
+  CliError,
+  requiredPosition,
+  stringOption,
+  type CliInvocation,
+  type CliResult,
+} from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
@@ -319,20 +325,9 @@ function councilStatus(
   };
 }
 
-function position(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
-}
-
-function option(invocation: CliInvocation, name: string): string | null {
-  const value = invocation.options[name];
-  return typeof value === "string" ? value : null;
-}
-
 function requiredOption(invocation: CliInvocation, name: string): string {
-  const value = option(invocation, name.slice(2));
-  if (value === null || value.trim() === "") {
+  const value = stringOption(invocation, name.slice(2));
+  if (value === undefined || value.trim() === "") {
     throw new CliError("MISSING_ARGUMENT", `missing or blank ${name}`, { field: name });
   }
   return value;
@@ -523,7 +518,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         context,
         "dispatch open",
         (invocation): CliResult => {
-          const workId = position(invocation, 0, "work id");
+          const workId = requiredPosition(invocation, 0, "work id");
           const work = context.work as WorkService;
           const objective = requiredOption(invocation, "--objective");
           const ownedScope = requiredOption(invocation, "--owned-scope");
@@ -540,7 +535,15 @@ export const dispatchPlugin: BuiltInPlugin = {
           }
           const evidenceRequired = requiredOption(invocation, "--evidence-required");
           const pane = requiredOption(invocation, "--pane");
-          const targetSession = option(invocation, "target-session");
+          const targetSessionValue = stringOption(invocation, "target-session");
+          if (targetSessionValue !== undefined && targetSessionValue.trim() === "") {
+            throw new CliError(
+              "MISSING_ARGUMENT",
+              "missing or blank --target-session",
+              { field: "--target-session" },
+            );
+          }
+          const targetSession = targetSessionValue ?? null;
           const open = context.store.database.transaction(() => {
             const subject = work.get(workId);
             if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
@@ -610,7 +613,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         context,
         "dispatch accept",
         (invocation): CliResult => {
-          const id = position(invocation, 0, "dispatch id");
+          const id = requiredPosition(invocation, 0, "dispatch id");
           const sessionId = context.sessions.current().id;
           const accept = context.store.database.transaction(() => {
             const dispatch = requireDispatch(context, id);
@@ -659,7 +662,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         context,
         "dispatch cancel",
         (invocation): CliResult => {
-          const id = position(invocation, 0, "dispatch id");
+          const id = requiredPosition(invocation, 0, "dispatch id");
           const reason = requiredOption(invocation, "--reason");
           const cancel = context.store.database.transaction(() => {
             const dispatch = requireDispatch(context, id);
@@ -707,7 +710,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       context.cli.register(
         "dispatch show",
         (invocation): CliResult => {
-          const dispatch = requireDispatch(context, position(invocation, 0, "dispatch id"));
+          const dispatch = requireDispatch(context, requiredPosition(invocation, 0, "dispatch id"));
           return { data: { dispatch }, text: format(dispatch) };
         },
         {
@@ -763,7 +766,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         context,
         "dispatch unseal",
         (invocation): CliResult => {
-          const workId = position(invocation, 0, "work id");
+          const workId = requiredPosition(invocation, 0, "work id");
           const work = context.work as WorkService;
           if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
           const reason = requiredOption(invocation, "--reason");
@@ -814,7 +817,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         context,
         "handback file",
         (invocation): CliResult => {
-          const dispatchId = position(invocation, 0, "dispatch id");
+          const dispatchId = requiredPosition(invocation, 0, "dispatch id");
           const dispatch = requireDispatch(context, dispatchId);
           if (dispatch.state === "cancelled") {
             throw new CliError("INVALID_STATE", `${dispatchId} is cancelled`);
@@ -927,7 +930,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       context.cli.register(
         "handback show",
         (invocation): CliResult => {
-          const handback = requireHandback(context, position(invocation, 0, "handback id"));
+          const handback = requireHandback(context, requiredPosition(invocation, 0, "handback id"));
           const dispatch = requireDispatch(context, handback.dispatchId);
           const council = service.council(dispatch.workId, dispatch.id);
           if (council.sealed) {

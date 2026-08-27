@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import {
+  CliError,
+  requiredPosition,
+  stringOptions,
+  type CliResult,
+} from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 import type {
@@ -140,18 +145,6 @@ function requireBundle(context: PluginContext, id: string): BundleRecord {
     });
   }
   return bundle;
-}
-
-function required(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
-}
-
-function listOption(invocation: CliInvocation, name: string): string[] {
-  const value = invocation.options[name];
-  if (Array.isArray(value)) return value;
-  return typeof value === "string" ? [value] : [];
 }
 
 function linkedWorkIds(context: PluginContext, id: string): string[] {
@@ -403,11 +396,11 @@ export const bundlePlugin: BuiltInPlugin = {
         context,
         "bundle open",
         async (invocation): Promise<CliResult> => {
-          const id = required(invocation, 0, "bundle id");
+          const id = requiredPosition(invocation, 0, "bundle id");
           if (getBundle(context, id)) {
             throw new CliError("DUPLICATE", `bundle already exists: ${id}`, { id });
           }
-          const workIds = listOption(invocation, "work");
+          const workIds = stringOptions(invocation, "work");
           const work = context.work as WorkService;
           for (const workId of workIds) {
             if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
@@ -478,7 +471,7 @@ export const bundlePlugin: BuiltInPlugin = {
         context,
         "bundle close",
         async (invocation): Promise<CliResult> => {
-          const id = required(invocation, 0, "bundle id");
+          const id = requiredPosition(invocation, 0, "bundle id");
           const bundle = requireBundle(context, id);
           if (bundle.state !== "active") {
             throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`);
@@ -532,7 +525,7 @@ export const bundlePlugin: BuiltInPlugin = {
         context,
         "handoff",
         async (invocation): Promise<CliResult> => {
-          const id = required(invocation, 0, "bundle id");
+          const id = requiredPosition(invocation, 0, "bundle id");
           const work = context.work as WorkService;
           if (work.snapshot().some((record) => record.id === id)) {
             const command = "maestro bundle list";
@@ -604,7 +597,7 @@ export const bundlePlugin: BuiltInPlugin = {
         context,
         "bundle save",
         async (invocation): Promise<CliResult> => {
-          const directory = resolve(required(invocation, 0, "bundle directory"));
+          const directory = resolve(requiredPosition(invocation, 0, "bundle directory"));
           const id = basename(directory);
           if (getBundle(context, id)) {
             throw new CliError("DUPLICATE", `bundle already exists: ${id}`, { id });
@@ -665,7 +658,7 @@ export const bundlePlugin: BuiltInPlugin = {
       context.cli.register(
         "bundle show",
         async (invocation): Promise<CliResult> => {
-          const id = required(invocation, 0, "bundle id");
+          const id = requiredPosition(invocation, 0, "bundle id");
           const bundle = requireBundle(context, id);
           const trio = bundle.state === "active"
             ? await readTrio(bundle.directory)

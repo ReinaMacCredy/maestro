@@ -1,4 +1,10 @@
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import {
+  CliError,
+  requiredPosition,
+  stringOption,
+  stringOptions,
+  type CliResult,
+} from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
@@ -87,23 +93,6 @@ function toWork(row: WorkRow): WorkRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function textOption(invocation: CliInvocation, name: string): string | undefined {
-  const value = invocation.options[name];
-  return typeof value === "string" ? value : undefined;
-}
-
-function listOption(invocation: CliInvocation, name: string): string[] {
-  const value = invocation.options[name];
-  if (Array.isArray(value)) return value;
-  return typeof value === "string" ? [value] : [];
-}
-
-function requirePosition(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
 }
 
 function getWork(context: PluginContext, id: string): WorkRecord | null {
@@ -340,15 +329,15 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work add",
         (invocation): CliResult => {
-          const title = requirePosition(invocation, 0, "work title");
-          const parentId = textOption(invocation, "parent") ?? null;
-          const blockers = listOption(invocation, "blocked-by");
+          const title = requiredPosition(invocation, 0, "work title");
+          const parentId = stringOption(invocation, "parent") ?? null;
+          const blockers = stringOptions(invocation, "blocked-by");
           for (const blocker of blockers) requireWork(context, blocker);
           let id = "";
           const now = new Date().toISOString();
-          const kind = textOption(invocation, "kind") ?? "task";
-          const acceptance = textOption(invocation, "acceptance") ?? null;
-          const atomicReason = textOption(invocation, "atomic-reason") ?? null;
+          const kind = stringOption(invocation, "kind") ?? "task";
+          const acceptance = stringOption(invocation, "acceptance") ?? null;
+          const atomicReason = stringOption(invocation, "atomic-reason") ?? null;
           context.store.database.exec("BEGIN IMMEDIATE");
           try {
             if (parentId) {
@@ -416,7 +405,7 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work start", async (invocation): Promise<CliResult> => {
-        const id = requirePosition(invocation, 0, "work id");
+        const id = requiredPosition(invocation, 0, "work id");
         const work = requireWork(context, id);
         if (work.state === "done") throw new CliError("INVALID_STATE", `${id} is already done`);
         if (work.state === "cancelled") {
@@ -441,7 +430,7 @@ export const workPlugin: BuiltInPlugin = {
         }
         // Declaring an existing item atomic here is the only way out of a
         // breakdown gate without filing a duplicate work item.
-        const declaredAtomic = textOption(invocation, "atomic-reason");
+        const declaredAtomic = stringOption(invocation, "atomic-reason");
         if (declaredAtomic) {
           context.store.database
             .query("UPDATE work SET atomic_reason = ?, updated_at = ? WHERE id = ?")
@@ -523,7 +512,7 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work release", (invocation): CliResult => {
-        const id = requirePosition(invocation, 0, "work id");
+        const id = requiredPosition(invocation, 0, "work id");
         const work = requireWork(context, id);
         if (work.state === "done" || work.state === "cancelled") {
           throw new CliError("INVALID_STATE", `${id} is ${work.state}; its lease cannot be released`);
@@ -562,8 +551,8 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work reclaim", (invocation): CliResult => {
-        const id = requirePosition(invocation, 0, "work id");
-        const reason = textOption(invocation, "reason");
+        const id = requiredPosition(invocation, 0, "work id");
+        const reason = stringOption(invocation, "reason");
         if (!reason?.trim()) {
           throw new CliError("MISSING_ARGUMENT", "work reclaim requires --reason <text>");
         }
@@ -619,8 +608,8 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work note", (invocation): CliResult => {
-        const id = requirePosition(invocation, 0, "work id");
-        const text = requirePosition(invocation, 1, "note text");
+        const id = requiredPosition(invocation, 0, "work id");
+        const text = requiredPosition(invocation, 1, "note text");
         requireWork(context, id);
         const createdAt = new Date().toISOString();
         context.store.database
@@ -648,7 +637,7 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work done",
         async (invocation): Promise<CliResult> => {
-          const id = requirePosition(invocation, 0, "work id");
+          const id = requiredPosition(invocation, 0, "work id");
           const work = requireWork(context, id);
           if (work.state === "cancelled") {
             throw new CliError(
@@ -679,9 +668,9 @@ export const workPlugin: BuiltInPlugin = {
                 : { command },
             );
           }
-          const evidence = textOption(invocation, "evidence") ?? "";
-          const claims = listOption(invocation, "claim");
-          const proofs = listOption(invocation, "proof");
+          const evidence = stringOption(invocation, "evidence") ?? "";
+          const claims = stringOptions(invocation, "claim");
+          const proofs = stringOptions(invocation, "proof");
           const result = await context.events.waterfall<
             {
               children: WorkRecord[];
@@ -765,7 +754,7 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work cancel",
         async (invocation): Promise<CliResult> => {
-          const id = requirePosition(invocation, 0, "work id");
+          const id = requiredPosition(invocation, 0, "work id");
           const work = requireWork(context, id);
           if (work.state === "cancelled") {
             throw new CliError("INVALID_STATE", `${id} is already cancelled`);
@@ -781,7 +770,7 @@ export const workPlugin: BuiltInPlugin = {
               });
             }
           }
-          const reason = textOption(invocation, "reason");
+          const reason = stringOption(invocation, "reason");
           if (!reason) {
             throw new CliError("MISSING_ARGUMENT", "work cancel requires --reason <text>");
           }
@@ -839,7 +828,7 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       context.cli.register("work show", (invocation): CliResult => {
-        const work = requireWork(context, requirePosition(invocation, 0, "work id"));
+        const work = requireWork(context, requiredPosition(invocation, 0, "work id"));
         const children = service.children(work.id);
         const blockers = blockersFor(context, work.id);
         const notes = context.store.database

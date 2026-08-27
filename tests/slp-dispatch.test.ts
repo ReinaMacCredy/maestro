@@ -167,6 +167,38 @@ test("173 dispatch open refuses every missing or blank envelope field", async ()
   });
 });
 
+test("300 dispatch open rejects blank target sessions without writing a contract or event", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "target session validation", "--atomic-reason", "fixture"]),
+    );
+    for (const target of ["", "   "]) {
+      const attempted = await runCli(fixture, [
+        ...dispatchOpenArgs(work),
+        "--target-session",
+        target,
+      ]);
+      expect(attempted.exitCode).not.toBe(0);
+      expect(attempted.stderr).toContain('"code":"MISSING_ARGUMENT"');
+      expect(attempted.stderr).toContain("missing or blank --target-session");
+    }
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM dispatches").get()?.count,
+    ).toBe(0);
+    expect(
+      database
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM event_log WHERE type = 'dispatch.open'",
+        )
+        .get()?.count,
+    ).toBe(0);
+    database.close();
+  });
+});
+
 test("174 dispatch show and list render the complete stored contract and identities", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
