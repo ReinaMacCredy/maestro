@@ -260,18 +260,26 @@ async function handleRequest(context: PluginContext, request: JsonRpcRequest): P
 }
 
 async function handleLine(context: PluginContext, line: string): Promise<void> {
-  let request: JsonRpcRequest;
+  let parsed: unknown;
   try {
-    request = JSON.parse(line) as JsonRpcRequest;
+    parsed = JSON.parse(line) as unknown;
   } catch {
     writeError(null, -32700, "parse error");
     return;
   }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    writeError(null, -32600, "invalid JSON-RPC request");
+    return;
+  }
+  const request = parsed as JsonRpcRequest;
   try {
     await handleRequest(context, request);
   } catch (error) {
     const envelope = failureEnvelope(error);
-    writeError(request.id ?? null, -32603, envelope.error.message);
+    const id = typeof request.id === "string" || typeof request.id === "number"
+      ? request.id
+      : null;
+    writeError(id, -32603, envelope.error.message);
   }
 }
 

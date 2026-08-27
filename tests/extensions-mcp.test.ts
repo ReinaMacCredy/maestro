@@ -11,7 +11,8 @@ import {
 
 interface JsonRpcResponse {
   error?: { code: number; message: string };
-  id: number;
+  id: number | null;
+  jsonrpc: string;
   result?: Record<string, unknown>;
 }
 
@@ -34,8 +35,7 @@ function startMcp(fixture: Fixture) {
   const decoder = new TextDecoder();
   let buffered = "";
 
-  async function request(id: number, method: string, params: Record<string, unknown> = {}) {
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+  async function readResponse(method: string): Promise<JsonRpcResponse> {
     while (!buffered.includes("\n")) {
       const chunk = await reader.read();
       if (chunk.done) throw new Error(`MCP server closed before replying to ${method}`);
@@ -45,6 +45,16 @@ function startMcp(fixture: Fixture) {
     const line = buffered.slice(0, newline);
     buffered = buffered.slice(newline + 1);
     return JSON.parse(line) as JsonRpcResponse;
+  }
+
+  async function request(id: number, method: string, params: Record<string, unknown> = {}) {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+    return readResponse(method);
+  }
+
+  async function raw(frame: string): Promise<JsonRpcResponse> {
+    child.stdin.write(`${frame}\n`);
+    return readResponse(frame);
   }
 
   function notify(method: string, params: Record<string, unknown> = {}): void {
@@ -60,7 +70,7 @@ function startMcp(fixture: Fixture) {
     return { exitCode, stderr };
   }
 
-  return { close, notify, request };
+  return { close, notify, raw, request };
 }
 
 async function initialize(mcp: ReturnType<typeof startMcp>) {
@@ -210,6 +220,27 @@ test("44 policy gates reached through maestro_run return tool errors with unbloc
     expect(JSON.stringify(blocked.result)).toContain("policy-proof");
     expect(JSON.stringify(blocked.result)).toContain(`maestro work done ${work}`);
     expect(JSON.stringify(blocked.result)).toContain("--proof");
+    expect(closed).toEqual({ exitCode: 0, stderr: "" });
+  });
+});
+
+test("305 MCP rejects a null frame and continues serving the same process", async () => {
+  await withFixture(async (fixture) => {
+    const mcp = startMcp(fixture);
+
+    const invalid = await mcp.raw("null");
+    const listed = await mcp.request(1, "tools/list");
+    const closed = await mcp.close();
+
+    expect(invalid).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "invalid JSON-RPC request" },
+    });
+    expect((listed.result?.tools as Array<{ name: string }>).map((tool) => tool.name)).toEqual([
+      "maestro_find",
+      "maestro_run",
+    ]);
     expect(closed).toEqual({ exitCode: 0, stderr: "" });
   });
 });
