@@ -1,19 +1,18 @@
 ---
 title: CLI reference
-description: Every top-level verb reported by the installed Maestro shim at commit 02f31e4f.
+description: Every top-level verb reported by the installed Maestro shim at commit 99248adb.
 ---
 
 This reference was generated from the installed `maestro 0.108.0` shim at
-commit `02f31e4f6d37b45b358e581e14b36f1c8557d1ae`.
+commit `99248adb71db640aa4f95cb45c91de770b24435a`.
 
 ```sh
 maestro help
 maestro <verb> --help
 ```
 
-`maestro help --help` is the one exception: it is parsed as a request for a
-verb literally named `--help` and exits with `UNKNOWN_VERB`. Use `maestro help`
-for the top-level inventory or `maestro help <verb>` for one verb's help.
+`maestro help` and `maestro help --help` print the top-level inventory.
+`maestro help <verb>` prints one verb's help.
 
 ## Coordination and observation
 
@@ -43,7 +42,9 @@ stores. It has no flags.
 
 - `file <dispatch-id>` requires `--status`, `--claim`, `--proof`,
   `--assumptions`, `--residual-risks`, and `--incidental-findings`.
-- `show <id>` reads one stored return packet.
+- `list <dispatch-or-work-id> [--json]` lists handbacks for one dispatch or
+  work item.
+- `show <id>` reads the handback for a handback or dispatch id.
 
 ### `prompt`
 
@@ -53,6 +54,11 @@ recorded user prompts, optionally for one session.
 ### `ready`
 
 `maestro ready [--json]` lists ready work and gated items with their blockers.
+
+### `room`
+
+`maestro room forget <path>` removes one repository from the room registry
+without uninstalling it.
 
 ### `status`
 
@@ -172,5 +178,6 @@ its files, or only one named file.
 
 ### `help`
 
-`maestro help` shows the top-level verb inventory. `maestro help <verb>` prints
-the same per-verb description that registered verbs expose through `--help`.
+`maestro help` and `maestro help --help` show the top-level verb inventory.
+`maestro help <verb>` prints the same per-verb description that registered
+verbs expose through `--help`.
