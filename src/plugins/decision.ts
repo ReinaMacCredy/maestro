@@ -1,5 +1,6 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { DispatchService } from "./dispatch.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
@@ -88,7 +89,7 @@ function format(decision: DecisionRecord): string {
 
 export const decisionPlugin: BuiltInPlugin = {
   name: "decision",
-  inject: ["work"],
+  inject: ["work", "dispatch"],
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS decisions (
@@ -200,6 +201,10 @@ export const decisionPlugin: BuiltInPlugin = {
                 throw new CliError("INVALID_STATE", `${supersedesId} must be locked before superseding`);
               }
             }
+            const council = workId
+              ? (context.dispatch as DispatchService).council(workId)
+              : null;
+            const sealedCouncil = council?.sealed ? council.generationAnchor : null;
             const id = context.store.nextPrefixedId("decisions", "d");
             context.store.database
               .query(
@@ -213,11 +218,22 @@ export const decisionPlugin: BuiltInPlugin = {
               entityType: "decision",
               entityId: id,
               sessionId: context.sessions.current().id,
-              payload: { text, parentId, workId, supersedesId },
+              payload: {
+                text,
+                parentId,
+                workId,
+                supersedesId,
+                ...(sealedCouncil ? { sealedCouncil } : {}),
+              },
             });
-            return service.get(id) as DecisionRecord;
+            return { decision: service.get(id) as DecisionRecord, sealedCouncil };
           });
-          const created = transaction.immediate();
+          const { decision: created, sealedCouncil } = transaction.immediate();
+          if (sealedCouncil && workId) {
+            process.stderr.write(
+              `[sealed] ${workId} council is sealed; this draft is readable by its lanes\n`,
+            );
+          }
           return { data: { decision: created }, text: format(created) };
         },
         {

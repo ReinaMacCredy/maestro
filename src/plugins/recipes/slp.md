@@ -171,6 +171,9 @@ returns COUNCIL_REQUEST. The Lead answers by opening a second generation
 (d688) or declining with a work note.
 
 A council's first views stay sealed until every member returns (blind design).
+The Lead writes its own first view outside the store (NOTES or a private file)
+and drafts it as a decision only after the seal opens; a draft on the council's
+work item while it is sealed is visible to every lane.
 When the views conflict or the risk warrants it, the Lead opens a second
 generation of dispatches on the same work item, one per Peer, and pastes the
 other Peers' handbacks into each contract verbatim together with one targeted

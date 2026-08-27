@@ -491,3 +491,12 @@ test("372 [lint] recipe slp and lane.md state the one-dispatch-one-handback boun
   expect(room).toMatch(/never changes an assignment/);
   expect(room).toContain('"after h<id>: <evidence>"');
 });
+
+test("413 [lint] recipe slp records the Lead view before a council is sealed", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";
+  expect(cross.replace(/\s+/g, " ")).toContain(
+    "A council's first views stay sealed until every member returns (blind design). " +
+      "The Lead writes its own first view outside the store (NOTES or a private file) and drafts it as a decision only after the seal opens; a draft on the council's work item while it is sealed is visible to every lane.",
+  );
+});

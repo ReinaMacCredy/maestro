@@ -1,5 +1,31 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { idFrom, runCli, withFixture } from "./helpers.ts";
+
+function dispatchOpenArgs(work: string): string[] {
+  return [
+    "dispatch",
+    "open",
+    work,
+    "--objective",
+    "Return an independent council view",
+    "--owned-scope",
+    "decision boundary",
+    "--excluded-scope",
+    "implementation",
+    "--mutation",
+    "no-write",
+    "--stop-condition",
+    "view returned",
+    "--lane",
+    "decision",
+    "--evidence-required",
+    "source: decision record",
+    "--pane",
+    "w1:pA",
+  ];
+}
 
 test("16 search JSON binds unique work, decision, and note tokens to explicit results", async () => {
   await withFixture(async (fixture) => {
@@ -76,6 +102,46 @@ test("19 locked decisions reject edits while superseding links and child visibil
     expect(listed.stdout).toContain(first);
     expect(listed.stdout).toContain(second);
     expect(listed.stdout).toContain("replacement child");
+  });
+});
+
+test("410 decision draft warns and records the generation when its work council is sealed", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "sealed decision council", "--atomic-reason", "fixture"]),
+    );
+    const firstDispatch = await runCli(fixture, dispatchOpenArgs(work));
+    const secondDispatch = await runCli(fixture, dispatchOpenArgs(work));
+    const generationAnchor = firstDispatch.stdout.match(/^(x\d+) \[open\]/)?.[1];
+    expect(firstDispatch.exitCode).toBe(0);
+    expect(secondDispatch.exitCode).toBe(0);
+    expect(generationAnchor).toBeString();
+
+    const drafted = await runCli(fixture, [
+      "decision",
+      "draft",
+      "ask the Supervisor without breaking the council seal",
+      "--work",
+      work,
+    ]);
+
+    expect(drafted.exitCode).toBe(0);
+    expect(drafted.stderr).toBe(
+      `[sealed] ${work} council is sealed; this draft is readable by its lanes\n`,
+    );
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const payload = database
+      .query<{ payload: string }, []>(
+        "SELECT payload FROM event_log WHERE type = 'decision.draft' ORDER BY id DESC LIMIT 1",
+      )
+      .get()?.payload;
+    database.close();
+    expect(payload).toBeString();
+    expect(JSON.parse(payload as string)).toEqual(
+      expect.objectContaining({ sealedCouncil: generationAnchor }),
+    );
   });
 });
 
