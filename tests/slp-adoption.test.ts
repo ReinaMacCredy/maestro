@@ -1043,7 +1043,7 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
       expect(config.hooks.PostToolUse).toBeUndefined();
     }
     const managedPreToolUse = {
-      matcher: "Agent",
+      matcher: "Agent|Task",
       hooks: [{ type: "command", command: "bun .claude/hooks/maestro-record.ts" }],
     };
     const firstClaudePreToolUse = firstClaude.hooks.PreToolUse ?? [];
@@ -1078,7 +1078,7 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
   });
 });
 
-test("447 PreToolUse denies Agent for an accepted dispatch holder without recording a session event", async () => {
+test("447 PreToolUse denies Agent and Task for a dispatch holder without recording a session event", async () => {
   await withFixture(async (fixture) => {
     const holder = "peer-hook-holder";
     await recordSession(fixture, holder);
@@ -1105,22 +1105,25 @@ test("447 PreToolUse denies Agent for an accepted dispatch holder without record
       ).exitCode,
     ).toBe(0);
 
-    const denied = await runCli(
-      fixture,
-      ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-      session(holder),
-    );
+    for (const toolName of ["Agent", "Task"]) {
+      const denied = await runCli(
+        fixture,
+        ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+        session(holder),
+        JSON.stringify({ tool_name: toolName }),
+      );
 
-    expect(denied.exitCode).toBe(0);
-    expect(denied.stderr).toBe("");
-    expect(JSON.parse(denied.stdout)).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          `${dispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
-      },
-    });
+      expect(denied.exitCode).toBe(0);
+      expect(denied.stderr).toBe("");
+      expect(JSON.parse(denied.stdout)).toEqual({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            `${dispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
+        },
+      });
+    }
     const status = await runCli(fixture, ["status", "--json"], session(holder));
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ id: string; lastEvent: string }> };
@@ -1131,7 +1134,7 @@ test("447 PreToolUse denies Agent for an accepted dispatch holder without record
   });
 });
 
-test("448 PreToolUse stays silent for a Lead that opened but does not hold a dispatch", async () => {
+test("448 PreToolUse stays silent for a Lead invoking Agent or Task", async () => {
   await withFixture(async (fixture) => {
     const lead = "lead-with-unaccepted-dispatch";
     await recordSession(fixture, lead);
@@ -1163,15 +1166,18 @@ test("448 PreToolUse stays silent for a Lead that opened but does not hold a dis
     );
     expect(opened.exitCode).toBe(0);
 
-    const allowed = await runCli(
-      fixture,
-      ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-      session(lead),
-    );
+    for (const toolName of ["Agent", "Task"]) {
+      const allowed = await runCli(
+        fixture,
+        ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+        session(lead),
+        JSON.stringify({ tool_name: toolName }),
+      );
 
-    expect(allowed.exitCode).toBe(0);
-    expect(allowed.stdout).toBe("");
-    expect(allowed.stderr).toBe("");
+      expect(allowed.exitCode).toBe(0);
+      expect(allowed.stdout).toBe("");
+      expect(allowed.stderr).toBe("");
+    }
     const status = await runCli(fixture, ["status", "--json"], session(lead));
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ id: string; lastEvent: string }> };

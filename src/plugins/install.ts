@@ -146,7 +146,7 @@ async function writeHookConfig(
     config.hooks.PreToolUse = [
       ...retained.groups,
       {
-        matcher: "Agent",
+        matcher: "Agent|Task",
         hooks: [{ type: "command", command }],
       },
     ];
