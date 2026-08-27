@@ -1,119 +1,189 @@
 # maestro
 
-Maestro is a local-first CLI for keeping human and agent work coordinated inside
-a repository. It stores durable work, decisions, sessions, evidence, dispatches,
-and handbacks in the repository's shared Git root, then delivers the current state to
-supported agent harnesses through hooks. It runs on Bun and does not require a
-background service.
+Maestro is a local-first coordination system for human and agent work. It keeps
+durable work, decisions, sessions, evidence, dispatches, and handbacks in each
+repository's shared Git root. It is written in TypeScript, runs on Bun, and does
+not require a background service.
+
+Version 0.108.0 is the first TypeScript release. It continues the version line
+after 0.107.x, the final Rust release.
 
 ## Three layers
 
-- **Mechanism kernel** owns CLI dispatch, the SQLite store, event delivery,
-  sessions, readiness projection, and plugin loading. It does not impose a
-  workflow.
-- **Plug-and-play policy plugins** add optional gates such as proof, breakdown,
-  TDD, QA, research, and independent witness checks. Enable or disable them per
-  repository in `.maestro/config`.
-- **Markdown recipes** provide methods on demand without copying protocol prose
-  into every repository. Browse them with `maestro recipe list` and read one
-  with `maestro recipe show <name>`.
+- **Mechanism kernel** owns the SQLite store, event log, sessions, CLI dispatch,
+  plugin loading, and readiness projection. It does not impose workflow policy.
+- **Plugins** provide verbs and optional policy gates. Repositories enable or
+  disable policies such as proof and breakdown in `.maestro/config`.
+- **Recipes and skills** provide prompt-first working methods as Markdown. Use
+  `maestro recipe list` to browse recipes and `maestro recipe show <name>` to
+  read one without copying it into a repository.
 
 ## Install, update, and remove
 
-Run the first install from a Maestro source checkout. The installer preserves
-the previous executable as `maestro-legacy`, copies the Bun runtime to
-`~/.maestro/runtime`, writes the shim at `~/.local/bin/maestro`, and wires the
-current repository:
+Maestro is distributed from source. From a Maestro checkout, run:
 
 ```sh
 bun bin/maestro.ts install
 maestro version
 ```
 
-The source checkout is recorded outside the runtime at
-`~/.maestro/source.json`. `maestro update` fetches that checkout's current
-upstream, accepts only a fast-forward, and resyncs the runtime. It refuses a
-dirty, diverged, unreachable, or stale source without partially updating the
-source or runtime:
+Install copies the runtime to `~/.maestro/runtime`, writes the shim at
+`~/.local/bin/maestro`, records the source checkout in
+`~/.maestro/source.json`, and wires the current repository. When replacing an
+older executable, it preserves that executable as `maestro-legacy` if no
+rollback executable already exists.
 
-```sh
-maestro update
-maestro version
-```
+Install also scaffolds `~/maestro`, the Supervisor room, and registers the
+current repository there. It materializes four managed skills under
+`~/maestro/skills`: `maestro-bundle`, `maestro-design`, `maestro-work`, and
+`maestro-verify`. The installer links those skills for Claude without
+overwriting unmanaged skills.
 
-`maestro install` remains the offline resync operation and is equivalent to the
-old `sync` behavior when run from a source checkout.
+Use `maestro update` to fetch the recorded source checkout, accept only a
+fast-forward, and resync the runtime. It refuses dirty, diverged, missing, or
+unreachable sources without partially updating the runtime. Use
+`maestro install` from the source checkout for an offline resync.
 
-`maestro uninstall` removes Maestro-managed hooks, settings keys, mirror
-blocks, and wiring from the current repository. It is idempotent and never
-deletes `.maestro/maestro.db` or a legacy `.maestro/store.sqlite`. To remove the
-machine-level shim and runtime as a separate manual action, run exactly:
+Use `maestro uninstall` to remove Maestro-managed hooks, settings keys, and
+mirror blocks from the current repository. It is idempotent and does not delete
+repository data, the machine runtime, the shim, or the Supervisor room.
 
-```sh
-rm ~/.local/bin/maestro
-rm -rf ~/.maestro/runtime
-```
+`maestro doctor` inspects the shim, runtime stamp, recorded source, repository
+wiring, permissions, and store access without repairing them. A healthy report
+exits zero; a reported problem names the next command when the repair is
+mechanical.
 
-`maestro doctor` diagnoses the shim target, runtime stamp, recorded source,
-current repository wiring, and store access without repairing or changing
-them. A healthy report exits zero; every reported issue names its fix command.
+## Roles and lanes
 
-Status and hook briefs append a one-line advisory when the installed runtime
-commit differs from the recorded source checkout's local HEAD. This check is
-offline and never fetches. Set `MAESTRO_AUTO_UPDATE=0` to silence it.
+Maestro uses three durable agent roles:
+
+- The **Supervisor** lives in `~/maestro`. It represents the owner across
+  projects, filters attention, and works through each project's Lead. It does
+  not edit project code, dispatch Peers directly, or accept technical work.
+- A repository session is its **Lead**. The Lead owns the project outcome,
+  contracts, topology, integration, and technical acceptance.
+- A pane opened with a dispatch is a **Peer**. The Peer owns independent
+  judgment or bounded delivery inside the stored contract, then returns a
+  handback with layered evidence.
+
+Read the full authority model with `maestro recipe show slp`.
+
+Lanes are Herdr panes, not subprocess agents created by Maestro. A Lead stores
+the lane contract with `maestro dispatch open`, the Peer takes it with
+`maestro dispatch accept`, and the Peer returns a packet with
+`maestro handback file`. Herdr owns pane creation, agent startup, prompting,
+wake-up, and pane closure; Maestro owns the durable contract and evidence.
+The room's `~/maestro/lane.md` contains the complete lane procedure.
+
+The four lane types are `scout` for no-write discovery, `decision` for a
+recommendation, `delivery` for bounded writes, and `challenge` for trying to
+break a premise or candidate. Concurrent dispatches on one work item form a
+council. The council stays sealed until every member returns, so no view can
+bias another and work cannot begin on a partial result.
+
+## Work, decisions, and evidence
+
+- `maestro status` shows session identity, held work, and live peers;
+  `maestro ready` shows work that can start and the gates blocking other work.
+- `maestro work` manages work trees, dependencies, leases, notes, cancellation,
+  claims, and proof.
+- `maestro decision` records draft, locked, and superseded choices with their
+  rationale and work links. Supersession takes effect when the replacement is
+  locked, not while it is still a draft.
+- `maestro dispatch` stores lane contracts and council state;
+  `maestro handback` stores shape-checked return packets.
+- `maestro search` searches native work, decisions, notes, events, bundles, and
+  imported Rust records.
+
+Failed commands emit a JSON error envelope on stderr and exit nonzero. Empty or
+whitespace-only required arguments are rejected rather than interpreted as
+missing identities or targets.
 
 ## Verb tour
 
-- `maestro status` shows every session, or only live sessions with `--live`;
-  `maestro ready` shows work that can start now.
-- `maestro work add|start|note|done|show|list` manages the work tree, dependency
-  edges, acceptance, leases, and evidence.
-- `maestro decision draft|lock|show|list` records choices with their own
-  lifecycle.
-- `maestro dispatch open|accept|show|list` and `maestro handback file|show`
-  preserve lane contracts and return packets; inspect the archive with
-  `maestro dispatch list <work-id>` and `maestro handback show <id>`.
-- `maestro plugin list|enable|disable|new|add|remove` manages built-in and local
-  extensions.
-- `maestro recipe list|show` serves the deeper working methods.
-- `maestro install` refreshes the runtime and repository wiring; `maestro
-  update`, `maestro uninstall`, and `maestro doctor` complete the distribution
-  lifecycle. `maestro version`, `maestro --version`, and `maestro -v` report
-  the same install identity.
+- `maestro status` shows sessions and leases; `maestro ready` shows startable
+  and gated work.
+- `maestro work add|start|note|done|show|list` manages the work lifecycle.
+- `maestro decision draft|lock|show|list` manages durable choices.
+- `maestro dispatch open|accept|show|list` stores lane contracts, while
+  `maestro handback file|show` stores and reads return packets.
+- `maestro attention` scans the current repository and `maestro brief`
+  summarizes every registered repository.
+- `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
+  manages the configured extension set.
+- `maestro import rust` imports preserved Rust data; `maestro legacy show`
+  reads imported cards and files.
+- `maestro install`, `maestro update`, `maestro uninstall`, and
+  `maestro doctor` manage and diagnose the source-installed runtime.
+- `maestro version` reports the package version and installed commit.
 
-`maestro help` and the Markdown recipes are the deeper command and method
-references.
+## Attention and brief
 
-## Claude and Codex hooks
+`maestro attention` computes current attention packets at read time. It detects
+stalled leases, repeated failures, stale decisions, scope collisions,
+unreturned dispatches, and returned handbacks that have not been reviewed. It
+records no mailbox message and runs no daemon.
 
-`maestro install` writes harness-specific adapters under `.claude/hooks/` and
-`.codex/hooks/`, merges their settings, and injects live state on session start
-and the next prompt. It also maintains small pointer blocks in `CLAUDE.md` and
-`AGENTS.md`. Claude consumes its configured commands directly; review Codex
-hook trust with `/hooks` after installation.
-Do not set `MAESTRO_SESSION_PID` manually: sessions anchor to the live agent host process automatically, and the environment variable exists for tests.
-When a sandbox blocks process inspection, Maestro falls back to a 60-minute
-session anchor refreshed only by commands that session runs. Two concurrent
-sandboxed sessions from the same harness in one worktree cannot be
-distinguished; the most recently active session receives subsequent commands.
+`maestro brief` reads the registry in `~/maestro/registry`, opens each project
+in observer mode, and reports only what needs attention. Missing repositories
+are named and skipped. When every registered project is running normally, the
+brief says so in one line. The `hm` shell function focuses the Supervisor room
+and prints this brief; it does not start an agent.
+
+## Observer mode
+
+Set `MAESTRO_READ_ONLY=1` to run Maestro as an observer. Pure commands such as
+status, search, recipes, and read-only list/show operations remain available.
+Mutating commands fail with `READ_ONLY`; external plugins are not loaded; and
+session, lease, and liveness state is not persisted. Search fails closed if its
+index cannot be refreshed rather than returning stale results as current.
+
+## Harness integration
+
+`maestro install` writes managed adapters for Claude and Codex and merges only
+the managed hook entries. `SessionStart` and `UserPromptSubmit` record the
+session and print its current brief. Small managed blocks in `CLAUDE.md` and
+`AGENTS.md` point agents to status, ready work, and recipes. No hook sends
+mail, pushes a dispatch into another session, or delivers PostToolUse packets.
+
+## Recipes, skills, and plugins
+
+`maestro recipe list` and `maestro recipe show <name>` serve the shipped
+Markdown methods. The four installed skills drive bundle, design, work, and
+verification lifecycles. `maestro plugin` lists and manages built-in, global,
+and repository plugins; policy plugins remain removable instead of being
+baked into the kernel.
+
+Use `maestro help` for the complete verb list and `maestro <verb> --help` for
+the current syntax and flags.
 
 ## Rust-era data
 
-The stores from the Rust line live under `legacy/rust/`. The reference import
-keeps its original read-only behavior:
+The last Rust stores are preserved under `legacy/rust/`. Import the card store
+read-only with:
 
 ```sh
 maestro import rust --path legacy/rust/store.sqlite
 ```
 
-Add `--promote` once to create native work and decisions. Features, tasks,
-ideas, and bugs keep their kind; progress cards become `chore` work. Terminal
-success states become `done`, terminal rejection states become `cancelled`, and
-all other work remains open without a lease. Decision supersession links and
-receipt notes are retained. Receipts whose card no longer exists are skipped
-and counted. `legacy_map` makes a repeated promotion report zero created.
+Add `--promote` to create native work, decisions, and provenance notes:
 
-`maestro import rust --path legacy/rust/archive-cards.sqlite` imports archived
-snapshots as searchable legacy files. Bun's built-in zstd decoder reads the
-snapshot payloads; any payload that cannot be decoded falls back to its stored
-search text and is counted as skipped. See `legacy/rust/README.md`.
+```sh
+maestro import rust --path legacy/rust/store.sqlite --promote
+```
+
+Promotion preserves card kinds, terminal outcomes, decision links,
+supersession chronology, and receipt provenance. Orphan receipts are skipped
+and counted. The `legacy_map` table makes repeated promotion idempotent.
+
+Archived Rust snapshots can also be imported for search:
+
+```sh
+maestro import rust --path legacy/rust/archive-cards.sqlite
+```
+
+Bun decodes zstd snapshot payloads when possible and falls back to stored
+search text when it cannot. Imported records remain available through
+`maestro search` and `maestro legacy show <id>`. See
+[`legacy/rust/README.md`](legacy/rust/README.md) for the preserved datasets and
+their exact counts.
