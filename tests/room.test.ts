@@ -142,7 +142,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
-      "lane.md": "b723a022c021b14e136e863a764ea3b4be9e54b1799fa866d7b7ce7b404e27f8",
+      "lane.md": "7c0041ed8a70e81e58e1620d5ffcbe24079ed45c41d59fdfe2682e8e9f097ba4",
       shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
     });
   });
@@ -435,6 +435,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
       "maestro status --live",
+      "maestro work release <work-id>",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
@@ -477,7 +478,12 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       );
       expect(parsed.exitCode, `${command}\n${parsed.stderr}`).toBe(0);
       if (command.startsWith("maestro work add ")) {
-        replacements.set("<work-id>", idFrom(parsed));
+        const work = idFrom(parsed);
+        replacements.set("<work-id>", work);
+        expect(
+          (await runInstalledCliAt(fixture, fixture.repo, ["work", "start", work], { PATH: path }))
+            .exitCode,
+        ).toBe(0);
       }
       if (command.startsWith("maestro dispatch open ")) {
         replacements.set("<dispatch-id>", parsed.stdout.match(/^(x\d+)/)?.[1] as string);

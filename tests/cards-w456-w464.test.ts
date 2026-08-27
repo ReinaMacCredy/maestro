@@ -251,3 +251,21 @@ test("405 room forget removes a registry line without uninstalling repository wi
     expect(help.stdout).toContain("room forget <path>");
   });
 });
+
+test("406 [lint] lane guidance makes the delivery work lease boundary explicit", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["install"])).exitCode).toBe(0);
+    const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
+
+    expect(lane).toContain(
+      "A delivery lane works under that accepted dispatch.",
+    );
+    expect(lane).toContain(
+      "the Lead releases its own work lease with `maestro work release <work-id>`",
+    );
+    expect(lane).toContain("otherwise the lane never runs maestro work start");
+    expect(lane).toContain(
+      "A lane that hits `LEASE_HELD` returns `BLOCKED` and names the holder",
+    );
+  });
+});
