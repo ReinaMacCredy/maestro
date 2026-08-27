@@ -341,12 +341,14 @@ test("452 withdrawn decisions refuse edits, locks, supersession, and invalid wit
       "--reason",
       "retire it again",
     ]);
-    expect(JSON.parse(supersededWithdrawal.stderr).error).toEqual(expect.objectContaining({
+    const supersededError = JSON.parse(supersededWithdrawal.stderr).error;
+    expect(supersededError).toEqual(expect.objectContaining({
       code: "INVALID_STATE",
-      message: expect.stringContaining(
-        `maestro decision draft "<replacement>" --supersedes ${locked}`,
-      ),
+      command: `maestro decision show ${replacement}`,
+      message: expect.stringContaining(`${locked} is superseded by ${replacement}`),
+      supersededById: replacement,
     }));
+    expect(supersededError.message).not.toContain("--supersedes");
   });
 });
 

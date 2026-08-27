@@ -401,12 +401,28 @@ export const decisionPlugin: BuiltInPlugin = {
         const withdraw = context.store.database.transaction(() => {
           const decision = requireDecision(context, id);
           if (decision.state !== "draft") {
-            if (decision.state === "locked" || decision.state === "superseded") {
+            if (decision.state === "locked") {
               const command = `maestro decision draft "<replacement>" --supersedes ${id}`;
               throw new CliError(
                 "INVALID_STATE",
-                `${id} is ${decision.state}; locked decisions are retired with: ${command}`,
+                `${id} is locked; locked decisions are retired with: ${command}`,
                 { command, id, state: decision.state },
+              );
+            }
+            if (decision.state === "superseded") {
+              const successor = decision.supersededById;
+              const command = `maestro decision show ${successor ?? id}`;
+              throw new CliError(
+                "INVALID_STATE",
+                successor
+                  ? `${id} is superseded by ${successor}; inspect the successor with: ${command}`
+                  : `${id} is superseded; inspect it with: ${command}`,
+                {
+                  command,
+                  id,
+                  state: decision.state,
+                  ...(successor ? { supersededById: successor } : {}),
+                },
               );
             }
             throw new CliError("INVALID_STATE", `${id} is ${decision.state}`, {
