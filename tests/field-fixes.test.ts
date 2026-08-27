@@ -238,6 +238,19 @@ test("289 [lint] recipe slp presents the SLP roles and install mirrors state the
     for (const heading of ["### Human", "### Supervisor", "### Lead", "### Peer"]) {
       expect(recipe.stdout).toContain(heading);
     }
+    for (const status of [
+      "DONE",
+      "BLOCKED",
+      "UNTESTABLE",
+      "UNKNOWN",
+      "FAILED",
+      "CHALLENGE",
+      "REOPEN_REQUEST",
+      "DEPENDENCY_REQUEST",
+      "COUNCIL_REQUEST",
+    ]) {
+      expect(recipe.stdout).toContain(status);
+    }
     expect(recipe.stdout).toContain("## How maestro binds a session to a role");
     expect(recipe.stdout).toContain("HANDBACK_UNREVIEWED");
 

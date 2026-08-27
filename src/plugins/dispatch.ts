@@ -58,15 +58,19 @@ interface DispatchRow {
   returned: number;
 }
 
-export type HandbackStatus =
-  | "DONE"
-  | "BLOCKED"
-  | "UNTESTABLE"
-  | "UNKNOWN"
-  | "FAILED"
-  | "CHALLENGE"
-  | "REOPEN_REQUEST"
-  | "DEPENDENCY_REQUEST";
+export const handbackStatusVocabulary = [
+  "DONE",
+  "BLOCKED",
+  "UNTESTABLE",
+  "UNKNOWN",
+  "FAILED",
+  "CHALLENGE",
+  "REOPEN_REQUEST",
+  "DEPENDENCY_REQUEST",
+  "COUNCIL_REQUEST",
+] as const;
+
+export type HandbackStatus = (typeof handbackStatusVocabulary)[number];
 
 export interface HandbackRecord {
   id: string;
@@ -121,16 +125,46 @@ export interface CouncilStatus {
   unsealReason: string | null;
 }
 
-const handbackStatuses: readonly HandbackStatus[] = [
-  "DONE",
-  "BLOCKED",
-  "UNTESTABLE",
-  "UNKNOWN",
-  "FAILED",
-  "CHALLENGE",
-  "REOPEN_REQUEST",
-  "DEPENDENCY_REQUEST",
-];
+const createHandbacksTableSql = `
+  CREATE TABLE IF NOT EXISTS handbacks (
+    id TEXT PRIMARY KEY,
+    dispatch_id TEXT NOT NULL REFERENCES dispatches(id),
+    status TEXT NOT NULL CHECK(status IN (
+      ${handbackStatusVocabulary.map((status) => `'${status}'`).join(", ")}
+    )),
+    claim TEXT NOT NULL,
+    proof TEXT NOT NULL,
+    assumptions TEXT NOT NULL,
+    residual_risks TEXT NOT NULL,
+    incidental_findings TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`;
+
+const createHandbacksIndexSql =
+  "CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id)";
+
+function handbacksSupportCouncilRequest(context: PluginContext): boolean {
+  const schema = context.store.database
+    .query<{ sql: string | null }, []>(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'handbacks'",
+    )
+    .get()?.sql;
+  return schema?.includes("'COUNCIL_REQUEST'") ?? false;
+}
+
+function migrateHandbackStatusVocabulary(context: PluginContext): void {
+  if (context.store.readOnly || handbacksSupportCouncilRequest(context)) return;
+  const migration = context.store.database.transaction(() => {
+    if (handbacksSupportCouncilRequest(context)) return;
+    context.store.database.exec("ALTER TABLE handbacks RENAME TO handbacks_legacy_statuses");
+    context.store.database.exec(createHandbacksTableSql);
+    context.store.database.exec("INSERT INTO handbacks SELECT * FROM handbacks_legacy_statuses");
+    context.store.database.exec("DROP TABLE handbacks_legacy_statuses");
+    context.store.database.exec(createHandbacksIndexSql);
+  });
+  migration.immediate();
+}
 
 function fromRow(row: DispatchRow): DispatchRecord {
   return {
@@ -402,21 +436,8 @@ export const dispatchPlugin: BuiltInPlugin = {
         updated_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS dispatches_work_id ON dispatches(work_id);
-      CREATE TABLE IF NOT EXISTS handbacks (
-        id TEXT PRIMARY KEY,
-        dispatch_id TEXT NOT NULL REFERENCES dispatches(id),
-        status TEXT NOT NULL CHECK(status IN (
-          'DONE', 'BLOCKED', 'UNTESTABLE', 'UNKNOWN', 'FAILED', 'CHALLENGE',
-          'REOPEN_REQUEST', 'DEPENDENCY_REQUEST'
-        )),
-        claim TEXT NOT NULL,
-        proof TEXT NOT NULL,
-        assumptions TEXT NOT NULL,
-        residual_risks TEXT NOT NULL,
-        incidental_findings TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id);
+      ${createHandbacksTableSql}
+      ${createHandbacksIndexSql};
       CREATE TABLE IF NOT EXISTS dispatch_councils (
         work_id TEXT NOT NULL REFERENCES work(id),
         generation_anchor TEXT NOT NULL REFERENCES dispatches(id),
@@ -425,6 +446,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         PRIMARY KEY(work_id, generation_anchor)
       );
     `);
+    migrateHandbackStatusVocabulary(context);
     const hasCouncilGenerationAnchor = context.store.database
       .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
       .all()
@@ -804,11 +826,11 @@ export const dispatchPlugin: BuiltInPlugin = {
             throw new CliError("INVALID_STATE", `${dispatchId} is cancelled`);
           }
           const status = requiredOption(invocation, "--status");
-          if (!handbackStatuses.includes(status as HandbackStatus)) {
+          if (!handbackStatusVocabulary.includes(status as HandbackStatus)) {
             throw new CliError(
               "INVALID_STATUS",
-              `invalid handback status ${status}; expected one of: ${handbackStatuses.join(", ")}`,
-              { statuses: handbackStatuses },
+              `invalid handback status ${status}; expected one of: ${handbackStatusVocabulary.join(", ")}`,
+              { statuses: handbackStatusVocabulary },
             );
           }
           const claim = requiredOption(invocation, "--claim");

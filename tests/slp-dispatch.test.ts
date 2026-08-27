@@ -874,7 +874,7 @@ test("266 dispatch migration clears legacy terminal holders once", async () => {
   });
 });
 
-test("176 handback file refuses a status outside the eight-value vocabulary", async () => {
+test("176 handback file refuses a status outside the nine-value vocabulary", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
     const args = handbackFileArgs(dispatch);
@@ -890,6 +890,7 @@ test("176 handback file refuses a status outside the eight-value vocabulary", as
       "CHALLENGE",
       "REOPEN_REQUEST",
       "DEPENDENCY_REQUEST",
+      "COUNCIL_REQUEST",
     ]) {
       expect(filed.stderr).toContain(status);
     }

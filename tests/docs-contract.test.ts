@@ -11,6 +11,7 @@ const handbackStatuses = [
   "CHALLENGE",
   "REOPEN_REQUEST",
   "DEPENDENCY_REQUEST",
+  "COUNCIL_REQUEST",
 ] as const;
 
 function session(id: string): Record<string, string> {

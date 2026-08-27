@@ -51,7 +51,8 @@ it alone.
 Independent judgment or delivery inside one bounded assignment. Owns technical
 judgment inside the lease, the right to investigate deeply, to confirm, to
 challenge the premise, to return DONE, BLOCKED, UNTESTABLE, UNKNOWN, FAILED,
-CHALLENGE, REOPEN_REQUEST or DEPENDENCY_REQUEST, and proof for its own writes.
+CHALLENGE, REOPEN_REQUEST, DEPENDENCY_REQUEST or COUNCIL_REQUEST, and proof for
+its own writes.
 Does not own topology, agent creation, scope beyond the assignment, project
 acceptance, or external effects. A topology dependency returns
 DEPENDENCY_REQUEST. Confirmation and partial progress belong in claim and
@@ -139,6 +140,10 @@ recommendation, a decision in the owner's name, or a freeze. It never acts on
 the packet by editing the project itself.
 
 ## Cross-examination
+
+A Peer that finds the assignment needs a council rather than one judgment
+returns COUNCIL_REQUEST. The Lead answers by opening a second generation
+(d688) or declining with a work note.
 
 A council's first views stay sealed until every member returns (blind design).
 When the views conflict or the risk warrants it, the Lead opens a second

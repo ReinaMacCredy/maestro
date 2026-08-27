@@ -105,6 +105,7 @@ test("133 install materializes the dispatch, handback, dependency, and episode c
       "CHALLENGE",
       "REOPEN_REQUEST",
       "DEPENDENCY_REQUEST",
+      "COUNCIL_REQUEST",
       "A+B+C",
       "Attempted",
       "Invariant assumed",

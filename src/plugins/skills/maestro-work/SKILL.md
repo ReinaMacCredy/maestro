@@ -43,7 +43,7 @@ or a council of two or three decision lanes.
 Return this packet when the lane stops:
 
 ```text
-Status: <DONE | BLOCKED | UNTESTABLE | UNKNOWN | FAILED | CHALLENGE | REOPEN_REQUEST | DEPENDENCY_REQUEST>
+Status: <DONE | BLOCKED | UNTESTABLE | UNKNOWN | FAILED | CHALLENGE | REOPEN_REQUEST | DEPENDENCY_REQUEST | COUNCIL_REQUEST>
 Claim: <what is now believed true>
 Proof: <evidence with its layer named>
 Assumptions not verified: <items or None>
