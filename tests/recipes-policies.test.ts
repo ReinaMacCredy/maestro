@@ -511,6 +511,7 @@ test("422 [lint] recipe slp and the scenarios page carry the intake contract (d7
     "about the outcome, never about the route",
     "the adjacent route it did not take",
     "without a time estimate",
+    "score (0-10) and the problem in one sentence",
     "The announcement never blocks",
   ]) {
     expect(flat).toContain(phrase);
@@ -525,6 +526,7 @@ test("422 [lint] recipe slp and the scenarios page carry the intake contract (d7
   expect(flatPage).toContain("You never name a shape");
   expect(flatPage).toContain("It never asks how many lanes to open");
   expect(flatPage).toContain("the route it did not take");
+  expect(flatPage).toContain("Score 7.");
 });
 
 test("425 [lint] recipe slp, lanes.md and roles.md say which boundaries are enforced and which are soft-audited (w494)", async () => {

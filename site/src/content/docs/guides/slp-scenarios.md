@@ -50,12 +50,12 @@ the work implies a push, publish, spend or delete you have not granted, or
 your sentence has two readings that would produce different results and the
 store does not settle which. It never asks how many lanes to open.
 
-Then, before it opens anything, it tells you in three lines: the problem as
-it understood it, what it is doing and the one thing that decided it, and the
+Then, before it opens anything, it tells you in three lines: the score and
+the problem as it understood it, what it is doing and the one thing that decided it, and the
 route it did not take with the phrase that switches to it:
 
 ```text
-Fifteen audit gaps, one option each, no code yet.
+Score 7. Fifteen audit gaps, one option each, no code yet.
 Two independent reads on the same brief, sealed, because you said you cannot
 choose and every gap has more than one defensible answer; I assumed you are
 around. The other route is that I pick and report; say "just pick" and I will.

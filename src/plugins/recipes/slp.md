@@ -94,7 +94,7 @@ and it comes before anything is opened. An owner's own word for a shape
 the Lead recognises; the announcement says which won.
 
 Then it says, in the owner's language and without a time estimate: the
-problem in one sentence, what it is doing in plain words and the one fact that
+score (0-10) and the problem in one sentence, what it is doing in plain words and the one fact that
 decided it, and the adjacent route it did not take with the sentence that
 would switch to it. Routes in plain words: I do it now; I put one session on
 it and review what comes back; I get two independent reads before anything
