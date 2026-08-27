@@ -35,9 +35,12 @@ not while the replacement remains a draft. History is never rewritten.
 
 ## Bundles
 
-Direct work is appropriate for one session, one branch, and acceptance that
-fits in a sentence. Open a bundle when work spans sessions or branches, shares
-a moving scope, carries high risk, or repeats a failed fix:
+Decide the tier from the request before any recon. A quickfix, a diff that
+fits in one sentence and hits no bundle trigger, is done directly with inline
+verification and no record; if it grows past one sentence, stop and add a work
+item. Direct work with a work item is appropriate for one session, one branch,
+and acceptance that fits in a sentence. Open a bundle when work spans sessions
+or branches, shares a moving scope, carries high risk, or repeats a failed fix:
 
 ```sh
 maestro bundle open <bundle-id> --work <work-id>
