@@ -420,12 +420,7 @@ export const workPlugin: BuiltInPlugin = {
         // Declaring an existing item atomic here is the only way out of a
         // breakdown gate without filing a duplicate work item.
         const declaredAtomic = stringOption(invocation, "atomic-reason");
-        if (declaredAtomic) {
-          context.store.database
-            .query("UPDATE work SET atomic_reason = ?, updated_at = ? WHERE id = ?")
-            .run(declaredAtomic, new Date().toISOString(), id);
-        }
-        const gateWork = declaredAtomic ? requireWork(context, id) : work;
+        const gateWork = declaredAtomic ? { ...work, atomicReason: declaredAtomic } : work;
         const children = service.children(id);
         const result = await context.events.waterfall<
           WorkGateInput,
@@ -462,6 +457,11 @@ export const workPlugin: BuiltInPlugin = {
           }
           context.sessions.record("work.start");
           const now = new Date().toISOString();
+          if (declaredAtomic) {
+            context.store.database
+              .query("UPDATE work SET atomic_reason = ?, updated_at = ? WHERE id = ?")
+              .run(declaredAtomic, now, id);
+          }
           const claimed = context.store.database
             .query(
               `UPDATE work

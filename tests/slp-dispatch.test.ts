@@ -1415,3 +1415,22 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
     expect(quiet.stdout).not.toContain("attention ");
   });
 });
+
+test("326 a start rejected by a gate leaves atomic_reason untouched", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(await runCli(fixture, ["work", "add", "atomic rollback target"]));
+    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
+    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
+
+    const started = await runCli(fixture, ["work", "start", work, "--atomic-reason", "single-file change"]);
+    expect(started.exitCode).not.toBe(0);
+    expect(started.stderr).toContain("GATE_BLOCKED");
+
+    const db = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const row = db.query("SELECT state, held_by, atomic_reason FROM work WHERE id = ?").get(work) as {
+      state: string; held_by: string | null; atomic_reason: string | null;
+    };
+    db.close();
+    expect(row).toEqual({ state: "open", held_by: null, atomic_reason: null });
+  });
+});
