@@ -112,6 +112,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "AGENTS.md",
       "CLAUDE.md",
       "lane.md",
+      "lead.md",
       "shellrc",
       ".claude/settings.json",
     ];
@@ -411,6 +412,43 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
+  });
+});
+
+test("450 [lint] installed lead guidance hands owner intent to the repository Lead", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const lead = await readFile(join(room, "lead.md"), "utf8");
+    const identity = await readFile(join(room, "IDENTITY.md"), "utf8");
+    const agents = await readFile(join(room, "AGENTS.md"), "utf8");
+
+    expect(lead.match(/^\d+\./gm)).toEqual(["1.", "2.", "3.", "4.", "5.", "6."]);
+    expect(lead).toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
+    expect(lead).toContain("`herdr agent list`");
+    expect(lead).toContain(
+      '`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>"`',
+    );
+    expect(lead).toContain(
+      "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead --no-focus`",
+    );
+    expect(lead).toContain(
+      "`herdr agent start <name> --kind <harness OWNER.md names> --pane <pane-id>`",
+    );
+    expect(lead).toContain(
+      '`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."`',
+    );
+    expect(lead).toContain("`herdr agent wait <name> --until working --timeout 60000`");
+    expect(lead).toContain(
+      '`maestro work note <room-work-id> "handed intent to <repo>: <one-line summary>"`',
+    );
+    expect(lead).toContain(
+      'Never run `maestro work add` or any write in the project store, run `maestro dispatch open`, suggest topology in the prompt, or read the pane transcript.',
+    );
+    expect(identity).toContain("read `lead.md`");
+    expect(agents).toContain("read `lead.md`");
   });
 });
 

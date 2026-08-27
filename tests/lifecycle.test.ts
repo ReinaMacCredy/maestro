@@ -746,6 +746,7 @@ test("411 update regenerates the room's generated files and keeps OWNER.md", asy
     const owner = join(room, "OWNER.md");
     await writeFile(owner, "# owner notes\nkeep me\n");
     await writeFile(join(room, "lane.md"), "stale lane text\n");
+    await writeFile(join(room, "lead.md"), "stale lead text\n");
 
     const updated = await runInstalled(fixture, runtime, source, ["update"]);
 
@@ -753,6 +754,9 @@ test("411 update regenerates the room's generated files and keeps OWNER.md", asy
     const lane = await readFile(join(room, "lane.md"), "utf8");
     expect(lane).not.toContain("stale lane text");
     expect(lane).toContain("a lane with a second stop point needs a second dispatch");
+    const lead = await readFile(join(room, "lead.md"), "utf8");
+    expect(lead).not.toContain("stale lead text");
+    expect(lead).toContain("[from supervisor][intent]");
     expect(await readFile(owner, "utf8")).toBe("# owner notes\nkeep me\n");
   });
 });

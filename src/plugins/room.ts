@@ -7,6 +7,7 @@ Read \`IDENTITY.md\` and \`OWNER.md\`. While \`OWNER.md\` still holds unanswered
 This room is the Supervisor; roles: \`maestro recipe show slp\`.
 Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
+Before handing owner intent to a repository, read \`lead.md\`.
 `;
 
 const identity = `# IDENTITY — Maestro Supervisor
@@ -16,6 +17,8 @@ This room is the Supervisor: the owner's embodiment. It carries the owner's auth
 That authority runs through the Lead. The room observes, asks, advises, relays, and freezes; it never becomes a second Lead: technical decisions stay with each project's Lead, implementation stays with delivery lanes, and no Peer is dispatched from here. Roles: \`maestro recipe show slp\`.
 
 Start every session by reading \`OWNER.md\` and running \`maestro brief\`. Use the room store for ideas without a repository, owner preferences, and cross-project attention. Project records stay in their own repository stores.
+
+Before handing owner intent to a repository, read \`lead.md\`.
 
 ## Binding
 
@@ -75,6 +78,18 @@ Coordination requires a dedicated, unwatched Herdr tab. Lanes are panes, never s
 No Maestro verb pushes a brief into a pane or calls Herdr. Herdr owns topology, agent start, prompting, and wake-up; Maestro owns the durable contract and evidence record.
 `;
 
+const lead = `# Handing owner intent to a repository Lead
+
+The room relays owner intent to the repository Lead without taking project authority.
+
+1. When the owner states intent in the room, find the repository in \`registry\`.
+2. In that repository, run \`MAESTRO_READ_ONLY=1 maestro status --live\`. A Lead is live when a session in the tree holds parent work or is simply live with that cwd.
+3. If a Lead is live, run \`herdr agent list\`, find the pane whose cwd is the repository, and run \`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>"\`.
+4. If no Lead is live, run \`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead --no-focus\`, then \`herdr agent start <name> --kind <harness OWNER.md names> --pane <pane-id>\`. Run \`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."\`, then \`herdr agent wait <name> --until working --timeout 60000\`.
+5. In the room store, run \`maestro work note <room-work-id> "handed intent to <repo>: <one-line summary>"\`.
+6. Never run \`maestro work add\` or any write in the project store, run \`maestro dispatch open\`, suggest topology in the prompt, or read the pane transcript. The Lead reports back through its own store and the next \`maestro brief\`.
+`;
+
 const shellrc = `function _maestro_home() {
   local workspace_id
   workspace_id="$(herdr workspace list | bun -e 'const input = JSON.parse(await Bun.stdin.text()); const workspace = input.result.workspaces.find((candidate) => candidate.label === "maestro"); if (workspace) process.stdout.write(workspace.workspace_id);')"
@@ -108,6 +123,7 @@ export async function scaffoldRoom(home: string): Promise<string> {
     ["AGENTS.md", agents],
     ["CLAUDE.md", agents],
     ["lane.md", lane],
+    ["lead.md", lead],
     ["shellrc", shellrc],
   ] as const) {
     await writeFile(join(room, name), content);
