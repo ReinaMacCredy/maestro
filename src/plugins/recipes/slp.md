@@ -144,6 +144,24 @@ appear only in the repository hook brief, for the Lead; failures on a
 Lead-held lease appear only in `maestro brief`, for the Supervisor;
 `maestro attention` still lists both with `holder role` and `route`.
 
+## Handback boundary
+
+One dispatch ends with exactly one handback (d697). The stop condition and
+the handback are the same event: a lane files when its stop condition is met
+and not before, and filing ends that stored assignment. A `[from lead]`
+prompt does not reopen it. When the Lead wants more evidence or a second
+phase after the return, the Lead opens a new sequential dispatch on the same
+work item and the same pane, names the prior dispatch and handback in the
+objective, and the lane accepts the new dispatch before continuing. A brief
+that pauses for review or a later signal after a handback is two dispatches.
+
+A return packet is evidence for the exact contract it was filed under, and it
+never changes; that is what makes a sealed council meaningful. Evidence that
+arrives after the return with no new assignment is a work note prefixed with
+the handback id (`maestro work note <work-id> "after h<id>: <evidence>"`) plus
+a `[from peer]` message; the note carries information, never work product,
+and never starts with `failed:`.
+
 ## Cross-examination
 
 A Peer that finds the assignment needs a council rather than one judgment

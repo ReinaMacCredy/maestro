@@ -142,7 +142,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
-      "lane.md": "7c0041ed8a70e81e58e1620d5ffcbe24079ed45c41d59fdfe2682e8e9f097ba4",
+      "lane.md": "308a45171f97f190606726be549f4c84dfbaa8369b39f4d76d864d77c5d2ee0b",
       shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
     });
   });
@@ -442,6 +442,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       "maestro recipe show slp",
       "maestro dispatch accept <dispatch-id>",
       'maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
+      'maestro work note <work-id> "after h<id>: <evidence>"',
       "maestro brief",
     ]);
 

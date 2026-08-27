@@ -869,10 +869,11 @@ export const dispatchPlugin: BuiltInPlugin = {
               throw new CliError("INVALID_STATE", `${dispatchId} is cancelled`);
             }
             if (current.state === "returned") {
+              const latest = listHandbacks(context, dispatchId).at(-1);
               throw new CliError(
                 "HANDBACK_EXISTS",
-                `${dispatchId} already has a handback`,
-                { dispatchId },
+                `${dispatchId} already returned ${latest?.id ?? "a handback"}; a second stop point is a second dispatch: ask the Lead ([from peer][${dispatchId}]) or record late evidence with: maestro work note ${current.workId} "after ${latest?.id ?? "<h-id>"}: <evidence>"`,
+                { dispatchId, handbackId: latest?.id, workId: current.workId },
               );
             }
             if (!current.heldBy) {

@@ -335,6 +335,8 @@ test("273 handback file refuses a second return for the same dispatch", async ()
     expect(repeated.exitCode).not.toBe(0);
     expect(repeated.stderr).toContain("HANDBACK_EXISTS");
     expect(repeated.stderr).toContain(dispatch);
+    expect(repeated.stderr).toContain("second dispatch");
+    expect(repeated.stderr).toMatch(/maestro work note w\d+ \\?"after h\d+:/);
   });
 });
 

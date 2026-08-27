@@ -474,3 +474,20 @@ test("371 [lint] recipe slp, IDENTITY.md and lane.md carry the cross-examination
   expect(room).toContain("Recovery or replacement lease: none");
   expect(room).toMatch(/cross-examination/i);
 });
+
+test("372 [lint] recipe slp and lane.md state the one-dispatch-one-handback boundary (d697)", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const boundary = recipe.split("## Handback boundary")[1]?.split("\n## ")[0] ?? "";
+  expect(boundary).toContain("exactly one handback");
+  expect(boundary).toMatch(/does not reopen/i);
+  expect(boundary).toMatch(/new sequential dispatch/i);
+  expect(boundary).toMatch(/accepts the new dispatch before continuing/i);
+  expect(boundary).toContain('"after h<id>: <evidence>"');
+  expect(boundary).toMatch(/never starts with `failed:`/);
+
+  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
+  expect(room).toMatch(/file exactly once, when the stop condition is met/);
+  expect(room).toMatch(/second stop point needs a second dispatch/);
+  expect(room).toMatch(/never changes an assignment/);
+  expect(room).toContain('"after h<id>: <evidence>"');
+});
