@@ -1007,6 +1007,67 @@ test("266 dispatch migration clears legacy terminal holders once", async () => {
   });
 });
 
+test("456 dispatch migration backfills openers and refuses untargeted legacy claims", async () => {
+  await withFixture(async (fixture) => {
+    const evidencedWork = idFrom(
+      await runCli(fixture, ["work", "add", "legacy opener evidence", "--atomic-reason", "fixture"]),
+    );
+    const missingWork = idFrom(
+      await runCli(fixture, ["work", "add", "legacy opener missing", "--atomic-reason", "fixture"]),
+    );
+    const evidenced = dispatchId(await runCli(fixture, dispatchOpenArgs(evidencedWork)));
+    const missing = "x2";
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const legacy = new Database(databasePath);
+    legacy
+      .query(
+        `INSERT INTO dispatches
+          (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
+           lane, evidence_required, pane, target_session, opened_by, claimed_by, held_by,
+           cancelled_at, cancel_reason, created_at, updated_at)
+         VALUES (?, ?, 'legacy objective', 'src/plugins/dispatch.ts', 'push',
+                 'write-bounded', 'return', 'delivery', 'source', 'w1:pB', NULL, NULL,
+                 NULL, NULL, NULL, NULL, ?, ?)`,
+      )
+      .run(missing, missingWork, new Date().toISOString(), new Date().toISOString());
+    legacy.run("ALTER TABLE dispatches DROP COLUMN opened_by");
+    legacy.run("ALTER TABLE dispatches DROP COLUMN claimed_by");
+    legacy.close();
+
+    const claimant = session("legacy-claimant");
+    expect((await runCli(fixture, ["dispatch", "accept", evidenced], claimant)).exitCode).toBe(0);
+    expect(
+      (
+        await runCli(fixture, ["dispatch", "confirm", evidenced, "--session", "legacy-claimant"])
+      ).exitCode,
+    ).toBe(0);
+
+    const refused = await runCli(fixture, ["dispatch", "accept", missing], claimant);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stderr).toContain('"code":"INVALID_STATE"');
+    expect(refused.stderr).toContain(
+      `maestro dispatch cancel ${missing} --reason legacy-untargeted`,
+    );
+    expect(refused.stderr).toContain("new dispatch");
+
+    const migrated = new Database(databasePath, { readonly: true });
+    try {
+      expect(
+        migrated
+          .query<{ claimed_by: string | null; id: string; opened_by: string | null }, []>(
+            "SELECT id, opened_by, claimed_by FROM dispatches ORDER BY id",
+          )
+          .all(),
+      ).toEqual([
+        { claimed_by: null, id: evidenced, opened_by: "test-session" },
+        { claimed_by: null, id: missing, opened_by: null },
+      ]);
+    } finally {
+      migrated.close();
+    }
+  });
+});
+
 test("176 handback file refuses a status outside the nine-value vocabulary", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);

@@ -538,6 +538,18 @@ export const dispatchPlugin: BuiltInPlugin = {
       "opened_by",
       "ALTER TABLE dispatches ADD COLUMN opened_by TEXT",
     );
+    context.store.migrate(`
+      UPDATE dispatches
+      SET opened_by = (
+        SELECT session_id
+        FROM event_log
+        WHERE type = 'dispatch.open'
+          AND entity_id = dispatches.id
+        ORDER BY id
+        LIMIT 1
+      )
+      WHERE opened_by IS NULL
+    `);
     context.store.ensureColumn(
       "dispatches",
       "claimed_by",
@@ -683,6 +695,14 @@ export const dispatchPlugin: BuiltInPlugin = {
             const dispatch = requireDispatch(context, id);
             if (dispatch.state !== "open") {
               throw new CliError("INVALID_STATE", `${id} is ${dispatch.state}`);
+            }
+            if (!dispatch.openedBy) {
+              const command = `maestro dispatch cancel ${id} --reason legacy-untargeted`;
+              throw new CliError(
+                "INVALID_STATE",
+                `${id} has no opener evidence; run ${command}, then open a new dispatch`,
+                { command, id },
+              );
             }
             if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
               throw new CliError(
