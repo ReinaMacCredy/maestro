@@ -1,6 +1,7 @@
 ---
 name: maestro-bundle
 description: Route work into the right maestro tier and drive the SPEC/NOTES/VERIFY bundle lifecycle - open, resume, close, recall.
+review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
 

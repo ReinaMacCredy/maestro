@@ -1,6 +1,7 @@
 ---
 name: maestro-verify
 description: Verify and close - cross-check coverage, run the VERIFY table, deliver the verdict, harvest durable lessons into decisions, close the bundle, and never claim remote state from local evidence.
+review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
 

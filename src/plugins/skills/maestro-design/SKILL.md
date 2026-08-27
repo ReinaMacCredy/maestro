@@ -1,6 +1,7 @@
 ---
 name: maestro-design
 description: Settle unknowns and lock decisions before implementation - recall past bundles, walk one fork at a time, record every settled choice with a rationale.
+review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
 

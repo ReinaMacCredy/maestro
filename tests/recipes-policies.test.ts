@@ -554,3 +554,17 @@ test("437 [lint] recipe slp names the repository Workspace Protocol surface", as
     expect(workspaceProtocol).toContain(localRule);
   }
 });
+
+test("443 [lint] recipe slp defines the Supervisor episode-to-rule review loop", async () => {
+  const recipe = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  const binding = recipe.split("## Supervisor binding")[1]?.split("\n## ")[0] ?? "";
+  const flat = binding.replace(/\s+/g, " ");
+
+  expect(flat).toContain("An episode is a REPEATED_FAILURE packet plus its work trace.");
+  expect(flat).toContain("The Supervisor aggregates recurring mechanisms in room notes or decisions.");
+  expect(flat).toContain("A rule it promotes records owner, review date, evidence, and removal trigger.");
+  expect(flat).toContain("A rule past its review date is reviewed or deleted.");
+});

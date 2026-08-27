@@ -567,6 +567,43 @@ test("49 doctor reports healthy components and structured fixable issues without
   });
 });
 
+test("441 doctor reports one skills issue for each past-due review date", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const skill = join(
+      fixture.home,
+      "maestro",
+      "skills",
+      "maestro-work",
+      "SKILL.md",
+    );
+    const content = await readFile(skill, "utf8");
+    await writeFile(
+      skill,
+      content.replace(/^review-date: .*$/m, "review-date: 2000-01-01"),
+    );
+
+    const diagnosed = await runInstalled(fixture, runtime, source, ["doctor"]);
+
+    expect(diagnosed.exitCode).not.toBe(0);
+    expect(diagnosed.stderr).toContain("DOCTOR_ISSUES");
+    expect(diagnosed.stderr).toContain(`skills: review date 2000-01-01 is past due: ${skill}`);
+    const error = JSON.parse(diagnosed.stderr) as {
+      error: {
+        issues: Array<{ component: string; fix: string; message: string }>;
+      };
+    };
+    expect(error.error.issues.filter((issue) => issue.component === "skills")).toEqual([
+      {
+        component: "skills",
+        fix: "review the rule or move the date",
+        message: `review date 2000-01-01 is past due: ${skill}`,
+      },
+    ]);
+  });
+});
+
 test("50 source installs record a machine-scoped checkout without leaking paths into the runtime stamp", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);

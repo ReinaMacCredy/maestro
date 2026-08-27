@@ -18,7 +18,7 @@ import {
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { scaffoldRoom } from "./room.ts";
-import { formatSkillSync, materializeSkills } from "./skills.ts";
+import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
 interface CommandResult {
@@ -343,6 +343,29 @@ async function doctor(): Promise<CliResult> {
   const checks: string[] = [];
   const issues: DoctorIssue[] = [];
   const installFix = "run maestro install from the Maestro source checkout";
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  for (const name of skillNames) {
+    const skill = join(home, "maestro", "skills", name, "SKILL.md");
+    if (!existsSync(skill)) continue;
+    const frontmatter = (await readFile(skill, "utf8")).match(
+      /^---\r?\n([\s\S]*?)\r?\n---/,
+    )?.[1];
+    const reviewDate = frontmatter?.match(
+      /^review-date:\s*(\d{4}-\d{2}-\d{2})\s*$/m,
+    )?.[1];
+    if (reviewDate && reviewDate < today) {
+      issues.push({
+        component: "skills",
+        fix: "review the rule or move the date",
+        message: `review date ${reviewDate} is past due: ${skill}`,
+      });
+    }
+  }
 
   const shim = join(home, ".local", "bin", "maestro");
   if (!existsSync(shim)) {

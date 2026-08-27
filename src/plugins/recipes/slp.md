@@ -263,6 +263,12 @@ decisions, recorded only when novel or material, aggregated by pattern. When
 it is stuck it does not spawn a second Supervisor; it escalates with a packet
 whose `human decision needed: yes` and waits. STOP, FREEZE, and replacing a
 Lead need an explicit recovery lease from the owner.
+
+An episode is a REPEATED_FAILURE packet plus its work trace. The Supervisor
+aggregates recurring mechanisms in room notes or decisions. A rule it promotes
+records owner, review date, evidence, and removal trigger. A rule past its
+review date is reviewed or deleted.
+
 The installer manages `~/maestro/.claude/settings.json` so `permissions.deny`
 contains `Agent` and `Task` (d694): a Claude Supervisor cannot spawn
 sub-agents even by mistake; Codex has no equivalent hook and stays bound by

@@ -1,6 +1,7 @@
 ---
 name: maestro-work
 description: Drive one accepted implementation unit test-first - smallest falsifiable behavior, minimum edits, evidence that names the real falsifier.
+review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
 

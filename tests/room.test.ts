@@ -1140,6 +1140,24 @@ test("241 install moves the four method skills into the room and links only thos
   });
 });
 
+test("442 install preserves review-date frontmatter in every method skill", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+
+    expect(installed.exitCode).toBe(0);
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
+      const skill = await readFile(
+        join(fixture.home, "maestro", "skills", name, "SKILL.md"),
+        "utf8",
+      );
+      const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+      expect(frontmatter).toContain("review-date: 2026-11-28");
+    }
+  });
+});
+
 test("242 owner preferences are room decisions whose reversals supersede the prior choice", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
