@@ -83,8 +83,9 @@ test("162 an atomic reason on start never bypasses the open-children gate", asyn
   });
 });
 
-test("163 a stalled-lease packet points at the durable work record", async () => {
+test("163 [lint] a stalled-lease packet renders the durable work command", async () => {
   await withFixture(async (fixture) => {
+    // Proves human rendering text, not structured subject identity or execution of the action.
     const parent = await addWork(fixture, "parent scope", ["--atomic-reason", "fixture"]);
     expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
       .toBe(0);
@@ -181,7 +182,7 @@ test("166 bundle open stamps the base commit git already knows", async () => {
   });
 });
 
-test("167 the implement loop names the failed-pass trace the detector reads", async () => {
+test("167 documented failed-pass notes trigger repeated-failure attention", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -190,6 +191,28 @@ test("167 the implement loop names the failed-pass trace the detector reads", as
       join(fixture.home, "maestro", "skills", "maestro-work", "SKILL.md"),
     ).text();
     const loop = skill.slice(skill.indexOf("## Loop"), skill.indexOf("## Test-first"));
+    // The installed prose assertion is lint; the attention result proves the detector contract.
     expect(loop).toContain('maestro work note <id> "failed: ');
+
+    const work = await addWork(fixture, "repeat the failing implementation", [
+      "--atomic-reason",
+      "fixture",
+    ]);
+    for (const note of [
+      "failed: first mechanism",
+      "failed: second mechanism",
+      "failed: third mechanism",
+    ]) {
+      expect((await runCli(fixture, ["work", "note", work, note])).exitCode).toBe(0);
+    }
+    const attention = await runCli(fixture, ["attention", "--json"]);
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ kind: string; subjectWork: string | null }> };
+    }).data.detections;
+    expect(detections).toContainEqual(expect.objectContaining({
+      kind: "REPEATED_FAILURE",
+      subjectWork: work,
+    }));
   });
 });
