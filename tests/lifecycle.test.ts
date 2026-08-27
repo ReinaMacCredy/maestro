@@ -73,6 +73,9 @@ async function createSourceCheckout(fixture: Fixture): Promise<{
     ".claude",
     ".codex",
   ]) {
+    // .claude/ and .codex/ are untracked installer wiring: present in a working
+    // checkout, absent in a clean clone; install below materializes them.
+    if (!existsSync(join(projectRoot, entry))) continue;
     await cp(join(projectRoot, entry), join(source, entry), { recursive: true });
   }
   await git(source, ["init", "-b", "main"]);

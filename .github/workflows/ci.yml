@@ -19,6 +19,8 @@ jobs:
           bun-version: 1.4.0
       - name: Install
         run: bun install
+      - name: Install zsh for the room shellrc tests
+        run: sudo apt-get install -y zsh
       - name: Test
         run: bun test
       - name: Type-check

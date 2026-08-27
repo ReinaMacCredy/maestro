@@ -19,7 +19,13 @@ test("287 maestro-work skill lane line matches the dispatch vocabulary", async (
 
 test("288 repo memory names every archived spec-workflow bundle", async () => {
   const workflowRoot = join(import.meta.dir, "..", ".spec-workflow");
-  const archived = (await readdir(join(workflowRoot, "archive"), { withFileTypes: true }))
+  // archive/ is gitignored, so a clean checkout has nothing to name.
+  const archived = (await readdir(join(workflowRoot, "archive"), { withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  ))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();

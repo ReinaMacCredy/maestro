@@ -21,12 +21,14 @@ async function storeSnapshot(repo: string): Promise<Array<[string, number, strin
   const names = (await readdir(directory))
     .filter((name) => name === "maestro.db" || name === "maestro.db-wal")
     .sort();
-  return Promise.all(
-    names.map(async (name) => {
+  const entries = await Promise.all(
+    names.map(async (name): Promise<[string, number, string]> => {
       const path = join(directory, name);
       return [name, (await stat(path)).mtimeMs, (await readFile(path)).toString("base64")];
     }),
   );
+  // SQLite creates an empty -wal sidecar on open (Linux); only a non-empty one is a write.
+  return entries.filter(([name, , content]) => name === "maestro.db" || content !== "");
 }
 
 async function addBriefWork(
@@ -81,8 +83,9 @@ test("234 install twice preserves a first-edit shell backup and one managed sour
     const originalRc = "# iris autocomplete remains disabled\nexport OWNER_SETTING=kept\n";
     await writeFile(join(fixture.home, ".zshrc"), originalRc);
 
-    const first = await runCli(fixture, ["install"], { PATH: path });
-    const second = await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path });
+    const shell = { PATH: path, SHELL: "/bin/zsh" };
+    const first = await runCli(fixture, ["install"], shell);
+    const second = await runInstalledCliAt(fixture, fixture.repo, ["install"], shell);
 
     expect(first.exitCode).toBe(0);
     expect(second.exitCode).toBe(0);
