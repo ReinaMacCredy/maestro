@@ -110,9 +110,9 @@ the work in the same turn. A repeated override in one direction may be
 recorded as a repository decision that changes which adjacent route is offered
 first; it never replaces this rule.
 
-The room is different: the Supervisor interviews the owner (OWNER.md) and
-relays purpose, priority and risk to a project's Lead; it does not score or
-choose that project's topology.
+The room is different: the Supervisor interviews the owner through the
+room's owner file and relays purpose, priority and risk to a project's Lead;
+it does not score or choose that project's topology.
 
 ## Topology invariants
 
