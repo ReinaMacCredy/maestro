@@ -169,7 +169,11 @@ The room reads, it is not pushed to: `maestro brief` runs `maestro attention`
 in every registered repository. Findings are STALLED_LEASE, REPEATED_FAILURE,
 DECISION_STALE, DECISION_REVIEW_DUE, HUMAN_DECISION_REQUIRED, LEAD_COLLISION,
 SCOPE_COLLISION, DISPATCH_UNACCEPTED, DISPATCH_UNRETURNED and HANDBACK_UNREVIEWED,
-each as a packet. HANDBACK_UNREVIEWED clears only when the work closes or a
+each as a packet. `DISPATCH_UNRETURNED` fires after `--dispatch-stale` hours
+(default 2). A lane expected to run longer is opened with its expected duration
+in the stop condition, and the Lead reads
+`maestro attention --dispatch-stale <h>` for it. `maestro brief` in the room
+uses the default. HANDBACK_UNREVIEWED clears only when the work closes or a
 later dispatch on the same work item names the handback id in its objective or
 evidence requirement; opening an unrelated follow-on does not count as review.
 

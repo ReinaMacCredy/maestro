@@ -598,3 +598,21 @@ test("445 [lint] handoff receipts are exact, searchable decisions with soft-audi
     "Packet completeness, receipt order, and break-before-make are soft-audited.",
   );
 });
+
+test("446 [lint] recipe slp explains the global unreturned-dispatch threshold", async () => {
+  const recipe = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  const feed = recipe.split("## Supervisor feed and packet")[1]?.split("\n## ")[0] ?? "";
+  const flat = feed.replace(/\s+/g, " ");
+
+  expect(flat).toContain(
+    "`DISPATCH_UNRETURNED` fires after `--dispatch-stale` hours (default 2).",
+  );
+  expect(flat).toContain(
+    "A lane expected to run longer is opened with its expected duration in the stop condition",
+  );
+  expect(flat).toContain("the Lead reads `maestro attention --dispatch-stale <h>` for it");
+  expect(flat).toContain("`maestro brief` in the room uses the default.");
+});
