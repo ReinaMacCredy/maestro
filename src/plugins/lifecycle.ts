@@ -14,6 +14,7 @@ import {
   uninstallRepo,
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
+import { resolveHomeDirectory } from "./home.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -36,7 +37,7 @@ interface PackageJson {
 const runtimeEntries = ["package.json", "tsconfig.json", "bin", "src"];
 
 function homeDirectory(): string {
-  return process.env.HOME ?? process.cwd();
+  return resolveHomeDirectory();
 }
 
 function runtimeRoot(home: string): string {
@@ -205,8 +206,17 @@ async function update(): Promise<CliResult> {
     await swapRuntime(staged, runtime);
     staged = null;
   } catch (error) {
-    await command(source, ["git", "reset", "--hard", oldCommit]);
+    const reset = await command(source, ["git", "reset", "--hard", oldCommit]);
     if (staged && existsSync(staged)) await rm(staged, { recursive: true, force: true });
+    const currentCommit = await readGitHeadCommit(source);
+    if (reset.exitCode !== 0 || currentCommit !== oldCommit) {
+      const recoveryCommand = `git -C ${JSON.stringify(source)} reset --hard ${oldCommit}`;
+      throw new CliError(
+        "UPDATE_ROLLBACK_FAILED",
+        `runtime resync failed and source rollback failed; old commit ${oldCommit}; current commit ${currentCommit ?? "unknown"}; reset: ${reset.stderr || `git exited ${reset.exitCode}`}; run: ${recoveryCommand}`,
+        { currentCommit, oldCommit, recoveryCommand, resetStderr: reset.stderr },
+      );
+    }
     throw new CliError(
       "UPDATE_RESYNC_FAILED",
       `source fast-forward was rolled back because runtime resync failed: ${error instanceof Error ? error.message : String(error)}; fix the runtime path, then run maestro update`,
@@ -230,8 +240,9 @@ async function update(): Promise<CliResult> {
   };
 }
 
-export async function driftAdvisory(home: string, runningRoot: string): Promise<string> {
+export async function driftAdvisory(_home: string, runningRoot: string): Promise<string> {
   if (process.env.MAESTRO_AUTO_UPDATE === "0") return "";
+  const home = resolveHomeDirectory();
   const [stampRead, recordRead] = await Promise.all([
     readInstallStamp(runningRoot),
     readSourceRecord(home),
@@ -250,7 +261,7 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
   }
 }
 
-async function codexTrustCheck(repo: string): Promise<string> {
+async function codexTrustCheck(repo: string, home: string): Promise<string> {
   const mainWorktree = await gitMainWorktree(repo);
   const hooks = join(mainWorktree ?? repo, ".codex", "hooks.json");
   if (!existsSync(hooks)) return "codex hooks: absent";
@@ -269,9 +280,9 @@ async function codexTrustCheck(repo: string): Promise<string> {
   if (missing.length > 0) {
     return `codex hooks: stale (missing ${missing.map(({ event }) => event).join(", ")} in ${hooks}; run maestro install)`;
   }
-  return await codexHooksTrusted(mainWorktree ?? repo, process.env.HOME ?? repo)
+  return await codexHooksTrusted(mainWorktree ?? repo, home)
     ? "codex hooks: trusted"
-    : "codex hooks: not trusted (Codex skips them; run /hooks in Codex once to trust)";
+    : "codex hooks: unverified (Codex trust hash contract unavailable; run /hooks in Codex to verify)";
 }
 
 // A repo migrating off the Rust build still carries .maestro/store.sqlite next to
@@ -401,7 +412,7 @@ async function doctor(): Promise<CliResult> {
     issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed .maestro/.gitignore block" });
   }
   if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
-  checks.push(await codexTrustCheck(repo));
+  checks.push(await codexTrustCheck(repo, home));
 
   const storeLocation = resolveStoreLocation(repo);
   const storePath = storeLocation.path;

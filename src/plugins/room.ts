@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const agents = `# Maestro chief-of-staff room
@@ -78,6 +78,7 @@ function maestro_lanes() {
 export async function scaffoldRoom(home: string): Promise<string> {
   const room = join(home, "maestro");
   await mkdir(room, { recursive: true });
+  await chmod(room, 0o700);
   for (const [name, content] of [
     ["IDENTITY.md", identity],
     ["AGENTS.md", agents],
@@ -92,5 +93,6 @@ export async function scaffoldRoom(home: string): Promise<string> {
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
   }
+  await chmod(join(room, "OWNER.md"), 0o600);
   return room;
 }

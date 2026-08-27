@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
@@ -154,8 +155,35 @@ test("270 install prints room Codex trust steps only while its hooks are untrust
     const repeated = await runCli(fixture, ["install"], { PATH: path });
 
     expect(repeated.exitCode).toBe(0);
-    expect(repeated.stdout).not.toContain(roomTrustPrefix);
+    expect(repeated.stdout).toContain(roomTrustPrefix);
+    expect(repeated.stdout).toContain("/hooks");
     expect(await readFile(configPath, "utf8")).toBe(config);
+  });
+});
+
+test("301 machine-scoped paths use an absolute home or fail before writing", async () => {
+  expect(
+    resolveHomeDirectory({ environmentHome: undefined, fallbackHome: "/os/home" }),
+  ).toBe("/os/home");
+  for (const invalid of ["", "   ", "relative/home"]) {
+    try {
+      resolveHomeDirectory({ environmentHome: invalid, fallbackHome: "/os/home" });
+      throw new Error("invalid home was accepted");
+    } catch (error) {
+      expect(error).toEqual(expect.objectContaining({ code: "HOME_REQUIRED" }));
+    }
+  }
+
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    for (const invalid of ["", "relative/home"]) {
+      const installed = await runCli(fixture, ["install"], { HOME: invalid, PATH: path });
+      expect(installed.exitCode).not.toBe(0);
+      expect(installed.stderr).toContain('"code":"HOME_REQUIRED"');
+    }
+    for (const path of [".local", "maestro", ".zshrc", ".bashrc"]) {
+      expect(existsSync(join(fixture.repo, path))).toBe(false);
+    }
   });
 });
 

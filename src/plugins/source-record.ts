@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 export const sourceRecordFile = "source.json";
@@ -37,5 +37,7 @@ export async function readSourceRecord(home: string): Promise<SourceRecordRead> 
 export async function writeSourceRecord(home: string, sourceRoot: string): Promise<void> {
   const path = sourceRecordPath(home);
   await mkdir(dirname(path), { recursive: true });
+  await chmod(dirname(path), 0o700);
   await writeFile(path, `${JSON.stringify({ path: resolve(sourceRoot) })}\n`);
+  await chmod(path, 0o600);
 }

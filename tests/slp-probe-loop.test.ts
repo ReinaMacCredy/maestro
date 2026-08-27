@@ -100,7 +100,7 @@ test("224 the import says how to read what it just imported", async () => {
   });
 });
 
-test("225 the codex check requires trust for the two retained record hooks", async () => {
+test("225 the codex check verifies hook declarations but never guesses trusted hashes", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -115,15 +115,16 @@ test("225 the codex check requires trust for the two retained record hooks", asy
       `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`,
     );
     const partial = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(partial.stdout).toContain("codex hooks: not trusted");
+    expect(partial.stdout).toContain("codex hooks: unverified");
 
     await writeFile(
       join(fixture.home, ".codex", "config.toml"),
       `[hooks.state."${hooksPath}:session_start:0:0"]\ntrusted_hash = "sha256:deadbeef"\n` +
         `[hooks.state."${hooksPath}:user_prompt_submit:0:0"]\ntrusted_hash = "sha256:deadbeef"\n`,
     );
-    const trusted = await runCli(fixture, ["doctor"], { PATH: path });
-    expect(trusted.stdout).toContain("codex hooks: trusted");
+    const stillUnverified = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(stillUnverified.stdout).toContain("codex hooks: unverified");
+    expect(stillUnverified.stdout).toContain("/hooks");
 
     delete installed.hooks.UserPromptSubmit;
     await writeFile(hooksPath, JSON.stringify(installed, null, 2));

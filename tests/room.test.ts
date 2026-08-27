@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -164,6 +165,37 @@ test("269 install wires both room harnesses without overwriting OWNER.md", async
         `bun .${harness}/hooks/maestro-record.ts`,
       );
       expect(config.hooks.PostToolUse).toBeUndefined();
+    }
+  });
+});
+
+test("303 reinstall repairs private room and machine-record permissions", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const privateDirectories = [room, join(room, ".maestro")];
+    const privateFiles = [
+      join(room, "OWNER.md"),
+      join(room, "registry"),
+      join(room, ".maestro", "maestro.db"),
+      join(fixture.home, ".maestro", "source.json"),
+    ];
+    for (const directory of privateDirectories) await chmod(directory, 0o755);
+    for (const file of privateFiles) await chmod(file, 0o644);
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    for (const directory of privateDirectories) {
+      expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    }
+    for (const file of privateFiles) {
+      expect((await stat(file)).mode & 0o777).toBe(0o600);
+    }
+    for (const suffix of ["-wal", "-shm"]) {
+      const sidecar = join(room, ".maestro", `maestro.db${suffix}`);
+      if (existsSync(sidecar)) expect((await stat(sidecar)).mode & 0o777).toBe(0o600);
     }
   });
 });

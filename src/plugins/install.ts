@@ -1,4 +1,4 @@
-import { constants, existsSync, realpathSync } from "node:fs";
+import { constants, existsSync } from "node:fs";
 import {
   access,
   chmod,
@@ -15,10 +15,11 @@ import { pathToFileURL } from "node:url";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
+import { resolveHomeDirectory } from "./home.ts";
 import { scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { writeSourceRecord } from "./source-record.ts";
+import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
   disabled?: boolean;
@@ -69,7 +70,6 @@ const managedAdapters = [
   ".claude/hooks/maestro-record.ts",
   ".codex/hooks/maestro-record.ts",
 ];
-const requiredCodexHookTrust = ["session_start", "user_prompt_submit"] as const;
 const shellSourceLine =
   '[[ -f "$HOME/maestro/shellrc" ]] && source "$HOME/maestro/shellrc" # maestro';
 
@@ -116,33 +116,20 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
   for (const event of ["SessionStart", "UserPromptSubmit"]) {
-    const groups = config.hooks[event] ?? [];
-    for (const group of groups) {
-      group.hooks = group.hooks.filter(
-        (handler) =>
-          !managedAdapters.some((adapter) => handler.command.includes(adapter)),
-      );
-    }
+    const retained = retainForeignHookGroups(config.hooks[event] ?? []);
     const handler: HookHandler = {
       type: "command",
       command,
       statusMessage: "Loading maestro state",
     };
     config.hooks[event] = [
-      ...groups.filter((group) => group.hooks.length > 0),
+      ...retained.groups,
       {
         hooks: [handler],
       },
     ];
   }
-  const retiredGroups = (config.hooks.PostToolUse ?? [])
-    .map((group) => ({
-      ...group,
-      hooks: group.hooks.filter(
-        (handler) => !managedAdapters.some((adapter) => handler.command.includes(adapter)),
-      ),
-    }))
-    .filter((group) => group.hooks.length > 0);
+  const retiredGroups = retainForeignHookGroups(config.hooks.PostToolUse ?? []).groups;
   if (retiredGroups.length > 0) {
     config.hooks.PostToolUse = retiredGroups;
   } else {
@@ -152,26 +139,51 @@ async function writeHookConfig(path: string, command: string): Promise<void> {
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
 }
 
+function retainForeignHookGroups(groups: HookGroup[]): { changed: boolean; groups: HookGroup[] } {
+  let changed = false;
+  const retained = groups
+    .map((group) => {
+      const hooks = group.hooks.filter(
+        (handler) => !managedAdapters.some((adapter) => handler.command.includes(adapter)),
+      );
+      if (hooks.length !== group.hooks.length) changed = true;
+      return { ...group, hooks };
+    })
+    .filter((group) => group.hooks.length > 0);
+  return { changed, groups: retained };
+}
+
+function upsertManagedBlock(existing: string, pattern: RegExp, block: string): string {
+  const cleaned = existing.replace(pattern, "\n");
+  return `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`;
+}
+
 async function writeMirror(path: string): Promise<void> {
   const begin = "<!-- maestro:begin -->";
   const end = "<!-- maestro:end -->";
   const block = `${begin}\nA session in this repository is its Lead; panes it opens with a dispatch are Peers; the room at ~/maestro is the Supervisor. Roles: \`maestro recipe show slp\`.\nLive maestro state is injected by hooks. Use \`maestro status\` for the current session view and \`maestro ready\` for available work.\nTrack work with \`maestro work add|start|done\`; method depth: \`maestro recipe show work\`.\nIf no harness hook fired, run \`maestro hook record --event SessionStart\` and read the brief from stdout.\nFailed commands print a JSON error envelope on stderr and exit nonzero; when the fix is mechanical, the message names the next command to run.\n${end}`;
   const existing = existsSync(path) ? await readFile(path, "utf8") : "";
-  const cleaned = existing.replace(
-    /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
-    "\n",
+  await writeFile(
+    path,
+    upsertManagedBlock(
+      existing,
+      /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
+      block,
+    ),
   );
-  await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`);
 }
 
 async function writeManagedIgnore(path: string): Promise<void> {
   const existing = existsSync(path) ? await readFile(path, "utf8") : "";
-  const cleaned = existing.replace(
-    /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
-    "\n",
-  );
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${managedIgnoreBlock}\n`);
+  await writeFile(
+    path,
+    upsertManagedBlock(
+      existing,
+      /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
+      managedIgnoreBlock,
+    ),
+  );
 }
 
 async function registerRepository(home: string, repo: string): Promise<void> {
@@ -182,6 +194,7 @@ async function registerRepository(home: string, repo: string): Promise<void> {
   const next = [...new Set([...entries, resolve(repo)])];
   const content = `${next.join("\n")}\n`;
   if (content !== existing) await writeFile(registry, content);
+  await chmod(registry, 0o600);
 }
 
 async function writeShellSource(home: string): Promise<boolean> {
@@ -232,6 +245,11 @@ async function initializeRoomStore(home: string, room: string, runtimeRoot: stri
       `cannot initialize ${join(room, ".maestro", "maestro.db")}: ${stderr.trim()}`,
     );
   }
+  await chmod(join(room, ".maestro"), 0o700);
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const path = join(room, ".maestro", `maestro.db${suffix}`);
+    if (existsSync(path)) await chmod(path, 0o600);
+  }
 }
 
 async function removeManagedHooks(path: string): Promise<boolean> {
@@ -240,17 +258,10 @@ async function removeManagedHooks(path: string): Promise<boolean> {
   let changed = false;
   if (config.hooks) {
     for (const [event, groups] of Object.entries(config.hooks)) {
-      const retained = groups
-        .map((group) => {
-          const hooks = group.hooks.filter(
-            (handler) => !managedAdapters.some((adapter) => handler.command.includes(adapter)),
-          );
-          if (hooks.length !== group.hooks.length) changed = true;
-          return { ...group, hooks };
-        })
-        .filter((group) => group.hooks.length > 0);
-      if (retained.length > 0) {
-        config.hooks[event] = retained;
+      const retained = retainForeignHookGroups(groups);
+      if (retained.changed) changed = true;
+      if (retained.groups.length > 0) {
+        config.hooks[event] = retained.groups;
       } else {
         delete config.hooks[event];
       }
@@ -266,13 +277,10 @@ async function removeManagedHooks(path: string): Promise<boolean> {
   return true;
 }
 
-async function removeManagedMirror(path: string): Promise<boolean> {
+async function removeManagedBlock(path: string, pattern: RegExp): Promise<boolean> {
   if (!existsSync(path)) return false;
   const existing = await readFile(path, "utf8");
-  const cleaned = existing.replace(
-    /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
-    "\n",
-  );
+  const cleaned = existing.replace(pattern, "\n");
   if (cleaned === existing) return false;
   const normalized = cleaned.replace(/\n{3,}/g, "\n\n").trimEnd();
   if (!normalized) {
@@ -303,23 +311,6 @@ async function removeManagedPolicyConfig(path: string): Promise<boolean> {
   return true;
 }
 
-async function removeManagedIgnore(path: string): Promise<boolean> {
-  if (!existsSync(path)) return false;
-  const existing = await readFile(path, "utf8");
-  const cleaned = existing.replace(
-    /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
-    "\n",
-  );
-  if (cleaned === existing) return false;
-  const normalized = cleaned.replace(/\n{3,}/g, "\n\n").trimEnd();
-  if (!normalized) {
-    await rm(path, { force: true });
-  } else {
-    await writeFile(path, `${normalized}\n`);
-  }
-  return true;
-}
-
 export async function uninstallRepo(repo: string): Promise<string[]> {
   const removed: string[] = [];
   for (const path of [
@@ -337,12 +328,22 @@ export async function uninstallRepo(repo: string): Promise<string[]> {
     if (await removeManagedHooks(path)) removed.push(`${path} managed hooks`);
   }
   for (const path of [join(repo, "AGENTS.md"), join(repo, "CLAUDE.md")]) {
-    if (await removeManagedMirror(path)) removed.push(`${path} mirror block`);
+    if (
+      await removeManagedBlock(
+        path,
+        /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
+      )
+    ) removed.push(`${path} mirror block`);
   }
   const config = join(repo, ".maestro", "config");
   if (await removeManagedPolicyConfig(config)) removed.push(`${config} managed plugins`);
   const ignore = join(repo, ".maestro", ".gitignore");
-  if (await removeManagedIgnore(ignore)) removed.push(`${ignore} managed block`);
+  if (
+    await removeManagedBlock(
+      ignore,
+      /\n?# maestro-ts:begin\n[\s\S]*?# maestro-ts:end\n?/g,
+    )
+  ) removed.push(`${ignore} managed block`);
   return removed;
 }
 
@@ -398,21 +399,8 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
   return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
 }
 
-export async function codexHooksTrusted(root: string, home: string): Promise<boolean> {
-  const hooks = join(root, ".codex", "hooks.json");
-  if (!existsSync(hooks)) return false;
-  const config = join(home, ".codex", "config.toml");
-  const text = existsSync(config) ? await readFile(config, "utf8") : "";
-  const paths = new Set<string>();
-  for (const candidate of [hooks, realpathSync(hooks)]) {
-    paths.add(candidate);
-    paths.add(
-      candidate.startsWith("/private/") ? candidate.slice("/private".length) : `/private${candidate}`,
-    );
-  }
-  return requiredCodexHookTrust.every((trust) =>
-    [...paths].some((path) => text.includes(`"${path}:${trust}:`)),
-  );
+export async function codexHooksTrusted(_root: string, _home: string): Promise<boolean> {
+  return false;
 }
 
 async function samePath(left: string, right: string): Promise<boolean> {
@@ -511,7 +499,12 @@ export const installPlugin: BuiltInPlugin = {
     context.effect(() =>
       registerSessionCommand(context, "install", async (): Promise<CliResult> => {
         const repo = process.cwd();
-        const home = process.env.HOME ?? repo;
+        const home = resolveHomeDirectory();
+        const existingSourceRecord = sourceRecordPath(home);
+        if (existsSync(existingSourceRecord)) {
+          await chmod(dirname(existingSourceRecord), 0o700);
+          await chmod(existingSourceRecord, 0o600);
+        }
         const localBin = join(home, ".local", "bin");
         const shim = join(localBin, "maestro");
         const legacy = join(localBin, "maestro-legacy");

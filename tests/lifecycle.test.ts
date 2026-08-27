@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   addLinkedWorktree,
@@ -275,6 +275,49 @@ test("47 update fast-forwards and resyncs while divergence and fetch failure cha
     expect(unreachable.stderr).toContain("fix");
     expect(await git(source, ["rev-parse", "HEAD"])).toBe(unreachableHead);
     expect(await readFile(stampPath)).toEqual(unreachableStamp);
+  });
+});
+
+test("302 update reports a failed rollback with commits and an exact recovery command", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const oldCommit = await git(source, ["rev-parse", "HEAD"]);
+    await rm(join(publisher, "tsconfig.json"));
+    await git(publisher, ["add", "-A"]);
+    await git(publisher, ["commit", "-m", "remove runtime entry"]);
+    await git(publisher, ["push", "origin", "main"]);
+    const currentCommit = await git(publisher, ["rev-parse", "HEAD"]);
+
+    const realGit = Bun.which("git");
+    if (!realGit) throw new Error("git is required for lifecycle tests");
+    const fakeBin = join(fixture.root, "reset-refusal-bin");
+    await mkdir(fakeBin, { recursive: true });
+    await writeFile(
+      join(fakeBin, "git"),
+      `#!/bin/sh
+if [ "$1" = "reset" ] && [ "$2" = "--hard" ]; then
+  printf '%s\n' 'reset refused by fixture' >&2
+  exit 42
+fi
+exec ${JSON.stringify(realGit)} "$@"
+`,
+    );
+    await chmod(join(fakeBin, "git"), 0o755);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"], {
+      PATH: `${fakeBin}:${runtime.path}`,
+    });
+    const recoveryCommand = `git -C ${JSON.stringify(await realpath(source))} reset --hard ${oldCommit}`;
+    const envelope = JSON.parse(updated.stderr) as {
+      error: { recoveryCommand?: string };
+    };
+    expect(updated.exitCode).not.toBe(0);
+    expect(updated.stderr).toContain("UPDATE_ROLLBACK_FAILED");
+    expect(updated.stderr).toContain(oldCommit);
+    expect(updated.stderr).toContain(currentCommit);
+    expect(envelope.error.recoveryCommand).toBe(recoveryCommand);
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(currentCommit);
   });
 });
 
