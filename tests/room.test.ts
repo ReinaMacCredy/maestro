@@ -218,7 +218,11 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
       expect(claude.split("\n").filter(Boolean).length).toBeLessThanOrEqual(6);
       expect(lane).toContain("herdr pane split");
       expect(lane).toContain("herdr agent start");
-      expect(lane).toContain("herdr agent wait <name> --until done --until blocked");
+      expect(lane).toContain("herdr agent wait <name> --until working --timeout 60000");
+      expect(lane).toContain("`herdr agent wait <name>` with no `--until`");
+      expect(lane).not.toContain("--until done");
+      expect(lane).toContain("re-arm");
+      expect(lane).toContain("holder shown by `maestro status --live` is the authority");
       expect(lane).not.toContain("events.wait");
       expect(lane).toContain("maestro handback file");
 
@@ -333,7 +337,7 @@ test("250 installed lane guidance names the runnable Herdr wait command", async 
     const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
 
     expect(lane).toContain(
-      "`herdr agent wait <name> --until done --until blocked` as a background command",
+      "`herdr agent wait <name>` with no `--until` as a background command",
     );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
