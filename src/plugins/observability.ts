@@ -306,6 +306,17 @@ export const observabilityPlugin: BuiltInPlugin = {
       context.cli.register(
         "search",
         (invocation): CliResult => {
+          if (
+            context.store.readOnly &&
+            !context.store.ephemeral &&
+            currentVersion() !== SEARCH_INDEX_VERSION
+          ) {
+            throw new CliError(
+              "READ_ONLY",
+              "MAESTRO_READ_ONLY=1 cannot refresh a stale search index; run search without MAESTRO_READ_ONLY once, then retry",
+              { command: "maestro search" },
+            );
+          }
           const term = required(invocation, 0, "search term");
           const query = `"${term.replaceAll('"', '""')}"`;
           const matches = context.store.database

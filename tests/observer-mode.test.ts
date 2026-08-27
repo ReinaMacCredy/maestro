@@ -309,20 +309,23 @@ test("218 read-only mode guards lifecycle commands before their special dispatch
   });
 });
 
-test("219 read-only search serves the persisted index without rebuilding stale state", async () => {
+test("304 read-only search fails closed on a stale index and serves a fresh index", async () => {
   await withFixture(async (fixture) => {
     await runCli(fixture, ["work", "add", "observer search needle"]);
-    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    const path = join(fixture.repo, ".maestro", "maestro.db");
+    const database = new Database(path);
     database.run("DELETE FROM search_index WHERE surface = 'work'");
     database.run("DELETE FROM search_index_state");
     database.run("INSERT INTO search_index_state(version) VALUES (0)");
     database.close();
+    const before = Buffer.from(await Bun.file(path).arrayBuffer()).toString("base64");
 
-    const result = await runCli(fixture, ["search", "needle"], readOnly);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("observer search needle");
+    const stale = await runCli(fixture, ["search", "needle"], readOnly);
+    expect(stale.exitCode).not.toBe(0);
+    expect(stale.stderr).toContain('"code":"READ_ONLY"');
+    expect(Buffer.from(await Bun.file(path).arrayBuffer()).toString("base64")).toBe(before);
 
-    const stored = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+    const stored = new Database(path, {
       readonly: true,
     });
     try {
@@ -339,6 +342,11 @@ test("219 read-only search serves the persisted index without rebuilding stale s
     } finally {
       stored.close();
     }
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const fresh = await runCli(fixture, ["search", "needle"], readOnly);
+    expect(fresh.exitCode).toBe(0);
+    expect(fresh.stdout).toContain("observer search needle");
   });
 });
 
