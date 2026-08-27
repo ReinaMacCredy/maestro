@@ -80,7 +80,7 @@ async function acceptedDispatch(
   return dispatch;
 }
 
-test("187 filing a handback releases the filing session's work lease without losing work", async () => {
+test("187 handback retains the work lease until work done releases it", async () => {
   await withFixture(async (fixture) => {
     const holder = "filing-holder";
     const work = idFrom(
@@ -108,11 +108,34 @@ test("187 filing a handback releases the filing session's work lease without los
     expect(envelope.data.work).toEqual(
       expect.objectContaining({
         evidence: "source: existing proof",
-        heldBy: null,
-        state: "open",
+        heldBy: holder,
+        state: "active",
       }),
     );
     expect(envelope.data.notes.map((note) => note.text)).toContain("keep this note");
+
+    const refused = await runCli(
+      fixture,
+      ["work", "done", work, "--evidence", "source: wrong session"],
+      session("different-session"),
+    );
+    expect(refused.exitCode).not.toBe(0);
+    expect(JSON.parse(refused.stderr).error.code).toBe("LEASE_HELD");
+
+    const completed = await runCli(
+      fixture,
+      ["work", "done", work, "--evidence", "source: owner completed"],
+      session(holder),
+    );
+    expect(completed.exitCode).toBe(0);
+    const done = await runCli(fixture, ["work", "show", work, "--json"]);
+    expect(done.exitCode).toBe(0);
+    const doneEnvelope = JSON.parse(done.stdout) as {
+      data: { work: { heldBy: string | null; state: string } };
+    };
+    expect(doneEnvelope.data.work).toEqual(
+      expect.objectContaining({ heldBy: null, state: "done" }),
+    );
   });
 });
 
