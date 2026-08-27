@@ -345,7 +345,9 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
-    const commands = [...lane.matchAll(/`(maestro [^`\n]+)`/g)].map((match) => match[1] as string);
+    const commands = [
+      ...new Set([...lane.matchAll(/`(maestro [^`\n]+)`/g)].map((match) => match[1] as string)),
+    ];
 
     expect(lane).toContain(
       "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes --no-focus",
@@ -354,17 +356,17 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(lane).not.toMatch(/\.{3}|…/);
     expect(lane).toContain("If Herdr supplies `agent_session.value` for the agent (Codex), use it.");
     expect(lane).toContain(
-      "When it does not (Claude), ask the started lane to run maestro status --live and report its own current session id.",
+      "When it does not (Claude), ask the started lane to run `maestro status --live` and report the line marked `(this session)`.",
     );
     expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
+      "maestro status --live",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
       "maestro dispatch accept <dispatch-id>",
       'maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
-      "maestro status --live",
       "maestro brief",
     ]);
 
@@ -407,6 +409,37 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
         replacements.set("<dispatch-id>", parsed.stdout.match(/^(x\d+)/)?.[1] as string);
       }
     }
+  });
+});
+
+test("283 status marks exactly the caller session in bare, live, and JSON output", async () => {
+  await withFixture(async (fixture) => {
+    const caller = { MAESTRO_SESSION_ID: "caller", MAESTRO_SESSION_PID: String(process.pid) };
+    const peer = { MAESTRO_SESSION_ID: "peer", MAESTRO_SESSION_PID: String(process.pid) };
+    for (const environment of [caller, peer]) {
+      expect(
+        (
+          await runCli(
+            fixture,
+            ["hook", "record", "--event", "SessionStart", "--harness", "codex"],
+            environment,
+          )
+        ).exitCode,
+      ).toBe(0);
+    }
+
+    for (const args of [["status"], ["status", "--live"]]) {
+      const status = await runCli(fixture, args, caller);
+      const marked = status.stdout.split("\n").filter((line) => line.endsWith(" (this session)"));
+      expect(status.exitCode).toBe(0);
+      expect(marked).toHaveLength(1);
+      expect(marked[0]).toStartWith("caller ");
+    }
+
+    const json = await runCli(fixture, ["status", "--live", "--json"], caller);
+    expect(json.exitCode).toBe(0);
+    expect((JSON.parse(json.stdout) as { data: { currentSession: string } }).data.currentSession)
+      .toBe("caller");
   });
 });
 
