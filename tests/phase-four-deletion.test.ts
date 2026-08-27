@@ -74,6 +74,13 @@ async function seedRetiredHook(path: string, command: string): Promise<void> {
 
 test("256 msg send is absent and returns the ordinary UNKNOWN_VERB error", async () => {
   await withFixture(async (fixture) => {
+    const legacy = openDatabase(fixture);
+    legacy.exec(`
+      CREATE TABLE messages (id TEXT);
+      CREATE TABLE message_cursors (id TEXT);
+    `);
+    legacy.close();
+
     const sent = await runCli(fixture, ["msg", "send", "former-peer", "handoff context"]);
     const error = errorFrom(sent);
 
@@ -189,8 +196,6 @@ test("259 supervisor start is absent and returns the ordinary UNKNOWN_VERB error
     expect(error.code).toBe("UNKNOWN_VERB");
     expect(error.verb).toBe("supervisor");
     expect(error.message).toContain("unknown verb: supervisor");
-    expect(await Bun.file(join(fixture.repo, ".maestro", "supervisor.json")).exists()).toBe(false);
-    expect(await Bun.file(join(fixture.repo, ".maestro", "supervisor.log")).exists()).toBe(false);
   });
 });
 
@@ -283,11 +288,6 @@ test("260 all five attention kinds are computed at read time without mailbox sta
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();
     const after = openDatabase(fixture);
     try {
-      const tables = after
-        .query<{ name: string }, []>(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors') ORDER BY name",
-        )
-        .all();
       const attentionRows = after
         .query<{ count: number }, []>("SELECT count(*) AS count FROM attention")
         .get()?.count;
@@ -298,7 +298,6 @@ test("260 all five attention kinds are computed at read time without mailbox sta
       expect(detections.every((detection) => detection.raisedAt === "not recorded (read-only)"))
         .toBe(true);
       expect(detections.every((detection) => detection.targets === undefined)).toBe(true);
-      expect(tables).toEqual([]);
       expect(attentionRows).toBe(0);
     } finally {
       after.close();

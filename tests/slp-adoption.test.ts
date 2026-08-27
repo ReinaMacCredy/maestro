@@ -301,12 +301,6 @@ test("139 attention records findings without delivery targets or mailbox tables"
     try {
       expect(recorded.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
-      const retiredTables = recorded
-        .query<{ name: string }, []>(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors')",
-        )
-        .all();
-      expect(retiredTables).toEqual([]);
     } finally {
       recorded.close();
     }

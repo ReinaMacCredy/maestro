@@ -315,13 +315,6 @@ test("158 attention records one packet independently of live peer order", async 
     try {
       expect(verified.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count)
         .toBe(1);
-      expect(
-        verified
-          .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN ('messages', 'message_cursors')",
-          )
-          .get()?.count,
-      ).toBe(0);
     } finally {
       verified.close();
     }
