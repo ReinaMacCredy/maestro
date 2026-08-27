@@ -5,6 +5,7 @@ import {
   addLinkedWorktree,
   initializeGitRepository,
   initializeSeparateGitRepository,
+  prepareInstallFixture,
   runCli,
   runCliAt,
   withFixture,
@@ -150,24 +151,31 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
   });
 });
 
-test("B3.4 a linked-worktree private store is advised once per invocation and left untouched", async () => {
+test("B3.4 a linked-worktree private store is silent on commands, reported by doctor, and left untouched", async () => {
   await withFixture(async (fixture) => {
     const worktree = await linkedWorktree(fixture, "linked-orphan");
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCliAt(fixture, worktree, ["install"], { PATH: path })).exitCode).toBe(0);
+
     const privateStore = join(worktree, ".maestro", "maestro.db");
     const original = "stage-one-private-store";
     await writeFile(privateStore, original);
 
-    const added = await runCliAt(fixture, worktree, ["work", "add", "shared despite orphan"]);
-    const advisoryLines = added.stderr.trim().split("\n").filter(Boolean);
+    const added = await runCliAt(fixture, worktree, ["work", "add", "shared despite orphan"], {
+      PATH: path,
+    });
     expect(added.exitCode).toBe(0);
-    expect(advisoryLines).toHaveLength(1);
-    expect(advisoryLines[0]).toContain("[orphan]");
-    expect(advisoryLines[0]).toContain(privateStore);
+    expect(added.stderr).toBe("");
     expect(await readFile(privateStore, "utf8")).toBe(original);
     expect((await runCli(fixture, ["work", "list"])).stdout).toContain("shared despite orphan");
 
-    const silent = await runCli(fixture, ["status"]);
-    expect(silent.exitCode).toBe(0);
-    expect(silent.stderr).not.toContain("[orphan]");
+    const diagnosed = await runCliAt(fixture, worktree, ["doctor"], { PATH: path });
+    const orphanLines = diagnosed.stdout.split("\n").filter((line) => line.includes(privateStore));
+    expect(diagnosed.exitCode).toBe(0);
+    expect(diagnosed.stderr).toBe("");
+    expect(diagnosed.stdout).toContain("doctor: healthy");
+    expect(orphanLines).toHaveLength(1);
+    expect(orphanLines[0]).toContain("left untouched");
+    expect(await readFile(privateStore, "utf8")).toBe(original);
   });
 });
