@@ -220,6 +220,63 @@ async function writePromotionStore(fixture: Fixture): Promise<string> {
   return path;
 }
 
+async function writeArchiveStore(fixture: Fixture): Promise<string> {
+  const path = join(fixture.repo, "archive-cards.sqlite");
+  const database = new Database(path, { create: true, strict: true });
+  database.exec(`
+    CREATE TABLE archived_snapshots (
+      id TEXT PRIMARY KEY NOT NULL,
+      archived_at TEXT NOT NULL,
+      source_relpath TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      snapshot_zstd BLOB NOT NULL,
+      snapshot_sha256 TEXT NOT NULL,
+      search_text TEXT NOT NULL,
+      last_checked_at TEXT
+    );
+  `);
+  const archiveText = "# Archived Nebula\narchivequasar remains searchable\n";
+  const archivePath = "notes.md";
+  const pathBytes = new TextEncoder().encode(archivePath);
+  const contentBytes = new TextEncoder().encode(archiveText);
+  const magic = new TextEncoder().encode("MAESTRO_ARCHIVE_SNAPSHOT_V1\n");
+  const snapshot = new Uint8Array(magic.length + 4 + 4 + 8 + pathBytes.length + contentBytes.length);
+  snapshot.set(magic);
+  const view = new DataView(snapshot.buffer);
+  let offset = magic.length;
+  view.setUint32(offset, 1, true);
+  offset += 4;
+  view.setUint32(offset, pathBytes.length, true);
+  offset += 4;
+  view.setBigUint64(offset, BigInt(contentBytes.length), true);
+  offset += 8;
+  snapshot.set(pathBytes, offset);
+  offset += pathBytes.length;
+  snapshot.set(contentBytes, offset);
+  const compressed = Bun.zstdCompressSync(snapshot);
+  database
+    .query(
+      `INSERT INTO archived_snapshots
+        (id, archived_at, source_relpath, manifest_json, snapshot_zstd,
+         snapshot_sha256, search_text, last_checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+    )
+    .run(
+      "snapshot-legacy-nebula",
+      "2026-06-30T00:00:00Z",
+      "archive/snapshot-legacy-nebula",
+      JSON.stringify({
+        format_version: "maestro.archive.snapshot.v1",
+        files: [{ path: archivePath, size: contentBytes.length, sha256: sha256(contentBytes) }],
+      }),
+      compressed,
+      sha256(compressed),
+      "title: Archived Nebula\ndescription: archivequasar remains searchable\n",
+    );
+  database.close();
+  return path;
+}
+
 function targetDatabase(fixture: Fixture): Database {
   return new Database(join(fixture.repo, ".maestro", "maestro.db"), {
     readonly: true,
@@ -499,5 +556,33 @@ test("301 a repeated --promote run creates nothing and preserves native rows and
       .get();
     afterDatabase.close();
     expect(after).toEqual(before);
+  });
+});
+
+test("302 archive-only Rust stores decode snapshots into searchable legacy files and report skips", async () => {
+  await withFixture(async (fixture) => {
+    const source = await writeArchiveStore(fixture);
+    const before = sha256(await readFile(source));
+
+    const imported = await runCli(fixture, ["import", "rust", "--path", source]);
+    const searched = await runCli(fixture, ["search", "archivequasar"]);
+
+    expect(imported.exitCode).toBe(0);
+    expect(imported.stdout).toContain("1 archived snapshots");
+    expect(imported.stdout).toContain("0 compressed payloads skipped");
+    expect(searched.exitCode).toBe(0);
+    expect(searched.stdout).toContain("[legacy] snapshot-legacy-nebula");
+    expect(sha256(await readFile(source))).toBe(before);
+    const database = targetDatabase(fixture);
+    expect(
+      database
+        .query("SELECT card_id, path, text_content FROM legacy_files WHERE card_id = ?")
+        .get("snapshot-legacy-nebula"),
+    ).toEqual({
+      card_id: "snapshot-legacy-nebula",
+      path: "archive/snapshot-legacy-nebula/notes.md",
+      text_content: "# Archived Nebula\narchivequasar remains searchable\n",
+    });
+    database.close();
   });
 });

@@ -32,11 +32,25 @@ interface SourceReceipt {
   payload_json: string;
 }
 
+interface SourceArchiveSnapshot {
+  archived_at: string;
+  id: string;
+  last_checked_at: string | null;
+  manifest_json: string;
+  search_text: string;
+  snapshot_sha256: string;
+  snapshot_zstd: Uint8Array | string;
+  source_relpath: string;
+}
+
 interface SourceData {
+  archiveSnapshots: number;
   cards: SourceCard[];
+  compressedPayloadsSkipped: number;
   decisions: ImportedDecision[];
   files: ImportedFile[];
   receipts: SourceReceipt[];
+  sourceKind: "archive" | "cards";
 }
 
 interface ImportedFile {
@@ -231,6 +245,114 @@ function legacySearchNeedsRebuild(context: PluginContext): boolean {
     .get() === null;
 }
 
+const archiveMagic = new TextEncoder().encode("MAESTRO_ARCHIVE_SNAPSHOT_V1\n");
+
+function archiveFiles(snapshot: SourceArchiveSnapshot): ImportedFile[] | null {
+  if (typeof Bun.zstdDecompressSync !== "function") return null;
+  try {
+    const decoded = Bun.zstdDecompressSync(bytes(snapshot.snapshot_zstd));
+    if (
+      decoded.byteLength < archiveMagic.byteLength + 4 ||
+      archiveMagic.some((byte, index) => decoded[index] !== byte)
+    ) {
+      return null;
+    }
+    const manifest = JSON.parse(snapshot.manifest_json) as {
+      files?: Array<{ path?: unknown; sha256?: unknown }>;
+    };
+    const hashes = new Map(
+      (manifest.files ?? [])
+        .filter((file): file is { path: string; sha256: string } =>
+          typeof file.path === "string" && typeof file.sha256 === "string"
+        )
+        .map((file) => [file.path, file.sha256] as const),
+    );
+    const view = new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+    let offset = archiveMagic.byteLength;
+    const count = view.getUint32(offset, true);
+    offset += 4;
+    const files: ImportedFile[] = [];
+    for (let index = 0; index < count; index += 1) {
+      if (offset + 12 > decoded.byteLength) return null;
+      const pathSize = view.getUint32(offset, true);
+      offset += 4;
+      const contentSize = Number(view.getBigUint64(offset, true));
+      offset += 8;
+      if (
+        !Number.isSafeInteger(contentSize) ||
+        offset + pathSize + contentSize > decoded.byteLength
+      ) {
+        return null;
+      }
+      const path = utf8.decode(decoded.slice(offset, offset + pathSize));
+      offset += pathSize;
+      const contents = decoded.slice(offset, offset + contentSize);
+      offset += contentSize;
+      files.push({
+        cardId: snapshot.id,
+        path: join(snapshot.source_relpath, path),
+        sha256: hashes.get(path) ?? snapshot.snapshot_sha256,
+        size: contents.byteLength,
+        text: text(contents),
+      });
+    }
+    return offset === decoded.byteLength ? files : null;
+  } catch {
+    return null;
+  }
+}
+
+function archiveSourceData(source: Database): SourceData {
+  const snapshots = source
+    .query<SourceArchiveSnapshot, []>(
+      `SELECT id, archived_at, source_relpath, manifest_json, snapshot_zstd,
+              snapshot_sha256, search_text, last_checked_at
+         FROM archived_snapshots ORDER BY id`,
+    )
+    .all();
+  const cards: SourceCard[] = [];
+  const files: ImportedFile[] = [];
+  let compressedPayloadsSkipped = 0;
+  for (const snapshot of snapshots) {
+    const titleMatch = snapshot.search_text.match(/^title:\s*(.+?)\s*$/m);
+    cards.push({
+      id: snapshot.id,
+      card_type: "archive",
+      parent: null,
+      status: "archived",
+      title: titleMatch?.[1] ? scalar(titleMatch[1]) : snapshot.id,
+      record_file: snapshot.source_relpath,
+      card_yaml: snapshot.search_text,
+      created_at: snapshot.archived_at,
+      updated_at: snapshot.last_checked_at ?? snapshot.archived_at,
+      imported_at: snapshot.archived_at,
+    });
+    const decodedFiles = archiveFiles(snapshot);
+    if (decodedFiles) {
+      files.push(...decodedFiles);
+      continue;
+    }
+    const compressed = bytes(snapshot.snapshot_zstd);
+    files.push({
+      cardId: snapshot.id,
+      path: snapshot.source_relpath,
+      sha256: snapshot.snapshot_sha256,
+      size: compressed.byteLength,
+      text: snapshot.search_text,
+    });
+    compressedPayloadsSkipped += 1;
+  }
+  return {
+    archiveSnapshots: snapshots.length,
+    cards,
+    compressedPayloadsSkipped,
+    decisions: [],
+    files,
+    receipts: [],
+    sourceKind: "archive",
+  };
+}
+
 function sourceData(path: string): SourceData {
   if (!existsSync(path)) {
     throw new CliError("LEGACY_STORE_NOT_FOUND", `legacy Rust store not found: ${path}`, { path });
@@ -246,10 +368,15 @@ function sourceData(path: string): SourceData {
     );
   }
   try {
-    if (!hasTable(source, "cards") || !hasTable(source, "card_files")) {
+    const hasCards = hasTable(source, "cards");
+    const hasCardFiles = hasTable(source, "card_files");
+    if (!hasCards && !hasCardFiles && hasTable(source, "archived_snapshots")) {
+      return archiveSourceData(source);
+    }
+    if (!hasCards || !hasCardFiles) {
       throw new CliError(
         "INVALID_LEGACY_STORE",
-        "legacy Rust store must contain cards and card_files tables",
+        "legacy Rust store must contain cards and card_files, or archived_snapshots",
         { path },
       );
     }
@@ -301,7 +428,15 @@ function sourceData(path: string): SourceData {
         )
         .all()
       : [];
-    return { cards, decisions: [...decisions.values()], files, receipts };
+    return {
+      archiveSnapshots: 0,
+      cards,
+      compressedPayloadsSkipped: 0,
+      decisions: [...decisions.values()],
+      files,
+      receipts,
+      sourceKind: "cards",
+    };
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CliError(
@@ -783,6 +918,12 @@ export const importRustPlugin: BuiltInPlugin = {
             : join(dirname(context.store.path), "store.sqlite");
           const data = sourceData(path);
           const textFiles = data.files.filter((file) => file.text !== null).length;
+          const summary = data.sourceKind === "archive"
+            ? `imported legacy archive: ${data.archiveSnapshots} archived snapshots, ` +
+              `${data.files.length} files (${textFiles} text), ` +
+              `${data.compressedPayloadsSkipped} compressed payloads skipped`
+            : `imported legacy: ${data.cards.length} cards, ${data.files.length} files ` +
+              `(${textFiles} text), ${data.decisions.length} decisions`;
           const result: CliResult = {
             data: {
               path,
@@ -790,9 +931,11 @@ export const importRustPlugin: BuiltInPlugin = {
               files: data.files.length,
               textFiles,
               decisions: data.decisions.length,
+              archiveSnapshots: data.archiveSnapshots,
+              compressedPayloadsSkipped: data.compressedPayloadsSkipped,
             },
             text: [
-              `imported legacy: ${data.cards.length} cards, ${data.files.length} files (${textFiles} text), ${data.decisions.length} decisions`,
+              summary,
               data.cards[0]
                 ? `read them: maestro legacy show ${data.cards[0].id}`
                 : null,
