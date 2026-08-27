@@ -304,6 +304,40 @@ test("260 every exported attention kind has an independent read-only detection s
     expect(opened.exitCode).toBe(0);
     const dispatch = opened.stdout.match(/\b(x\d+)\b/)?.[1];
     expect(dispatch).toBeDefined();
+    expect(
+      (
+        await runCli(fixture, ["dispatch", "accept", dispatch as string], {
+          MAESTRO_SESSION_ID: "unreturned-holder",
+          MAESTRO_SESSION_PID: String(process.pid),
+        })
+      ).exitCode,
+    ).toBe(0);
+
+    const unacceptedWork = await addWork(fixture, "undelivered lane");
+    const unacceptedOpened = await runCli(fixture, [
+      "dispatch",
+      "open",
+      unacceptedWork,
+      "--objective",
+      "accept the stored contract",
+      "--owned-scope",
+      "scratch",
+      "--excluded-scope",
+      "product source",
+      "--mutation",
+      "no-write",
+      "--stop-condition",
+      "dispatch accepted",
+      "--lane",
+      "delivery",
+      "--evidence-required",
+      "source",
+      "--pane",
+      "w1:pX",
+    ]);
+    expect(unacceptedOpened.exitCode).toBe(0);
+    const unacceptedDispatch = unacceptedOpened.stdout.match(/\b(x\d+)\b/)?.[1];
+    expect(unacceptedDispatch).toBeDefined();
 
     const handbackWork = await addWork(fixture, "returned lane awaiting review");
     const handbackOpened = await runCli(fixture, [
@@ -378,6 +412,9 @@ test("260 every exported attention kind has an independent read-only detection s
       database
         .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
         .run(new Date(Date.now() - 3 * 60 * 60_000).toISOString(), dispatch as string);
+      database
+        .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 11 * 60_000).toISOString(), unacceptedDispatch as string);
     } finally {
       database.close();
     }
@@ -401,6 +438,7 @@ test("260 every exported attention kind has an independent read-only detection s
     }).data.detections;
     const expectedSubjects = {
       DECISION_STALE: decisionWork,
+      DISPATCH_UNACCEPTED: unacceptedWork,
       DISPATCH_UNRETURNED: dispatchWork,
       HANDBACK_UNREVIEWED: handbackWork,
       REPEATED_FAILURE: repeated,
