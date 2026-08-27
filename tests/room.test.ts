@@ -395,6 +395,9 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(lane).not.toMatch(/\.{3}|…/);
     expect(lane).toContain("herdr pane process-info --pane <pane-id>");
     expect(lane).toContain("the session whose pid matches in `maestro status --live`");
+    expect(lane).toContain("Codex runs SessionStart on its first turn");
+    expect(lane).toContain("without `--target-session`");
+    expect(lane).toContain("`held by` equals the pane's session");
     expect(lane).not.toContain("Reply with the single word");
     expect(lane).not.toContain("ask the started lane");
     expect(lane).toContain(
