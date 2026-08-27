@@ -403,7 +403,11 @@ async function doctor(): Promise<CliResult> {
   if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
   checks.push(await codexTrustCheck(repo));
 
-  const storePath = resolveStoreLocation(repo).path;
+  const storeLocation = resolveStoreLocation(repo);
+  const storePath = storeLocation.path;
+  if (storeLocation.orphanPath) {
+    checks.push(`orphan store: ${storeLocation.orphanPath} left untouched`);
+  }
   if (!existsSync(storePath)) {
     issues.push({ component: "store", fix: "run maestro install", message: `store is missing: ${storePath}` });
   } else {

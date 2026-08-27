@@ -5,6 +5,8 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
+  addLinkedWorktree,
+  initializeGitRepository,
   type CliResult,
   type Fixture,
   prepareInstallFixture,
@@ -15,6 +17,29 @@ import {
 } from "./helpers.ts";
 
 const projectRoot = resolve(import.meta.dir, "..");
+
+test("284 orphan worktree store is silent on ordinary commands and reported healthy by doctor", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const linked = join(fixture.root, "linked");
+    await addLinkedWorktree(fixture.repo, linked);
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCliAt(fixture, linked, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const orphan = join(linked, ".maestro", "maestro.db");
+    await cp(join(fixture.repo, ".maestro", "maestro.db"), orphan);
+
+    const version = await runCliAt(fixture, linked, ["version"], { PATH: path });
+    expect(version.exitCode).toBe(0);
+    expect(version.stderr).toBe("");
+
+    const diagnosed = await runCliAt(fixture, linked, ["doctor"], { PATH: path });
+    expect(diagnosed.exitCode).toBe(0);
+    expect(diagnosed.stdout).toContain("doctor: healthy");
+    expect(diagnosed.stdout).toContain(orphan);
+    expect(await Bun.file(orphan).exists()).toBe(true);
+  });
+});
 
 function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");

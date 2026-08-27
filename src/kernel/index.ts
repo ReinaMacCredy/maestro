@@ -19,11 +19,6 @@ export async function run(args: string[], options: RunOptions = {}): Promise<num
   const repo = process.cwd();
   const home = process.env.HOME ?? repo;
   const storeLocation = resolveStoreLocation(repo);
-  if (storeLocation.orphanPath) {
-    process.stderr.write(
-      `[orphan] private maestro store left untouched: ${storeLocation.orphanPath}\n`,
-    );
-  }
   const store = new Store(storeLocation.path, { readonly: options.readOnly });
   const cli = new Cli(options.cli);
   const events = new Events();
