@@ -130,7 +130,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
   });
 });
 
-test("270 install prints room Codex trust steps only while its hooks are untrusted", async () => {
+test("270 unverified Codex hook hashes never suppress room trust guidance", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const room = join(fixture.home, "maestro");
@@ -187,8 +187,9 @@ test("301 machine-scoped paths use an absolute home or fail before writing", asy
   });
 });
 
-test("29 install writes portable hook files without machine-absolute paths", async () => {
+test("29 [lint] install writes portable hook files without machine-absolute paths", async () => {
   await withFixture(async (fixture) => {
+    // Proves generated-file portability lint, not execution after relocating the installed fixture.
     const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], {
