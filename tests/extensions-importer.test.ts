@@ -207,7 +207,13 @@ async function writePromotionStore(fixture: Fixture): Promise<string> {
     "receipt-legacy-aurora",
     featureId,
     now,
-    JSON.stringify({ result: "pass", checks: 3, details: "proof ".repeat(80), tail: "preserved" }),
+    JSON.stringify({
+      result: "pass",
+      checks: 3,
+      details: "proof ".repeat(80),
+      exactWhitespace: "two  spaces\nand a newline",
+      tail: "preserved",
+    }),
   );
   insertReceipt.run(
     "verification",
@@ -510,8 +516,10 @@ test("300 --promote maps legacy cards, decisions, receipts, provenance, and even
     const receiptNote = workNotes.find((note) => note.startsWith("legacy receipt verification"));
     expect(receiptNote).toBeString();
     const receiptPayload = JSON.parse(receiptNote?.slice(receiptNote.indexOf(": ") + 2) ?? "null") as {
+      exactWhitespace?: string;
       tail?: string;
     };
+    expect(receiptPayload.exactWhitespace).toBe("two  spaces\nand a newline");
     expect(receiptPayload.tail).toBe("preserved");
     expect(
       database.query<{ rationale: string; text: string }, [string]>(
@@ -529,6 +537,20 @@ test("300 --promote maps legacy cards, decisions, receipts, provenance, and even
         .all(newDecision)
         .map((event) => event.type),
     ).toEqual(["decision.draft", "decision.supersede", "decision.lock"]);
+    expect(
+      database
+        .query<{ entity_id: string; type: string }, [string, string]>(
+          `SELECT entity_id, type FROM event_log
+           WHERE entity_type = 'decision' AND entity_id IN (?, ?) ORDER BY id`,
+        )
+        .all(oldDecision, newDecision),
+    ).toEqual([
+      { entity_id: oldDecision, type: "decision.draft" },
+      { entity_id: oldDecision, type: "decision.lock" },
+      { entity_id: newDecision, type: "decision.draft" },
+      { entity_id: newDecision, type: "decision.supersede" },
+      { entity_id: newDecision, type: "decision.lock" },
+    ]);
     expect(
       database.query<{ count: number }, []>(
         "SELECT count(*) AS count FROM event_log WHERE entity_type IN ('work', 'decision')",
@@ -639,5 +661,25 @@ test("303 reference import stays available when native work promotion is disable
     );
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain("title: Legacy Aurora");
+  });
+});
+
+test("304 --promote fails before reference rows when native promotion is disabled", async () => {
+  await withFixture(async (fixture) => {
+    const source = await writeLegacyStore(fixture);
+    await setPlugin(fixture, "work", true);
+
+    const promoted = await runCli(fixture, ["import", "rust", "--path", source, "--promote"]);
+
+    expect(promoted.exitCode).toBe(1);
+    const error = JSON.parse(promoted.stderr) as { error: { code: string; message: string } };
+    expect(error.error).toEqual({
+      code: "PROMOTION_UNAVAILABLE",
+      message: "--promote requires the native work and decision plugins",
+    });
+    const database = targetDatabase(fixture);
+    expect(database.query<{ count: number }, []>("SELECT count(*) AS count FROM legacy_cards").get()?.count)
+      .toBe(0);
+    database.close();
   });
 });

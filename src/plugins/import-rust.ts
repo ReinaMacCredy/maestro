@@ -598,11 +598,11 @@ function yamlValue(yaml: string, key: string): string | null {
 }
 
 function payloadSummary(payload: string): string {
-  let compact = payload;
   try {
-    compact = JSON.stringify(JSON.parse(payload));
-  } catch {}
-  return compact.replaceAll(/\s+/g, " ").trim();
+    return JSON.stringify(JSON.parse(payload));
+  } catch {
+    return payload;
+  }
 }
 
 interface PromotionSummary {
@@ -781,13 +781,6 @@ function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionS
         )
         .run(id, text, provenance, state, workId, card.created_at, card.updated_at);
       notes += 1;
-      context.log.append({
-        type: "decision.draft",
-        entityType: "decision",
-        entityId: id,
-        sessionId,
-        payload: { text, workId, importedFrom: card.id },
-      });
     }
 
     for (const card of decisionCards) {
@@ -803,28 +796,58 @@ function promoteLegacyRows(context: PluginContext, data: SourceData): PromotionS
           successor ? nativeIds.get(successor) ?? null : null,
           id,
         );
-      if (predecessor) {
+    }
+
+    const pendingDecisionEvents = new Map(decisionCards.map((card) => [card.id, card] as const));
+    const emittedDecisionEvents = new Set<string>();
+    while (pendingDecisionEvents.size > 0) {
+      let progressed = false;
+      for (const card of [...pendingDecisionEvents.values()]) {
+        const predecessor = supersedes.get(card.id);
+        if (predecessor && !emittedDecisionEvents.has(predecessor)) continue;
+        const id = nativeIds.get(card.id) as string;
+        const predecessorId = predecessor ? nativeIds.get(predecessor) : undefined;
+        const workId = card.parent && workCardIds.has(card.parent)
+          ? nativeIds.get(card.parent) ?? null
+          : null;
+        const provenance = `imported from legacy card ${card.id}`;
+        const text = `${yamlValue(card.card_yaml, "decision") ?? card.title} (${provenance})`;
         context.log.append({
-          type: "decision.supersede",
+          type: "decision.draft",
           entityType: "decision",
           entityId: id,
           sessionId,
-          payload: { supersedesId: nativeIds.get(predecessor), importedFrom: card.id },
+          payload: { text, workId, supersedesId: predecessorId, importedFrom: card.id },
         });
+        const state = decisionState(card.status);
+        if (predecessorId && state !== "draft") {
+          context.log.append({
+            type: "decision.supersede",
+            entityType: "decision",
+            entityId: id,
+            sessionId,
+            payload: { supersedesId: predecessorId, importedFrom: card.id },
+          });
+        }
+        if (state !== "draft") {
+          context.log.append({
+            type: "decision.lock",
+            entityType: "decision",
+            entityId: id,
+            sessionId,
+            payload: { importedFrom: card.id, legacyStatus: card.status },
+          });
+        }
+        emittedDecisionEvents.add(card.id);
+        pendingDecisionEvents.delete(card.id);
+        progressed = true;
       }
-    }
-
-    for (const card of decisionCards) {
-      const state = decisionState(card.status);
-      if (state === "draft") continue;
-      const id = nativeIds.get(card.id) as string;
-      context.log.append({
-        type: "decision.lock",
-        entityType: "decision",
-        entityId: id,
-        sessionId,
-        payload: { importedFrom: card.id, legacyStatus: card.status },
-      });
+      if (!progressed) {
+        throw new CliError(
+          "INVALID_LEGACY_STORE",
+          `legacy decision supersession cycle: ${[...pendingDecisionEvents.keys()].join(", ")}`,
+        );
+      }
     }
 
     let receiptsSkipped = 0;
@@ -951,6 +974,15 @@ export const importRustPlugin: BuiltInPlugin = {
           const path = typeof override === "string"
             ? override
             : join(dirname(context.store.path), "store.sqlite");
+          if (
+            invocation.options.promote === true &&
+            (context.work === undefined || context.decision === undefined)
+          ) {
+            throw new CliError(
+              "PROMOTION_UNAVAILABLE",
+              "--promote requires the native work and decision plugins",
+            );
+          }
           const data = sourceData(path);
           const textFiles = data.files.filter((file) => file.text !== null).length;
           const summary = data.sourceKind === "archive"
