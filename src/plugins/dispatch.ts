@@ -465,41 +465,20 @@ export const dispatchPlugin: BuiltInPlugin = {
       });
       migrateCouncils.immediate();
     }
-    const hasDispatchColumn = (name: string) =>
-      context.store.database
-        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
-        .all()
-        .some((column) => column.name === name);
-    if (!hasDispatchColumn("pane")) {
-      try {
-        context.store.migrate("ALTER TABLE dispatches ADD COLUMN pane TEXT");
-      } catch (error) {
-        if (!hasDispatchColumn("pane")) throw error;
-      }
-    }
-    if (!context.store.readOnly && !hasDispatchColumn("terminal_held_by_backfilled")) {
-      try {
-        const backfill = context.store.database.transaction(() => {
-          context.store.migrate(
-            "ALTER TABLE dispatches ADD COLUMN terminal_held_by_backfilled INTEGER NOT NULL DEFAULT 1",
-          );
-          context.store.database
-            .query(
-              `UPDATE dispatches
-               SET held_by = NULL
-               WHERE held_by IS NOT NULL
-                 AND (
-                   cancelled_at IS NOT NULL OR
-                   EXISTS(SELECT 1 FROM handbacks WHERE handbacks.dispatch_id = dispatches.id)
-                 )`,
-            )
-            .run();
-        });
-        backfill.immediate();
-      } catch (error) {
-        if (!hasDispatchColumn("terminal_held_by_backfilled")) throw error;
-      }
-    }
+    context.store.ensureColumn(
+      "dispatches",
+      "pane",
+      "ALTER TABLE dispatches ADD COLUMN pane TEXT",
+    );
+    context.store.migrate(`
+      UPDATE dispatches
+      SET held_by = NULL
+      WHERE held_by IS NOT NULL
+        AND (
+          cancelled_at IS NOT NULL OR
+          EXISTS(SELECT 1 FROM handbacks WHERE handbacks.dispatch_id = dispatches.id)
+        )
+    `);
 
     const service: DispatchService = {
       council: (workId, dispatchId) => councilStatus(context, workId, dispatchId),

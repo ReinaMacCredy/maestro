@@ -433,3 +433,90 @@ test("293 dispatch cancel and handback file have one terminal winner", async () 
     }
   });
 });
+
+test("306 concurrent attention scans raise one row and one event", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const worktree = join(fixture.root, "attention-worktree");
+    await addLinkedWorktree(fixture.repo, worktree);
+    const work = idFrom(await runCli(fixture, ["work", "add", "attention race"]));
+    const decision = idFrom(
+      await runCli(fixture, ["decision", "draft", "stale attention race", "--work", work]),
+    );
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const writable = new Database(databasePath);
+    writable
+      .query("UPDATE decisions SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+    writable.close();
+
+    const scans = await Promise.all([
+      runCli(
+        fixture,
+        ["attention", "--json", "--decision-stale", "24"],
+        sessionEnvironment("attention-a"),
+      ),
+      runCliAt(
+        fixture,
+        worktree,
+        ["attention", "--json", "--decision-stale", "24"],
+        sessionEnvironment("attention-b"),
+      ),
+    ]);
+    expect(scans.map((result) => result.exitCode)).toEqual([0, 0]);
+    const raised = scans.map((result) => {
+      const envelope = JSON.parse(result.stdout) as {
+        data: { detections: Array<{ fingerprint: string; raised: boolean }> };
+      };
+      return envelope.data.detections.find(
+        (detection) => detection.fingerprint === `decision:${decision}`,
+      )?.raised;
+    });
+    expect(raised.sort()).toEqual([false, true]);
+
+    const stored = new Database(databasePath, { readonly: true });
+    expect(
+      stored
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM attention WHERE fingerprint = ?",
+        )
+        .get(`decision:${decision}`)?.count,
+    ).toBe(1);
+    expect(
+      stored
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM event_log WHERE type = 'attention.raise' AND entity_id = ?",
+        )
+        .get(decision)?.count,
+    ).toBe(1);
+    stored.close();
+  });
+});
+
+test("307 concurrent startup adds one pane column to an old dispatch schema", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const worktree = join(fixture.root, "dispatch-migration-worktree");
+    await addLinkedWorktree(fixture.repo, worktree);
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const legacy = new Database(databasePath);
+    legacy.exec("ALTER TABLE dispatches DROP COLUMN pane");
+    legacy.close();
+
+    const startups = await Promise.all([
+      runCli(fixture, ["version"], sessionEnvironment("migration-a")),
+      runCliAt(fixture, worktree, ["version"], sessionEnvironment("migration-b")),
+    ]);
+    expect(startups.map((result) => result.exitCode)).toEqual([0, 0]);
+
+    const migrated = new Database(databasePath, { readonly: true });
+    expect(
+      migrated
+        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
+        .all()
+        .filter((column) => column.name === "pane"),
+    ).toHaveLength(1);
+    migrated.close();
+  });
+});

@@ -824,12 +824,6 @@ test("266 dispatch migration clears legacy terminal holders once", async () => {
         .all()
         .map((row) => row.held_by),
     ).toEqual([null, "open-lane", null]);
-    expect(
-      migrated
-        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
-        .all()
-        .map((column) => column.name),
-    ).toContain("terminal_held_by_backfilled");
     migrated.close();
 
     expect((await runCli(fixture, ["version"])).exitCode).toBe(0);

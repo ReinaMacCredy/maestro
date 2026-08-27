@@ -278,11 +278,6 @@ export const workPlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL
       );
     `);
-    const hasWorkColumn = (name: string) =>
-      context.store.database
-        .query<{ name: string }, []>("PRAGMA table_info(work)")
-        .all()
-        .some((column) => column.name === name);
     for (const [name, migration] of [
       ["cancelled_at", "ALTER TABLE work ADD COLUMN cancelled_at TEXT"],
       ["cancel_reason", "ALTER TABLE work ADD COLUMN cancel_reason TEXT"],
@@ -290,13 +285,7 @@ export const workPlugin: BuiltInPlugin = {
       ["reclaimed_by", "ALTER TABLE work ADD COLUMN reclaimed_by TEXT"],
       ["reclaim_reason", "ALTER TABLE work ADD COLUMN reclaim_reason TEXT"],
     ] as const) {
-      if (hasWorkColumn(name)) continue;
-      try {
-        context.store.migrate(migration);
-      } catch (error) {
-        // Concurrent startup can race the same ALTER; losing is fine.
-        if (!hasWorkColumn(name)) throw error;
-      }
+      context.store.ensureColumn("work", name, migration);
     }
 
     const service: WorkService = {

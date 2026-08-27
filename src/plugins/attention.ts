@@ -22,12 +22,6 @@ interface AttentionWorkRow {
 
 interface AttentionRow {
   created_at: string;
-  fingerprint: string;
-  id: number;
-  kind: AttentionKind;
-  packet: string;
-  subject_session: string | null;
-  subject_work: string | null;
 }
 
 interface EventRow {
@@ -419,27 +413,17 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
       subjectWork: detection.subjectWork,
     };
   }
-  const existing = context.store.database
-    .query<AttentionRow, [string]>("SELECT * FROM attention WHERE fingerprint = ?")
-    .get(detection.fingerprint);
-  if (existing) {
-    return {
-      fingerprint: detection.fingerprint,
-      kind: detection.kind,
-      packet: detection.packet,
-      raised: false,
-      raisedAt: existing.created_at,
-      subjectSession: detection.subjectSession,
-      subjectWork: detection.subjectWork,
-    };
-  }
-
   const createdAt = new Date().toISOString();
-  let inserted = false;
   const transaction = context.store.database.transaction(() => {
-    const result = context.store.database
+    const existing = context.store.database
+      .query<AttentionRow, [string]>(
+        "SELECT created_at FROM attention WHERE fingerprint = ?",
+      )
+      .get(detection.fingerprint);
+    if (existing) return { raised: false, raisedAt: existing.created_at };
+    context.store.database
       .query(
-        `INSERT OR IGNORE INTO attention
+        `INSERT INTO attention
           (kind, fingerprint, subject_work, subject_session, packet, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
@@ -451,8 +435,6 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
         detection.packet,
         createdAt,
       );
-    if (result.changes === 0) return;
-    inserted = true;
     context.log.append({
       type: "attention.raise",
       entityType: detection.entityType,
@@ -463,28 +445,15 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
         kind: detection.kind,
       },
     });
+    return { raised: true, raisedAt: createdAt };
   });
-  transaction();
-  if (!inserted) {
-    const raced = context.store.database
-      .query<AttentionRow, [string]>("SELECT * FROM attention WHERE fingerprint = ?")
-      .get(detection.fingerprint) as AttentionRow;
-    return {
-      fingerprint: detection.fingerprint,
-      kind: detection.kind,
-      packet: detection.packet,
-      raised: false,
-      raisedAt: raced.created_at,
-      subjectSession: detection.subjectSession,
-      subjectWork: detection.subjectWork,
-    };
-  }
+  const result = transaction.immediate();
   return {
     fingerprint: detection.fingerprint,
     kind: detection.kind,
     packet: detection.packet,
-    raised: true,
-    raisedAt: createdAt,
+    raised: result.raised,
+    raisedAt: result.raisedAt,
     subjectSession: detection.subjectSession,
     subjectWork: detection.subjectWork,
   };

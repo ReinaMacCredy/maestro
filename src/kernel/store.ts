@@ -49,6 +49,12 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
   return { orphanPath, path, root: checkoutRoot };
 }
 
+function assertSqliteIdentifier(identifier: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`invalid SQLite identifier: ${identifier}`);
+  }
+}
+
 export class Store {
   readonly database: Database;
   readonly ephemeral: boolean;
@@ -80,10 +86,24 @@ export class Store {
     this.database.exec(sql);
   }
 
-  nextPrefixedId(table: string, prefix: string): string {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
-      throw new Error(`invalid SQLite identifier: ${table}`);
+  ensureColumn(table: string, column: string, migration: string): void {
+    assertSqliteIdentifier(table);
+    assertSqliteIdentifier(column);
+    const hasColumn = () =>
+      this.database
+        .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+        .all()
+        .some((entry) => entry.name === column);
+    if (hasColumn()) return;
+    try {
+      this.migrate(migration);
+    } catch (error) {
+      if (!hasColumn()) throw error;
     }
+  }
+
+  nextPrefixedId(table: string, prefix: string): string {
+    assertSqliteIdentifier(table);
     if (!/^[A-Za-z]$/.test(prefix)) {
       throw new Error(`invalid ID prefix: ${prefix}`);
     }

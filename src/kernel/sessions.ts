@@ -58,15 +58,18 @@ export class Sessions {
         scope TEXT NOT NULL DEFAULT ''
       );
     `);
-    this.ensureColumn(
+    store.ensureColumn(
+      "sessions",
       "harness",
       "ALTER TABLE sessions ADD COLUMN harness TEXT CHECK(harness IN ('claude', 'codex'))",
     );
-    this.ensureColumn(
+    store.ensureColumn(
+      "sessions",
       "anchor",
       "ALTER TABLE sessions ADD COLUMN anchor TEXT NOT NULL DEFAULT 'pid' CHECK(anchor IN ('pid', 'ttl'))",
     );
-    this.ensureColumn(
+    store.ensureColumn(
+      "sessions",
       "scope",
       "ALTER TABLE sessions ADD COLUMN scope TEXT NOT NULL DEFAULT ''",
     );
@@ -362,20 +365,6 @@ export class Sessions {
 
   private disabled(): boolean {
     return this.store.readOnly || process.env.MAESTRO_SESSION_NONE === "1";
-  }
-
-  private ensureColumn(name: string, migration: string): void {
-    const hasColumn = () =>
-      this.store.database
-        .query<{ name: string }, []>("PRAGMA table_info(sessions)")
-        .all()
-        .some((column) => column.name === name);
-    if (hasColumn()) return;
-    try {
-      this.store.migrate(migration);
-    } catch (error) {
-      if (!hasColumn()) throw error;
-    }
   }
 
   private isPidAlive(pid: number): boolean {
