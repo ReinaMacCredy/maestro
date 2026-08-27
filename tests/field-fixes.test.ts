@@ -255,6 +255,7 @@ test("289 [lint] recipe slp presents the SLP roles and install mirrors state the
     expect(recipe.stdout).toContain("HANDBACK_UNREVIEWED");
     expect(recipe.stdout).toContain("HUMAN_DECISION_REQUIRED");
     expect(recipe.stdout).toContain("LEAD_COLLISION");
+    expect(recipe.stdout).toContain("DECISION_REVIEW_DUE");
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);

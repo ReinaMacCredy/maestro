@@ -8,6 +8,8 @@ export interface DecisionRecord {
   id: string;
   text: string;
   rationale: string | null;
+  dissent: string | null;
+  reviewAt: string | null;
   needsOwner: boolean;
   state: "draft" | "locked" | "superseded";
   parentId: string | null;
@@ -22,6 +24,8 @@ interface DecisionRow {
   id: string;
   text: string;
   rationale: string | null;
+  dissent: string | null;
+  review_at: string | null;
   needs_owner: number;
   state: "draft" | "locked" | "superseded";
   parent_id: string | null;
@@ -42,6 +46,8 @@ function fromRow(row: DecisionRow): DecisionRecord {
     id: row.id,
     text: row.text,
     rationale: row.rationale,
+    dissent: row.dissent,
+    reviewAt: row.review_at,
     needsOwner: row.needs_owner === 1,
     state: row.state,
     parentId: row.parent_id,
@@ -71,6 +77,27 @@ function option(invocation: CliInvocation, name: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function reviewAtOption(invocation: CliInvocation): string | null {
+  const value = option(invocation, "review-at");
+  if (value === null) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/.exec(value);
+  const calendar = new Date(0);
+  if (match) {
+    calendar.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    calendar.setUTCHours(0, 0, 0, 0);
+  }
+  if (
+    !match ||
+    Number.isNaN(Date.parse(value)) ||
+    calendar.getUTCFullYear() !== Number(match[1]) ||
+    calendar.getUTCMonth() !== Number(match[2]) - 1 ||
+    calendar.getUTCDate() !== Number(match[3])
+  ) {
+    throw new CliError("INVALID_VALUE", "--review-at must be an ISO date");
+  }
+  return value;
+}
+
 function required(invocation: CliInvocation, index: number, label: string): string {
   const value = invocation.positionals[index];
   if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
@@ -81,6 +108,8 @@ function format(decision: DecisionRecord): string {
   return [
     `${decision.id} [${decision.state}] ${decision.text}`,
     decision.rationale ? `rationale: ${decision.rationale}` : null,
+    decision.dissent ? `dissent: ${decision.dissent}` : null,
+    decision.reviewAt ? `review at: ${decision.reviewAt}` : null,
     decision.needsOwner ? "needs owner: yes" : null,
     decision.parentId ? `parent: ${decision.parentId}` : null,
     decision.workId ? `work: ${decision.workId}` : null,
@@ -126,6 +155,16 @@ export const decisionPlugin: BuiltInPlugin = {
       "needs_owner",
       "ALTER TABLE decisions ADD COLUMN needs_owner INTEGER NOT NULL DEFAULT 0",
     );
+    context.store.ensureColumn(
+      "decisions",
+      "dissent",
+      "ALTER TABLE decisions ADD COLUMN dissent TEXT",
+    );
+    context.store.ensureColumn(
+      "decisions",
+      "review_at",
+      "ALTER TABLE decisions ADD COLUMN review_at TEXT",
+    );
     const service: DecisionService = {
       get: (id) => getDecision(context, id),
       list: () =>
@@ -147,6 +186,8 @@ export const decisionPlugin: BuiltInPlugin = {
           const second = invocation.positionals[1];
           const existing = getDecision(context, first);
           const needsOwner = invocation.options["needs-owner"] === true;
+          const suppliedDissent = option(invocation, "dissent");
+          const suppliedReviewAt = reviewAtOption(invocation);
           if (existing && second !== undefined) {
             if (existing.state !== "draft") {
               throw new CliError(
@@ -157,12 +198,22 @@ export const decisionPlugin: BuiltInPlugin = {
             }
             const text = required(invocation, 1, "replacement text");
             const rationale = option(invocation, "rationale") ?? existing.rationale;
+            const dissent = suppliedDissent ?? existing.dissent;
+            const reviewAt = suppliedReviewAt ?? existing.reviewAt;
             const updatedAt = new Date().toISOString();
             context.store.database
               .query(
-                "UPDATE decisions SET text = ?, rationale = ?, needs_owner = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
+                "UPDATE decisions SET text = ?, rationale = ?, dissent = ?, review_at = ?, needs_owner = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
               )
-              .run(text, rationale, needsOwner || existing.needsOwner ? 1 : 0, updatedAt, existing.id);
+              .run(
+                text,
+                rationale,
+                dissent,
+                reviewAt,
+                needsOwner || existing.needsOwner ? 1 : 0,
+                updatedAt,
+                existing.id,
+              );
             context.log.append({
               type: "decision.draft",
               entityType: "decision",
@@ -219,10 +270,22 @@ export const decisionPlugin: BuiltInPlugin = {
             context.store.database
               .query(
                 `INSERT INTO decisions
-                  (id, text, rationale, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+                  (id, text, rationale, dissent, review_at, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
               )
-              .run(id, text, rationale, needsOwner ? 1 : 0, parentId, workId, supersedesId, now, now);
+              .run(
+                id,
+                text,
+                rationale,
+                suppliedDissent,
+                suppliedReviewAt,
+                needsOwner ? 1 : 0,
+                parentId,
+                workId,
+                supersedesId,
+                now,
+                now,
+              );
             context.log.append({
               type: "decision.draft",
               entityType: "decision",
@@ -250,6 +313,8 @@ export const decisionPlugin: BuiltInPlugin = {
           description: "Create or edit a draft decision.",
           flags: {
             "--rationale": { description: "Record why this decision was made.", value: true },
+            "--dissent": { description: "Record the dissenting view.", value: true },
+            "--review-at": { description: "Schedule review at an ISO date.", value: true },
             "--needs-owner": { description: "Mark this draft as requiring an owner decision." },
             "--parent": { description: "Attach this draft beneath a parent decision.", value: true },
             "--work": { description: "Link this draft to a work item.", value: true },
@@ -267,6 +332,8 @@ export const decisionPlugin: BuiltInPlugin = {
     context.effect(() =>
       registerSessionCommand(context, "decision lock", (invocation): CliResult => {
         const id = required(invocation, 0, "decision id");
+        const suppliedDissent = option(invocation, "dissent");
+        const suppliedReviewAt = reviewAtOption(invocation);
         const lock = context.store.database.transaction(() => {
           const decision = requireDecision(context, id);
           if (decision.state !== "draft") {
@@ -314,8 +381,15 @@ export const decisionPlugin: BuiltInPlugin = {
             });
           }
           const locked = context.store.database
-            .query("UPDATE decisions SET state = 'locked', updated_at = ? WHERE id = ? AND state = 'draft'")
-            .run(updatedAt, id);
+            .query(
+              "UPDATE decisions SET state = 'locked', dissent = ?, review_at = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
+            )
+            .run(
+              suppliedDissent ?? decision.dissent,
+              suppliedReviewAt ?? decision.reviewAt,
+              updatedAt,
+              id,
+            );
           if (locked.changes === 0) {
             const current = requireDecision(context, id);
             throw new CliError("INVALID_STATE", `${id} is ${current.state}`);
@@ -332,6 +406,10 @@ export const decisionPlugin: BuiltInPlugin = {
         return { data: { decision: locked }, text: format(locked) };
       }, {
         description: "Lock a draft decision against further edits.",
+        flags: {
+          "--dissent": { description: "Record the dissenting view.", value: true },
+          "--review-at": { description: "Schedule review at an ISO date.", value: true },
+        },
         positionals: [{ name: "id", required: true }],
       }),
     );

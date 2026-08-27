@@ -863,6 +863,51 @@ test("418 brief reports HUMAN_DECISION_REQUIRED and omits ordinary progress", as
   });
 });
 
+test("431 brief reports DECISION_REVIEW_DUE and omits ordinary progress", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await runCli(fixture, ["install"], { PATH: path });
+    await addBriefWork(fixture, fixture.repo, path, "ordinary decision progress");
+    const work = await addBriefWork(fixture, fixture.repo, path, "decision review due");
+    const decision = idFrom(
+      await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        [
+          "decision",
+          "draft",
+          "review the accepted boundary",
+          "--review-at",
+          new Date(Date.now() - 60_000).toISOString(),
+          "--work",
+          work,
+        ],
+        { PATH: path },
+      ),
+    );
+    expect(
+      (await runInstalledCliAt(
+        fixture,
+        fixture.repo,
+        ["decision", "lock", decision],
+        { PATH: path },
+      )).exitCode,
+    ).toBe(0);
+
+    const brief = await runInstalledCliAt(
+      fixture,
+      join(fixture.home, "maestro"),
+      ["brief"],
+      { MAESTRO_READ_ONLY: "1", PATH: path },
+    );
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      `${await realpath(fixture.repo)}: attention DECISION_REVIEW_DUE decision ${decision}`,
+    );
+    expect(brief.stdout).not.toContain("ordinary decision progress");
+  });
+});
+
 test("252 brief reports STALLED_LEASE and omits ordinary in-progress work", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

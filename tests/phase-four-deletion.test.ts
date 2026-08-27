@@ -279,6 +279,21 @@ test("260 every exported attention kind has an independent read-only detection s
       ]),
     );
 
+    const reviewWork = await addWork(fixture, "locked decision due for review");
+    const reviewAt = new Date(Date.now() - 60_000).toISOString();
+    const reviewDecision = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "revisit the accepted boundary",
+        "--review-at",
+        reviewAt,
+        "--work",
+        reviewWork,
+      ]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", reviewDecision])).exitCode).toBe(0);
+
     const collisionParent = await addWork(fixture, "shared mutation scope");
     await startWork(fixture, collisionParent, "lead-holder");
     const collisionA = await addWork(fixture, "first colliding lane", collisionParent);
@@ -467,6 +482,7 @@ test("260 every exported attention kind has an independent read-only detection s
       };
     }).data.detections;
     const expectedSubjects = {
+      DECISION_REVIEW_DUE: reviewWork,
       DECISION_STALE: decisionWork,
       DISPATCH_UNACCEPTED: unacceptedWork,
       DISPATCH_UNRETURNED: dispatchWork,
@@ -478,6 +494,7 @@ test("260 every exported attention kind has an independent read-only detection s
       STALLED_LEASE: stalled,
     } satisfies Record<AttentionKind, string>;
     const expectedPacketHeads = {
+      DECISION_REVIEW_DUE: `attention DECISION_REVIEW_DUE decision ${reviewDecision}`,
       DECISION_STALE: `attention DECISION_STALE decision ${decision}`,
       DISPATCH_UNACCEPTED: `attention DISPATCH_UNACCEPTED dispatch ${unacceptedDispatch}`,
       DISPATCH_UNRETURNED: `attention DISPATCH_UNRETURNED dispatch ${dispatch}`,

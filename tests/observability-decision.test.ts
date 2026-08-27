@@ -130,6 +130,74 @@ test("417 decision draft --needs-owner round-trips an explicit owner requirement
   });
 });
 
+test("428 decision dissent and review date round-trip through draft and lock", async () => {
+  await withFixture(async (fixture) => {
+    const draftedReview = "2026-09-01T00:00:00.000Z";
+    const lockedReview = "2027-03-01T00:00:00.000Z";
+    const decision = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "adopt the reviewable boundary",
+        "--dissent",
+        "prefer the narrower boundary",
+        "--review-at",
+        draftedReview,
+      ]),
+    );
+
+    const drafted = await runCli(fixture, ["decision", "show", decision]);
+    expect(drafted.exitCode).toBe(0);
+    expect(drafted.stdout).toContain("dissent: prefer the narrower boundary");
+    expect(drafted.stdout).toContain(`review at: ${draftedReview}`);
+
+    const locked = await runCli(fixture, [
+      "decision",
+      "lock",
+      decision,
+      "--dissent",
+      "retain the narrower alternative as dissent",
+      "--review-at",
+      lockedReview,
+    ]);
+    expect(locked.exitCode).toBe(0);
+    expect(locked.stdout).toContain("dissent: retain the narrower alternative as dissent");
+    expect(locked.stdout).toContain(`review at: ${lockedReview}`);
+
+    const shown = await runCli(fixture, ["decision", "show", decision]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("dissent: retain the narrower alternative as dissent");
+    expect(shown.stdout).toContain(`review at: ${lockedReview}`);
+  });
+});
+
+test("429 decision review dates reject non-ISO values on draft and lock", async () => {
+  await withFixture(async (fixture) => {
+    const invalidDraft = await runCli(fixture, [
+      "decision",
+      "draft",
+      "invalid review date",
+      "--review-at",
+      "next Tuesday",
+    ]);
+    expect(invalidDraft.exitCode).not.toBe(0);
+    expect(invalidDraft.stderr).toContain('"code":"INVALID_VALUE"');
+    expect(invalidDraft.stderr).toContain("--review-at must be an ISO date");
+
+    const decision = idFrom(await runCli(fixture, ["decision", "draft", "valid draft"]));
+    const invalidLock = await runCli(fixture, [
+      "decision",
+      "lock",
+      decision,
+      "--review-at",
+      "not-a-date",
+    ]);
+    expect(invalidLock.exitCode).not.toBe(0);
+    expect(invalidLock.stderr).toContain('"code":"INVALID_VALUE"');
+    expect(invalidLock.stderr).toContain("--review-at must be an ISO date");
+  });
+});
+
 test("410 decision draft warns and records the generation when its work council is sealed", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(

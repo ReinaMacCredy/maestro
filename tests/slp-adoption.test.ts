@@ -532,6 +532,107 @@ test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked d
   });
 });
 
+test("430 attention raises DECISION_REVIEW_DUE only for due locked unsuperseded decisions", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "reviewable decision work");
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const due = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "due review",
+        "--review-at",
+        past,
+        "--work",
+        work,
+      ]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", due])).exitCode).toBe(0);
+
+    const futureDecision = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "future review",
+        "--review-at",
+        future,
+        "--work",
+        work,
+      ]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", futureDecision])).exitCode).toBe(0);
+
+    const draft = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "draft review",
+        "--review-at",
+        past,
+        "--work",
+        work,
+      ]),
+    );
+    const superseded = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "superseded review",
+        "--review-at",
+        past,
+        "--work",
+        work,
+      ]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", superseded])).exitCode).toBe(0);
+    const replacement = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "replacement decision",
+        "--supersedes",
+        superseded,
+        "--work",
+        work,
+      ]),
+    );
+    expect((await runCli(fixture, ["decision", "lock", replacement])).exitCode).toBe(0);
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          kind: string;
+          packet: string;
+          subjectWork: string | null;
+        }>;
+      };
+    }).data.detections.filter((detection) => detection.kind === "DECISION_REVIEW_DUE");
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toEqual(expect.objectContaining({
+      fingerprint: `review:${due}:${past}`,
+      subjectWork: work,
+    }));
+    for (const required of [
+      `attention DECISION_REVIEW_DUE decision ${due}`,
+      "  observed:",
+      "  evidence:",
+      "  unknown:",
+      "  question:",
+      `  smallest action: maestro decision show ${due}`,
+      "  human decision needed: no",
+    ]) {
+      expect(detections[0]?.packet).toContain(required);
+    }
+    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${futureDecision}`);
+    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${draft}`);
+    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${superseded}`);
+  });
+});
+
 test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "shared scope");

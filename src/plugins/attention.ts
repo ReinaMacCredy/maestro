@@ -9,6 +9,7 @@ export type AttentionKind =
   | "STALLED_LEASE"
   | "REPEATED_FAILURE"
   | "DECISION_STALE"
+  | "DECISION_REVIEW_DUE"
   | "HUMAN_DECISION_REQUIRED"
   | "LEAD_COLLISION"
   | "SCOPE_COLLISION"
@@ -75,6 +76,7 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
   STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
   DECISION_STALE: "decision",
+  DECISION_REVIEW_DUE: "decision",
   HUMAN_DECISION_REQUIRED: "decision",
   LEAD_COLLISION: "work",
   SCOPE_COLLISION: "work",
@@ -312,6 +314,42 @@ function humanDecisionRequiredDetections(
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
+    }];
+  });
+}
+
+function decisionReviewDueDetections(
+  context: PluginContext,
+  workById: Map<string, AttentionWorkRow>,
+  now: number,
+): Detection[] {
+  const rows = context.store.database
+    .query<{ id: string; review_at: string; work_id: string | null }, []>(
+      `SELECT id, review_at, work_id
+       FROM decisions
+       WHERE state = 'locked'
+         AND superseded_by_id IS NULL
+         AND review_at IS NOT NULL
+       ORDER BY id`,
+    )
+    .all();
+  return rows.flatMap((decision): Detection[] => {
+    if (!(Date.parse(decision.review_at) < now)) return [];
+    const work = decision.work_id ? workById.get(decision.work_id) : null;
+    return [{
+      entityId: decision.id,
+      entityType: "decision",
+      fingerprint: `review:${decision.id}:${decision.review_at}`,
+      kind: "DECISION_REVIEW_DUE",
+      packet: packet("DECISION_REVIEW_DUE", decision.id, {
+        observed: `locked decision reached its review date ${decision.review_at}`,
+        evidence: `decisions.review_at ${decision.review_at}; decisions.superseded_by_id NULL`,
+        unknown: "whether the decision still fits the current evidence",
+        question: "keep, revise, or supersede this decision?",
+        smallestAction: `maestro decision show ${decision.id}`,
+      }),
+      subjectSession: work?.heldBy ?? null,
+      subjectWork: decision.work_id,
     }];
   });
 }
@@ -575,6 +613,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
       now,
       options.decisionStaleHours,
     ),
+    ...decisionReviewDueDetections(context, workById, now),
     ...humanDecisionRequiredDetections(context, workById),
     ...leadCollisionDetections(context, works, sessions),
     ...scopeCollisionDetections(works, sessions),
