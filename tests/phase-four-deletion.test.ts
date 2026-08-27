@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { AttentionKind } from "../src/plugins/attention.ts";
 import {
   idFrom,
   prepareInstallFixture,
@@ -18,14 +19,6 @@ interface HookConfig {
     matcher?: string;
   }>>;
 }
-
-const attentionKinds = [
-  "DECISION_STALE",
-  "DISPATCH_UNRETURNED",
-  "REPEATED_FAILURE",
-  "SCOPE_COLLISION",
-  "STALLED_LEASE",
-] as const;
 
 function errorFrom(result: CliResult): { code: string; message: string; verb?: string } {
   return (
@@ -141,7 +134,7 @@ test("257 agents outside Herdr still record SessionStart and UserPromptSubmit wi
   });
 });
 
-test("258 install omits PostToolUse and re-install removes only its retired managed hooks", async () => {
+test("258 [closeout-only] re-install removes retired managed PostToolUse hooks and preserves foreign groups", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const first = await runCli(fixture, ["install"], { PATH: path });
@@ -155,25 +148,11 @@ test("258 install omits PostToolUse and re-install removes only its retired mana
     const repeated = await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path });
     const repeatedClaude = JSON.parse(await readFile(claudePath, "utf8")) as HookConfig;
     const repeatedCodex = JSON.parse(await readFile(codexPath, "utf8")) as HookConfig;
-    const workSkillRoot = join(fixture.home, "maestro", "skills", "maestro-work");
-    const workSkill = await readFile(join(workSkillRoot, "SKILL.md"), "utf8");
-    const conflictHandoff = await readFile(
-      join(workSkillRoot, "references", "conflict-handoff.md"),
-      "utf8",
-    );
-    const worktree = await readFile(join(workSkillRoot, "references", "worktree.md"), "utf8");
 
     expect(first.exitCode).toBe(0);
     expect(repeated.exitCode).toBe(0);
     expect(firstClaude.hooks.PostToolUse).toBeUndefined();
     expect(firstCodex.hooks.PostToolUse).toBeUndefined();
-    expect(workSkill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
-    for (const reference of [conflictHandoff, worktree]) {
-      expect(reference).toContain("herdr pane send-text");
-      expect(reference).toContain("maestro dispatch");
-      expect(reference).toContain("maestro handback");
-      expect(reference).not.toContain("maestro msg");
-    }
     for (const config of [repeatedClaude, repeatedCodex]) {
       expect(config.hooks.SessionStart).toBeArray();
       expect(config.hooks.UserPromptSubmit).toBeArray();
@@ -183,6 +162,77 @@ test("258 install omits PostToolUse and re-install removes only its retired mana
           hooks: [{ type: "command", command: "foreign-post-tool-hook" }],
         },
       ]);
+    }
+  });
+});
+
+test("350 installed hook configuration executes both current adapters", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    for (const [harness, configPath] of [
+      ["claude", join(fixture.repo, ".claude", "settings.json")],
+      ["codex", join(fixture.repo, ".codex", "hooks.json")],
+    ] as const) {
+      const config = JSON.parse(await readFile(configPath, "utf8")) as HookConfig;
+      const handler = config.hooks.SessionStart
+        ?.flatMap((group) => group.hooks)
+        .find((candidate) => candidate.command.includes("maestro-record.ts"));
+      expect(handler).toBeDefined();
+      const adapter = handler?.command.replace(/^bun /, "") ?? "";
+      const sessionId = `phase-four-${harness}`;
+      const hook = Bun.spawn([process.execPath, adapter], {
+        cwd: fixture.repo,
+        env: { ...process.env, HOME: fixture.home, PATH: path },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      hook.stdin.write(JSON.stringify({
+        cwd: fixture.repo,
+        hook_event_name: "SessionStart",
+        session_id: sessionId,
+      }));
+      hook.stdin.end();
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(hook.stdout).text(),
+        new Response(hook.stderr).text(),
+        hook.exited,
+      ]);
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout).toContain("enabled policies");
+
+      const status = await runInstalledCliAt(fixture, fixture.repo, ["status", "--json"], {
+        PATH: path,
+      });
+      const sessions = (JSON.parse(status.stdout) as {
+        data: { sessions: Array<{ harness: string | null; id: string }> };
+      }).data.sessions;
+      expect(sessions).toContainEqual(expect.objectContaining({ harness, id: sessionId }));
+    }
+  });
+});
+
+test("351 [lint] installed work guidance stays on dispatch and handback vocabulary", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const workSkillRoot = join(fixture.home, "maestro", "skills", "maestro-work");
+    const workSkill = await readFile(join(workSkillRoot, "SKILL.md"), "utf8");
+    const conflictHandoff = await readFile(
+      join(workSkillRoot, "references", "conflict-handoff.md"),
+      "utf8",
+    );
+    const worktree = await readFile(join(workSkillRoot, "references", "worktree.md"), "utf8");
+
+    expect(workSkill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
+    for (const reference of [conflictHandoff, worktree]) {
+      expect(reference).toContain("herdr pane send-text");
+      expect(reference).toContain("maestro dispatch");
+      expect(reference).toContain("maestro handback");
+      expect(reference).not.toContain("maestro msg");
     }
   });
 });
@@ -199,7 +249,7 @@ test("259 supervisor start is absent and returns the ordinary UNKNOWN_VERB error
   });
 });
 
-test("260 all five attention kinds are computed at read time without mailbox state", async () => {
+test("260 every exported attention kind has an independent read-only detection scenario", async () => {
   await withFixture(async (fixture) => {
     const stalled = await addWork(fixture, "stalled lane");
     await startWork(fixture, stalled, "stalled-holder");
@@ -255,6 +305,68 @@ test("260 all five attention kinds are computed at read time without mailbox sta
     const dispatch = opened.stdout.match(/\b(x\d+)\b/)?.[1];
     expect(dispatch).toBeDefined();
 
+    const handbackWork = await addWork(fixture, "returned lane awaiting review");
+    const handbackOpened = await runCli(fixture, [
+      "dispatch",
+      "open",
+      handbackWork,
+      "--objective",
+      "return a result for review",
+      "--owned-scope",
+      "scratch",
+      "--excluded-scope",
+      "product source",
+      "--mutation",
+      "no-write",
+      "--stop-condition",
+      "handback filed",
+      "--lane",
+      "delivery",
+      "--evidence-required",
+      "source",
+      "--pane",
+      "w1:pY",
+    ]);
+    expect(handbackOpened.exitCode).toBe(0);
+    const handbackDispatch = handbackOpened.stdout.match(/\b(x\d+)\b/)?.[1];
+    expect(handbackDispatch).toBeDefined();
+    expect(
+      (
+        await runCli(fixture, ["dispatch", "accept", handbackDispatch as string], {
+          MAESTRO_SESSION_ID: "handback-holder",
+          MAESTRO_SESSION_PID: String(process.pid),
+        })
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(
+          fixture,
+          [
+            "handback",
+            "file",
+            handbackDispatch as string,
+            "--status",
+            "DONE",
+            "--claim",
+            "the lane returned",
+            "--proof",
+            "source: fixture",
+            "--assumptions",
+            "None",
+            "--residual-risks",
+            "None",
+            "--incidental-findings",
+            "None",
+          ],
+          {
+            MAESTRO_SESSION_ID: "handback-holder",
+            MAESTRO_SESSION_PID: String(process.pid),
+          },
+        )
+      ).exitCode,
+    ).toBe(0);
+
     const database = openDatabase(fixture);
     try {
       database
@@ -278,13 +390,23 @@ test("260 all five attention kinds are computed at read time without mailbox sta
     const detections = (JSON.parse(attention.stdout) as {
       data: {
         detections: Array<{
+          fingerprint: string;
           kind: string;
           raised: boolean;
           raisedAt: string;
+          subjectWork: string | null;
           targets?: string[];
         }>;
       };
     }).data.detections;
+    const expectedSubjects = {
+      DECISION_STALE: decisionWork,
+      DISPATCH_UNRETURNED: dispatchWork,
+      HANDBACK_UNREVIEWED: handbackWork,
+      REPEATED_FAILURE: repeated,
+      SCOPE_COLLISION: collisionA,
+      STALLED_LEASE: stalled,
+    } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();
     const after = openDatabase(fixture);
     try {
@@ -293,7 +415,10 @@ test("260 all five attention kinds are computed at read time without mailbox sta
         .get()?.count;
 
       expect(attention.exitCode).toBe(0);
-      expect(observedKinds).toEqual([...attentionKinds].sort());
+      expect(observedKinds).toEqual(Object.keys(expectedSubjects).sort());
+      for (const [kind, subjectWork] of Object.entries(expectedSubjects)) {
+        expect(detections).toContainEqual(expect.objectContaining({ kind, subjectWork }));
+      }
       expect(detections.every((detection) => detection.raised === false)).toBe(true);
       expect(detections.every((detection) => detection.raisedAt === "not recorded (read-only)"))
         .toBe(true);
