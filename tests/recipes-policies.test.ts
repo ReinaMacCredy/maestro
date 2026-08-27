@@ -434,3 +434,20 @@ test("36 stacked prefixed gates explain one-invocation claim and proof pairs", a
     }
   });
 });
+
+test("370 [lint] recipe slp and lane.md state the cross-role messaging convention (d687)", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const section = recipe.split("## Talking across roles")[1]?.split("\n## ")[0] ?? "";
+  expect(section).toContain("[from <role>]");
+  expect(section).toContain("[ask d<id>]");
+  expect(section).toContain("maestro decision draft");
+  expect(section).toContain("supervisor default, not owner instruction");
+  expect(section).toContain("maestro work note");
+  expect(section).toMatch(/answer is the record/i);
+
+  // room.ts holds lane.md inside a template literal, so backticks are escaped there.
+  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
+  expect(room).toMatch(/One lane per `herdr agent prompt` call/);
+  expect(room).toMatch(/confirm `working` before briefing the next lane/);
+  expect(room).toContain("[from <role>]");
+});

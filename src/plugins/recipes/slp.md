@@ -127,6 +127,26 @@ the Lead's pane through Herdr, or left for the Lead's next brief), a
 recommendation, a decision in the owner's name, or a freeze. It never acts on
 the packet by editing the project itself.
 
+## Talking across roles
+
+Herdr carries the words; the store carries the truth. A prompt that lands in a
+pane has no provenance of its own, so every cross-role message starts with the
+sender's role and the record it is about, and the answer is the record.
+
+- A question that needs an owner or Supervisor decision is drafted first:
+  `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,
+  then sent with `herdr agent prompt <name> "[from <role>][ask d<id>] <question>"`.
+  The Supervisor answers by `maestro decision lock d<id>` when it relays the
+  owner's word, or by drafting a superseding decision whose rationale says
+  "supervisor default, not owner instruction" when it advises. The reply
+  prompt names the record; the record, not the prompt, is what the Lead acts on.
+- A question that is not a decision is a note: `maestro work note <id> "<question>"`,
+  sent the same way; the answer is a note on the same work.
+- An unanswered draft surfaces as DECISION_STALE in attention; nobody polls.
+- Peers reach the Lead the same way (`[from peer]` plus the dispatch id);
+  Peers never message the Supervisor, and the Supervisor never messages a Peer.
+- Long messages are written to a file and sent with `"$(cat file)"`.
+
 ## Lane procedure
 
 The mechanics of opening, briefing, waking and closing a lane live in

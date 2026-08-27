@@ -131,7 +131,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "IDENTITY.md": "2101d1d76210f2770447e7634196bc43e88f5c8a93eef9d6f4a71f8dcfc8dc5f",
-      "lane.md": "0c708585fde7f6543858e24fbe606e723766ee610943024d125f3478254e6e58",
+      "lane.md": "1db0113a0b6e390e049d1db00a7290831eebbaf37802ef617606014909a1df89",
       shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
     });
   });
@@ -426,6 +426,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
+      "maestro recipe show slp",
       "maestro dispatch accept <dispatch-id>",
       'maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
       "maestro brief",
