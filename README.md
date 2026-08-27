@@ -5,6 +5,8 @@ durable work, decisions, sessions, evidence, dispatches, and handbacks in each
 repository's shared Git root. It is written in TypeScript, runs on Bun, and does
 not require a background service.
 
+Documentation: [maestro.maccredyreina.me](https://maestro.maccredyreina.me/)
+
 Version 0.108.0 is the first TypeScript release. It continues the version line
 after 0.107.x, the final Rust release.
 
