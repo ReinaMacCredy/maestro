@@ -393,9 +393,12 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     );
     expect(lane).not.toContain("herdr pane split --current");
     expect(lane).not.toMatch(/\.{3}|…/);
-    expect(lane).toContain("If Herdr supplies `agent_session.value` for the agent (Codex), use it.");
+    expect(lane).toContain("herdr pane process-info --pane <pane-id>");
+    expect(lane).toContain("the session whose pid matches in `maestro status --live`");
+    expect(lane).not.toContain("Reply with the single word");
+    expect(lane).not.toContain("ask the started lane");
     expect(lane).toContain(
-      "When it does not (Claude), ask the started lane to run `maestro status --live` and report the line marked `(this session)`.",
+      "Never send a warm-up prompt just to learn the id.",
     );
     expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
