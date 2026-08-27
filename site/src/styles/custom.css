@@ -1,0 +1,7 @@
+.pagination-links {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pagination-links > a[rel='next']:only-child {
+  grid-column: 2;
+}

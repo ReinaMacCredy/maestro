@@ -56,6 +56,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'maestro',
+      customCss: ['./src/styles/custom.css'],
       editLink: {
         baseUrl: 'https://github.com/ReinaMacCredy/maestro/edit/main/site/',
       },
