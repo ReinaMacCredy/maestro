@@ -273,6 +273,10 @@ export class Cli {
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     if (args[0] === "help") {
+      if (args.length === 2 && args[1] === "--help") {
+        const help = this.helpText();
+        return { result: { data: { help }, text: help }, wantsJson: false };
+      }
       const { target, unexpected } = this.helpTarget(args.slice(1));
       if (unexpected) {
         throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
