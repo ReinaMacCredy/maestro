@@ -198,6 +198,158 @@ test("429 decision review dates reject non-ISO values on draft and lock", async 
   });
 });
 
+test("451 decision withdraw preserves draft storage while every renderer reports withdrawn", async () => {
+  await withFixture(async (fixture) => {
+    const decision = idFrom(
+      await runCli(fixture, ["decision", "draft", "duplicate council view"]),
+    );
+
+    const withdrawn = await runCli(fixture, [
+      "decision",
+      "withdraw",
+      decision,
+      "--reason",
+      "duplicate of the locked reconciliation",
+    ]);
+    expect(withdrawn.exitCode).toBe(0);
+    expect(withdrawn.stdout).toContain(`${decision} [withdrawn] duplicate council view`);
+    expect(withdrawn.stdout).toContain("withdraw reason: duplicate of the locked reconciliation");
+
+    const shown = await runCli(fixture, ["decision", "show", decision]);
+    const listed = await runCli(fixture, ["decision", "list"]);
+    const listedJson = await runCli(fixture, ["decision", "list", "--json"]);
+    expect(shown.stdout).toContain(`${decision} [withdrawn]`);
+    expect(shown.stdout).toContain("withdraw reason: duplicate of the locked reconciliation");
+    expect(listed.stdout).toContain(
+      `${decision} [withdrawn] duplicate council view | withdraw reason: duplicate of the locked reconciliation`,
+    );
+    expect({ exitCode: listedJson.exitCode, stderr: listedJson.stderr }).toEqual({
+      exitCode: 0,
+      stderr: "",
+    });
+
+    const listedDecision = (JSON.parse(listedJson.stdout).data.decisions as Array<{
+      id: string;
+      state: string;
+      withdrawReason: string | null;
+      withdrawnAt: string | null;
+    }>).find((candidate) => candidate.id === decision);
+    expect(listedDecision).toEqual(expect.objectContaining({
+      state: "withdrawn",
+      withdrawReason: "duplicate of the locked reconciliation",
+    }));
+    expect(listedDecision?.withdrawnAt).toBeString();
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    try {
+      expect(database.query<{
+        state: string;
+        withdraw_reason: string | null;
+        withdrawn_at: string | null;
+      }, [string]>(
+        "SELECT state, withdraw_reason, withdrawn_at FROM decisions WHERE id = ?",
+      ).get(decision)).toEqual(expect.objectContaining({
+        state: "draft",
+        withdraw_reason: "duplicate of the locked reconciliation",
+        withdrawn_at: expect.any(String),
+      }));
+      const event = database.query<{ payload: string }, [string]>(
+        "SELECT payload FROM event_log WHERE type = 'decision.withdraw' AND entity_id = ?",
+      ).get(decision);
+      expect(JSON.parse(event?.payload ?? "{}")).toEqual({
+        reason: "duplicate of the locked reconciliation",
+      });
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("452 withdrawn decisions refuse edits, locks, supersession, and invalid withdrawal states", async () => {
+  await withFixture(async (fixture) => {
+    const draft = idFrom(await runCli(fixture, ["decision", "draft", "losing first view"]));
+    for (const args of [
+      ["decision", "withdraw", draft],
+      ["decision", "withdraw", draft, "--reason", ""],
+    ]) {
+      const missing = await runCli(fixture, args);
+      expect(missing.exitCode).not.toBe(0);
+      expect(JSON.parse(missing.stderr).error).toEqual(expect.objectContaining({
+        code: "MISSING_ARGUMENT",
+        message: "decision withdraw requires --reason <text>",
+      }));
+    }
+
+    expect((await runCli(fixture, [
+      "decision",
+      "withdraw",
+      draft,
+      "--reason",
+      "another decision won",
+    ])).exitCode).toBe(0);
+
+    const refused = [
+      await runCli(fixture, ["decision", "draft", draft, "edited losing view"]),
+      await runCli(fixture, ["decision", "lock", draft]),
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "replacement targeting a withdrawal",
+        "--supersedes",
+        draft,
+      ]),
+      await runCli(fixture, ["decision", "withdraw", draft, "--reason", "again"]),
+    ];
+    for (const result of refused) {
+      expect(result.exitCode).not.toBe(0);
+      expect(JSON.parse(result.stderr).error).toEqual(expect.objectContaining({
+        code: "INVALID_STATE",
+        message: expect.stringContaining(`${draft} is withdrawn`),
+      }));
+    }
+
+    const locked = idFrom(await runCli(fixture, ["decision", "draft", "locked choice"]));
+    expect((await runCli(fixture, ["decision", "lock", locked])).exitCode).toBe(0);
+    const lockedWithdrawal = await runCli(fixture, [
+      "decision",
+      "withdraw",
+      locked,
+      "--reason",
+      "retire it",
+    ]);
+    expect(JSON.parse(lockedWithdrawal.stderr).error).toEqual(expect.objectContaining({
+      code: "INVALID_STATE",
+      message: expect.stringContaining(
+        `maestro decision draft "<replacement>" --supersedes ${locked}`,
+      ),
+    }));
+
+    const replacement = idFrom(await runCli(fixture, [
+      "decision",
+      "draft",
+      "replacement choice",
+      "--supersedes",
+      locked,
+    ]));
+    expect((await runCli(fixture, ["decision", "lock", replacement])).exitCode).toBe(0);
+    const supersededWithdrawal = await runCli(fixture, [
+      "decision",
+      "withdraw",
+      locked,
+      "--reason",
+      "retire it again",
+    ]);
+    expect(JSON.parse(supersededWithdrawal.stderr).error).toEqual(expect.objectContaining({
+      code: "INVALID_STATE",
+      message: expect.stringContaining(
+        `maestro decision draft "<replacement>" --supersedes ${locked}`,
+      ),
+    }));
+  });
+});
+
 test("410 decision draft warns and records the generation when its work council is sealed", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(

@@ -11,7 +11,9 @@ export interface DecisionRecord {
   dissent: string | null;
   reviewAt: string | null;
   needsOwner: boolean;
-  state: "draft" | "locked" | "superseded";
+  state: "draft" | "locked" | "superseded" | "withdrawn";
+  withdrawnAt: string | null;
+  withdrawReason: string | null;
   parentId: string | null;
   workId: string | null;
   supersedesId: string | null;
@@ -32,6 +34,8 @@ interface DecisionRow {
   work_id: string | null;
   supersedes_id: string | null;
   superseded_by_id: string | null;
+  withdrawn_at: string | null;
+  withdraw_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,7 +53,9 @@ function fromRow(row: DecisionRow): DecisionRecord {
     dissent: row.dissent,
     reviewAt: row.review_at,
     needsOwner: row.needs_owner === 1,
-    state: row.state,
+    state: row.withdrawn_at ? "withdrawn" : row.state,
+    withdrawnAt: row.withdrawn_at,
+    withdrawReason: row.withdraw_reason,
     parentId: row.parent_id,
     workId: row.work_id,
     supersedesId: row.supersedes_id,
@@ -69,6 +75,17 @@ function getDecision(context: PluginContext, id: string): DecisionRecord | null 
 function requireDecision(context: PluginContext, id: string): DecisionRecord {
   const decision = getDecision(context, id);
   if (!decision) throw new CliError("NOT_FOUND", `decision not found: ${id}`, { id });
+  return decision;
+}
+
+function requireSupersessionTarget(context: PluginContext, id: string): DecisionRecord {
+  const decision = requireDecision(context, id);
+  if (decision.state === "withdrawn") {
+    throw new CliError("INVALID_STATE", `${id} is withdrawn`);
+  }
+  if (decision.state !== "locked") {
+    throw new CliError("INVALID_STATE", `${id} must be locked before superseding`);
+  }
   return decision;
 }
 
@@ -111,6 +128,7 @@ function format(decision: DecisionRecord): string {
     decision.dissent ? `dissent: ${decision.dissent}` : null,
     decision.reviewAt ? `review at: ${decision.reviewAt}` : null,
     decision.needsOwner ? "needs owner: yes" : null,
+    decision.withdrawReason ? `withdraw reason: ${decision.withdrawReason}` : null,
     decision.parentId ? `parent: ${decision.parentId}` : null,
     decision.workId ? `work: ${decision.workId}` : null,
     decision.supersedesId ? `supersedes: ${decision.supersedesId}` : null,
@@ -165,6 +183,16 @@ export const decisionPlugin: BuiltInPlugin = {
       "review_at",
       "ALTER TABLE decisions ADD COLUMN review_at TEXT",
     );
+    context.store.ensureColumn(
+      "decisions",
+      "withdrawn_at",
+      "ALTER TABLE decisions ADD COLUMN withdrawn_at TEXT",
+    );
+    context.store.ensureColumn(
+      "decisions",
+      "withdraw_reason",
+      "ALTER TABLE decisions ADD COLUMN withdraw_reason TEXT",
+    );
     const service: DecisionService = {
       get: (id) => getDecision(context, id),
       list: () =>
@@ -189,6 +217,12 @@ export const decisionPlugin: BuiltInPlugin = {
           const suppliedDissent = option(invocation, "dissent");
           const suppliedReviewAt = reviewAtOption(invocation);
           if (existing && second !== undefined) {
+            if (existing.state === "withdrawn") {
+              throw new CliError("INVALID_STATE", `${existing.id} is withdrawn`, {
+                id: existing.id,
+                state: existing.state,
+              });
+            }
             if (existing.state !== "draft") {
               throw new CliError(
                 "LOCKED_DECISION",
@@ -244,10 +278,7 @@ export const decisionPlugin: BuiltInPlugin = {
             if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
           }
           if (supersedesId) {
-            const superseded = requireDecision(context, supersedesId);
-            if (superseded.state !== "locked") {
-              throw new CliError("INVALID_STATE", `${supersedesId} must be locked before superseding`);
-            }
+            requireSupersessionTarget(context, supersedesId);
           }
           const now = new Date().toISOString();
           const transaction = context.store.database.transaction(() => {
@@ -257,10 +288,7 @@ export const decisionPlugin: BuiltInPlugin = {
               if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
             }
             if (supersedesId) {
-              const superseded = requireDecision(context, supersedesId);
-              if (superseded.state !== "locked") {
-                throw new CliError("INVALID_STATE", `${supersedesId} must be locked before superseding`);
-              }
+              requireSupersessionTarget(context, supersedesId);
             }
             const council = workId
               ? (context.dispatch as DispatchService).council(workId)
@@ -327,6 +355,60 @@ export const decisionPlugin: BuiltInPlugin = {
           rootDescription: "Record durable decisions and their lifecycle.",
         },
       ),
+    );
+
+    context.effect(() =>
+      registerSessionCommand(context, "decision withdraw", (invocation): CliResult => {
+        const id = required(invocation, 0, "decision id");
+        const reason = option(invocation, "reason");
+        if (!reason?.trim()) {
+          throw new CliError(
+            "MISSING_ARGUMENT",
+            "decision withdraw requires --reason <text>",
+          );
+        }
+        const withdraw = context.store.database.transaction(() => {
+          const decision = requireDecision(context, id);
+          if (decision.state !== "draft") {
+            if (decision.state === "locked" || decision.state === "superseded") {
+              const command = `maestro decision draft "<replacement>" --supersedes ${id}`;
+              throw new CliError(
+                "INVALID_STATE",
+                `${id} is ${decision.state}; locked decisions are retired with: ${command}`,
+                { command, id, state: decision.state },
+              );
+            }
+            throw new CliError("INVALID_STATE", `${id} is ${decision.state}`, {
+              id,
+              state: decision.state,
+            });
+          }
+          const withdrawnAt = new Date().toISOString();
+          context.store.database
+            .query(
+              `UPDATE decisions
+               SET withdrawn_at = ?, withdraw_reason = ?, updated_at = ?
+               WHERE id = ? AND state = 'draft' AND withdrawn_at IS NULL`,
+            )
+            .run(withdrawnAt, reason, withdrawnAt, id);
+          context.log.append({
+            type: "decision.withdraw",
+            entityType: "decision",
+            entityId: id,
+            sessionId: context.sessions.current().id,
+            payload: { reason },
+          });
+          return service.get(id) as DecisionRecord;
+        });
+        const withdrawn = withdraw.immediate();
+        return { data: { decision: withdrawn }, text: format(withdrawn) };
+      }, {
+        description: "Withdraw a draft decision that will not be locked.",
+        flags: {
+          "--reason": { description: "Record why the draft was withdrawn.", value: true },
+        },
+        positionals: [{ name: "id", required: true }],
+      }),
     );
 
     context.effect(() =>
@@ -432,7 +514,10 @@ export const decisionPlugin: BuiltInPlugin = {
           const decisions = service.list();
           return {
             data: { decisions },
-            text: decisions.map((decision) => `${decision.id} [${decision.state}] ${decision.text}`).join("\n"),
+            text: decisions.map((decision) =>
+              `${decision.id} [${decision.state}] ${decision.text}` +
+              (decision.withdrawReason ? ` | withdraw reason: ${decision.withdrawReason}` : "")
+            ).join("\n"),
           };
         },
         { description: "List decisions and their current states.", mutates: false },

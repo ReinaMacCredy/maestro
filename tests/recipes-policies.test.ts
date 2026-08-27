@@ -452,6 +452,16 @@ test("370 [lint] recipe slp and lane.md state the cross-role messaging conventio
   expect(room).toContain("[from <role>]");
 });
 
+test("454 [lint] recipe slp withdraws losing first views and duplicates instead of locking them", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const section = recipe.split("## Talking across roles")[1]?.split("\n## ")[0] ?? "";
+
+  expect(section).toContain(
+    "A first view or a duplicate that lost is withdrawn with its reason, never locked",
+  );
+  expect(section).toContain('maestro decision withdraw d<id> --reason "<why>"');
+});
+
 test("371 [lint] recipe slp, IDENTITY.md and lane.md carry the cross-examination, Lead-per-scope handoff, and Supervisor binding text", async () => {
   const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
   const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";

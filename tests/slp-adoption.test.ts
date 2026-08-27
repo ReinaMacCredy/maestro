@@ -566,6 +566,52 @@ test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked d
   });
 });
 
+test("453 withdrawn drafts raise neither stale nor human-decision attention", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "withdrawn owner decision");
+    const decision = idFrom(
+      await runCli(fixture, [
+        "decision",
+        "draft",
+        "owner choice that lost",
+        "--needs-owner",
+        "--work",
+        work,
+      ]),
+    );
+    const database = openDatabase(fixture);
+    try {
+      database
+        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+    } finally {
+      database.close();
+    }
+    expect((await runCli(fixture, [
+      "decision",
+      "withdraw",
+      decision,
+      "--reason",
+      "a different option was locked",
+    ])).exitCode).toBe(0);
+
+    const attention = await runCli(
+      fixture,
+      ["attention", "--json", "--decision-stale", "24"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ kind: string; packet: string }> };
+    }).data.detections;
+    for (const kind of ["DECISION_STALE", "HUMAN_DECISION_REQUIRED"]) {
+      expect(
+        detections.filter((detection) => detection.kind === kind).map((detection) => detection.packet),
+      ).not.toContainEqual(expect.stringContaining(`decision ${decision}`));
+    }
+  });
+});
+
 test("430 attention raises DECISION_REVIEW_DUE only for due locked unsuperseded decisions", async () => {
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "reviewable decision work");

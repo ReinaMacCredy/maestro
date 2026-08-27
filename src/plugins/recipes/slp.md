@@ -290,6 +290,7 @@ this text.
 Herdr carries the words; the store carries the truth. A prompt that lands in a
 pane has no provenance of its own, so every cross-role message starts with the
 sender's role and the record it is about, and the answer is the record.
+A first view or a duplicate that lost is withdrawn with its reason, never locked (`maestro decision withdraw d<id> --reason "<why>"`).
 
 - A question that needs an owner or Supervisor decision is drafted first:
   `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,

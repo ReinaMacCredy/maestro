@@ -253,6 +253,7 @@ function decisionStaleDetections(
        FROM decisions
        JOIN work ON work.id = decisions.work_id
        WHERE decisions.state = 'draft'
+         AND decisions.withdrawn_at IS NULL
          AND decisions.created_at < ?
          AND work.state != 'done'
          AND work.cancelled_at IS NULL
@@ -290,6 +291,7 @@ function humanDecisionRequiredDetections(
        FROM decisions
        JOIN work ON work.id = decisions.work_id
        WHERE decisions.state = 'draft'
+         AND decisions.withdrawn_at IS NULL
          AND decisions.needs_owner = 1
          AND work.state != 'done'
          AND work.cancelled_at IS NULL
