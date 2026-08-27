@@ -1,12 +1,45 @@
 import { expect, test } from "bun:test";
 import {
+  Cli,
   CliError,
   requiredPosition,
   stringOption,
   stringOptions,
+  type CliCommandDescriptor,
   type CliInvocation,
 } from "../src/kernel/cli.ts";
-import { runCli, withFixture, writePlugin } from "./helpers.ts";
+import { Events } from "../src/kernel/events.ts";
+import { Loader } from "../src/kernel/loader.ts";
+import { EventLog } from "../src/kernel/log.ts";
+import { Ready } from "../src/kernel/ready.ts";
+import { Sessions } from "../src/kernel/sessions.ts";
+import { resolveStoreLocation, Store } from "../src/kernel/store.ts";
+import { builtInPlugins } from "../src/plugins/index.ts";
+import { runCli, type Fixture, withFixture, writePlugin } from "./helpers.ts";
+
+async function describeFixtureCommands(fixture: Fixture): Promise<CliCommandDescriptor[]> {
+  const location = resolveStoreLocation(fixture.repo);
+  const store = new Store(location.path);
+  const cli = new Cli();
+  const events = new Events();
+  const log = new EventLog(store);
+  const ready = new Ready();
+  const sessions = new Sessions(store, location.root);
+  const loader = new Loader(
+    fixture.repo,
+    fixture.home,
+    builtInPlugins,
+    { cli, events, log, ready, sessions, store },
+    { loadExternalPlugins: false },
+  );
+  try {
+    await loader.loadAll();
+    return cli.describeCommands();
+  } finally {
+    await loader.unloadAll();
+    store.close();
+  }
+}
 
 test("299 CLI value decoders preserve positional, scalar, repeated, and absent contracts", () => {
   const invocation: CliInvocation = {
@@ -53,8 +86,9 @@ test("25 bare and help invocations list verbs while unknown verbs suggest the ne
   });
 });
 
-test("34 per-verb help is registry-driven for built-in and plugin verbs", async () => {
+test("34 [lint] per-verb help is registry-driven for built-in and plugin verbs", async () => {
   await withFixture(async (fixture) => {
+    // Proves help metadata rendering, not handler parsing or command effects.
     await writePlugin(
       fixture,
       "repo",
@@ -108,27 +142,31 @@ export default {
   });
 });
 
-test("35 top-level help lists every root verb with its registered description", async () => {
+test("35 top-level help roots match describeCommands and every registration is described", async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(fixture, ["help"]);
+    const descriptors = await describeFixtureCommands(fixture);
+    const verbSection = result.stdout.split("\n\n", 1)[0] ?? "";
+    const helpRows = Object.fromEntries(
+      verbSection.split("\n").flatMap((line) => {
+        const match = line.match(/^  (\S+) {2,}(.+)$/);
+        return match?.[1] && match[2] ? [[match[1], match[2]]] : [];
+      }),
+    );
+    const descriptorRoots = [...new Set([
+      "help",
+      ...descriptors.map((descriptor) => descriptor.name.split(" ")[0]),
+    ])]
+      .filter((root): root is string => root !== undefined)
+      .sort();
 
     expect(result.exitCode).toBe(0);
-    for (const verb of [
-      "decision",
-      "help",
-      "hook",
-      "install",
-      "plugin",
-      "ready",
-      "recipe",
-      "search",
-      "status",
-      "trace",
-      "version",
-      "work",
-    ]) {
-      expect(result.stdout).toMatch(new RegExp(`^  ${verb} {2,}\\S`, "m"));
-      expect(result.stdout).not.toMatch(new RegExp(`^  ${verb}$`, "m"));
+    expect(Object.keys(helpRows).sort()).toEqual(descriptorRoots);
+    for (const descriptor of descriptors) {
+      expect(descriptor.description.trim().length).toBeGreaterThan(0);
+    }
+    for (const root of descriptorRoots) {
+      expect(helpRows[root]?.trim().length ?? 0).toBeGreaterThan(0);
     }
   });
 });
