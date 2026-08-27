@@ -20,7 +20,7 @@ Owned scope: <paths or responsibility>
 Excluded scope: <explicit non-goals>
 Mutation: <no-write | write-bounded: paths>
 Stop condition: <done or blocked boundary>
-Lane: scout | decision | delivery | challenge
+Lane: scout | decision | delivery | challenge | shadow
 Evidence required: <proof and layer>
 ```
 
@@ -32,6 +32,8 @@ A tiny task may collapse the envelope to three lines, but it never drops
 - `decision` investigates, compares, and recommends without writing.
 - `challenge` breaks the premise or candidate and returns findings only, with
   no fixes or redesign.
+- `shadow` runs beside the owner without writing and returns comparison
+  evidence that is never a candidate or a work write lease.
 
 The canonical parallel shapes are delivery and challenge on the same scope,
 or a council of two or three decision lanes.

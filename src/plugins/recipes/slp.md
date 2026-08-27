@@ -58,6 +58,17 @@ DEPENDENCY_REQUEST. Confirmation and partial progress belong in claim and
 residual-risk text under the appropriate return status; independence is
 evidence, not theatre.
 
+| maestro lane | paseo disposition | write? |
+|---|---|---|
+| scout | Scout | no |
+| decision | Architect | no |
+| delivery | Engineer/Owner | yes, one owner per scope |
+| challenge | Reviewer | no |
+| shadow | Shadow | no, evidence only |
+
+A shadow lane runs beside the owner. Its handback is comparison evidence,
+never a candidate, and never carries the work write lease.
+
 ## Topology invariants
 
 ```
@@ -97,7 +108,7 @@ no-write lease is no-write.
 |---|---|---|
 | `~/maestro` (opened with `hm`) | Supervisor, the owner's embodiment | the room `AGENTS.md` points at `IDENTITY.md`; `maestro brief` is its event feed across every registered repository |
 | a repository's working tree | Lead of that repository | the repo `AGENTS.md` maestro block says so; the hook brief shows what it holds; `maestro work start` and `maestro bundle open` are its leases |
-| a pane the Lead opened with a dispatch | Peer | the Lead sends the stored contract; `maestro dispatch accept <id>` takes the lease; lane vocabulary: scout (no-write), decision, delivery, challenge |
+| a pane the Lead opened with a dispatch | Peer | the Lead sends the stored contract; `maestro dispatch accept <id>` takes the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
 
 A session never becomes a Peer on its own; only an accepted dispatch makes
 one. A Supervisor never takes work in a repository store; if it needs a change

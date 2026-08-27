@@ -131,7 +131,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
-      "lane.md": "3eec62223e7fe66e13219c46fe6e7592130c5834806234a839dc15d17d91fcb8",
+      "lane.md": "b723a022c021b14e136e863a764ea3b4be9e54b1799fa866d7b7ce7b404e27f8",
       shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
     });
   });

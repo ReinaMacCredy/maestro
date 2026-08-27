@@ -685,7 +685,7 @@ test("280 handoff exposes completed generations without leaking a sealed generat
 
 test("281 dispatch lanes share the brief vocabulary and preserve historical unknown values", async () => {
   await withFixture(async (fixture) => {
-    const lanes = ["scout", "decision", "delivery", "challenge"] as const;
+    const lanes = ["scout", "decision", "delivery", "challenge", "shadow"] as const;
     const brief = await runCli(
       fixture,
       ["hook", "record", "--event", "SessionStart"],
@@ -693,7 +693,7 @@ test("281 dispatch lanes share the brief vocabulary and preserve historical unkn
     );
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(
-      "lane (scout no-write | decision x2-3 | delivery | challenge)",
+      "lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write)",
     );
 
     const work = idFrom(
@@ -705,7 +705,7 @@ test("281 dispatch lanes share the brief vocabulary and preserve historical unkn
     expect(invalid.exitCode).not.toBe(0);
     expect(invalid.stderr).toContain("INVALID_LANE");
     expect(invalid.stderr).toContain(
-      "expected one of: scout, decision, delivery, challenge",
+      "expected one of: scout, decision, delivery, challenge, shadow",
     );
 
     for (const lane of lanes) {

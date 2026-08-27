@@ -14,6 +14,7 @@ export const dispatchLaneVocabulary = [
   { brief: "decision x2-3", name: "decision" },
   { brief: "delivery", name: "delivery" },
   { brief: "challenge", name: "challenge" },
+  { brief: "shadow no-write", name: "shadow" },
 ] as const;
 
 const dispatchLaneNames = dispatchLaneVocabulary.map(({ name }) => name);
