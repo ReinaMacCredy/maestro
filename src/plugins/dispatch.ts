@@ -286,10 +286,11 @@ function councilStatus(
     }
   }
   const members = selected ? rows.slice(selected.start, selected.end) : [];
+  const liveMembers = members.filter((row) => row.cancelled_at === null);
   const counts = {
-    resolved: members.filter((row) => row.returned_at !== null || row.cancelled_at !== null).length,
-    returned: members.filter((row) => row.returned_at !== null).length,
-    total: members.length,
+    resolved: liveMembers.filter((row) => row.returned_at !== null).length,
+    returned: liveMembers.filter((row) => row.returned_at !== null).length,
+    total: liveMembers.length,
   };
   const generationAnchor = members[0]?.id ?? null;
   const hasGenerationAnchor = context.store.database

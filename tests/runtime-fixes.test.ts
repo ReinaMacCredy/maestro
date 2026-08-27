@@ -244,3 +244,39 @@ test("322 help --help prints top-level help without changing existing help forms
     expect(perVerb.stdout).toContain("usage: maestro work");
   });
 });
+
+test("323 cancelled dispatches leave the live council before work start", async () => {
+  await withFixture(async (fixture) => {
+    const owner = session("council-owner");
+    const work = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "cancelled council lane", "--atomic-reason", "fixture"],
+        owner,
+      ),
+    );
+    const first = dispatchId(
+      (await runCli(fixture, dispatchOpenArgs(work, "council-owner"), owner)).stdout,
+    );
+    const second = dispatchId(
+      (await runCli(fixture, dispatchOpenArgs(work, "council-owner"), owner)).stdout,
+    );
+
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["dispatch", "cancel", first, "--reason", "lane replaced"],
+          owner,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["dispatch", "accept", second], owner)).exitCode).toBe(0);
+
+    const started = await runCli(fixture, ["work", "start", work], owner);
+    expect(started.exitCode).toBe(0);
+    const listed = await runCli(fixture, ["dispatch", "list", work], owner);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).not.toContain("council:");
+  });
+});
