@@ -99,4 +99,21 @@ distinguished; the most recently active session receives subsequent commands.
 
 ## Rust-era data
 
-The stores from the Rust line live under `legacy/rust/`; `maestro import rust --path legacy/rust/store.sqlite` makes the old cards, files and decisions searchable and readable with `maestro legacy show`. See `legacy/rust/README.md`.
+The stores from the Rust line live under `legacy/rust/`. The reference import
+keeps its original read-only behavior:
+
+```sh
+maestro import rust --path legacy/rust/store.sqlite
+```
+
+Add `--promote` once to create native work and decisions. Features, tasks,
+ideas, and bugs keep their kind; progress cards become `chore` work. Terminal
+success states become `done`, terminal rejection states become `cancelled`, and
+all other work remains open without a lease. Decision supersession links and
+receipt notes are retained. Receipts whose card no longer exists are skipped
+and counted. `legacy_map` makes a repeated promotion report zero created.
+
+`maestro import rust --path legacy/rust/archive-cards.sqlite` imports archived
+snapshots as searchable legacy files. Bun's built-in zstd decoder reads the
+snapshot payloads; any payload that cannot be decoded falls back to its stored
+search text and is counted as skipped. See `legacy/rust/README.md`.
