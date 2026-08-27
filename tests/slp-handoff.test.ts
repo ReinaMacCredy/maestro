@@ -190,7 +190,8 @@ test("171 handoff rejects work ids and unknown bundles with the next command", a
   });
 });
 
-test("172 the four-skill roster points handoffs at maestro handoff", async () => {
+test("172 [lint] the four-skill roster points handoffs at maestro handoff", async () => {
+  // Proves source artifact content, not installed skill discovery by a harness.
   const root = join(import.meta.dir, "..", "src", "plugins", "skills");
   const roster = (await readdir(root, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
