@@ -332,6 +332,14 @@ test("64 update ignores untracked source files but still refuses tracked changes
     // Real installs leave untracked wiring in the source checkout (.claude/,
     // .codex/); update must not treat those as dirt or it refuses forever.
     await writeFile(join(source, "untracked-note.txt"), "scratch\n");
+    // An untracked file under src/ would be copied into a runtime stamped as
+    // HEAD, so update refuses it until it is committed or removed.
+    const stray = join(source, "src", "untracked-runtime-marker.ts");
+    await writeFile(stray, "export const marker = true;\n");
+    const strayRefused = await runInstalled(fixture, runtime, source, ["update"]);
+    expect(strayRefused.exitCode).not.toBe(0);
+    expect(strayRefused.stderr).toContain("UPDATE_SOURCE_DIRTY");
+    await rm(stray);
     const packagePath = join(publisher, "package.json");
     const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
     packageJson.version = "0.1.2";

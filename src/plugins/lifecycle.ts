@@ -122,11 +122,17 @@ async function update(): Promise<CliResult> {
       { fix: "run maestro install from a valid Maestro source checkout" },
     );
   }
-  // Untracked files are ignored: install itself leaves untracked wiring
-  // (.claude/, .codex/) in a wired source checkout, and ff-only merges
-  // cannot lose them.
-  const dirty = await command(source, ["git", "status", "--porcelain", "--untracked-files=no"]);
-  if (dirty.exitCode !== 0 || dirty.stdout) {
+  // Untracked files outside the runtime surface are ignored: install itself
+  // leaves untracked wiring (.claude/, .codex/) in a wired source checkout.
+  // An untracked file under the surface that syncRuntime copies would ship
+  // in a runtime stamped as HEAD, so it counts as dirt.
+  const status = await command(source, ["git", "status", "--porcelain", "--untracked-files=all"]);
+  const runtimeSurface = /^(package\.json|tsconfig\.json|bin\/|src\/)/;
+  const dirt = status.stdout
+    .split("\n")
+    .filter((line) => line.length > 3)
+    .filter((line) => !line.startsWith("??") || runtimeSurface.test(line.slice(3)));
+  if (status.exitCode !== 0 || dirt.length > 0) {
     throw new CliError(
       "UPDATE_SOURCE_DIRTY",
       "Maestro source checkout has local changes; commit or stash them, then run maestro update",
