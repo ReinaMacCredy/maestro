@@ -557,6 +557,7 @@ export const attentionPlugin: BuiltInPlugin = {
         {
           description: "Scan store state for attention packets without mutating work.",
           flags: attentionFlags,
+          mutates: false,
           rootDescription: "Raise one-shot attention packets from store evidence.",
         },
       ),
@@ -571,6 +572,7 @@ export const attentionPlugin: BuiltInPlugin = {
         {
           description: "Scan store state and emit one compact JSON success envelope.",
           flags: attentionFlags,
+          mutates: false,
         },
       ),
     );

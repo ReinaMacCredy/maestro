@@ -807,6 +807,7 @@ export const workPlugin: BuiltInPlugin = {
         };
       }, {
         description: "Show one work item with its blockers, evidence, children, and notes.",
+        mutates: false,
         positionals: [{ name: "id", required: true }],
       }),
     );
@@ -838,7 +839,7 @@ export const workPlugin: BuiltInPlugin = {
             text: roots.flatMap((work) => renderTree(work, 0)).join("\n"),
           };
         },
-        { description: "List tracked work and current states." },
+        { description: "List tracked work and current states.", mutates: false },
       ),
     );
 
@@ -954,7 +955,7 @@ export const workPlugin: BuiltInPlugin = {
               : "no ready work; inspect tracked work: maestro work list",
           };
         },
-        { description: "List ready work and gated items with their blockers." },
+        { description: "List ready work and gated items with their blockers.", mutates: false },
       ),
     );
   },

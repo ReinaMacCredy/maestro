@@ -35,7 +35,7 @@ export const versionPlugin: BuiltInPlugin = {
               : `maestro ${packageJson.version} (source/dev)`,
           };
         },
-        { description: "Show the installed or source Maestro version." },
+        { description: "Show the installed or source Maestro version.", mutates: false },
       ),
     );
   },

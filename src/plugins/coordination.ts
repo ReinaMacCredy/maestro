@@ -205,6 +205,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           flags: {
             "--session": { description: "Only prompts from this session.", value: true },
           },
+          mutates: false,
           rootDescription: "Recorded user prompts from harness hooks.",
         },
       ),
@@ -301,6 +302,7 @@ export const coordinationPlugin: BuiltInPlugin = {
         {
           description: "Show sessions, live peers, and held work.",
           flags: { "--live": { description: "Show live sessions only." } },
+          mutates: false,
         },
       ),
     );

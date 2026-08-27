@@ -84,7 +84,10 @@ export const briefPlugin: BuiltInPlugin = {
             : "All registered projects are running normally.";
           return { data: { results }, text };
         },
-        { description: "Summarize registered repository work without changing project stores." },
+        {
+          description: "Summarize registered repository work without changing project stores.",
+          mutates: false,
+        },
       ),
     );
   },

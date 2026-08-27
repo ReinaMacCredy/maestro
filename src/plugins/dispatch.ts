@@ -653,6 +653,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         },
         {
           description: "Show one stored dispatch contract.",
+          mutates: false,
           positionals: [{ name: "id", required: true }],
         },
       ),
@@ -692,6 +693,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         },
         {
           description: "List dispatch contracts, optionally for one work item.",
+          mutates: false,
           positionals: [{ name: "work-id", required: false }],
         },
       ),
@@ -882,6 +884,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         },
         {
           description: "Show one stored handback packet.",
+          mutates: false,
           positionals: [{ name: "id", required: true }],
         },
       ),

@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { Cli } from "../src/kernel/cli.ts";
+import { observerMode } from "../src/plugins/observer-mode.ts";
 import { idFrom, runCli, withFixture, writeConfig, writePlugin } from "./helpers.ts";
 
 const withoutSession = { MAESTRO_SESSION_NONE: "1" };
@@ -307,7 +309,7 @@ test("218 read-only mode guards lifecycle commands before their special dispatch
   });
 });
 
-test("219 read-only mode rejects search instead of serving a stale persisted index", async () => {
+test("219 read-only search serves the persisted index without rebuilding stale state", async () => {
   await withFixture(async (fixture) => {
     await runCli(fixture, ["work", "add", "observer search needle"]);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
@@ -317,7 +319,52 @@ test("219 read-only mode rejects search instead of serving a stale persisted ind
     database.close();
 
     const result = await runCli(fixture, ["search", "needle"], readOnly);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('"code":"READ_ONLY"');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("observer search needle");
+
+    const stored = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    try {
+      expect(
+        stored.query<{ version: number }, []>(
+          "SELECT version FROM search_index_state LIMIT 1",
+        ).get()?.version,
+      ).toBe(0);
+      expect(
+        stored.query<{ count: number }, []>(
+          "SELECT count(*) AS count FROM search_index WHERE surface = 'work'",
+        ).get()?.count,
+      ).toBe(0);
+    } finally {
+      stored.close();
+    }
   });
+});
+
+test("286 observer mode follows registered mutability and defaults fail-closed", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["search", "x"], readOnly)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["plugin", "list"], readOnly)).exitCode).toBe(0);
+
+    const write = await runCli(fixture, ["work", "add", "x"], readOnly);
+    expect(write.exitCode).toBe(1);
+    expect(write.stderr).toContain('"code":"READ_ONLY"');
+  });
+
+  const previous = process.env.MAESTRO_READ_ONLY;
+  process.env.MAESTRO_READ_ONLY = "1";
+  try {
+    const cli = new Cli(observerMode().cli);
+    cli.register("future inspect", () => "future");
+    await expect(cli.execute(["future", "inspect"])).rejects.toMatchObject({
+      code: "READ_ONLY",
+    });
+  } finally {
+    if (previous === undefined) {
+      delete process.env.MAESTRO_READ_ONLY;
+    } else {
+      process.env.MAESTRO_READ_ONLY = previous;
+    }
+  }
 });

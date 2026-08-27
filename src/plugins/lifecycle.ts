@@ -455,6 +455,7 @@ async function uninstall(): Promise<CliResult> {
 function registerLifecycle(cli: Cli): void {
   cli.register("doctor", doctor, {
     description: "Diagnose the machine runtime and current repository wiring read-only.",
+    mutates: false,
   });
   cli.register("uninstall", uninstall, {
     description: "Remove Maestro-managed wiring from the current repository.",
@@ -482,7 +483,12 @@ export const lifecyclePlugin: BuiltInPlugin = {
       ["uninstall", uninstall, "Remove Maestro-managed wiring from the current repository."],
       ["update", update, "Fast-forward the recorded source checkout and resync the runtime."],
     ] as const) {
-      context.effect(() => context.cli.register(verb, handler, { description }));
+      context.effect(() =>
+        context.cli.register(verb, handler, {
+          description,
+          ...(verb === "doctor" ? { mutates: false } : {}),
+        })
+      );
     }
   },
 };

@@ -94,6 +94,7 @@ export const recipePlugin: BuiltInPlugin = {
         },
         {
           description: "List the shipped workflow recipes.",
+          mutates: false,
           rootDescription: "Browse and read shipped workflow recipes.",
         },
       ),
@@ -115,6 +116,7 @@ export const recipePlugin: BuiltInPlugin = {
         },
         {
           description: "Show one workflow recipe by name.",
+          mutates: false,
           positionals: [{ name: "name", required: true }],
         },
       ),

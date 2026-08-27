@@ -274,6 +274,7 @@ export const decisionPlugin: BuiltInPlugin = {
         return { data: { decision }, text: format(decision) };
       }, {
         description: "Show one decision and its links.",
+        mutates: false,
         positionals: [{ name: "id", required: true }],
       }),
     );
@@ -288,7 +289,7 @@ export const decisionPlugin: BuiltInPlugin = {
             text: decisions.map((decision) => `${decision.id} [${decision.state}] ${decision.text}`).join("\n"),
           };
         },
-        { description: "List decisions and their current states." },
+        { description: "List decisions and their current states.", mutates: false },
       ),
     );
   },

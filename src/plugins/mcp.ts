@@ -307,6 +307,7 @@ export const mcpPlugin: BuiltInPlugin = {
         },
         {
           description: "Serve exactly two Maestro meta-tools over foreground stdio MCP.",
+          mutates: false,
           rootDescription: "Expose Maestro through a foreground stdio MCP transport.",
         },
       ),

@@ -77,6 +77,7 @@ export const pluginManagerPlugin: BuiltInPlugin = {
         },
         {
           description: "List built-in, global, and repository plugins.",
+          mutates: false,
           rootDescription: "Manage built-in, global, and repository plugins.",
         },
       ),

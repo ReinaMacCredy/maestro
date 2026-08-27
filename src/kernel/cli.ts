@@ -10,12 +10,13 @@ export interface CommandOptions {
   description?: string;
   flags?: Record<string, FlagDefinition>;
   maxPositionals?: number;
+  mutates?: boolean;
   positionals?: PositionalDefinition[];
   rootDescription?: string;
 }
 
 export interface CliOptions {
-  beforeInvoke?: (command: string) => Promise<void> | void;
+  beforeInvoke?: (command: string, mutates: boolean) => Promise<void> | void;
   beforeUnknown?: (args: readonly string[]) => Promise<void> | void;
   helpFooter?: string;
 }
@@ -73,6 +74,7 @@ interface CommandDefinition {
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
   maxPositionals: number;
+  mutates: boolean;
   positionals: PositionalDefinition[];
   rootDescription?: string;
 }
@@ -173,6 +175,7 @@ export class Cli {
       handler,
       flags: new Map(Object.entries(options.flags ?? {})),
       maxPositionals: options.maxPositionals ?? options.positionals?.length ?? 0,
+      mutates: options.mutates ?? true,
       positionals: options.positionals ?? [],
       rootDescription: options.rootDescription
         ? this.oneLine(options.rootDescription, options.rootDescription)
@@ -193,6 +196,10 @@ export class Cli {
       current?.delete(flag);
       if (current?.size === 0) this.extensions.delete(command);
     };
+  }
+
+  commandMutates(command: string): boolean | undefined {
+    return this.commands.get(command)?.mutates;
   }
 
   describeCommands(): CliCommandDescriptor[] {
@@ -276,7 +283,7 @@ export class Cli {
       );
     }
     const { command, definition, consumed } = found;
-    await this.options.beforeInvoke?.(command);
+    await this.options.beforeInvoke?.(command, this.commandMutates(command) ?? true);
     const remaining = args.slice(consumed);
     const jsonIndex = remaining.indexOf("--json");
     const wantsJson = jsonIndex >= 0;

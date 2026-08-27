@@ -1,30 +1,5 @@
 import { CliError, type CliOptions } from "../kernel/cli.ts";
 
-const observerCommands = new Set([
-  "attention",
-  "attention --json",
-  "brief",
-  "bundle list",
-  "bundle show",
-  "decision list",
-  "decision show",
-  "dispatch list",
-  "dispatch show",
-  "doctor",
-  "handback show",
-  "legacy show",
-  "mcp serve",
-  "prompt list",
-  "ready",
-  "recipe list",
-  "recipe show",
-  "status",
-  "trace",
-  "version",
-  "work list",
-  "work show",
-]);
-
 const observerPlugins = new Set([
   "brief",
   "bundle",
@@ -35,6 +10,7 @@ const observerPlugins = new Set([
   "lifecycle",
   "mcp",
   "observability",
+  "plugin-host",
   "policy-breakdown",
   "policy-dispatch",
   "policy-lifecycle",
@@ -67,8 +43,8 @@ export function observerMode(): ObserverMode {
     loadExternalPlugins: !enabled,
     cli: {
       helpFooter,
-      beforeInvoke(command) {
-        if (!enabled || observerCommands.has(command)) return;
+      beforeInvoke(command, mutates) {
+        if (!enabled || !mutates) return;
         throw new CliError(
           "READ_ONLY",
           `MAESTRO_READ_ONLY=1 blocks ${command}; remove MAESTRO_READ_ONLY and retry`,

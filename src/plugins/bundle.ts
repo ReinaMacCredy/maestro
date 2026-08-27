@@ -657,7 +657,7 @@ export const bundlePlugin: BuiltInPlugin = {
               : 'no bundles; run: maestro bundle open "<id>"',
           };
         },
-        { description: "List bundles and their states." },
+        { description: "List bundles and their states.", mutates: false },
       ),
     );
 
@@ -698,6 +698,7 @@ export const bundlePlugin: BuiltInPlugin = {
         },
         {
           description: "Compose one bundle: trio text, linked work, decisions.",
+          mutates: false,
           positionals: [{ name: "id", required: true }],
         },
       ),
