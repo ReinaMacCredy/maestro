@@ -212,59 +212,90 @@ export const decisionPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const first = required(invocation, 0, "decision text");
           const second = invocation.positionals[1];
-          const existing = getDecision(context, first);
           const needsOwner = invocation.options["needs-owner"] === true;
           const suppliedDissent = option(invocation, "dissent");
           const suppliedReviewAt = reviewAtOption(invocation);
-          if (existing && second !== undefined) {
-            if (existing.state === "withdrawn") {
-              throw new CliError("INVALID_STATE", `${existing.id} is withdrawn`, {
-                id: existing.id,
-                state: existing.state,
-              });
-            }
-            if (existing.state !== "draft") {
-              throw new CliError(
-                "LOCKED_DECISION",
-                `${existing.id} is ${existing.state}; create a draft with --supersedes instead`,
-                { id: existing.id, state: existing.state },
-              );
-            }
-            const text = required(invocation, 1, "replacement text");
-            const rationale = option(invocation, "rationale") ?? existing.rationale;
-            const dissent = suppliedDissent ?? existing.dissent;
-            const reviewAt = suppliedReviewAt ?? existing.reviewAt;
-            const updatedAt = new Date().toISOString();
-            context.store.database
-              .query(
-                "UPDATE decisions SET text = ?, rationale = ?, dissent = ?, review_at = ?, needs_owner = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
-              )
-              .run(
-                text,
-                rationale,
-                dissent,
-                reviewAt,
-                needsOwner || existing.needsOwner ? 1 : 0,
-                updatedAt,
-                existing.id,
-              );
-            context.log.append({
-              type: "decision.draft",
-              entityType: "decision",
-              entityId: existing.id,
-              sessionId: context.sessions.current().id,
-              payload: { text, edit: true },
-            });
-            const updated = service.get(existing.id);
-            return {
-              data: { decision: updated, previous: existing.text },
-              text: `${format(updated as DecisionRecord)}\nprevious: ${existing.text}`,
-            };
-          }
           if (second !== undefined) {
-            throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${second}`, {
-              argument: second,
+            const edit = context.store.database.transaction(() => {
+              const existing = getDecision(context, first);
+              if (!existing) {
+                throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${second}`, {
+                  argument: second,
+                });
+              }
+              const text = required(invocation, 1, "replacement text");
+              if (existing.state === "withdrawn") {
+                throw new CliError("INVALID_STATE", `${existing.id} is withdrawn`, {
+                  id: existing.id,
+                  state: existing.state,
+                });
+              }
+              if (existing.state !== "draft") {
+                throw new CliError(
+                  "LOCKED_DECISION",
+                  `${existing.id} is ${existing.state}; create a draft with --supersedes instead`,
+                  { id: existing.id, state: existing.state },
+                );
+              }
+              const rationale = option(invocation, "rationale") ?? existing.rationale;
+              const dissent = suppliedDissent ?? existing.dissent;
+              const reviewAt = suppliedReviewAt ?? existing.reviewAt;
+              const council = existing.workId
+                ? (context.dispatch as DispatchService).council(existing.workId)
+                : null;
+              const sealedCouncil = council?.sealed ? council.generationAnchor : null;
+              const updatedAt = new Date().toISOString();
+              const updated = context.store.database
+                .query(
+                  `UPDATE decisions
+                   SET text = ?, rationale = ?, dissent = ?, review_at = ?, needs_owner = ?, updated_at = ?
+                   WHERE id = ? AND state = 'draft' AND withdrawn_at IS NULL
+                   RETURNING id`,
+                )
+                .get(
+                  text,
+                  rationale,
+                  dissent,
+                  reviewAt,
+                  needsOwner || existing.needsOwner ? 1 : 0,
+                  updatedAt,
+                  existing.id,
+                ) as { id: string } | null;
+              if (updated?.id !== existing.id) {
+                throw new CliError(
+                  "INVALID_STATE",
+                  `${existing.id} changed while the edit was pending`,
+                  { id: existing.id },
+                );
+              }
+              context.log.append({
+                type: "decision.draft",
+                entityType: "decision",
+                entityId: existing.id,
+                sessionId: context.sessions.current().id,
+                payload: {
+                  text,
+                  edit: true,
+                  ...(sealedCouncil ? { sealedCouncil } : {}),
+                },
+              });
+              return {
+                decision: service.get(existing.id) as DecisionRecord,
+                previous: existing.text,
+                sealedCouncil,
+                workId: existing.workId,
+              };
             });
+            const updated = edit.immediate();
+            if (updated.sealedCouncil && updated.workId) {
+              process.stderr.write(
+                `[sealed] ${updated.workId} council is sealed; this draft is readable by its lanes\n`,
+              );
+            }
+            return {
+              data: { decision: updated.decision, previous: updated.previous },
+              text: `${format(updated.decision)}\nprevious: ${updated.previous}`,
+            };
           }
 
           const text = first;

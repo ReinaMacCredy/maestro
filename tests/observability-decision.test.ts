@@ -390,6 +390,92 @@ test("410 decision draft warns and records the generation when its work council 
   });
 });
 
+test("460 decision edit refuses a lost conditional update without appending an event", async () => {
+  await withFixture(async (fixture) => {
+    const decision = idFrom(await runCli(fixture, ["decision", "draft", "stable draft text"]));
+    const path = join(fixture.repo, ".maestro", "maestro.db");
+    const database = new Database(path);
+    database.run(`
+      CREATE TRIGGER ignore_decision_edit
+      BEFORE UPDATE OF text ON decisions
+      BEGIN
+        SELECT RAISE(IGNORE);
+      END
+    `);
+    const beforeEvents = database
+      .query<{ count: number }, [string]>(
+        "SELECT count(*) AS count FROM event_log WHERE type = 'decision.draft' AND entity_id = ?",
+      )
+      .get(decision)?.count;
+    database.close();
+
+    const edited = await runCli(fixture, ["decision", "draft", decision, "racing edit"]);
+    expect(edited.exitCode).toBe(1);
+    expect(edited.stderr).toContain('"code":"INVALID_STATE"');
+
+    const stored = new Database(path, { readonly: true });
+    try {
+      expect(
+        stored.query<{ text: string }, [string]>("SELECT text FROM decisions WHERE id = ?").get(decision),
+      ).toEqual({ text: "stable draft text" });
+      expect(
+        stored
+          .query<{ count: number }, [string]>(
+            "SELECT count(*) AS count FROM event_log WHERE type = 'decision.draft' AND entity_id = ?",
+          )
+          .get(decision)?.count,
+      ).toBe(beforeEvents);
+    } finally {
+      stored.close();
+    }
+  });
+});
+
+test("461 decision edit warns and records the generation while its work council is sealed", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "sealed edit council", "--atomic-reason", "fixture"]),
+    );
+    const decision = idFrom(
+      await runCli(fixture, ["decision", "draft", "harmless first text", "--work", work]),
+    );
+    const firstDispatch = await runCli(fixture, dispatchOpenArgs(work));
+    expect(firstDispatch.exitCode).toBe(0);
+    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
+    const generationAnchor = firstDispatch.stdout.match(/^(x\d+) \[open\]/)?.[1];
+    expect(generationAnchor).toBeString();
+
+    const edited = await runCli(fixture, [
+      "decision",
+      "draft",
+      decision,
+      "sensitive first view",
+    ]);
+    expect(edited.exitCode, edited.stderr).toBe(0);
+    expect(edited.stderr).toBe(
+      `[sealed] ${work} council is sealed; this draft is readable by its lanes\n`,
+    );
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    try {
+      const payload = database
+        .query<{ payload: string }, [string]>(
+          "SELECT payload FROM event_log WHERE type = 'decision.draft' AND entity_id = ? ORDER BY id DESC LIMIT 1",
+        )
+        .get(decision)?.payload;
+      expect(JSON.parse(payload ?? "{}")).toEqual({
+        edit: true,
+        sealedCouncil: generationAnchor,
+        text: "sensitive first view",
+      });
+    } finally {
+      database.close();
+    }
+  });
+});
+
 test("298 a replacement supersedes its predecessor only when the replacement locks", async () => {
   await withFixture(async (fixture) => {
     const predecessor = idFrom(
