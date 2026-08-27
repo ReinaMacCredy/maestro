@@ -127,6 +127,51 @@ the Lead's pane through Herdr, or left for the Lead's next brief), a
 recommendation, a decision in the owner's name, or a freeze. It never acts on
 the packet by editing the project itself.
 
+## Cross-examination
+
+A council's first views stay sealed until every member returns (blind design).
+When the views conflict or the risk warrants it, the Lead opens a second
+generation of dispatches on the same work item, one per Peer, and pastes the
+other Peers' handbacks into each contract verbatim together with one targeted
+question ("B claims X; where does that contradict your view?"). Each Peer
+answers by handback: CONFIRM, CHALLENGE, or REOPEN_REQUEST, with evidence.
+Peers never prompt each other; every word of the debate is a dispatch or a
+handback, so the Lead sees all of it. The Lead reconciles the round into a
+decision plus recorded dissent and the next proof. No third round without a
+new question; open-ended debate is not a council.
+
+## One Lead per scope
+
+A scope has exactly one Lead. A large project is several scopes (root plus
+project dimensions), each with its own Lead; the root scope's Lead owns
+integration and release and never accepts a child scope's candidate in its
+place. Dependencies between scopes travel as work items and handbacks
+(`DEPENDENCY_REQUEST` becomes a work item in the other scope), never as a
+second Lead on one moving scope.
+
+A Lead is continued or replaced only through a frozen handoff packet, written
+by the outgoing Lead at a bounded stop point into the bundle NOTES and the
+store: objective, scope, current state, current write owner, accepted
+decisions, failed approaches, successful patterns, evidence index, active
+risks and blockers, exact resume point. Receipts, in order, each a decision or
+note in the store: `packet_ready` (outgoing Lead), `successor_authorized`
+(owner, through the Supervisor), `successor_acknowledged` (the successor,
+who may reject an incomplete packet), `predecessor_released` (owner). The
+predecessor stops writing at release; a narrative-only packet is rejected.
+
+## Supervisor binding
+
+The room holds exactly one Supervisor, bound by the fields in
+`~/maestro/IDENTITY.md`: owner, project scope (the registry), reporting
+target, observation boundary, raw transcript access (denied by default: it
+reads stores and handbacks, not panes), write authority (none), acceptance
+authority (none), recovery or replacement lease (none until the owner grants
+it in writing), review date. Its notebook is the room store: notes and
+decisions, recorded only when novel or material, aggregated by pattern. When
+it is stuck it does not spawn a second Supervisor; it escalates with a packet
+whose `human decision needed: yes` and waits. STOP, FREEZE, and replacing a
+Lead need an explicit recovery lease from the owner.
+
 ## Talking across roles
 
 Herdr carries the words; the store carries the truth. A prompt that lands in a

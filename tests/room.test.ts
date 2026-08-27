@@ -130,8 +130,8 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
     expect(generatedHashes).toEqual({
       "AGENTS.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
       "CLAUDE.md": "0a80c4b85d67c24eecd133cf223cf8e46e1bf84a8e8b1a5c090d977955b0ec8f",
-      "IDENTITY.md": "2101d1d76210f2770447e7634196bc43e88f5c8a93eef9d6f4a71f8dcfc8dc5f",
-      "lane.md": "1db0113a0b6e390e049d1db00a7290831eebbaf37802ef617606014909a1df89",
+      "IDENTITY.md": "dd98de9fbac2f571a463fd3bbc4b688cbed6c110c2f8e6e3b5f39eb5a6138cb1",
+      "lane.md": "3eec62223e7fe66e13219c46fe6e7592130c5834806234a839dc15d17d91fcb8",
       shellrc: "eaea143a0c24385bfe39531aa607313f0c8cb55366ada9fe9d1ff78b6d76386b",
     });
   });

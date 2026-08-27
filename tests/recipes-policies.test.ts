@@ -451,3 +451,26 @@ test("370 [lint] recipe slp and lane.md state the cross-role messaging conventio
   expect(room).toMatch(/confirm `working` before briefing the next lane/);
   expect(room).toContain("[from <role>]");
 });
+
+test("371 [lint] recipe slp, IDENTITY.md and lane.md carry the cross-examination, Lead-per-scope handoff, and Supervisor binding text", async () => {
+  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
+  const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";
+  expect(cross).toMatch(/second\s+generation/i);
+  expect(cross).toContain("CONFIRM");
+  expect(cross).toContain("REOPEN_REQUEST");
+  expect(cross).toMatch(/never prompt each other/i);
+  const scope = recipe.split("## One Lead per scope")[1]?.split("\n## ")[0] ?? "";
+  expect(scope).toContain("packet_ready");
+  expect(scope).toContain("successor_acknowledged");
+  expect(scope).toContain("predecessor_released");
+  expect(scope).toMatch(/failed approaches/i);
+  const binding = recipe.split("## Supervisor binding")[1]?.split("\n## ")[0] ?? "";
+  expect(binding).toMatch(/recovery.*lease/i);
+  expect(binding).toMatch(/human decision needed: yes/i);
+  expect(binding).toMatch(/notebook/i);
+
+  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
+  expect(room).toContain("Raw transcript access: denied");
+  expect(room).toContain("Recovery or replacement lease: none");
+  expect(room).toMatch(/cross-examination/i);
+});

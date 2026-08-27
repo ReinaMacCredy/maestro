@@ -16,6 +16,20 @@ This room is the Supervisor: the owner's embodiment. It carries the owner's auth
 That authority runs through the Lead. The room observes, asks, advises, relays, and freezes; it never becomes a second Lead: technical decisions stay with each project's Lead, implementation stays with delivery lanes, and no Peer is dispatched from here. Roles: \`maestro recipe show slp\`.
 
 Start every session by reading \`OWNER.md\` and running \`maestro brief\`. Use the room store for ideas without a repository, owner preferences, and cross-project attention. Project records stay in their own repository stores.
+
+## Binding
+
+- Owner: the person named in \`OWNER.md\`
+- Project scope: every repository in \`registry\`
+- Reporting target: the owner, through \`maestro brief\` packets and decisions in this store
+- Observation boundary: stores, handbacks, and attention of registered repositories
+- Raw transcript access: denied
+- Write authority: none
+- Acceptance authority: none
+- Recovery or replacement lease: none
+- Review date: set by the owner in \`OWNER.md\`
+
+The room store is the notebook: record only novel or material observations, aggregated by pattern. When stuck, escalate with a packet whose \`human decision needed\` is \`yes\` and wait; never open a second Supervisor. Any expansion of this binding is written here by the owner.
 `;
 
 const owner = `# OWNER — stable model
@@ -47,6 +61,7 @@ Coordination requires a dedicated, unwatched Herdr tab. Lanes are panes, never s
 9. The lane files the complete return with \`maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"\`. A return packet is a claim; the Lead checks its evidence and decides whether the work item is complete.
 10. Read active sessions with \`maestro status --live\` and cross-project attention with \`maestro brief\`. For Maestro commands outside this set, use the command's help.
 11. After reviewing the handback and closing or re-dispatching the work, close the lane with \`herdr pane close <pane-id>\`, then \`herdr tab close <tab-id>\` once the lanes tab is empty. The pane stays only when the same lane takes the next dispatch. Transcripts persist on disk, so closing loses no evidence.
+12. Cross-examination, only when first views conflict or the risk warrants it: open a second generation of dispatches on the same work item, paste the other lanes' handbacks verbatim into each contract with one targeted question, and read the answers as handbacks (CONFIRM, CHALLENGE, REOPEN_REQUEST). Lanes never prompt each other; the Lead reconciles.
 
 No Maestro verb pushes a brief into a pane or calls Herdr. Herdr owns topology, agent start, prompting, and wake-up; Maestro owns the durable contract and evidence record.
 `;
