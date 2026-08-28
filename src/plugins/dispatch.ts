@@ -939,7 +939,7 @@ export const dispatchPlugin: BuiltInPlugin = {
         "dispatch confirm",
         (invocation): CliResult => {
           const id = requiredPosition(invocation, 0, "dispatch id");
-          const claimedSession = requiredOption(invocation, "--session");
+          const requestedSession = requiredOption(invocation, "--session");
           const openerSession = context.sessions.current().id;
           const confirm = context.store.database.transaction(() => {
             const dispatch = requireDispatch(context, id);
@@ -953,11 +953,21 @@ export const dispatchPlugin: BuiltInPlugin = {
                 { currentSession: openerSession, id, openedBy: dispatch.openedBy },
               );
             }
-            if (dispatch.claimedBy !== claimedSession) {
+            if (dispatch.heldBy) {
+              if (dispatch.heldBy !== requestedSession) {
+                throw new CliError(
+                  "CLAIM_MISMATCH",
+                  `${id} is held by ${dispatch.heldBy}; requested confirmation is ${requestedSession}`,
+                  { heldBy: dispatch.heldBy, id, requestedSession },
+                );
+              }
+              return dispatch;
+            }
+            if (dispatch.claimedBy !== requestedSession) {
               throw new CliError(
                 "CLAIM_MISMATCH",
-                `${id} is claimed by ${dispatch.claimedBy ?? "no session"}; requested confirmation is ${claimedSession}`,
-                { claimedBy: dispatch.claimedBy, id, requestedSession: claimedSession },
+                `${id} is claimed by ${dispatch.claimedBy ?? "no session"}; requested confirmation is ${requestedSession}`,
+                { claimedBy: dispatch.claimedBy, id, requestedSession },
               );
             }
             const now = new Date().toISOString();
@@ -967,7 +977,7 @@ export const dispatchPlugin: BuiltInPlugin = {
                  SET claimed_by = NULL, held_by = ?, updated_at = ?
                  WHERE id = ? AND claimed_by = ? AND held_by IS NULL`,
               )
-              .run(claimedSession, now, id, claimedSession);
+              .run(requestedSession, now, id, requestedSession);
             if (updated.changes !== 1) {
               throw new CliError("INVALID_STATE", `${id} changed while confirmation was pending`);
             }
@@ -976,7 +986,7 @@ export const dispatchPlugin: BuiltInPlugin = {
               entityType: "dispatch",
               entityId: id,
               sessionId: openerSession,
-              payload: { sessionId: claimedSession },
+              payload: { sessionId: requestedSession },
             });
             return service.get(id) as DispatchRecord;
           });
@@ -984,8 +994,10 @@ export const dispatchPlugin: BuiltInPlugin = {
           return { data: { dispatch: confirmed }, text: format(confirmed) };
         },
         {
-          description: "Confirm an untargeted dispatch claim as its opener.",
-          flags: { "--session": { description: "Name the claimed session to confirm.", value: true } },
+          description: "Confirm a dispatch claim or validate its targeted holder as the opener.",
+          flags: {
+            "--session": { description: "Name the claimed or targeted session.", value: true },
+          },
           positionals: [{ name: "id", required: true }],
         },
       ),

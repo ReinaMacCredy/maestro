@@ -357,6 +357,7 @@ export const workPlugin: BuiltInPlugin = {
               }
             }
             id = context.store.nextPrefixedId("work", "w");
+            context.sessions.record("work.add");
             context.store.database
               .query(
                 `INSERT INTO work
@@ -786,13 +787,31 @@ export const workPlugin: BuiltInPlugin = {
           if (!reason) {
             throw new CliError("MISSING_ARGUMENT", "work cancel requires --reason <text>");
           }
-          const result = await context.events.waterfall<WorkGateInput, GateResult>(
-            "work.cancel",
-            { work, children: service.children(id), sessionId: context.sessions.current().id },
-            async () => ({ blocked: false }),
-          );
-          blockIfNeeded(result);
           const sessionId = context.sessions.current().id;
+          const mutableDescendantsQuery = context.store.database.query<{ id: string }, [string]>(
+            `WITH RECURSIVE descendants(id, depth) AS (
+               SELECT id, 1 FROM work WHERE parent_id = ?
+               UNION ALL
+               SELECT work.id, descendants.depth + 1
+               FROM work
+               JOIN descendants ON work.parent_id = descendants.id
+             )
+             SELECT work.id
+             FROM work
+             JOIN descendants ON work.id = descendants.id
+             WHERE work.state IN ('open', 'active') AND work.cancelled_at IS NULL
+             ORDER BY descendants.depth, CAST(SUBSTR(work.id, 2) AS INTEGER)`,
+          );
+          const descendantIds = mutableDescendantsQuery.all(id).map((descendant) => descendant.id);
+          for (const targetId of [id, ...descendantIds]) {
+            const target = targetId === id ? work : requireWork(context, targetId);
+            const result = await context.events.waterfall<WorkGateInput, GateResult>(
+              "work.cancel",
+              { work: target, children: service.children(targetId), sessionId },
+              async () => ({ blocked: false }),
+            );
+            blockIfNeeded(result);
+          }
           const cancel = context.store.database.transaction(() => {
             const current = requireWork(context, id);
             if (current.state === "cancelled") {
@@ -805,31 +824,62 @@ export const workPlugin: BuiltInPlugin = {
               throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
             }
             const now = new Date().toISOString();
-            const cancelled = context.store.database
+            const currentDescendantIds = mutableDescendantsQuery
+              .all(id)
+              .map((descendant) => descendant.id);
+            if (
+              currentDescendantIds.length !== descendantIds.length ||
+              currentDescendantIds.some((descendantId, index) =>
+                descendantId !== descendantIds[index]
+              )
+            ) {
+              throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
+            }
+            const cancellations = [
+              { id, reason },
+              ...currentDescendantIds.map((descendantId) => ({
+                id: descendantId,
+                reason: `parent ${id} cancelled: ${reason}`,
+              })),
+            ];
+            const cancelWork = context.store.database
               .query(
                 `UPDATE work
                  SET cancelled_at = ?, cancel_reason = ?, held_by = NULL, updated_at = ?
-                 WHERE id = ? AND state = ? AND cancelled_at IS NULL AND held_by IS ?`,
-              )
-              .run(now, reason, now, id, work.state === "active" ? "active" : "open", work.heldBy);
-            if (cancelled.changes === 0) {
-              throw new CliError("INVALID_STATE", `${id} changed while cancellation was pending`);
+                 WHERE id = ? AND state IN ('open', 'active') AND cancelled_at IS NULL`,
+              );
+            for (const cancellation of cancellations) {
+              const cancelled = cancelWork.run(
+                now,
+                cancellation.reason,
+                now,
+                cancellation.id,
+              );
+              if (cancelled.changes === 0) {
+                throw new CliError(
+                  "INVALID_STATE",
+                  `${cancellation.id} changed while cancellation was pending`,
+                );
+              }
             }
             context.sessions.record("work.cancel");
-            context.log.append({
-              type: "work.cancel",
-              entityType: "work",
-              entityId: id,
-              sessionId,
-              payload: { reason },
-            });
+            for (const cancellation of cancellations) {
+              context.log.append({
+                type: "work.cancel",
+                entityType: "work",
+                entityId: cancellation.id,
+                sessionId,
+                payload: { reason: cancellation.reason },
+              });
+            }
             return service.get(id);
           });
           const cancelled = cancel.immediate();
           return { data: { work: cancelled }, text: `${id} cancelled: ${reason}` };
         },
         {
-          description: "Cancel open or currently held work permanently with a recorded reason.",
+          description:
+            "Cancel open or currently held work and its open or active descendants with a recorded reason.",
           flags: {
             "--reason": { description: "Record why this work is cancelled.", value: true },
           },
