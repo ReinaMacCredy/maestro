@@ -1609,23 +1609,34 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
 });
 
 test.skipIf(process.env.HERDR_ENV !== "1")(
-  "236 [lint] hm prints the read-only brief before starting supervisor",
+  "236 [lint] hm prints the read-only brief and starts supervisor in an unoccupied pane",
   async () => {
     // Shell-boundary lint: proves the generated function's fake-command path, not real Herdr effects.
-    await withFixture(async (fixture) => {
-      const { path } = await prepareInstallFixture(fixture);
-      await runCli(fixture, ["install"], { PATH: path });
-      const fakeBin = join(fixture.root, "fake-bin-brief");
-      const herdrLog = join(fixture.root, "herdr-brief.log");
-      const maestroLog = join(fixture.root, "maestro-brief.log");
-      await mkdir(fakeBin, { recursive: true });
-      await writeFile(
-        join(fakeBin, "herdr"),
-        `#!/bin/sh
+    const runHm = async (workspaceExists: boolean) =>
+      withFixture(async (fixture) => {
+        const { path } = await prepareInstallFixture(fixture);
+        await runCli(fixture, ["install"], { PATH: path });
+        const fakeBin = join(fixture.root, "fake-bin-brief");
+        const herdrLog = join(fixture.root, "herdr-brief.log");
+        const maestroLog = join(fixture.root, "maestro-brief.log");
+        const workspaceState = join(fixture.root, "herdr-workspace-state");
+        await mkdir(fakeBin, { recursive: true });
+        if (workspaceExists) await writeFile(workspaceState, "occupied root pane");
+        await writeFile(
+          join(fakeBin, "herdr"),
+          `#!/bin/sh
 printf '%s\\n' "$*" >> "$HERDR_LOG"
 case "$1 $2" in
   "workspace list")
-    printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[{"label":"maestro","workspace_id":"w9"}]}}'
+    if [ -f "$HERDR_WORKSPACE_STATE" ]; then
+      printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[{"label":"maestro","workspace_id":"w9"}]}}'
+    else
+      printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[]}}'
+    fi
+    ;;
+  "workspace create")
+    : > "$HERDR_WORKSPACE_STATE"
+    printf '%s\\n' '{"id":"test","result":{"workspace":{"label":"maestro","workspace_id":"w9"}}}'
     ;;
   "workspace focus")
     printf '%s\\n' '{"id":"test","result":{"workspace_id":"w9"}}'
@@ -1636,64 +1647,87 @@ case "$1 $2" in
   "agent list")
     printf '%s\\n' '{"id":"test","result":{"type":"agent_list","agents":[]}}'
     ;;
+  "tab create")
+    printf '%s\\n' '{"id":"test","result":{"tab":{"tab_id":"w9:t2"},"root_pane":{"pane_id":"w9:t2:p1","workspace_id":"w9"}}}'
+    ;;
   "agent start")
-    printf '%s\\n' '{"id":"test","result":{"name":"supervisor","pane_id":"w9:p1"}}'
+    printf '%s\\n' '{"id":"test","result":{"name":"supervisor"}}'
     ;;
 esac
 `,
-      );
-      await chmod(join(fakeBin, "herdr"), 0o755);
-      await writeFile(
-        join(fakeBin, "maestro"),
-        `#!/bin/sh
+        );
+        await chmod(join(fakeBin, "herdr"), 0o755);
+        await writeFile(
+          join(fakeBin, "maestro"),
+          `#!/bin/sh
 printf '%s read-only=%s cwd=%s\\n' "$*" "$MAESTRO_READ_ONLY" "$PWD" >> "$MAESTRO_LOG"
 printf '%s\\n' 'owner brief'
 `,
-      );
-      await chmod(join(fakeBin, "maestro"), 0o755);
+        );
+        await chmod(join(fakeBin, "maestro"), 0o755);
 
-      const shell = Bun.spawn(
-        [
-          "/bin/zsh",
-          "-f",
-          "-c",
-          'source "$HOME/maestro/shellrc"; eval hm; printf "shell-returned\\n"',
-        ],
-        {
-          cwd: fixture.repo,
-          env: {
-            ...process.env,
-            HERDR_ENV: "1",
-            HERDR_LOG: herdrLog,
-            HOME: fixture.home,
-            MAESTRO_LOG: maestroLog,
-            PATH: `${fakeBin}:${path}`,
+        const shell = Bun.spawn(
+          [
+            "/bin/zsh",
+            "-f",
+            "-c",
+            'source "$HOME/maestro/shellrc"; eval hm; printf "shell-returned\\n"',
+          ],
+          {
+            cwd: fixture.repo,
+            env: {
+              ...process.env,
+              HERDR_ENV: "1",
+              HERDR_LOG: herdrLog,
+              HERDR_WORKSPACE_STATE: workspaceState,
+              HOME: fixture.home,
+              MAESTRO_LOG: maestroLog,
+              PATH: `${fakeBin}:${path}`,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
           },
-          stdout: "pipe",
-          stderr: "pipe",
-        },
-      );
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(shell.stdout).text(),
-        new Response(shell.stderr).text(),
-        shell.exited,
-      ]);
+        );
+        const [stdout, stderr, exitCode] = await Promise.all([
+          new Response(shell.stdout).text(),
+          new Response(shell.stderr).text(),
+          shell.exited,
+        ]);
 
-      expect(exitCode).toBe(0);
-      expect(stderr).toBe("");
-      expect(stdout).toBe("owner brief\nshell-returned\n");
-      expect(await readFile(maestroLog, "utf8")).toBe(
-        `brief read-only=1 cwd=${join(fixture.home, "maestro")}\n`,
-      );
-      const herdrCommands = (await readFile(herdrLog, "utf8")).trim().split("\n");
-      expect(herdrCommands).toEqual([
-        "workspace list",
-        "workspace focus w9",
-        "pane list --workspace w9",
-        "agent list",
-        "agent start supervisor --kind claude --pane w9:p1",
-      ]);
-    });
+        expect(exitCode).toBe(0);
+        expect(stderr).toBe("");
+        expect(stdout).toBe("owner brief\nshell-returned\n");
+        expect(await readFile(maestroLog, "utf8")).toBe(
+          `brief read-only=1 cwd=${join(fixture.home, "maestro")}\n`,
+        );
+        return {
+          commands: (await readFile(herdrLog, "utf8")).trim().split("\n"),
+          room: join(fixture.home, "maestro"),
+        };
+      });
+
+    const occupiedWorkspace = await runHm(true);
+    expect(occupiedWorkspace.commands).toEqual([
+      "workspace list",
+      "workspace focus w9",
+      "pane list --workspace w9",
+      "agent list",
+      `tab create --workspace w9 --cwd ${occupiedWorkspace.room} --label supervisor`,
+      "agent start supervisor --kind claude --pane w9:t2:p1",
+    ]);
+    expect(occupiedWorkspace.commands).not.toContain(
+      "agent start supervisor --kind claude --pane w9:p1",
+    );
+
+    const freshWorkspace = await runHm(false);
+    expect(freshWorkspace.commands).toEqual([
+      "workspace list",
+      `workspace create --cwd ${freshWorkspace.room} --label maestro --focus`,
+      "workspace list",
+      "pane list --workspace w9",
+      "agent list",
+      "agent start supervisor --kind claude --pane w9:p1",
+    ]);
   },
 );
 
