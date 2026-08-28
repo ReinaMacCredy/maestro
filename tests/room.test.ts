@@ -78,6 +78,17 @@ function openRepoDatabase(repo: string): Database {
   return new Database(join(repo, ".maestro", "maestro.db"));
 }
 
+function roomMetaRows(room: string): Array<{ key: string; value: string }> {
+  const database = openRepoDatabase(room);
+  try {
+    return database
+      .query<{ key: string; value: string }, []>("SELECT key, value FROM meta ORDER BY key")
+      .all();
+  } finally {
+    database.close();
+  }
+}
+
 test("234 install twice preserves a first-edit shell backup and one managed source and registry line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
@@ -1373,6 +1384,127 @@ test("243 install initializes the room store without turning the room into a git
       { MAESTRO_READ_ONLY: "1", PATH: path },
     );
     expect(shown.stdout).toContain("unassigned owner idea");
+  });
+});
+
+test("492 install records and backfills one idempotent room-store fact", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const room = join(fixture.home, "maestro");
+
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(roomMetaRows(room)).toEqual([{ key: "kind", value: "room" }]);
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    expect(roomMetaRows(room)).toEqual([{ key: "kind", value: "room" }]);
+
+    const database = openRepoDatabase(room);
+    database.query("DELETE FROM meta WHERE key = 'kind'").run();
+    database.close();
+    expect(roomMetaRows(room)).toEqual([]);
+
+    expect(
+      (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
+    ).toBe(0);
+    expect(roomMetaRows(room)).toEqual([{ key: "kind", value: "room" }]);
+  });
+});
+
+test("493 isRoom rejects repository and unmarked bare stores", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+    const roomModule = await import("../src/plugins/room.ts") as unknown as {
+      isRoom?: (database: Database) => boolean;
+    };
+    expect(roomModule.isRoom).toBeFunction();
+
+    const repository = openRepoDatabase(fixture.repo);
+    expect(roomModule.isRoom?.(repository)).toBe(false);
+    repository.close();
+
+    const bareRoom = join(fixture.home, "maestro");
+    await mkdir(join(bareRoom, ".maestro"), { recursive: true });
+    new Database(join(bareRoom, ".maestro", "maestro.db")).close();
+    const bare = openRepoDatabase(bareRoom);
+    expect(roomModule.isRoom?.(bare)).toBe(false);
+    bare.close();
+  });
+});
+
+test("494 room mark refuses an ordinary repository command path", async () => {
+  await withFixture(async (fixture) => {
+    const marked = await runCli(fixture, ["room", "mark"]);
+
+    expect(marked.exitCode).toBe(1);
+    expect(JSON.parse(marked.stderr)).toMatchObject({
+      error: {
+        code: "ROOM_MARK_INTERNAL",
+        message: "room mark is reserved for the room-scaffolding code path",
+      },
+    });
+    const database = openRepoDatabase(fixture.repo);
+    const count = database
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM meta WHERE key = 'kind'")
+      .get()?.count;
+    database.close();
+    expect(count).toBe(0);
+  });
+});
+
+test("495 repository wiring verbs refuse a marked room without changing it", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const files = [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "OWNER.md",
+      ".claude/settings.json",
+    ];
+    const beforeFiles = new Map(
+      await Promise.all(
+        files.map(async (name) => [name, await readFile(join(room, name), "utf8")] as const),
+      ),
+    );
+    const beforeStore = (await storeSnapshot(room)).map(([name, , content]) => [name, content]);
+    const message =
+      "~/maestro is the Supervisor room, not a repository; run maestro install from a repository checkout, which maintains the room";
+
+    for (const verb of ["install", "update", "uninstall"]) {
+      const refused = await runInstalledCliAt(fixture, room, [verb], { PATH: path });
+      expect(refused.exitCode).toBe(1);
+      expect(JSON.parse(refused.stderr)).toMatchObject({
+        error: { code: "INSTALL_IN_ROOM", message },
+      });
+      for (const name of files) {
+        expect(await readFile(join(room, name), "utf8")).toBe(beforeFiles.get(name));
+      }
+      expect((await storeSnapshot(room)).map(([name, , content]) => [name, content])).toEqual(
+        beforeStore,
+      );
+    }
+  });
+});
+
+test("496 room guidance names repository-only verbs and the lane return boundary", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const repositoryOnly =
+      "Repository-only verbs are `maestro install`, `maestro update`, and `maestro uninstall`; `maestro doctor` wiring checks describe repositories, not this room.";
+    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
+      expect(await readFile(join(room, name), "utf8")).toContain(repositoryOnly);
+    }
+    const lane = await readFile(join(room, "lane.md"), "utf8");
+    expect(lane).toContain("never talks to the Lead through the terminal");
+    expect(lane).toContain("`herdr pane send-text`");
+    expect(lane).toContain("`herdr agent prompt`");
+    expect(lane).toContain("its only returns are the handback and `--request`");
+    expect(lane).toContain("a `[from peer]` note is `maestro work note`");
   });
 });
 

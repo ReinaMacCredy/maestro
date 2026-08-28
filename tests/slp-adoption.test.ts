@@ -26,8 +26,10 @@ async function openAttentionDispatch(
   lane: "decision" | "delivery" | "scout" | "shadow",
   ownedScope: string,
   excludedScope: string,
+  targetSession?: string,
+  opener = "test-session",
 ): Promise<string> {
-  const opened = await runCli(fixture, [
+  const args = [
     "dispatch",
     "open",
     work,
@@ -47,7 +49,9 @@ async function openAttentionDispatch(
     "source: attention packet",
     "--pane",
     `w1:p-${work}`,
-  ]);
+  ];
+  if (targetSession) args.push("--target-session", targetSession);
+  const opened = await runCli(fixture, args, session(opener));
   expect(opened.exitCode).toBe(0);
   const dispatch = opened.stdout.match(/^(x\d+) \[open\]/)?.[1];
   expect(dispatch).toBeString();
@@ -1078,10 +1082,14 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
   });
 });
 
-test("447 PreToolUse denies Agent and Task for a dispatch holder without recording a session event", async () => {
+test("447 PreToolUse denies returned holders and targets but stays silent for the opener", async () => {
   await withFixture(async (fixture) => {
+    const opener = "peer-hook-opener";
     const holder = "peer-hook-holder";
+    const target = "peer-hook-target";
+    await recordSession(fixture, opener);
     await recordSession(fixture, holder);
+    await recordSession(fixture, target);
     const work = await addWork(fixture, "deny peer sub-topology");
     const dispatch = await openAttentionDispatch(
       fixture,
@@ -1089,6 +1097,8 @@ test("447 PreToolUse denies Agent and Task for a dispatch holder without recordi
       "delivery",
       "src/plugins/coordination.ts",
       "all other files",
+      undefined,
+      opener,
     );
     expect(
       (await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode,
@@ -1101,28 +1111,82 @@ test("447 PreToolUse denies Agent and Task for a dispatch holder without recordi
           dispatch,
           "--session",
           holder,
-        ])
+        ], session(opener))
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(
+          fixture,
+          [
+            "handback",
+            "file",
+            dispatch,
+            "--status",
+            "DONE",
+            "--candidate",
+            "fixture-candidate",
+            "--claim",
+            "returned holders remain Peers",
+            "--proof",
+            "source: hook stdout",
+            "--assumptions",
+            "None",
+            "--residual-risks",
+            "None",
+            "--incidental-findings",
+            "None",
+          ],
+          session(holder),
+        )
       ).exitCode,
     ).toBe(0);
 
+    const targetWork = await addWork(fixture, "deny targeted peer sub-topology");
+    const targetedDispatch = await openAttentionDispatch(
+      fixture,
+      targetWork,
+      "scout",
+      "tests/slp-adoption.test.ts",
+      "product source",
+      target,
+      opener,
+    );
+
+    for (const [peer, peerDispatch] of [
+      [holder, dispatch],
+      [target, targetedDispatch],
+    ] as const) {
+      for (const toolName of ["Agent", "Task"]) {
+        const denied = await runCli(
+          fixture,
+          ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+          session(peer),
+          JSON.stringify({ tool_name: toolName }),
+        );
+
+        expect(denied.exitCode).toBe(0);
+        expect(denied.stderr).toBe("");
+        expect(JSON.parse(denied.stdout)).toEqual({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              `${peerDispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
+          },
+        });
+      }
+    }
     for (const toolName of ["Agent", "Task"]) {
-      const denied = await runCli(
+      const allowed = await runCli(
         fixture,
         ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-        session(holder),
+        session(opener),
         JSON.stringify({ tool_name: toolName }),
       );
-
-      expect(denied.exitCode).toBe(0);
-      expect(denied.stderr).toBe("");
-      expect(JSON.parse(denied.stdout)).toEqual({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason:
-            `${dispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
-        },
-      });
+      expect(allowed.exitCode).toBe(0);
+      expect(allowed.stdout).toBe("");
+      expect(allowed.stderr).toBe("");
     }
     const status = await runCli(fixture, ["status", "--json"], session(holder));
     const sessions = (JSON.parse(status.stdout) as {

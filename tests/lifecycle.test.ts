@@ -13,6 +13,7 @@ import {
   prepareInstallFixture,
   runCli,
   runCliAt,
+  runInstalledCliAt,
   runTool,
   withFixture,
 } from "./helpers.ts";
@@ -157,6 +158,55 @@ async function runInstalled(
   ]);
   return { exitCode, stdout, stderr };
 }
+
+test("497 doctor applies the room contract instead of repository wiring checks", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+
+    const diagnosed = await runInstalledCliAt(fixture, room, ["doctor"], { PATH: path });
+
+    expect(diagnosed.exitCode).toBe(0);
+    expect(diagnosed.stdout).toContain("doctor: healthy");
+    expect(diagnosed.stdout).toContain("room files: ok");
+    expect(diagnosed.stdout).toContain("room registry: ok");
+    expect(diagnosed.stdout).toContain("room hooks: ok");
+    expect(diagnosed.stdout).toContain("room deny list: ok");
+    expect(diagnosed.stdout).toContain("store: ok");
+    expect(diagnosed.stdout).not.toContain("wiring:");
+    expect(diagnosed.stdout).not.toContain("maestro install");
+  });
+});
+
+test("498 a missing room file gets only the repository-checkout repair", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const missing = join(room, "lead.md");
+    await rm(missing);
+
+    const diagnosed = await runInstalledCliAt(fixture, room, ["doctor"], { PATH: path });
+
+    expect(diagnosed.exitCode).toBe(1);
+    const error = (JSON.parse(diagnosed.stderr) as {
+      error: {
+        code: string;
+        issues: Array<{ component: string; fix: string; message: string }>;
+      };
+    }).error;
+    expect(error.code).toBe("DOCTOR_ISSUES");
+    expect(error.issues).toEqual([
+      {
+        component: "room",
+        fix:
+          "run maestro install or maestro update from a registered repository checkout (registry lists them)",
+        message: `missing room file: ${missing}`,
+      },
+    ]);
+  });
+});
 
 test("46 uninstall reverses managed wiring while preserving foreign content and stores", async () => {
   await withFixture(async (fixture) => {
