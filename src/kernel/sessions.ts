@@ -212,26 +212,14 @@ export class Sessions {
       this.resolved = { anchor, harness: guessedHarness, id: environmentId, pid, scope: this.scope };
       return this.resolved;
     }
-    if (anchor === "pid") {
-      const recorded = this.store.database
-        .query<{ id: string }, [number]>(
-          "SELECT id FROM sessions WHERE pid = ? ORDER BY last_seen DESC LIMIT 1",
-        )
-        .get(pid);
-      this.resolved = {
-        anchor,
-        harness: guessedHarness,
-        id: recorded?.id ?? `pid-${pid}`,
-        pid,
-        scope: this.scope,
-      };
-      return this.resolved;
-    }
-    const recorded = this.recentTtlSession(guessedHarness);
+    // Without an explicit identity this process is somebody new. Mint a random
+    // id; never adopt a recorded row, because every signal available here (a
+    // reused pid, a recent session in the same scope) belongs to a process that
+    // may already be gone, and adopting it inherits that session's lease.
     this.resolved = {
       anchor,
-      harness: recorded?.harness ?? guessedHarness,
-      id: recorded?.id ?? `ttl-${crypto.randomUUID()}`,
+      harness: guessedHarness,
+      id: `anon-${crypto.randomUUID()}`,
       pid,
       scope: this.scope,
     };
@@ -322,27 +310,6 @@ export class Sessions {
     };
   }
 
-  private recentTtlSession(harness: Harness | null): SessionRow | null {
-    const cutoff = new Date(Date.now() - sessionTtlMs).toISOString();
-    if (!harness) {
-      return this.store.database
-        .query<SessionRow, [string, string]>(
-          `SELECT * FROM sessions
-           WHERE anchor = 'ttl' AND scope = ? AND last_seen >= ?
-           ORDER BY last_seen DESC LIMIT 1`,
-        )
-        .get(this.scope, cutoff) ?? null;
-    }
-    return this.store.database
-      .query<SessionRow, [string, string, Harness, Harness]>(
-        `SELECT * FROM sessions
-         WHERE anchor = 'ttl' AND scope = ? AND last_seen >= ?
-           AND (harness = ? OR harness IS NULL)
-         ORDER BY CASE WHEN harness = ? THEN 0 ELSE 1 END, last_seen DESC
-         LIMIT 1`,
-      )
-      .get(this.scope, cutoff, harness, harness) ?? null;
-  }
 
   private guessHarness(): Harness | null {
     if (

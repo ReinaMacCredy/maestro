@@ -512,7 +512,9 @@ test("295 shared-pid downgrade never decreases a newer persisted heartbeat", asy
 
 test("470 a replacement process reusing a pid gets a fresh session and cannot finish the old lease (w472/d704)", async () => {
   await withFixture(async (fixture) => {
-    const reused = 424242;
+    // A live pid: the old session must still look alive, or the lease would
+    // simply expire and the reuse would never be tested.
+    const reused = process.pid;
     const work = idFrom(
       await runCli(fixture, ["work", "add", "pid reuse repro", "--atomic-reason", "fixture"]),
     );
@@ -563,36 +565,41 @@ test("470 a replacement process reusing a pid gets a fresh session and cannot fi
 
 test("471 the current session id does not depend on which historical row shares its pid (w472/d704)", async () => {
   await withFixture(async (fixture) => {
-    const reused = 424243;
     const blank = {
       MAESTRO_SESSION_ID: "",
-      MAESTRO_SESSION_PID: String(reused),
+      MAESTRO_SESSION_PID: String(process.pid),
       CODEX_SESSION_ID: "",
       CODEX_THREAD_ID: "",
       CLAUDE_CODE_SESSION_ID: "",
       CLAUDE_SESSION_ID: "",
       CURSOR_SESSION_ID: "",
     };
-    const before = idFrom(
-      await runCli(fixture, ["work", "add", "before the perturbation"], blank),
-    );
-    expect((await runCli(fixture, ["work", "start", before], blank)).exitCode).toBe(0);
-    const first = (await runCli(fixture, ["work", "start", before], blank)).stderr;
+    const identity = async (title: string): Promise<string> => {
+      const work = idFrom(
+        await runCli(fixture, ["work", "add", title, "--atomic-reason", "fixture"], blank),
+      );
+      const started = await runCli(fixture, ["work", "start", work], blank);
+      expect(started.exitCode).toBe(0);
+      return started.stdout.trim().split(" started by ")[1] ?? "missing session";
+    };
 
-    // Perturbation: plant a prior session row on the very same pid.
+    const before = await identity("before the perturbation");
+
+    // Perturbation: plant a prior session row on the very same pid. The
+    // resolved identity must not move because of it.
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     database
       .query(
         `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
          VALUES ('planted', ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
       )
-      .run(reused, new Date().toISOString(), fixture.repo);
+      .run(process.pid, new Date().toISOString(), fixture.repo);
     database.close();
 
-    const after = idFrom(await runCli(fixture, ["work", "add", "after the perturbation"], blank));
-    const started = await runCli(fixture, ["work", "start", after], blank);
-    expect(started.exitCode).toBe(0);
-    expect(started.stdout).not.toContain("planted");
-    expect(first).not.toContain("planted");
+    const after = await identity("after the perturbation");
+
+    expect(before).not.toBe("planted");
+    expect(after).not.toBe("planted");
+    expect(after).not.toBe(before);
   });
 });
