@@ -444,3 +444,66 @@ test("409 attention and hook briefs prefix decision subjects with their kind", a
     expect(hook.stdout).toContain(`attention DECISION_STALE decision ${decision}`);
   });
 });
+
+test("476 the store refuses a second handback on one dispatch, not just the command (w475, d706)", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "one return", "--atomic-reason", "fixture"]),
+    );
+    const dispatch = await openDispatch(fixture, work);
+    await fileHandback(fixture, dispatch, "the only view");
+
+    // The command guard is not the invariant; the store is. Bypass the command.
+    expect(() =>
+      insertHandback(fixture, {
+        claim: "a second view",
+        dispatch,
+        id: "h2",
+        status: "DONE",
+      })
+    ).toThrow(/UNIQUE|constraint/i);
+
+    const listed = await runCli(fixture, ["handback", "list", dispatch]);
+    expect(listed.stdout).not.toContain("h2");
+  });
+});
+
+test("477 a store that already holds duplicate handbacks keeps the first and migrates (w475, d706)", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "legacy duplicates", "--atomic-reason", "fixture"]),
+    );
+    const dispatch = await openDispatch(fixture, work);
+    const first = await fileHandback(fixture, dispatch, "the first view");
+
+    const path = join(fixture.repo, ".maestro", "maestro.db");
+    let database = new Database(path);
+    database.exec("DROP INDEX IF EXISTS handbacks_dispatch_id");
+    database.exec("CREATE INDEX handbacks_dispatch_id ON handbacks(dispatch_id)");
+    database
+      .query(
+        `INSERT INTO handbacks
+          (id, dispatch_id, status, claim, proof, assumptions, residual_risks,
+           incidental_findings, created_at)
+         VALUES ('h9', ?, 'DONE', 'a later duplicate', 'p', 'None', 'None', 'None', ?)`,
+      )
+      .run(dispatch, new Date(Date.now() + 60_000).toISOString());
+    database.close();
+
+    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
+
+    database = new Database(path, { readonly: true });
+    const survivors = database
+      .query<{ id: string }, [string]>("SELECT id FROM handbacks WHERE dispatch_id = ?")
+      .all(dispatch)
+      .map((row) => row.id);
+    const unique = database
+      .query<{ sql: string | null }, []>(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'handbacks_dispatch_id'",
+      )
+      .get()?.sql ?? "";
+    database.close();
+    expect(survivors).toEqual([first]);
+    expect(unique).toMatch(/UNIQUE/i);
+  });
+});
