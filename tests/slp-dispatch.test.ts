@@ -1881,3 +1881,33 @@ test("475 an undeclared second dispatch is sequential work, not a council (w502,
     expect(listed.stdout).not.toContain("council:");
   });
 }, 60_000);
+
+test("478 only the opener can cancel a dispatch, so a peer cannot shrink a sealed council (w474, d706)", async () => {
+  await withFixture(async (fixture) => {
+    const council = await openCouncil(fixture);
+    const [first, second] = council.dispatches;
+
+    const byStranger = await runCli(
+      fixture,
+      ["dispatch", "cancel", second, "--reason", "not mine to cancel"],
+      session("peer-a"),
+    );
+    expect(byStranger.exitCode).not.toBe(0);
+    const envelope = JSON.parse(byStranger.stderr) as { error: { code: string; message: string } };
+    expect(envelope.error.code).toBe("NOT_OPENER");
+    expect(envelope.error.message).toContain("test-session");
+
+    // The council is intact: the first view stays sealed.
+    expect((await runCli(fixture, handbackFileArgs(first))).exitCode).toBe(0);
+    const listed = await runCli(fixture, ["dispatch", "list", council.work]);
+    expect(listed.stdout).toContain("council: sealed (1/2 returned)");
+
+    // The opener still owns the exit.
+    const byOpener = await runCli(
+      fixture,
+      ["dispatch", "cancel", second, "--reason", "lane replaced"],
+      session("test-session"),
+    );
+    expect(byOpener.exitCode).toBe(0);
+  });
+}, 60_000);
