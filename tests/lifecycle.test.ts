@@ -869,3 +869,38 @@ test("411 update regenerates the room's generated files and keeps OWNER.md", asy
     expect(await readFile(owner, "utf8")).toBe("# owner notes\nkeep me\n");
   });
 });
+
+test("530 one update materializes the room templates shipped by the commit it installs", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // update calls scaffoldRoom after swapRuntime, but the running process
+    // imported room.ts before the swap, so the templates were written from the
+    // outgoing runtime and the room read doctrine one release behind. The
+    // marker below ships in the new commit; one update must materialize it.
+    const marker = "ROOM-TEMPLATE-MARKER-530";
+    const roomPath = join(publisher, "src", "plugins", "room.ts");
+    const roomSource = await readFile(roomPath, "utf8");
+    const heading = "# Handing owner intent to a repository Lead";
+    expect(roomSource).toContain(heading);
+    await writeFile(roomPath, roomSource.replace(heading, `${heading} ${marker}`));
+    await git(publisher, ["add", "src/plugins/room.ts"]);
+    await git(publisher, ["commit", "-m", "ship a new lead template"]);
+    await git(publisher, ["push", "origin", "main"]);
+    const remoteCommit = await git(publisher, ["rev-parse", "HEAD"]);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+    expect(updated.exitCode).toBe(0);
+
+    // Pin the swap itself, so a missing marker can only be the ordering defect
+    // and never an update that failed to install the commit at all.
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(remoteCommit);
+    expect(await readFile(join(runtime.runtimeRoot, "src", "plugins", "room.ts"), "utf8")).toContain(
+      marker,
+    );
+
+    expect(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8")).toContain(marker);
+  });
+}, 120_000);

@@ -18,7 +18,7 @@ import {
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
-import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
+import { installInRoomMessage, isRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -316,8 +316,25 @@ async function update(): Promise<CliResult> {
   const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
   const skillText = skillSync ? formatSkillSync(skillSync) : "";
   // Refresh the generated room templates after an update; previously only
-  // install did this.
-  await scaffoldRoom(home);
+  // install did this. The templates are compiled into room.ts, and this
+  // process imported it before the swap, so calling scaffoldRoom in-process
+  // writes the outgoing release's text and leaves the room reading doctrine
+  // one release behind. A query string does not help: Bun keys the module
+  // cache on the resolved path and ignores it. Only a fresh process loads the
+  // runtime that was just swapped in.
+  const scaffolded = await command(runtime, [
+    process.execPath,
+    "-e",
+    `const room = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "room.ts")).href)});` +
+      `await room.scaffoldRoom(${JSON.stringify(home)});`,
+  ]);
+  if (scaffolded.exitCode !== 0) {
+    throw new CliError(
+      "ROOM_SCAFFOLD_FAILED",
+      `runtime installed but the room templates were not refreshed: ${scaffolded.stderr || `bun exited ${scaffolded.exitCode}`}; run maestro update again`,
+      { fix: "run maestro update again" },
+    );
+  }
   return {
     data: { aheadOnly, noUpstream, oldCommit, newCommit, version: packageJson.version },
     text: (noUpstream
