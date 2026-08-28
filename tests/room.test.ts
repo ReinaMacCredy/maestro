@@ -268,8 +268,10 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
       expect(claude.split("\n").filter(Boolean).length).toBeLessThanOrEqual(6);
       expect(lane).toContain("herdr pane split");
       expect(lane).toContain("herdr agent start");
-      expect(lane).toContain("herdr agent wait <name> --until working --timeout 60000");
-      expect(lane).toContain("`herdr agent wait <name>` with no `--until`");
+      expect(lane).toContain(
+        "herdr agent wait peer-<dispatch id> --until working --timeout 60000",
+      );
+      expect(lane).toContain("`herdr agent wait peer-<dispatch id>` with no `--until`");
       expect(lane).not.toContain("--until done");
       expect(lane).toContain("re-arm");
       expect(lane).toContain("holder shown by `maestro status --live` is the authority");
@@ -393,7 +395,7 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
 
     expect(lane).toContain(
-      "`herdr agent wait <name>` with no `--until` as a background command",
+      "`herdr agent wait peer-<dispatch id>` with no `--until` as a background command",
     );
     expect(lane).toContain(
       "`BLOCKED`, `DEPENDENCY_REQUEST`, `COUNCIL_REQUEST`, and `REOPEN_REQUEST` also pass `--request \"<retry condition or requested action>\"`.",
@@ -425,21 +427,23 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     const identity = await readFile(join(room, "IDENTITY.md"), "utf8");
     const agents = await readFile(join(room, "AGENTS.md"), "utf8");
 
-    expect(lead).toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
+    expect(lead).not.toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
     expect(lead).toContain("`herdr agent list`");
     expect(lead).toContain(
-      '`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>"`',
+      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>"`',
     );
     expect(lead).toContain(
       "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead --no-focus`",
     );
     expect(lead).toContain(
-      "`herdr agent start <name> --kind <harness OWNER.md names> --pane <pane-id>`",
+      "`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>`",
     );
     expect(lead).toContain(
-      '`herdr agent prompt <name> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."`',
+      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."`',
     );
-    expect(lead).toContain("`herdr agent wait <name> --until working --timeout 60000`");
+    expect(lead).toContain(
+      "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
+    );
     expect(lead).toContain(
       '`maestro work note <room-work-id> "handed intent to <repo>: <one-line summary>"`',
     );
@@ -448,6 +452,41 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     );
     expect(identity).toContain("read `lead.md`");
     expect(agents).toContain("read `lead.md`");
+  });
+});
+
+test("484 [lint] installed Lead guidance uses only the opener-set repository role name", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = await readFile(join(fixture.home, "maestro", "lead.md"), "utf8");
+
+    expect(lead).toContain("lead-<repo basename>");
+    expect(lead).toContain("whose cwd is the repository");
+    expect(lead).toContain("Never prompt a pane with any other name.");
+    expect(lead).not.toContain(
+      "A Lead is live when a session in the tree holds parent work or is simply live with that cwd.",
+    );
+    expect(lead).not.toContain("find the pane whose cwd is the repository");
+  });
+});
+
+test("485 [lint] installed lane guidance binds the Peer name before agent start", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lane = await readFile(join(fixture.home, "maestro", "lane.md"), "utf8");
+    const opened = lane.indexOf("`maestro dispatch open <work-id>");
+    const started = lane.indexOf(
+      "`herdr agent start peer-<dispatch id> --kind <kind> --pane <pane-id>`",
+    );
+
+    expect(opened).toBeGreaterThanOrEqual(0);
+    expect(started).toBeGreaterThan(opened);
+    expect(lane).toContain(
+      'not my role: <name> holds <dispatch id>; send intent to the Lead',
+    );
+    expect(lane).toContain("runs no Maestro write verb and files nothing");
   });
 });
 
@@ -482,7 +521,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       "maestro dispatch confirm <dispatch-id> --session <session-id>",
       "maestro dispatch cancel <dispatch-id> --reason wrong-holder",
       "maestro work release <work-id>",
-      'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>',
+      'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
       "maestro recipe show slp",
@@ -526,7 +565,6 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
           candidate.startsWith("maestro dispatch open ")
         ) as string;
         const openArgs = argumentsFor(openCommand);
-        openArgs.splice(openArgs.indexOf("--target-session"), 2);
         const opened = await runInstalledCliAt(
           fixture,
           fixture.repo,
