@@ -603,3 +603,40 @@ test("471 the current session id does not depend on which historical row shares 
     expect(after).not.toBe(before);
   });
 });
+
+test("480 work add alone records a live session before attributing its event", async () => {
+  await withFixture(async (fixture) => {
+    const added = await runCli(
+      fixture,
+      ["work", "add", "add-only session", "--atomic-reason", "fixture"],
+      session("add-only"),
+    );
+    expect(added.exitCode).toBe(0);
+    const work = idFrom(added);
+
+    const live = await runCli(fixture, ["status", "--live"]);
+    expect(live.exitCode).toBe(0);
+    expect(live.stdout).toContain("add-only [live]");
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const attribution = database
+      .query<
+        { id: string; last_event: string; session_id: string },
+        [string]
+      >(
+        `SELECT sessions.id, sessions.last_event, event_log.session_id
+         FROM event_log
+         JOIN sessions ON sessions.id = event_log.session_id
+         WHERE event_log.type = 'work.add' AND event_log.entity_id = ?`,
+      )
+      .get(work);
+    database.close();
+    expect(attribution).toEqual({
+      id: "add-only",
+      last_event: "work.add",
+      session_id: "add-only",
+    });
+  });
+});

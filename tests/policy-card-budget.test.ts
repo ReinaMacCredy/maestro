@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -134,6 +135,104 @@ test("468 the budget reads its limit from the plugin config", async () => {
     const refused = await add(fixture, "a second");
     expect(refused.exitCode).not.toBe(0);
     expect(refused.stderr).toContain("policy-card-budget");
+  });
+});
+
+test("479 cancelling a parent cascades through mutable descendants and frees their card budget", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await add(fixture, "cascade parent"));
+    const heldChild = idFrom(await add(fixture, "held child", ["--parent", parent]));
+    const doneChild = idFrom(await add(fixture, "done child", ["--parent", parent]));
+    const cancelledChild = idFrom(
+      await add(fixture, "cancelled child", ["--parent", parent]),
+    );
+    const heldSession = { MAESTRO_SESSION_ID: "held-child", MAESTRO_SESSION_PID: String(process.pid) };
+    const doneSession = { MAESTRO_SESSION_ID: "done-child", MAESTRO_SESSION_PID: String(process.pid) };
+
+    expect((await runCli(fixture, ["work", "start", heldChild], heldSession)).exitCode).toBe(0);
+    const openGrandchild = idFrom(
+      await add(fixture, "open grandchild", ["--parent", heldChild]),
+    );
+    expect((await runCli(fixture, ["work", "start", doneChild], doneSession)).exitCode).toBe(0);
+    expect(
+      (
+        await runCli(
+          fixture,
+          ["work", "done", doneChild, "--claim", "finished", "--proof", "fixture"],
+          doneSession,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCli(fixture, [
+          "work", "cancel", cancelledChild, "--reason", "already settled",
+        ])
+      ).exitCode,
+    ).toBe(0);
+
+    await setPlugin(fixture, "policy-card-budget", false);
+    expect((await add(fixture, "budget filler")).exitCode).toBe(0);
+    expect((await add(fixture, "blocked before cascade")).exitCode).not.toBe(0);
+
+    const reason = "parent no longer needed";
+    expect(
+      (await runCli(fixture, ["work", "cancel", parent, "--reason", reason])).exitCode,
+    ).toBe(0);
+
+    const shown = async (id: string) => {
+      const result = await runCli(fixture, ["work", "show", id, "--json"]);
+      expect(result.exitCode).toBe(0);
+      return (JSON.parse(result.stdout) as {
+        data: { work: { cancelReason: string | null; heldBy: string | null; state: string } };
+      }).data.work;
+    };
+    expect(await shown(parent)).toMatchObject({ state: "cancelled", cancelReason: reason });
+    for (const id of [heldChild, openGrandchild]) {
+      expect(await shown(id)).toMatchObject({
+        state: "cancelled",
+        cancelReason: `parent ${parent} cancelled: ${reason}`,
+        heldBy: null,
+      });
+    }
+    expect(await shown(doneChild)).toMatchObject({ state: "done", cancelReason: null });
+    expect(await shown(cancelledChild)).toMatchObject({
+      state: "cancelled",
+      cancelReason: "already settled",
+    });
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    for (const id of [parent, heldChild, openGrandchild, doneChild, cancelledChild]) {
+      expect(ready.stdout).not.toContain(id);
+    }
+
+    expect((await add(fixture, "freed slot one")).exitCode).toBe(0);
+    expect((await add(fixture, "freed slot two")).exitCode).toBe(0);
+    expect((await add(fixture, "blocked after two freed slots")).exitCode).not.toBe(0);
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const events = database
+      .query<{ entity_id: string; payload: string }, []>(
+        "SELECT entity_id, payload FROM event_log WHERE type = 'work.cancel' ORDER BY id",
+      )
+      .all()
+      .filter((event) => [parent, heldChild, openGrandchild, doneChild, cancelledChild].includes(event.entity_id));
+    database.close();
+    expect(events.map((event) => event.entity_id)).toEqual([
+      cancelledChild,
+      parent,
+      heldChild,
+      openGrandchild,
+    ]);
+    expect(events.map((event) => JSON.parse(event.payload).reason)).toEqual([
+      "already settled",
+      reason,
+      `parent ${parent} cancelled: ${reason}`,
+      `parent ${parent} cancelled: ${reason}`,
+    ]);
   });
 });
 

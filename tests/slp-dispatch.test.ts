@@ -423,6 +423,53 @@ test("424 only the dispatch opener can confirm an untargeted claim", async () =>
   });
 });
 
+test("481 confirming a targeted holder is an idempotent success while a mismatch is rejected", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "targeted confirmation", "--atomic-reason", "fixture"]),
+    );
+    const holder = "target-holder";
+    const dispatch = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--target-session", holder]),
+    );
+    const accepted = await runCli(fixture, ["dispatch", "accept", dispatch], session(holder));
+    expect(accepted.exitCode).toBe(0);
+
+    const confirmed = await runCli(fixture, [
+      "dispatch",
+      "confirm",
+      dispatch,
+      "--session",
+      holder,
+    ]);
+    expect(confirmed.exitCode).toBe(0);
+    expect(confirmed.stdout).toBe(accepted.stdout);
+    expect(confirmed.stdout).toContain("claimed by: none");
+    expect(confirmed.stdout).toContain(`held by: ${holder}`);
+
+    const mismatch = await runCli(fixture, [
+      "dispatch",
+      "confirm",
+      dispatch,
+      "--session",
+      "different-holder",
+    ]);
+    expect(mismatch.exitCode).not.toBe(0);
+    expect(mismatch.stderr).toContain('"code":"CLAIM_MISMATCH"');
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    const stored = database
+      .query<{ claimed_by: string | null; held_by: string | null }, [string]>(
+        "SELECT claimed_by, held_by FROM dispatches WHERE id = ?",
+      )
+      .get(dispatch);
+    database.close();
+    expect(stored).toEqual({ claimed_by: null, held_by: holder });
+  });
+});
+
 test("426 handback file and show round-trip an optional opaque candidate", async () => {
   await withFixture(async (fixture) => {
     const dispatch = await openDispatch(fixture);
