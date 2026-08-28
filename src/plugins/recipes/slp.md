@@ -161,7 +161,7 @@ binding on the role, checkable after the fact, not prevented.
 |---|---|---|
 | `~/maestro` (opened with `hm`) | Supervisor, the owner's embodiment | the room `AGENTS.md` points at `IDENTITY.md`; `maestro brief` is its event feed across every registered repository |
 | a Herdr agent named `lead-<repo basename>` whose cwd is the repository | Lead of that repository | the room sets the name; the hook brief lists dispatches it opened |
-| a Herdr agent named `peer-<dispatch id>` | Peer | the Lead sets the name and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
+| a pane the Lead opened with a dispatch | Peer | the Lead starts it as `peer-<dispatch id>` and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
 
 A session never becomes a Peer on its own; the Lead makes it one by starting
 `peer-<dispatch id>`, and dispatch acceptance records that binding. A
