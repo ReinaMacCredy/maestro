@@ -2090,3 +2090,31 @@ test("478 only the opener can cancel a dispatch, so a peer cannot shrink a seale
     expect(byOpener.exitCode).toBe(0);
   });
 }, 60_000);
+
+test("532 target mismatch names both exits from a dispatch nobody can accept", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "targeted lane", "--atomic-reason", "fixture"]),
+    );
+    // The Herdr agent name, the value a Lead reached for twice; accept never
+    // matches it and confirm cannot repair the contract, because confirm needs
+    // a claim that never happened. Cancelling is the only exit, so the error
+    // has to say so at the moment it fires.
+    const targeted = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--target-session", "peer-x1"]),
+    );
+
+    const refused = await runCli(
+      fixture,
+      ["dispatch", "accept", targeted],
+      session("real-session-id"),
+    );
+
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("TARGET_MISMATCH");
+    expect(refused.stderr).toContain("harness session id");
+    expect(refused.stderr).toContain(`maestro dispatch cancel ${targeted}`);
+    expect(refused.stderr).toContain("real-session-id");
+    expect(refused.stderr).toContain("pane-bound");
+  });
+});

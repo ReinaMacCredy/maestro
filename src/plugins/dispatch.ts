@@ -914,10 +914,14 @@ export const dispatchPlugin: BuiltInPlugin = {
               );
             }
             if (dispatch.targetSession && dispatch.targetSession !== sessionId) {
+              // confirm cannot repair this: it needs a claim, and a dispatch
+              // nobody can accept never made one. Cancelling is the only exit,
+              // so the error names it rather than leaving it to be discovered.
+              const fix = `run: maestro dispatch cancel ${id} --reason "<why>", then reopen with --target-session ${sessionId} or pane-bound without the flag`;
               throw new CliError(
                 "TARGET_MISMATCH",
-                `${id} targets ${dispatch.targetSession}; current session is ${sessionId}`,
-                { id, targetSession: dispatch.targetSession },
+                `${id} targets ${dispatch.targetSession}; current session is ${sessionId}; --target-session takes the accepting session's harness session id, not the Herdr agent name; ${fix}`,
+                { fix, id, targetSession: dispatch.targetSession },
               );
             }
             if (dispatch.heldBy && dispatch.heldBy !== sessionId) {
