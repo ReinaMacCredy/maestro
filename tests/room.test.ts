@@ -294,6 +294,7 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
 
       const fakeBin = join(fixture.root, "fake-bin");
       const state = join(fixture.root, "herdr-state");
+      const agentState = join(fixture.root, "herdr-agent-state");
       const log = join(fixture.root, "herdr.log");
       await mkdir(fakeBin, { recursive: true });
       await writeFile(
@@ -315,6 +316,23 @@ case "$1 $2" in
   "workspace focus")
     printf '%s\\n' '{"id":"test","result":{"workspace_id":"w9"}}'
     ;;
+  "pane list")
+    printf '%s\\n' '{"id":"test","result":{"type":"pane_list","panes":[{"pane_id":"w9:p1","workspace_id":"w9"}]}}'
+    ;;
+  "agent list")
+    if [ -f "$HERDR_AGENT_STATE" ]; then
+      printf '%s\\n' '{"id":"test","result":{"type":"agent_list","agents":[{"name":"supervisor","pane_id":"w9:p1","workspace_id":"w9"}]}}'
+    else
+      printf '%s\\n' '{"id":"test","result":{"type":"agent_list","agents":[]}}'
+    fi
+    ;;
+  "agent start")
+    : > "$HERDR_AGENT_STATE"
+    printf '%s\\n' '{"id":"test","result":{"name":"supervisor","pane_id":"w9:p1"}}'
+    ;;
+  "agent focus")
+    printf '%s\\n' '{"id":"test","result":{"name":"supervisor","pane_id":"w9:p1"}}'
+    ;;
 esac
 `,
       );
@@ -329,6 +347,7 @@ esac
           env: {
             ...process.env,
             HERDR_ENV: "1",
+            HERDR_AGENT_STATE: agentState,
             HERDR_LOG: log,
             HERDR_STATE: state,
             HOME: fixture.home,
@@ -350,6 +369,12 @@ esac
       ]);
       expect(commands.filter((line) => line.startsWith("workspace focus "))).toEqual([
         "workspace focus w9",
+      ]);
+      expect(commands.filter((line) => line.startsWith("agent start "))).toEqual([
+        "agent start supervisor --kind claude --pane w9:p1",
+      ]);
+      expect(commands.filter((line) => line.startsWith("agent focus "))).toEqual([
+        "agent focus supervisor",
       ]);
     });
   },
@@ -423,6 +448,9 @@ test("250 [lint] installed lane guidance names the runnable Herdr wait command",
     expect(lane).toContain(
       "A delivery lane passes `--candidate <commit or digest>` with its DONE handback.",
     );
+    expect(lane).toContain(
+      "The wait is a convenience; the handback in the store is the return; a wait that outlives the handback (a lane with a background shell stays `working`) is resolved by reading the store, never by prompting the lane.",
+    );
     expect(lane).not.toContain("herdr events");
     expect(lane).not.toContain("events.wait");
   });
@@ -435,6 +463,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     expect(installed.exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
     const lead = await readFile(join(room, "lead.md"), "utf8");
+    const shellrc = await readFile(join(room, "shellrc"), "utf8");
     const identity = await readFile(join(room, "IDENTITY.md"), "utf8");
     const agents = await readFile(join(room, "AGENTS.md"), "utf8");
 
@@ -464,6 +493,22 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     expect(lead).toContain(
       'Never run `maestro work add` or any write in the project store, run `maestro dispatch open`, suggest topology in the prompt, or read the pane transcript.',
     );
+    expect(lead).toContain(
+      '`maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`, then `herdr agent prompt supervisor "[from lead][ask d<id>] <question>"`',
+    );
+    expect(lead).toContain("A non-decision question is a work note sent the same way.");
+    expect(lead).toContain("The room never runs `herdr agent wait` on a Lead");
+    expect(lead).toContain("the store is the truth and the room's next prompt shows it");
+    expect(lead).toContain(
+      "The room's reply is a prompt and the record (lock or supersede) is what the Lead acts on.",
+    );
+    expect(lead).not.toContain(
+      "The Lead reports back through its own store and the next `maestro brief`.",
+    );
+    expect(shellrc).toContain(
+      'herdr agent start supervisor --kind claude --pane "$root_pane_id"',
+    );
+    expect(shellrc).toContain("# The owner may edit the supervisor's agent kind.");
     expect(identity).toContain("read `lead.md`");
     expect(agents).toContain("read `lead.md`");
   });
@@ -1536,11 +1581,14 @@ test("496 room guidance names repository-only verbs and the lane return boundary
       expect(await readFile(join(room, name), "utf8")).toContain(repositoryOnly);
     }
     const lane = await readFile(join(room, "lane.md"), "utf8");
-    expect(lane).toContain("never talks to the Lead through the terminal");
+    expect(lane).not.toContain("never talks to the Lead through the terminal");
     expect(lane).toContain("`herdr pane send-text`");
-    expect(lane).toContain("`herdr agent prompt`");
-    expect(lane).toContain("its only returns are the handback and `--request`");
-    expect(lane).toContain("a `[from peer]` note is `maestro work note`");
+    expect(lane).toContain(
+      '`herdr agent prompt lead-<repo basename> "[from peer][x<id>] <message>"`',
+    );
+    expect(lane).toContain("about a stored record (a handback, a note, a draft)");
+    expect(lane).toContain("Its returns stay the handback and `--request`.");
+    expect(lane).toContain("A lane never messages the Supervisor.");
   });
 });
 
@@ -1562,9 +1610,9 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
 });
 
 test.skipIf(process.env.HERDR_ENV !== "1")(
-  "236 [lint] hm prints the read-only brief and returns without starting an agent",
+  "236 [lint] hm prints the read-only brief before starting supervisor",
   async () => {
-    // Shell-boundary lint: proves the generated function's fake-command path, not real no-agent or no-store effects.
+    // Shell-boundary lint: proves the generated function's fake-command path, not real Herdr effects.
     await withFixture(async (fixture) => {
       const { path } = await prepareInstallFixture(fixture);
       await runCli(fixture, ["install"], { PATH: path });
@@ -1576,7 +1624,23 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         join(fakeBin, "herdr"),
         `#!/bin/sh
 printf '%s\\n' "$*" >> "$HERDR_LOG"
-printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[{"label":"maestro","workspace_id":"w9"}]}}'
+case "$1 $2" in
+  "workspace list")
+    printf '%s\\n' '{"id":"test","result":{"type":"workspace_list","workspaces":[{"label":"maestro","workspace_id":"w9"}]}}'
+    ;;
+  "workspace focus")
+    printf '%s\\n' '{"id":"test","result":{"workspace_id":"w9"}}'
+    ;;
+  "pane list")
+    printf '%s\\n' '{"id":"test","result":{"type":"pane_list","panes":[{"pane_id":"w9:p1","workspace_id":"w9"}]}}'
+    ;;
+  "agent list")
+    printf '%s\\n' '{"id":"test","result":{"type":"agent_list","agents":[]}}'
+    ;;
+  "agent start")
+    printf '%s\\n' '{"id":"test","result":{"name":"supervisor","pane_id":"w9:p1"}}'
+    ;;
+esac
 `,
       );
       await chmod(join(fakeBin, "herdr"), 0o755);
@@ -1622,10 +1686,14 @@ printf '%s\\n' 'owner brief'
       expect(await readFile(maestroLog, "utf8")).toBe(
         `brief read-only=1 cwd=${join(fixture.home, "maestro")}\n`,
       );
-      const herdrCommands = await readFile(herdrLog, "utf8");
-      expect(herdrCommands).toContain("workspace list");
-      expect(herdrCommands).toContain("workspace focus w9");
-      expect(herdrCommands).not.toContain("agent");
+      const herdrCommands = (await readFile(herdrLog, "utf8")).trim().split("\n");
+      expect(herdrCommands).toEqual([
+        "workspace list",
+        "workspace focus w9",
+        "pane list --workspace w9",
+        "agent list",
+        "agent start supervisor --kind claude --pane w9:p1",
+      ]);
     });
   },
 );

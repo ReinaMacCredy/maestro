@@ -441,6 +441,10 @@ test("370 [lint] recipe slp and lane.md state the cross-role messaging conventio
   expect(section).toContain("[from <role>]");
   expect(section).toContain("[ask d<id>]");
   expect(section).toContain("maestro decision draft");
+  expect(section).toContain(
+    'herdr agent prompt supervisor "[from lead][ask d<id>] <question>"',
+  );
+  expect(section).toContain("`hm` starts or focuses the room agent named `supervisor`");
   expect(section).toContain("supervisor default, not owner instruction");
   expect(section).toContain("maestro work note");
   expect(section).toMatch(/answer is the record/i);
