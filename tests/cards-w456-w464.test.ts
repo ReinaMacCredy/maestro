@@ -123,24 +123,18 @@ function insertHandback(
   database.close();
 }
 
-test("400 handback show accepts a dispatch id and resolves its latest handback", async () => {
+test("400 handback show accepts a dispatch id and resolves its one handback", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "latest handback", "--atomic-reason", "fixture"]),
     );
     const dispatch = await openDispatch(fixture, work);
-    const first = await fileHandback(fixture, dispatch, "first claim");
-    insertHandback(fixture, {
-      claim: "latest claim\nprivate detail",
-      dispatch,
-      id: "h2",
-      status: "BLOCKED",
-    });
+    const first = await fileHandback(fixture, dispatch, "the claim\nprivate detail");
 
     const byDispatch = await runCli(fixture, ["handback", "show", dispatch]);
     expect(byDispatch.exitCode).toBe(0);
-    expect(byDispatch.stdout).toStartWith("h2 [BLOCKED]\n");
-    expect(byDispatch.stdout).toContain("claim: latest claim\nprivate detail\n");
+    expect(byDispatch.stdout).toStartWith(`${first} [DONE]\n`);
+    expect(byDispatch.stdout).toContain("claim: the claim\nprivate detail\n");
 
     const byHandback = await runCli(fixture, ["handback", "show", first]);
     expect(byHandback.exitCode).toBe(0);
@@ -148,7 +142,7 @@ test("400 handback show accepts a dispatch id and resolves its latest handback",
   });
 });
 
-test("401 dispatch show pins singular and plural handback lines", async () => {
+test("401 dispatch show pins its handback line", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "show handbacks", "--atomic-reason", "fixture"]),
@@ -179,18 +173,6 @@ test("401 dispatch show pins singular and plural handback lines", async () => {
       stdout: [...expected, `handback: ${handback}`].join("\n") + "\n",
     });
 
-    insertHandback(fixture, {
-      claim: "second shown claim",
-      dispatch,
-      id: "h2",
-      status: "UNKNOWN",
-    });
-    const plural = await runCli(fixture, ["dispatch", "show", dispatch]);
-    expect(plural).toEqual({
-      exitCode: 0,
-      stderr: "",
-      stdout: [...expected, `handbacks: ${handback}, h2`].join("\n") + "\n",
-    });
   });
 });
 

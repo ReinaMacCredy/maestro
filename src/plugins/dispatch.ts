@@ -158,8 +158,51 @@ const createHandbacksTableSql = `
   );
 `;
 
+// One dispatch, one handback is a store invariant, not a command guard: the
+// command path can be bypassed by any other writer (d706, w475).
 const createHandbacksIndexSql =
-  "CREATE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id)";
+  "CREATE UNIQUE INDEX IF NOT EXISTS handbacks_dispatch_id ON handbacks(dispatch_id)";
+
+// A store written before that index may hold duplicates. The first return is
+// the one the council saw, so later rows are dropped and named in the log.
+function migrateHandbackUniqueness(context: PluginContext): void {
+  if (context.store.readOnly) return;
+  const existing = context.store.database
+    .query<{ sql: string | null }, []>(
+      "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'handbacks_dispatch_id'",
+    )
+    .get()?.sql;
+  if (existing && /unique/i.test(existing)) return;
+  const migration = context.store.database.transaction(() => {
+    const duplicates = context.store.database
+      .query<{ id: string; dispatch_id: string }, []>(
+        `SELECT id, dispatch_id FROM handbacks
+         WHERE id NOT IN (
+           SELECT id FROM handbacks AS keeper
+           WHERE keeper.created_at = (
+             SELECT MIN(created_at) FROM handbacks AS earliest
+             WHERE earliest.dispatch_id = keeper.dispatch_id
+           )
+           GROUP BY keeper.dispatch_id
+         )`,
+      )
+      .all();
+    const remove = context.store.database.query("DELETE FROM handbacks WHERE id = ?");
+    for (const row of duplicates) {
+      remove.run(row.id);
+      context.log.append({
+        type: "handback.duplicate-dropped",
+        entityType: "handback",
+        entityId: row.id,
+        sessionId: context.sessions.current().id,
+        payload: { dispatchId: row.dispatch_id },
+      });
+    }
+    context.store.database.exec("DROP INDEX IF EXISTS handbacks_dispatch_id");
+    context.store.database.exec(createHandbacksIndexSql);
+  });
+  migration.immediate();
+}
 
 function handbacksSupportCouncilRequest(context: PluginContext): boolean {
   const schema = context.store.database
@@ -544,6 +587,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       );
     `);
     migrateHandbackStatusVocabulary(context);
+    migrateHandbackUniqueness(context);
     const hasCouncilGenerationAnchor = context.store.database
       .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
       .all()
