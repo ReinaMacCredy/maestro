@@ -13,6 +13,19 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 Nothing yet.
 
+## [0.111.1] - 2026-08-29
+
+### Changed
+
+- Every Claude agent SLP starts now carries `--autocompact 250000` (owner
+  order, room d24): the Model table's Claude cells, the Claude command strings
+  in the lane and lead templates, and the `hm` shell function, which previously
+  started the Supervisor with no flags at all. Codex command strings are
+  unchanged, since Codex has no equivalent flag. `hm` takes the window but not
+  a model: model names live in `OWNER.md`, and the `--kind` plus the flags
+  after `--` are named as one owner edit point so switching to `--kind codex`
+  does not leave Claude flags behind.
+
 ## [0.111.0] - 2026-08-29
 
 The public-adoption release (d8). Maestro is now licensed, has a security

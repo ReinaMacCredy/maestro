@@ -93,7 +93,7 @@ test("42 MCP initialize carries the dynamic brief and lists exactly two meta-too
     const tools = (listed.result?.tools ?? []) as Array<{ name: string }>;
 
     expect(initialized.error).toBeUndefined();
-    expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version: "0.111.0" });
+    expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version: "0.111.1" });
     expect(initialized.result?.instructions).toContain("held work:");
     expect(initialized.result?.instructions).toContain("enabled policies:");
     expect(initialized.result?.instructions).not.toContain("pending message");

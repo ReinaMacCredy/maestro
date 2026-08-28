@@ -69,7 +69,7 @@ test("31 installed version and top-level aliases print package and install ident
     for (const result of [verb, longAlias, shortAlias]) {
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
-      expect(result.stdout).toContain("maestro 0.111.0");
+      expect(result.stdout).toContain("maestro 0.111.1");
       expect(result.stdout).toContain(expectedCommit);
       expect(result.stdout).toMatch(/installed \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
     }
@@ -84,7 +84,7 @@ test("32 source version without an install stamp reports source dev and exits ze
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe("");
-    expect(result.stdout).toBe("maestro 0.111.0 (source/dev)\n");
+    expect(result.stdout).toBe("maestro 0.111.1 (source/dev)\n");
   });
 });
 
@@ -100,7 +100,7 @@ test("33 install writes a portable version commit and ISO date stamp inside the 
     };
 
     expect(Object.keys(stamp).sort()).toEqual(["commit", "installedAt", "version"]);
-    expect(stamp.version).toBe("0.111.0");
+    expect(stamp.version).toBe("0.111.1");
     expect(stamp.commit).toBe(await sourceCommit());
     expect(new Date(stamp.installedAt).toISOString()).toBe(stamp.installedAt);
     expect(Object.values(stamp).some((value) => value.startsWith("/"))).toBe(false);
