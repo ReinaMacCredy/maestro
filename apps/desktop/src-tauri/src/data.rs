@@ -1,6 +1,7 @@
-//! Read-only data layer: runs `maestro <verb> --json` per configured repo and
-//! emits one `snapshot` event with all repos. Never opens the sqlite store; the
-//! db/wal mtimes are only read to decide when to re-run the verbs.
+//! Read-only data layer: runs `maestro <verb> --json` per configured repo under
+//! `MAESTRO_READ_ONLY=1` and emits one `snapshot` event with all repos. Never
+//! opens the sqlite store; the db/wal mtimes are only read to decide when to
+//! re-run the verbs.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -121,6 +122,10 @@ fn run_verb(bin: &Path, repo: &Path, args: &[&str]) -> Result<Value, String> {
         .args(args)
         .current_dir(repo)
         .env("PATH", path_env(bin))
+        // Watching a store must not change it: observer mode refuses every
+        // mutating verb, skips session and liveness bookkeeping, and declines
+        // to load the watched repository's own plugins.
+        .env("MAESTRO_READ_ONLY", "1")
         .output()
         .map_err(|e| format!("spawn {}: {}", bin.display(), e))?;
     let stdout = String::from_utf8_lossy(&out.stdout);

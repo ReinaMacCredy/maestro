@@ -48,3 +48,14 @@ test("505 [lint] README points an external reader at all three governance files"
     expect(readme).toContain(file);
   }
 });
+
+test("506 the desktop data layer spawns every maestro verb under MAESTRO_READ_ONLY=1", async () => {
+  // The desktop polls each configured repository once a second while agents are
+  // working in it. Without this env the poll writes a session row, heartbeats
+  // liveness, and loads that repository's plugins, so watching a store would
+  // change it.
+  const data = await repoFile("apps/desktop/src-tauri/src/data.rs");
+  const spawn = data.match(/fn run_verb\([\s\S]*?\n}/)?.[0];
+  expect(spawn).toBeString();
+  expect(spawn).toContain('.env("MAESTRO_READ_ONLY", "1")');
+});
