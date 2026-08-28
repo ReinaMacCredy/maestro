@@ -156,7 +156,7 @@ test("98 session lastEvent records what happened, not what was attempted", async
       await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"], session),
     );
     expect((await runCli(fixture, ["work", "start", gated], session)).exitCode).not.toBe(0);
-    expect(await lastEvent()).toBe("SessionStart");
+    expect(await lastEvent()).toBe("work.add");
 
     const item = idFrom(
       await runCli(
