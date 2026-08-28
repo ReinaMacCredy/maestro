@@ -606,7 +606,6 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     );
     expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
-      "maestro work note",
       'maestro work add "<title>" --atomic-reason "<why>"',
       "maestro work release <work-id>",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
