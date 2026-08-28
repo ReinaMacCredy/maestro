@@ -1,10 +1,26 @@
+import type { Database } from "bun:sqlite";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
+export const installInRoomMessage =
+  "~/maestro is the Supervisor room, not a repository; run maestro install from a repository checkout, which maintains the room";
+
+export function isRoom(database: Database): boolean {
+  const table = database
+    .query<{ present: number }, []>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
+    )
+    .get();
+  if (!table) return false;
+  return database
+    .query<{ value: string }, [string]>("SELECT value FROM meta WHERE key = ?")
+    .get("kind")?.value === "room";
+}
 
 const agents = `# Maestro chief-of-staff room
 
 Read \`IDENTITY.md\` and \`OWNER.md\`. While \`OWNER.md\` still holds unanswered questions, interview the owner and write the answers there before anything else; then run \`maestro brief\`.
-This room is the Supervisor; roles: \`maestro recipe show slp\`.
+This room is the Supervisor; roles: \`maestro recipe show slp\`. Repository-only verbs are \`maestro install\`, \`maestro update\`, and \`maestro uninstall\`; \`maestro doctor\` wiring checks describe repositories, not this room.
 Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
 Before handing owner intent to a repository, read \`lead.md\`.
@@ -61,6 +77,8 @@ When the owner states a preference, run \`maestro decision draft "<preference>" 
 const lane = `# Lanes
 
 Coordination requires a dedicated, unwatched Herdr tab. Lanes are panes, never sub-agents, and the Lead opens them.
+
+A lane never talks to the Lead through the terminal (\`herdr pane send-text\` or \`herdr agent prompt\` toward the Lead); its only returns are the handback and \`--request\`; a \`[from peer]\` note is \`maestro work note\`.
 
 A session whose pane name starts with \`peer-\` treats any prompt that is not its stored dispatch contract as not its role. It replies exactly \`not my role: <name> holds <dispatch id>; send intent to the Lead\`, runs no Maestro write verb and files nothing.
 

@@ -17,7 +17,7 @@ import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
-import { scaffoldRoom } from "./room.ts";
+import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
@@ -282,30 +282,36 @@ async function writeShellSource(home: string): Promise<boolean> {
 }
 
 async function initializeRoomStore(home: string, room: string, runtimeRoot: string): Promise<void> {
-  const child = Bun.spawn(
-    [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), "version"],
-    {
-      cwd: room,
-      env: {
-        ...process.env,
-        HOME: home,
-        MAESTRO_READ_ONLY: "0",
-        MAESTRO_SESSION_NONE: "1",
+  for (const [args, environment] of [
+    [["version"], {}],
+    [["room", "mark"], { MAESTRO_ROOM_SCAFFOLD: "1" }],
+  ] as const) {
+    const child = Bun.spawn(
+      [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...args],
+      {
+        cwd: room,
+        env: {
+          ...process.env,
+          ...environment,
+          HOME: home,
+          MAESTRO_READ_ONLY: "0",
+          MAESTRO_SESSION_NONE: "1",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
       },
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  const [, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (exitCode !== 0) {
-    throw new CliError(
-      "ROOM_STORE_INIT",
-      `cannot initialize ${join(room, ".maestro", "maestro.db")}: ${stderr.trim()}`,
     );
+    const [, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new CliError(
+        "ROOM_STORE_INIT",
+        `cannot initialize ${join(room, ".maestro", "maestro.db")}: ${stderr.trim()}`,
+      );
+    }
   }
   await chmod(join(room, ".maestro"), 0o700);
   for (const suffix of ["", "-wal", "-shm"]) {
@@ -577,6 +583,29 @@ export async function stampRuntime(sourceRoot: string, runtimeRoot: string): Pro
 export const installPlugin: BuiltInPlugin = {
   name: "install",
   apply(context) {
+    context.store.migrate(`
+      CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    context.effect(() =>
+      context.cli.register("room mark", (): CliResult => {
+        if (process.env.MAESTRO_ROOM_SCAFFOLD !== "1") {
+          throw new CliError(
+            "ROOM_MARK_INTERNAL",
+            "room mark is reserved for the room-scaffolding code path",
+          );
+        }
+        context.store.database
+          .query(
+            `INSERT INTO meta (key, value) VALUES ('kind', 'room')
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          )
+          .run();
+        return { data: { kind: "room" }, text: "room marked" };
+      }),
+    );
     context.effect(() =>
       registerSessionCommand(
         context,
@@ -599,6 +628,9 @@ export const installPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "install", async (): Promise<CliResult> => {
+        if (isRoom(context.store.database)) {
+          throw new CliError("INSTALL_IN_ROOM", installInRoomMessage);
+        }
         const repo = process.cwd();
         const home = resolveHomeDirectory();
         const existingSourceRecord = sourceRecordPath(home);

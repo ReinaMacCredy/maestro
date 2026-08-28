@@ -17,7 +17,7 @@ import {
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
-import { scaffoldRoom } from "./room.ts";
+import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -45,6 +45,24 @@ function homeDirectory(): string {
 
 function runtimeRoot(home: string): string {
   return join(home, ".maestro", "runtime");
+}
+
+function cwdIsRoom(cwd: string): boolean {
+  let database: Database | null = null;
+  try {
+    const store = resolveStoreLocation(cwd);
+    if (!existsSync(store.path)) return false;
+    database = new Database(store.path, { readonly: true, strict: true });
+    return isRoom(database);
+  } catch {
+    return false;
+  } finally {
+    database?.close();
+  }
+}
+
+function refuseRepositoryWiringInRoom(cwd: string): void {
+  if (cwdIsRoom(cwd)) throw new CliError("INSTALL_IN_ROOM", installInRoomMessage);
 }
 
 async function command(cwd: string, args: string[]): Promise<CommandResult> {
@@ -112,6 +130,7 @@ async function swapRuntime(staged: string, runtime: string): Promise<void> {
 }
 
 async function update(): Promise<CliResult> {
+  refuseRepositoryWiringInRoom(resolve(process.cwd()));
   const home = homeDirectory();
   const source = await requireSource(home);
   const runtime = runtimeRoot(home);
@@ -343,6 +362,9 @@ async function doctor(): Promise<CliResult> {
   const checks: string[] = [];
   const issues: DoctorIssue[] = [];
   const installFix = "run maestro install from the Maestro source checkout";
+  const room = cwdIsRoom(repo);
+  const roomFix =
+    "run maestro install or maestro update from a registered repository checkout (registry lists them)";
   const now = new Date();
   const today = [
     now.getFullYear(),
@@ -418,52 +440,96 @@ async function doctor(): Promise<CliResult> {
     }
   }
 
-  const wiringPaths = [
-    join(repo, ".claude", "hooks", "maestro-record.ts"),
-    join(repo, ".codex", "hooks", "maestro-record.ts"),
-  ];
-  for (const path of wiringPaths) {
-    if (!existsSync(path)) {
-      issues.push({ component: "wiring", fix: "run maestro install", message: `missing hook: ${path}` });
+  if (room) {
+    let filesHealthy = true;
+    for (const name of ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "lane.md", "lead.md", "OWNER.md"]) {
+      const path = join(repo, name);
+      if (!existsSync(path)) {
+        filesHealthy = false;
+        issues.push({ component: "room", fix: roomFix, message: `missing room file: ${path}` });
+      }
     }
-  }
-  for (const path of [join(repo, ".claude", "settings.json"), join(repo, ".codex", "hooks.json")]) {
-    const settings = await readJsonObject(path);
-    if (!settings || !JSON.stringify(settings).includes("maestro-record.ts")) {
-      issues.push({ component: "wiring", fix: "run maestro install", message: `missing managed settings in ${path}` });
+    if (filesHealthy) checks.push("room files: ok");
+    const registry = join(repo, "registry");
+    if (existsSync(registry)) {
+      checks.push("room registry: ok");
+    } else {
+      issues.push({ component: "room", fix: roomFix, message: `missing room registry: ${registry}` });
     }
-  }
-  for (const path of [join(repo, "AGENTS.md"), join(repo, "CLAUDE.md")]) {
-    const text = existsSync(path) ? await readFile(path, "utf8") : "";
-    if (!text.includes("<!-- maestro:begin -->")) {
-      issues.push({ component: "wiring", fix: "run maestro install", message: `missing mirror block in ${path}` });
+
+    let hooksHealthy = true;
+    for (const path of [
+      join(repo, ".claude", "hooks", "maestro-record.ts"),
+      join(repo, ".codex", "hooks", "maestro-record.ts"),
+    ]) {
+      if (!existsSync(path)) {
+        hooksHealthy = false;
+        issues.push({ component: "room", fix: roomFix, message: `missing room hook: ${path}` });
+      }
     }
+    for (const path of [
+      join(repo, ".claude", "settings.json"),
+      join(repo, ".codex", "hooks.json"),
+    ]) {
+      const settings = await readJsonObject(path);
+      if (!settings || !JSON.stringify(settings).includes("maestro-record.ts")) {
+        hooksHealthy = false;
+        issues.push({
+          component: "room",
+          fix: roomFix,
+          message: `missing room hook settings: ${path}`,
+        });
+      }
+    }
+    if (hooksHealthy) checks.push("room hooks: ok");
+  } else {
+    const wiringPaths = [
+      join(repo, ".claude", "hooks", "maestro-record.ts"),
+      join(repo, ".codex", "hooks", "maestro-record.ts"),
+    ];
+    for (const path of wiringPaths) {
+      if (!existsSync(path)) {
+        issues.push({ component: "wiring", fix: "run maestro install", message: `missing hook: ${path}` });
+      }
+    }
+    for (const path of [join(repo, ".claude", "settings.json"), join(repo, ".codex", "hooks.json")]) {
+      const settings = await readJsonObject(path);
+      if (!settings || !JSON.stringify(settings).includes("maestro-record.ts")) {
+        issues.push({ component: "wiring", fix: "run maestro install", message: `missing managed settings in ${path}` });
+      }
+    }
+    for (const path of [join(repo, "AGENTS.md"), join(repo, "CLAUDE.md")]) {
+      const text = existsSync(path) ? await readFile(path, "utf8") : "";
+      if (!text.includes("<!-- maestro:begin -->")) {
+        issues.push({ component: "wiring", fix: "run maestro install", message: `missing mirror block in ${path}` });
+      }
+    }
+    const policy = await readJsonObject(join(repo, ".maestro", "config"));
+    const ignore = join(repo, ".maestro", ".gitignore");
+    if (!policy || !JSON.stringify(policy).includes("policy-proof")) {
+      issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed plugin config" });
+    }
+    if (!existsSync(ignore) || !(await readFile(ignore, "utf8")).includes("# maestro-ts:begin")) {
+      issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed .maestro/.gitignore block" });
+    }
+    if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
+    checks.push(await codexTrustCheck(repo, home));
   }
-  const policy = await readJsonObject(join(repo, ".maestro", "config"));
-  const ignore = join(repo, ".maestro", ".gitignore");
-  if (!policy || !JSON.stringify(policy).includes("policy-proof")) {
-    issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed plugin config" });
-  }
-  if (!existsSync(ignore) || !(await readFile(ignore, "utf8")).includes("# maestro-ts:begin")) {
-    issues.push({ component: "wiring", fix: "run maestro install", message: "missing managed .maestro/.gitignore block" });
-  }
-  if (!issues.some((issue) => issue.component === "wiring")) checks.push("wiring: ok");
-  checks.push(await codexTrustCheck(repo, home));
-  const roomSettings = await readJsonObject(
-    join(home, "maestro", ".claude", "settings.json"),
-  );
+  const roomRoot = room ? repo : join(home, "maestro");
+  const roomSettings = await readJsonObject(join(roomRoot, ".claude", "settings.json"));
   const roomPermissions = roomSettings?.permissions;
   const roomDeny = roomPermissions && typeof roomPermissions === "object" &&
       !Array.isArray(roomPermissions)
     ? (roomPermissions as Record<string, unknown>).deny
     : null;
+  const roomDenyHealthy = Array.isArray(roomDeny) &&
+    roomDeny.includes("Agent") && roomDeny.includes("Task");
   checks.push(
-    `room deny list: ${
-      Array.isArray(roomDeny) && roomDeny.includes("Agent") && roomDeny.includes("Task")
-        ? "ok"
-        : "missing"
-    }`,
+    `room deny list: ${roomDenyHealthy ? "ok" : "missing"}`,
   );
+  if (room && !roomDenyHealthy) {
+    issues.push({ component: "room", fix: roomFix, message: "room deny list is missing" });
+  }
 
   const storeLocation = resolveStoreLocation(repo);
   const storePath = storeLocation.path;
@@ -505,6 +571,7 @@ async function doctor(): Promise<CliResult> {
 
 async function uninstall(): Promise<CliResult> {
   const repo = resolve(process.cwd());
+  refuseRepositoryWiringInRoom(repo);
   const removed = await uninstallRepo(repo);
   if (await forgetRepository(homeDirectory(), repo)) removed.push(`${repo} registry line`);
   return {

@@ -527,6 +527,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     );
     expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
+      "maestro work note",
       'maestro work add "<title>" --atomic-reason "<why>"',
       "maestro work release <work-id>",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
@@ -557,6 +558,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       ["<current belief>", "commands parse"],
     ]);
     const argumentsFor = (command: string): string[] => {
+      if (command === "maestro work note") return ["work", "note", "--help"];
       let rendered = command;
       for (const [placeholder, value] of replacements) {
         rendered = rendered.replaceAll(placeholder, value);
@@ -1480,7 +1482,7 @@ test("495 repository wiring verbs refuse a marked room without changing it", asy
         error: { code: "INSTALL_IN_ROOM", message },
       });
       for (const name of files) {
-        expect(await readFile(join(room, name), "utf8")).toBe(beforeFiles.get(name));
+        expect(await readFile(join(room, name), "utf8")).toBe(beforeFiles.get(name)!);
       }
       expect((await storeSnapshot(room)).map(([name, , content]) => [name, content])).toEqual(
         beforeStore,

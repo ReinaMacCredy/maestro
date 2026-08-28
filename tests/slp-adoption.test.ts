@@ -1097,22 +1097,11 @@ test("447 PreToolUse denies returned holders and targets but stays silent for th
       "delivery",
       "src/plugins/coordination.ts",
       "all other files",
-      undefined,
+      holder,
       opener,
     );
     expect(
       (await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(fixture, [
-          "dispatch",
-          "confirm",
-          dispatch,
-          "--session",
-          holder,
-        ], session(opener))
-      ).exitCode,
     ).toBe(0);
     expect(
       (

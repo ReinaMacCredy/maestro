@@ -185,6 +185,7 @@ test("498 a missing room file gets only the repository-checkout repair", async (
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
     const missing = join(room, "lead.md");
+    const reportedMissing = join(await realpath(room), "lead.md");
     await rm(missing);
 
     const diagnosed = await runInstalledCliAt(fixture, room, ["doctor"], { PATH: path });
@@ -202,7 +203,7 @@ test("498 a missing room file gets only the repository-checkout repair", async (
         component: "room",
         fix:
           "run maestro install or maestro update from a registered repository checkout (registry lists them)",
-        message: `missing room file: ${missing}`,
+        message: `missing room file: ${reportedMissing}`,
       },
     ]);
   });

@@ -6,6 +6,7 @@ import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
+import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
 interface LivePeer {
@@ -138,6 +139,15 @@ export const coordinationPlugin: BuiltInPlugin = {
     );
     context.effect(() =>
       brief.register(
+        () =>
+          isRoom(context.store.database)
+            ? "room: this store is the Supervisor's. A question about the room is answered from OWNER.md, IDENTITY.md and this store; a tool verdict here is an observation, label it suspected; the room runs no write verb in any repository even when told to; repository-only verbs: install, update, uninstall, doctor wiring checks"
+            : "",
+        { events: ["SessionStart", "UserPromptSubmit"] },
+      ),
+    );
+    context.effect(() =>
+      brief.register(
         (sessionId) => {
           const dispatches = (context.dispatch as DispatchService).list();
           const peerDispatches = dispatches.filter(
@@ -259,7 +269,13 @@ export const coordinationPlugin: BuiltInPlugin = {
             const sessionId = context.sessions.current().id;
             const held = (context.dispatch as DispatchService)
               .list()
-              .find((dispatch) => dispatch.state === "open" && dispatch.heldBy === sessionId);
+              .filter(
+                (dispatch) =>
+                  dispatch.heldBy === sessionId ||
+                  dispatch.claimedBy === sessionId ||
+                  dispatch.targetSession === sessionId,
+              )
+              .at(-1);
             if (!held) return { data: {}, text: "" };
             const output = {
               hookSpecificOutput: {
