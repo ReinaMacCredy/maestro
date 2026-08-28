@@ -548,7 +548,7 @@ test("425 [lint] recipe slp, lanes.md and roles.md say which boundaries are enfo
   expect(recipe.replace(/\s+/g, " ")).toContain(
     "A full-access process under a no-write lease is no-write by contract; maestro enforces the lease (LEASE_HELD, the lane gate on work start), not the filesystem.",
   );
-  expect(lanes).toContain("| Boundary | Enforced by | Soft-audited |");
+  expect(lanes).toContain("| id | Boundary | Enforced by | Proof | Soft-audited |");
   expect(lanes).not.toContain("performs no-write discovery and reports state.");
   expect(roles.replace(/\s+/g, " ")).toContain("Write authority and acceptance authority are soft-audited");
 });

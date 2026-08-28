@@ -37,16 +37,17 @@ nothing intercepts what the harness writes. The table says which boundary is
 which. A soft-audited boundary is binding on the role and checkable after
 the fact, not prevented.
 
-| Boundary | Enforced by | Soft-audited |
-|---|---|---|
-| work write lease | `LEASE_HELD` on `work start`; the lane gate for no-write dispatch holders | file writes by the harness |
-| council seal | `handback show`, `handback list`, and attention hide sealed returns | the SQLite file and note files on disk stay readable |
-| one handback per dispatch | `HANDBACK_EXISTS` | the truth of the claim |
-| untargeted accept | opener confirmation before work or handback | which pane the brief reached |
-| Supervisor sub-agents | `Agent` and `Task` denied in the room's Claude settings | Codex, and any Peer pane in a repository |
-| Supervisor project writes | `MAESTRO_READ_ONLY=1` on the `hm` brief | every other verb the room session runs |
-| external effects (push, tag, publish, deploy, spend, delete) | nothing | the Human gate in the role contract |
-| tool and call budgets | nothing | the assignment text |
+| id | Boundary | Enforced by | Proof | Soft-audited |
+|---|---|---|---|---|
+| B1 | work write lease | `LEASE_HELD` on `work start`; the lane gate for no-write dispatch holders | test 470 | file writes by the harness |
+| B2 | council seal | recorded council membership; `handback show`, `handback list`, attention and bundle handoff hide sealed returns | test 474 | the SQLite file and note files on disk stay readable |
+| B3 | one handback per dispatch | `UNIQUE(handbacks.dispatch_id)` | test 476 | the truth of the claim |
+| B4 | untargeted accept | opener confirmation before work or handback | test 423 | which pane the brief reached |
+| B5 | dispatch cancel | the recorded opener | test 478 | the stated cancellation reason |
+| B6 | Supervisor sub-agents | `PreToolUse` denies `Agent` and `Task` in the room's Claude settings | test 447 | Codex, and any Peer pane in a repository |
+| B7 | Supervisor project writes | `MAESTRO_READ_ONLY=1` on the `hm` brief | test 214 | every other verb the room session runs |
+| B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
+| B9 | tool and call budgets | nothing | soft-audited | the assignment text |
 
 ## Open a dispatch
 

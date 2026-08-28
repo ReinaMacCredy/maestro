@@ -1806,54 +1806,95 @@ test("326 a start rejected by a gate leaves atomic_reason untouched", async () =
   });
 });
 
-// d706 step 2: the seal is a property of the declared council, so it must not
-// move when only the open/return interleaving moves.
-async function councilSeal(
-  fixture: Fixture,
-  order: "open-open-return" | "open-return-open",
-): Promise<string> {
-  const work = idFrom(
-    await runCli(fixture, ["work", "add", `council ${order}`, "--atomic-reason", "fixture"]),
-  );
-  const first = dispatchId(
-    await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"], session("lead")),
-  );
-  const openSecond = async (): Promise<void> => {
-    await runCli(
-      fixture,
-      [...dispatchOpenArgs(work), "--council-anchor", first],
-      session("lead"),
-    );
-  };
-  const returnFirst = async (): Promise<void> => {
-    await runCli(fixture, ["dispatch", "accept", first], session("lane-one"));
-    await runCli(fixture, ["dispatch", "confirm", first, "--session", "lane-one"], session("lead"));
-    await runCli(
-      fixture,
-      [
-        "handback", "file", first, "--status", "DONE",
-        "--claim", "first secret view", "--proof", "live: fixture",
-        "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
-      ],
-      session("lane-one"),
-    );
-  };
-  if (order === "open-open-return") {
-    await openSecond();
-    await returnFirst();
-  } else {
-    await returnFirst();
-    await openSecond();
-  }
-  const shown = await runCli(fixture, ["handback", "show", first], session("lead"));
-  return shown.exitCode === 0 ? "readable" : "SEALED";
-}
-
 test("474 a declared council seals the first view whichever order the lanes are opened and returned (w502, d706)", async () => {
-  await withFixture(async (fixture) => {
-    expect(await councilSeal(fixture, "open-open-return")).toBe("SEALED");
-    expect(await councilSeal(fixture, "open-return-open")).toBe("SEALED");
-  });
+  for (const order of ["open-open-return", "open-return-open"] as const) {
+    await withFixture(async (fixture) => {
+      await initializeGitRepository(fixture.repo);
+      const claim = `first secret view ${order}`;
+      const work = idFrom(
+        await runCli(fixture, ["work", "add", `council ${order}`, "--atomic-reason", "fixture"]),
+      );
+      const bundle = `council-seal-${order}`;
+      expect((await runCli(fixture, ["bundle", "open", bundle, "--work", work])).exitCode)
+        .toBe(0);
+      const first = dispatchId(
+        await runCli(
+          fixture,
+          [...dispatchOpenArgs(work), "--council-members", "2"],
+          session("lead"),
+        ),
+      );
+      const openSecond = async (): Promise<void> => {
+        expect(
+          (
+            await runCli(
+              fixture,
+              [...dispatchOpenArgs(work), "--council-anchor", first],
+              session("lead"),
+            )
+          ).exitCode,
+        ).toBe(0);
+      };
+      const returnFirst = async (): Promise<string> => {
+        expect((await runCli(fixture, ["dispatch", "accept", first], session("lane-one"))).exitCode)
+          .toBe(0);
+        expect(
+          (
+            await runCli(
+              fixture,
+              ["dispatch", "confirm", first, "--session", "lane-one"],
+              session("lead"),
+            )
+          ).exitCode,
+        ).toBe(0);
+        const filed = await runCli(
+          fixture,
+          [
+            "handback", "file", first, "--status", "DONE",
+            "--claim", claim, "--proof", "live: fixture",
+            "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
+          ],
+          session("lane-one"),
+        );
+        expect(filed.exitCode).toBe(0);
+        return handbackId(filed);
+      };
+
+      let firstHandback: string;
+      if (order === "open-open-return") {
+        await openSecond();
+        firstHandback = await returnFirst();
+      } else {
+        firstHandback = await returnFirst();
+        await openSecond();
+      }
+
+      const shown = await runCli(fixture, ["handback", "show", firstHandback], session("lead"));
+      expect(shown.exitCode).not.toBe(0);
+      expect(shown.stderr).toContain("SEALED");
+
+      for (const target of [first, work]) {
+        const listed = await runCli(fixture, ["handback", "list", target]);
+        expect(listed.exitCode).toBe(0);
+        expect(listed.stdout).toContain(`${firstHandback} [SEALED]`);
+        expect(listed.stdout).not.toContain(claim);
+      }
+
+      const attention = await runCli(fixture, ["attention", "--json"], session("lead"));
+      expect(attention.exitCode).toBe(0);
+      expect(attention.stdout).not.toContain("HANDBACK_UNREVIEWED");
+      expect(attention.stdout).not.toContain(claim);
+
+      const handoff = await runCli(fixture, ["handoff", bundle, "--json"], session("lead"));
+      expect(handoff.exitCode).toBe(0);
+      expect(handoff.stdout).not.toContain(claim);
+      const envelope = JSON.parse(handoff.stdout) as {
+        data: { bundle: { directory: string }; handbacks: unknown[] };
+      };
+      expect(envelope.data.handbacks).toEqual([]);
+      expect(await Bun.file(join(envelope.data.bundle.directory, "NOTES.md")).text()).not.toContain(claim);
+    });
+  }
 }, 60_000);
 
 test("475 an undeclared second dispatch is sequential work, not a council (w502, d706)", async () => {

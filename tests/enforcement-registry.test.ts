@@ -60,8 +60,8 @@ async function registry(): Promise<Registry> {
   return { headers, rows };
 }
 
-async function numberedTests(): Promise<Map<string, NumberedTest>> {
-  const tests = new Map<string, NumberedTest>();
+async function numberedTests(): Promise<Map<string, NumberedTest[]>> {
+  const tests = new Map<string, NumberedTest[]>();
   const names = (await readdir(import.meta.dir)).filter((name) => name.endsWith(".test.ts"));
   for (const name of names) {
     const source = await readFile(join(import.meta.dir, name), "utf8");
@@ -70,7 +70,9 @@ async function numberedTests(): Promise<Map<string, NumberedTest>> {
       const number = declaration[1] as string;
       const start = declaration.index as number;
       const end = declarations[index + 1]?.index ?? source.length;
-      tests.set(number, { file: name, source: source.slice(start, end) });
+      const matches = tests.get(number) ?? [];
+      matches.push({ file: name, source: source.slice(start, end) });
+      tests.set(number, matches);
     }
   }
   return tests;
@@ -94,12 +96,14 @@ const attackMarkers = [
   /open-open-return|open-return-open/,
 ];
 
-// These are the runtime's explicit refusal forms. A new protocol form must be
-// added deliberately instead of making the predicate accept generic assertions.
 const refusalAssertions = [
+  // CLI policy refusals exit nonzero.
   /\.not\.toBe\(0\)/,
+  // Store constraints refuse by throwing before a CLI result exists.
   /\.toThrow\(/,
-  /(?:\.code\)|"code"|\\?"code\\?")\s*\)?\s*\.to(?:Be|Contain)\(["'`][A-Z][A-Z0-9_]*/,
+  // Structured refusals pin their error code directly or in the JSON envelope.
+  /\.code\)\.toBe\(["'`][A-Z][A-Z0-9_]+["'`]\)|\.toContain\(\s*["'`][^)\n]*code[^)\n]*[A-Z][A-Z0-9_]+[^)\n]*\)/,
+  // Claude's hook protocol refuses with a deny decision and a successful hook exit.
   /permissionDecision:\s*["'`]deny["'`]/,
 ];
 
@@ -121,7 +125,11 @@ test("480 [lint] every enforced registry row cites an existing numbered test", a
   for (const row of enforcingRows(parsed.rows)) {
     const number = citation(row);
     expect(number, `${row.values.id || row.values.Boundary}: missing proof citation`).not.toBeNull();
-    expect(tests.has(number as string), `${row.values.id}: test ${number} does not exist`).toBeTrue();
+    const matches = number === null ? [] : tests.get(number) ?? [];
+    expect(
+      matches.length,
+      `${row.values.id}: test ${number} resolves to ${matches.map((match) => match.file).join(", ") || "no file"}`,
+    ).toBe(1);
   }
 });
 
@@ -130,7 +138,8 @@ test("481 [lint] every enforcement citation contains an attack marker and a refu
   const tests = await numberedTests();
   for (const row of enforcingRows(parsed.rows)) {
     const number = citation(row);
-    const source = number === null ? "" : tests.get(number)?.source ?? "";
+    const matches = number === null ? [] : tests.get(number) ?? [];
+    const source = matches.length === 1 ? (matches[0] as NumberedTest).source : "";
     expect(
       attackMarkers.some((pattern) => pattern.test(source)),
       `${row.values.id || row.values.Boundary}: test ${number ?? "missing"} has no attack marker`,
