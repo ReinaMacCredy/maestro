@@ -12,6 +12,11 @@ import {
   withFixture,
 } from "./helpers.ts";
 
+// Every test here stages a real race by spawning many CLI processes, so wall
+// time tracks machine load rather than the code under test. Bun's 5s default
+// made them pass on an idle laptop and fail on a busy one; 293 failed a release
+// verification that way. The explicit timeout is not slack for slow code, it is
+// the acknowledgement that these measure concurrency, not speed.
 function sessionEnvironment(id: string): Record<string, string> {
   return {
     MAESTRO_SESSION_ID: id,
@@ -115,7 +120,7 @@ test("B3.10 concurrent shared-store startup and work creation avoid locks and du
     const ids = additions.map(idFrom);
     expect(new Set(ids).size).toBe(additions.length);
   });
-});
+}, 120_000);
 
 test("290 concurrent starts preserve the single lease winner and its audit event", async () => {
   await withFixture(async (fixture) => {
@@ -192,7 +197,7 @@ export default {
       expect(events).toBe(1);
     }
   });
-});
+}, 120_000);
 
 test("291 concurrent decision, dispatch, and handback allocation stays serialized", async () => {
   await withFixture(async (fixture) => {
@@ -306,7 +311,7 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
       { count: 2, type: "handback.file" },
     ]);
   });
-});
+}, 120_000);
 
 test("292 delayed work transitions cannot commit after their authorizing state changes", async () => {
   await withFixture(async (fixture) => {
@@ -414,7 +419,7 @@ export default {
       expect.objectContaining({ heldBy: "replacement-holder", state: "active" }),
     );
   });
-});
+}, 120_000);
 
 test("293 dispatch cancel and handback file have one terminal winner", async () => {
   await withFixture(async (fixture) => {
@@ -469,7 +474,7 @@ test("293 dispatch cancel and handback file have one terminal winner", async () 
       expect(Number(row?.cancelled) + Number(row?.returned)).toBe(1);
     }
   });
-});
+}, 120_000);
 
 test("306 concurrent attention scans raise one row and one event", async () => {
   await withFixture(async (fixture) => {
@@ -528,7 +533,7 @@ test("306 concurrent attention scans raise one row and one event", async () => {
     ).toBe(1);
     stored.close();
   });
-});
+}, 120_000);
 
 test("307 concurrent startup adds one pane column to an old dispatch schema", async () => {
   await withFixture(async (fixture) => {
@@ -556,4 +561,4 @@ test("307 concurrent startup adds one pane column to an old dispatch schema", as
     ).toHaveLength(1);
     migrated.close();
   });
-});
+}, 120_000);

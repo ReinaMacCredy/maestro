@@ -13,6 +13,67 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 Nothing yet.
 
+## [0.111.0] - 2026-08-29
+
+The public-adoption release (d8). Maestro is now licensed, has a security
+policy, and no longer executes code a repository carries.
+
+### Added
+
+- MIT `LICENSE` (owner choice, room d16), `SECURITY.md` with a private
+  reporting channel and the boundaries a report is judged against, and
+  `CONTRIBUTING.md` naming the bun-only toolchain, the test-first rule, and the
+  A1-A3 gates CI enforces.
+- Plugin trust boundary (d712, d713). A global or repository plugin executes
+  only when `~/.maestro/trust.json` holds a grant matching its canonical path
+  and a sha256 over every file in the artifact. `maestro plugin trust` and
+  `plugin untrust` manage grants; `plugin add` trusts the bytes it just cloned
+  and no longer imports them; `plugin new` scaffolds untrusted. An untrusted
+  plugin is named from the filesystem and never imported, so `plugin list`
+  executes nothing.
+- `maestro handback review <h-id> --note <text>` (d17) records that the opener
+  read a return packet and clears its `HANDBACK_UNREVIEWED` finding. Only the
+  session that opened the dispatch may file it, and a second review is a no-op.
+- PR CI over the trees the root suite never compiled: the desktop TypeScript
+  build and tests, the desktop Rust crate on macOS, and the documentation site.
+- A store records its schema generation in `PRAGMA user_version`, and a Maestro
+  older than the store refuses every command with `STORE_TOO_NEW` rather than
+  writing into a shape it does not know.
+
+### Changed
+
+- `scripts/install.sh` installs the newest pushed release tag by version order
+  onto a `maestro-release` branch instead of the tip of `main` (d714).
+  `MAESTRO_REF` remains the development escape hatch, and `maestro update`
+  moves a pinned checkout tag to tag while every other branch keeps its
+  upstream fast-forward. Pinning buys a release and a reproducible install; it
+  is not tamper-proofing, because `install.sh` itself is fetched from `main`.
+- The desktop data layer runs every verb under `MAESTRO_READ_ONLY=1`, so
+  watching a store no longer writes a session row, heartbeats liveness, or
+  loads the watched repository's plugins.
+- A Lead reports a closed card carrying relayed room intent with one
+  `[from lead][done w<id> re d<room-id>]` prompt (d22); `maestro brief` prints
+  attention findings only, so a closure was otherwise invisible to the room.
+- The `HANDBACK_UNREVIEWED` packet's smallest action is the review verb on
+  every branch; the status-specific next move moved into its question.
+- A lane's cwd decides which store it reads, so the lane procedure states the
+  room lane's cwd and makes a lane compare its stored contract against the one
+  it was sent before accepting (d717).
+
+### Fixed
+
+- `LEAD_COLLISION` missed a holder pair where one card was parentless and the
+  other a child, so two sessions could hold active work in one repository with
+  `maestro attention` reporting nothing (d21). A pair sharing a parent stays
+  `SCOPE_COLLISION` alone, so one incident is still one packet.
+- `STALLED_LEASE` raised nothing when the holder session was dead, leaving an
+  abandoned card active forever; a dead holder now raises regardless of
+  freshness, as an unreturned dispatch already did.
+- `plugin list` reported an untrusted plugin twice, once as untrusted and again
+  as a missing source.
+- Tests 47 and 308 exceeded Bun's 5s default on an idle machine and now carry
+  explicit timeouts.
+
 ## [0.110.0] - 2026-08-28
 
 ### Added
