@@ -639,27 +639,45 @@ test("449 [lint] recipe slp states the harness boundary for topology invariant 4
   );
 });
 
-test("500 [lint] recipe slp treats model routing as guidance-only four-rung reference (d711)", async () => {
+test("500 [lint] recipe slp treats model routing as guidance-only two-harness reference (d711)", async () => {
   const recipe = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
     "utf8",
   );
   const model = recipe.split("## Model")[1]?.split("\n## ")[0] ?? "";
-  const paragraph = model.split("\n| rung")[0]?.trim() ?? "";
-  const flat = paragraph.replace(/\s+/g, " ");
+  const guidance = model.trim().split("\n\n")[0] ?? "";
+  const flat = guidance.replace(/\s+/g, " ");
+  const rungTable = model.split("### Thinking level by lane")[0] ?? "";
+  const thinking = model.split("### Thinking level by lane")[1] ?? "";
 
-  expect(paragraph).not.toContain("\n\n");
+  expect(guidance).not.toContain("\n\n");
   expect(flat).toContain("The Lead picks a lane's model the way it picks a sub-agent's");
   expect(flat).toContain("the room picks the Lead's model");
   expect(flat).toContain("Nothing records, enforces, or prints the choice.");
   expect(flat).toContain("Model names rot");
-  expect(flat).toContain("the owner keeps the current examples for that column in `OWNER.md`");
-  expect(model.split("\n").filter((line) => line.startsWith("|"))).toEqual([
-    "| rung | use it for | example (2026-08, owner-editable) |",
-    "|---|---|---|",
-    "| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | sonnet or haiku |",
-    "| strong | delivery with red/green, long brief, kernel or store, decision lanes | opus or gpt-5.6-sol |",
-    "| diverse | challenge and council: a different model family from the lane that produced the view, whatever the rung | codex vs claude |",
-    "| lead | reviews handbacks, closes cards, settles forks | fable or opus |",
+  expect(flat).toContain("the owner keeps the current examples for those columns in `OWNER.md`");
+  expect(model).toContain("These examples are dated 2026-08-28 and owner-editable.");
+  expect(rungTable.split("\n").filter((line) => line.startsWith("|"))).toEqual([
+    "| rung | use it for | example Claude Code | example Codex CLI |",
+    "|---|---|---|---|",
+    "| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |",
+    "| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |",
+    "| diverse | challenge and council: a different model family from the lane that produced the view; Claude and Codex are the two harnesses maestro wires today; a third family (Grok 4.6, Gemini 3.7 Flash) needs a third harness, which is a repository change (`sessions.harness` accepts `claude | codex`, `src/kernel/sessions.ts`) | Claude | Codex |",
+    "| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |",
   ]);
+  expect(thinking.split("\n").filter((line) => line.startsWith("|"))).toEqual([
+    "| lane | Claude | Codex |",
+    "|---|---|---|",
+    "| scout | medium | medium |",
+    "| decision | xhigh | xhigh |",
+    "| delivery | high | high |",
+    "| challenge | xhigh | xhigh |",
+    "| shadow | low | low |",
+  ]);
+  expect(thinking).toContain(
+    "Keep one effort level for a whole session: the level sits in the prompt prefix cache, so changing it mid-session drops the cache; `max` is for one genuinely hard fork, not a default (community measurement: about 2.2x time and 1.7x tokens versus `high`).",
+  );
+  expect(thinking).toContain(
+    "Pass the level with Claude Code's `--effort <level>` or Codex's `-c model_reasoning_effort=<level>`.",
+  );
 });

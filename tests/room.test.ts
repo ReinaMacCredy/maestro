@@ -478,7 +478,7 @@ test("501 [lint] installed room guidance selects models from the SLP reference (
     const leadStep = lead.split("4. ")[1]?.split("\n5. ")[0] ?? "";
 
     expect(laneStep).toContain(
-      "Pass the chosen model from the Model table in `maestro recipe show slp` to the harness: use `-- --model <name>` for Claude or Codex's `--model <name>` flag (verified with `codex --help`).",
+      "Pass the chosen model from the Model table in `maestro recipe show slp` and the lane's thinking level from its table to the harness: use `-- --model <name> --effort <level>` for Claude or Codex's `--model <name> -c model_reasoning_effort=<level>` flags (verified with `claude --help` and `codex --help`).",
     );
     expect(leadStep).toContain(
       "Pick the Lead's model from the `lead` rung of the Model table in `maestro recipe show slp`.",
