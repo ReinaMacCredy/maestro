@@ -114,21 +114,26 @@ The room relays owner intent to the repository Lead without taking project autho
 `;
 
 const shellrc = `function _maestro_home() {
-  local workspace_id workspace_pane_ids root_pane_id supervisor_pane_id
+  local workspace_created=0 workspace_id workspace_pane_ids root_pane_id supervisor_pane_id
   workspace_id="$(herdr workspace list | bun -e 'const input = JSON.parse(await Bun.stdin.text()); const workspace = input.result.workspaces.find((candidate) => candidate.label === "maestro"); if (workspace) process.stdout.write(workspace.workspace_id);')"
   if [[ -n "$workspace_id" ]]; then
     herdr workspace focus "$workspace_id" >/dev/null
   else
     herdr workspace create --cwd "$HOME/maestro" --label maestro --focus >/dev/null
+    workspace_created=1
     workspace_id="$(herdr workspace list | bun -e 'const input = JSON.parse(await Bun.stdin.text()); const workspace = input.result.workspaces.find((candidate) => candidate.label === "maestro"); if (workspace) process.stdout.write(workspace.workspace_id);')"
   fi
   workspace_pane_ids="$(herdr pane list --workspace "$workspace_id" | bun -e 'const input = JSON.parse(await Bun.stdin.text()); process.stdout.write(input.result.panes.map((candidate) => candidate.pane_id).join(","));')"
-  root_pane_id="\${workspace_pane_ids%%,*}"
   supervisor_pane_id="$(herdr agent list | HERDR_WORKSPACE_PANE_IDS="$workspace_pane_ids" bun -e 'const input = JSON.parse(await Bun.stdin.text()); const paneIds = new Set((Bun.env.HERDR_WORKSPACE_PANE_IDS ?? "").split(",").filter(Boolean)); const agent = input.result.agents.find((candidate) => candidate.name === "supervisor" && paneIds.has(candidate.pane_id)); if (agent) process.stdout.write(agent.pane_id);')"
   (cd "$HOME/maestro" && MAESTRO_READ_ONLY=1 maestro brief)
   if [[ -n "$supervisor_pane_id" ]]; then
     herdr agent focus supervisor >/dev/null
   else
+    if [[ "$workspace_created" -eq 1 ]]; then
+      root_pane_id="\${workspace_pane_ids%%,*}"
+    else
+      root_pane_id="$(herdr tab create --workspace "$workspace_id" --cwd "$HOME/maestro" --label supervisor | bun -e 'const input = JSON.parse(await Bun.stdin.text()); process.stdout.write(input.result.root_pane.pane_id);')"
+    fi
     # The owner may edit the supervisor's agent kind.
     herdr agent start supervisor --kind claude --pane "$root_pane_id" >/dev/null
   fi
