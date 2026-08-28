@@ -3,6 +3,12 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture } from "./helpers.ts";
 
+function dispatchIdOf(result: { stdout: string }): string {
+  const match = result.stdout.match(/^(x\d+) \[open\]/);
+  if (!match?.[1]) throw new Error(`missing dispatch id in stdout: ${result.stdout}`);
+  return match[1];
+}
+
 function dispatchOpenArgs(work: string): string[] {
   return [
     "dispatch",
@@ -357,8 +363,15 @@ test("410 decision draft warns and records the generation when its work council 
     const work = idFrom(
       await runCli(fixture, ["work", "add", "sealed decision council", "--atomic-reason", "fixture"]),
     );
-    const firstDispatch = await runCli(fixture, dispatchOpenArgs(work));
-    const secondDispatch = await runCli(fixture, dispatchOpenArgs(work));
+    const firstDispatch = await runCli(
+      fixture,
+      [...dispatchOpenArgs(work), "--council-members", "2"],
+    );
+    const secondDispatch = await runCli(fixture, [
+      ...dispatchOpenArgs(work),
+      "--council-anchor",
+      dispatchIdOf(firstDispatch),
+    ]);
     const generationAnchor = firstDispatch.stdout.match(/^(x\d+) \[open\]/)?.[1];
     expect(firstDispatch.exitCode).toBe(0);
     expect(secondDispatch.exitCode).toBe(0);
@@ -441,9 +454,18 @@ test("461 decision edit warns and records the generation while its work council 
     const decision = idFrom(
       await runCli(fixture, ["decision", "draft", "harmless first text", "--work", work]),
     );
-    const firstDispatch = await runCli(fixture, dispatchOpenArgs(work));
+    const firstDispatch = await runCli(
+      fixture,
+      [...dispatchOpenArgs(work), "--council-members", "2"],
+    );
     expect(firstDispatch.exitCode).toBe(0);
-    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, [
+        ...dispatchOpenArgs(work),
+        "--council-anchor",
+        dispatchIdOf(firstDispatch),
+      ])).exitCode,
+    ).toBe(0);
     const generationAnchor = firstDispatch.stdout.match(/^(x\d+) \[open\]/)?.[1];
     expect(generationAnchor).toBeString();
 

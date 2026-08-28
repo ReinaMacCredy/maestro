@@ -213,16 +213,25 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     );
     expect(new Set(decisions.map(idFrom)).size).toBe(2);
 
+    // The council is declared before the race so the two concurrent opens join
+    // one recorded generation instead of racing to infer one (d706).
+    const anchor = await runCli(
+      fixture,
+      [...dispatchOpenArgs(work, "race:anchor"), "--council-members", "3"],
+      sessionEnvironment("dispatch-open-a"),
+    );
+    expect(anchor.exitCode).toBe(0);
+    const councilAnchor = dispatchId(anchor);
     const dispatches = await Promise.all([
       runCli(
         fixture,
-        dispatchOpenArgs(work, "race:a"),
+        [...dispatchOpenArgs(work, "race:a"), "--council-anchor", councilAnchor],
         sessionEnvironment("dispatch-open-a"),
       ),
       runCliAt(
         fixture,
         worktree,
-        dispatchOpenArgs(work, "race:b"),
+        [...dispatchOpenArgs(work, "race:b"), "--council-anchor", councilAnchor],
         sessionEnvironment("dispatch-open-b"),
       ),
     ]);
@@ -233,7 +242,7 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     const dispatchIds = dispatches.map(dispatchId);
     expect(new Set(dispatchIds).size).toBe(2);
     const council = await runCli(fixture, ["dispatch", "list", work]);
-    expect(council.stdout).toContain("council: sealed (0/2 returned)");
+    expect(council.stdout).toContain("council: sealed (0/3 returned)");
 
     const holders = ["handback-a", "handback-b"];
     const openers = ["dispatch-open-a", "dispatch-open-b"];
@@ -288,7 +297,7 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     database.close();
     expect(eventCounts).toEqual([
       { count: 2, type: "decision.draft" },
-      { count: 2, type: "dispatch.open" },
+      { count: 3, type: "dispatch.open" },
       { count: 2, type: "handback.file" },
     ]);
   });

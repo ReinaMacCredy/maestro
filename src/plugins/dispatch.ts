@@ -116,6 +116,8 @@ interface CouncilDispatchRow {
   created_at: string;
   cancelled_at: string | null;
   returned_at: string | null;
+  generation_anchor: string | null;
+  expected_members: number | null;
 }
 
 export interface DispatchService {
@@ -289,6 +291,9 @@ function listHandbacks(context: PluginContext, dispatchId: string): HandbackReco
     .map(fromHandbackRow);
 }
 
+// Council membership is a recorded fact, not an inference: the anchor row
+// carries how many views were declared, so the seal cannot move because the
+// Lead happened to open the second lane after the first one returned (d706).
 function councilStatus(
   context: PluginContext,
   workId: string,
@@ -299,54 +304,45 @@ function councilStatus(
       `SELECT dispatches.id,
               dispatches.created_at,
               dispatches.cancelled_at,
+              dispatches.generation_anchor,
+              dispatches.expected_members,
               MIN(handbacks.created_at) AS returned_at
        FROM dispatches
        LEFT JOIN handbacks ON handbacks.dispatch_id = dispatches.id
        WHERE dispatches.work_id = ?
-       GROUP BY dispatches.id, dispatches.created_at, dispatches.cancelled_at
+       GROUP BY dispatches.id, dispatches.created_at, dispatches.cancelled_at,
+                dispatches.generation_anchor, dispatches.expected_members
        ORDER BY dispatches.created_at, CAST(SUBSTR(dispatches.id, 2) AS INTEGER)`,
     )
     .all(workId);
-  const generations: Array<{ end: number; start: number }> = [];
-  let generationStart = 0;
-  let hasUnresolved = false;
-  let latestResolution: string | null = null;
-  for (const [index, row] of rows.entries()) {
-    if (
-      index > 0 &&
-      !hasUnresolved &&
-      latestResolution !== null &&
-      latestResolution <= row.created_at
-    ) {
-      generations.push({ end: index, start: generationStart });
-      generationStart = index;
-    }
-    const resolution = row.cancelled_at ?? row.returned_at;
-    if (resolution === null) {
-      hasUnresolved = true;
-    } else if (latestResolution === null || resolution > latestResolution) {
-      latestResolution = resolution;
-    }
+  const anchorOf = (row: CouncilDispatchRow): string => row.generation_anchor ?? row.id;
+  const anchors: string[] = [];
+  for (const row of rows) {
+    const anchor = anchorOf(row);
+    if (!anchors.includes(anchor)) anchors.push(anchor);
   }
-  if (rows.length > 0) generations.push({ end: rows.length, start: generationStart });
-
-  let selected = generations[generations.length - 1] ?? null;
-  if (dispatchId) {
-    const anchor = rows.findIndex((row) => row.id === dispatchId);
-    selected = generations.find(({ end, start }) => anchor >= start && anchor < end) ?? null;
-  } else {
-    for (const generation of generations) {
-      if (generation.end - generation.start > 1) selected = generation;
-    }
-  }
-  const members = selected ? rows.slice(selected.start, selected.end) : [];
-  const liveMembers = members.filter((row) => row.cancelled_at === null);
-  const counts = {
-    resolved: liveMembers.filter((row) => row.returned_at !== null).length,
-    returned: liveMembers.filter((row) => row.returned_at !== null).length,
-    total: liveMembers.length,
+  const membersOf = (anchor: string): CouncilDispatchRow[] =>
+    rows.filter((row) => anchorOf(row) === anchor);
+  const declaredOf = (anchor: string): number => {
+    const row = rows.find((candidate) => candidate.id === anchor);
+    return Math.max(row?.expected_members ?? 1, membersOf(anchor).length);
   };
-  const generationAnchor = members[0]?.id ?? null;
+  const liveTotalOf = (anchor: string): number =>
+    declaredOf(anchor) - membersOf(anchor).filter((row) => row.cancelled_at !== null).length;
+
+  let generationAnchor: string | null = null;
+  if (dispatchId) {
+    const row = rows.find((candidate) => candidate.id === dispatchId);
+    generationAnchor = row ? anchorOf(row) : null;
+  } else {
+    generationAnchor = anchors[anchors.length - 1] ?? null;
+    for (const anchor of anchors) if (liveTotalOf(anchor) > 1) generationAnchor = anchor;
+  }
+
+  const members = generationAnchor ? membersOf(generationAnchor) : [];
+  const liveMembers = members.filter((row) => row.cancelled_at === null);
+  const total = generationAnchor ? liveTotalOf(generationAnchor) : 0;
+  const returned = liveMembers.filter((row) => row.returned_at !== null).length;
   const hasGenerationAnchor = context.store.database
     .query<{ name: string }, []>("PRAGMA table_info(dispatch_councils)")
     .all()
@@ -371,10 +367,10 @@ function councilStatus(
   return {
     generationAnchor,
     workId,
-    total: counts.total,
-    returned: counts.returned,
-    resolved: counts.resolved,
-    sealed: counts.total > 1 && !unsealed && counts.resolved < counts.total,
+    total,
+    returned,
+    resolved: returned,
+    sealed: total > 1 && !unsealed && returned < total,
     unsealed,
     unsealReason: unseal?.unseal_reason ?? null,
   };
@@ -447,6 +443,68 @@ function formatCouncil(council: CouncilStatus): string | null {
 function formatLane(dispatch: DispatchRecord, workState: string, holderLive: boolean): string {
   const holderState = dispatch.heldBy ? holderLive ? "live" : "dead" : "none";
   return `lane ${dispatch.pane ?? "none"} | ${dispatch.id} | ${dispatch.lane} | dispatch=${dispatch.state} | work=${workState} | holder=${holderState}`;
+}
+
+// The pre-d706 generation inference, kept only to migrate stores written
+// before membership was recorded. It split a work item's dispatches wherever
+// every earlier row had resolved before the next one was created.
+function backfillGenerations(context: PluginContext): void {
+  const migrate = context.store.database.transaction(() => {
+    const works = context.store.database
+      .query<{ work_id: string }, []>("SELECT DISTINCT work_id FROM dispatches")
+      .all();
+    const setAnchor = context.store.database.query(
+      "UPDATE dispatches SET generation_anchor = ? WHERE id = ?",
+    );
+    const setExpected = context.store.database.query(
+      "UPDATE dispatches SET expected_members = ? WHERE id = ?",
+    );
+    for (const { work_id: workId } of works) {
+      const rows = context.store.database
+        .query<
+          { id: string; created_at: string; cancelled_at: string | null; returned_at: string | null },
+          [string]
+        >(
+          `SELECT dispatches.id,
+                  dispatches.created_at,
+                  dispatches.cancelled_at,
+                  MIN(handbacks.created_at) AS returned_at
+           FROM dispatches
+           LEFT JOIN handbacks ON handbacks.dispatch_id = dispatches.id
+           WHERE dispatches.work_id = ?
+           GROUP BY dispatches.id, dispatches.created_at, dispatches.cancelled_at
+           ORDER BY dispatches.created_at, CAST(SUBSTR(dispatches.id, 2) AS INTEGER)`,
+        )
+        .all(workId);
+      const generations: Array<{ end: number; start: number }> = [];
+      let generationStart = 0;
+      let hasUnresolved = false;
+      let latestResolution: string | null = null;
+      for (const [index, row] of rows.entries()) {
+        if (
+          index > 0 && !hasUnresolved && latestResolution !== null &&
+          latestResolution <= row.created_at
+        ) {
+          generations.push({ end: index, start: generationStart });
+          generationStart = index;
+        }
+        const resolution = row.cancelled_at ?? row.returned_at;
+        if (resolution === null) hasUnresolved = true;
+        else if (latestResolution === null || resolution > latestResolution) {
+          latestResolution = resolution;
+        }
+      }
+      if (rows.length > 0) generations.push({ end: rows.length, start: generationStart });
+      for (const { end, start } of generations) {
+        const members = rows.slice(start, end);
+        const generationAnchor = members[0]?.id;
+        if (!generationAnchor) continue;
+        for (const member of members) setAnchor.run(generationAnchor, member.id);
+        setExpected.run(members.length, generationAnchor);
+      }
+    }
+  });
+  migrate.immediate();
 }
 
 export const dispatchPlugin: BuiltInPlugin = {
@@ -556,6 +614,28 @@ export const dispatchPlugin: BuiltInPlugin = {
       "ALTER TABLE dispatches ADD COLUMN claimed_by TEXT",
     );
     context.store.ensureColumn(
+      "dispatches",
+      "generation_anchor",
+      "ALTER TABLE dispatches ADD COLUMN generation_anchor TEXT",
+    );
+    context.store.ensureColumn(
+      "dispatches",
+      "expected_members",
+      "ALTER TABLE dispatches ADD COLUMN expected_members INTEGER",
+    );
+    if (!context.store.readOnly) {
+      // Backfill any row written before membership was recorded: replay the
+      // timing inference that used to run on every read, so councils created
+      // by an older binary keep the membership they had. Idempotent, because
+      // every row it touches stops being NULL.
+      const pending = context.store.database
+        .query<{ pending: number }, []>(
+          "SELECT COUNT(*) AS pending FROM dispatches WHERE generation_anchor IS NULL",
+        )
+        .get()?.pending ?? 0;
+      if (pending > 0) backfillGenerations(context);
+    }
+    context.store.ensureColumn(
       "handbacks",
       "request",
       "ALTER TABLE handbacks ADD COLUMN request TEXT",
@@ -618,6 +698,25 @@ export const dispatchPlugin: BuiltInPlugin = {
             );
           }
           const targetSession = targetSessionValue ?? null;
+          const councilMembersValue = stringOption(invocation, "council-members");
+          const councilAnchor = stringOption(invocation, "council-anchor") ?? null;
+          if (councilMembersValue !== undefined && councilAnchor !== null) {
+            throw new CliError(
+              "INVALID_ARGUMENT",
+              "--council-members declares a new council and --council-anchor joins one; pass only one",
+            );
+          }
+          let declaredMembers = 1;
+          if (councilMembersValue !== undefined) {
+            declaredMembers = Number(councilMembersValue);
+            if (!Number.isInteger(declaredMembers) || declaredMembers < 2) {
+              throw new CliError(
+                "INVALID_ARGUMENT",
+                `--council-members must be an integer of 2 or more; got ${councilMembersValue}`,
+                { field: "--council-members" },
+              );
+            }
+          }
           const openedBy = context.sessions.current().id;
           const open = context.store.database.transaction(() => {
             const subject = work.get(workId);
@@ -628,14 +727,46 @@ export const dispatchPlugin: BuiltInPlugin = {
                 `${workId} is ${subject.state}; a lane contract binds live work`,
               );
             }
+            if (councilAnchor !== null) {
+              const anchor = getDispatch(context, councilAnchor);
+              if (!anchor) {
+                throw new CliError("NOT_FOUND", `dispatch not found: ${councilAnchor}`);
+              }
+              if (anchor.workId !== workId) {
+                throw new CliError(
+                  "INVALID_ARGUMENT",
+                  `${councilAnchor} belongs to ${anchor.workId}; a council spans one work item`,
+                );
+              }
+              const declared = service.council(workId, councilAnchor);
+              if (declared.generationAnchor !== councilAnchor) {
+                throw new CliError(
+                  "INVALID_ARGUMENT",
+                  `${councilAnchor} is a member of council ${declared.generationAnchor}; join that anchor`,
+                );
+              }
+              const seated = context.store.database
+                .query<{ seated: number }, [string]>(
+                  "SELECT COUNT(*) AS seated FROM dispatches WHERE generation_anchor = ?",
+                )
+                .get(councilAnchor)?.seated ?? 0;
+              if (seated >= declared.total) {
+                throw new CliError(
+                  "INVALID_STATE",
+                  `council ${councilAnchor} declared ${declared.total} members and all are open`,
+                  { council: councilAnchor },
+                );
+              }
+            }
             const id = context.store.nextPrefixedId("dispatches", "x");
             const now = new Date().toISOString();
             context.store.database
               .query(
                 `INSERT INTO dispatches
                   (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-                   lane, evidence_required, pane, target_session, opened_by, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   lane, evidence_required, pane, target_session, opened_by,
+                   generation_anchor, expected_members, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .run(
                 id,
@@ -650,6 +781,8 @@ export const dispatchPlugin: BuiltInPlugin = {
                 pane,
                 targetSession,
                 openedBy,
+                councilAnchor ?? id,
+                councilAnchor === null ? declaredMembers : null,
                 now,
                 now,
               );
@@ -677,6 +810,14 @@ export const dispatchPlugin: BuiltInPlugin = {
             "--evidence-required": { description: "Name the required evidence.", value: true },
             "--pane": { description: "Record the pane that owns the lane.", value: true },
             "--target-session": { description: "Address a session if already known.", value: true },
+            "--council-members": {
+              description: "Declare a blind council of this many views; later members join with --council-anchor.",
+              value: true,
+            },
+            "--council-anchor": {
+              description: "Join the council declared by this dispatch id.",
+              value: true,
+            },
           },
           positionals: [{ name: "work-id", required: true }],
           rootDescription: "Store lane contracts and their return packets.",

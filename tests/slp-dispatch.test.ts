@@ -48,15 +48,23 @@ function dispatchId(result: { stdout: string }): string {
 
 function insertStoredDispatch(
   fixture: Fixture,
-  input: { createdAt: string; id: string; lane: string; work: string },
+  input: {
+    createdAt: string;
+    id: string;
+    lane: string;
+    work: string;
+    councilAnchor?: string;
+    councilMembers?: number;
+  },
 ): void {
   const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
   database
     .query(
       `INSERT INTO dispatches
         (id, work_id, objective, owned_scope, excluded_scope, mutation, stop_condition,
-         lane, evidence_required, pane, opened_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         lane, evidence_required, pane, opened_by, generation_anchor, expected_members,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.id,
@@ -70,6 +78,8 @@ function insertStoredDispatch(
       "source: readback",
       "w1:pZ",
       "test-session",
+      input.councilAnchor ?? input.id,
+      input.councilAnchor ? null : input.councilMembers ?? 1,
       input.createdAt,
       input.createdAt,
     );
@@ -139,9 +149,13 @@ async function openCouncil(
   const work = idFrom(
     await runCli(fixture, ["work", "add", "sealed council", "--atomic-reason", "fixture"]),
   );
-  const first = await runCli(fixture, dispatchOpenArgs(work));
-  const second = await runCli(fixture, dispatchOpenArgs(work));
+  const first = await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"]);
   expect(first.exitCode).toBe(0);
+  const second = await runCli(fixture, [
+    ...dispatchOpenArgs(work),
+    "--council-anchor",
+    dispatchId(first),
+  ]);
   expect(second.exitCode).toBe(0);
   const dispatches: [string, string] = [dispatchId(first), dispatchId(second)];
   for (const dispatch of dispatches) await acceptDispatch(fixture, dispatch);
@@ -472,10 +486,14 @@ test("274 work-scoped dispatch lists render compact lane state without changing 
     const work = idFrom(
       await runCli(fixture, ["work", "add", "lane board", "--atomic-reason", "fixture"]),
     );
-    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const first = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"]),
+    );
     const secondArgs = dispatchOpenArgs(work);
     secondArgs[secondArgs.indexOf("--pane") + 1] = "w1:pB";
-    const second = dispatchId(await runCli(fixture, secondArgs));
+    const second = dispatchId(
+      await runCli(fixture, [...secondArgs, "--council-anchor", first]),
+    );
     const liveHolder = session("live-lane");
     expect(
       (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], liveHolder))
@@ -652,8 +670,12 @@ test("279 a genuine later council seals only its own concurrent generation", asy
     expect(earlierReturn.exitCode).toBe(0);
 
     const createdAt = new Date().toISOString();
-    insertStoredDispatch(fixture, { createdAt, id: "x2", lane: "design", work });
-    insertStoredDispatch(fixture, { createdAt, id: "x3", lane: "design", work });
+    insertStoredDispatch(fixture, {
+      createdAt, id: "x2", lane: "design", work, councilMembers: 2,
+    });
+    insertStoredDispatch(fixture, {
+      createdAt, id: "x3", lane: "design", work, councilAnchor: "x2",
+    });
     const first = "x2";
     const second = "x3";
     await acceptDispatch(fixture, first);
@@ -699,9 +721,22 @@ test("296 unsealing one council generation never opens a later generation", asyn
       expect((await runCli(fixture, handbackFileArgs(dispatch))).exitCode).toBe(0);
     }
 
+    const secondAnchor = dispatchId(
+      await runCli(fixture, [
+        ...dispatchOpenArgs(firstGeneration.work),
+        "--council-members",
+        "2",
+      ]),
+    );
     const secondGeneration = [
-      dispatchId(await runCli(fixture, dispatchOpenArgs(firstGeneration.work))),
-      dispatchId(await runCli(fixture, dispatchOpenArgs(firstGeneration.work))),
+      secondAnchor,
+      dispatchId(
+        await runCli(fixture, [
+          ...dispatchOpenArgs(firstGeneration.work),
+          "--council-anchor",
+          secondAnchor,
+        ]),
+      ),
     ];
     for (const dispatch of secondGeneration) await acceptDispatch(fixture, dispatch);
     const partial = await runCli(fixture, handbackFileArgs(secondGeneration[0] as string));
@@ -737,6 +772,7 @@ test("297 legacy work-scoped council unseals migrate to the first generation anc
     const databasePath = join(fixture.repo, ".maestro", "maestro.db");
     let database = new Database(databasePath);
     database.exec(`
+      UPDATE dispatches SET generation_anchor = NULL, expected_members = NULL;
       DROP TABLE dispatch_councils;
       CREATE TABLE dispatch_councils (
         work_id TEXT PRIMARY KEY REFERENCES work(id),
@@ -792,8 +828,12 @@ test("280 handoff exposes completed generations without leaking a sealed generat
     earlierArgs[earlierArgs.indexOf("--claim") + 1] = "prior generation is complete";
     expect((await runCli(fixture, earlierArgs)).exitCode).toBe(0);
 
-    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
-    const second = dispatchId(await runCli(fixture, dispatchOpenArgs(work)));
+    const first = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"]),
+    );
+    const second = dispatchId(
+      await runCli(fixture, [...dispatchOpenArgs(work), "--council-anchor", first]),
+    );
     await acceptDispatch(fixture, first);
     await acceptDispatch(fixture, second);
     const currentArgs = handbackFileArgs(first);
@@ -1746,8 +1786,12 @@ test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchan
 test("326 a start rejected by a gate leaves atomic_reason untouched", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(await runCli(fixture, ["work", "add", "atomic rollback target"]));
-    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
-    expect((await runCli(fixture, dispatchOpenArgs(work))).exitCode).toBe(0);
+    const anchor = await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"]);
+    expect(anchor.exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, [...dispatchOpenArgs(work), "--council-anchor", dispatchId(anchor)]))
+        .exitCode,
+    ).toBe(0);
 
     const started = await runCli(fixture, ["work", "start", work, "--atomic-reason", "single-file change"]);
     expect(started.exitCode).not.toBe(0);
