@@ -193,3 +193,19 @@ test("514 plugin remove drops the grant so a later file at that path is not vouc
     expect(existsSync(sentinel)).toBe(false);
   });
 });
+
+test("515 an untrusted plugin named by repo config lists once, not also as a missing source", async () => {
+  await withFixture(async (fixture) => {
+    const sentinel = sentinelPath(fixture);
+    await writeUntrustedPlugin(fixture, "repo", "tripwire", tripwire(sentinel, "tripwire"));
+    await writeConfig(fixture, [{ name: "tripwire", disabled: false }]);
+
+    const rows = (await runCli(fixture, ["plugin", "list"])).stdout
+      .split("\n")
+      .filter((line) => line.startsWith("tripwire\t"));
+
+    // The source is found; it is untrusted. Reporting it as missing as well
+    // sends the reader looking for a file that is right there.
+    expect(rows).toEqual(["tripwire\trepo\tuntrusted"]);
+  });
+});

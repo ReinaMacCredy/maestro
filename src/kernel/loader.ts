@@ -181,6 +181,10 @@ export class Loader {
 
     for (const entry of this.config.values()) {
       if (chosen.has(entry.name)) continue;
+      // An untrusted artifact never becomes a candidate, but its source is on
+      // disk; reporting it as missing too would send the reader hunting for a
+      // file that is right there.
+      if (this.records.some((record) => record.name === entry.name)) continue;
       this.records.push({
         name: entry.name,
         source: "repo",
