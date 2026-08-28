@@ -59,3 +59,28 @@ test("506 the desktop data layer spawns every maestro verb under MAESTRO_READ_ON
   expect(spawn).toBeString();
   expect(spawn).toContain('.env("MAESTRO_READ_ONLY", "1")');
 });
+
+test("516 [lint] PR CI builds every tree the repository ships, not only the root", async () => {
+  const ci = await repoFile(".github/workflows/ci.yml");
+  const jobs = [...ci.slice(ci.indexOf("\njobs:")).matchAll(/^ {2}([a-z][a-z-]*):$/gm)]
+    .map((match) => match[1] as string);
+  expect(jobs).toEqual(["verify", "desktop", "desktop-rust", "site"]);
+
+  const desktop = ci.slice(ci.indexOf("\n  desktop:"), ci.indexOf("\n  desktop-rust:"));
+  // apps/desktop's tsconfig sets types: ["bun"], resolved from the ROOT install.
+  // Installing only the desktop's own dependencies fails every run with TS2688
+  // before reaching desktop code, which is a gate people learn to ignore.
+  expect(desktop).toContain("bun install --frozen-lockfile && cd apps/desktop");
+  expect(desktop).toContain("bun run build");
+  expect(desktop).toContain("bun test");
+
+  const rust = ci.slice(ci.indexOf("\n  desktop-rust:"), ci.indexOf("\n  site:"));
+  expect(rust).toContain("cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml");
+  // tauri-nspanel is macOS-only, so an ubuntu check would pass on a
+  // configuration nobody ships.
+  expect(rust).toContain("runs-on: macos-latest");
+
+  const site = ci.slice(ci.indexOf("\n  site:"));
+  expect(site).toContain("cd site && bun run build");
+  expect(site).toContain("playwright install --with-deps chromium");
+});

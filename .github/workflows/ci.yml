@@ -43,3 +43,53 @@ jobs:
           if rg -n -- '\blean\b|--lane light|--qa' src/; then
             exit 1
           fi
+
+  # The root suite above never compiled apps/desktop or site, so a change that
+  # broke either one reached main and was only caught by the Pages deploy, after
+  # merge. These three jobs close that. desktop and site run on ubuntu and are
+  # cheap. desktop-rust runs on macOS because that is the platform the crate
+  # targets: tauri-nspanel is a macOS-only dependency and the panel code behind
+  # it never compiles anywhere else, so an ubuntu check would pass on a
+  # configuration nobody ships. It is the expensive job of the three.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.0
+      # apps/desktop's tsconfig sets types: ["bun"], which resolves @types/bun
+      # from the root install; without it tsc fails with TS2688 before ever
+      # reaching the desktop's own code.
+      - name: Install
+        run: bun install --frozen-lockfile && cd apps/desktop && bun install --frozen-lockfile
+      - name: Type-check and build
+        run: cd apps/desktop && bun run build
+      - name: Test
+        run: cd apps/desktop && bun test
+
+  desktop-rust:
+    runs-on: macos-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+      - name: Check the desktop crate
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install site dependencies
+        run: cd site && bun install --frozen-lockfile
+      - name: Install Chromium for Mermaid rendering
+        run: cd site && bun x playwright install --with-deps chromium
+      - name: Build site
+        run: cd site && bun run build
