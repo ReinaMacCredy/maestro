@@ -20,11 +20,10 @@ export function isRoom(database: Database): boolean {
 const agents = `# Maestro chief-of-staff room
 
 Read \`IDENTITY.md\` and \`OWNER.md\`. While \`OWNER.md\` still holds unanswered questions, interview the owner and write the answers there before anything else; then run \`maestro brief\`.
-This room is the Supervisor; roles: \`maestro recipe show slp\`. Repository-only verbs are \`maestro install\`, \`maestro update\`, and \`maestro uninstall\`; \`maestro doctor\` wiring checks describe repositories, not this room.
+This room is the Supervisor; roles: \`maestro recipe show slp\`. Repository-only verbs are \`maestro install\`, \`maestro update\`, and \`maestro uninstall\`; \`maestro doctor\` wiring checks describe repositories, not this room. The room never edits any store by hand (no sqlite, no file edits under \`.maestro\`); every store changes only through \`maestro\` verbs, and a defect in stored data is owner intent for the Lead of the code that wrote it, relayed per \`lead.md\`.
 Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
 Before handing owner intent to a repository, read \`lead.md\`.
-The room never edits any store by hand (no sqlite, no file edits under \`.maestro\`); every store changes only through \`maestro\` verbs, and a defect in stored data is owner intent for the Lead of the code that wrote it, relayed per \`lead.md\`.
 `;
 
 const identity = `# IDENTITY — Maestro Supervisor
