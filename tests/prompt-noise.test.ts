@@ -12,13 +12,13 @@ test("518 UserPromptSubmit ignores task-notification harness envelopes", async (
       {},
       JSON.stringify({ prompt: `  <task-notification>\n<task-id>${marker}</task-id>` }),
     );
-    const listed = await runCli(fixture, ["prompt", "list"]);
-    const searched = await runCli(fixture, ["search", marker]);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     const promptCount = database
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM prompts")
       .get()?.count;
     database.close();
+    const listed = await runCli(fixture, ["prompt", "list"]);
+    const searched = await runCli(fixture, ["search", marker]);
 
     expect(submitted.exitCode).toBe(0);
     expect(listed.stdout).toBe("no prompts recorded\n");
