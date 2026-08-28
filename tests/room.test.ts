@@ -556,7 +556,7 @@ test("528 [lint] a Lead reports a closed card back to the room (d22)", async () 
     // intent and the room never learns, which is how three closures went
     // unreported before d22.
     const message =
-      'herdr agent prompt supervisor "[from lead][done w<id> re d<room-id>] <candidate commit; one line on any deviation>"';
+      'herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"';
     expect(lead).toContain(message);
     expect(slp).toContain(message);
     expect(lead).toContain("one prompt per closed card, after `maestro work done`");
@@ -1811,5 +1811,34 @@ test("412 first install seeds OWNER.md with the interview questions and the room
       expect(text).toContain("interview the owner");
       expect(text.indexOf("interview the owner")).toBeLessThan(text.indexOf("maestro brief"));
     }
+  });
+});
+
+test("529 [lint] relayed intent reports on close even without a room decision id (d22)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = await readFile(join(fixture.home, "maestro", "lead.md"), "utf8");
+    const slp = await readFile(
+      join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+      "utf8",
+    );
+    const step6 = lead.split("\n6. ")[1]?.split("\n7. ")[0] ?? "";
+    expect(step6).not.toBe("");
+
+    // Keying the report on a room decision id missed room card w4 to
+    // lead-dotfiles: that relay carried intent and named no decision, so the
+    // trigger never fired and the closure went unreported.
+    expect(step6).toContain("[from supervisor][intent]");
+    expect(step6).toContain("w<room-id>");
+    expect(step6).toContain("d<room-id>");
+    expect(slp).toContain("w<room-id>");
+
+    // The same Lead then hunted for the room with ListAgents and dispatch
+    // list. The room agent name is fixed, so searching is always wrong.
+    expect(step6).toContain("herdr agent prompt supervisor");
+    expect(step6).toMatch(/only channel|reached only by/);
+    expect(step6).toContain("herdr agent list");
+    expect(step6).toContain("maestro dispatch list");
   });
 });
