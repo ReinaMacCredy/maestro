@@ -140,14 +140,30 @@ text.
 
 ## Model
 
-The Lead picks a lane's model the way it picks a sub-agent's, and the room picks the Lead's model. Nothing records, enforces, or prints the choice. Model names rot, so the owner keeps the current examples for that column in `OWNER.md`.
+The Lead picks a lane's model the way it picks a sub-agent's, and the room picks the Lead's model. Nothing records, enforces, or prints the choice. Model names rot, so the owner keeps the current examples for those columns in `OWNER.md`.
 
-| rung | use it for | example (2026-08, owner-editable) |
+These examples are dated 2026-08-28 and owner-editable.
+
+| rung | use it for | example Claude Code | example Codex CLI |
+|---|---|---|---|
+| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |
+| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |
+| diverse | challenge and council: a different model family from the lane that produced the view; Claude and Codex are the two harnesses maestro wires today; a third family (Grok 4.6, Gemini 3.7 Flash) needs a third harness, which is a repository change (`sessions.harness` accepts `claude | codex`, `src/kernel/sessions.ts`) | Claude | Codex |
+| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |
+
+### Thinking level by lane
+
+| lane | Claude | Codex |
 |---|---|---|
-| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | sonnet or haiku |
-| strong | delivery with red/green, long brief, kernel or store, decision lanes | opus or gpt-5.6-sol |
-| diverse | challenge and council: a different model family from the lane that produced the view, whatever the rung | codex vs claude |
-| lead | reviews handbacks, closes cards, settles forks | fable or opus |
+| scout | medium | medium |
+| decision | xhigh | xhigh |
+| delivery | high | high |
+| challenge | xhigh | xhigh |
+| shadow | low | low |
+
+Keep one effort level for a whole session: the level sits in the prompt prefix cache, so changing it mid-session drops the cache; `max` is for one genuinely hard fork, not a default (community measurement: about 2.2x time and 1.7x tokens versus `high`).
+
+Pass the level with Claude Code's `--effort <level>` or Codex's `-c model_reasoning_effort=<level>`.
 
 ## Instruction stack
 
