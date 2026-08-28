@@ -46,7 +46,9 @@ agent harness hooks. In scope:
 - Reading or writing outside the current repository's `.maestro/` directory and
   the documented `~/.maestro` and `~/.local/bin` install paths.
 - Corrupting or forging the durable record: work state, leases, decisions,
-  dispatches, handbacks, or the event log, from outside the CLI contract.
+  dispatches, handbacks, or the event log, from outside the CLI contract. A
+  store records the schema generation that wrote it, and an older Maestro
+  refuses a newer store rather than writing into a shape it does not know.
 - Weaknesses in `scripts/install.sh` and `maestro install` that let a third
   party influence what gets installed.
 

@@ -68,6 +68,13 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
   return { orphanPath, path, root: checkoutRoot };
 }
 
+// The schema generation this binary understands. Every plugin migrates its own
+// tables additively on open, so this is not a migration counter: it exists so a
+// store carries a readable claim about who wrote it, and so an older binary
+// refuses a newer store instead of writing into a shape it does not know.
+// Raise it when a change makes a store unreadable to the previous release.
+export const schemaGeneration = 1;
+
 function assertSqliteIdentifier(identifier: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`invalid SQLite identifier: ${identifier}`);
@@ -86,6 +93,7 @@ export class Store {
     this.database = this.openDatabase(path);
     this.database.exec("PRAGMA busy_timeout = 5000");
     this.database.exec("PRAGMA foreign_keys = ON");
+    this.assertSchemaUnderstood();
     if (this.readOnly) return;
     try {
       this.database.exec("PRAGMA journal_mode = WAL");
@@ -94,6 +102,23 @@ export class Store {
       Bun.sleepSync(100);
       this.database.exec("PRAGMA journal_mode = WAL");
     }
+  }
+
+  private assertSchemaUnderstood(): void {
+    const recorded = this.database
+      .query<{ user_version: number }, []>("PRAGMA user_version")
+      .get()?.user_version ?? 0;
+    if (recorded > schemaGeneration) {
+      throw new CliError(
+        "STORE_TOO_NEW",
+        `${this.path} was written by a newer Maestro (store schema ${recorded}, this build understands ${schemaGeneration}); run maestro update`,
+        { fix: "run maestro update", recorded, understood: schemaGeneration },
+      );
+    }
+    // Stamping is a write, so a reader leaves an older store exactly as it
+    // found it (d706) and simply reads it.
+    if (this.readOnly || this.ephemeral || recorded === schemaGeneration) return;
+    this.database.exec(`PRAGMA user_version = ${schemaGeneration}`);
   }
 
   private openDatabase(path: string): Database {
