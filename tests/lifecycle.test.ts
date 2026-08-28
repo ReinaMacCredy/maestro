@@ -715,7 +715,7 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
     };
 
     expect(Object.keys(workflow.on ?? {}).sort()).toEqual(["pull_request", "push"]);
-    expect(Object.keys(workflow.jobs ?? {})).toEqual(["verify"]);
+    expect(Object.keys(workflow.jobs ?? {})).toEqual(["verify", "desktop", "desktop-rust", "site"]);
     const verify = workflow.jobs?.verify;
     expect(verify?.if).toBeUndefined();
     const steps = verify?.steps ?? [];
@@ -811,6 +811,37 @@ test("231 update on a source branch with no upstream resyncs instead of erroring
     expect(await git(source, ["rev-parse", "HEAD"])).toBe(head);
     const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
     expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(head);
+  });
+});
+
+test("518 update moves a pinned source tag to tag, not to the branch tip", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // The publisher cuts v0.9.0, then v0.10.0, then keeps working on main.
+    await git(publisher, ["commit", "--allow-empty", "-m", "release one"]);
+    await git(publisher, ["tag", "v0.9.0"]);
+    await git(publisher, ["commit", "--allow-empty", "-m", "release two"]);
+    await git(publisher, ["tag", "v0.10.0"]);
+    const release = await git(publisher, ["rev-parse", "v0.10.0^{}"]);
+    await git(publisher, ["commit", "--allow-empty", "-m", "unreleased work"]);
+    const tip = await git(publisher, ["rev-parse", "HEAD"]);
+    await git(publisher, ["push", "--tags", "origin", "main"]);
+    expect(release).not.toBe(tip);
+
+    // What scripts/install.sh leaves behind for an adopter: a branch at the
+    // release tag with no upstream.
+    await git(source, ["fetch", "--tags", "origin"]);
+    await git(source, ["checkout", "-b", "maestro-release", "v0.9.0"]);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect({ code: updated.exitCode, err: updated.stderr }).toMatchObject({ code: 0 });
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(release);
+    expect(await git(source, ["symbolic-ref", "--quiet", "--short", "HEAD"])).toBe("maestro-release");
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(release);
   });
 });
 

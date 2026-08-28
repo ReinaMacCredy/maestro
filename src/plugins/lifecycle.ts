@@ -130,6 +130,50 @@ async function swapRuntime(staged: string, runtime: string): Promise<void> {
   }
 }
 
+// scripts/install.sh leaves an adopter's checkout on this branch, sitting at a
+// release tag with no upstream (d714).
+const pinnedBranch = "maestro-release";
+
+// Version order, not string order: v0.9.0 outranks v0.10.0 lexicographically.
+export function newestReleaseTag(tags: readonly string[]): string | null {
+  let best: { tag: string; value: number } | null = null;
+  for (const tag of tags) {
+    const parts = /^v(\d+)\.(\d+)\.(\d+)$/.exec(tag);
+    if (!parts) continue;
+    const value = Number(parts[1]) * 1_000_000 + Number(parts[2]) * 1_000 + Number(parts[3]);
+    if (!best || value > best.value) best = { tag, value };
+  }
+  return best?.tag ?? null;
+}
+
+async function fastForwardToNewestTag(source: string): Promise<void> {
+  const fetched = await command(source, ["git", "fetch", "--tags", "origin"]);
+  if (fetched.exitCode !== 0) {
+    throw new CliError(
+      "UPDATE_FETCH_FAILED",
+      `cannot fetch release tags for the Maestro source: ${fetched.stderr || "git fetch failed"}; fix remote connectivity, then run maestro update`,
+      { fix: "fix the source remote or network, then run maestro update" },
+    );
+  }
+  const listed = await command(source, ["git", "tag", "--list"]);
+  const tag = newestReleaseTag(listed.stdout.split("\n").map((line) => line.trim()));
+  if (!tag) {
+    throw new CliError(
+      "UPDATE_NO_RELEASE_TAG",
+      `the Maestro source on ${pinnedBranch} has no release tag to follow; check out a branch that tracks an upstream, then run maestro update`,
+      { fix: "check out a tracking branch, then run maestro update" },
+    );
+  }
+  const merged = await command(source, ["git", "merge", "--ff-only", tag]);
+  if (merged.exitCode !== 0) {
+    throw new CliError(
+      "UPDATE_MERGE_FAILED",
+      `cannot fast-forward the pinned Maestro source to ${tag}: ${merged.stderr || "git merge --ff-only failed"}; fix the checkout, then run maestro update`,
+      { fix: "fix the source checkout, then run maestro update" },
+    );
+  }
+}
+
 async function update(): Promise<CliResult> {
   refuseRepositoryWiringInRoom(resolve(process.cwd()));
   const home = homeDirectory();
@@ -168,22 +212,30 @@ async function update(): Promise<CliResult> {
       { fix: "check out the Maestro source branch, then run maestro update" },
     );
   }
-  const upstream = await command(source, [
-    "git",
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "@{upstream}",
-  ]);
+  // A checkout scripts/install.sh pinned follows the release tag line, not a
+  // branch tip, and has no upstream to pull from (d714). The branch name is the
+  // signal: right after a release, main and the newest tag are the same commit,
+  // so HEAD-sits-on-a-tag would misread a main checkout as pinned.
+  const pinned = branch.stdout === pinnedBranch;
+  if (pinned) await fastForwardToNewestTag(source);
+  const upstream = pinned
+    ? { exitCode: 1, stdout: "", stderr: "" }
+    : await command(source, [
+      "git",
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "@{upstream}",
+    ]);
   // A branch nobody has pushed has nothing to pull, which is the same situation
   // the ahead-only path below already rules is not an error. Resync the runtime
   // and name the missing upstream so a real misconfiguration stays visible (d38).
-  const noUpstream = upstream.exitCode !== 0 || !upstream.stdout;
+  const noUpstream = !pinned && (upstream.exitCode !== 0 || !upstream.stdout);
   const sourceBranch = noUpstream
     ? (await command(source, ["git", "rev-parse", "--abbrev-ref", "HEAD"])).stdout || "HEAD"
     : "";
   let aheadOnly = false;
-  if (!noUpstream) {
+  if (!pinned && !noUpstream) {
   const fetched = await command(source, ["git", "fetch", "--no-tags"]);
   if (fetched.exitCode !== 0) {
     throw new CliError(

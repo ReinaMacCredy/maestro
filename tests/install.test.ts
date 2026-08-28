@@ -382,6 +382,78 @@ test("310 scripts/install.sh clones the source checkout, installs from it, and f
   });
 });
 
+test("517 scripts/install.sh pins the newest release tag by version, not main's tip", async () => {
+  await withFixture(async (fixture) => {
+    const projectRoot = join(import.meta.dir, "..");
+    const upstream = join(fixture.root, "upstream");
+    await mkdir(upstream, { recursive: true });
+    for (const entry of ["package.json", "tsconfig.json", "bin", "src", "scripts", ".gitignore"]) {
+      await cp(join(projectRoot, entry), join(upstream, entry), { recursive: true });
+    }
+    const git = (args: string[]) =>
+      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", ...args], {
+        cwd: upstream,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    const gitOut = async (args: string[]) => (await new Response(git(args).stdout).text()).trim();
+    expect(await git(["init", "-q", "-b", "main"]).exited).toBe(0);
+    expect(await git(["add", "."]).exited).toBe(0);
+    expect(await git(["commit", "-q", "-m", "upstream"]).exited).toBe(0);
+    // v0.9.0 sorts ABOVE v0.10.0 lexicographically, so a plain sort picks the
+    // older release; only a version-aware comparison gets this right.
+    expect(await git(["tag", "v0.9.0"]).exited).toBe(0);
+    expect(await git(["commit", "-q", "--allow-empty", "-m", "release"]).exited).toBe(0);
+    expect(await git(["tag", "v0.10.0"]).exited).toBe(0);
+    const release = await gitOut(["rev-parse", "v0.10.0^{}"]);
+    // Mid-flight work lands after the release; an adopter must not get this.
+    expect(await git(["commit", "-q", "--allow-empty", "-m", "unreleased work"]).exited).toBe(0);
+    const tip = await gitOut(["rev-parse", "HEAD"]);
+    expect(release).not.toBe(tip);
+
+    const { path } = await prepareInstallFixture(fixture);
+    const source = join(fixture.home, ".maestro", "source");
+    const run = async (extra: Record<string, string> = {}) => {
+      const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
+        cwd: fixture.repo,
+        env: {
+          ...process.env,
+          HOME: fixture.home,
+          PATH: path,
+          SHELL: "/bin/zsh",
+          MAESTRO_REPO: upstream,
+          MAESTRO_SESSION_ID: "test-session",
+          MAESTRO_SESSION_PID: String(process.pid),
+          ...extra,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode: await child.exited, stdout, stderr };
+    };
+    const sourceGit = async (args: string[]) =>
+      (await new Response(Bun.spawn(["git", "-C", source, ...args], { stdout: "pipe", stderr: "pipe" }).stdout).text()).trim();
+
+    const pinned = await run();
+    expect(pinned.exitCode).toBe(0);
+    expect(await sourceGit(["rev-parse", "HEAD"])).toBe(release);
+    // A branch, not a detached HEAD: lifecycle.ts refuses to update a detached
+    // checkout, so pinning must not cost the fast-forward contract.
+    expect(await sourceGit(["symbolic-ref", "--quiet", "--short", "HEAD"])).toBe("maestro-release");
+
+    const explicit = await run({ MAESTRO_REF: "main", MAESTRO_SOURCE_DIR: join(fixture.home, "dev-source") });
+    expect(explicit.exitCode).toBe(0);
+    const devHead = (await new Response(
+      Bun.spawn(["git", "-C", join(fixture.home, "dev-source"), "rev-parse", "HEAD"], { stdout: "pipe", stderr: "pipe" }).stdout,
+    ).text()).trim();
+    expect(devHead).toBe(tip);
+  });
+}, 120_000);
+
 test("312 scripts/install.sh refuses a bun older than the lockfile's bun floor and names it", async () => {
   await withFixture(async (fixture) => {
     const projectRoot = join(import.meta.dir, "..");
