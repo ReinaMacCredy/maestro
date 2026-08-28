@@ -143,13 +143,14 @@ text.
 The Lead picks a lane's model the way it picks a sub-agent's, and the room picks the Lead's model. Nothing records, enforces, or prints the choice. Model names rot, so the owner keeps the current examples for those columns in `OWNER.md`.
 
 These examples are dated 2026-08-28 and owner-editable.
+Every Claude start also passes `--autocompact 250000`; Codex has no equivalent flag and takes none.
 
 | rung | use it for | example Claude Code | example Codex CLI |
 |---|---|---|---|
-| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |
-| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |
+| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet --autocompact 250000`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |
+| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus --autocompact 250000`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |
 | diverse | challenge and council: a different model family from the lane that produced the view; Claude and Codex are the two harnesses maestro wires today; a third family (Grok 4.6, Gemini 3.7 Flash) needs a third harness, which is a repository change (`sessions.harness` accepts `claude | codex`, `src/kernel/sessions.ts`) | Claude | Codex |
-| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |
+| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable --autocompact 250000`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |
 
 ### Thinking level by lane
 

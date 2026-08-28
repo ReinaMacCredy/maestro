@@ -664,10 +664,10 @@ test("500 [lint] recipe slp treats model routing as guidance-only two-harness re
   expect(rungTable.split("\n").filter((line) => line.startsWith("|"))).toEqual([
     "| rung | use it for | example Claude Code | example Codex CLI |",
     "|---|---|---|---|",
-    "| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |",
-    "| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |",
+    "| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet --autocompact 250000`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |",
+    "| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus --autocompact 250000`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |",
     "| diverse | challenge and council: a different model family from the lane that produced the view; Claude and Codex are the two harnesses maestro wires today; a third family (Grok 4.6, Gemini 3.7 Flash) needs a third harness, which is a repository change (`sessions.harness` accepts `claude | codex`, `src/kernel/sessions.ts`) | Claude | Codex |",
-    "| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |",
+    "| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable --autocompact 250000`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |",
   ]);
   expect(thinking.split("\n").filter((line) => line.startsWith("|"))).toEqual([
     "| lane | Claude | Codex |",
@@ -683,5 +683,10 @@ test("500 [lint] recipe slp treats model routing as guidance-only two-harness re
   );
   expect(thinking).toContain(
     "Pass the level with Claude Code's `--effort <level>` or Codex's `-c model_reasoning_effort=<level>`.",
+  );
+  // d24: every Claude start carries the window, so the flag rides in the model
+  // cell where a Lead reading the table to build a command will meet it.
+  expect(model).toContain(
+    "Every Claude start also passes `--autocompact 250000`; Codex has no equivalent flag and takes none.",
   );
 });

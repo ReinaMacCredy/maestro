@@ -371,7 +371,7 @@ esac
         "workspace focus w9",
       ]);
       expect(commands.filter((line) => line.startsWith("agent start "))).toEqual([
-        "agent start supervisor --kind claude --pane w9:p1",
+        "agent start supervisor --kind claude --pane w9:p1 -- --autocompact 250000",
       ]);
       expect(commands.filter((line) => line.startsWith("agent focus "))).toEqual([
         "agent focus supervisor",
@@ -481,6 +481,10 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     expect(lead).toContain(
       "`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>`",
     );
+    // d24: a Claude Lead gets the same window as a Claude lane.
+    expect(lead).toContain(
+      "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
+    );
     expect(lead).toContain(
       '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."`',
     );
@@ -506,9 +510,13 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       "The Lead reports back through its own store and the next `maestro brief`.",
     );
     expect(shellrc).toContain(
-      'herdr agent start supervisor --kind claude --pane "$root_pane_id"',
+      'herdr agent start supervisor --kind claude --pane "$root_pane_id" -- --autocompact 250000',
     );
-    expect(shellrc).toContain("# The owner may edit the supervisor's agent kind.");
+    // d24 fixes the window here but not the model: the kind and the flags after
+    // -- are one owner edit point, and model names live in OWNER.md.
+    expect(shellrc).toContain(
+      "both this kind and the\n    # flags after -- are the owner's to edit together.",
+    );
     expect(identity).toContain("read `lead.md`");
     expect(agents).toContain("read `lead.md`");
   });
@@ -568,10 +576,10 @@ test("501 [lint] installed room guidance selects models from the SLP reference (
     const leadStep = lead.split("4. ")[1]?.split("\n5. ")[0] ?? "";
 
     expect(laneStep).toContain(
-      "Pass the chosen model from the Model table in `maestro recipe show slp` and the lane's thinking level from its table to the harness: use `-- --model <name> --effort <level>` for Claude or Codex's `--model <name> -c model_reasoning_effort=<level>` flags (verified with `claude --help` and `codex --help`).",
+      "Pass the chosen model from the Model table in `maestro recipe show slp` and the lane's thinking level from its table to the harness: use `-- --model <name> --effort <level> --autocompact 250000` for Claude or Codex's `--model <name> -c model_reasoning_effort=<level>` flags (verified with `claude --help` and `codex --help`).",
     );
     expect(leadStep).toContain(
-      "Pick the Lead's model from the `lead` rung of the Model table in `maestro recipe show slp`.",
+      "Pick the Lead's model from the `lead` rung of the Model table in `maestro recipe show slp`;",
     );
     expect(owner).toContain(
       "Which examples should the owner-editable Model table column use for cheap, strong, diverse, and lead? Keep the current names here.",
@@ -1770,10 +1778,10 @@ printf '%s\\n' 'owner brief'
       "pane list --workspace w9",
       "agent list",
       `tab create --workspace w9 --cwd ${occupiedWorkspace.room} --label supervisor`,
-      "agent start supervisor --kind claude --pane w9:t2:p1",
+      "agent start supervisor --kind claude --pane w9:t2:p1 -- --autocompact 250000",
     ]);
     expect(occupiedWorkspace.commands).not.toContain(
-      "agent start supervisor --kind claude --pane w9:p1",
+      "agent start supervisor --kind claude --pane w9:p1 -- --autocompact 250000",
     );
 
     const freshWorkspace = await runHm(false);
@@ -1783,7 +1791,7 @@ printf '%s\\n' 'owner brief'
       "workspace list",
       "pane list --workspace w9",
       "agent list",
-      "agent start supervisor --kind claude --pane w9:p1",
+      "agent start supervisor --kind claude --pane w9:p1 -- --autocompact 250000",
     ]);
   },
 );
