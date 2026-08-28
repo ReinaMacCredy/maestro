@@ -514,6 +514,25 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
   });
 });
 
+test("516 [lint] room guidance forbids store hand edits and relays fix intent", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const agents = await readFile(join(room, "AGENTS.md"), "utf8");
+    const claude = await readFile(join(room, "CLAUDE.md"), "utf8");
+    const lead = await readFile(join(room, "lead.md"), "utf8");
+    const storeBoundary =
+      "The room never edits any store by hand (no sqlite, no file edits under `.maestro`); every store changes only through `maestro` verbs, and a defect in stored data is owner intent for the Lead of the code that wrote it, relayed per `lead.md`.";
+    const relayRule =
+      "When the owner says fix or do, relay without asking whether to relay; ask the owner a question only for a real fork.";
+
+    expect(agents).toContain(storeBoundary);
+    expect(claude).toContain(storeBoundary);
+    expect(lead.split("\n").find((line) => line.startsWith("1. "))).toContain(relayRule);
+  });
+});
+
 test("501 [lint] installed room guidance selects models from the SLP reference (d711)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

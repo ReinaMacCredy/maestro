@@ -43,6 +43,29 @@ test("284 orphan worktree store is silent on ordinary commands and reported heal
   });
 });
 
+test("517 commands refuse a cwd inside the repository store in normal and observer modes", async () => {
+  await withFixture(async (fixture) => {
+    await initializeGitRepository(fixture.repo);
+    const storeDirectory = join(fixture.repo, ".maestro");
+    const nestedStore = join(storeDirectory, ".maestro", "maestro.db");
+    const cases: Array<[string, Record<string, string>]> = [
+      [storeDirectory, {}],
+      [storeDirectory, { MAESTRO_READ_ONLY: "1" }],
+      [join(storeDirectory, "plugins"), {}],
+    ];
+
+    for (const [cwd, environment] of cases) {
+      const result = await runCliAt(fixture, cwd, ["status"], environment);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('code: "STORE_INSIDE_STORE"');
+      expect(result.stderr).toContain(
+        `${cwd} is inside a .maestro directory; run maestro from the directory that owns it: ${fixture.repo}`,
+      );
+      expect(existsSync(nestedStore)).toBeFalse();
+    }
+  });
+});
+
 function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }

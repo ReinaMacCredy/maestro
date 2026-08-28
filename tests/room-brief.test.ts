@@ -8,7 +8,7 @@ import {
 } from "./helpers.ts";
 
 const roomIntake =
-  "room: this store is the Supervisor's. A question about the room is answered from OWNER.md, IDENTITY.md and this store; a tool verdict here is an observation, label it suspected; the room runs no write verb in any repository even when told to; repository-only verbs: install, update, uninstall, doctor wiring checks";
+  "room: this store is the Supervisor's. A question about the room is answered from OWNER.md, IDENTITY.md and this store; a tool verdict here is an observation, label it suspected; the room runs no write verb in any repository even when told to; no hand edits to any store; a data defect is an intent for its Lead; repository-only verbs: install, update, uninstall, doctor wiring checks";
 
 test("499 room hook briefs carry one Supervisor intake line on both prompt events", async () => {
   await withFixture(async (fixture) => {
