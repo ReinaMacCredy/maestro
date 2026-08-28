@@ -517,15 +517,15 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     expect(lane).toContain("Never treat the pane id as session identity.");
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
-      "maestro status --live",
-      "maestro dispatch confirm <dispatch-id> --session <session-id>",
-      "maestro dispatch cancel <dispatch-id> --reason wrong-holder",
       "maestro work release <work-id>",
       'maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id>',
       "maestro dispatch show <dispatch-id>",
       "maestro dispatch list <work-id>",
       "maestro recipe show slp",
       "maestro dispatch accept <dispatch-id>",
+      "maestro status --live",
+      "maestro dispatch confirm <dispatch-id> --session <session-id>",
+      "maestro dispatch cancel <dispatch-id> --reason wrong-holder",
       'maestro handback file <dispatch-id> --status DONE --candidate "<commit or digest>" --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
       'maestro work note <work-id> "after h<id>: <evidence>"',
       "maestro brief",
@@ -557,34 +557,6 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     };
 
     for (const command of commands) {
-      if (
-        command.startsWith("maestro dispatch confirm ") &&
-        !replacements.has("<dispatch-id>")
-      ) {
-        const openCommand = commands.find((candidate) =>
-          candidate.startsWith("maestro dispatch open ")
-        ) as string;
-        const openArgs = argumentsFor(openCommand);
-        const opened = await runInstalledCliAt(
-          fixture,
-          fixture.repo,
-          openArgs,
-          { PATH: path },
-        );
-        expect(opened.exitCode).toBe(0);
-        const dispatch = opened.stdout.match(/^(x\d+)/)?.[1] as string;
-        replacements.set("<dispatch-id>", dispatch);
-        expect(
-          (
-            await runInstalledCliAt(
-              fixture,
-              fixture.repo,
-              ["dispatch", "accept", dispatch],
-              { PATH: path },
-            )
-          ).exitCode,
-        ).toBe(0);
-      }
       const parsed = await runInstalledCliAt(
         fixture,
         fixture.repo,
@@ -602,6 +574,40 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       }
       if (command.startsWith("maestro dispatch open ")) {
         replacements.set("<dispatch-id>", parsed.stdout.match(/^(x\d+)/)?.[1] as string);
+      }
+      if (command.startsWith("maestro dispatch cancel ")) {
+        const openCommand = commands.find((candidate) =>
+          candidate.startsWith("maestro dispatch open ")
+        ) as string;
+        const reopened = await runInstalledCliAt(
+          fixture,
+          fixture.repo,
+          argumentsFor(openCommand),
+          { PATH: path },
+        );
+        expect(reopened.exitCode).toBe(0);
+        const dispatch = reopened.stdout.match(/^(x\d+)/)?.[1] as string;
+        replacements.set("<dispatch-id>", dispatch);
+        expect(
+          (
+            await runInstalledCliAt(
+              fixture,
+              fixture.repo,
+              ["dispatch", "accept", dispatch],
+              { PATH: path },
+            )
+          ).exitCode,
+        ).toBe(0);
+        expect(
+          (
+            await runInstalledCliAt(
+              fixture,
+              fixture.repo,
+              ["dispatch", "confirm", dispatch, "--session", "test-session"],
+              { PATH: path },
+            )
+          ).exitCode,
+        ).toBe(0);
       }
     }
   });

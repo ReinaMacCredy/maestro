@@ -1,8 +1,9 @@
 # SLP: Supervisor, Lead, Peer
 
 Use this recipe to know which role a session holds and what that role owns.
-A role is durable identity, not per-prompt state: it comes from where the
-session was started and which lease it holds, never from a flag or a claim.
+A role is durable identity, not per-prompt state: it comes from the Herdr agent
+name set by the opener and is soft-audited against the store, never inferred
+from cwd.
 
 ## Roles
 
@@ -159,12 +160,13 @@ binding on the role, checkable after the fact, not prevented.
 | Started where | Role | How it knows |
 |---|---|---|
 | `~/maestro` (opened with `hm`) | Supervisor, the owner's embodiment | the room `AGENTS.md` points at `IDENTITY.md`; `maestro brief` is its event feed across every registered repository |
-| a repository's working tree | Lead of that repository | the repo `AGENTS.md` maestro block says so; the hook brief shows what it holds; `maestro work start` and `maestro bundle open` are its leases |
-| a pane the Lead opened with a dispatch | Peer | the Lead sends the stored contract; `maestro dispatch accept <id>` takes the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
+| a Herdr agent named `lead-<repo basename>` whose cwd is the repository | Lead of that repository | the room sets the name; the hook brief lists dispatches it opened |
+| a Herdr agent named `peer-<dispatch id>` | Peer | the Lead sets the name and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
 
-A session never becomes a Peer on its own; only an accepted dispatch makes
-one. A Supervisor never takes work in a repository store; if it needs a change
-made, it asks the Lead. Two sessions holding parent work in one repository are
+A session never becomes a Peer on its own; the Lead makes it one by starting
+`peer-<dispatch id>`, and dispatch acceptance records that binding. A
+Supervisor never takes work in a repository store; if it needs a change made,
+it asks the Lead. Two sessions holding parent work in one repository are
 split-brain: the later one must stop and read `maestro status`.
 
 ## Supervisor feed and packet

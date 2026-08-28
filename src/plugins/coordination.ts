@@ -137,6 +137,29 @@ export const coordinationPlugin: BuiltInPlugin = {
       }),
     );
     context.effect(() =>
+      brief.register(
+        (sessionId) => {
+          const dispatches = (context.dispatch as DispatchService).list();
+          const peerDispatches = dispatches.filter(
+            (dispatch) =>
+              dispatch.heldBy === sessionId ||
+              dispatch.claimedBy === sessionId ||
+              dispatch.targetSession === sessionId,
+          );
+          if (peerDispatches.length > 0) {
+            return `role: peer (${peerDispatches.map(({ id }) => id).join(", ")}) — dispatch prompts only; anything else is not your role`;
+          }
+          const openedDispatches = dispatches.filter(
+            (dispatch) => dispatch.openedBy === sessionId,
+          );
+          return openedDispatches.length > 0
+            ? `role: lead (opened ${openedDispatches.map(({ id }) => id).join(", ")})`
+            : "";
+        },
+        { events: ["SessionStart", "UserPromptSubmit"] },
+      ),
+    );
+    context.effect(() =>
       brief.register(() => {
         const policies = context.loader.records
           .filter((record) => record.status === "active" && record.name.startsWith("policy-"))

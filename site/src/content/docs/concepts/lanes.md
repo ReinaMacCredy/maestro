@@ -48,6 +48,7 @@ the fact, not prevented.
 | B7 | Supervisor project writes | `MAESTRO_READ_ONLY=1` on the `hm` brief | test 214 | every other verb the room session runs |
 | B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
 | B9 | tool and call budgets | nothing | soft-audited | the assignment text |
+| B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |
 
 ## Open a dispatch
 
