@@ -1761,3 +1761,79 @@ test("326 a start rejected by a gate leaves atomic_reason untouched", async () =
     expect(row).toEqual({ state: "open", held_by: null, atomic_reason: null });
   });
 });
+
+// d706 step 2: the seal is a property of the declared council, so it must not
+// move when only the open/return interleaving moves.
+async function councilSeal(
+  fixture: Fixture,
+  order: "open-open-return" | "open-return-open",
+): Promise<string> {
+  const work = idFrom(
+    await runCli(fixture, ["work", "add", `council ${order}`, "--atomic-reason", "fixture"]),
+  );
+  const first = dispatchId(
+    await runCli(fixture, [...dispatchOpenArgs(work), "--council-members", "2"], session("lead")),
+  );
+  const openSecond = async (): Promise<void> => {
+    await runCli(
+      fixture,
+      [...dispatchOpenArgs(work), "--council-anchor", first],
+      session("lead"),
+    );
+  };
+  const returnFirst = async (): Promise<void> => {
+    await runCli(fixture, ["dispatch", "accept", first], session("lane-one"));
+    await runCli(fixture, ["dispatch", "confirm", first, "--session", "lane-one"], session("lead"));
+    await runCli(
+      fixture,
+      [
+        "handback", "file", first, "--status", "DONE",
+        "--claim", "first secret view", "--proof", "live: fixture",
+        "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
+      ],
+      session("lane-one"),
+    );
+  };
+  if (order === "open-open-return") {
+    await openSecond();
+    await returnFirst();
+  } else {
+    await returnFirst();
+    await openSecond();
+  }
+  const shown = await runCli(fixture, ["handback", "show", first], session("lead"));
+  return shown.exitCode === 0 ? "readable" : "SEALED";
+}
+
+test("474 a declared council seals the first view whichever order the lanes are opened and returned (w502, d706)", async () => {
+  await withFixture(async (fixture) => {
+    expect(await councilSeal(fixture, "open-open-return")).toBe("SEALED");
+    expect(await councilSeal(fixture, "open-return-open")).toBe("SEALED");
+  });
+}, 60_000);
+
+test("475 an undeclared second dispatch is sequential work, not a council (w502, d706)", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "sequential", "--atomic-reason", "fixture"]),
+    );
+    const first = dispatchId(await runCli(fixture, dispatchOpenArgs(work), session("lead")));
+    await runCli(fixture, ["dispatch", "accept", first], session("lane-one"));
+    await runCli(fixture, ["dispatch", "confirm", first, "--session", "lane-one"], session("lead"));
+    await runCli(
+      fixture,
+      [
+        "handback", "file", first, "--status", "DONE",
+        "--claim", "sequential view", "--proof", "live: fixture",
+        "--assumptions", "None", "--residual-risks", "None", "--incidental-findings", "None",
+      ],
+      session("lane-one"),
+    );
+    await runCli(fixture, dispatchOpenArgs(work), session("lead"));
+
+    const shown = await runCli(fixture, ["handback", "show", first], session("lead"));
+    expect(shown.exitCode).toBe(0);
+    const listed = await runCli(fixture, ["dispatch", "list", work], session("lead"));
+    expect(listed.stdout).not.toContain("council:");
+  });
+}, 60_000);
