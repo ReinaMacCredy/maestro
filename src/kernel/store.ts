@@ -64,11 +64,7 @@ export class Store {
     this.readOnly = options.readonly ?? false;
     this.ephemeral = this.readOnly && !existsSync(path);
     if (!this.readOnly) mkdirSync(dirname(path), { recursive: true });
-    this.database = new Database(this.ephemeral ? ":memory:" : path, {
-      create: !this.readOnly || this.ephemeral,
-      readonly: this.readOnly && !this.ephemeral,
-      strict: true,
-    });
+    this.database = this.openDatabase(path);
     this.database.exec("PRAGMA busy_timeout = 5000");
     this.database.exec("PRAGMA foreign_keys = ON");
     if (this.readOnly) return;
@@ -78,6 +74,36 @@ export class Store {
       if (!(error instanceof SQLiteError) || !error.code?.startsWith("SQLITE_BUSY")) throw error;
       Bun.sleepSync(100);
       this.database.exec("PRAGMA journal_mode = WAL");
+    }
+  }
+
+  private openDatabase(path: string): Database {
+    if (this.ephemeral) return new Database(":memory:", { create: true, strict: true });
+    if (!this.readOnly) return new Database(path, { create: true, strict: true });
+    try {
+      const readonly = new Database(path, { create: false, readonly: true, strict: true });
+      try {
+        readonly.query("SELECT count(*) FROM sqlite_master").get();
+        return readonly;
+      } catch (error) {
+        readonly.close();
+        throw error;
+      }
+    } catch (error) {
+      // A WAL database is unreadable without its -shm, and a read-only handle
+      // cannot create one, so a cleanly closed store would otherwise report
+      // itself unreadable and unload every store-backed verb. Reopen writable
+      // and let SQLite refuse the writes instead: the sidecars reappear, the
+      // content does not change (d706). A store that fails both ways keeps its
+      // original diagnosis.
+      try {
+        const observer = new Database(path, { create: false, strict: true });
+        observer.exec("PRAGMA query_only = 1");
+        observer.query("SELECT count(*) FROM sqlite_master").get();
+        return observer;
+      } catch {
+        throw error;
+      }
     }
   }
 
