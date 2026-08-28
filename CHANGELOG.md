@@ -13,6 +13,64 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 Nothing yet.
 
+## [0.110.0] - 2026-08-28
+
+### Added
+
+- `policy-card-budget` (d703): a removable policy on the new `work.add` gate
+  that refuses a new card while the store already holds `limit` (default 3)
+  open cards with no live holder and no accepted dispatch; enabled here.
+  lane.md: a finding returned in a handback is closed by that handback and
+  becomes a card only when it is the next thing the Lead will do.
+- Declared councils (d706): `dispatch open --council-members <n>` and
+  `--council-anchor <id>` record membership instead of inferring it from
+  timing; the seal is a property of the declared council, whatever order the
+  lanes open and return. One handback per dispatch is now a store constraint,
+  and only the session that opened a dispatch may cancel it.
+- Enforcement registry: the boundary table in `concepts/lanes.md` gives every
+  row an id and cites the test that attacks it, or says `soft-audited`;
+  meta-tests refuse a row without an attacking test and an SLP mechanism
+  token that no row claims.
+- Roles travel in pane names (d709): the room finds a repository Lead only as
+  the Herdr agent it started as `lead-<repo basename>`, the Lead starts each
+  lane as `peer-<dispatch id>` after `dispatch open --pane`, a peer-named
+  session refuses any prompt that is not its stored contract, and the hook
+  brief prints a store-derived `role:` line on every prompt (open dispatch
+  ids, closed ones as a count; a returned holder is still a peer). The
+  repository mirror block names the Lead the same way.
+- The Supervisor room is a recorded store fact: the installer writes
+  `meta.kind=room` into the room store; `doctor` applies the room contract
+  there (files, registry, hooks, deny list, store) and never prescribes
+  `maestro install`; `install` and `uninstall` refuse with `INSTALL_IN_ROOM`;
+  the room hook brief carries a Supervisor intake line; the room `AGENTS.md`
+  names the repository-only verbs.
+- SLP Model reference (d711, guidance only): four rungs (cheap, strong,
+  diverse, lead) with dated per-harness examples the owner keeps current in
+  `OWNER.md`, a thinking level per lane, and the effort flags to pass; the
+  Lead picks a lane's model the way it picks a sub-agent's, the room picks the
+  Lead's model, nothing records or enforces the choice.
+
+### Changed
+
+- Session identity (d705) is never adopted from an incidental signal: without
+  an explicit id a process mints `anon-<uuid>`; the pid stays liveness-only.
+- Read-only opens fall back to a `query_only` handle for a cleanly closed WAL
+  store, so declared-pure verbs answer the same with or without the sidecars.
+- The Peer `PreToolUse` deny now covers a session on any dispatch row in any
+  state, matching the role line.
+- lane.md: a lane never talks to the Lead through the terminal; its returns
+  are the handback and `--request`.
+
+### Fixed
+
+- `work cancel` on a parent cascades to its open or active descendants in one
+  transaction with a prefixed reason and one event per row.
+- `work add` records the session, so a session whose only verb was `work add`
+  appears in `status --live`.
+- `dispatch confirm` accepts a targeted dispatch already held by the named
+  session instead of failing with `CLAIM_MISMATCH`.
+- The `role:` line no longer lists every dispatch the Lead ever opened.
+
 ## [0.109.0] - 2026-08-28
 
 ### Added

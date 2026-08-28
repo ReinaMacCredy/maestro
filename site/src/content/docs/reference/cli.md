@@ -1,10 +1,10 @@
 ---
 title: CLI reference
-description: Every top-level verb reported by the installed Maestro shim at commit 99248adb.
+description: Every top-level verb reported by the installed Maestro shim at commit 483f6d12.
 ---
 
-This reference was generated from the installed `maestro 0.109.0` shim at
-commit `99248adb71db640aa4f95cb45c91de770b24435a`.
+This reference was generated from the installed `maestro` shim at
+commit `483f6d126bed7928ce3a2adbeb61ad3a6f189a11`, released as 0.110.0.
 
 ```sh
 maestro help
@@ -30,11 +30,17 @@ stores. It has no flags.
 ### `dispatch`
 
 - `accept <id>` accepts a dispatch without taking the work write lease.
-- `cancel <id> --reason <value>` records why an open dispatch was abandoned.
+- `cancel <id> --reason <value>` records why an open dispatch was abandoned;
+  only the session that opened it may cancel it.
+- `confirm <id> --session <value>` confirms a claimed dispatch as its opener;
+  a targeted dispatch already held by that session confirms as a no-op.
 - `list [work-id] [--json]` lists contracts, optionally for one work item.
 - `open <work-id>` requires `--objective`, `--owned-scope`, `--excluded-scope`,
   `--mutation`, `--stop-condition`, `--lane`, `--evidence-required`, and
-  `--pane`; `--target-session` is optional.
+  `--pane`; `--target-session` is optional. `--council-members <n>` declares
+  a council of `n` seats on a new anchor, and `--council-anchor <id>` adds a
+  seat to a declared council; the two are mutually exclusive. One handback per
+  dispatch is a store constraint.
 - `show <id>` reads one stored contract.
 - `unseal <work-id> --reason <value>` opens a sealed council early and records why.
 
@@ -58,7 +64,8 @@ recorded user prompts, optionally for one session.
 ### `room`
 
 `maestro room forget <path>` removes one repository from the room registry
-without uninstalling it.
+without uninstalling it. `maestro room mark` is internal: the installer runs it
+inside the room store to record that the store is the Supervisor's.
 
 ### `status`
 
@@ -77,7 +84,9 @@ without uninstalling it.
 - `note <id> <text>` appends a durable note.
 - `done <id>` accepts repeatable `--claim` and `--proof`, plus opaque
   `--evidence`, and completes through enabled policy gates.
-- `cancel <id> --reason <value>` permanently cancels open or held work.
+- `cancel <id> --reason <value>` permanently cancels open or held work and its
+  open or active descendants, each with the reason prefixed `parent <id>
+  cancelled:`.
 - `release <id>` releases the current session's lease without completion.
 - `reclaim <id> --reason <value>` takes an existing lease with a recorded reason.
 
@@ -131,7 +140,8 @@ store and Git evidence.
 ### `install`
 
 `maestro install` installs the runtime and current repository hook wiring. It
-has no flags.
+has no flags. Run inside the Supervisor room it refuses with `INSTALL_IN_ROOM`;
+the room is maintained by installing from a repository checkout.
 
 ### `update`
 
@@ -146,7 +156,9 @@ It has no flags.
 ### `doctor`
 
 `maestro doctor` diagnoses the machine runtime and repository wiring read-only.
-It has no flags.
+It has no flags. In the Supervisor room it applies the room contract (room
+files, registry, hooks, deny list, store) instead of the repository wiring
+checks.
 
 ### `version`
 
