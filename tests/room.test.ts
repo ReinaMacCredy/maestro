@@ -624,6 +624,16 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       "Never send a warm-up prompt just to learn the id.",
     );
     expect(lane).toContain("Never treat the pane id as session identity.");
+    // Both stores allocate x-ids from 1, so the room's ids will eventually
+    // collide with a repository's; cwd is the only thing that tells them apart
+    // and no verb takes a store argument (d717).
+    expect(lane).toContain(
+      "A lane's cwd alone decides which store every Maestro verb reads",
+    );
+    expect(lane).toContain("A room-store lane is opened with `--cwd ~/maestro`");
+    expect(lane).toContain(
+      "compares the contract from `maestro dispatch show <dispatch-id>` against the contract in its prompt",
+    );
     expect(commands).toEqual([
       'maestro work add "<title>" --atomic-reason "<why>"',
       "maestro work release <work-id>",
