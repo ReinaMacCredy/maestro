@@ -537,11 +537,16 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     ];
 
     expect(lane).toContain(
-      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes-<work id> --no-focus",
+      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes-<owner>-<work id> --no-focus",
+    );
+    expect(lane).toContain(
+      "`<owner>` is the repository basename when a Lead opens the tab (for example, `lanes-maestro-w524`) and the literal `room` when the Supervisor opens lanes for room-store work (for example, `lanes-room-w522`), because the room directory is also named `maestro` and its basename cannot distinguish room-store work.",
     );
     expect(lane).not.toContain(
-      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes --no-focus",
+      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes-<work id> --no-focus",
     );
+    expect(lane).toContain("once the `lanes-<owner>-<work id>` tab is empty");
+    expect(lane).not.toContain("once the lanes tab is empty");
     expect(lane).not.toContain("herdr pane split --current");
     expect(lane).not.toMatch(/\.{3}|…/);
     expect(lane).toContain("herdr pane process-info --pane <pane-id>");
