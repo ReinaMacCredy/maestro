@@ -509,3 +509,90 @@ test("295 shared-pid downgrade never decreases a newer persisted heartbeat", asy
     expect(persisted).toEqual({ anchor: "ttl", last_seen: newerHeartbeat });
   });
 });
+
+test("470 a replacement process reusing a pid gets a fresh session and cannot finish the old lease (w472/d704)", async () => {
+  await withFixture(async (fixture) => {
+    const reused = 424242;
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "pid reuse repro", "--atomic-reason", "fixture"]),
+    );
+    expect(
+      (await runCli(
+        fixture,
+        ["hook", "record", "--event", "SessionStart"],
+        session("old-session", reused),
+      )).exitCode,
+    ).toBe(0);
+    expect((await runCli(fixture, ["work", "start", work], session("old-session", reused))).exitCode)
+      .toBe(0);
+
+    // The replacement carries only the pid: no explicit identity anywhere.
+    const blank = {
+      MAESTRO_SESSION_ID: "",
+      MAESTRO_SESSION_PID: String(reused),
+      CODEX_SESSION_ID: "",
+      CODEX_THREAD_ID: "",
+      CLAUDE_CODE_SESSION_ID: "",
+      CLAUDE_SESSION_ID: "",
+      CURSOR_SESSION_ID: "",
+    };
+    const completed = await runCli(
+      fixture,
+      ["work", "done", work, "--claim", "inherited", "--proof", "same pid only"],
+      blank,
+    );
+    expect(completed.exitCode).not.toBe(0);
+    expect(completed.stderr).toContain("old-session");
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const done = database
+      .query<{ count: number }, [string]>(
+        "SELECT COUNT(*) AS count FROM event_log WHERE type = 'work.done' AND entity_id = ?",
+      )
+      .get(work);
+    const shown = database
+      .query<{ held_by: string | null; state: string }, [string]>(
+        "SELECT held_by, state FROM work WHERE id = ?",
+      )
+      .get(work);
+    database.close();
+    expect(done?.count).toBe(0);
+    expect(shown).toEqual({ held_by: "old-session", state: "active" });
+  });
+});
+
+test("471 the current session id does not depend on which historical row shares its pid (w472/d704)", async () => {
+  await withFixture(async (fixture) => {
+    const reused = 424243;
+    const blank = {
+      MAESTRO_SESSION_ID: "",
+      MAESTRO_SESSION_PID: String(reused),
+      CODEX_SESSION_ID: "",
+      CODEX_THREAD_ID: "",
+      CLAUDE_CODE_SESSION_ID: "",
+      CLAUDE_SESSION_ID: "",
+      CURSOR_SESSION_ID: "",
+    };
+    const before = idFrom(
+      await runCli(fixture, ["work", "add", "before the perturbation"], blank),
+    );
+    expect((await runCli(fixture, ["work", "start", before], blank)).exitCode).toBe(0);
+    const first = (await runCli(fixture, ["work", "start", before], blank)).stderr;
+
+    // Perturbation: plant a prior session row on the very same pid.
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    database
+      .query(
+        `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
+         VALUES ('planted', ?, 'SessionStart', ?, 'codex', 'pid', ?)`,
+      )
+      .run(reused, new Date().toISOString(), fixture.repo);
+    database.close();
+
+    const after = idFrom(await runCli(fixture, ["work", "add", "after the perturbation"], blank));
+    const started = await runCli(fixture, ["work", "start", after], blank);
+    expect(started.exitCode).toBe(0);
+    expect(started.stdout).not.toContain("planted");
+    expect(first).not.toContain("planted");
+  });
+});

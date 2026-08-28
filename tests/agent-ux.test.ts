@@ -91,7 +91,7 @@ function sessionEnvironment(id: string, pid = ""): Record<string, string> {
   };
 }
 
-test("54 sandboxed hook, start, and done processes share one TTL session", async () => {
+test("54 sandboxed processes without an identity get fresh sessions and never inherit a lease (d704)", async () => {
   await withFixture(async (fixture) => {
     const id = idFrom(await runCli(fixture, ["work", "add", "sandbox bridge", "--kind", "idea"]));
     const environment = await noPsEnvironment(fixture);
@@ -102,22 +102,36 @@ test("54 sandboxed hook, start, and done processes share one TTL session", async
       environment,
     );
     const started = await runCli(fixture, ["work", "start", id], environment);
+    const holder = started.stdout.trim().split(" started by ")[1] ?? "missing session";
     const completed = await runCli(
       fixture,
       ["work", "done", id, "--claim", "test: sandbox bridge", "--proof", "three processes"],
       environment,
     );
+
+    expect(hooked.exitCode).toBe(0);
+    expect(started.exitCode).toBe(0);
+    // Every identity-less process is its own session. The second cannot finish
+    // work the first holds, and the refusal names the holder instead of
+    // silently adopting it.
+    expect(completed.exitCode).not.toBe(0);
+    expect(completed.stderr).toContain("LEASE_HELD");
+    expect(completed.stderr).toContain(holder);
+
     const status = await runCli(fixture, ["status", "--json"], environment);
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ anchor: string; id: string }> };
     }).data.sessions.filter((session) => session.anchor === "ttl");
+    expect(sessions.length).toBeGreaterThan(1);
+    expect(new Set(sessions.map((session) => session.id)).size).toBe(sessions.length);
 
-    expect(hooked.exitCode).toBe(0);
-    expect(started.exitCode).toBe(0);
-    expect(completed.exitCode).toBe(0);
-    expect(completed.stderr).not.toContain("LEASE_REQUIRED");
-    expect(sessions).toHaveLength(1);
-    expect(started.stdout).toContain(sessions[0]?.id ?? "missing session");
+    // Carrying the identity forward is what restores continuity.
+    const recovered = await runCli(
+      fixture,
+      ["work", "done", id, "--claim", "test: sandbox bridge", "--proof", "explicit identity"],
+      { ...environment, MAESTRO_SESSION_ID: holder },
+    );
+    expect(recovered.exitCode).toBe(0);
   });
 });
 
