@@ -147,14 +147,24 @@ export const coordinationPlugin: BuiltInPlugin = {
               dispatch.targetSession === sessionId,
           );
           if (peerDispatches.length > 0) {
-            return `role: peer (${peerDispatches.map(({ id }) => id).join(", ")}) — dispatch prompts only; anything else is not your role`;
+            const openDispatches = peerDispatches.filter(
+              (dispatch) => dispatch.state === "open",
+            );
+            if (openDispatches.length > 0) {
+              return `role: peer (${openDispatches.map(({ id }) => id).join(", ")}) — dispatch prompts only; anything else is not your role`;
+            }
+            const latest = peerDispatches.at(-1)!;
+            return `role: peer (last ${latest.id} ${latest.state}) — dispatch prompts only; anything else is not your role`;
           }
           const openedDispatches = dispatches.filter(
             (dispatch) => dispatch.openedBy === sessionId,
           );
-          return openedDispatches.length > 0
-            ? `role: lead (opened ${openedDispatches.map(({ id }) => id).join(", ")})`
-            : "";
+          if (openedDispatches.length === 0) return "";
+          const openDispatches = openedDispatches.filter(
+            (dispatch) => dispatch.state === "open",
+          );
+          const openText = openDispatches.map(({ id }) => id).join(", ") || "none";
+          return `role: lead (open ${openText}; ${openedDispatches.length - openDispatches.length} closed)`;
         },
         { events: ["SessionStart", "UserPromptSubmit"] },
       ),
