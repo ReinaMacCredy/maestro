@@ -1,6 +1,7 @@
 import { Database, SQLiteError } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { CliError } from "./cli.ts";
 
 export interface StoreLocation {
   orphanPath: string | null;
@@ -9,7 +10,23 @@ export interface StoreLocation {
 }
 
 export function resolveStoreLocation(cwd: string): StoreLocation {
-  const fallback = join(cwd, ".maestro", "maestro.db");
+  const resolvedCwd = resolve(cwd);
+  const fallback = join(resolvedCwd, ".maestro", "maestro.db");
+  const assertOutsideStore = (root: string | null): void => {
+    let current = resolvedCwd;
+    while (true) {
+      if (basename(current) === ".maestro") {
+        throw new CliError(
+          "STORE_INSIDE_STORE",
+          `${resolvedCwd} is inside a .maestro directory; run maestro from the directory that owns it: ${dirname(current)}`,
+        );
+      }
+      if (current === root) return;
+      const parent = dirname(current);
+      if (parent === current) return;
+      current = parent;
+    }
+  };
   let result: ReturnType<typeof Bun.spawnSync>;
   try {
     result = Bun.spawnSync(["git", "rev-parse", "--show-toplevel", "--git-common-dir"], {
@@ -29,7 +46,8 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
       diagnostic.startsWith("fatal: not a git repository (or any of the parent directories):") ||
       diagnostic.startsWith("fatal: not a git repository (or any parent up to mount point ")
     ) {
-      return { orphanPath: null, path: fallback, root: resolve(cwd) };
+      assertOutsideStore(null);
+      return { orphanPath: null, path: fallback, root: resolvedCwd };
     }
     throw new Error(`cannot resolve git repository: ${diagnostic || `git exited ${result.exitCode}`}`);
   }
@@ -41,6 +59,7 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
     throw new Error("cannot resolve git repository: git returned incomplete paths");
   }
   const checkoutRoot = resolve(cwd, checkoutOutput);
+  assertOutsideStore(checkoutRoot);
   const commonDirectory = resolve(cwd, commonDirectoryOutput);
   const commonRoot = basename(commonDirectory) === ".git" ? dirname(commonDirectory) : commonDirectory;
   const path = join(commonRoot, ".maestro", "maestro.db");

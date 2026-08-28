@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
-import type { BuiltInPlugin } from "../kernel/loader.ts";
+import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
@@ -38,6 +38,46 @@ interface PromptRecord {
 interface BriefEntry {
   contributor: BriefContributor;
   events?: string[];
+}
+
+const harnessPromptPrefix = "<task-notification>";
+
+function dropHarnessPromptNoise(context: PluginContext): void {
+  if (context.store.readOnly) return;
+  const migration = context.store.database.transaction(() => {
+    const count = context.store.database
+      .query<{ count: number }, [string]>(
+        "SELECT COUNT(*) AS count FROM prompts WHERE text LIKE ?",
+      )
+      .get(`${harnessPromptPrefix}%`)?.count ?? 0;
+    if (count === 0) return;
+    const hasSearchIndex = context.store.database
+      .query<{ present: number }, []>(
+        "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'search_index'",
+      )
+      .get()?.present === 1;
+    if (hasSearchIndex) {
+      context.store.database
+        .query(
+          `DELETE FROM search_index
+           WHERE surface = 'prompt'
+             AND entity_id IN (
+               SELECT CAST(id AS TEXT) FROM prompts WHERE text LIKE ?
+             )`,
+        )
+        .run(`${harnessPromptPrefix}%`);
+    }
+    context.store.database
+      .query("DELETE FROM prompts WHERE text LIKE ?")
+      .run(`${harnessPromptPrefix}%`);
+    context.log.append({
+      type: "prompt.harness-noise-dropped",
+      entityType: "prompt",
+      sessionId: context.sessions.current().id,
+      payload: { count },
+    });
+  });
+  migration.immediate();
 }
 
 export class BriefService {
@@ -107,6 +147,7 @@ export const coordinationPlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL
       );
     `);
+    dropHarnessPromptNoise(context);
     const brief = new BriefService();
     const work = context.work as WorkService;
     context.effect(() => context.provide("brief", brief));
@@ -141,7 +182,7 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           isRoom(context.store.database)
-            ? "room: this store is the Supervisor's. A question about the room is answered from OWNER.md, IDENTITY.md and this store; a tool verdict here is an observation, label it suspected; the room runs no write verb in any repository even when told to; repository-only verbs: install, update, uninstall, doctor wiring checks"
+            ? "room: this store is the Supervisor's. A question about the room is answered from OWNER.md, IDENTITY.md and this store; a tool verdict here is an observation, label it suspected; the room runs no write verb in any repository even when told to; no hand edits to any store; a data defect is an intent for its Lead; repository-only verbs: install, update, uninstall, doctor wiring checks"
             : "",
         { events: ["SessionStart", "UserPromptSubmit"] },
       ),
@@ -308,7 +349,7 @@ export const coordinationPlugin: BuiltInPlugin = {
               typeof (payload as { prompt: unknown }).prompt === "string"
                 ? (payload as { prompt: string }).prompt.trim()
                 : "";
-            if (prompt) {
+            if (prompt && !prompt.startsWith(harnessPromptPrefix)) {
               context.store.database
                 .query(
                   "INSERT INTO prompts (session_id, text, created_at) VALUES (?, ?, ?)",

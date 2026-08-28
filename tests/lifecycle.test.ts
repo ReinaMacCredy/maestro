@@ -56,10 +56,12 @@ test("517 commands refuse a cwd inside the repository store in normal and observ
 
     for (const [cwd, environment] of cases) {
       const result = await runCliAt(fixture, cwd, ["status"], environment);
+      const reportedCwd = await realpath(cwd);
+      const reportedOwner = await realpath(fixture.repo);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain('code: "STORE_INSIDE_STORE"');
       expect(result.stderr).toContain(
-        `${cwd} is inside a .maestro directory; run maestro from the directory that owns it: ${fixture.repo}`,
+        `${reportedCwd} is inside a .maestro directory; run maestro from the directory that owns it: ${reportedOwner}`,
       );
       expect(existsSync(nestedStore)).toBeFalse();
     }

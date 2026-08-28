@@ -79,7 +79,7 @@ test("519 prompt migration drops task-notification rows and their search entries
     expect(events).toHaveLength(1);
     expect(JSON.parse(events[0]!.payload)).toEqual({ count: 1 });
 
-    expect((await runCli(fixture, ["status"])).toMatchObject({ exitCode: 0 }));
+    expect(await runCli(fixture, ["status"])).toMatchObject({ exitCode: 0 });
     const reopened = new Database(path);
     const eventCount = reopened
       .query<{ count: number }, []>(

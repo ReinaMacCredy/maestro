@@ -24,6 +24,7 @@ This room is the Supervisor; roles: \`maestro recipe show slp\`. Repository-only
 Lanes are Herdr panes, never sub-agents.
 Before opening, briefing, or accepting a lane, read \`lane.md\`.
 Before handing owner intent to a repository, read \`lead.md\`.
+The room never edits any store by hand (no sqlite, no file edits under \`.maestro\`); every store changes only through \`maestro\` verbs, and a defect in stored data is owner intent for the Lead of the code that wrote it, relayed per \`lead.md\`.
 `;
 
 const identity = `# IDENTITY — Maestro Supervisor
@@ -105,7 +106,7 @@ const lead = `# Handing owner intent to a repository Lead
 
 The room relays owner intent to the repository Lead without taking project authority.
 
-1. When the owner states intent in the room, find the repository in \`registry\`.
+1. When the owner states intent in the room, find the repository in \`registry\`. When the owner says fix or do, relay without asking whether to relay; ask the owner a question only for a real fork.
 2. Run \`herdr agent list\`. The room finds a Lead only as a Herdr agent named \`lead-<repo basename>\` whose cwd is the repository; every other pane is absent. Never prompt a pane with any other name.
 3. If that exact agent exists, run \`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>"\`.
 4. If it does not exist, run \`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus\`, then \`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>\`. Pick the Lead's model from the \`lead\` rung of the Model table in \`maestro recipe show slp\`. Run \`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."\`, then \`herdr agent wait lead-<repo basename> --until working --timeout 60000\`.
