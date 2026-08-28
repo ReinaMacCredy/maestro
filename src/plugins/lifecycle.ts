@@ -17,6 +17,7 @@ import {
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
+import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
@@ -234,6 +235,10 @@ async function update(): Promise<CliResult> {
     staged = await stageRuntime(source, runtime);
     await swapRuntime(staged, runtime);
     staged = null;
+    // Upgrading past the plugin trust boundary must not silently stop the
+    // plugins the user already installed by hand; this is a no-op once the
+    // trust file exists.
+    await grandfatherHomePlugins(home);
   } catch (error) {
     const reset = await command(source, ["git", "reset", "--hard", oldCommit]);
     if (staged && existsSync(staged)) await rm(staged, { recursive: true, force: true });

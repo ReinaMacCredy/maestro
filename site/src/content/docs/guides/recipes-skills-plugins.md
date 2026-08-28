@@ -41,8 +41,27 @@ maestro plugin list
 ```
 
 Plugins can be built in, global, or repository-local. The `plugin` verb can add,
-create, enable, disable, or remove managed plugins. Policies remain plugins so
-their gates can be removed without changing the mechanism kernel.
+create, trust, enable, disable, or remove managed plugins. Policies remain
+plugins so their gates can be removed without changing the mechanism kernel.
+
+### Trust
+
+Built-in plugins ship with Maestro and always load. A global or
+repository-local plugin is code that arrived from somewhere else, so it executes
+only after you vouch for it:
+
+```sh
+maestro plugin list          # untrusted plugins are named, never imported
+maestro plugin trust <name>  # after reading the source it names
+```
+
+The grant lives in `~/.maestro/trust.json`, which no repository can write, and
+is keyed to the plugin's location and a digest of every file in it. Editing the
+plugin, pulling a change into it, or swapping one of its files revokes the grant
+and Maestro stops loading it until you trust it again. Enabling a plugin is a
+separate statement and never confers trust: a cloned repository can ship its own
+`.maestro/config`, so if `enable` could vouch for code, the repository could
+vouch for itself.
 
 ## Repository configuration
 

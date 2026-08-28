@@ -5,3 +5,4 @@ site/node_modules/
 site/.astro/
 site/dist/
 site/public/install.sh
+.DS_Store

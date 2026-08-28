@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { grantTrust } from "../src/plugins/plugin-trust.ts";
 import {
   addLinkedWorktree,
   idFrom,
@@ -136,7 +137,11 @@ export default {
     for (const checkout of [fixture.repo, worktree]) {
       const plugins = join(checkout, ".maestro", "plugins");
       await mkdir(plugins, { recursive: true });
-      await writeFile(join(plugins, "start-delay.ts"), delayPlugin);
+      const path = join(plugins, "start-delay.ts");
+      await writeFile(path, delayPlugin);
+      // The plugin is the instrument this test measures with; without a grant
+      // it never loads and the race it stages never happens.
+      await grantTrust(fixture.home, { root: path, source: "repo" });
     }
 
     for (let trial = 0; trial < 6; trial += 1) {
@@ -318,7 +323,9 @@ export default {
   },
 };
 `;
-    await writeFile(join(fixture.repo, ".maestro", "plugins", "transition-delay.ts"), delayPlugin);
+    const delayPath = join(fixture.repo, ".maestro", "plugins", "transition-delay.ts");
+    await writeFile(delayPath, delayPlugin);
+    await grantTrust(fixture.home, { root: delayPath, source: "repo" });
 
     const startThenCancel = idFrom(
       await runCli(fixture, ["work", "add", "start then cancel", "--atomic-reason", "fixture"]),

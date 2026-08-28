@@ -10,6 +10,10 @@ Repository configuration is JSON with a `plugins` array. Each item has a plugin
 policy defaults; `maestro plugin enable <name>` and `maestro plugin disable
 <name>` own lifecycle changes.
 
+This file lives inside the repository, so it states policy only and can never
+grant trust. Whether an external plugin may execute at all is recorded in
+`~/.maestro/trust.json` by `maestro plugin trust`.
+
 The default policy state is:
 
 | Plugin | State |

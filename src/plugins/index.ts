@@ -10,6 +10,7 @@ import { lifecyclePlugin } from "./lifecycle.ts";
 import { mcpPlugin } from "./mcp.ts";
 import { observabilityPlugin } from "./observability.ts";
 import { pluginManagerPlugin } from "./plugin-manager.ts";
+import { pluginTrustPlugin } from "./plugin-trust.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
 import { policyCardBudgetPlugin } from "./policy-card-budget.ts";
 import { policyDispatchPlugin } from "./policy-dispatch.ts";
@@ -26,6 +27,7 @@ import { workPlugin } from "./work.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
+  pluginTrustPlugin,
   briefPlugin,
   workPlugin,
   dispatchPlugin,

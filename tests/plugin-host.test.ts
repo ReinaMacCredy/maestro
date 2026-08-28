@@ -140,6 +140,11 @@ test("6 plugin new and plugin add appear with repo and global source tiers", asy
     expect(listed.stdout).toContain(basename(remote));
     expect(listed.stdout).toContain("global");
 
+    // A scaffold is authored, not vouched for: plugin new says so, and the
+    // digest it would be trusted against changes with the author's first edit.
+    expect(created.stdout).toContain("maestro plugin trust my-gate");
+    expect(await runCli(fixture, ["my-gate"])).toMatchObject({ exitCode: 2 });
+
     await writePlugin(
       fixture,
       "repo",
@@ -147,9 +152,11 @@ test("6 plugin new and plugin add appear with repo and global source tiers", asy
       `export default { name: "index-local", apply() {} };\n`,
     );
     const removed = await runCli(fixture, ["plugin", "remove", "index-local"]);
-    const scaffoldStillLoads = await runCli(fixture, ["my-gate"]);
+    const trusted = await runCli(fixture, ["plugin", "trust", "my-gate"]);
+    const scaffoldLoads = await runCli(fixture, ["my-gate"]);
     expect(removed.exitCode).toBe(0);
-    expect(scaffoldStillLoads.exitCode).toBe(0);
+    expect(trusted.exitCode).toBe(0);
+    expect(scaffoldLoads.exitCode).toBe(0);
   });
 });
 
@@ -199,15 +206,20 @@ test("27 plugin add rejects missing entrypoints and immediately lists loadable c
 
     const added = await runCli(fixture, ["plugin", "add", valid]);
     const listed = await runCli(fixture, ["plugin", "list"]);
-    const config = JSON.parse(await readFile(join(fixture.repo, ".maestro", "config"), "utf8")) as {
-      plugins: Array<{ name: string }>;
+    const trust = JSON.parse(await readFile(join(fixture.home, ".maestro", "trust.json"), "utf8")) as {
+      plugins: Array<{ digest: string; path: string }>;
     };
 
     expect(added.exitCode).toBe(0);
     expect(listed.exitCode).toBe(0);
     expect(listed.stdout).toContain("valid-plugin");
     expect(listed.stdout).toContain("global");
-    expect(config.plugins.map((entry) => entry.name)).toContain("valid-plugin");
+    expect(listed.stdout).toContain("active");
+    // add no longer writes a name-keyed config entry: it cannot learn the
+    // declared name without importing the clone, which is what it stopped
+    // doing. The grant it does write covers the cloned bytes.
+    expect(trust.plugins.map((grant) => basename(grant.path))).toContain("valid-plugin");
+    expect(trust.plugins[0]?.digest).toStartWith("sha256:");
   });
 });
 

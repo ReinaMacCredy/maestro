@@ -1,6 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { grantTrust } from "../src/plugins/plugin-trust.ts";
 
 export interface Fixture {
   home: string;
@@ -241,7 +242,7 @@ export async function setPlugin(
   await writeFile(path, `${JSON.stringify(config)}\n`);
 }
 
-export async function writePlugin(
+export async function writeUntrustedPlugin(
   fixture: Fixture,
   tier: "global" | "repo",
   name: string,
@@ -254,6 +255,20 @@ export async function writePlugin(
   await mkdir(directory, { recursive: true });
   const path = join(directory, `${name}.ts`);
   await writeFile(path, source);
+  return path;
+}
+
+// Most tests are about what a loaded plugin does, not about the trust gate, so
+// the default helper vouches for what it writes. Tests that exercise the gate
+// itself use writeUntrustedPlugin.
+export async function writePlugin(
+  fixture: Fixture,
+  tier: "global" | "repo",
+  name: string,
+  source: string,
+): Promise<string> {
+  const path = await writeUntrustedPlugin(fixture, tier, name, source);
+  await grantTrust(fixture.home, { root: path, source: tier === "repo" ? "repo" : "global" });
   return path;
 }
 

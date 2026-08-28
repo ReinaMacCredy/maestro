@@ -124,10 +124,18 @@ store and Git evidence.
 
 ### `plugin`
 
-- `list [--json]` lists built-in, global, and repository plugins.
-- `add <url>` clones and enables a plugin from Git.
-- `new <name>` scaffolds a repository-local plugin.
-- `enable <name>` and `disable <name>` change installed plugin state.
+- `list [--json]` lists built-in, global, and repository plugins, including
+  untrusted ones, which are named from the filesystem and never imported.
+- `add <url>` clones a plugin from Git and trusts the cloned bytes. It does not
+  import the clone; the plugin loads on the next invocation.
+- `new <name>` scaffolds a repository-local plugin. The scaffold is untrusted
+  until you run `plugin trust`.
+- `trust <name>` records that the plugin's current source may execute, and
+  prints the path and digest it vouched for.
+- `untrust <name>` withdraws that grant.
+- `enable <name>` and `disable <name>` change installed plugin state. Enabling
+  never confers trust; an untrusted plugin is refused with a pointer to
+  `plugin trust`.
 - `remove <name>` removes a managed plugin and its files.
 
 ### `mcp`

@@ -11,6 +11,7 @@ const observerPlugins = new Set([
   "mcp",
   "observability",
   "plugin-host",
+  "plugin-trust",
   "policy-breakdown",
   "policy-dispatch",
   "policy-lifecycle",

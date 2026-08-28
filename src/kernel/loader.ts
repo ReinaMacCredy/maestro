@@ -25,9 +25,10 @@ export interface PluginRecord {
   artifact?: "directory" | "file";
   name: string;
   source: PluginSource;
-  status: "active" | "disabled" | "error" | "unloaded";
+  status: "active" | "disabled" | "error" | "unloaded" | "untrusted";
   diagnostic?: string;
   path?: string;
+  root?: string;
   requires?: string;
 }
 
@@ -59,11 +60,16 @@ interface Candidate {
   plugin: Plugin;
   source: PluginSource;
   path?: string;
+  root?: string;
   defaultDisabled?: boolean;
 }
 
 export interface LoaderOptions {
   loadExternalPlugins?: boolean;
+  trustExternalPlugin?: (artifact: {
+    root: string;
+    source: PluginSource;
+  }) => boolean | Promise<boolean>;
 }
 
 export function resolvePluginEntrypoint(directory: string): string | null {
@@ -136,6 +142,7 @@ export class Loader {
           source: candidate.source,
           status: "disabled",
           path: candidate.path,
+          root: candidate.root,
           requires: candidate.plugin.requires,
         });
       } else {
@@ -165,6 +172,7 @@ export class Loader {
           source: candidate.source,
           status: "unloaded",
           path: candidate.path,
+          root: candidate.root,
           diagnostic: `missing service: ${missing.join(", ")}`,
           requires: candidate.plugin.requires,
         });
@@ -223,6 +231,7 @@ export class Loader {
         source: candidate.source,
         status: "active",
         path: candidate.path,
+        root: candidate.root,
         requires: candidate.plugin.requires,
       });
     } catch (error) {
@@ -233,6 +242,7 @@ export class Loader {
         source: candidate.source,
         status: "error",
         path: candidate.path,
+        root: candidate.root,
         diagnostic: error instanceof Error ? error.message : String(error),
         requires: candidate.plugin.requires,
       });
@@ -282,6 +292,22 @@ export class Loader {
           ? join(directory, entry.name)
           : null;
       if (!path || !existsSync(path)) continue;
+      const root = entry.isDirectory() ? join(directory, entry.name) : path;
+      const name = entry.name.replace(/\.ts$/, "");
+      // The gate sits before the import, not before apply(): a plugin's module
+      // scope runs the moment it is imported, and the disabled flag is not read
+      // until loadAll(), long after discovery would already have executed it.
+      if (!(await (this.options.trustExternalPlugin?.({ root, source }) ?? true))) {
+        this.records.push({
+          artifact: entry.isDirectory() ? "directory" : "file",
+          name,
+          source,
+          status: "untrusted",
+          path,
+          root,
+        });
+        continue;
+      }
       try {
         const plugin = await importPluginEntrypoint(path);
         candidates.push({
@@ -289,15 +315,16 @@ export class Loader {
           plugin,
           source,
           path,
+          root,
         });
       } catch (error) {
-        const name = entry.name.replace(/\.ts$/, "");
         this.records.push({
           artifact: entry.isDirectory() ? "directory" : "file",
           name,
           source,
           status: "error",
           path,
+          root,
           diagnostic: error instanceof Error ? error.message : String(error),
         });
       }

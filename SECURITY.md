@@ -20,6 +20,19 @@ Expect an acknowledgement within seven days. This is a single-maintainer
 project with no paid support and no bounty; fixes land on `main` and are
 announced in `CHANGELOG.md`.
 
+## Trust model
+
+Maestro executes three kinds of plugin code. Built-in plugins ship with the
+runtime you installed. A global or repository-local plugin executes only when
+`~/.maestro/trust.json` holds a grant matching both its location and a digest of
+every file in it, recorded by `maestro plugin trust`. No file inside a
+repository can create that grant, so cloning a repository, or opening one in an
+editor whose hooks run Maestro, executes none of the code it carries. Editing or
+replacing a trusted plugin's source revokes the grant.
+
+Trust is not a sandbox. A plugin you have trusted runs with the full authority
+of your user account.
+
 ## What is in scope
 
 Maestro runs on a developer machine, reads and writes each repository's

@@ -18,6 +18,7 @@ import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
+import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
@@ -633,6 +634,7 @@ export const installPlugin: BuiltInPlugin = {
         }
         const repo = process.cwd();
         const home = resolveHomeDirectory();
+        await grandfatherHomePlugins(home);
         const existingSourceRecord = sourceRecordPath(home);
         if (existsSync(existingSourceRecord)) {
           await chmod(dirname(existingSourceRecord), 0o700);

@@ -3,11 +3,11 @@ import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import {
-  importPluginEntrypoint,
   resolvePluginEntrypoint,
   type BuiltInPlugin,
   type PluginRecord,
 } from "../kernel/loader.ts";
+import { grantTrust, revokeTrust } from "./plugin-trust.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
 interface ConfigEntry {
@@ -101,6 +101,16 @@ export const pluginManagerPlugin: BuiltInPlugin = {
             { plugin: name },
           );
         }
+        // Enabling is a statement about a plugin the user already vouched for.
+        // If it could confer trust, a clone shipping its own .maestro/config
+        // would be back to loading itself.
+        if (record.status === "untrusted") {
+          throw new CliError(
+            "PLUGIN_UNTRUSTED",
+            `plugin source is not trusted: ${name}; review it, then: maestro plugin trust ${name}`,
+            { command: `maestro plugin trust ${name}`, plugin: name },
+          );
+        }
         await updateEntry(configPath, name, false);
         context.log.append({
           type: "plugin.enable",
@@ -152,7 +162,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           sessionId: context.sessions.current().id,
           payload: { path },
         });
-        return { data: { name, path, source: "repo" }, text: `${name} created at ${path}` };
+        return {
+          data: { name, path, source: "repo" },
+          text: `${name} created at ${path}\nit stays untrusted until: maestro plugin trust ${name}`,
+        };
       }, {
         description: "Scaffold a repository-local plugin.",
         positionals: [{ name: "name", required: true }],
@@ -182,8 +195,11 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           await rm(destination, { recursive: true, force: true });
           throw new CliError("CLONE_FAILED", stderr.trim() || `git clone failed: ${url}`);
         }
-        let pluginName: string;
+        let digest: string;
         try {
+          // Confirming an entrypoint exists is a filesystem question. Importing
+          // it to read its declared name would run the clone's module scope at
+          // add time, which is the thing being prevented.
           const entrypoint = resolvePluginEntrypoint(destination);
           if (!entrypoint) {
             throw new CliError(
@@ -192,25 +208,25 @@ export const pluginManagerPlugin: BuiltInPlugin = {
               { plugin: name },
             );
           }
-          const plugin = await importPluginEntrypoint(entrypoint);
-          validateName(plugin.name);
-          pluginName = plugin.name;
-          await updateEntry(configPath, pluginName, false);
+          // Naming the git URL is the trust act; the grant covers the bytes just
+          // cloned, so a later pull inside the clone revokes it.
+          digest = await grantTrust(home, { root: destination, source: "global" });
         } catch (error) {
           await rm(destination, { recursive: true, force: true });
           if (error instanceof CliError) throw error;
           throw new CliError(
             "INVALID_PLUGIN",
-            `plugin entrypoint is not loadable: ${name}: ${error instanceof Error ? error.message : String(error)}`,
+            `plugin source is not usable: ${name}: ${error instanceof Error ? error.message : String(error)}`,
             { plugin: name },
           );
         }
+        const pluginName = name;
         context.log.append({
           type: "plugin.add",
           entityType: "plugin",
           entityId: pluginName,
           sessionId: context.sessions.current().id,
-          payload: { url, destination },
+          payload: { digest, url, destination },
         });
         return {
           data: { name: pluginName, path: destination, source: "global" },
@@ -239,6 +255,10 @@ export const pluginManagerPlugin: BuiltInPlugin = {
           }
         }
         await removeEntry(configPath, name);
+        // Leave no grant pointing at a path this command just emptied: a later
+        // plugin written to the same path would otherwise inherit the vouching
+        // if its bytes happened to match.
+        if (record.root) await revokeTrust(home, record.root);
         context.log.append({
           type: "plugin.remove",
           entityType: "plugin",
