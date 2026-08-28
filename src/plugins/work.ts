@@ -68,6 +68,13 @@ export interface WorkGateInput {
   work: WorkRecord;
 }
 
+export interface WorkAddGateInput {
+  kind: string;
+  parentId: string | null;
+  sessionId: string;
+  title: string;
+}
+
 interface GateResult {
   blocked: boolean;
   blockers?: Array<{ id: string; state: string }>;
@@ -322,7 +329,7 @@ export const workPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "work add",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           const title = requiredPosition(invocation, 0, "work title");
           const parentId = stringOption(invocation, "parent") ?? null;
           const blockers = stringOptions(invocation, "blocked-by");
@@ -332,6 +339,12 @@ export const workPlugin: BuiltInPlugin = {
           const kind = stringOption(invocation, "kind") ?? "task";
           const acceptance = stringOption(invocation, "acceptance") ?? null;
           const atomicReason = stringOption(invocation, "atomic-reason") ?? null;
+          const gate = await context.events.waterfall<WorkAddGateInput, GateResult>(
+            "work.add",
+            { kind, parentId, sessionId: context.sessions.current().id, title },
+            async () => ({ blocked: false }),
+          );
+          blockIfNeeded(gate);
           context.store.database.exec("BEGIN IMMEDIATE");
           try {
             if (parentId) {

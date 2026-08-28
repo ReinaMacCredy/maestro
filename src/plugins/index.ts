@@ -11,6 +11,7 @@ import { mcpPlugin } from "./mcp.ts";
 import { observabilityPlugin } from "./observability.ts";
 import { pluginManagerPlugin } from "./plugin-manager.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
+import { policyCardBudgetPlugin } from "./policy-card-budget.ts";
 import { policyDispatchPlugin } from "./policy-dispatch.ts";
 import { policyLifecyclePlugin } from "./policy-lifecycle.ts";
 import { policyProofPlugin } from "./policy-proof.ts";
@@ -34,6 +35,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyDispatchPlugin,
   policyProofPlugin,
   policyBreakdownPlugin,
+  policyCardBudgetPlugin,
   policyTddPlugin,
   policyQaPlugin,
   policyResearchPlugin,
