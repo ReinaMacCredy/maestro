@@ -121,7 +121,9 @@ test("308 SLP Peer return statuses are exactly the runtime vocabulary", async ()
       if (status === "DEPENDENCY_REQUEST") expect(filed.stdout).toContain(status);
     }
   });
-});
+  // Nine statuses, each several CLI spawns: 5.4s on an idle developer machine,
+  // so the 5s default is a flake waiting for a loaded CI runner.
+}, 120_000);
 
 function documentedCommands(readme: string): string[][] {
   const verbTour = readme.match(/## Verb tour\n([\s\S]*?)(?=\n## )/)?.[1] ?? "";

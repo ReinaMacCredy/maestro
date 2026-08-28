@@ -356,7 +356,9 @@ test("47 update fast-forwards and resyncs while divergence and fetch failure cha
     expect(await git(source, ["rev-parse", "HEAD"])).toBe(unreachableHead);
     expect(await readFile(stampPath)).toEqual(unreachableStamp);
   });
-});
+  // A full install plus three update round trips: 6.4s on an idle developer
+  // machine, so the 5s default is a flake waiting for a loaded CI runner.
+}, 120_000);
 
 test("438 update warns about live holders and still completes", async () => {
   await withFixture(async (fixture) => {

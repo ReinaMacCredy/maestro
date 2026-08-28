@@ -969,6 +969,65 @@ test("414 attention raises LEAD_COLLISION without treating a delivery Peer as a 
   });
 });
 
+function killSession(fixture: Fixture, id: string): void {
+  const database = openDatabase(fixture);
+  try {
+    // A pid-anchored session is dead when its pid is gone. PID 2^22 - 1 is above
+    // every platform's pid_max, so it can never be running.
+    database.query("UPDATE sessions SET pid = ? WHERE id = ?").run(4_194_303, id);
+  } finally {
+    database.close();
+  }
+}
+
+test("525 an active card whose holder session died raises a finding regardless of freshness", async () => {
+  await withFixture(async (fixture) => {
+    // An unreturned dispatch with a dead holder already raises immediately
+    // (attention.ts DISPATCH_UNRETURNED); a work lease with a dead holder raised
+    // nothing at all, so an abandoned card sat active forever.
+    const abandoned = await addWork(fixture, "card its holder walked away from");
+    // A distinct pid, so the scanner's own pid does not make this a shared-pid
+    // session and downgrade it to TTL liveness, where the pid no longer decides.
+    await startWork(fixture, abandoned, "gone-session", 1);
+    killSession(fixture, "gone-session");
+
+    // Freshly seen, so only death can be what raises this.
+    const attention = await runCli(
+      fixture,
+      ["attention", "--json", "--stale", "30"],
+      session("scanner-session"),
+    );
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ kind: string; packet: string; subjectWork: string | null }> };
+    }).data.detections.filter((detection) => detection.subjectWork === abandoned);
+
+    expect(detections).toHaveLength(1);
+    expect(detections[0]?.packet).toContain("is dead");
+  });
+});
+
+test("526 a live holder still decides STALLED_LEASE by freshness alone", async () => {
+  await withFixture(async (fixture) => {
+    const fresh = await addWork(fixture, "held right now");
+    await startWork(fixture, fresh, "busy-session");
+    const stale = await addWork(fixture, "held by someone quiet");
+    await startWork(fixture, stale, "quiet-session");
+    backdateSession(fixture, "quiet-session", 45);
+
+    const attention = await runCli(
+      fixture,
+      ["attention", "--json", "--stale", "30"],
+      session("scanner-session"),
+    );
+    const stalled = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ kind: string; subjectWork: string | null }> };
+    }).data.detections.filter((detection) => detection.kind === "STALLED_LEASE");
+
+    expect(stalled.map((detection) => detection.subjectWork)).toEqual([stale]);
+  });
+});
+
 test("523 attention raises LEAD_COLLISION when one holder's card is a child and the other's is not", async () => {
   await withFixture(async (fixture) => {
     // The shape that actually occurred on 2026-08-28: a Lead working a child of

@@ -178,7 +178,11 @@ function stalledDetections(
   return works.flatMap((work): Detection[] => {
     if (work.state !== "active" || !work.heldBy) return [];
     const holder = sessions.get(work.heldBy);
-    if (!holder?.live || Date.parse(holder.lastSeen) >= cutoff) return [];
+    if (!holder) return [];
+    // A dead holder is not a slow one, so freshness is not the question: it will
+    // never come back, and the card would otherwise sit active forever. This is
+    // the shape DISPATCH_UNRETURNED already uses for a dead holder.
+    if (holder.live && Date.parse(holder.lastSeen) >= cutoff) return [];
     const start = latestStart(context, work.id);
     const startId = start?.id ?? 0;
     return [{
@@ -187,12 +191,16 @@ function stalledDetections(
       fingerprint: `stalled:${work.id}:${startId}`,
       kind: "STALLED_LEASE",
       packet: packet("STALLED_LEASE", work.id, {
-        observed:
-          `held by ${work.heldBy}, last seen ${holder.lastSeen} ` +
-          `(${minutesSince(holder.lastSeen, now)} min)`,
+        observed: holder.live
+          ? `held by ${work.heldBy}, last seen ${holder.lastSeen} ` +
+            `(${minutesSince(holder.lastSeen, now)} min)`
+          : `held by ${work.heldBy}, whose session is dead ` +
+            `(last seen ${holder.lastSeen})`,
         evidence: `work.start #${startId}, sessions.last_seen ${holder.lastSeen}`,
-        unknown: "whether the session is thinking, blocked on a tool, or gone",
-        question: "reclaim, re-scope, or wait?",
+        unknown: holder.live
+          ? "whether the session is thinking, blocked on a tool, or gone"
+          : "how much of the work the dead session finished before it ended",
+        question: holder.live ? "reclaim, re-scope, or wait?" : "reclaim or cancel?",
         smallestAction: `maestro work show ${work.id}`,
       }),
       subjectSession: work.heldBy,
