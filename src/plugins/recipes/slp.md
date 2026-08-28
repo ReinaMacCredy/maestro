@@ -192,7 +192,13 @@ binding on the role, checkable after the fact, not prevented.
 | a pane the Lead opened with a dispatch | Peer | the Lead starts it as `peer-<dispatch id>` and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
 
 A session never becomes a Peer on its own; the Lead makes it one by starting
-`peer-<dispatch id>`, and dispatch acceptance records that binding. A
+`peer-<dispatch id>`, and dispatch acceptance records that binding. When a
+dispatch names its taker with `--target-session`, the value is that session's
+harness session id, the one Herdr reports as `agent_session.value`, never the
+Herdr agent name: a name never matches at `maestro dispatch accept`, and
+`maestro dispatch confirm` cannot repair the contract because it needs a claim
+that never happened, so the dispatch can only be cancelled. A pane-bound
+dispatch omits the flag. A
 Supervisor never takes work in a repository store; if it needs a change made,
 it asks the Lead. Two sessions holding active work in one repository are
 split-brain: the later one must stop and read `maestro status`.

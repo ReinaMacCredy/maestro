@@ -37,7 +37,9 @@ stores. It has no flags.
 - `list [work-id] [--json]` lists contracts, optionally for one work item.
 - `open <work-id>` requires `--objective`, `--owned-scope`, `--excluded-scope`,
   `--mutation`, `--stop-condition`, `--lane`, `--evidence-required`, and
-  `--pane`; `--target-session` is optional. `--council-members <n>` declares
+  `--pane`; `--target-session` is optional and takes the accepting session's
+  harness session id, the value Herdr reports as `agent_session.value`, never
+  the Herdr agent name. `--council-members <n>` declares
   a council of `n` seats on a new anchor, and `--council-anchor <id>` adds a
   seat to a declared council; the two are mutually exclusive. One handback per
   dispatch is a store constraint.

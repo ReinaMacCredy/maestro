@@ -690,3 +690,29 @@ test("500 [lint] recipe slp treats model routing as guidance-only two-harness re
     "Every Claude start also passes `--autocompact 250000`; Codex has no equivalent flag and takes none.",
   );
 });
+
+test("531 [lint] target-session says it takes the harness session id, not the agent name", async () => {
+  // A Lead passed the Herdr agent name instead: accept never matched, and
+  // dispatch confirm needs an existing claim, so the dispatch could only be
+  // cancelled. Every surface that names the flag must give its value type.
+  const phrases = ["harness session id", "agent_session.value"];
+
+  await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["help", "dispatch"]);
+    expect(help.exitCode).toBe(0);
+    for (const phrase of phrases) expect(help.stdout).toContain(phrase);
+  });
+
+  const cli = await readFile(
+    join(import.meta.dir, "..", "site", "src", "content", "docs", "reference", "cli.md"),
+    "utf8",
+  );
+  const slp = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  for (const phrase of phrases) {
+    expect(cli).toContain(phrase);
+    expect(slp).toContain(phrase);
+  }
+});

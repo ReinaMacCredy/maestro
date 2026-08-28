@@ -873,7 +873,11 @@ export const dispatchPlugin: BuiltInPlugin = {
             "--lane": { description: "Name the lane type.", value: true },
             "--evidence-required": { description: "Name the required evidence.", value: true },
             "--pane": { description: "Record the pane that owns the lane.", value: true },
-            "--target-session": { description: "Address a session if already known.", value: true },
+            "--target-session": {
+              description:
+                "Address a session already known by its harness session id, the value Herdr reports as agent_session.value; never the Herdr agent name.",
+              value: true,
+            },
             "--council-members": {
               description: "Declare a blind council of this many views; later members join with --council-anchor.",
               value: true,
