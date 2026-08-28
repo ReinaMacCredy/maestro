@@ -240,3 +240,10 @@ search text when it cannot. Imported records remain available through
 `maestro search` and `maestro legacy show <id>`. See
 [`legacy/rust/README.md`](legacy/rust/README.md) for the preserved datasets and
 their exact counts.
+
+## Contributing, security, and license
+
+Contributions follow the toolchain, layout, and pre-pull-request checks in
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Report a suspected vulnerability through
+the private channel in [`SECURITY.md`](SECURITY.md), never a public issue.
+Maestro is released under the MIT license; see [`LICENSE`](LICENSE).
