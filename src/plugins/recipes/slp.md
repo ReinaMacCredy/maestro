@@ -138,6 +138,17 @@ For Claude panes, the `PreToolUse` hook enforces invariant 4 when a session
 holds an open dispatch; Codex has no `PreToolUse` hook and stays bound by this
 text.
 
+## Model
+
+The Lead picks a lane's model the way it picks a sub-agent's, and the room picks the Lead's model. Nothing records, enforces, or prints the choice. Model names rot, so the owner keeps the current examples for that column in `OWNER.md`.
+
+| rung | use it for | example (2026-08, owner-editable) |
+|---|---|---|
+| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | sonnet or haiku |
+| strong | delivery with red/green, long brief, kernel or store, decision lanes | opus or gpt-5.6-sol |
+| diverse | challenge and council: a different model family from the lane that produced the view, whatever the rung | codex vs claude |
+| lead | reviews handbacks, closes cards, settles forks | fable or opus |
+
 ## Instruction stack
 
 | Layer | Question | In maestro |
