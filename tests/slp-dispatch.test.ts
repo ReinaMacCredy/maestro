@@ -1734,8 +1734,13 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
     expect(unreviewed).toHaveLength(1);
     expect(unreviewed[0]?.fingerprint).toContain(dispatch);
     expect(unreviewed[0]?.packet).toContain(`${dispatch} returned BLOCKED (${handback})`);
+    // The smallest action must be one that actually clears the finding: reading
+    // the packet is a pure read and closing the work needs a lease.
     expect(unreviewed[0]?.packet).toContain(
-      "smallest action: re-dispatch on the same pane or cancel",
+      `smallest action: maestro handback review ${handback}`,
+    );
+    expect(unreviewed[0]?.packet).toContain(
+      "question: retry condition met? then re-dispatch on the same pane or cancel",
     );
 
     const hook = await runCli(
@@ -1767,33 +1772,119 @@ test("285 a returned handback nobody reviewed raises HANDBACK_UNREVIEWED and rea
   });
 });
 
+test("527 handback review clears HANDBACK_UNREVIEWED and only the opener may file it", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await runCli(fixture, ["work", "add", "lead scope", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
+      .toBe(0);
+    const child = idFrom(
+      await runCli(fixture, ["work", "add", "lane task", "--parent", parent, "--atomic-reason", "fixture"]),
+    );
+    const dispatch = dispatchId(
+      await runCli(
+        fixture,
+        [...dispatchOpenArgs(child), "--target-session", "worker-session"],
+        session("lead-session"),
+      ),
+    );
+    expect(
+      (await runCli(fixture, ["dispatch", "accept", dispatch], session("worker-session"))).exitCode,
+    ).toBe(0);
+    const filed = await runCli(
+      fixture,
+      [
+        "handback", "file", dispatch,
+        "--status", "DONE",
+        "--claim", "the boundary holds",
+        "--proof", "source: focused regression",
+        "--assumptions", "None",
+        "--residual-risks", "None",
+        "--incidental-findings", "None",
+      ],
+      session("worker-session"),
+    );
+    expect(filed.exitCode).toBe(0);
+    const handback = filed.stdout.match(/^(h\d+)/)?.[1] as string;
+
+    const scan = async () =>
+      (JSON.parse((await runCli(fixture, ["attention", "--json"], session("lead-session"))).stdout) as {
+        data: { detections: Array<{ kind: string; packet: string }> };
+      }).data.detections.filter((detection) => detection.kind === "HANDBACK_UNREVIEWED");
+
+    const before = await scan();
+    expect(before).toHaveLength(1);
+    // The packet must name the action that actually clears it. Reading the
+    // packet is mutates:false and closing the work needs a lease, so before
+    // this verb the finding survived every review a Lead could actually do.
+    expect(before[0]?.packet).toContain(`maestro handback review ${handback}`);
+
+    // Only the opener reviews: a lane cannot mark its own return read.
+    const wrong = await runCli(
+      fixture,
+      ["handback", "review", handback, "--note", "looks fine to me"],
+      session("worker-session"),
+    );
+    expect(wrong.exitCode).not.toBe(0);
+    expect(wrong.stderr).toContain("NOT_OPENER");
+    expect(await scan()).toHaveLength(1);
+
+    const empty = await runCli(
+      fixture,
+      ["handback", "review", handback, "--note", "   "],
+      session("lead-session"),
+    );
+    expect(empty.exitCode).not.toBe(0);
+
+    const reviewed = await runCli(
+      fixture,
+      ["handback", "review", handback, "--note", "read it; closing the card next"],
+      session("lead-session"),
+    );
+    expect(reviewed.exitCode).toBe(0);
+    expect(await scan()).toHaveLength(0);
+
+    // Idempotent: a second review is not an error and does not double-record.
+    const again = await runCli(
+      fixture,
+      ["handback", "review", handback, "--note", "read it again"],
+      session("lead-session"),
+    );
+    expect(again.exitCode).toBe(0);
+    expect(await scan()).toHaveLength(0);
+
+    const quiet = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      session("lead-session"),
+    );
+    expect(quiet.stdout).not.toContain("HANDBACK_UNREVIEWED");
+  });
+});
+
 test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchanged", async () => {
   await withFixture(async (fixture) => {
     const cases = [
       {
         status: "BLOCKED",
-        question: "retry condition met?",
-        smallestAction: "re-dispatch on the same pane or cancel",
+        question: "retry condition met? then re-dispatch on the same pane or cancel",
       },
       {
         status: "DEPENDENCY_REQUEST",
-        question: "accept or decline the dependency request?",
-        smallestAction: "open the dependency as a work item in the other scope",
+        question:
+          "accept or decline the dependency request? accepting opens it as a work item in the other scope",
       },
       {
         status: "COUNCIL_REQUEST",
-        question: "open another council generation or decline?",
-        smallestAction: "open a second generation (d688) or decline with a work note",
+        question:
+          "open another council generation or decline? a second generation is d688, a decline is a work note",
       },
       {
         status: "REOPEN_REQUEST",
         question: "grant another lease or decline?",
-        smallestAction: "grant a new lease or decline",
       },
       {
         status: "DONE",
         question: "close the work, re-dispatch, or cancel?",
-        smallestAction: null,
       },
     ] as const;
     const dispatches = new Map<
@@ -1822,9 +1913,9 @@ test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchan
       )?.packet;
       expect(packet).toBeString();
       expect(packet).toContain(`question: ${branch.question}`);
-      expect(packet).toContain(
-        `smallest action: ${branch.smallestAction ?? `maestro handback show ${handback}`}`,
-      );
+      // Every branch names the one action that clears the finding; the
+      // status-specific move lives in the question above.
+      expect(packet).toContain(`smallest action: maestro handback review ${handback}`);
       expect(packet).toContain("attention HANDBACK_UNREVIEWED dispatch");
     }
   });

@@ -638,6 +638,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       'maestro handback file <dispatch-id> --status DONE --candidate "<commit or digest>" --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"',
       'maestro work note <work-id> "after h<id>: <evidence>"',
       "maestro brief",
+      'maestro handback review <handback id> --note "<what you decided>"',
     ]);
 
     const replacements = new Map([
@@ -653,6 +654,7 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       ["<session-id>", "test-session"],
       ["<commit or digest>", "candidate-sha"],
       ["<current belief>", "commands parse"],
+      ["<what you decided>", "read it; closing the card next"],
     ]);
     const argumentsFor = (command: string): string[] => {
       if (command === "maestro work note") return ["work", "note", "--help"];
@@ -684,6 +686,9 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
       }
       if (command.startsWith("maestro dispatch open ")) {
         replacements.set("<dispatch-id>", parsed.stdout.match(/^(x\d+)/)?.[1] as string);
+      }
+      if (command.startsWith("maestro handback file ")) {
+        replacements.set("<handback id>", parsed.stdout.match(/^(h\d+)/)?.[1] as string);
       }
       if (command.startsWith("maestro dispatch cancel ")) {
         const openCommand = commands.find((candidate) =>

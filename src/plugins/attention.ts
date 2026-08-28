@@ -656,6 +656,10 @@ function handbackUnreviewedDetections(
     // A sealed council's packets are unreadable by design; the finding
     // appears once the seal opens.
     if (dispatch.council(record.workId, record.id).sealed) return [];
+    // The explicit record of a Lead having read the packet. The other two clears
+    // stay: closing the work and citing the handback in a later dispatch each
+    // prove a review happened without anyone having to say so.
+    if (handbacks.reviewed(latest.id)) return [];
     const cites = new RegExp(`\\b${latest.id}\\b`);
     const reviewed = dispatches.some(
       (other) =>
@@ -663,21 +667,25 @@ function handbackUnreviewedDetections(
         (cites.test(other.objective) || cites.test(other.evidenceRequired)),
     );
     if (reviewed) return [];
+    // The smallest action has to be one that actually clears this: reading the
+    // packet is a pure read and closing the work needs a lease, so before the
+    // review verb the finding survived every review a Lead could really do.
+    const review = `maestro handback review ${latest.id} --note "<what you decided>"`;
+    // The substantive move moves into the question, where "what should I do"
+    // belongs, so making the smallest action the clearing verb costs no guidance.
     let question = "close the work, re-dispatch, or cancel?";
-    let smallestAction = `maestro handback show ${latest.id}`;
     if (latest.status === "BLOCKED") {
-      question = "retry condition met?";
-      smallestAction = "re-dispatch on the same pane or cancel";
+      question = "retry condition met? then re-dispatch on the same pane or cancel";
     } else if (latest.status === "DEPENDENCY_REQUEST") {
-      question = "accept or decline the dependency request?";
-      smallestAction = "open the dependency as a work item in the other scope";
+      question =
+        "accept or decline the dependency request? accepting opens it as a work item in the other scope";
     } else if (latest.status === "COUNCIL_REQUEST") {
-      question = "open another council generation or decline?";
-      smallestAction = "open a second generation (d688) or decline with a work note";
+      question =
+        "open another council generation or decline? a second generation is d688, a decline is a work note";
     } else if (latest.status === "REOPEN_REQUEST") {
       question = "grant another lease or decline?";
-      smallestAction = "grant a new lease or decline";
     }
+    const smallestAction = review;
     return [{
       entityId: record.id,
       entityType: "dispatch",

@@ -129,6 +129,7 @@ export interface DispatchService {
 export interface HandbackService {
   get(id: string): HandbackRecord | null;
   list(dispatchId: string): HandbackRecord[];
+  reviewed(handbackId: string): boolean;
 }
 
 export interface CouncilStatus {
@@ -154,6 +155,17 @@ const createHandbacksTableSql = `
     assumptions TEXT NOT NULL,
     residual_risks TEXT NOT NULL,
     incidental_findings TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`;
+
+// One review per handback, enforced by the key rather than by the command, so
+// a second review is a no-op instead of a duplicate row (d17).
+const createHandbackReviewsTableSql = `
+  CREATE TABLE IF NOT EXISTS handback_reviews (
+    handback_id TEXT PRIMARY KEY REFERENCES handbacks(id),
+    reviewed_by TEXT NOT NULL,
+    note TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
 `;
@@ -699,6 +711,8 @@ export const dispatchPlugin: BuiltInPlugin = {
         )
     `);
 
+    context.store.migrate(createHandbackReviewsTableSql);
+
     const service: DispatchService = {
       council: (workId, dispatchId) => councilStatus(context, workId, dispatchId),
       get: (id) => getDispatch(context, id),
@@ -708,6 +722,12 @@ export const dispatchPlugin: BuiltInPlugin = {
     const handbackService: HandbackService = {
       get: (id) => getHandback(context, id),
       list: (dispatchId) => listHandbacks(context, dispatchId),
+      reviewed: (handbackId) =>
+        context.store.database
+          .query<{ handback_id: string }, [string]>(
+            "SELECT handback_id FROM handback_reviews WHERE handback_id = ?",
+          )
+          .get(handbackId) !== null,
     };
     context.effect(() => context.provide("handback", handbackService));
 
@@ -1347,6 +1367,60 @@ export const dispatchPlugin: BuiltInPlugin = {
           mutates: false,
           positionals: [{ name: "dispatch-or-work-id", required: true }],
           rootDescription: "File, list, and read durable return packets.",
+        },
+      ),
+    );
+
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "handback review",
+        (invocation): CliResult => {
+          const id = requiredPosition(invocation, 0, "handback id");
+          const note = requiredOption(invocation, "--note").trim();
+          if (!note) {
+            throw new CliError("EMPTY_NOTE", "--note must say what the review concluded", { id });
+          }
+          const handback = handbackService.get(id) ?? requireHandback(context, id);
+          const dispatch = requireDispatch(context, handback.dispatchId);
+          const reviewer = context.sessions.current().id;
+          // The Lead that opened the lane is the one whose reading closes it; a
+          // lane marking its own return read would clear the finding that exists
+          // to make someone else look at it.
+          if (dispatch.openedBy !== reviewer) {
+            throw new CliError(
+              "NOT_OPENER",
+              `only the session that opened ${dispatch.id} reviews its handback; opened by ${dispatch.openedBy ?? "none"}`,
+              { dispatch: dispatch.id, openedBy: dispatch.openedBy, reviewer },
+            );
+          }
+          const already = handbackService.reviewed(handback.id);
+          if (!already) {
+            context.store.database
+              .query(
+                `INSERT INTO handback_reviews (handback_id, reviewed_by, note, created_at)
+                 VALUES (?, ?, ?, ?)`,
+              )
+              .run(handback.id, reviewer, note, new Date().toISOString());
+            context.log.append({
+              type: "handback.review",
+              entityType: "handback",
+              entityId: handback.id,
+              sessionId: reviewer,
+              payload: { dispatchId: dispatch.id, note },
+            });
+          }
+          return {
+            data: { alreadyReviewed: already, handback: handback.id, note },
+            text: already ? `${handback.id} already reviewed` : `${handback.id} reviewed`,
+          };
+        },
+        {
+          description: "Record that the opener read a returned handback.",
+          flags: {
+            "--note": { description: "State what the review concluded.", value: true },
+          },
+          positionals: [{ name: "id", required: true }],
         },
       ),
     );

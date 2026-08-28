@@ -51,6 +51,11 @@ stores. It has no flags.
 - `list <dispatch-or-work-id> [--json]` lists handbacks for one dispatch or
   work item.
 - `show <id>` reads the handback for a handback or dispatch id.
+- `review <id> --note <text>` records that the opener read the return packet,
+  which clears its `HANDBACK_UNREVIEWED` finding. Only the session that opened
+  the dispatch may file it, and a second review is a no-op. Closing the work,
+  or citing the handback in a later dispatch on the same item, still clears the
+  finding on their own.
 
 ### `prompt`
 
