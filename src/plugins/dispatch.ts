@@ -998,8 +998,20 @@ export const dispatchPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           const id = requiredPosition(invocation, 0, "dispatch id");
           const reason = requiredOption(invocation, "--reason");
+          const canceller = context.sessions.current().id;
           const cancel = context.store.database.transaction(() => {
             const dispatch = requireDispatch(context, id);
+            // Cancelling removes a declared council member, so the exit belongs
+            // to the Lead who opened the lane. A Peer returns BLOCKED instead.
+            if (dispatch.openedBy !== null && dispatch.openedBy !== canceller) {
+              throw new CliError(
+                "NOT_OPENER",
+                `${id} was opened by ${dispatch.openedBy}; only its opener cancels it, ` +
+                  `a lane returns BLOCKED: maestro handback file ${id} --status BLOCKED ` +
+                  `--request "<what would unblock it>"`,
+                { dispatchId: id, openedBy: dispatch.openedBy },
+              );
+            }
             if (dispatch.state === "returned") {
               throw new CliError("HANDBACK_EXISTS", `${id} already has a handback`, {
                 dispatchId: id,
@@ -1025,7 +1037,7 @@ export const dispatchPlugin: BuiltInPlugin = {
               type: "dispatch.cancel",
               entityType: "dispatch",
               entityId: id,
-              sessionId: context.sessions.current().id,
+              sessionId: canceller,
               payload: { reason },
             });
             return service.get(id) as DispatchRecord;
