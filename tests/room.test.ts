@@ -466,6 +466,29 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
   });
 });
 
+test("501 [lint] installed room guidance selects models from the SLP reference (d711)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const lane = await readFile(join(room, "lane.md"), "utf8");
+    const lead = await readFile(join(room, "lead.md"), "utf8");
+    const owner = await readFile(join(room, "OWNER.md"), "utf8");
+    const laneStep = lane.split("5. ")[1]?.split("\n6. ")[0] ?? "";
+    const leadStep = lead.split("4. ")[1]?.split("\n5. ")[0] ?? "";
+
+    expect(laneStep).toContain(
+      "Pass the chosen model from the Model table in `maestro recipe show slp` to the harness: use `-- --model <name>` for Claude or Codex's `--model <name>` flag (verified with `codex --help`).",
+    );
+    expect(leadStep).toContain(
+      "Pick the Lead's model from the `lead` rung of the Model table in `maestro recipe show slp`.",
+    );
+    expect(owner).toContain(
+      "Which examples should the owner-editable Model table column use for cheap, strong, diverse, and lead? Keep the current names here.",
+    );
+  });
+});
+
 test("484 [lint] installed Lead guidance uses only the opener-set repository role name", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
