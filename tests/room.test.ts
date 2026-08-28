@@ -444,6 +444,9 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>"`',
     );
     expect(lead).toContain(
+      "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus`",
+    );
+    expect(lead).not.toContain(
       "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead --no-focus`",
     );
     expect(lead).toContain(
@@ -534,6 +537,9 @@ test("265 every installed lane Maestro command parses against the real CLI", asy
     ];
 
     expect(lane).toContain(
+      "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes-<work id> --no-focus",
+    );
+    expect(lane).not.toContain(
       "herdr tab create --workspace <workspace-id> --cwd <repo> --label lanes --no-focus",
     );
     expect(lane).not.toContain("herdr pane split --current");
