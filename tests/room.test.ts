@@ -533,6 +533,29 @@ test("516 [lint] room guidance forbids store hand edits and relays fix intent", 
   });
 });
 
+test("528 [lint] a Lead reports a closed card back to the room (d22)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = await readFile(join(fixture.home, "maestro", "lead.md"), "utf8");
+    const slp = await readFile(
+      join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+      "utf8",
+    );
+
+    // maestro brief prints attention findings only, so a closed card is
+    // invisible to the room; without this sentence a Lead can finish relayed
+    // intent and the room never learns, which is how three closures went
+    // unreported before d22.
+    const message =
+      'herdr agent prompt supervisor "[from lead][done w<id> re d<room-id>] <candidate commit; one line on any deviation>"';
+    expect(lead).toContain(message);
+    expect(slp).toContain(message);
+    expect(lead).toContain("one prompt per closed card, after `maestro work done`");
+    expect(lead).toContain("never before");
+  });
+});
+
 test("501 [lint] installed room guidance selects models from the SLP reference (d711)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

@@ -322,6 +322,10 @@ sender's role and the record it is about, and the answer is the record.
 `hm` starts or focuses the room agent named `supervisor` in the `maestro` workspace.
 A first view or a duplicate that lost is withdrawn with its reason, never locked (`maestro decision withdraw d<id> --reason "<why>"`).
 
+- Work that carried relayed room intent is reported once when it closes:
+  `herdr agent prompt supervisor "[from lead][done w<id> re d<room-id>] <candidate commit; one line on any deviation>"`,
+  after `maestro work done` and never before. `maestro brief` shows attention
+  findings only, so a closed card is otherwise invisible to the room.
 - A question that needs an owner or Supervisor decision is drafted first:
   `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,
   then sent with `herdr agent prompt supervisor "[from lead][ask d<id>] <question>"`.
