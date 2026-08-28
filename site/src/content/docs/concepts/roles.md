@@ -61,6 +61,37 @@ A Peer may return `DONE`, `BLOCKED`, `UNTESTABLE`, `UNKNOWN`, `FAILED`,
 Unknown and partial results stay explicit; they are never rounded up to
 acceptance.
 
+## Teams
+
+A team is one Herdr workspace. A session reads its role from its agent name
+prefix and its team from the workspace it sits in, never from cwd: cwd decides
+only which store a verb reads, so two teams on one repository share a store and
+stay separate teams. One team cwd maps to exactly one workspace, and the opener
+reuses a matching workspace before creating one.
+
+| name | what it is | writes? |
+|---|---|---|
+| `supervisor-<team>` | the team's one record holder: locks decisions, receives done reports, holds the owner gates for the team | yes, records |
+| `advisor-<team>` | counsel for the record holder when it is stuck or the owner is away | no |
+| `observer-<team>` | drift watch for as long as the team is working | no |
+| `lead-<repo basename>` | Lead of that repository; a team spanning repositories holds several | yes, in that repository |
+| `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
+
+The observer reads the panes of its own workspace and speaks to whoever drifts
+as `[from observer][suspected] <pane> <quoted evidence> <why>`, once per issue
+and again only on new evidence. It never changes an assignment, never freezes,
+never runs a write verb, and never writes the store: the addressee or
+`supervisor-<team>` decides, and `supervisor-<team>` records. Its triggers are
+countable rather than a matter of taste: the same failure a third time, a pane
+claim contradicting `maestro status` or `maestro work show`, a role answering a
+question type it does not own, a pane silent past its stop condition, and
+self-doubt phrases repeated in one turn.
+
+The room at `~/maestro` is its own workspace and opens no agent there; it opens
+each team's panes in that team's workspace. Team membership, the observer's
+read scope, one workspace per team cwd, and the room's clean workspace are all
+soft-audited.
+
 ## SLP topology
 
 ```mermaid

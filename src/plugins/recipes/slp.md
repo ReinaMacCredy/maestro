@@ -71,6 +71,61 @@ evidence, not theatre.
 A shadow lane runs beside the owner. Its handback is comparison evidence,
 never a candidate, and never carries the work write lease.
 
+## Teams
+
+A team is one Herdr workspace. Every pane of that team lives in it, and the two
+coordinates a session needs are read from different places: role from the name
+prefix, team from the workspace id, never from cwd. cwd decides only which
+store a verb reads (d717), so two teams working the same repository read the
+same store and stay distinct teams, and one team spanning three repositories
+stays one team.
+
+One team cwd maps to exactly one workspace. Before creating a team workspace
+the opener reads `herdr workspace list` and reuses a workspace whose label or
+cwd already matches; a second workspace on the same cwd splits a team in half
+without saying so.
+
+A team holds exactly one record holder, `supervisor-<team>`. Beside it stand
+two supports that hold no records, and below it the ordinary project roles:
+
+| name | what it is | writes? |
+|---|---|---|
+| `supervisor-<team>` | the team's record holder: locks decisions, receives done reports, holds the owner gates for this team | yes, records |
+| `advisor-<team>` | support for the record holder when it is stuck or the owner is away; it is the counsel a Codex Supervisor has no tool for | no: no cards, no records |
+| `observer-<team>` | drift watch, running for as long as the team is working | no |
+| `lead-<repo basename>` | Lead of that repository (a team may hold several when it spans repositories) | yes, in that repository |
+| `consult-<repo basename>` | the Lead's counterpart beside it (d27) | see d27 |
+| `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
+
+Example models for the team roles, dated 2026-08-29 and owner-editable exactly
+like the Model table below: `supervisor-<team>` on the `lead` rung, and both
+supports on a cheap-but-thinking pair, `advisor-<team>` on `gpt-5.6-sol` at
+`xhigh` and `observer-<team>` on `gpt-5.6-luna` at `xhigh`.
+
+### The observer
+
+`observer-<team>` may run `herdr agent read` on every pane in its own workspace
+only, and it speaks straight to the member that drifts:
+
+```
+[from observer][suspected] <pane> <quoted evidence> <why>
+```
+
+It says so once per issue and again only on new evidence. It never changes an
+assignment, never freezes, never runs a write verb, never writes the store: the
+addressee or `supervisor-<team>` decides, and `supervisor-<team>` records. This
+is the Supervisor's own separation of observation, hypothesis and verdict
+placed in a second pane, which is why the operative word stays "suspected".
+
+Triggers are countable, not taste: the same failure a third time; a claim in a
+pane contradicting `maestro status` or `maestro work show`; a role answering a
+question type it does not own; a pane silent past its stop condition;
+self-doubt phrases repeated in one turn.
+
+Reading panes is the observer's grant, not the room's: the Supervisor binding
+below still denies the room raw transcript access, and the observer's grant
+stops at its own workspace, so neither role can read the other's team.
+
 ## Reading the owner's prompt
 
 The Lead never asks the owner which shape to use: topology is the Lead's
@@ -190,6 +245,7 @@ binding on the role, checkable after the fact, not prevented.
 | `~/maestro` (opened with `hm`) | Supervisor, the owner's embodiment | the room `AGENTS.md` points at `IDENTITY.md`; `maestro brief` is its event feed across every registered repository |
 | a Herdr agent named `lead-<repo basename>` whose cwd is the repository | Lead of that repository | the room sets the name; the hook brief lists dispatches it opened |
 | a pane the Lead opened with a dispatch | Peer | the Lead starts it as `peer-<dispatch id>` and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
+| a Herdr agent named `supervisor-<team>`, `advisor-<team>` or `observer-<team>` | that team role | the room sets the name when it opens the team; the team is the workspace the pane sits in, never its cwd |
 
 A session never becomes a Peer on its own; the Lead makes it one by starting
 `peer-<dispatch id>`, and dispatch acceptance records that binding. When a
@@ -331,15 +387,23 @@ A first view or a duplicate that lost is withdrawn with its reason, never locked
 
 - Work opened from a `[from supervisor][intent]` prompt is reported once when
   it closes, whether or not it carries a room decision id:
-  `herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"`,
-  after `maestro work done` and never before. `<room record>` is the record the
+  `herdr agent prompt <record holder> "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"`,
+  after `maestro work done` and never before. `<record holder>` is the record
+  holder named in the prompt that opened it (d719): `supervisor-<team>` for a
+  Lead the room opened inside a team, and the room's own `supervisor` when the
+  prompt names none, which is why the plain form stays
+  `herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"`.
+  The Lead never searches for that name; it reads it from the prompt, and
+  falls back to matching its own workspace id against the `team-<name>` label
+  in `herdr workspace list` only when the prompt is lost. `<room record>` is the record the
   relaying prompt named: `d<room-id>` for a decision, `w<room-id>` for a room
   work item when the prompt names no decision. `maestro brief` shows attention
   findings only, so a closed card is otherwise invisible to the room, and
-  `herdr agent prompt supervisor` is the only channel to it.
+  `herdr agent prompt <record holder>` is the only channel to it.
 - A question that needs an owner or Supervisor decision is drafted first:
   `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,
-  then sent with `herdr agent prompt supervisor "[from lead][ask d<id>] <question>"`.
+  then sent with `herdr agent prompt <record holder> "[from lead][ask d<id>] <question>"`
+  (`herdr agent prompt supervisor "[from lead][ask d<id>] <question>"` when the room is the holder).
   The generic envelope remains `[from <role>]` plus the record id.
   When the Supervisor relays the owner's word it locks that draft in the
   repository store (`maestro decision lock d<id>`, the one write it makes

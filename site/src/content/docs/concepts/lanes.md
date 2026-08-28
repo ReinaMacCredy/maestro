@@ -49,6 +49,10 @@ the fact, not prevented.
 | B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
 | B9 | tool and call budgets | nothing | soft-audited | the assignment text |
 | B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |
+| B11 | team membership | nothing | soft-audited | the workspace the opener put the pane in, read from the workspace id and never from cwd (d28) |
+| B12 | observer read scope | nothing | soft-audited | the observer speaks only inside its own workspace and runs no write verb (d28) |
+| B13 | one workspace per team cwd | nothing | soft-audited | the room reads `herdr workspace list` and reuses a match before creating one (d29) |
+| B14 | a clean room workspace | nothing | soft-audited | the room opens every team pane in that team's workspace (d29) |
 
 ## Open a dispatch
 

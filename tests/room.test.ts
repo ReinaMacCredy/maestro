@@ -486,7 +486,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
     );
     expect(lead).toContain(
-      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700)."`',
+      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>."`',
     );
     expect(lead).toContain(
       "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
@@ -1840,5 +1840,105 @@ test("529 [lint] relayed intent reports on close even without a room decision id
     expect(step6).toMatch(/only channel|reached only by/);
     expect(step6).toContain("herdr agent list");
     expect(step6).toContain("maestro dispatch list");
+  });
+});
+
+function flat(text: string): string {
+  return text.replace(/\s+/g, " ");
+}
+
+test("533 [lint] the slp recipe carries the d28 team model", async () => {
+  const raw = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+  const slp = flat(raw);
+
+  // A team is a workspace, and the two coordinates are read from different
+  // places: role from the name prefix, team from the workspace id. cwd decides
+  // which store a verb reads (d717) and never which team a pane belongs to.
+  expect(slp).toContain("A team is one Herdr workspace");
+  expect(slp).toContain("role from the name prefix, team from the workspace id, never from cwd");
+
+  // The three team-scoped names and what each one may not do.
+  expect(slp).toContain("supervisor-<team>");
+  expect(slp).toContain("advisor-<team>");
+  expect(slp).toContain("observer-<team>");
+  expect(slp).toContain("consult-<repo basename>");
+  expect(slp).toContain("exactly one record holder");
+
+  // The observer speaks, it never acts: no assignment change, no freeze, no
+  // write verb, no store write, and only inside its own workspace.
+  expect(slp).toContain(
+    "[from observer][suspected] <pane> <quoted evidence> <why>",
+  );
+  expect(slp).toContain("its own workspace only");
+  expect(slp).toContain(
+    "never changes an assignment, never freezes, never runs a write verb, never writes the store",
+  );
+  expect(slp).toContain("once per issue and again only on new evidence");
+
+  // Triggers are countable so a drift call is checkable rather than a matter
+  // of taste.
+  const triggers = raw.match(/Triggers are countable[\s\S]*?\n\n/)?.[0] ?? "";
+  expect(triggers).not.toBe("");
+  for (const trigger of [
+    "the same failure a third time",
+    "contradicting",
+    "a role answering a question type it does not own",
+    "silent past its stop condition",
+    "self-doubt phrases repeated in one turn",
+  ]) {
+    expect(flat(triggers), trigger).toContain(trigger);
+  }
+
+  // d719: the report target is a parameter the opener names, not a fixed name.
+  expect(slp).toContain("[from lead][done w<id> re <room record>]");
+  expect(slp).toContain(
+    "the record holder named in the prompt that opened it",
+  );
+});
+
+test("534 [lint] installed lead guidance opens a team workspace before any pane (d29)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = flat(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8"));
+
+    // The room's own workspace stays clean: every pane the room opens goes to
+    // the team's workspace, which the room creates first.
+    expect(lead).toContain(
+      "`herdr workspace create --cwd <team cwd> --label team-<name> --no-focus`",
+    );
+    expect(lead).toContain("never in the room's own workspace");
+
+    // One team cwd is one workspace: read the list and reuse before creating.
+    expect(lead).toContain("`herdr workspace list`");
+    expect(lead).toContain("reuse");
+    expect(lead).toContain("never opens a duplicate");
+
+    // d719: the relay prompt carries the report target, so the Lead never
+    // searches for it.
+    expect(lead).toContain("report to <record holder>");
+  });
+});
+
+test("535 [lint] the room's transcript denial stays while observer-<team> reads its own workspace", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const identity = flat(await readFile(join(room, "IDENTITY.md"), "utf8"));
+    const agents = flat(await readFile(join(room, "AGENTS.md"), "utf8"));
+
+    // The room still reads stores, not panes. The d28 grant belongs to a
+    // different role in a different workspace and does not widen this binding.
+    expect(identity).toContain("Raw transcript access: denied");
+    expect(identity).toContain("observer-<team>");
+    expect(identity).toContain("does not widen this binding");
+
+    // d29: the room supervisor opens no agent in the room's own workspace.
+    expect(agents).toContain("opens no agent in this workspace");
+    expect(agents).toContain("the owner may open their own");
   });
 });
