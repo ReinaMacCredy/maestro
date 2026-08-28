@@ -193,7 +193,7 @@ binding on the role, checkable after the fact, not prevented.
 A session never becomes a Peer on its own; the Lead makes it one by starting
 `peer-<dispatch id>`, and dispatch acceptance records that binding. A
 Supervisor never takes work in a repository store; if it needs a change made,
-it asks the Lead. Two sessions holding parent work in one repository are
+it asks the Lead. Two sessions holding active work in one repository are
 split-brain: the later one must stop and read `maestro status`.
 
 ## Supervisor feed and packet

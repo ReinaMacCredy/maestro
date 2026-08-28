@@ -969,6 +969,61 @@ test("414 attention raises LEAD_COLLISION without treating a delivery Peer as a 
   });
 });
 
+test("523 attention raises LEAD_COLLISION when one holder's card is a child and the other's is not", async () => {
+  await withFixture(async (fixture) => {
+    // The shape that actually occurred on 2026-08-28: a Lead working a child of
+    // its feature while another session held a parentless card. LEAD_COLLISION
+    // dropped the child, SCOPE_COLLISION needs both rows under one parent, and
+    // STALLED_LEASE never compares two rows, so nothing fired at all.
+    const parent = await addWork(fixture, "feature under a Lead");
+    const child = await addWork(fixture, "child of the feature", parent);
+    await startWork(fixture, child, "lead-a");
+    const solo = await addWork(fixture, "parentless card another session took");
+    await startWork(fixture, solo, "lead-b");
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    expect(attention.exitCode).toBe(0);
+    const detections = (JSON.parse(attention.stdout) as {
+      data: {
+        detections: Array<{
+          fingerprint: string;
+          kind: string;
+          packet: string;
+          subjectSession: string | null;
+        }>;
+      };
+    }).data.detections.filter((detection) => detection.kind === "LEAD_COLLISION");
+
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toEqual(expect.objectContaining({
+      fingerprint: `lead-collision:${child}:${solo}:lead-a:lead-b`,
+      subjectSession: "lead-a,lead-b",
+    }));
+  });
+});
+
+test("524 two children of one parent stay a single SCOPE_COLLISION, not two kinds", async () => {
+  await withFixture(async (fixture) => {
+    // Widening LEAD_COLLISION to child cards makes this pair visible to both
+    // detectors; SCOPE_COLLISION says more about it, so one incident must not
+    // arrive as two packets.
+    const parent = await addWork(fixture, "one parent");
+    const left = await addWork(fixture, "left child", parent);
+    const right = await addWork(fixture, "right child", parent);
+    await startWork(fixture, left, "lead-a");
+    await startWork(fixture, right, "lead-b");
+
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
+    const kinds = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<{ fingerprint: string; kind: string }> };
+    }).data.detections
+      .filter((detection) => detection.fingerprint.endsWith(`${left}:${right}:lead-a:lead-b`))
+      .map((detection) => detection.kind);
+
+    expect(kinds).toEqual(["SCOPE_COLLISION"]);
+  });
+});
+
 test("458 delivery acceptance after work start does not hide a Lead collision", async () => {
   await withFixture(async (fixture) => {
     const first = await addWork(fixture, "first established Lead");

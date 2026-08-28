@@ -493,7 +493,7 @@ function leadCollisionDetections(
   const active = works
     .filter(
       (work) =>
-        work.state === "active" && !work.parentId && work.heldBy &&
+        work.state === "active" && work.heldBy &&
         sessions.get(work.heldBy)?.live &&
         !deliveryPeers.has(`${work.id}:${work.heldBy}`),
     )
@@ -504,6 +504,10 @@ function leadCollisionDetections(
     for (let rightIndex = leftIndex + 1; rightIndex < active.length; rightIndex += 1) {
       const second = active[rightIndex] as AttentionWorkRow;
       if (first.heldBy === second.heldBy) continue;
+      // Two children of one parent are SCOPE_COLLISION's situation, and it says
+      // more about them than this does. Reporting the pair under both kinds
+      // makes one incident look like two.
+      if (first.parentId && first.parentId === second.parentId) continue;
       const holders = [first.heldBy as string, second.heldBy as string].sort();
       detections.push({
         entityId: first.id,
