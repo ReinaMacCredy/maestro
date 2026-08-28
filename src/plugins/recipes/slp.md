@@ -319,11 +319,13 @@ this text.
 Herdr carries the words; the store carries the truth. A prompt that lands in a
 pane has no provenance of its own, so every cross-role message starts with the
 sender's role and the record it is about, and the answer is the record.
+`hm` starts or focuses the room agent named `supervisor` in the `maestro` workspace.
 A first view or a duplicate that lost is withdrawn with its reason, never locked (`maestro decision withdraw d<id> --reason "<why>"`).
 
 - A question that needs an owner or Supervisor decision is drafted first:
   `maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`,
-  then sent with `herdr agent prompt <name> "[from <role>][ask d<id>] <question>"`.
+  then sent with `herdr agent prompt supervisor "[from lead][ask d<id>] <question>"`.
+  The generic envelope remains `[from <role>]` plus the record id.
   When the Supervisor relays the owner's word it locks that draft in the
   repository store (`maestro decision lock d<id>`, the one write it makes
   there). When it advises, it answers by prompt only and the Lead records the
