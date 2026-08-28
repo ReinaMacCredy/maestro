@@ -262,6 +262,9 @@ test("289 [lint] recipe slp presents the SLP roles and install mirrors state the
     for (const name of ["AGENTS.md", "CLAUDE.md"]) {
       const mirror = await readFile(join(fixture.repo, name), "utf8");
       expect(mirror).toContain(
+        "The Lead of this repository is the agent the room started as `lead-<repo basename>`; a pane it opens with a dispatch is a Peer named `peer-<dispatch id>`; a session with any other name holds only what its accepted dispatch says; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.",
+      );
+      expect(mirror).not.toContain(
         "A session in this repository is its Lead; panes it opens with a dispatch are Peers; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.",
       );
     }
