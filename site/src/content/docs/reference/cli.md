@@ -1,10 +1,10 @@
 ---
 title: CLI reference
-description: Every top-level verb reported by the installed Maestro shim at commit f7099773.
+description: Every top-level verb reported by the installed Maestro shim at commit 64738a0a.
 ---
 
 This reference was generated from the installed `maestro` shim at
-commit `f7099773dc4129b45839ca517c540260fbc106f0`, released as 0.111.1.
+commit `64738a0a7f9ead97fe7b758a0e0c02ed9093519a`, released as 0.112.0.
 
 ```sh
 maestro help
