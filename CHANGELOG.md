@@ -44,7 +44,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
   least N and never exactly N. A stale drift advisory read at session start was
   nearly reported to a Lead as a live hazard, and the length of a `head -5`
   listing was quoted in a brief as a count of five where the real number was
-  fifty-eight (room l7: room w9, room d53; room l10: room w6).
+  fifty-eight. The external-effect gate's own definition of verified evidence
+  defers to that rule instead of restating it, and keeps the worked example it
+  carries, so the binding defines the term once (room l7: room w9, room d53;
+  room l10: room w6).
 - A brief body is now sent through a file, `herdr agent prompt <name>
   "$(cat <file>)"`, in `lane.md` step 5 and for every prompt the room itself
   sends in `lead.md`. A double-quoted argument is still scanned by the sending

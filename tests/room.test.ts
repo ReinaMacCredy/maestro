@@ -2174,6 +2174,17 @@ test("569 [lint] the room's evidence rule names the two surfaces that read as ev
     expect(identity).toContain(
       "a listing truncated for display, which proves at least N and never exactly N, so a number that will be quoted comes from a command that counts",
     );
+
+    // The gate bullet directly under the rule used to open with its own
+    // definition of verified evidence, so a reader met two definitions in
+    // adjacent bullets. It defers now, and keeps its own worked example (l2).
+    expect(identity).toContain(
+      "The verified evidence this gate names is the Evidence rule above applied to a decision",
+    );
+    expect(identity).toContain(
+      "verified by opening the reader-facing page a reader would land on",
+    );
+    expect(identity).not.toContain("Verified evidence means every claim in that decision");
   });
 });
 
