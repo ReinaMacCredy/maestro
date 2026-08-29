@@ -1,0 +1,146 @@
+# Case 3 of the scenario guide: a decision the owner does not want made blindly. Two
+# no-write lanes hold the same question; the council stays sealed until both return,
+# and the Lead locks the decision with the rejected alternative in the rationale.
+$ maestro work add "Session identity after pid reuse" --kind task --atomic-reason "one decision, no code" --acceptance "a locked decision with a falsifier"
+w1 added: Session identity after pid reuse
+
+$ maestro dispatch open w1 --lane decision --council-members 2 --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation no-write --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane w1:pA
+x1 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: none
+held by: none
+
+$ maestro dispatch open w1 --lane decision --council-anchor x1 --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation no-write --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane w1:pB
+x2 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pB
+target session: none
+opened by: test-session
+claimed by: none
+held by: none
+
+$ maestro dispatch accept x1
+x1 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: decision-a
+held by: none
+
+$ maestro dispatch confirm x1 --session decision-a
+x1 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: none
+held by: decision-a
+
+$ maestro dispatch accept x2
+x2 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pB
+target session: none
+opened by: test-session
+claimed by: decision-b
+held by: none
+
+$ maestro dispatch confirm x2 --session decision-b
+x2 [open]
+work: w1
+objective: recommend how a session proves it is still the same process after the OS reuses its pid
+owned scope: src/kernel/sessions.ts and its tests, read only
+excluded scope: any code change
+mutation: no-write
+stop condition: options, recommendation, and falsifier written
+lane: decision
+evidence required: source: note path with mechanism per option
+pane: w1:pB
+target session: none
+opened by: test-session
+claimed by: none
+held by: decision-b
+
+$ maestro handback file x1 --status DONE --claim "sessions carry a start-time incarnation stamp" --proof "source: notes/incarnation.md" --assumptions None --residual-risks "a clock jump would look like a new incarnation" --incidental-findings None
+h1 [DONE]
+dispatch: x1
+claim: sessions carry a start-time incarnation stamp
+proof: source: notes/incarnation.md
+assumptions not verified: None
+residual risks: a clock jump would look like a new incarnation
+incidental findings: None
+
+$ maestro handback show h1
+! exit 1
+{"ok":false,"error":{"code":"SEALED","message":"council w1 is SEALED (1/2 returned)","returned":1,"total":2,"workId":"w1"}}
+
+$ maestro handback file x2 --status DONE --claim "a heartbeat row proves liveness better than any stamp" --proof "source: notes/heartbeat.md" --assumptions None --residual-risks "the heartbeat needs a writer" --incidental-findings None
+h2 [DONE]
+dispatch: x2
+claim: a heartbeat row proves liveness better than any stamp
+proof: source: notes/heartbeat.md
+assumptions not verified: None
+residual risks: the heartbeat needs a writer
+incidental findings: None
+
+$ maestro handback show h1
+h1 [DONE]
+dispatch: x1
+claim: sessions carry a start-time incarnation stamp
+proof: source: notes/incarnation.md
+assumptions not verified: None
+residual risks: a clock jump would look like a new incarnation
+incidental findings: None
+council: complete (2/2 returned)
+
+$ maestro decision draft "sessions carry a start-time incarnation; a pid match without a matching incarnation is dead" --rationale "both lanes reject pid-only identity; A proposes an incarnation stamp, B a heartbeat row; a heartbeat needs a writer that d5 forbids" --work w1
+d1 [draft] sessions carry a start-time incarnation; a pid match without a matching incarnation is dead
+rationale: both lanes reject pid-only identity; A proposes an incarnation stamp, B a heartbeat row; a heartbeat needs a writer that d5 forbids
+work: w1
+
+$ maestro decision lock d1
+d1 [locked] sessions carry a start-time incarnation; a pid match without a matching incarnation is dead
+rationale: both lanes reject pid-only identity; A proposes an incarnation stamp, B a heartbeat row; a heartbeat needs a writer that d5 forbids
+work: w1
+
+$ maestro work note w1 "dissent from x2: a heartbeat would also detect a hung process; deferred, not rejected"
+w1 note: dissent from x2: a heartbeat would also detect a hung process; deferred, not rejected

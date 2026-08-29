@@ -1,0 +1,93 @@
+# Case 2 of the scenario guide: a bounded change while the owner is busy. The Lead
+# stores the contract, confirms the lane's claim, and reviews the packet the lane
+# files once.
+$ maestro work add "audit --since omits older entries" --kind task --atomic-reason "one verb, one flag" --acceptance "entries before the date are omitted"
+w1 added: audit --since omits older entries
+
+$ maestro dispatch open w1 --lane delivery --objective "audit --since <date> omits entries older than the date, test-first" --owned-scope "src/plugins/audit.ts, tests/audit.test.ts" --excluded-scope "store schema, other verbs, docs" --mutation "write-bounded to the owned scope; no commit, no push" --stop-condition "new test green and full suite passes, or BLOCKED" --evidence-required "source: bun test tests/audit.test.ts with counts" --pane w1:pA
+x1 [open]
+work: w1
+objective: audit --since <date> omits entries older than the date, test-first
+owned scope: src/plugins/audit.ts, tests/audit.test.ts
+excluded scope: store schema, other verbs, docs
+mutation: write-bounded to the owned scope; no commit, no push
+stop condition: new test green and full suite passes, or BLOCKED
+lane: delivery
+evidence required: source: bun test tests/audit.test.ts with counts
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: none
+held by: none
+
+$ maestro dispatch accept x1
+x1 [open]
+work: w1
+objective: audit --since <date> omits entries older than the date, test-first
+owned scope: src/plugins/audit.ts, tests/audit.test.ts
+excluded scope: store schema, other verbs, docs
+mutation: write-bounded to the owned scope; no commit, no push
+stop condition: new test green and full suite passes, or BLOCKED
+lane: delivery
+evidence required: source: bun test tests/audit.test.ts with counts
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: lane-since
+held by: none
+
+$ maestro dispatch confirm x1 --session lane-since
+x1 [open]
+work: w1
+objective: audit --since <date> omits entries older than the date, test-first
+owned scope: src/plugins/audit.ts, tests/audit.test.ts
+excluded scope: store schema, other verbs, docs
+mutation: write-bounded to the owned scope; no commit, no push
+stop condition: new test green and full suite passes, or BLOCKED
+lane: delivery
+evidence required: source: bun test tests/audit.test.ts with counts
+pane: w1:pA
+target session: none
+opened by: test-session
+claimed by: none
+held by: lane-since
+
+$ maestro work start w1
+w1 started by lane-since
+
+$ maestro handback file x1 --status DONE --claim "audit --since omits entries older than the date" --proof "source: bun test tests/audit.test.ts 14 pass 0 fail" --assumptions "dates are ISO-8601 in the store" --residual-risks None --incidental-findings "audit --json prints the date in local time, not UTC"
+h1 [DONE]
+dispatch: x1
+claim: audit --since omits entries older than the date
+proof: source: bun test tests/audit.test.ts 14 pass 0 fail
+assumptions not verified: dates are ISO-8601 in the store
+residual risks: None
+incidental findings: audit --json prints the date in local time, not UTC
+
+$ maestro work release w1
+w1 released by lane-since
+
+$ maestro attention
+attention HANDBACK_UNREVIEWED dispatch x1
+  observed: x1 returned DONE (h1) <age> ago; work w1 is still open
+  evidence: handbacks row h1 status DONE; work.state open; no later dispatch on w1 cites h1
+  unknown: whether the Lead has read the return packet
+  question: close the work, re-dispatch, or cancel?
+  smallest action: maestro handback review h1 --note "<what you decided>"
+  human decision needed: no
+  raised <time>
+
+$ maestro handback review h1 --note "falsifier re-run by the Lead before the close"
+h1 reviewed
+
+$ maestro work done w1 --claim "audit --since omits entries older than the date" --proof "source: bun test 336 pass 0 fail"
+w1 done
+
+$ maestro work show w1
+w1 [done] audit --since omits older entries
+kind: task
+acceptance: entries before the date are omitted
+atomic reason: one verb, one flag
+evidence: claim: audit --since omits entries older than the date
+proof: source: bun test 336 pass 0 fail
+dispatch: x1 [returned] delivery: audit --since <date> omits entries older than the date, test-first

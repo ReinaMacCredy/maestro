@@ -1,0 +1,6 @@
+# Case 1 of the scenario guide: a fix you could check yourself. No pane, no dispatch;
+# the record exists only so the claim and its proof outlive the session.
+work add "README names install.sh" --kind task --atomic-reason "one-line doc fix" --acceptance "README install line matches scripts/install.sh"
+work start w1
+work done w1 --claim "docs: README names install.sh" --proof "source: rg -n 'install.sh' README.md"
+work show w1

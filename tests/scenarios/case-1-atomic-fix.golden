@@ -1,0 +1,18 @@
+# Case 1 of the scenario guide: a fix you could check yourself. No pane, no dispatch;
+# the record exists only so the claim and its proof outlive the session.
+$ maestro work add "README names install.sh" --kind task --atomic-reason "one-line doc fix" --acceptance "README install line matches scripts/install.sh"
+w1 added: README names install.sh
+
+$ maestro work start w1
+w1 started by test-session
+
+$ maestro work done w1 --claim "docs: README names install.sh" --proof "source: rg -n 'install.sh' README.md"
+w1 done
+
+$ maestro work show w1
+w1 [done] README names install.sh
+kind: task
+acceptance: README install line matches scripts/install.sh
+atomic reason: one-line doc fix
+evidence: claim: docs: README names install.sh
+proof: source: rg -n 'install.sh' README.md

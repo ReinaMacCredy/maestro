@@ -1,0 +1,14 @@
+# Case 2 of the scenario guide: a bounded change while the owner is busy. The Lead
+# stores the contract, confirms the lane's claim, and reviews the packet the lane
+# files once.
+work add "audit --since omits older entries" --kind task --atomic-reason "one verb, one flag" --acceptance "entries before the date are omitted"
+dispatch open w1 --lane delivery --objective "audit --since <date> omits entries older than the date, test-first" --owned-scope "src/plugins/audit.ts, tests/audit.test.ts" --excluded-scope "store schema, other verbs, docs" --mutation "write-bounded to the owned scope; no commit, no push" --stop-condition "new test green and full suite passes, or BLOCKED" --evidence-required "source: bun test tests/audit.test.ts with counts" --pane w1:pA
+@lane-since dispatch accept x1
+dispatch confirm x1 --session lane-since
+@lane-since work start w1
+@lane-since handback file x1 --status DONE --claim "audit --since omits entries older than the date" --proof "source: bun test tests/audit.test.ts 14 pass 0 fail" --assumptions "dates are ISO-8601 in the store" --residual-risks "None" --incidental-findings "audit --json prints the date in local time, not UTC"
+@lane-since work release w1
+attention
+handback review h1 --note "falsifier re-run by the Lead before the close"
+work done w1 --claim "audit --since omits entries older than the date" --proof "source: bun test 336 pass 0 fail"
+work show w1

@@ -64,10 +64,20 @@ text that already covers it, or the reading that was wrong.
 
 ## The replay gate
 
-Doctrine has golden scenarios. An edit is accepted only when the replay still
-matches the golden set, or matches the change a lesson explicitly expected. A
-replay that drifts in a way no lesson asked for is a regression in the doctrine,
-not an improvement, and it goes back before the handback.
+Doctrine has golden scenarios: a script of maestro commands and the transcript
+it produced. In this repository they are `tests/scenarios/<case>.script` and
+`<case>.golden`, replayed by `bun test tests/scenario-golden.test.ts`.
+
+Run the replay after every edit. An edit is accepted only when it still matches
+the golden set, or matches the change a lesson explicitly expected. A replay
+that drifts in a way no lesson asked for is a regression in the doctrine, not an
+improvement, and it goes back before the handback. When a lesson did ask for the
+change, re-record with `MAESTRO_GOLDEN_UPDATE=1 bun test
+tests/scenario-golden.test.ts` and put the new golden in the same commit, so the
+diff shows the behaviour that changed next to the sentence that changed it.
+
+A doctrine edit no scenario covers is an edit nothing can falsify: add the
+scenario in the same commit rather than leaving the rule unwatched.
 
 ## Filing new lessons
 

@@ -1,0 +1,17 @@
+# Case 3 of the scenario guide: a decision the owner does not want made blindly. Two
+# no-write lanes hold the same question; the council stays sealed until both return,
+# and the Lead locks the decision with the rejected alternative in the rationale.
+work add "Session identity after pid reuse" --kind task --atomic-reason "one decision, no code" --acceptance "a locked decision with a falsifier"
+dispatch open w1 --lane decision --council-members 2 --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation "no-write" --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane w1:pA
+dispatch open w1 --lane decision --council-anchor x1 --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation "no-write" --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane w1:pB
+@decision-a dispatch accept x1
+dispatch confirm x1 --session decision-a
+@decision-b dispatch accept x2
+dispatch confirm x2 --session decision-b
+@decision-a handback file x1 --status DONE --claim "sessions carry a start-time incarnation stamp" --proof "source: notes/incarnation.md" --assumptions None --residual-risks "a clock jump would look like a new incarnation" --incidental-findings None
+handback show h1
+@decision-b handback file x2 --status DONE --claim "a heartbeat row proves liveness better than any stamp" --proof "source: notes/heartbeat.md" --assumptions None --residual-risks "the heartbeat needs a writer" --incidental-findings None
+handback show h1
+decision draft "sessions carry a start-time incarnation; a pid match without a matching incarnation is dead" --rationale "both lanes reject pid-only identity; A proposes an incarnation stamp, B a heartbeat row; a heartbeat needs a writer that d5 forbids" --work w1
+decision lock d1
+work note w1 "dissent from x2: a heartbeat would also detect a hung process; deferred, not rejected"

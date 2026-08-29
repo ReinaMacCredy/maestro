@@ -459,6 +459,29 @@ Completion is reported only to the layer that was proved. "source: PASS at
 1a2b3c4d; installed: BLOCKED, an active agent prevents restart; live: NOT
 TESTED" is an honest report; "done" is not.
 
+## Replaying these cases
+
+Cases 1 to 3, and the lesson loop behind them, are also runnable. Each is a
+script of maestro commands in `tests/scenarios/<name>.script` with the
+transcript it produced beside it in `<name>.golden`, replayed against a fresh
+store by:
+
+```sh
+bun test tests/scenario-golden.test.ts
+```
+
+A line prefixed with `@<session>` runs as that lane, which is how one script
+holds both the Lead and the Peer. Timestamps, paths and pids are normalised, so
+a diff in a golden is a change in behaviour, not in the clock.
+
+The goldens exist for the improver (d43): a doctrine edit is accepted only when
+the replay still matches, or matches the change a lesson asked for. When a
+lesson did ask for it, the golden is re-recorded with `MAESTRO_GOLDEN_UPDATE=1`
+and travels in the same commit, so the diff shows the behaviour that changed
+next to the sentence that changed it. The herdr half of a case, the panes and
+prompts, is not replayed; the scripts pin the maestro spine of the round, which
+is why the cases that are mostly panes and relays have no script yet.
+
 ## What it looks like when it goes wrong
 
 - The Supervisor edits a file, prompts a Peer, or accepts a candidate: it has become a second Lead, and the Peer now has two authority paths.

@@ -32,6 +32,8 @@ const mechanismAllowlist: Record<string, string> = {
   HUMAN_DECISION_REQUIRED: "Attention finding label; it routes a decision rather than enforcing a boundary.",
   LEAD_COLLISION: "Attention finding label; it reports a collision rather than refusing an action.",
   LESSONS_PENDING: "Attention finding label; it observes pending corrections rather than refusing an action.",
+  MAESTRO_GOLDEN_UPDATE:
+    "Re-record switch for the scenario replay harness; it rewrites goldens rather than enforcing a boundary.",
   REOPEN_REQUEST: "Peer return status, not a runtime enforcement mechanism.",
   REPEATED_FAILURE: "Attention finding label; it aggregates failures rather than refusing an action.",
   SCOPE_COLLISION: "Attention finding label; it reports overlapping scopes rather than refusing an action.",

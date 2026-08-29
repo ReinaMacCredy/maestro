@@ -1,0 +1,54 @@
+# The self-improvement loop of d40, d42 and d44: a correction is filed as a lesson by
+# whoever made it, the improver reads lessons rather than free text, and every lesson
+# leaves the pile by a commit or by an answered rejection, never by deletion.
+$ maestro lesson file "the Lead dispatched a lane for a one-line doc fix" --expected "a one-line diff is done in place, with a card only for the claim" --why "a contract longer than the diff costs more than it protects" --target "recipe slp, Lane procedure" --evidence w41 --evidence h7
+l1 [pending] the Lead dispatched a lane for a one-line doc fix
+target: recipe slp, Lane procedure
+expected: a one-line diff is done in place, with a card only for the claim
+why: a contract longer than the diff costs more than it protects
+evidence: w41, h7
+project: repo
+
+$ maestro lesson file "the report named a candidate that was never verified" --expected "a done report names the sha the falsifier actually ran against" --why "an unverified candidate makes the gate a formality" --target "lead.md, reporting rule" --evidence w44
+l2 [pending] the report named a candidate that was never verified
+target: lead.md, reporting rule
+expected: a done report names the sha the falsifier actually ran against
+why: an unverified candidate makes the gate a formality
+evidence: w44
+project: repo
+
+$ maestro lesson list
+l1 [pending] (repo) recipe slp, Lane procedure | the Lead dispatched a lane for a one-line doc fix
+l2 [pending] (repo) lead.md, reporting rule | the report named a candidate that was never verified
+
+$ maestro lesson show l1
+l1 [pending] the Lead dispatched a lane for a one-line doc fix
+target: recipe slp, Lane procedure
+expected: a one-line diff is done in place, with a card only for the claim
+why: a contract longer than the diff costs more than it protects
+evidence: w41, h7
+project: repo
+
+$ maestro lesson process l1 --commit 1a2b3c4d
+l1 [processed] the Lead dispatched a lane for a one-line doc fix
+target: recipe slp, Lane procedure
+expected: a one-line diff is done in place, with a card only for the claim
+why: a contract longer than the diff costs more than it protects
+evidence: w41, h7
+project: repo
+commit: 1a2b3c4d
+
+$ maestro lesson process l2 --answer "the rule already says it; the lane misread it, so this is a prompt fix, not a doctrine edit"
+l2 [processed] the report named a candidate that was never verified
+target: lead.md, reporting rule
+expected: a done report names the sha the falsifier actually ran against
+why: an unverified candidate makes the gate a formality
+evidence: w44
+project: repo
+answer: the rule already says it; the lane misread it, so this is a prompt fix, not a doctrine edit
+
+$ maestro lesson list
+
+$ maestro lesson list --all
+l1 [processed] (repo) recipe slp, Lane procedure | the Lead dispatched a lane for a one-line doc fix
+l2 [processed] (repo) lead.md, reporting rule | the report named a candidate that was never verified

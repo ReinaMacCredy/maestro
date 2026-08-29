@@ -503,9 +503,13 @@ reconciles the two, reports done, and the room gates the result. A doctrine edit
 approved only by the model that wrote it is the failure this pairing exists to
 prevent.
 
-The harness is scenario golden output. The SLP scenarios and the cross-harness
-journey are replayable scripts, and an improver edit is accepted only when the
-replay still matches the golden set, or matches the change a lesson expected.
+The harness is scenario golden output. Each SLP scenario is a script of maestro
+commands with the transcript it produced beside it - in this repository,
+`tests/scenarios/<case>.script` and `<case>.golden`, replayed by
+`tests/scenario-golden.test.ts`. An improver edit is accepted only when the
+replay still matches the golden set, or matches the change a lesson expected; a
+change a lesson asked for is re-recorded with `MAESTRO_GOLDEN_UPDATE=1` and the
+new golden travels in the same commit as the edit.
 The harness is a prerequisite for the first improver run: lessons accumulate
 before it exists and LESSONS_PENDING stays visible, but the room does not relay
 "run the improver" until there is something to replay against.
