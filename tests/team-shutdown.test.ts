@@ -269,6 +269,133 @@ test("only the exact team Supervisor can reconcile or stop the generation", asyn
   });
 });
 
+test("Room emergency override requires unreachable Supervisor evidence or explicit owner intervention", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.root, "room");
+    await mkdir(room);
+    const fake = await installFakeHerdr(fixture);
+    await openTeam(fixture, room, "omega", fake.env);
+
+    const beforeDenied = await fakeHerdrCommands(fake);
+    const denied = await runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "reconcile",
+        "omega",
+        "--operation",
+        "reconcile-omega-room-denied",
+        "--requested-by",
+        "supervisor",
+        "--override-reason",
+        "team Supervisor stopped responding",
+        "--override-evidence",
+        "incident omega-1",
+        "--resource",
+        "supervisor",
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(denied.exitCode).toBe(1);
+    expect(envelope(denied.stderr).error).toMatchObject({
+      code: "TEAM_OVERRIDE_DENIED",
+      requestedBy: "supervisor",
+      supervisorReachable: true,
+    });
+    const deniedCommands = (await fakeHerdrCommands(fake)).slice(beforeDenied.length);
+    expect(deniedCommands.some((command) => command.slice(0, 2).join(" ") === "agent list")).toBe(true);
+    expect(
+      deniedCommands.some((command) =>
+        ["workspace create", "tab create", "agent start", "pane run", "pane close", "tab close"]
+          .includes(command.slice(0, 2).join(" "))
+      ),
+    ).toBe(false);
+
+    await editFakeHerdrState(fake, (state) => {
+      const agents = state.agents as Array<Record<string, any>>;
+      const supervisor = agents.find((agent) => agent.name === "supervisor-omega");
+      if (!supervisor) throw new Error("fake team Supervisor missing");
+      state.agents = agents.filter((agent) => agent.name !== "supervisor-omega");
+      delete (state.processes as Record<string, unknown>)[String(supervisor.pane_id)];
+    });
+
+    const reconciled = await runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "reconcile",
+        "omega",
+        "--operation",
+        "reconcile-omega-room-override",
+        "--requested-by",
+        "supervisor",
+        "--override-reason",
+        "team Supervisor is absent",
+        "--override-evidence",
+        "fresh runtime inspection found supervisor-omega missing",
+        "--resource",
+        "supervisor",
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(reconciled.exitCode, reconciled.stderr).toBe(0);
+    expect(envelope(reconciled.stdout).data).toMatchObject({
+      receipt: {
+        executedBy: "test-session",
+        overrideEvidence: {
+          basis: "supervisor-unreachable",
+          declared: "fresh runtime inspection found supervisor-omega missing",
+          missing: expect.arrayContaining([
+            expect.objectContaining({ code: "role.missing", resource: "team:omega:g1:supervisor" }),
+          ]),
+        },
+        overrideReason: "team Supervisor is absent",
+        requestedBy: "supervisor",
+      },
+      team: { verdict: "OPERABLE" },
+    });
+
+    const ownerStop = await runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "stop",
+        "omega",
+        "--operation",
+        "stop-omega-owner-override",
+        "--requested-by",
+        "owner",
+        "--owner-intervention",
+        "--override-reason",
+        "owner ordered immediate shutdown",
+        "--override-evidence",
+        "room decision d-owner-stop",
+        "--wait-ms",
+        "0",
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(ownerStop.exitCode, ownerStop.stderr).toBe(0);
+    expect(envelope(ownerStop.stdout).data.receipt).toMatchObject({
+      executedBy: "test-session",
+      overrideEvidence: {
+        basis: "owner-intervention",
+        declared: "room decision d-owner-stop",
+        missing: [],
+      },
+      overrideReason: "owner ordered immediate shutdown",
+      requestedBy: "owner",
+      result: "STOPPED",
+    });
+  });
+});
+
 test("normal stop closes work seats before sensor and Observer, Supervisor last, then proves absence", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
@@ -556,6 +683,8 @@ test("force stop requires explicit reason and evidence, records possible loss, a
     expect(result.receipt).toMatchObject({
       forced: true,
       missing: [],
+      overrideEvidence: null,
+      overrideReason: null,
       result: "FORCED_STOPPED",
     });
     expect(result.receipt.actual).toMatchObject({

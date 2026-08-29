@@ -152,6 +152,12 @@ All lifecycle operations run against the Room ledger:
   live while work roles reach their bounded stops, closes the team Supervisor
   last from the external Room control session, and records STOPPED only after
   fresh absence proof.
+- Emergency override is rejected while `supervisor-<team>` is reachable. An
+  absent or unreachable team Supervisor permits Room authority only with
+  `--requested-by supervisor`, `--override-reason`, and
+  `--override-evidence`; explicit owner intervention uses
+  `--requested-by owner --owner-intervention` with the same two evidence
+  fields. Override authority stays separate from force-stop loss authority.
 
 `team status` never upgrades health. STARTING, REVIEW_HOLD, DRAINING, and
 CLOSED are explicit non-operable results. Every protected project gate consumes

@@ -61,6 +61,14 @@ export interface TeamSnapshot extends TeamAxes {
   workspaceLabel: string;
 }
 
+export interface TeamOverrideEvidence {
+  basis: "supervisor-unreachable" | "owner-intervention";
+  declared: string;
+  inspectedAt: string | null;
+  missing: MissingPostcondition[];
+  runtimeRevision: string | null;
+}
+
 export interface TeamReceipt {
   actor: string;
   actual: Record<string, unknown> | null;
@@ -77,6 +85,8 @@ export interface TeamReceipt {
   observedAt: string | null;
   observedRuntimeRevision: string | null;
   operationId: string;
+  overrideEvidence: TeamOverrideEvidence | null;
+  overrideReason: string | null;
   requestedBy: string;
   result: string | null;
   status: "ATTEMPTED" | "FINALIZED";
@@ -117,6 +127,8 @@ interface ReceiptRow {
   observed_at: string | null;
   observed_runtime_revision: string | null;
   operation_id: string;
+  override_evidence_json: string | null;
+  override_reason: string | null;
   requested_by: string;
   result: string | null;
   status: "ATTEMPTED" | "FINALIZED";
@@ -137,6 +149,11 @@ interface DesiredOperation {
     reason: string;
   };
   plan: TeamPlan;
+}
+
+interface TeamAuthorityOverride {
+  evidence: TeamOverrideEvidence;
+  reason: string;
 }
 
 interface ReviewPacketRow {
@@ -257,6 +274,7 @@ function migrate(context: PluginContext): void {
       requested_by TEXT NOT NULL,
       executed_by TEXT NOT NULL,
       override_reason TEXT,
+      override_evidence_json TEXT,
       expected_revision INTEGER NOT NULL,
       observed_runtime_revision TEXT,
       attempted_at TEXT NOT NULL,
@@ -346,6 +364,16 @@ function migrate(context: PluginContext): void {
       completed_at TEXT
     );
   `);
+  context.store.ensureColumn(
+    "team_receipts",
+    "override_reason",
+    "ALTER TABLE team_receipts ADD COLUMN override_reason TEXT",
+  );
+  context.store.ensureColumn(
+    "team_receipts",
+    "override_evidence_json",
+    "ALTER TABLE team_receipts ADD COLUMN override_evidence_json TEXT",
+  );
   migrateTeamControlTables(context.store, process.cwd());
 }
 
@@ -436,6 +464,8 @@ function receiptFromRow(row: ReceiptRow): TeamReceipt {
     observedAt: row.observed_at,
     observedRuntimeRevision: row.observed_runtime_revision,
     operationId: row.operation_id,
+    overrideEvidence: json<TeamOverrideEvidence | null>(row.override_evidence_json ?? null, null),
+    overrideReason: row.override_reason ?? null,
     requestedBy: row.requested_by,
     result: row.result,
     status: row.status,
@@ -600,6 +630,7 @@ function insertAttempt(
     generation: number;
     kind: string;
     operationId: string;
+    override?: TeamAuthorityOverride | null;
     requestedBy: string;
     snapshot: TeamSnapshot | null;
     teamId: string;
@@ -611,8 +642,9 @@ function insertAttempt(
     .query(
       `INSERT INTO team_receipts
         (operation_id, kind, team_id, generation, actor, requested_by, executed_by,
-         expected_revision, attempted_at, before_json, desired_json, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ATTEMPTED')`,
+         override_reason, override_evidence_json, expected_revision, attempted_at,
+         before_json, desired_json, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ATTEMPTED')`,
     )
     .run(
       input.operationId,
@@ -622,6 +654,8 @@ function insertAttempt(
       session.id,
       input.requestedBy,
       session.id,
+      input.override?.reason ?? null,
+      input.override ? JSON.stringify(input.override.evidence) : null,
       input.desired.plan.expectedRevision,
       attemptedAt,
       JSON.stringify(baseAxes(input.snapshot)),
@@ -672,7 +706,6 @@ function finalizeReceiptAndSnapshot(
     forced?: boolean;
     inspection: TeamInspection;
     operationId: string;
-    overrideReason?: string;
     plan: TeamPlan;
     previous: TeamSnapshot | null;
     result: string;
@@ -698,7 +731,7 @@ function finalizeReceiptAndSnapshot(
         `UPDATE team_receipts
          SET observed_runtime_revision = ?, completed_at = ?, observed_at = ?,
              actual_json = ?, status = 'FINALIZED', result = ?, after_json = ?, missing_json = ?,
-             forced = ?, override_reason = ?
+             forced = ?
          WHERE operation_id = ? AND status = 'ATTEMPTED'`,
       )
       .run(
@@ -710,7 +743,6 @@ function finalizeReceiptAndSnapshot(
         JSON.stringify(after),
         JSON.stringify(input.inspection.missing),
         input.forced ? 1 : 0,
-        input.overrideReason ?? null,
         input.operationId,
       );
     if (finalized.changes !== 1) {
@@ -1307,6 +1339,7 @@ function reviewAxisOperation(
     axes: TeamAxes;
     kind: string;
     operationId: string;
+    override?: TeamAuthorityOverride | null;
     requestedBy: string;
     result: string;
     snapshot: TeamSnapshot;
@@ -1327,6 +1360,7 @@ function reviewAxisOperation(
       generation: input.snapshot.generation,
       kind: input.kind,
       operationId: input.operationId,
+      override: input.override,
       requestedBy: input.requestedBy,
       snapshot: input.snapshot,
       teamId: input.snapshot.teamId,
@@ -1413,7 +1447,183 @@ function assertTeamSupervisor(teamId: string, requestedBy: string): void {
   }
 }
 
-function clearReview(context: PluginContext, invocation: CliInvocation): CliResult {
+function authorityOverrideFromReceipt(row: ReceiptRow): TeamAuthorityOverride | null {
+  const evidenceJson = row.override_evidence_json ?? null;
+  const reason = row.override_reason ?? null;
+  if (reason === null && evidenceJson === null) return null;
+  if (reason === null || evidenceJson === null) {
+    throw new CliError(
+      "STORE_CORRUPT",
+      `${row.operation_id} has incomplete team override authority`,
+      { operationId: row.operation_id },
+    );
+  }
+  return {
+    evidence: json<TeamOverrideEvidence>(evidenceJson, {} as TeamOverrideEvidence),
+    reason,
+  };
+}
+
+function hasOverrideOptions(invocation: CliInvocation): boolean {
+  return invocation.options["override-reason"] !== undefined ||
+    invocation.options["override-evidence"] !== undefined ||
+    invocation.options["owner-intervention"] !== undefined;
+}
+
+async function authorizeActiveTeamMutation(
+  context: PluginContext,
+  runtime: TeamRuntime,
+  snapshot: TeamSnapshot,
+  invocation: CliInvocation,
+  existing: ReceiptRow | null,
+): Promise<{ override: TeamAuthorityOverride | null; requestedBy: string }> {
+  const teamId = snapshot.teamId;
+  const requestedBy = requiredStringOption(invocation, "requested-by");
+  const expected = `supervisor-${teamId}`;
+  const ownerIntervention = invocation.options["owner-intervention"] === true;
+
+  if (existing) {
+    if (existing.requested_by !== requestedBy) {
+      throw new CliError(
+        "OPERATION_CONFLICT",
+        `${existing.operation_id} was authorized by ${existing.requested_by}, not ${requestedBy}`,
+        {
+          attemptedRequestedBy: existing.requested_by,
+          operationId: existing.operation_id,
+          requestedBy,
+        },
+      );
+    }
+    const override = authorityOverrideFromReceipt(existing);
+    if (!override) {
+      if (hasOverrideOptions(invocation)) {
+        throw new CliError(
+          "OPERATION_CONFLICT",
+          `${existing.operation_id} was attempted without emergency override authority`,
+          { operationId: existing.operation_id },
+        );
+      }
+      assertTeamSupervisor(teamId, requestedBy);
+      return { override: null, requestedBy };
+    }
+    const reason = requiredStringOption(invocation, "override-reason");
+    const declared = requiredStringOption(invocation, "override-evidence");
+    const expectedOwnerIntervention = override.evidence.basis === "owner-intervention";
+    if (
+      override.reason !== reason ||
+      override.evidence.declared !== declared ||
+      ownerIntervention !== expectedOwnerIntervention
+    ) {
+      throw new CliError(
+        "OPERATION_CONFLICT",
+        `${existing.operation_id} override authority does not match its attempted receipt`,
+        { operationId: existing.operation_id },
+      );
+    }
+    return { override, requestedBy };
+  }
+
+  if (requestedBy === expected) {
+    if (hasOverrideOptions(invocation)) {
+      throw new CliError(
+        "INVALID_ARGUMENT",
+        `${expected} must use routine authority without emergency override flags`,
+        { requestedBy, teamId },
+      );
+    }
+    return { override: null, requestedBy };
+  }
+
+  if (requestedBy === "owner") {
+    if (!ownerIntervention) {
+      throw new CliError(
+        "TEAM_OVERRIDE_DENIED",
+        "owner emergency authority requires --owner-intervention",
+        { requestedBy, teamId },
+      );
+    }
+    const reason = requiredStringOption(invocation, "override-reason");
+    const declared = requiredStringOption(invocation, "override-evidence");
+    return {
+      override: {
+        evidence: {
+          basis: "owner-intervention",
+          declared,
+          inspectedAt: null,
+          missing: [],
+          runtimeRevision: null,
+        },
+        reason,
+      },
+      requestedBy,
+    };
+  }
+
+  if (requestedBy !== "supervisor") {
+    assertTeamSupervisor(teamId, requestedBy);
+  }
+  if (ownerIntervention) {
+    throw new CliError(
+      "TEAM_OVERRIDE_DENIED",
+      "--owner-intervention requires --requested-by owner",
+      { requestedBy, teamId },
+    );
+  }
+  const reason = requiredStringOption(invocation, "override-reason");
+  const declared = requiredStringOption(invocation, "override-evidence");
+  const plan = planForSnapshot(context, snapshot);
+  let inspection: TeamInspection;
+  try {
+    inspection = await runtime.inspect(plan, snapshot.resources);
+  } catch (error) {
+    const failed = runtimeFailureInspection(error);
+    throw new CliError(
+      "TEAM_OVERRIDE_UNPROVEN",
+      `cannot prove supervisor-${teamId} absent or unreachable`,
+      {
+        missing: failed.missing,
+        requestedBy,
+        supervisorReachable: null,
+        teamId,
+      },
+    );
+  }
+  const supervisorResource = plan.roles.find((role) => role.role === "supervisor")?.resourceKey;
+  const unreachableCodes = new Set(["role.missing", "role.pane", "role.process", "role.unreachable"]);
+  const missing = inspection.missing.filter(
+    (item) => item.resource === supervisorResource && unreachableCodes.has(item.code),
+  );
+  if (missing.length === 0) {
+    throw new CliError(
+      "TEAM_OVERRIDE_DENIED",
+      `supervisor-${teamId} is reachable; Room emergency override is not permitted`,
+      {
+        requestedBy,
+        supervisorReachable: true,
+        teamId,
+      },
+    );
+  }
+  return {
+    override: {
+      evidence: {
+        basis: "supervisor-unreachable",
+        declared,
+        inspectedAt: inspection.inspectedAt,
+        missing,
+        runtimeRevision: inspection.runtimeRevision,
+      },
+      reason,
+    },
+    requestedBy,
+  };
+}
+
+async function clearReview(
+  context: PluginContext,
+  runtime: TeamRuntime,
+  invocation: CliInvocation,
+): Promise<CliResult> {
   const teamId = normalizeTeamId(requiredPosition(invocation, 0, "team id"));
   const operationId = requiredOperation(invocation);
   const existing = findReceipt(context, operationId);
@@ -1425,8 +1635,6 @@ function clearReview(context: PluginContext, invocation: CliInvocation): CliResu
     };
   }
   const snapshot = requireSnapshot(context, teamId);
-  const requestedBy = requiredStringOption(invocation, "requested-by");
-  assertTeamSupervisor(teamId, requestedBy);
   const rationale = requiredStringOption(invocation, "rationale");
   if (snapshot.review !== "REVIEW_REQUIRED") {
     throw new CliError("INVALID_STATE", `${teamId} has no review hold to clear`, {
@@ -1434,12 +1642,20 @@ function clearReview(context: PluginContext, invocation: CliInvocation): CliResu
       teamId,
     });
   }
+  const authority = await authorizeActiveTeamMutation(
+    context,
+    runtime,
+    snapshot,
+    invocation,
+    existing,
+  );
   const resolvedAt = new Date().toISOString();
   const outcome = reviewAxisOperation(context, {
     axes: { health: snapshot.health, review: "CLEAR", stage: snapshot.stage },
     kind: "team.review.clear",
     operationId,
-    requestedBy,
+    override: authority.override,
+    requestedBy: authority.requestedBy,
     result: "REVIEW_CLEAR",
     snapshot,
     transactionMutation: () => {
@@ -1458,7 +1674,11 @@ function clearReview(context: PluginContext, invocation: CliInvocation): CliResu
   };
 }
 
-function escalateReview(context: PluginContext, invocation: CliInvocation): CliResult {
+async function escalateReview(
+  context: PluginContext,
+  runtime: TeamRuntime,
+  invocation: CliInvocation,
+): Promise<CliResult> {
   const teamId = normalizeTeamId(requiredPosition(invocation, 0, "team id"));
   const baseOperationId = requiredOperation(invocation);
   const reviewOperationId = `${baseOperationId}:review`;
@@ -1476,8 +1696,6 @@ function escalateReview(context: PluginContext, invocation: CliInvocation): CliR
       text: `${teamId} review escalated to DEGRADED`,
     };
   }
-  const requestedBy = requiredStringOption(invocation, "requested-by");
-  assertTeamSupervisor(teamId, requestedBy);
   const rationale = requiredStringOption(invocation, "rationale");
   const before = requireSnapshot(context, teamId);
   if (before.review !== "REVIEW_REQUIRED") {
@@ -1486,12 +1704,20 @@ function escalateReview(context: PluginContext, invocation: CliInvocation): CliR
       teamId,
     });
   }
+  const authority = await authorizeActiveTeamMutation(
+    context,
+    runtime,
+    before,
+    invocation,
+    existingReview ?? existingHealth,
+  );
   const resolvedAt = new Date().toISOString();
   const reviewOutcome = reviewAxisOperation(context, {
     axes: { health: before.health, review: "CLEAR", stage: before.stage },
     kind: "team.review.escalate.review",
     operationId: reviewOperationId,
-    requestedBy,
+    override: authority.override,
+    requestedBy: authority.requestedBy,
     result: "REVIEW_ESCALATED",
     snapshot: before,
     transactionMutation: () => {
@@ -1508,7 +1734,8 @@ function escalateReview(context: PluginContext, invocation: CliInvocation): CliR
     axes: { health: "DEGRADED", review: reviewOutcome.team.review, stage: reviewOutcome.team.stage },
     kind: "team.review.escalate.health",
     operationId: healthOperationId,
-    requestedBy,
+    override: authority.override,
+    requestedBy: authority.requestedBy,
     result: "DEGRADED",
     snapshot: reviewOutcome.team,
   });
@@ -1826,8 +2053,6 @@ async function reconcileTeam(
       teamId,
     });
   }
-  const requestedBy = requiredStringOption(invocation, "requested-by");
-  assertTeamSupervisor(teamId, requestedBy);
   const rawResources = [...new Set(stringOptions(invocation, "resource"))];
   const allowedResources = new Set<TeamRepairResource>([
     "workspace",
@@ -1850,6 +2075,13 @@ async function reconcileTeam(
     );
   }
   const resources = rawResources as TeamRepairResource[];
+  const authority = await authorizeActiveTeamMutation(
+    context,
+    runtime,
+    snapshot,
+    invocation,
+    existing,
+  );
   const plan = planForSnapshot(context, snapshot);
   if (!existing) {
     insertAttempt(context, {
@@ -1857,7 +2089,8 @@ async function reconcileTeam(
       generation: snapshot.generation,
       kind: "team.reconcile",
       operationId,
-      requestedBy,
+      override: authority.override,
+      requestedBy: authority.requestedBy,
       snapshot,
       teamId,
     });
@@ -2152,8 +2385,6 @@ async function stopTeam(
       teamId,
     });
   }
-  const requestedBy = requiredStringOption(invocation, "requested-by");
-  assertTeamSupervisor(teamId, requestedBy);
   const priorStage = findReceipt(context, `${operationId}:stage`);
   if (priorStage) validateReceiptIdentity(priorStage, "team.stop.stage", teamId);
   const resumingStagedOperation =
@@ -2189,6 +2420,14 @@ async function stopTeam(
       { currentGeneration: snapshot.generation, operationGeneration: existing.generation },
     );
   }
+  const authority = await authorizeActiveTeamMutation(
+    context,
+    runtime,
+    snapshot,
+    invocation,
+    existing ?? (resumingStagedOperation ? priorStage : null),
+  );
+  const requestedBy = authority.requestedBy;
 
   if (snapshot.stage !== "STOPPING") {
     const stageOperationId = `${operationId}:stage`;
@@ -2203,6 +2442,7 @@ async function stopTeam(
           generation: snapshot.generation,
           kind: "team.stop.stage",
           operationId: stageOperationId,
+          override: authority.override,
           requestedBy,
           snapshot,
           teamId,
@@ -2246,6 +2486,7 @@ async function stopTeam(
       generation: snapshot.generation,
       kind: "team.stop",
       operationId,
+      override: authority.override,
       requestedBy,
       snapshot,
       teamId,
@@ -2340,7 +2581,6 @@ async function stopTeam(
     forced,
     inspection,
     operationId,
-    overrideReason: forced ? forceReason ?? undefined : undefined,
     plan: desired.plan,
     previous: snapshot,
     result,
@@ -2394,6 +2634,21 @@ const commonMutationFlags = {
   "--requested-by": {
     description: "Record the authorizing actor separately from the executing session.",
     value: true,
+  },
+};
+
+const activeTeamAuthorityFlags = {
+  ...commonMutationFlags,
+  "--override-evidence": {
+    description: "Cite evidence for a Room or owner emergency override.",
+    value: true,
+  },
+  "--override-reason": {
+    description: "Record why emergency override authority is necessary.",
+    value: true,
+  },
+  "--owner-intervention": {
+    description: "Record explicit owner intervention as emergency authority.",
   },
 };
 
@@ -2612,11 +2867,11 @@ export const teamPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "team review clear",
-        (invocation) => clearReview(context, invocation),
+        (invocation) => clearReview(context, runtime, invocation),
         {
           description: "Clear REVIEW_REQUIRED with team-Supervisor rationale.",
           flags: {
-            ...commonMutationFlags,
+            ...activeTeamAuthorityFlags,
             "--rationale": { description: "Record why the finding is resolved.", value: true },
           },
           json: true,
@@ -2629,11 +2884,11 @@ export const teamPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "team review escalate",
-        (invocation) => escalateReview(context, invocation),
+        (invocation) => escalateReview(context, runtime, invocation),
         {
           description: "Resolve review and record a separate DEGRADED health receipt.",
           flags: {
-            ...commonMutationFlags,
+            ...activeTeamAuthorityFlags,
             "--rationale": { description: "Record why the review becomes a health failure.", value: true },
           },
           json: true,
@@ -2671,7 +2926,7 @@ export const teamPlugin: BuiltInPlugin = {
         {
           description: "Repair explicitly selected team resources and re-prove readiness.",
           flags: {
-            ...commonMutationFlags,
+            ...activeTeamAuthorityFlags,
             "--resource": {
               description: "Repair one named team resource.",
               multiple: true,
@@ -2692,7 +2947,7 @@ export const teamPlugin: BuiltInPlugin = {
         {
           description: "Drain and stop one team generation.",
           flags: {
-            ...commonMutationFlags,
+            ...activeTeamAuthorityFlags,
             "--evidence": { description: "Cite evidence authorizing possible loss.", value: true },
             "--force": { description: "Bypass unsettled work with a forced-loss receipt." },
             "--reason": { description: "Record why forced shutdown is necessary.", value: true },

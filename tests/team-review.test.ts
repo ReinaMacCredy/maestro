@@ -362,7 +362,12 @@ test("health preserves review and escalation uses separate review and health rec
         "--operation",
         "escalate-kappa-1",
         "--requested-by",
-        "supervisor-kappa",
+        "owner",
+        "--owner-intervention",
+        "--override-reason",
+        "owner requires the authority violation to drain the team",
+        "--override-evidence",
+        "room decision d-kappa-drain",
         "--rationale",
         "authority violation requires runtime drain",
         "--json",
@@ -380,6 +385,17 @@ test("health preserves review and escalation uses separate review and health rec
       "team.review.escalate.review",
       "team.review.escalate.health",
     ]);
+    for (const receipt of result.receipts) {
+      expect(receipt).toMatchObject({
+        overrideEvidence: {
+          basis: "owner-intervention",
+          declared: "room decision d-kappa-drain",
+          missing: [],
+        },
+        overrideReason: "owner requires the authority violation to drain the team",
+        requestedBy: "owner",
+      });
+    }
   });
 });
 

@@ -1910,6 +1910,9 @@ test("533 [lint] the slp recipe carries the supervised team lifecycle", async ()
     "`maestro team stop`",
   ]) expect(slp).toContain(command);
   expect(slp).toContain("supervised check");
+  expect(slp).toContain("`--override-reason`");
+  expect(slp).toContain("`--override-evidence`");
+  expect(slp).toContain("`--requested-by owner --owner-intervention`");
   const teams = raw.split("## Teams")[1]?.split("\n## ")[0] ?? "";
   expect(teams).not.toContain("observer-watch");
   expect(teams).not.toContain("herdr workspace create");
@@ -1955,6 +1958,9 @@ test("534 [lint] installed lead guidance routes topology through the Room lifecy
     expect(lead).toContain("supervised check");
     expect(lead).toContain("snapshot only");
     expect(lead).toContain("fresh runtime inspection");
+    expect(lead).toContain("--override-reason");
+    expect(lead).toContain("--override-evidence");
+    expect(lead).toContain("--requested-by owner --owner-intervention");
     expect(lead).not.toContain("observer-watch");
     expect(lead).not.toContain("herdr workspace create");
     expect(lead).not.toContain("herdr tab create");
