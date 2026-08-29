@@ -11,6 +11,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.113.1] - 2026-08-29
+
+The patch that retires the run-update-twice rule and puts the loop on the site.
+One `maestro update` now brings the room fully onto the commit it installs, the
+self-improvement loop has a page a reader can land on, and the first improver
+run turns five corrections from a live team into four doctrine edits.
+
 ### Added
 
 - Documentation site: a Self-improvement guide covering the loop end to end for

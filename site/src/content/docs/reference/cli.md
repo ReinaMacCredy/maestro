@@ -4,7 +4,7 @@ description: Every top-level verb reported by the installed Maestro shim at comm
 ---
 
 This reference was generated from the installed `maestro` shim at
-commit `2be4788b2832511595ea6661b904af8261c036fd`, released as 0.113.0.
+commit `2be4788b2832511595ea6661b904af8261c036fd`, released as 0.113.1.
 
 ```sh
 maestro help
