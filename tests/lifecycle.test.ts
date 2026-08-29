@@ -794,13 +794,16 @@ test("53 a clean install type-checks without runtime dependencies", async () => 
   });
 }, 10_000);
 
-test("231 update on a source branch with no upstream resyncs instead of erroring", async () => {
+test("231 update on a no-upstream branch in a checkout with no remote resyncs instead of erroring", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
 
-    // The local-development shape this repo has run in for hundreds of commits:
-    // a working branch nobody has pushed, so there is no upstream to pull from.
+    // The half of d38 that survives d728: a checkout with no remote at all, where
+    // a working branch has nothing to pull and no published line to be measured
+    // against. With a remote present the same shape is unreviewed code and
+    // update refuses it (test 561).
+    await git(source, ["remote", "remove", "origin"]);
     await git(source, ["checkout", "-b", "local-only"]);
     await writeFile(join(source, "local-only-note.txt"), "local only\n");
     await git(source, ["add", "local-only-note.txt"]);
@@ -815,6 +818,61 @@ test("231 update on a source branch with no upstream resyncs instead of erroring
     expect(await git(source, ["rev-parse", "HEAD"])).toBe(head);
     const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
     expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(head);
+  });
+});
+
+test("561 update refuses a source branch no remote has published and names it (d728)", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const installed = await git(source, ["rev-parse", "HEAD"]);
+
+    // l6's shape: every lane branches inside the source checkout, so the drift
+    // nag can name a lane commit and the update it asks for installs unreviewed
+    // code as the room's runtime.
+    await git(source, ["checkout", "-b", "improver/w557"]);
+    await writeFile(join(source, "lane-note.txt"), "lane work\n");
+    await git(source, ["add", "lane-note.txt"]);
+    await git(source, ["commit", "-m", "lane work nobody has pushed"]);
+    const lane = await git(source, ["rev-parse", "HEAD"]);
+    expect(lane).not.toBe(installed);
+
+    const refused = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.stderr).toContain("UPDATE_SOURCE_UNPUBLISHED");
+    expect(refused.stderr).toContain("improver/w557");
+    // Nothing installed and nothing moved: the runtime still stamps the commit
+    // it was installed from.
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(installed);
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(lane);
+  });
+});
+
+test("562 the drift nag names the source branch and the commits no remote holds (d728)", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // The residual d728 records rather than closes: main tracks an upstream and
+    // is only ahead of it, which update accepts, so the count is the only thing
+    // that says the runtime would be built from commits nobody has published.
+    await writeFile(join(source, "drift.txt"), "drift\n");
+    await git(source, ["add", "drift.txt"]);
+    await git(source, ["commit", "-m", "unpublished work on main"]);
+    const ahead = await runInstalled(fixture, runtime, source, ["status"]);
+
+    expect(ahead.stdout).toContain("run maestro update");
+    expect(ahead.stdout).toContain("on main (1 commit no remote holds)");
+
+    await git(source, ["checkout", "-b", "improver/w557"]);
+    await writeFile(join(source, "lane-note.txt"), "lane work\n");
+    await git(source, ["add", "lane-note.txt"]);
+    await git(source, ["commit", "-m", "lane work"]);
+    const lane = await runInstalled(fixture, runtime, source, ["status"]);
+
+    expect(lane.stdout).toContain("on improver/w557 (2 commits no remote holds)");
   });
 });
 

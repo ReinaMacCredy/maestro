@@ -231,6 +231,17 @@ async function update(): Promise<CliResult> {
   // the ahead-only path below already rules is not an error. Resync the runtime
   // and name the missing upstream so a real misconfiguration stays visible (d38).
   const noUpstream = !pinned && (upstream.exitCode !== 0 || !upstream.stdout);
+  // Every lane branches inside this same checkout, so a branch no remote has
+  // published is unreviewed code, and the drift nag that asks for the update
+  // reads the same either way (d728). d38's ruling that a missing upstream is
+  // not an error survives where it was written, a checkout with no remote.
+  if (noUpstream && (await command(source, ["git", "remote"])).stdout) {
+    throw new CliError(
+      "UPDATE_SOURCE_UNPUBLISHED",
+      `Maestro source is on ${branch.stdout}, a branch no remote has published; check out the branch the runtime follows, then run maestro update, or run maestro install from ${source} to install this branch on purpose`,
+      { fix: `check out the branch the runtime follows in ${source}, then run maestro update` },
+    );
+  }
   const sourceBranch = noUpstream
     ? (await command(source, ["git", "rev-parse", "--abbrev-ref", "HEAD"])).stdout || "HEAD"
     : "";
@@ -376,7 +387,23 @@ export async function driftAdvisory(_home: string, runningRoot: string): Promise
   if (stampRead.status !== "valid" || recordRead.status !== "valid") return "";
   const sourceCommit = await readGitHeadCommit(recordRead.record.path);
   if (!sourceCommit || sourceCommit === stampRead.stamp.commit) return "";
-  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} differs from source ${sourceCommit.slice(0, 8)}; run maestro update`;
+  const source = recordRead.record.path;
+  const branch = await command(source, ["git", "symbolic-ref", "--quiet", "--short", "HEAD"]);
+  const where = branch.stdout ? `on ${branch.stdout}` : "on a detached HEAD";
+  // The branch says which line the update would install; the count says how much
+  // of it nobody else can see, which is the shape update still accepts on a
+  // tracking branch that is only ahead (d728). Both are meaningless without a
+  // remote to be unpublished against.
+  const counted = (await command(source, ["git", "remote"])).stdout
+    ? Number((await command(source, ["git", "rev-list", "--count", "HEAD", "--not", "--remotes"])).stdout)
+    : 0;
+  // A nag is advisory: a git call that fails here drops the count rather than
+  // printing NaN beside a commit the reader is meant to trust.
+  const unpublished = Number.isFinite(counted) ? counted : 0;
+  const held = unpublished > 0
+    ? ` (${unpublished} commit${unpublished === 1 ? "" : "s"} no remote holds)`
+    : "";
+  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} differs from source ${sourceCommit.slice(0, 8)} ${where}${held}; run maestro update`;
 }
 
 async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {

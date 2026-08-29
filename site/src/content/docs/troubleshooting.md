@@ -37,6 +37,28 @@ The recorded source checkout has tracked local changes. Commit or stash those
 changes, then run `maestro update`. Untracked installer wiring is ignored by
 the dirty check; tracked changes are not.
 
+## `UPDATE_SOURCE_UNPUBLISHED`
+
+The recorded source checkout has a remote but sits on a branch no remote has
+published, so an update would install code nobody else can see. Lanes branch
+inside the same checkout the runtime is installed from, so this is the ordinary
+way an unreviewed branch becomes the runtime. Check out the branch the runtime
+follows, then run `maestro update`; to install the current branch on purpose,
+run `maestro install` from that checkout. A checkout with no remote at all is
+not affected: a branch there has nothing to be unpublished against.
+
+The drift line names both halves of the same fact, so the branch is visible
+before the update rather than after it:
+
+```
+[update] runtime 24002076 differs from source 8cc27daa on main (2 commits no remote holds); run maestro update
+```
+
+The count is every commit reachable from `HEAD` that no remote-tracking ref
+holds. A tracking branch that is only ahead of its upstream still updates, so
+on that path the count is the only signal that the runtime would be built from
+unpublished commits.
+
 ## `LEASE_REQUIRED`
 
 The verb acts on a lease that does not exist. `maestro work release` raises it

@@ -11,6 +11,18 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Changed
+
+- `maestro update` refuses a source checkout that has a remote but sits on a
+  branch no remote has published, with `UPDATE_SOURCE_UNPUBLISHED` naming the
+  branch and the next command; lanes branch inside the checkout the runtime is
+  installed from, so an unpublished branch there is unreviewed code. A checkout
+  with no remote is unaffected.
+- The drift line names the branch it read the source commit from and the number
+  of commits no remote holds, so a line that means the runtime is behind can no
+  longer read the same as a line that means the runtime would be built from a
+  lane branch.
+
 ## [0.113.1] - 2026-08-29
 
 The patch that retires the run-update-twice rule and puts the loop on the site.
