@@ -122,6 +122,11 @@ inside the room store to record that the store is the Supervisor's.
 - `show <id>` reads one lesson and its evidence.
 - `list [--all] [--project <value>]` lists pending lessons; `--all` includes
   processed ones.
+- `render` writes `~/maestro/PROJECT/<project>.md`, one file per project tag,
+  from the store it runs in plus every store in `~/maestro/registry`, read
+  through a read-only child. Pending and processed lessons both appear, so a
+  new team inherits the whole record. The room runs it before it hands intent
+  to a Lead; the files are a view and are never hand-edited.
 
 ### `bundle`
 

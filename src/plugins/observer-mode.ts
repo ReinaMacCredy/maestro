@@ -7,6 +7,7 @@ const observerPlugins = new Set([
   "decision",
   "dispatch",
   "import-rust",
+  "lesson",
   "lifecycle",
   "mcp",
   "observability",

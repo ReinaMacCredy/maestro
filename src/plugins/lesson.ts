@@ -1,4 +1,6 @@
-import { basename, dirname } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   CliError,
   requiredPosition,
@@ -113,6 +115,86 @@ function format(lesson: LessonRecord): string {
 
 function line(lesson: LessonRecord): string {
   return `${lesson.id} [${lesson.state}] (${lesson.project}) ${lesson.target} | ${lesson.happened}`;
+}
+
+interface SourcedLesson {
+  lesson: LessonRecord;
+  source: string;
+}
+
+interface RepoLessons {
+  error: boolean;
+  lessons: LessonRecord[];
+  missing: boolean;
+  repo: string;
+}
+
+async function registeredRepos(home: string): Promise<string[]> {
+  const registry = join(home, "maestro", "registry");
+  if (!existsSync(registry)) return [];
+  return (await readFile(registry, "utf8")).split(/\r?\n/).filter(Boolean);
+}
+
+// The store a repository owns is read through its own CLI, never by opening its
+// database here: the child is what keeps a store too new to read honest.
+async function readRepoLessons(repo: string): Promise<RepoLessons> {
+  if (!existsSync(repo) || !existsSync(join(repo, ".maestro"))) {
+    return { error: false, lessons: [], missing: true, repo };
+  }
+  const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
+  const child = Bun.spawn([process.execPath, cli, "lesson", "list", "--all", "--json"], {
+    cwd: repo,
+    env: { ...process.env, MAESTRO_READ_ONLY: "1" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, , exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) return { error: true, lessons: [], missing: false, repo };
+  try {
+    const envelope = JSON.parse(stdout) as { data?: { lessons?: LessonRecord[] } };
+    return { error: false, lessons: envelope.data?.lessons ?? [], missing: false, repo };
+  } catch {
+    return { error: true, lessons: [], missing: false, repo };
+  }
+}
+
+function entry({ lesson, source }: SourcedLesson): string {
+  return [
+    `### ${lesson.id} (${basename(source)}) ${lesson.happened}`,
+    `- target: ${lesson.target}`,
+    `- expected: ${lesson.expected}`,
+    `- why: ${lesson.why}`,
+    `- evidence: ${lesson.evidence.join(", ")}`,
+    lesson.commit ? `- commit: ${lesson.commit}` : null,
+    lesson.answer ? `- answer: ${lesson.answer}` : null,
+    `- filed: ${lesson.createdAt}`,
+    `- source: ${source}`,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+}
+
+function view(project: string, sourced: SourcedLesson[]): string {
+  const section = (title: string, state: "pending" | "processed"): string[] => {
+    const entries = sourced.filter((item) => item.lesson.state === state).map(entry);
+    return entries.length === 0 ? [] : [`## ${title}`, "", entries.join("\n\n")];
+  };
+  return [
+    `# Lessons: ${project}`,
+    "",
+    "Rendered by `maestro lesson render` from the room store and every registered",
+    "repository's store. This file is a view and is never hand-edited: an edit here",
+    "is lost on the next render. File a correction with `maestro lesson file`.",
+    "",
+    ...section("Pending", "pending"),
+    "",
+    ...section("Processed", "processed"),
+    "",
+  ].join("\n");
 }
 
 export const lessonPlugin: BuiltInPlugin = {
@@ -291,6 +373,54 @@ export const lessonPlugin: BuiltInPlugin = {
           "--project": { description: "Only lessons tagged with this project.", value: true },
         },
         mutates: false,
+      }),
+    );
+
+    context.effect(() =>
+      context.cli.register("lesson render", async (): Promise<CliResult> => {
+        const home = process.env["HOME"] ?? process.cwd();
+        const local = dirname(dirname(context.store.path));
+        const repos = (await registeredRepos(home)).filter((repo) => resolve(repo) !== local);
+        const scanned = await Promise.all(repos.map(readRepoLessons));
+        const sourced: SourcedLesson[] = [
+          ...service.list({ all: true }).map((lesson) => ({ lesson, source: local })),
+          ...scanned.flatMap((result) =>
+            result.lessons.map((lesson) => ({ lesson, source: result.repo }))
+          ),
+        ];
+
+        const byProject = new Map<string, SourcedLesson[]>();
+        for (const item of sourced) {
+          const group = byProject.get(item.lesson.project) ?? [];
+          group.push(item);
+          byProject.set(item.lesson.project, group);
+        }
+
+        const directory = join(home, "maestro", "PROJECT");
+        await mkdir(directory, { recursive: true });
+        const written: string[] = [];
+        for (const [project, group] of [...byProject].sort(([a], [b]) => a.localeCompare(b))) {
+          group.sort((left, right) => left.lesson.createdAt.localeCompare(right.lesson.createdAt));
+          const path = join(directory, `${project}.md`);
+          await writeFile(path, view(project, group));
+          const pending = group.filter((item) => item.lesson.state === "pending").length;
+          written.push(`PROJECT/${project}.md: ${group.length} lessons (${pending} pending)`);
+        }
+
+        const unavailable = scanned.flatMap((result) =>
+          result.missing
+            ? [`skipped: ${result.repo} (missing)`]
+            : result.error
+              ? [`Unreadable repository: ${result.repo}`]
+              : []
+        );
+        const lines = [...written, ...unavailable];
+        return {
+          data: { directory, projects: [...byProject.keys()], written: written.length },
+          text: lines.length > 0 ? lines.join("\n") : "No lessons to render.",
+        };
+      }, {
+        description: "Render the per-project lesson view under ~/maestro/PROJECT.",
       }),
     );
   },

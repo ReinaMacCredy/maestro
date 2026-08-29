@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runCli, withFixture, type Fixture } from "./helpers.ts";
+import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 interface LessonRow {
   answer: string | null;
@@ -238,5 +238,66 @@ test("550 brief carries LESSONS_PENDING from a registered project (w551/d42)", a
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain("LESSONS_PENDING");
     expect(brief.stdout).toContain(fixture.repo);
+  });
+});
+
+async function makeStore(path: string): Promise<void> {
+  await mkdir(join(path, ".maestro", "plugins"), { recursive: true });
+  await writeFile(join(path, ".maestro", "config"), `${JSON.stringify({ plugins: [] })}\n`);
+}
+
+test("551 the room renders one project view from its own store and the repository's (w552/d725)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    await writeFile(join(room, "registry"), `${fixture.repo}\n${join(fixture.root, "gone")}\n`);
+
+    expect((await runCli(fixture, fileArgs("the Lead closed a relay in two commands"))).exitCode)
+      .toBe(0);
+    const roomFiled = await runCliAt(
+      fixture,
+      room,
+      fileArgs("the room relayed intent without naming the report target", [
+        "--project",
+        "repo",
+      ]),
+    );
+    expect(roomFiled.exitCode).toBe(0);
+
+    const rendered = await runCliAt(fixture, room, ["lesson", "render"]);
+    expect(rendered.exitCode).toBe(0);
+    expect(rendered.stdout).toContain("PROJECT/repo.md");
+
+    const view = await readFile(join(room, "PROJECT", "repo.md"), "utf8");
+    // Both stores reach one view: the repository files its own corrections and
+    // the room files the ones it makes about that project.
+    expect(view).toContain("the Lead closed a relay in two commands");
+    expect(view).toContain("the room relayed intent without naming the report target");
+    expect(view).toContain("a relay card closes in one command");
+    // A rendered view says so: an edit here is lost on the next render.
+    expect(view).toContain("maestro lesson render");
+    expect(view).toContain("never hand-edited");
+    // A registry entry that is not there is skipped, not an error.
+    expect(rendered.stdout).toContain("skipped");
+  });
+});
+
+test("552 a new team inherits processed lessons as well as pending ones (w552/d42)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    await writeFile(join(room, "registry"), `${fixture.repo}\n`);
+
+    expect((await runCli(fixture, fileArgs("the correction already answered"))).exitCode).toBe(0);
+    expect((await runCli(fixture, fileArgs("the correction still open"))).exitCode).toBe(0);
+    expect((await runCli(fixture, ["lesson", "process", "l1", "--commit", "25f6cd03"])).exitCode)
+      .toBe(0);
+
+    expect((await runCliAt(fixture, room, ["lesson", "render"])).exitCode).toBe(0);
+    const view = await readFile(join(room, "PROJECT", "repo.md"), "utf8");
+
+    expect(view).toContain("the correction still open");
+    expect(view).toContain("the correction already answered");
+    expect(view).toContain("25f6cd03");
   });
 });

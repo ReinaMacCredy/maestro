@@ -488,7 +488,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
     );
     expect(lead).toContain(
-      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>."`',
+      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read `~/maestro/PROJECT/<repo basename>.md` before your first card, it holds every correction already filed against this project."`',
     );
     expect(lead).toContain(
       "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
@@ -2100,5 +2100,18 @@ test("539 [lint] the room holds owner authority in full behind the external-effe
     // AGENTS.md and CLAUDE.md are the same generated text and both say it.
     expect(agents).toContain("It holds the owner's authority in full");
     expect(claude).toBe(await readFile(join(room, "AGENTS.md"), "utf8"));
+  });
+});
+
+test("553 [lint] the room renders the project view and hands it to a new Lead (w552/d42)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = flat(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8"));
+
+    // The view is rendered before it is handed, so the Lead reads it fresh.
+    expect(lead).toContain("`maestro lesson render`");
+    expect(lead).toContain("~/maestro/PROJECT/<repo basename>.md");
+    expect(lead).toContain("before your first card");
   });
 });
