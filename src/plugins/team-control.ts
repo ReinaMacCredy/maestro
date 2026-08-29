@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { Store, resolveStoreLocation } from "../kernel/store.ts";
 import {
@@ -366,6 +366,16 @@ export class TeamControl {
         bound: true,
         receiptId: null,
         reason: `project binding store path does not match the current store: bound ${canonicalPath(binding.projectStorePath)}, current ${canonicalPath(this.localStore.path)}`,
+        verdict: "CLOSED",
+      };
+    }
+    if (!existsSync(binding.roomStorePath)) {
+      return {
+        allowed: false,
+        binding,
+        bound: true,
+        receiptId: null,
+        reason: `Room ledger unavailable: ${binding.roomStorePath} does not exist`,
         verdict: "CLOSED",
       };
     }

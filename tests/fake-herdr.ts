@@ -20,6 +20,7 @@ export interface FakeHerdrFixture {
 
 const fakeHerdrSource = `#!/usr/bin/env bun
 import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { Database } from "bun:sqlite";
 
 const args = Bun.argv.slice(2);
 const statePath = Bun.env.FAKE_HERDR_STATE;
@@ -39,6 +40,30 @@ const respond = async (result) => {
 };
 
 const command = args.slice(0, 2).join(" ");
+const receiptDatabasePath = Bun.env.FAKE_HERDR_RECEIPT_DB;
+const receiptOperation = Bun.env.FAKE_HERDR_RECEIPT_OPERATION;
+const receiptTeam = Bun.env.FAKE_HERDR_RECEIPT_TEAM;
+if (receiptDatabasePath && receiptOperation && receiptTeam) {
+  const database = new Database(receiptDatabasePath, { create: false, readonly: true, strict: true });
+  const receipt = database
+    .query("SELECT status FROM team_receipts WHERE operation_id = ?")
+    .get(receiptOperation);
+  const snapshot = database
+    .query("SELECT COUNT(*) AS count FROM team_lifecycle WHERE team_id = ?")
+    .get(receiptTeam);
+  database.close();
+  const audit = {
+    command,
+    receiptStatus: receipt?.status ?? null,
+    snapshotCount: snapshot?.count ?? 0,
+  };
+  state.receipt_audit.push(audit);
+  if (audit.receiptStatus !== "ATTEMPTED" || audit.snapshotCount !== 0) {
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stderr.write("runtime command ran outside ATTEMPTED receipt: " + JSON.stringify(audit) + "\\n");
+    process.exit(65);
+  }
+}
 if (command === "workspace list") {
   await respond({ type: "workspace_list", workspaces: state.workspaces });
 } else if (command === "workspace create") {
@@ -227,6 +252,7 @@ export async function installFakeHerdr(
       panes: [],
       processes: {},
       prompts: [],
+      receipt_audit: [],
       outputs: {},
       sequence: 0,
       tabs: [],

@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Store } from "../src/kernel/store.ts";
+import {
+  TeamControl,
+  type TeamControlBoundary,
+} from "../src/plugins/team-control.ts";
+import type { TeamRuntime } from "../src/plugins/team-runtime.ts";
 import {
   editFakeHerdrState,
   fakeHerdrCommands,
@@ -209,6 +216,31 @@ test("project binding stores no READY copy and fresh TeamControl gates REVIEW_HO
     expect(blockedDispatch.exitCode).toBe(1);
     expect(envelope(blockedDispatch.stderr).error.message).toContain("DRAINING");
 
+    const localStore = new Store(join(fixture.repo, ".maestro", "maestro.db"));
+    const externalControl = new TeamControl(
+      localStore,
+      "external-effect-session",
+      {
+        inspect: async () => ({
+          actual: { source: "external-effect fixture" },
+          complete: true,
+          inspectedAt: new Date().toISOString(),
+          missing: [],
+          runtimeRevision: "external-effect-fixture",
+        }),
+        probeObserver: async () => [],
+      } as unknown as TeamRuntime,
+    );
+    try {
+      expect(await externalControl.check("external.effect")).toMatchObject({
+        allowed: false,
+        bound: true,
+        verdict: "DRAINING",
+      });
+    } finally {
+      localStore.close();
+    }
+
     const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), { strict: true });
     expect(
       roomDatabase
@@ -248,6 +280,91 @@ test("invalid project binding fails closed before runtime inspection", async () 
     });
     expect(envelope(blocked.stderr).error.message).toContain("binding");
     expect(await fakeHerdrCommands(fake)).toEqual(before);
+  });
+});
+
+test("a missing Room ledger fails closed without creating a replacement database", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.root, "room");
+    await mkdir(room);
+    const fake = await installFakeHerdr(fixture);
+    await openTeam(fixture, room, "missing-ledger", fake.env);
+    const missingLedger = join(fixture.root, "missing-room", "maestro.db");
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), { strict: true });
+    projectDatabase.query("UPDATE team_local_bindings SET room_store_path = ?").run(missingLedger);
+    projectDatabase.close();
+    const before = await fakeHerdrCommands(fake);
+
+    const blocked = await runCli(
+      fixture,
+      ["work", "add", "must not recreate Room ledger", "--atomic-reason", "gate fixture"],
+      fake.env,
+    );
+
+    expect(blocked.exitCode).toBe(1);
+    expect(envelope(blocked.stderr).error).toMatchObject({
+      code: "GATE_BLOCKED",
+      origin: "team-control",
+    });
+    expect(envelope(blocked.stderr).error.message).toContain("Room ledger unavailable");
+    expect(existsSync(missingLedger)).toBe(false);
+    expect(await fakeHerdrCommands(fake)).toEqual(before);
+  });
+});
+
+test("every protected boundary fails closed before runtime when the attempt receipt cannot be written", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.root, "room");
+    await mkdir(room);
+    const fake = await installFakeHerdr(fixture);
+    await openTeam(fixture, room, "receipt-fault", fake.env);
+    const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), { strict: true });
+    roomDatabase.exec(`
+      CREATE TRIGGER deny_team_control_receipt
+      BEFORE INSERT ON team_receipts
+      WHEN NEW.kind LIKE 'team.control.%'
+      BEGIN
+        SELECT RAISE(ABORT, 'receipt write blocked');
+      END;
+    `);
+    roomDatabase.close();
+    let runtimeCalls = 0;
+    const runtime = {
+      inspect: async () => {
+        runtimeCalls += 1;
+        throw new Error("runtime must not be reached");
+      },
+      probeObserver: async () => {
+        runtimeCalls += 1;
+        throw new Error("runtime must not be reached");
+      },
+    } as unknown as TeamRuntime;
+    const projectStore = new Store(join(fixture.repo, ".maestro", "maestro.db"));
+    const control = new TeamControl(projectStore, "receipt-fault-session", runtime);
+    const boundaries: TeamControlBoundary[] = [
+      "work.add",
+      "work.start",
+      "dispatch.open",
+      "work.done",
+      "handback.final",
+      "bundle.close",
+      "external.effect",
+    ];
+
+    try {
+      for (const boundary of boundaries) {
+        const result = await control.check(boundary);
+        expect(result).toMatchObject({
+          allowed: false,
+          bound: true,
+          verdict: "CLOSED",
+        });
+        expect(result.reason).toContain("receipt write blocked");
+      }
+      expect(runtimeCalls).toBe(0);
+    } finally {
+      projectStore.close();
+    }
   });
 });
 
