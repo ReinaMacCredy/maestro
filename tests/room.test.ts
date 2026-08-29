@@ -2055,3 +2055,50 @@ test("538 [lint] a team reaches the room only through supervisor-<team> (d36)", 
     expect(slp).toContain("the room itself opened and still owns");
   });
 });
+
+test("539 [lint] the room holds owner authority in full behind the external-effect gate (d37)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const identity = flat(await readFile(join(room, "IDENTITY.md"), "utf8"));
+    const agents = flat(await readFile(join(room, "AGENTS.md"), "utf8"));
+    const claude = await readFile(join(room, "CLAUDE.md"), "utf8");
+    const slp = flat(
+      await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8"),
+    );
+
+    // Full equivalence: the three binding lines that used to read "none" now
+    // carry the owner's own authority.
+    expect(identity).toContain("Write authority: the owner's, in full");
+    expect(identity).toContain("Acceptance authority: the owner's, at the owner boundary");
+    expect(identity).toContain("Recovery or replacement lease: standing, in any team");
+    for (const effect of ["push", "tag", "release", "publish", "deploy", "`maestro update`"]) {
+      expect(identity).toContain(effect);
+    }
+    expect(identity).not.toContain("Write authority: none");
+
+    // Authority without the gate is the failure this replaces: an external
+    // effect still needs a locked decision, a named candidate, and a record.
+    for (const text of [identity, slp]) {
+      expect(text).toContain("never straight from a Lead's prompt");
+    }
+    expect(identity).toContain("names the exact candidate and the verified evidence");
+
+    // Intervention reaches any team, but a code correction still goes through
+    // that team's Lead: the room does not become a second Lead.
+    expect(slp).toContain("It may intervene in any team to stop or correct an error");
+    expect(slp).toContain("redirect or replace a `supervisor-<team>` or a Lead");
+    for (const text of [identity, slp]) {
+      expect(text).toContain("unless the room explicitly takes a lane over");
+    }
+
+    // The Human section binds the room too, so a rule written for one seat is
+    // not read as exempting the other.
+    expect(slp).toContain("Every authority in this section is also the Supervisor's");
+
+    // AGENTS.md and CLAUDE.md are the same generated text and both say it.
+    expect(agents).toContain("It holds the owner's authority in full");
+    expect(claude).toBe(await readFile(join(room, "AGENTS.md"), "utf8"));
+  });
+});

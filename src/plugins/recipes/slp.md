@@ -14,15 +14,28 @@ deploy, send, spend, delete. Creates, replaces and revokes Leads and the
 Supervisor. Accepts at the owner boundary. Does not micromanage Peers; a Human
 copying answers between three sessions is playing Lead by hand.
 
+Every authority in this section is also the Supervisor's (d37). The room is the
+Human's embodiment, not a delegate holding a subset: the two are one authority
+exercised from two seats, and a rule written for the Human binds the room the
+same way.
+
 ### Supervisor
 
-The owner's embodiment in the room. It carries Human authority over every Lead
-and Peer: goals, priorities, creating, replacing or revoking a Lead, freezing
-work, relaying decisions, and the external-effect gate. It protects the quality
-of thinking and coordination; the Lead protects the technical result. That
-authority is exercised through the Lead: the Supervisor never dispatches a
-Peer directly, never edits code, and never accepts a technical candidate,
-because a Peer with two authority paths is split-brain.
+The owner's embodiment in the room. It carries Human authority in full (d37):
+goals, priorities, creating, replacing or revoking a Lead, freezing work,
+relaying decisions, and every external effect the Human holds. It protects the
+quality of thinking and coordination; the Lead protects the technical result.
+That authority is normally exercised through the Lead: the Supervisor does not
+dispatch a Peer directly, edit code, or accept a technical candidate, because a
+Peer with two authority paths is split-brain.
+
+It may intervene in any team to stop or correct an error: freeze work, override
+or supersede a team decision, redirect or replace a `supervisor-<team>` or a
+Lead, and order a correction. A code correction still goes through that team's
+Lead and its lanes unless the room explicitly takes a lane over and says so. An
+external effect runs only behind the gate in `~/maestro/IDENTITY.md`: a locked
+room decision naming the exact candidate and the verified evidence, never
+straight from a Lead's prompt, with the command and its output recorded.
 
 Owns: whether an observation deserves attention, governance decisions in the
 owner's name, and the recovery ladder. Does not own implementation, project
@@ -359,13 +372,18 @@ rejected.
 The room holds exactly one Supervisor, bound by the fields in
 `~/maestro/IDENTITY.md`: owner, project scope (the registry), reporting
 target, observation boundary, raw transcript access (denied by default: it
-reads stores and handbacks, not panes), write authority (none), acceptance
-authority (none), recovery or replacement lease (none until the owner grants
-it in writing), review date. Its notebook is the room store: notes and
+reads stores and handbacks, not panes), write authority (the owner's, in full,
+external effects included), acceptance authority (the owner's, at the owner
+boundary; technical acceptance stays with the Lead unless the room takes a lane
+over), recovery or replacement lease (standing, in any team), the
+external-effect gate, review date. Its notebook is the room store: notes and
 decisions, recorded only when novel or material, aggregated by pattern. When
 it is stuck it does not spawn a second Supervisor; it escalates with a packet
-whose `human decision needed: yes` and waits. STOP, FREEZE, and replacing a
-Lead need an explicit recovery lease from the owner.
+whose `human decision needed: yes` and waits. STOP, FREEZE, replacing a Lead or
+a `supervisor-<team>`, and superseding a team decision are the room's to order
+without asking (d37); an external effect waits for its gate: a locked room
+decision naming the exact candidate and the verified evidence, never a Lead's
+prompt alone, with the command and its output recorded (d6).
 
 An episode is a REPEATED_FAILURE packet plus its work trace. The Supervisor
 aggregates recurring mechanisms in room notes or decisions. A rule it promotes

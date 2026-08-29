@@ -56,6 +56,7 @@ the fact, not prevented.
 | B15 | the upward channel | nothing | soft-audited | `supervisor-<team>` is the only pane that prompts the room (d36) |
 | B16 | a misrouted report | nothing | soft-audited | a supervisor bounces a `[from lead]` prompt from a Lead it does not own (d35) |
 | B17 | the observer sensor | nothing | soft-audited | the watcher lives in the observer's own pane and no maestro verb starts it (d33) |
+| B18 | the external-effect gate | nothing | soft-audited | the room runs an external effect only after a locked room decision names the candidate and the evidence, and records the command and its output (d37, room d6) |
 
 ## Open a dispatch
 

@@ -19,7 +19,7 @@ from anything you say.
 | You start an agent in | You are talking to | It reads |
 |---|---|---|
 | a repository working tree | the Lead of that repository | the repo `AGENTS.md` maestro block and the hook brief |
-| `~/maestro`, after `hm` | the Supervisor, your embodiment across projects | `IDENTITY.md`, `OWNER.md`, then `maestro brief` |
+| `~/maestro`, after `hm` | the Supervisor, your embodiment across projects, holding your authority in full | `IDENTITY.md`, `OWNER.md`, then `maestro brief` |
 
 You never talk to a Peer. Peers are panes the Lead opens with a stored
 dispatch; they take orders from that contract and return to the Lead, and the
@@ -384,6 +384,64 @@ that project's store, the one write it makes there:
 maestro decision lock d12
 ```
 
+## Case 6: one project needs a team, not a Lead
+
+**You type**, in the room after `hm`:
+
+```text
+the rewrite is too big for one pane. give it a proper team: someone holding the records, someone to think with when it gets stuck, and someone watching that nobody drifts
+```
+
+**The Supervisor reads it as**: open a team. A team is one Herdr workspace, so
+the first thing it needs is that workspace, not a pane.
+
+**What it does**: reads `herdr workspace list` first and reuses a workspace
+whose cwd already matches, because a second workspace on the same cwd splits a
+team in half without saying so. Only if there is none does it create one:
+
+```sh
+herdr workspace create --cwd ~/Code/rewrite --label team-rewrite --no-focus
+```
+
+Every pane of the team then opens in that workspace: `supervisor-<team>` as the
+one record holder, `advisor-<team>` beside it as read-only counsel, and
+`observer-<team>` watching. The room's own workspace stays empty of agents; the
+only panes there are the ones you opened yourself.
+
+**While the team works**, the observer is the part you never have to run. A
+watcher in its own pane waits on every team agent and sweeps the working ones,
+and it wakes the model only on a countable trigger: the same failure a third
+time, a pane claiming something the store contradicts, a role answering a
+question type it does not own, a pane silent past its stop condition, or
+self-doubt repeated in one turn. When the model agrees, one line goes to the
+member that drifted and to nobody else:
+
+```text
+[from observer][suspected] peer-x12 "the suite is green" `maestro work show w88` records no verify note on this candidate; the claim and the record disagree
+```
+
+It says that once per issue. It never reassigns, never freezes, never runs a
+write verb; the member or `supervisor-<team>` decides.
+
+**What you get back** comes up one channel. Only `supervisor-<team>` reports to
+the room:
+
+```sh
+herdr agent prompt supervisor "[from supervisor-rewrite][done w88 re w12] closed at 1a2b3c4d; the observer caught a green claim with no verify note, the Lead re-ran it before the close"
+```
+
+A report that arrives from anywhere else is refused rather than absorbed: a
+supervisor that gets a `[from lead]` prompt from a Lead it does not own answers
+`not my supervisor: send to supervisor-<team>` and records nothing, so the
+team's own record holder still learns that the work closed.
+
+**Your own seat is unchanged.** The room holds your authority in full, so it
+can freeze that team, supersede one of its decisions, or replace its supervisor
+without asking you first. What it still cannot do quietly is an external
+effect: a push, a tag, a release, or a `maestro update` runs only after a locked
+room decision names the exact candidate and the evidence, and the room records
+the command and its output.
+
 ## Reading a report
 
 Every case ends with a claim coming back to you. Behind it, the Lead ran the
@@ -395,7 +453,7 @@ same check before writing the report, and you can ask for any line of it:
 4. The required checks ran on that candidate, and the proof names its layer: `source:`, `artifact:`, `installed:`, `live:`.
 5. Independence fits the claim: a review that read the author's notes first is not independent.
 6. Unknowns and residual risks are still visible, not rounded to `DONE`.
-7. No external effect happened that you did not grant.
+7. No external effect happened outside its gate: you granted it, or the room granted it in your name with a locked decision naming that candidate and its evidence.
 
 Completion is reported only to the layer that was proved. "source: PASS at
 1a2b3c4d; installed: BLOCKED, an active agent prevents restart; live: NOT

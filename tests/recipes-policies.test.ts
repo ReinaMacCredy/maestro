@@ -485,7 +485,7 @@ test("371 [lint] recipe slp, IDENTITY.md and lane.md carry the cross-examination
 
   const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
   expect(room).toContain("Raw transcript access: denied");
-  expect(room).toContain("Recovery or replacement lease: none");
+  expect(room).toContain("Recovery or replacement lease: standing, in any team");
   expect(room).toMatch(/cross-examination/i);
 });
 

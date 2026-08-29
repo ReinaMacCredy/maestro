@@ -17,21 +17,34 @@ and revokes the Supervisor and Leads, and accepts at the owner boundary.
 
 ## Supervisor
 
-The Supervisor lives in `~/maestro` and represents the owner across registered
-projects. It filters attention, governs in the owner's name, and carries Human
-authority through each project's Lead. It never dispatches a Peer directly,
-edits project code, or accepts a technical candidate.
+The Supervisor lives in `~/maestro` and is the owner's embodiment across
+registered projects. It filters attention, governs in the owner's name, and
+carries Human authority in full: every authority listed for the Human above is
+the room's to exercise, the external effects included. It normally works
+through each project's Lead, and does not dispatch a Peer directly, edit
+project code, or accept a technical candidate.
+
+Full authority includes intervening in any team to stop or correct an error:
+freezing work, overriding or superseding a team decision, redirecting or
+replacing a `supervisor-<team>` or a Lead, and ordering a correction. A code
+correction still goes through that team's Lead and its lanes unless the room
+explicitly takes a lane over.
+
+Every external effect runs only behind the room's gate: push, tag, release,
+publish, deploy, `maestro update`, remotes, deletion, machine config. The gate
+is a locked room decision that names the exact candidate and the verified
+evidence, never straight from a Lead's prompt, with the command and its output
+recorded. The authority is the room's; the gate is what makes it safe to hold.
 
 The room has exactly one Supervisor. `~/maestro/IDENTITY.md` binds its owner,
 project scope, reporting target, observation boundary, raw transcript access,
-write authority, acceptance authority, recovery or replacement lease, and
-review date. Raw transcript access, project writes, technical acceptance, and
-recovery are denied unless the owner explicitly changes that binding.
+write authority, acceptance authority, recovery or replacement lease, the
+external-effect gate, and review date. Raw transcript access stays denied: the
+room reads stores and handbacks, not panes.
 
-Write authority and acceptance authority are soft-audited: the room's `hm`
-brief runs read-only (`MAESTRO_READ_ONLY=1`), but a session that changes
-directory into a project can run write verbs there. The binding is the
-contract, not a gate.
+Write authority and acceptance authority are soft-audited, and so is the gate:
+nothing in the runtime refuses a push from a room that skipped its decision.
+The binding is the contract, not a gate in code.
 
 The installer also denies Claude's `Agent` and `Task` tools in the Supervisor
 room. Codex has no equivalent hook and remains bound by the role contract.
@@ -75,6 +88,7 @@ reuses a matching workspace before creating one.
 | `advisor-<team>` | counsel for the record holder when it is stuck or the owner is away | no |
 | `observer-<team>` | drift watch for as long as the team is working | no |
 | `lead-<repo basename>` | Lead of that repository; a team spanning repositories holds several | yes, in that repository |
+| `consult-<repo basename>` | the Lead's counterpart beside it | no |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
 
 The observer reads the panes of its own workspace and speaks to whoever drifts
@@ -90,7 +104,10 @@ self-doubt phrases repeated in one turn.
 `observer-<team>` splits sensor from judgment: a small shell watcher in its own
 pane matches the countable triggers and wakes the model with
 `[watch] <pane> <state> <matched lines>`; the model then reads further, checks
-the store, and either speaks or stays silent. The watcher is not a maestro
+the store with `MAESTRO_READ_ONLY=1` so the read leaves no trace in a store it
+does not own, and either speaks or stays silent. That prefix is
+[observer mode](/guides/observer-mode/), the read-only store mode; the role and
+the mode share a word, not a definition. The watcher is not a maestro
 process: no verb starts it, it opens no store, and it dies with its pane.
 
 Between a team and the room there is one channel, and it runs upward:
@@ -121,8 +138,10 @@ flowchart TB
   Lead --> PeerC["Peer: independent review"]
 ```
 
-The topology has one write owner per moving scope. The Supervisor is never the
-writer or technical acceptance owner. Peers do not create sub-topology unless
+The topology has one write owner per moving scope. The Supervisor is not the
+writer or the technical acceptance owner while a Lead holds the scope; when it
+intervenes it says so and takes the lane over rather than writing beside the
+Lead. Peers do not create sub-topology unless
 the assignment grants it, and Human decisions or scope changes reach Peers
 through the Lead. Two sessions holding parent work in one repository are
 split-brain; the later session stops and reads `maestro status`.
