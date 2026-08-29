@@ -53,6 +53,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
   brief that arrives complete-looking with its verb removed. That is what
   happened to a relayed note, whose literal command text vanished before it
   reached the room (room l8: room w6).
+- A green the room records now carries pass, fail and skip counts together and
+  names the environment it ran in, in `lead.md` rule 6, and a pass count alone
+  is an incomplete claim rather than a green. A runner prints no skip line when
+  the count is zero, so two environment-gated tests a lane's shell could not run
+  were silently missing from its total: the lane reported 490 pass 2 skip on the
+  tree the room knew as 492 pass 0 skip, and it took three messages to establish
+  that the gap was environmental and not a fork divergence (room l9: room w6).
 
 ## [0.113.1] - 2026-08-29
 

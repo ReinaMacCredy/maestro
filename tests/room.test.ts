@@ -2201,3 +2201,20 @@ test("570 [lint] a brief body is sent through a file, not as a rescanned inline 
     expect(lead).toContain("an unset variable expands to nothing");
   });
 });
+
+test("571 [lint] a recorded green names its skip count and its environment (d7)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const lead = flat(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8"));
+
+    // room l9: a lane reported 490 pass 2 skip on a tree the room knew as 492
+    // pass 0 skip, and it took three messages to establish that the gap was
+    // two environment-gated tests the lane's shell could not run.
+    expect(lead).toContain(
+      "carries pass, fail and skip counts together and names the environment it ran in",
+    );
+    expect(lead).toContain("a runner prints no skip line when the count is zero");
+    expect(lead).toContain("A pass count alone is an incomplete claim, not a green (d7).");
+  });
+});
