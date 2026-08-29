@@ -1,10 +1,10 @@
 ---
 title: CLI reference
-description: Every top-level verb reported by the installed Maestro shim at commit 2be4788b.
+description: Every top-level verb reported by Maestro source at commit f120871e.
 ---
 
-This reference was generated from the installed `maestro` shim at
-commit `2be4788b2832511595ea6661b904af8261c036fd`, released as 0.114.0.
+This reference was generated from Maestro source at
+commit `f120871ec385a5c58eacf4ac3eb654963454ff37`, version 0.114.0.
 
 ```sh
 maestro help
@@ -82,6 +82,43 @@ inside the room store to record that the store is the Supervisor's.
 ### `status`
 
 `maestro status [--live] [--json]` shows sessions, live peers, and held work.
+
+### `team`
+
+`maestro team` manages the generation-scoped supervised-team lifecycle stored
+in the Room ledger. Lifecycle mutations use `--operation <value>` as an
+idempotency key, `--requested-by <value>` for the authorizing actor,
+`--expected-revision <value>` for optimistic concurrency, and `--json` for a
+compact receipt envelope.
+
+- `open <team-id> --repo <value> [--wait-ms <value>]` creates or adopts the
+  deterministic workspace, roles, prompts, and foreground sensor, then returns
+  success only after bounded readiness proof.
+- `status <team-id>` reads the last ledger snapshot without refreshing health.
+- `health <team-id>` performs one fresh runtime inspection; `await-ready
+  <team-id> [--wait-ms <value>]` performs the bounded foreground wait.
+- `bind <team-id> --repo <value>` binds another project to the authoritative
+  Room generation without copying its `READY` state into that project.
+- `review <team-id>` reads packet state. `review trigger` applies a versioned
+  semantic rule, `review spot-check` runs one Supervisor question, `review
+  raise` consumes one packet capability, and `review clear|escalate` requires
+  Supervisor rationale.
+- `advise <team-id>` requires `--decision`, `--question`, `--stop-condition`,
+  and optional repeatable `--context`; it runs one bounded Advisor consultation
+  and closes the temporary seat.
+- `reconcile <team-id> --resource <value>` repairs repeatable named resources:
+  `workspace`, `supervisor`, `lead`, `observer`, or `sensor`. It always
+  re-inspects the complete generation and never clears review state.
+- `stop <team-id> [--wait-ms <value>]` records STOPPING before drain and records
+  STOPPED only after absence proof. `--force` additionally requires
+  `--reason <value> --evidence <value>` and records possible loss.
+
+Routine reconcile, review resolution, and stop are authorized by
+`supervisor-<team>`. Emergency mutation flags are `--override-reason <value>`,
+`--override-evidence <value>`, and, for explicit owner authority,
+`--owner-intervention`; Room override without owner intervention is denied
+while the team Supervisor is reachable. See [Supervised teams](/guides/supervised-teams/)
+for the state model and command sequences.
 
 ## Work, decisions, and bundles
 

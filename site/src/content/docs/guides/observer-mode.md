@@ -3,9 +3,11 @@ title: Observer mode
 description: Read Maestro state without persisting session, lease, or liveness updates.
 ---
 
-This page is the read-only store mode. The team role `observer-<team>`, which
-watches panes for drift, is a different thing and lives in
-[Roles](/concepts/roles/); it uses this mode for every store read it makes.
+This page is the read-only store mode. The team role `observer-<team>` is a
+different thing: it consumes bounded sensor packets and can submit only a
+packet-capability review verdict. That role receives no general store access
+from this mode. See [Roles](/concepts/roles/) and
+[Supervised teams](/guides/supervised-teams/).
 
 Set `MAESTRO_READ_ONLY=1` for a fail-closed observer process:
 

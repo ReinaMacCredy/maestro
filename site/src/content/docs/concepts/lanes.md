@@ -49,13 +49,13 @@ the fact, not prevented.
 | B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
 | B9 | tool and call budgets | nothing | soft-audited | the assignment text |
 | B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |
-| B11 | team membership | nothing | soft-audited | the workspace the opener put the pane in, read from the workspace id and never from cwd (d28) |
-| B12 | observer read scope | nothing | soft-audited | the observer speaks only inside its own workspace and runs no write verb (d28) |
-| B13 | one workspace per team cwd | nothing | soft-audited | the room reads `herdr workspace list` and reuses a match before creating one (d29) |
-| B14 | a clean room workspace | nothing | soft-audited | the room opens every team pane in that team's workspace (d29) |
+| B11 | team membership | Room binding plus fresh TeamRuntime generation inspection | lifecycle receipt | cwd and a pane label alone remain non-authoritative |
+| B12 | Observer authority | one-use `team review raise` packet capability | review packet and receipt | whether the model reads outside the bounded packet remains a role obligation |
+| B13 | deterministic team resources | generation-scoped TeamRuntime identities and duplicate rejection | health/open receipt | Herdr itself does not understand the Room ledger |
+| B14 | a clean room workspace | TeamRuntime opens team resources in the generation workspace | open receipt | panes the owner opens manually in the room |
 | B15 | the upward channel | nothing | soft-audited | `supervisor-<team>` is the only pane that prompts the room (d36) |
 | B16 | a misrouted report | nothing | soft-audited | a supervisor bounces a `[from lead]` prompt from a Lead it does not own (d35) |
-| B17 | the observer sensor | nothing | soft-audited | the watcher lives in the observer's own pane and no maestro verb starts it (d33) |
+| B17 | the Observer sensor | TeamRuntime starts and inspects one foreground generation-scoped process | health receipt plus sensor-delivery effect | the semantics of model judgment after a packet |
 | B18 | the external-effect gate | nothing | soft-audited | the room runs an external effect only after a locked room decision names the candidate and the evidence, and records the command and its output (d37, room d6) |
 
 ## Open a dispatch
@@ -140,3 +140,7 @@ flowchart LR
 
 Implementation of the ruling belongs on separate work, not as a later
 dispatch that silently changes council membership.
+
+Team roles and their Room-ledger lifecycle are documented separately in
+[Supervised teams](/guides/supervised-teams/). Dispatch Peers remain bounded
+lanes and are not baseline team-readiness seats.

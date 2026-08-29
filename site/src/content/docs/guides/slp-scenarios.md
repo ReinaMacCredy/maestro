@@ -392,36 +392,51 @@ maestro decision lock d12
 the rewrite is too big for one pane. give it a proper team: someone holding the records, someone to think with when it gets stuck, and someone watching that nobody drifts
 ```
 
-**The Supervisor reads it as**: open a team. A team is one Herdr workspace, so
-the first thing it needs is that workspace, not a pane.
+**The Supervisor reads it as**: open a team. A managed generation owns one
+Herdr workspace, so the first thing it needs is a Room-ledger generation, not
+a hand-built pane.
 
-**What it does**: reads `herdr workspace list` first and reuses a workspace
-whose cwd already matches, because a second workspace on the same cwd splits a
-team in half without saying so. Only if there is none does it create one:
+**What it does**: invokes the lifecycle service. TeamRuntime creates or adopts
+the deterministic workspace, Supervisor, Lead, Observer, bootstrap prompts,
+and foreground sensor. Advisor is not an idle baseline pane.
 
 ```sh
-herdr workspace create --cwd ~/Code/rewrite --label team-rewrite --no-focus
+maestro team open rewrite \
+  --repo ~/Code/rewrite \
+  --operation open-rewrite-1 \
+  --requested-by supervisor \
+  --wait-ms 30000 \
+  --json
 ```
 
-Every pane of the team then opens in that workspace: `supervisor-<team>` as the
-one record holder, `advisor-<team>` beside it as read-only counsel, and
-`observer-<team>` watching. The room's own workspace stays empty of agents; the
-only panes there are the ones you opened yourself.
+The result is accepted only at `ACTIVE / READY / CLEAR`, whose verdict is
+`OPERABLE`. `STARTING` names every missing postcondition. Before relaying later
+intent, the room runs `team health`; `team status` alone is only the last
+snapshot and cannot prove that a process is still live.
 
-**While the team works**, the observer is the part you never have to run. A
-watcher in its own pane waits on every team agent and sweeps the working ones,
-and it wakes the model only on a countable trigger: the same failure a third
-time, a pane claiming something the store contradicts, a role answering a
-question type it does not own, a pane silent past its stop condition, or
-self-doubt repeated in one turn. When the model agrees, one line goes to the
-member that drifted and to nobody else:
+**While the team works**, the foreground sensor applies the countable semantic
+triggers and sends a capped, deduplicated evidence packet to Observer. Observer
+does not read a continuous whole-team transcript. It can return one finding
+only through that packet's capability; a validated finding moves the team to
+`REVIEW_HOLD`, and `supervisor-rewrite` either clears it with rationale or
+escalates it into `DEGRADED` health.
 
-```text
-[from observer][suspected] peer-x12 "the suite is green" `maestro work show w88` records no verify note on this candidate; the claim and the record disagree
+When the boss wants one direct inspection without installing a new rule, the
+Supervisor runs a one-shot supervised check:
+
+```sh
+maestro team review spot-check rewrite \
+  --operation spot-rewrite-w88 \
+  --requested-by supervisor-rewrite \
+  --question "Does the green claim match the recorded verification?" \
+  --window "w88 current handback" \
+  --stop "one verdict" \
+  --json
 ```
 
-It says that once per issue. It never reassigns, never freezes, never runs a
-write verb; the member or `supervisor-<team>` decides.
+When the team needs counsel, `team advise` starts one temporary Advisor,
+collects one decision-focused recommendation, and closes it at the declared
+stop. Advisor receives no work, lease, decision, reconcile, or store authority.
 
 **What you get back** comes up one channel. Only `supervisor-<team>` reports to
 the room:
@@ -436,11 +451,17 @@ supervisor that gets a `[from lead]` prompt from a Lead it does not own answers
 team's own record holder still learns that the work closed.
 
 **Your own seat is unchanged.** The room holds your authority in full, so it
-can freeze that team, supersede one of its decisions, or replace its supervisor
-without asking you first. What it still cannot do quietly is an external
-effect: a push, a tag, a release, or a `maestro update` runs only after a locked
-room decision names the exact candidate and the evidence, and the room records
-the command and its output.
+can freeze that team, supersede one of its decisions, or replace its Supervisor.
+Routine repair, review resolution, and stop are authorized by
+`supervisor-rewrite` and executed from the external Room session. Room
+emergency override is refused while that Supervisor is reachable; proved
+absence or explicit owner intervention must carry separate reason and evidence.
+What the room still cannot do quietly is an external effect: a push, tag,
+release, or `maestro update` runs only after a locked room decision names the
+exact candidate and evidence, and the room records the command and output.
+
+The full command sequence is in
+[Supervised teams](/guides/supervised-teams/).
 
 ## Reading a report
 

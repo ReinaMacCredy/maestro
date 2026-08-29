@@ -1,6 +1,6 @@
 ---
 title: Roles
-description: The Human, Supervisor, Lead, and Peer authority model used by SLP.
+description: The Human, Supervisor, Lead, Advisor, Observer, and Peer authority model used by SLP.
 ---
 
 Read the complete role contract from the installed runtime:
@@ -76,41 +76,46 @@ acceptance.
 
 ## Teams
 
-A team is one Herdr workspace. A session reads its role from its agent name
-prefix and its team from the workspace it sits in, never from cwd: cwd decides
-only which store a verb reads, so two teams on one repository share a store and
-stay separate teams. One team cwd maps to exactly one workspace, and the opener
-reuses a matching workspace before creating one.
+A managed team generation is one deterministic Herdr workspace named
+`team-<team>-g<generation>`, backed by a Room-ledger snapshot and receipts. A
+session reads membership from that generation's inspected workspace identity,
+never from cwd. Cwd decides which project store a command reads; it is not
+readiness evidence.
 
 | name | what it is | writes? |
 |---|---|---|
-| `supervisor-<team>` | the team's one record holder: locks decisions, receives done reports, holds the owner gates for the team | yes, records |
-| `advisor-<team>` | counsel for the record holder when it is stuck or the owner is away, and the team's read-only investigator | no |
-| `observer-<team>` | drift watch for as long as the team is working | no |
-| `lead-<repo basename>` | Lead of that repository; a team spanning repositories holds several | yes, in that repository |
+| `supervisor-<team>` | the active generation's authorizer and record holder | yes, records |
+| `lead-<repo basename>` | Lead of that repository | yes, in that repository |
+| `observer-<team>` | judgment for bounded sensor packets and one packet-capability verdict | only the scoped review verdict |
+| foreground sensor | deterministic evidence collector in its own pane; not a model seat | only packet delivery through the lifecycle service |
+| temporary Advisor | one decision-focused consultation started and stopped by TeamRuntime | no project authority |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
 
-The help ladder is peers, then the Lead, then `advisor-<team>`, then
-`supervisor-<team>`; there is no seat between the Lead and the advisor.
+Advisor and dispatch Peers are not baseline readiness members. Advisor exists
+only for a bounded request from the team Supervisor or registered Lead, returns
+one recommendation, and stops at the declared condition. It receives no work,
+lease, decision, reconcile, or store authority.
 
-The observer reads the panes of its own workspace and speaks to whoever drifts
-as `[from observer][suspected] <pane> <quoted evidence> <why>`, once per issue
-and again only on new evidence. It never changes an assignment, never freezes,
-never runs a write verb, and never writes the store: the addressee or
-`supervisor-<team>` decides, and `supervisor-<team>` records. Its triggers are
-countable rather than a matter of taste: the same failure a third time, a pane
-claim contradicting `maestro status` or `maestro work show`, a role answering a
-question type it does not own, a pane silent past its stop condition, and
-self-doubt phrases repeated in one turn.
+Sensor and judgment are separate. The foreground sensor evaluates the fixed
+semantic triggers and sends capped, deduplicated evidence packets. Observer
+receives those packets, not a continuous whole-team transcript. It cannot
+start or stop roles, change assignments, repair resources, or use general
+store verbs; it can submit at most one finding through the packet's live
+`team review raise` capability. `supervisor-<team>` clears that finding with
+rationale or escalates it into a separate `DEGRADED` health receipt.
 
-`observer-<team>` splits sensor from judgment: a small shell watcher in its own
-pane matches the countable triggers and wakes the model with
-`[watch] <pane> <state> <matched lines>`; the model then reads further, checks
-the store with `MAESTRO_READ_ONLY=1` so the read leaves no trace in a store it
-does not own, and either speaks or stays silent. That prefix is
-[observer mode](/guides/observer-mode/), the read-only store mode; the role and
-the mode share a word, not a definition. The watcher is not a maestro
-process: no verb starts it, it opens no store, and it dies with its pane.
+The team's baseline is usable only at `ACTIVE / READY / CLEAR`, whose derived
+verdict is `OPERABLE`. `REVIEW_HOLD` stops consequential acceptance,
+`DRAINING` permits only bounded return/release/recovery work, and every
+non-active stage is `CLOSED`. Status is the last snapshot; health and
+await-ready perform fresh runtime inspection. Inspection never silently
+restarts a failed role.
+
+While active, `supervisor-<team>` authorizes routine reconcile, review
+resolution, and stop. A foreground Room session executes runtime mutations so
+receipts distinguish `requestedBy` from `executedBy`. Room emergency override
+is rejected while the team Supervisor is reachable; proved absence or explicit
+owner intervention requires separate reason and evidence.
 
 Between a team and the room there is one channel, and it runs upward:
 `supervisor-<team>` reports to the room with
@@ -123,10 +128,14 @@ still owns. A misrouted report fails closed: a supervisor answers a
 it, because absorbing it would leave that team's record holder never learning
 the work closed.
 
-The room at `~/maestro` is its own workspace and opens no agent there; it opens
-each team's panes in that team's workspace. Team membership, the observer's
-read scope, one workspace per team cwd, and the room's clean workspace are all
-soft-audited.
+The room at `~/maestro` is its own workspace and opens no team agent there.
+TeamRuntime owns generation-scoped workspace, role, bootstrap prompt, sensor,
+inspection, reconcile, and shutdown behavior. Pane labels or a legacy
+workspace without a lifecycle generation remain unmanaged and cannot establish
+readiness.
+
+The complete lifecycle and commands are in
+[Supervised teams](/guides/supervised-teams/).
 
 ## SLP topology
 

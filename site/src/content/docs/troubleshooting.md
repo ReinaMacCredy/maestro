@@ -78,6 +78,35 @@ maestro work show <work-id>
 maestro status --live
 ```
 
+## Team is not `OPERABLE`
+
+`maestro team status <team> --json` is the last Room-ledger snapshot. Refresh
+the evidence before acting:
+
+```sh
+maestro team health <team> \
+  --operation <new-stable-id> \
+  --requested-by supervisor-<team> \
+  --json
+```
+
+- `STARTING` or `CLOSED` means readiness was never proved for an active
+  generation. Read the receipt's `missing` array.
+- `DRAINING` means fresh inspection found a missing, dead, mismatched, or
+  duplicate required resource. Health inspection never repairs it; run
+  `team reconcile` only for explicitly authorized resource names.
+- `REVIEW_HOLD` means Observer submitted a valid packet-bound finding. The team
+  Supervisor must clear or escalate it with rationale; reconcile does not
+  erase review state.
+- `STOPPING` means drain or absence proof is incomplete. Read the stop receipt
+  before retrying. Force stop is separate possible-loss authorization.
+
+`TEAM_OVERRIDE_DENIED` with `supervisorReachable: true` is expected when the
+Room tries emergency authority while `supervisor-<team>` remains reachable.
+Do not retry it as an override; use routine Supervisor authority. See
+[Supervised teams](/guides/supervised-teams/) for repair, owner intervention,
+and shutdown commands.
+
 ## Split-brain notice
 
 Two live sessions holding sibling or parent work in the same repository can be

@@ -69,7 +69,7 @@ async function openDispatch(fixture: Fixture, index: number): Promise<string> {
 test("308 SLP Peer return statuses are exactly the runtime vocabulary", async () => {
   const recipe = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"))
     .text();
-  const peer = recipe.match(/### Peer\n([\s\S]*?)\n## Topology invariants/)?.[1] ?? "";
+  const peer = recipe.match(/### Peer\n([\s\S]*?)(?=\n### |\n## )/)?.[1] ?? "";
   const documented = [
     ...new Set([...peer.matchAll(/\b[A-Z][A-Z_]+\b/g)].map((match) => match[0])),
   ];
@@ -166,4 +166,57 @@ test("309 [lint] every README verb-tour command resolves through CLI help", asyn
   // release gate while several agents shared the machine. 30s keeps the test
   // honest about a genuine hang while surviving the contention this repository
   // actually works under.
+}, 30_000);
+
+test("310 [lint] supervised-team site guidance matches the registered lifecycle surface", async () => {
+  const docsRoot = join(import.meta.dir, "..", "site", "src", "content", "docs");
+  const guide = await Bun.file(join(docsRoot, "guides", "supervised-teams.md")).text();
+  const roles = await Bun.file(join(docsRoot, "concepts", "roles.md")).text();
+  const lanes = await Bun.file(join(docsRoot, "concepts", "lanes.md")).text();
+  const observerMode = await Bun.file(join(docsRoot, "guides", "observer-mode.md")).text();
+  const scenarios = await Bun.file(join(docsRoot, "guides", "slp-scenarios.md")).text();
+  const reference = await Bun.file(join(docsRoot, "reference", "cli.md")).text();
+  const combined = [guide, roles, lanes, observerMode, scenarios, reference].join("\n");
+
+  for (const command of [
+    "maestro team open",
+    "maestro team status",
+    "maestro team health",
+    "maestro team await-ready",
+    "maestro team review spot-check",
+    "maestro team review clear",
+    "maestro team review escalate",
+    "maestro team advise",
+    "maestro team reconcile",
+    "maestro team stop",
+  ]) expect(combined).toContain(command);
+  expect(combined).toContain("continuous whole-team transcript");
+  expect(combined).toContain("--owner-intervention");
+  expect(combined).toContain("requestedBy");
+  expect(combined).toContain("executedBy");
+  expect(combined).not.toContain("observer-watch");
+  expect(combined).not.toContain("watcher in its own pane");
+  expect(scenarios).not.toContain("herdr workspace create --cwd ~/Code/rewrite");
+
+  await withFixture(async (fixture) => {
+    for (const command of [
+      ["team"],
+      ["team", "open"],
+      ["team", "status"],
+      ["team", "health"],
+      ["team", "await-ready"],
+      ["team", "review", "spot-check"],
+      ["team", "review", "clear"],
+      ["team", "review", "escalate"],
+      ["team", "advise"],
+      ["team", "reconcile"],
+      ["team", "stop"],
+    ]) {
+      const result = await runCli(fixture, ["help", ...command]);
+      expect({ command: command.join(" "), exitCode: result.exitCode }).toEqual({
+        command: command.join(" "),
+        exitCode: 0,
+      });
+    }
+  });
 }, 30_000);
