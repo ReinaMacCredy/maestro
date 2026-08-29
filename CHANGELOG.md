@@ -11,6 +11,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Fixed
+
+- One `maestro update` now materializes the managed skills shipped by the commit
+  it installs. `skillNames` and the skill sources live in a module the running
+  process imported before the runtime swap, so an update that installed a
+  release adding a skill wrote the outgoing release's list, and only a second
+  pass wrote the new one; the room saw it at v0.113.0, where `maestro-improve`
+  appeared on the second update. Skills are materialized from the post-swap
+  runtime in a fresh process, the same way the room templates already were.
+
 ## [0.113.0] - 2026-08-29
 
 The self-improvement release. A correction stops being a remark in a transcript

@@ -19,7 +19,7 @@ import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { installInRoomMessage, isRoom } from "./room.ts";
-import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
+import { skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
 interface CommandResult {
@@ -313,8 +313,28 @@ async function update(): Promise<CliResult> {
   const packageJson = JSON.parse(
     await readFile(join(source, "package.json"), "utf8"),
   ) as PackageJson;
-  const skillSync = newCommit ? await materializeSkills(home, newCommit) : null;
-  const skillText = skillSync ? formatSkillSync(skillSync) : "";
+  // Same reason as the room templates below: skillNames and the skill sources
+  // live in the module this process imported before the swap, so materializing
+  // in-process writes the outgoing release's list and a skill the new commit
+  // adds needs a second update to appear.
+  let skillText = "";
+  if (newCommit) {
+    const synced = await command(runtime, [
+      process.execPath,
+      "-e",
+      `const skills = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "skills.ts")).href)});` +
+        `const sync = await skills.materializeSkills(${JSON.stringify(home)}, ${JSON.stringify(newCommit)});` +
+        `console.log(skills.formatSkillSync(sync));`,
+    ]);
+    if (synced.exitCode !== 0) {
+      throw new CliError(
+        "SKILL_SYNC_FAILED",
+        `runtime installed but the managed skills were not materialized: ${synced.stderr || `bun exited ${synced.exitCode}`}; run maestro update again`,
+        { fix: "run maestro update again" },
+      );
+    }
+    skillText = synced.stdout.trim();
+  }
   // Refresh the generated room templates after an update; previously only
   // install did this. The templates are compiled into room.ts, and this
   // process imported it before the swap, so calling scaffoldRoom in-process

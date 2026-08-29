@@ -872,6 +872,48 @@ test("411 update regenerates the room's generated files and keeps OWNER.md", asy
   });
 });
 
+test("531 one update materializes a managed skill the commit it installs adds", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+
+    // Same ordering defect as 530, one line above it: update read skillNames and
+    // the skill sources through the module this process imported before the
+    // swap, so a release that adds a managed skill installed the commit and
+    // wrote the outgoing release's list. The room saw it at v0.113.0, where
+    // maestro-improve appeared only on a second update.
+    const name = "maestro-marker-531";
+    const skillDirectory = join(publisher, "src", "plugins", "skills", name);
+    await mkdir(skillDirectory, { recursive: true });
+    await writeFile(
+      join(skillDirectory, "SKILL.md"),
+      `---\nname: ${name}\ndescription: A skill shipped by the commit under test.\nreview-date: 2099-01-01\n---\n<!-- maestro-skill-version: dev -->\n\nMarker.\n`,
+    );
+    const skillsPath = join(publisher, "src", "plugins", "skills.ts");
+    const skillsSource = await readFile(skillsPath, "utf8");
+    const listAnchor = '  "maestro-bundle",';
+    expect(skillsSource).toContain(listAnchor);
+    await writeFile(skillsPath, skillsSource.replace(listAnchor, `  "${name}",\n${listAnchor}`));
+    await git(publisher, ["add", "src/plugins"]);
+    await git(publisher, ["commit", "-m", "ship a new managed skill"]);
+    await git(publisher, ["push", "origin", "main"]);
+    const remoteCommit = await git(publisher, ["rev-parse", "HEAD"]);
+
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+    expect(updated.exitCode).toBe(0);
+
+    // Pin the swap itself, so a missing skill can only be the ordering defect
+    // and never an update that failed to install the commit at all.
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(remoteCommit);
+
+    const installed = join(fixture.home, "maestro", "skills", name, "SKILL.md");
+    expect(await readFile(installed, "utf8")).toContain(`maestro-skill-version: ${remoteCommit}`);
+    expect(updated.stdout).toContain(name);
+    expect(existsSync(join(fixture.home, ".claude", "skills", name))).toBe(true);
+  });
+}, 120_000);
+
 test("530 one update materializes the room templates shipped by the commit it installs", async () => {
   await withFixture(async (fixture) => {
     const { publisher, source } = await createSourceCheckout(fixture);
