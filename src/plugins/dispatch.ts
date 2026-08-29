@@ -330,7 +330,9 @@ function fromHandbackRow(row: HandbackRow): HandbackRecord {
 
 // A lesson id is half an id: every store numbers lessons from l1 and lesson
 // process writes only to the store it runs in, so a return that answers one
-// names where it lives (d729).
+// names where it lives (d729). The path must be absolute because a shell does
+// not expand a tilde mid-word: l1@~/maestro arrives literal and would resolve
+// nowhere, which is the silent failure this field exists to prevent.
 function parseLessonReference(value: string): { id: string; store: string } {
   const match = /^(l\d+)@(.+)$/.exec(value.trim());
   const id = match?.[1];
