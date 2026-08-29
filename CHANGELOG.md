@@ -22,6 +22,11 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Changed
 
+- `maestro decision draft` refuses a lone positional that names an existing
+  decision, instead of creating a second decision whose text is that id, and
+  refuses `--supersedes`, `--parent` and `--work` on an edit, which the edit
+  statement parsed and dropped without a word. A supersession could be typed,
+  accepted and lost; the two failures compound, so both close together.
 - `maestro update` refuses a source checkout that has a remote but sits on a
   branch no remote has published, with `UPDATE_SOURCE_UNPUBLISHED` naming the
   branch and the next command; lanes branch inside the checkout the runtime is

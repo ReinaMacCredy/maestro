@@ -580,3 +580,68 @@ test("21 --json list output is one compact single-line envelope", async () => {
     expect(JSON.parse(result.stdout).data.works).toBeArray();
   });
 });
+
+test("567 decision draft refuses an existing id with no replacement text (w562)", async () => {
+  await withFixture(async (fixture) => {
+    const locked = idFrom(await runCli(fixture, ["decision", "draft", "the ruling being edited"]));
+    expect((await runCli(fixture, ["decision", "lock", locked])).exitCode).toBe(0);
+    const open = idFrom(await runCli(fixture, ["decision", "draft", "the draft still open"]));
+
+    // What this cost: a draft whose text was the literal string d727, minted
+    // beside the decision it was meant to edit, because one positional never
+    // reaches the edit branch and the create path cannot tell them apart.
+    const onLocked = await runCli(fixture, [
+      "decision",
+      "draft",
+      locked,
+      "--rationale",
+      "the reason it was locked",
+    ]);
+    expect(onLocked.exitCode).not.toBe(0);
+    expect(onLocked.stderr).toContain(locked);
+    expect(onLocked.stderr).toContain("replacement text");
+    expect(onLocked.stderr).toContain(`--supersedes ${locked}`);
+
+    const onDraft = await runCli(fixture, ["decision", "draft", open, "--rationale", "a reason"]);
+    expect(onDraft.exitCode).not.toBe(0);
+    expect(onDraft.stderr).toContain("replacement text");
+
+    // Neither refusal wrote anything: two decisions exist, not four.
+    expect((await runCli(fixture, ["decision", "show", "d3"])).exitCode).not.toBe(0);
+    const listed = await runCli(fixture, ["decision", "list"]);
+    expect(listed.stdout).not.toContain(`${locked}\n`);
+  });
+});
+
+test("568 decision draft refuses the links an edit would drop (w562)", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await runCli(fixture, ["decision", "draft", "parent choice"]));
+    const target = idFrom(await runCli(fixture, ["decision", "draft", "the ruling retired"]));
+    expect((await runCli(fixture, ["decision", "lock", target])).exitCode).toBe(0);
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "the card", "--atomic-reason", "fixture"]),
+    );
+    const open = idFrom(await runCli(fixture, ["decision", "draft", "the draft still open"]));
+
+    // The edit UPDATE sets text, rationale, dissent, review_at and needs_owner
+    // and nothing else, so these three were parsed and discarded in silence.
+    for (const flag of [["--supersedes", target], ["--parent", parent], ["--work", work]]) {
+      const refused = await runCli(fixture, [
+        "decision",
+        "draft",
+        open,
+        "the draft reworded",
+        ...flag,
+      ]);
+      expect(refused.exitCode).not.toBe(0);
+      expect(refused.stderr).toContain(flag[0] as string);
+    }
+
+    const shown = await runCli(fixture, ["decision", "show", open]);
+    expect(shown.stdout).toContain("the draft still open");
+    // The text-only edit is untouched.
+    const edited = await runCli(fixture, ["decision", "draft", open, "the draft reworded"]);
+    expect(edited.exitCode).toBe(0);
+    expect(edited.stdout).toContain("the draft reworded");
+  });
+});

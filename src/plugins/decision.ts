@@ -216,6 +216,20 @@ export const decisionPlugin: BuiltInPlugin = {
           const suppliedDissent = option(invocation, "dissent");
           const suppliedReviewAt = reviewAtOption(invocation);
           if (second !== undefined) {
+            // The edit UPDATE sets text, rationale, dissent, review_at and
+            // needs_owner; these three were parsed and dropped in silence, so
+            // a supersession could be typed, accepted and lost (w562).
+            const links = ["supersedes", "parent", "work"].filter((name) =>
+              option(invocation, name) !== null
+            );
+            if (links.length > 0) {
+              const named = links.map((name) => `--${name}`).join(", ");
+              throw new CliError(
+                "INVALID_ARGUMENT",
+                `${named} ${links.length === 1 ? "belongs" : "belong"} to a new draft, not to an edit of ${first}; an edit changes text, rationale, dissent, review date and owner requirement only. Withdraw ${first} and draft the replacement with its links, or edit the text alone`,
+                { id: first, options: links },
+              );
+            }
             const edit = context.store.database.transaction(() => {
               const existing = getDecision(context, first);
               if (!existing) {
@@ -296,6 +310,22 @@ export const decisionPlugin: BuiltInPlugin = {
               data: { decision: updated.decision, previous: updated.previous },
               text: `${format(updated.decision)}\nprevious: ${updated.previous}`,
             };
+          }
+
+          // A one-positional invocation naming an existing decision reads as an
+          // edit that forgot its replacement text, and the create path cannot
+          // tell it from a decision whose text is literally that id. It minted
+          // one titled d727 beside the decision it meant to edit (w562).
+          const named = getDecision(context, first);
+          if (named) {
+            const retire = named.state === "draft"
+              ? `maestro decision withdraw ${named.id} --reason "<why>" to drop it`
+              : `maestro decision draft "<text>" --supersedes ${named.id} to retire it`;
+            throw new CliError(
+              "MISSING_ARGUMENT",
+              `${named.id} already exists, so this reads as an edit with no replacement text; run: maestro decision draft ${named.id} "<replacement text>" to edit it, or ${retire}`,
+              { field: "replacement text", id: named.id, state: named.state },
+            );
           }
 
           const text = first;

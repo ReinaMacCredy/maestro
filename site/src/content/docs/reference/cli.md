@@ -107,7 +107,12 @@ inside the room store to record that the store is the Supervisor's.
 ### `decision`
 
 - `draft <text-or-id> [replacement]` creates or edits a draft; flags are
-  `--rationale`, `--work`, `--parent`, and `--supersedes`.
+  `--rationale`, `--work`, `--parent`, and `--supersedes`. An edit is the
+  two-positional form: naming an existing decision with no replacement text
+  refuses rather than creating a decision whose text is that id, and
+  `--work`, `--parent` and `--supersedes` are refused on an edit because an
+  edit changes text, rationale, dissent, review date and owner requirement
+  only.
 - `lock <id>` locks a draft against further edits.
 - `show <id>` reads one decision and its links.
 - `list [--json]` lists current decision states.
