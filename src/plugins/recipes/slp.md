@@ -110,6 +110,13 @@ two supports that hold no records, and below it the ordinary project roles:
 | `consult-<repo basename>` | the Lead's counterpart beside it (d27) | see d27 |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
 
+Every seat in a team reports to `supervisor-<team>`, the name the prompt that
+opened it gave, and never to the bare `supervisor`, which is the room. Only
+`supervisor-<team>` has a channel out of the workspace (d36): `advisor-<team>`,
+`observer-<team>` and `consult-<repo basename>` have none at all, so a support
+seat reporting ready, or anything else, sends it to `supervisor-<team>` inside
+its own workspace.
+
 Example models for the team roles, dated 2026-08-29 and owner-editable exactly
 like the Model table below: `supervisor-<team>` on the `lead` rung, and both
 supports on a cheap-but-thinking pair, `advisor-<team>` on `gpt-5.6-sol` at

@@ -558,10 +558,19 @@ test("528 [lint] a Lead reports a closed card back to the room (d22)", async () 
     // invisible to the room; without this sentence a Lead can finish relayed
     // intent and the room never learns, which is how three closures went
     // unreported before d22.
-    const message =
-      'herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"';
-    expect(lead).toContain(message);
-    expect(slp).toContain(message);
+    // l3: the report target is a parameter, not the bare room name. Three
+    // support seats in a new team read `supervisor` here and reported to the
+    // room over their own record holder's head.
+    expect(lead).toContain(
+      'herdr agent prompt <record holder> "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"',
+    );
+    expect(lead).toContain(
+      "`<record holder>` is `supervisor-<team>` whenever the pane sits in a team workspace",
+    );
+    // The bare form survives in the recipe as the no-team fallback (d719).
+    expect(slp).toContain(
+      'herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"',
+    );
     expect(lead).toContain("one prompt per closed card, after `maestro work done`");
     expect(lead).toContain("never before");
   });
@@ -1839,7 +1848,7 @@ test("529 [lint] relayed intent reports on close even without a room decision id
 
     // The same Lead then hunted for the room with ListAgents and dispatch
     // list. The room agent name is fixed, so searching is always wrong.
-    expect(step6).toContain("herdr agent prompt supervisor");
+    expect(step6).toContain("herdr agent prompt <record holder>");
     expect(step6).toMatch(/only channel|reached only by/);
     expect(step6).toContain("herdr agent list");
     expect(step6).toContain("maestro dispatch list");
@@ -1869,6 +1878,15 @@ test("533 [lint] the slp recipe carries the d28 team model", async () => {
   expect(slp).toContain("observer-<team>");
   expect(slp).toContain("consult-<repo basename>");
   expect(slp).toContain("exactly one record holder");
+
+  // l3: the seats read this table about themselves, so it carries the report
+  // target and the fact that a support seat has no way out of the workspace.
+  expect(slp).toContain(
+    "Every seat in a team reports to `supervisor-<team>`, the name the prompt that opened it gave, and never to the bare `supervisor`, which is the room.",
+  );
+  expect(slp).toContain(
+    "`advisor-<team>`, `observer-<team>` and `consult-<repo basename>` have none at all",
+  );
 
   // The observer speaks, it never acts: no assignment change, no freeze, no
   // write verb, no store write, and only inside its own workspace.

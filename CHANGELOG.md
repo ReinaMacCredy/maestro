@@ -30,6 +30,14 @@ TypeScript-on-Bun line and continues the existing version sequence.
   release passed the gate as "docs and site refreshed" while the site had no
   page on the self-improvement loop, and the owner found the gap (l2: w9, w10,
   d47).
+- A team seat now reads its report target as `supervisor-<team>`. `lead.md` rule
+  6 spelled the command with the bare name `supervisor`, which is the room, and
+  the recipe's team table said what each seat may write but not where it
+  reports; in a new team workspace `advisor-cmux`, `observer-cmux` and
+  `consult-cmux` all sent their ready straight to the room. Rule 6 now spells
+  the command with `<record holder>` and says which name that resolves to, and
+  the team table says only `supervisor-<team>` has a channel out of the
+  workspace (l3: w6, d28, d30, d36).
 
 ### Fixed
 
