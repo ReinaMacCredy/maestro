@@ -11,6 +11,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- Documentation site: a Self-improvement guide covering the loop end to end for
+  a reader, from filing a lesson through the threshold, the improver's smallest
+  edit, the golden replay gate, the challenge lane, and the rendered per-project
+  view. The loop shipped as recipe text, which reaches a session and not a
+  reader of the site. Reachable from the sidebar and cross-linked with the CLI
+  reference, Attention and brief, SLP scenarios, and Recipes, skills, and
+  plugins.
+
 ### Fixed
 
 - One `maestro update` now materializes the managed skills shipped by the commit

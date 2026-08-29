@@ -29,7 +29,8 @@ Install materializes five managed method skills under `~/maestro/skills/`:
 - `maestro-design` settles one fork at a time and records locked decisions.
 - `maestro-work` drives one accepted implementation unit through proof.
 - `maestro-verify` checks evidence layers and controls close and delivery gates.
-- `maestro-improve` turns filed lessons into the smallest doctrine edit.
+- `maestro-improve` turns filed lessons into the smallest doctrine edit; the
+  loop around it is in [Self-improvement](/guides/self-improvement/).
 
 The installer links these skills for Claude without overwriting an unmanaged
 skill. Coordination remains in the Supervisor room's lane instructions rather

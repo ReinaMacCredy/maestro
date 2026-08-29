@@ -28,6 +28,9 @@ pending lesson starts that clock. It is grouped by the lesson's project tag,
 because the room relays "run improver" to the Lead of the doctrine the lessons
 target. The improver never runs per correction.
 
+The loop it triggers, from filing a lesson to gating the edit, is in
+[Self-improvement](/guides/self-improvement/).
+
 Threshold flags tune stale leases, draft decisions, and unreturned dispatches.
 For a compact machine-readable result, run:
 

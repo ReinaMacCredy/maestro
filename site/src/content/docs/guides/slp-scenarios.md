@@ -474,7 +474,8 @@ A line prefixed with `@<session>` runs as that lane, which is how one script
 holds both the Lead and the Peer. Timestamps, paths and pids are normalised, so
 a diff in a golden is a change in behaviour, not in the clock.
 
-The goldens exist for the improver (d43): a doctrine edit is accepted only when
+The goldens exist for the improver, the loop in
+[Self-improvement](/guides/self-improvement/) (d43): a doctrine edit is accepted only when
 the replay still matches, or matches the change a lesson asked for. When a
 lesson did ask for it, the golden is re-recorded with `MAESTRO_GOLDEN_UPDATE=1`
 and travels in the same commit, so the diff shows the behaviour that changed

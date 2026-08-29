@@ -716,3 +716,45 @@ test("531 [lint] target-session says it takes the harness session id, not the ag
     expect(slp).toContain(phrase);
   }
 });
+
+test("559 [lint] the site carries the self-improvement loop end to end and links both ways", async () => {
+  // The loop shipped as recipe text, which reaches sessions and not a reader of
+  // the site; the owner found no page for it. One guide holds it, and the four
+  // pages that carry a piece of it point at that guide.
+  const docs = join(import.meta.dir, "..", "site", "src", "content", "docs");
+  const guide = await readFile(join(docs, "guides", "self-improvement.md"), "utf8");
+  for (const phrase of [
+    "maestro lesson file", // d40: the record and who files it
+    "handback",
+    "smallest edit", // the improver's rule
+    "maestro lesson process",
+    "never deleted",
+    "LESSONS_PENDING", // d42, d724: the threshold
+    "five pending lessons",
+    "seven days",
+    "maestro lesson render", // d42, d725: the per-project view
+    "~/maestro/PROJECT/",
+    "never hand-edited",
+    "tests/scenario-golden.test.ts", // d43: the gate
+    "MAESTRO_GOLDEN_UPDATE=1",
+    "challenge lane", // d44: trusted sources and the pairing
+    "diverse rung",
+  ]) {
+    expect(guide).toContain(phrase);
+  }
+
+  const sidebar = await readFile(join(import.meta.dir, "..", "site", "astro.config.mjs"), "utf8");
+  expect(sidebar).toContain("slug: 'guides/self-improvement'");
+
+  const neighbours = [
+    { dir: "guides", file: "attention-and-brief.md" },
+    { dir: "guides", file: "slp-scenarios.md" },
+    { dir: "guides", file: "recipes-skills-plugins.md" },
+    { dir: "reference", file: "cli.md" },
+  ];
+  for (const { dir, file } of neighbours) {
+    const page = await readFile(join(docs, dir, file), "utf8");
+    expect(page).toContain("/guides/self-improvement/");
+    expect(guide).toContain(`/${dir}/${file.replace(/\.mdx?$/, "")}/`);
+  }
+});

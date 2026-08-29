@@ -111,6 +111,9 @@ inside the room store to record that the store is the Supervisor's.
 
 ### `lesson`
 
+The loop these verbs serve is in
+[Self-improvement](/guides/self-improvement/).
+
 - `file <what-happened> --target <value> --expected <value> --why <value>
   --evidence <value>` files a correction where it happened; `--evidence`
   repeats and takes work, handback, or decision ids, unvalidated so a lesson
