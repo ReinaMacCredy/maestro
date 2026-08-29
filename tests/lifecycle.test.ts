@@ -115,7 +115,9 @@ async function createSourceCheckout(fixture: Fixture): Promise<{
     PATH: installFixture.path,
   });
   expect(materialized).toMatchObject({ exitCode: 0 });
-  await git(source, ["add", "AGENTS.md", "CLAUDE.md", ".claude", ".codex"]);
+  // -f because the repository ignores that wiring per checkout; a published source
+  // ships it, which is what the clone below has to find.
+  await git(source, ["add", "-f", "AGENTS.md", "CLAUDE.md", ".claude", ".codex"]);
   await git(source, ["commit", "--allow-empty", "-m", "materialize current wiring"]);
   await git(fixture.root, ["init", "--bare", "--initial-branch=main", bare]);
   await git(source, ["remote", "add", "origin", bare]);

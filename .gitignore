@@ -6,3 +6,8 @@ site/.astro/
 site/dist/
 site/public/install.sh
 .DS_Store
+
+# installer-owned harness wiring and IDE state, per checkout
+.claude/
+.codex/
+.idea/
