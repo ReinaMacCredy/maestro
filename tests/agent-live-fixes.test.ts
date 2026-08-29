@@ -27,7 +27,7 @@ test("92 gate envelope carries origin without a duplicated reason; lease keeps c
     const loose = idFrom(
       await runCli(fixture, ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"]),
     );
-    const unleased = await runCli(fixture, ["work", "done", loose, "--evidence", "done"]);
+    const unleased = await runCli(fixture, ["work", "reclaim", loose, "--reason", "nobody holds it"]);
     expect(unleased.exitCode).not.toBe(0);
     const leaseError = (JSON.parse(unleased.stderr) as { error: Record<string, unknown> }).error;
     expect(leaseError.code).toBe("LEASE_REQUIRED");

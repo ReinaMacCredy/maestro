@@ -157,6 +157,15 @@ test("382 accepting a shadow dispatch never takes the work write lease", async (
     expect(grabbed.exitCode).not.toBe(0);
     expect(grabbed.stderr).toContain("GATE_BLOCKED");
     expect(grabbed.stderr).toContain("shadow lane");
+    // Nor through done: its implicit claim runs the same start gates (w548/d720).
+    const finished = await runCli(
+      fixture,
+      ["work", "done", work, "--claim", "shadow wrote", "--proof", "source: none"],
+      session("shadow-holder"),
+    );
+    expect(finished.exitCode).not.toBe(0);
+    expect(finished.stderr).toContain("GATE_BLOCKED");
+    expect(finished.stderr).toContain("shadow lane");
     const still = JSON.parse((await runCli(fixture, ["work", "show", work, "--json"])).stdout) as typeof envelope;
     expect(still.data.work.heldBy).toBeNull();
   });

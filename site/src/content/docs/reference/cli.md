@@ -90,7 +90,9 @@ inside the room store to record that the store is the Supervisor's.
 - `list [--json]` lists tracked work.
 - `note <id> <text>` appends a durable note.
 - `done <id>` accepts repeatable `--claim` and `--proof`, plus opaque
-  `--evidence`, and completes through enabled policy gates.
+  `--evidence`, and completes through enabled policy gates. When no session
+  holds the item it takes the lease itself, through the same gates and blocker
+  checks as `start`; a lease another live session holds still refuses.
 - `cancel <id> --reason <value>` permanently cancels open or held work and its
   open or active descendants, each with the reason prefixed `parent <id>
   cancelled:`.

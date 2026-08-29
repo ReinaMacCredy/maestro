@@ -657,24 +657,31 @@ export const workPlugin: BuiltInPlugin = {
             throw new CliError("INVALID_STATE", `${id} is already done; nothing to complete`);
           }
           const sessionId = context.sessions.current().id;
-          if (work.heldBy !== sessionId) {
+          // A card nobody holds closes in one command: done takes the lease
+          // itself. The start gates and blockers run first, so the implicit
+          // claim is not a way around anything work start would refuse.
+          const claimsLease = work.heldBy !== sessionId;
+          const expired = claimsLease ? latestLeaseExpiration(context, id) : null;
+          if (claimsLease) {
             if (work.heldBy) {
               throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
                 holder: work.heldBy,
               });
             }
-            const command = `maestro work start ${id}`;
-            const expired = latestLeaseExpiration(context, id);
-            const explanation = expired
-              ? `; previous lease held by ${expired.holder} expired because ${expired.reason}`
-              : "";
-            throw new CliError(
-              "LEASE_REQUIRED",
-              `${id} must be started before completion; run: ${command}${explanation}`,
-              expired
-                ? { command, expiredHolder: expired.holder, expiredReason: expired.reason }
-                : { command },
+            const blockers = unresolvedBlockers(context, id);
+            if (blockers.length > 0) {
+              const details = blockerDetails(context, id, blockers, sessionId);
+              throw new CliError("BLOCKED", details.reason, {
+                blockers: details.blockers,
+                command: details.command,
+              });
+            }
+            const start = await context.events.waterfall<WorkGateInput, GateResult>(
+              "work.start",
+              { work: { ...work, heldBy: null }, children: service.children(id), sessionId },
+              async () => ({ blocked: false }),
             );
+            blockIfNeeded(start);
           }
           const evidence = stringOption(invocation, "evidence") ?? "";
           const candidate = stringOption(invocation, "candidate") ?? null;
@@ -708,20 +715,27 @@ export const workPlugin: BuiltInPlugin = {
             if (current.state === "done") {
               throw new CliError("INVALID_STATE", `${id} is already done; nothing to complete`);
             }
+            const now = new Date().toISOString();
             if (current.heldBy !== sessionId) {
               if (current.heldBy) {
                 throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy}`, {
                   holder: current.heldBy,
                 });
               }
-              const command = `maestro work start ${id}`;
-              throw new CliError(
-                "LEASE_REQUIRED",
-                `${id} must be started before completion; run: ${command}`,
-                { command },
-              );
+              const claimed = context.store.database
+                .query(
+                  `UPDATE work
+                   SET state = 'active', held_by = ?, updated_at = ?
+                   WHERE id = ? AND state != 'done' AND cancelled_at IS NULL AND held_by IS NULL`,
+                )
+                .run(sessionId, now, id);
+              if (claimed.changes === 0) {
+                const refreshed = requireWork(context, id);
+                throw new CliError("LEASE_HELD", `${id} is held by ${refreshed.heldBy}`, {
+                  holder: refreshed.heldBy,
+                });
+              }
             }
-            const now = new Date().toISOString();
             const completed = context.store.database
               .query(
                 `UPDATE work
@@ -738,15 +752,20 @@ export const workPlugin: BuiltInPlugin = {
               entityType: "work",
               entityId: id,
               sessionId,
-              payload: { candidate, evidence: recordedEvidence, claims, proofs },
+              payload: claimsLease
+                ? { candidate, claimedOnDone: true, evidence: recordedEvidence, claims, proofs }
+                : { candidate, evidence: recordedEvidence, claims, proofs },
             });
             return service.get(id);
           });
           const completed = complete.immediate();
-          return { data: { work: completed }, text: `${id} done` };
+          const lostLease = expired
+            ? `; previous lease held by ${expired.holder} expired because ${expired.reason}`
+            : "";
+          return { data: { work: completed }, text: `${id} done${lostLease}` };
         },
         {
-          description: "Complete held work with policy-checked evidence.",
+          description: "Complete work with policy-checked evidence, taking an unheld lease.",
           flags: {
             "--evidence": {
               description: "Record opaque completion evidence.",

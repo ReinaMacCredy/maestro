@@ -202,7 +202,7 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
   });
 });
 
-test("56 LEASE_REQUIRED names the start command and an expired holder reason", async () => {
+test("56 work done takes an unheld lease and names the holder that lost it (w548/d720)", async () => {
   await withFixture(async (fixture) => {
     const missingId = idFrom(await runCli(fixture, ["work", "add", "missing lease", "--kind", "idea"]));
     const missing = await runCli(fixture, ["work", "done", missingId, "--evidence", "none"]);
@@ -216,10 +216,13 @@ test("56 LEASE_REQUIRED names the start command and an expired holder reason", a
       sessionEnvironment("replacement-holder", String(process.pid)),
     );
 
-    expect(missing.stderr).toContain(`maestro work start ${missingId}`);
-    expect(expired.stderr).toContain(`maestro work start ${expiredId}`);
-    expect(expired.stderr).toContain("expired-holder");
-    expect(expired.stderr.toLowerCase()).toContain("pid");
+    expect(missing.exitCode).toBe(0);
+    expect(missing.stdout).toContain(`${missingId} done`);
+    // The expiry reason the old error carried survives on the success path.
+    expect(expired.exitCode).toBe(0);
+    expect(expired.stdout).toContain(`${expiredId} done`);
+    expect(expired.stdout).toContain("expired-holder");
+    expect(expired.stdout.toLowerCase()).toContain("pid");
   });
 });
 

@@ -640,3 +640,100 @@ test("480 work add alone records a live session before attributing its event", a
     });
   });
 });
+
+test("540 work done claims an unheld card and completes it in one command (w548/d720)", async () => {
+  await withFixture(async (fixture) => {
+    // A relay card is never worked in the delivery sense: it records a handoff
+    // and closes when the report arrives, so the start carried no information.
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "relay card", "--atomic-reason", "fixture"]),
+    );
+    const done = await runCli(
+      fixture,
+      ["work", "done", work, "--claim", "relayed: lead reported done", "--proof", "source: report"],
+      session("relay-holder"),
+    );
+    expect(done.exitCode).toBe(0);
+    expect(done.stdout).toContain(`${work} done`);
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const events = database
+      .query<{ payload: string; type: string }, [string]>(
+        "SELECT payload, type FROM event_log WHERE entity_id = ?",
+      )
+      .all(work);
+    const row = database
+      .query<{ held_by: string | null; state: string }, [string]>(
+        "SELECT held_by, state FROM work WHERE id = ?",
+      )
+      .get(work);
+    database.close();
+    expect(row).toEqual({ held_by: null, state: "done" });
+    const types = events.map((event) => event.type);
+    expect(types).toContain("work.done");
+    expect(types).not.toContain("work.start");
+    // The implicit claim is recorded where the completion is, not as a
+    // zero-length start no reader consumes.
+    const completion = events.find((event) => event.type === "work.done");
+    expect(JSON.parse(completion?.payload ?? "{}").claimedOnDone).toBe(true);
+  });
+});
+
+test("541 work done still refuses a card another live session holds (w548/d720)", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "held card", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session("first-holder"))).exitCode).toBe(0);
+
+    const stolen = await runCli(
+      fixture,
+      ["work", "done", work, "--claim", "took it", "--proof", "source: none"],
+      session("second-session"),
+    );
+    expect(stolen.exitCode).not.toBe(0);
+    expect(stolen.stderr).toContain("LEASE_HELD");
+    expect(stolen.stderr).toContain("first-holder");
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const row = database
+      .query<{ held_by: string | null; state: string }, [string]>(
+        "SELECT held_by, state FROM work WHERE id = ?",
+      )
+      .get(work);
+    database.close();
+    expect(row).toEqual({ held_by: "first-holder", state: "active" });
+  });
+});
+
+test("542 the implicit claim on work done answers to blockers (w548/d720)", async () => {
+  await withFixture(async (fixture) => {
+    const blocker = idFrom(
+      await runCli(fixture, ["work", "add", "blocker", "--atomic-reason", "fixture"]),
+    );
+    const blocked = idFrom(
+      await runCli(
+        fixture,
+        ["work", "add", "blocked card", "--atomic-reason", "fixture", "--blocked-by", blocker],
+      ),
+    );
+
+    const done = await runCli(
+      fixture,
+      ["work", "done", blocked, "--claim", "skipped ahead", "--proof", "source: none"],
+      session("blocked-session"),
+    );
+    expect(done.exitCode).not.toBe(0);
+    expect(done.stderr).toContain("BLOCKED");
+    expect(done.stderr).toContain(blocker);
+
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const row = database
+      .query<{ held_by: string | null; state: string }, [string]>(
+        "SELECT held_by, state FROM work WHERE id = ?",
+      )
+      .get(blocked);
+    database.close();
+    expect(row).toEqual({ held_by: null, state: "open" });
+  });
+});

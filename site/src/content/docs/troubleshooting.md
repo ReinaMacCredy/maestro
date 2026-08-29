@@ -39,11 +39,17 @@ the dirty check; tracked changes are not.
 
 ## `LEASE_REQUIRED`
 
-Completion requires the current session to hold the work lease. The error names
-the exact `maestro work start <id>` command. If a previous holder expired, the
-message also names that holder and the PID or TTL liveness reason.
+The verb acts on a lease that does not exist. `maestro work release` raises it
+when no session holds the item, and `maestro work reclaim` raises it in the
+same case, naming the exact `maestro work start <id>` command; reclaiming a
+lease another session holds is that verb's normal path.
 
-Do not bypass the lease. Read the work and live session state first:
+Completion does not raise this. `maestro work done` takes an unheld lease
+itself and says so when a previous holder lost one, naming that holder and the
+PID or TTL liveness reason. `work start`, `work done`, and `work release`
+refuse a lease another live session holds with `LEASE_HELD`.
+
+Read the work and live session state first:
 
 ```sh
 maestro work show <work-id>

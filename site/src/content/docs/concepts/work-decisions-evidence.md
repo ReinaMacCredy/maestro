@@ -93,8 +93,8 @@ maestro bundle close <bundle-id>
 
 ## Claims and proofs
 
-Complete held work with an observable claim paired to evidence that could
-falsify it:
+Complete work with an observable claim paired to evidence that could falsify
+it:
 
 ```sh
 maestro work done <work-id> --claim "test: <behavior>" --proof "source: <falsifier>"
@@ -102,6 +102,11 @@ maestro work done <work-id> --claim "test: <behavior>" --proof "source: <falsifi
 
 Evidence layers are `source`, `artifact`, `installed`, `live`, and `journey`.
 Claim only as far as the last proven link and name untested links explicitly.
+
+If no session holds the item, `done` takes the lease as part of that command,
+through the same gates and blocker checks as `start`. Taking it first is still
+how a delivery card announces its holder before the editing begins; a card that
+only records a handoff can close in one command.
 
 ## Default policy gates
 

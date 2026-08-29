@@ -11,7 +11,17 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- `maestro work done` takes the lease itself when no session holds the item,
+  completing in one command (room d700 relay w8, decisions d720 and d721). The
+  implicit claim runs the same blocker check and `work.start` gate chain as
+  `maestro work start`, so a no-write lane still cannot take the lease through
+  completion, and a lease another live session holds still raises
+  `LEASE_HELD`. No `work.start` event is written for the implicit claim; the
+  `work.done` event carries `claimedOnDone`. When a previous holder lost the
+  lease, the completion text names that holder and the liveness reason the
+  removed `LEASE_REQUIRED` error used to carry.
 
 ## [0.112.0] - 2026-08-29
 
