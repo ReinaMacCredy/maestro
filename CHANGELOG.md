@@ -36,6 +36,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
   of commits no remote holds, so a line that means the runtime is behind can no
   longer read the same as a line that means the runtime would be built from a
   lane branch.
+- The room's binding in `IDENTITY.md` now states its evidence rule for every
+  claim the room makes, in a brief or a report as much as in a gate decision,
+  and names the two surfaces that read as evidence and are not: a line that
+  arrived in context rather than from a command just run, re-checked by running
+  the verb that emits it, and a listing truncated for display, which proves at
+  least N and never exactly N. A stale drift advisory read at session start was
+  nearly reported to a Lead as a live hazard, and the length of a `head -5`
+  listing was quoted in a brief as a count of five where the real number was
+  fifty-eight (room l7: room w9, room d53; room l10: room w6).
 
 ## [0.113.1] - 2026-08-29
 

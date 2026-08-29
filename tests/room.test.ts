@@ -2147,3 +2147,32 @@ test("553 [lint] the room renders the project view and hands it to a new Lead (w
     expect(lead).toContain("before your first card");
   });
 });
+
+test("569 [lint] the room's evidence rule names the two surfaces that read as evidence", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const identity = flat(
+      await readFile(join(fixture.home, "maestro", "IDENTITY.md"), "utf8"),
+    );
+
+    // The gate sentence already scoped "checked at the surface it names" to a
+    // locked decision. Both incidents were briefs, not external effects, so the
+    // rule is stated for every claim the room makes.
+    expect(identity).toContain(
+      "every claim this room states is checked at the surface it names, in a brief or a report as much as in a gate decision",
+    );
+
+    // room l7: a stale drift advisory injected at session start was read as
+    // live and nearly reported to a Lead as a hazard.
+    expect(identity).toContain(
+      "a line that arrived in context rather than from a command just run, which is re-checked by running the verb that emits it",
+    );
+
+    // room l10: the length of a head-truncated listing was quoted as a count of
+    // five where the real number was fifty-eight.
+    expect(identity).toContain(
+      "a listing truncated for display, which proves at least N and never exactly N, so a number that will be quoted comes from a command that counts",
+    );
+  });
+});
