@@ -1987,10 +1987,26 @@ test("536 [lint] the room scaffolds the observer watcher and its start template 
     expect(watcher).toContain("not my role");
     expect(flat(watcher)).toContain("Sensor, not judgment");
 
-    // It belongs to the observer's pane, not to maestro: this is what keeps
-    // the deleted supervisor daemon deleted.
+    // It belongs to a pane, not to maestro: this is what keeps the deleted
+    // supervisor daemon deleted.
     expect(flat(watcher)).toContain("No maestro verb starts it");
     expect(watcher).toContain("HERDR_WORKSPACE_ID");
+
+    // d60: the pane cannot be the observer's own tool shell. A background
+    // process started from a harness's tool command dies with that command,
+    // which is why the first live sensor's pid was gone minutes later with no
+    // state directory and no wait armed.
+    expect(flat(watcher)).toContain(
+      "shell pane the room opens beside the observer and dies with that pane (d60)",
+    );
+    expect(flat(watcher)).not.toContain("observer's own pane and dies with it");
+    expect(watcher).toContain("start this in a pane of the team's workspace");
+
+    // A wait on an agent already idle, done or blocked returns at once, so
+    // arming every pane re-fired the whole settled set every cycle. Armed only
+    // for a working pane, it fires on the transition out of working, once.
+    expect(watcher).toContain('[ "$status" = "working" ] || continue');
+    expect(flat(watcher)).toContain("transition out of working and once per transition");
 
     // Counting is what makes a trigger countable rather than a matter of taste.
     expect(watcher).toContain("doubt >= 2");
@@ -2004,6 +2020,24 @@ test("536 [lint] the room scaffolds the observer watcher and its start template 
     expect(observer).toContain("once per issue");
     expect(observer).toContain("ledger");
     expect(observer).toContain("never writes the store");
+
+    // d60: the room opens the sensor's pane too, after the agent, and the
+    // observer is never told to start it. The old template told it to
+    // background the script from its own shell, which is the thing that dies.
+    expect(observer).toContain(
+      "herdr pane split --pane <pane-id> --direction down --cwd <team cwd> --no-focus",
+    );
+    expect(observer).toContain(
+      "herdr pane run <sensor-pane-id> ~/maestro/observer-watch.sh observer-<team>",
+    );
+    expect(observer).toContain("The sensor pane comes after the agent and never before it");
+    expect(observer).toContain("The sensor is already running in its own pane; starting it is not yours.");
+    expect(observer).not.toContain("observer-watch.sh observer-<team> &`");
+
+    // The template is the whole start message and goes through a file, so the
+    // send obeys the same rule as every other body the room writes.
+    expect(observer).toContain("Then send it this and nothing else, once, written to a file");
+    expect(lead).toContain("that template is the only start message the room sends an observer");
 
     // A bare maestro command creates the store where none exists and refreshes
     // a session row, so every store read the observer makes carries the prefix

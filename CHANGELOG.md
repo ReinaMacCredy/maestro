@@ -22,6 +22,22 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Changed
 
+- The observer's sensor is opened by the room in a plain shell pane of its own,
+  split beside the observer and started with `herdr pane run`, and the observer
+  is no longer told to background it from its own shell. A background process
+  started from a harness's tool command does not outlive that command: the first
+  live sensor reported a pid that was gone minutes later, with no state
+  directory and no wait armed, while the same script in a sibling shell pane had
+  both inside 25 seconds. `observer.md` and `lead.md` carry the new shape, and
+  that template is now stated to be the only start message the room sends an
+  observer, since a hand-written handoff in its place left one watching for
+  three minutes and then silent (room d60).
+- `observer-watch.sh` arms a wait only for a working pane, so the sensor fires
+  on the transition out of working and once per transition. `herdr agent wait`
+  on an agent already idle, done or blocked returns at once, so arming every
+  pane re-fired the whole settled set every cycle: events grew by one line per
+  settled pane per cycle and a settled pane whose tail held a matching line woke
+  the model every 15 seconds until that tail scrolled away (room d60).
 - `maestro decision draft` refuses a lone positional that names an existing
   decision, instead of creating a second decision whose text is that id, and
   refuses `--supersedes`, `--parent` and `--work` on an edit, which the edit
