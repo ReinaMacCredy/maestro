@@ -125,7 +125,6 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "lane.md",
       "lead.md",
       "observer.md",
-      "observer-watch.sh",
       "shellrc",
       ".claude/settings.json",
     ];
@@ -136,6 +135,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
     );
     const ownerEdit = "# OWNER\n\nOwner-authored content survives installs.\n";
     await writeFile(join(room, "OWNER.md"), ownerEdit);
+    await writeFile(join(room, "observer-watch.sh"), "stale legacy watcher\n");
     for (const name of generatedNames) {
       await writeFile(
         join(room, name),
@@ -151,6 +151,7 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       expect(await readFile(join(room, name), "utf8")).toBe(firstInstall.get(name) ?? "");
       expect(await readFile(join(room, name), "utf8")).not.toContain("stale ");
     }
+    expect(existsSync(join(room, "observer-watch.sh"))).toBe(false);
   });
 });
 
@@ -471,28 +472,13 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     const agents = await readFile(join(room, "AGENTS.md"), "utf8");
 
     expect(lead).not.toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
-    expect(lead).toContain("`herdr agent list`");
-    expect(lead).toContain(
-      '`[from supervisor][intent] <owner words verbatim>` to a file and run `herdr agent prompt lead-<repo basename> "$(cat <file>)"`',
-    );
-    expect(lead).toContain(
-      "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus`",
-    );
-    expect(lead).not.toContain(
-      "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead --no-focus`",
-    );
-    expect(lead).toContain(
-      "`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>`",
-    );
-    // d24: a Claude Lead gets the same window as a Claude lane.
-    expect(lead).toContain(
-      "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
-    );
+    expect(lead).toContain("`maestro team status <team> --json`");
+    expect(lead).not.toContain("herdr tab create");
+    expect(lead).not.toContain("herdr agent start");
+    expect(lead).not.toContain("herdr pane split");
+    expect(lead).toContain("TeamRuntime owns workspace, pane, agent, bootstrap prompt, and sensor creation");
     expect(lead).toContain(
       '`[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read ~/maestro/PROJECT/<repo basename>.md before your first card, it holds every correction already filed against this project.` to a file and run `herdr agent prompt lead-<repo basename> "$(cat <file>)"`',
-    );
-    expect(lead).toContain(
-      "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
     );
     expect(lead).toContain(
       '`maestro work note <room-work-id> "handed intent to <repo>: <one-line summary>"`',
@@ -501,13 +487,13 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       'Never run `maestro work add` or any write in the project store, run `maestro dispatch open`, suggest topology in the prompt, or read the pane transcript.',
     );
     expect(lead).toContain(
-      '`maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`, then `herdr agent prompt supervisor "[from lead][ask d<id>] <question>"`',
+      '`maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>`, then `herdr agent prompt <record holder> "[from lead][ask d<id>] <question>"`',
     );
     expect(lead).toContain("A non-decision question is a work note sent the same way.");
     expect(lead).toContain("The room never runs `herdr agent wait` on a Lead");
     expect(lead).toContain("the store is the truth and the room's next prompt shows it");
     expect(lead).toContain(
-      "The room's reply is a prompt and the record (lock or supersede) is what the Lead acts on.",
+      "The record holder's reply is a prompt and the record (lock or supersede) is what the Lead acts on.",
     );
     expect(lead).not.toContain(
       "The Lead reports back through its own store and the next `maestro brief`.",
@@ -576,7 +562,7 @@ test("528 [lint] a Lead reports a closed card back to the room (d22)", async () 
   });
 });
 
-test("501 [lint] installed room guidance selects models from the SLP reference (d711)", async () => {
+test("501 [lint] installed lane guidance selects models while team startup stays lifecycle-owned (d711)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -585,14 +571,12 @@ test("501 [lint] installed room guidance selects models from the SLP reference (
     const lead = await readFile(join(room, "lead.md"), "utf8");
     const owner = await readFile(join(room, "OWNER.md"), "utf8");
     const laneStep = lane.split("5. ")[1]?.split("\n6. ")[0] ?? "";
-    const leadStep = lead.split("4. ")[1]?.split("\n5. ")[0] ?? "";
 
     expect(laneStep).toContain(
       "Pass the chosen model from the Model table in `maestro recipe show slp` and the lane's thinking level from its table to the harness: use `-- --model <name> --effort <level> --autocompact 250000` for Claude or Codex's `--model <name> -c model_reasoning_effort=<level>` flags (verified with `claude --help` and `codex --help`).",
     );
-    expect(leadStep).toContain(
-      "Pick the Lead's model from the `lead` rung of the Model table in `maestro recipe show slp`;",
-    );
+    expect(lead).toContain("TeamRuntime owns workspace, pane, agent, bootstrap prompt, and sensor creation");
+    expect(lead).not.toContain("Pick the Lead's model");
     expect(owner).toContain(
       "Which examples should the owner-editable Model table column use for cheap, strong, diverse, and lead? Keep the current names here.",
     );
@@ -1835,29 +1819,29 @@ test("529 [lint] relayed intent reports on close even without a room decision id
       join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
       "utf8",
     );
-    const step6 = lead.split("\n6. ")[1]?.split("\n7. ")[0] ?? "";
-    expect(step6).not.toBe("");
+    const step7 = lead.split("\n7. ")[1]?.split("\n8. ")[0] ?? "";
+    expect(step7).not.toBe("");
 
     // Keying the report on a room decision id missed room card w4 to
     // lead-dotfiles: that relay carried intent and named no decision, so the
     // trigger never fired and the closure went unreported.
-    expect(step6).toContain("[from supervisor][intent]");
-    expect(step6).toContain("w<room-id>");
-    expect(step6).toContain("d<room-id>");
+    expect(step7).toContain("[from supervisor][intent]");
+    expect(step7).toContain("w<room-id>");
+    expect(step7).toContain("d<room-id>");
     expect(slp).toContain("w<room-id>");
 
     // The same Lead then hunted for the room with ListAgents and dispatch
     // list. The room agent name is fixed, so searching is always wrong.
-    expect(step6).toContain("herdr agent prompt <record holder>");
+    expect(step7).toContain("herdr agent prompt <record holder>");
 
     // l5: every store numbers decisions from d1, so the room citing d41 at a
     // team whose store held d1 to d4 hid the premise blocking that team.
-    expect(step6).toContain(
+    expect(step7).toContain(
       "a record id that crosses a store boundary in either direction is written with its store",
     );
-    expect(step6).toMatch(/only channel|reached only by/);
-    expect(step6).toContain("herdr agent list");
-    expect(step6).toContain("maestro dispatch list");
+    expect(step7).toMatch(/only channel|reached only by/);
+    expect(step7).not.toContain("herdr agent list");
+    expect(step7).not.toContain("maestro dispatch list");
   });
 });
 
@@ -1865,7 +1849,7 @@ function flat(text: string): string {
   return text.replace(/\s+/g, " ");
 }
 
-test("533 [lint] the slp recipe carries the d28 team model", async () => {
+test("533 [lint] the slp recipe carries the supervised team lifecycle", async () => {
   const raw = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
     "utf8",
@@ -1902,16 +1886,35 @@ test("533 [lint] the slp recipe carries the d28 team model", async () => {
     "`advisor-<team>` and `observer-<team>` have none at all",
   );
 
-  // The observer speaks, it never acts: no assignment change, no freeze, no
-  // write verb, no store write, and only inside its own workspace.
+  // Observer receives bounded packets from the foreground sensor and owns
+  // only the packet-capability review path.
+  expect(slp).toContain("one bounded evidence packet");
+  expect(slp).toContain("`maestro team review raise`");
+  expect(slp).toContain("never receives a continuous whole-team transcript");
   expect(slp).toContain(
-    "[from observer][suspected] <pane> <quoted evidence> <why>",
+    "no general store, work, dispatch, decision, reconcile, or runtime authority",
   );
-  expect(slp).toContain("its own workspace only");
-  expect(slp).toContain(
-    "never changes an assignment, never freezes, never runs a write verb, never writes the store",
-  );
-  expect(slp).toContain("once per issue and again only on new evidence");
+  expect(slp).toContain("same dedupe key fires again only on new evidence");
+
+  // Advisor is an on-demand bounded operation, not an idle baseline pane.
+  expect(slp).toContain("Advisor is not a baseline readiness seat");
+  expect(slp).toContain("`maestro team advise`");
+
+  // The Room-ledger lifecycle is the only team topology path.
+  for (const command of [
+    "`maestro team open`",
+    "`maestro team status`",
+    "`maestro team health`",
+    "`maestro team review spot-check`",
+    "`maestro team reconcile`",
+    "`maestro team stop`",
+  ]) expect(slp).toContain(command);
+  expect(slp).toContain("supervised check");
+  const teams = raw.split("## Teams")[1]?.split("\n## ")[0] ?? "";
+  expect(teams).not.toContain("observer-watch");
+  expect(teams).not.toContain("herdr workspace create");
+  expect(teams).not.toContain("herdr tab create");
+  expect(teams).not.toContain("herdr agent start");
 
   // Triggers are countable so a drift call is checkable rather than a matter
   // of taste.
@@ -1934,23 +1937,29 @@ test("533 [lint] the slp recipe carries the d28 team model", async () => {
   );
 });
 
-test("534 [lint] installed lead guidance opens a team workspace before any pane (d29)", async () => {
+test("534 [lint] installed lead guidance routes topology through the Room lifecycle", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const lead = flat(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8"));
 
-    // The room's own workspace stays clean: every pane the room opens goes to
-    // the team's workspace, which the room creates first.
-    expect(lead).toContain(
-      "`herdr workspace create --cwd <team cwd> --label team-<name> --no-focus`",
-    );
-    expect(lead).toContain("never in the room's own workspace");
-
-    // One team cwd is one workspace: read the list and reuse before creating.
-    expect(lead).toContain("`herdr workspace list`");
-    expect(lead).toContain("reuse");
-    expect(lead).toContain("never opens a duplicate");
+    for (const command of [
+      "`maestro team open <team>",
+      "`maestro team status <team> --json`",
+      "`maestro team health <team>",
+      "`maestro team review spot-check <team>",
+      "`maestro team advise <team>",
+      "`maestro team reconcile <team>",
+      "`maestro team stop <team>",
+    ]) expect(lead).toContain(command);
+    expect(lead).toContain("supervised check");
+    expect(lead).toContain("snapshot only");
+    expect(lead).toContain("fresh runtime inspection");
+    expect(lead).not.toContain("observer-watch");
+    expect(lead).not.toContain("herdr workspace create");
+    expect(lead).not.toContain("herdr tab create");
+    expect(lead).not.toContain("herdr agent start");
+    expect(lead).not.toContain("herdr pane split");
 
     // d719: the relay prompt carries the report target, so the Lead never
     // searches for it.
@@ -1958,7 +1967,7 @@ test("534 [lint] installed lead guidance opens a team workspace before any pane 
   });
 });
 
-test("535 [lint] the room's transcript denial stays while observer-<team> reads its own workspace", async () => {
+test("535 [lint] the room and Observer both deny continuous transcript access", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -1966,10 +1975,11 @@ test("535 [lint] the room's transcript denial stays while observer-<team> reads 
     const identity = flat(await readFile(join(room, "IDENTITY.md"), "utf8"));
     const agents = flat(await readFile(join(room, "AGENTS.md"), "utf8"));
 
-    // The room still reads stores, not panes. The d28 grant belongs to a
-    // different role in a different workspace and does not widen this binding.
+    // The Room reads records, while Observer receives only sensor packets.
     expect(identity).toContain("Raw transcript access: denied");
     expect(identity).toContain("observer-<team>");
+    expect(identity).toContain("bounded evidence packets");
+    expect(identity).toContain("never receives a continuous whole-team transcript");
     expect(identity).toContain("does not widen this binding");
 
     // d29: the room supervisor opens no agent in the room's own workspace.
@@ -1978,88 +1988,29 @@ test("535 [lint] the room's transcript denial stays while observer-<team> reads 
   });
 });
 
-test("536 [lint] the room scaffolds the observer watcher and its start template (d33)", async () => {
+test("536 [lint] fresh room guidance uses the foreground sensor and scoped Observer contract", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
-    const watcher = await readFile(join(room, "observer-watch.sh"), "utf8");
     const observer = flat(await readFile(join(room, "observer.md"), "utf8"));
     const lead = flat(await readFile(join(room, "lead.md"), "utf8"));
+    expect(existsSync(join(room, "observer-watch.sh"))).toBe(false);
+    expect(observer).toContain("bounded evidence packet");
+    expect(observer).toContain("packet capability");
+    expect(observer).toContain("`maestro team review raise <team>");
+    expect(observer).toContain("at most one packet-bound verdict");
+    expect(observer).toContain("no general store, work, dispatch, decision, reconcile, or runtime authority");
+    expect(observer).not.toContain("herdr agent read");
+    expect(observer).not.toContain("herdr agent start");
+    expect(observer).not.toContain("herdr pane");
+    expect(observer).not.toContain("observer-watch");
+    expect(observer).not.toContain("maestro status");
+    expect(observer).not.toContain("maestro work");
 
-    // The watcher is a sensor: it wakes the model, it never judges.
-    expect(watcher).toContain("herdr agent wait");
-    expect(watcher).toContain("--source recent-unwrapped");
-    expect(watcher).toContain("[watch] $name");
-    expect(watcher).toContain("LEASE_HELD");
-    expect(watcher).toContain("not my role");
-    expect(flat(watcher)).toContain("Sensor, not judgment");
-
-    // It belongs to a pane, not to maestro: this is what keeps the deleted
-    // supervisor daemon deleted.
-    expect(flat(watcher)).toContain("No maestro verb starts it");
-    expect(watcher).toContain("HERDR_WORKSPACE_ID");
-
-    // d60: the pane cannot be the observer's own tool shell. A background
-    // process started from a harness's tool command dies with that command,
-    // which is why the first live sensor's pid was gone minutes later with no
-    // state directory and no wait armed.
-    expect(flat(watcher)).toContain(
-      "shell pane the room opens beside the observer and dies with that pane (d60)",
-    );
-    expect(flat(watcher)).not.toContain("observer's own pane and dies with it");
-    expect(watcher).toContain("start this in a pane of the team's workspace");
-
-    // A wait on an agent already idle, done or blocked returns at once, so
-    // arming every pane re-fired the whole settled set every cycle. Armed only
-    // for a working pane, it fires on the transition out of working, once.
-    expect(watcher).toContain('[ "$status" = "working" ] || continue');
-    expect(flat(watcher)).toContain("transition out of working and once per transition");
-
-    // Counting is what makes a trigger countable rather than a matter of taste.
-    expect(watcher).toContain("doubt >= 2");
-    expect(watcher).toContain("seen[$0] == 3");
-
-    // The start template tells the room how to open the observer, and the
-    // observer what to do when the watcher wakes it.
-    expect(observer).toContain("herdr agent start observer-<team>");
-    expect(observer).toContain("observer-watch.sh observer-<team>");
-    expect(observer).toContain("[from observer][suspected]");
-    expect(observer).toContain("once per issue");
-    expect(observer).toContain("ledger");
-    expect(observer).toContain("never writes the store");
-
-    // d60: the room opens the sensor's pane too, after the agent, and the
-    // observer is never told to start it. The old template told it to
-    // background the script from its own shell, which is the thing that dies.
-    expect(observer).toContain(
-      "herdr pane split --pane <pane-id> --direction down --cwd <team cwd> --no-focus",
-    );
-    expect(observer).toContain(
-      "herdr pane run <sensor-pane-id> ~/maestro/observer-watch.sh observer-<team>",
-    );
-    expect(observer).toContain("The sensor pane comes after the agent and never before it");
-    expect(observer).toContain("The sensor is already running in its own pane; starting it is not yours.");
-    expect(observer).not.toContain("observer-watch.sh observer-<team> &`");
-
-    // The template is the whole start message and goes through a file, so the
-    // send obeys the same rule as every other body the room writes.
-    expect(observer).toContain("Then send it this and nothing else, once, written to a file");
-    expect(lead).toContain("that template is the only start message the room sends an observer");
-
-    // A bare maestro command creates the store where none exists and refreshes
-    // a session row, so every store read the observer makes carries the prefix
-    // or the template contradicts itself.
-    const reads = [...observer.matchAll(/(\S*\s?)maestro (status|work show)/g)];
-    expect(reads.length).toBeGreaterThan(0);
-    for (const read of reads) expect(read[1]).toContain("MAESTRO_READ_ONLY=1");
-
-    // The executable bit matters: the observer runs this, it does not read it.
-    const mode = (await stat(join(room, "observer-watch.sh"))).mode & 0o777;
-    expect(mode & 0o100).toBe(0o100);
-
-    // Opening the observer is part of opening a team.
-    expect(lead).toContain("observer.md");
+    expect(lead).toContain("maestro-team-sensor");
+    expect(lead).toContain("TeamRuntime owns workspace, pane, agent, bootstrap prompt, and sensor creation");
+    expect(lead).not.toContain("observer-watch");
   });
 });
 
@@ -2242,9 +2193,8 @@ test("570 [lint] a brief body is sent through a file, not as a rescanned inline 
     // sender's shell evaluated the formatting marks in the body. The mechanics
     // sit next to the send, in lane.md step 5.
     expect(lane).toContain("The body goes through a file and is never typed inline");
-    // h118: the absolute was false of the observer watcher, which expands its
-    // own variables inline on purpose. The invariant is scoped, and the step's
-    // own send form no longer models what the rule forbids.
+    // h118: the invariant is scoped to literal prompt bodies; scripts that
+    // intentionally expand their own variables remain outside it.
     expect(lane).toContain(
       'send it with `herdr agent prompt peer-<dispatch id> "$(cat <file>)"`',
     );
@@ -2252,8 +2202,9 @@ test("570 [lint] a brief body is sent through a file, not as a rescanned inline 
       "That governs literal or owner-supplied text: a contract, owner words repeated verbatim, a note about a command.",
     );
     expect(lane).toContain(
-      "It does not govern a script expanding its own variables on purpose, as the observer's watcher does",
+      "It does not govern a script expanding its own variables on purpose.",
     );
+    expect(lane).not.toContain("observer's watcher");
 
     // The room's own sends are the larger exposure: every brief leaves here as
     // a double-quoted argument, and the quiet failure removes text silently.

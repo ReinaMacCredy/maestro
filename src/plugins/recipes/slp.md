@@ -93,64 +93,93 @@ store a verb reads (d717), so two teams working the same repository read the
 same store and stay distinct teams, and one team spanning three repositories
 stays one team.
 
-One team cwd maps to exactly one workspace. Before creating a team workspace
-the opener reads `herdr workspace list` and reuses a workspace whose label or
-cwd already matches; a second workspace on the same cwd splits a team in half
-without saying so.
+The Room store is the sole lifecycle ledger. TeamRuntime alone creates, adopts,
+prompts, inspects, repairs, and removes the generation-owned workspace, role
+panes, agents, and foreground sensor. Room guidance never starts those
+resources with direct Herdr commands. A pane, label, planned topology row, or
+old receipt is not readiness proof.
 
-A team holds exactly one record holder, `supervisor-<team>`. Beside it stand
-two supports that hold no records, and below it the ordinary project roles:
+A team holds exactly one record holder, `supervisor-<team>`. Beside it are one
+baseline Observer and an Advisor that exists only for a bounded consultation:
 
 | name | what it is | writes? |
 |---|---|---|
 | `supervisor-<team>` | the team's record holder: locks decisions, receives done reports, holds the owner gates for this team | yes, records |
-| `advisor-<team>` | support for the record holder when it is stuck or the owner is away; it is the counsel a Codex Supervisor has no tool for, and it is the team's read-only investigator, the seat a Lead takes a hard question to | no: no cards, no records |
-| `observer-<team>` | drift watch, running for as long as the team is working | no |
+| `advisor-<team>` | on-demand counsel and the team's read-only investigator; starts for one decision question and closes after one recommendation | no: no cards, records, leases, or decisions |
+| `observer-<team>` | bounded judgment for sensor packets and supervised checks | one capability-bound review verdict only |
 | `lead-<repo basename>` | Lead of that repository (a team may hold several when it spans repositories) | yes, in that repository |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
 
 The help ladder is peers, then the Lead, then `advisor-<team>`, then
 `supervisor-<team>`. There is no seat between the Lead and the advisor: a
-separate investigator rung beside each Lead was retired because a team given one
-skipped it. It sat on the same model and the same read-only grant as the two
-seats around it, so it added a hop and nothing else, and every difficulty went
-from the Lead to the record holder directly. The duty is the advisor's now, and
-the advisor still runs no write verb, holds no cards and holds no records.
+separate investigator rung beside each Lead was retired because a team given
+one skipped it. It sat on the same model and the same read-only grant as the
+two seats around it, so it added a hop and nothing else, and every difficulty
+went from the Lead to the record holder directly. The duty is the advisor's
+now, and it is the team's read-only investigator.
 
 Every seat in a team reports to `supervisor-<team>`, the name the prompt that
 opened it gave, and never to the bare `supervisor`, which is the room. Only
-`supervisor-<team>` has a channel out of the workspace (d36): `advisor-<team>`
-and `observer-<team>` have none at all, so a support seat reporting ready, or
-anything else, sends it to `supervisor-<team>` inside its own workspace.
+`supervisor-<team>` has a channel out of the workspace (d36):
+`advisor-<team>` and `observer-<team>` have none at all.
 
 Example models for the team roles, dated 2026-08-29 and owner-editable exactly
 like the Model table below: `supervisor-<team>` on the `lead` rung, and both
 supports on a cheap-but-thinking pair, `advisor-<team>` on `gpt-5.6-sol` at
 `xhigh` and `observer-<team>` on `gpt-5.6-luna` at `xhigh`.
 
+### Team lifecycle
+
+All lifecycle operations run against the Room ledger:
+
+- `maestro team open` creates or adopts deterministic resources and returns
+  OPERABLE only after one bounded proof of ACTIVE + READY + CLEAR.
+- `maestro team status` reads the last ledger snapshot only.
+- `maestro team health` and `maestro team await-ready` perform fresh runtime
+  inspection; neither silently repairs a failed resource.
+- `maestro team review spot-check` is a supervised check: the boss-like,
+  one-shot inspection of one question, generation, evidence window, and stop.
+  It installs no persistent watcher. `maestro team review raise` is the
+  Observer's packet-capability path; only the team Supervisor may clear or
+  escalate the resulting hold with rationale.
+- `maestro team advise` runs one bounded Advisor consultation. Advisor is not
+  a baseline readiness seat: TeamRuntime starts or adopts it, proves delivery,
+  records one recommendation, and closes it at the declared stop.
+- `maestro team reconcile` repairs only the resources explicitly authorized
+  by `supervisor-<team>`, then re-proves the whole topology. There is no
+  automatic restart, and runtime repair cannot clear a review hold.
+- `maestro team stop` records STOPPING before drain, keeps Observer and sensor
+  live while work roles reach their bounded stops, closes the team Supervisor
+  last from the external Room control session, and records STOPPED only after
+  fresh absence proof.
+
+`team status` never upgrades health. STARTING, REVIEW_HOLD, DRAINING, and
+CLOSED are explicit non-operable results. Every protected project gate consumes
+the same fresh TeamControl verdict from the Room ledger rather than a local
+READY copy.
+
 ### The observer
 
-`observer-<team>` may run `herdr agent read` on every pane in its own workspace
-only, and it speaks straight to the member that drifts:
+The dedicated `maestro-team-sensor` is a foreground process in its own pane,
+not a daemon, scheduler, or model. It applies the fixed semantic catalog and
+delivers one bounded evidence packet after a threshold fires. Observer never
+receives a continuous whole-team transcript.
 
-```
-[from observer][suspected] <pane> <quoted evidence> <why>
-```
+A packet carries the rule, team generation, actor, relevant work, decision,
+authority and stop references, exact evidence, a capped excerpt, and one-use
+capability. Observer judges only that packet and may submit at most one verdict
+through `maestro team review raise`. It has no general store, work, dispatch,
+decision, reconcile, or runtime authority. The Room ledger owns dedupe, so the
+same dedupe key fires again only on new evidence.
 
-It says so once per issue and again only on new evidence. It never changes an
-assignment, never freezes, never runs a write verb, never writes the store: the
-addressee or `supervisor-<team>` decides, and `supervisor-<team>` records. This
-is the Supervisor's own separation of observation, hypothesis and verdict
-placed in a second pane, which is why the operative word stays "suspected".
+Triggers are countable, not taste: the same failure a third time; a claim
+contradicting the relevant `maestro status` or `maestro work show` record; a
+role answering a question type it does not own; a pane silent past its stop
+condition; self-doubt phrases repeated in one turn.
 
-Triggers are countable, not taste: the same failure a third time; a claim in a
-pane contradicting `maestro status` or `maestro work show`; a role answering a
-question type it does not own; a pane silent past its stop condition;
-self-doubt phrases repeated in one turn.
-
-Reading panes is the observer's grant, not the room's: the Supervisor binding
-below still denies the room raw transcript access, and the observer's grant
-stops at its own workspace, so neither role can read the other's team.
+Reading raw panes is neither Observer nor room authority. The sensor reads only
+the bounded recent window needed by the fixed catalog; the packet, receipt, and
+cited evidence are the review surface.
 
 ## Reading the owner's prompt
 
@@ -271,7 +300,7 @@ binding on the role, checkable after the fact, not prevented.
 | `~/maestro` (opened with `hm`) | Supervisor, the owner's embodiment | the room `AGENTS.md` points at `IDENTITY.md`; `maestro brief` is its event feed across every registered repository |
 | a Herdr agent named `lead-<repo basename>` whose cwd is the repository | Lead of that repository | the room sets the name; the hook brief lists dispatches it opened |
 | a pane the Lead opened with a dispatch | Peer | the Lead starts it as `peer-<dispatch id>` and sends that stored contract; `maestro dispatch accept <id>` records the lease; lane vocabulary: scout (no-write), decision, delivery, challenge, shadow (no-write, evidence only) |
-| a Herdr agent named `supervisor-<team>`, `advisor-<team>` or `observer-<team>` | that team role | the room sets the name when it opens the team; the team is the workspace the pane sits in, never its cwd |
+| a Herdr agent named `supervisor-<team>`, `advisor-<team>` or `observer-<team>` | that team role | `maestro team` asks TeamRuntime to set and prove the generation-owned identity; the team is the workspace the pane sits in, never its cwd |
 
 A session never becomes a Peer on its own; the Lead makes it one by starting
 `peer-<dispatch id>`, and dispatch acceptance records that binding. When a
@@ -553,6 +582,7 @@ project, processed ones included.
 
 ## Lane procedure
 
-The mechanics of opening, briefing, waking and closing a lane live in
-`~/maestro/lane.md`. The record is maestro's; topology and delivery are
-Herdr's; no maestro verb pushes a brief or calls Herdr.
+The mechanics of opening, briefing, waking and closing a Peer lane live in
+`~/maestro/lane.md`. Dispatch and work verbs never push a brief or call Herdr;
+the explicit `maestro team` lifecycle is the separate boundary that invokes
+TeamRuntime for supervised team topology and evidence.
