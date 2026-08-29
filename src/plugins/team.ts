@@ -9,6 +9,7 @@ import {
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { Store } from "../kernel/store.ts";
 import {
   buildTeamPlan,
   HerdrTeamRuntime,
@@ -18,6 +19,7 @@ import {
   type RuntimeEffect,
   type TeamInspection,
   type TeamPlan,
+  type TeamRepairResource,
   type TeamRuntime,
 } from "./team-runtime.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -61,6 +63,7 @@ export interface TeamSnapshot extends TeamAxes {
 
 export interface TeamReceipt {
   actor: string;
+  actual: Record<string, unknown> | null;
   after: (TeamAxes & { verdict: TeamVerdict }) | null;
   attemptedAt: string;
   before: (TeamAxes & { verdict: TeamVerdict }) | null;
@@ -99,6 +102,7 @@ interface SnapshotRow {
 
 interface ReceiptRow {
   actor: string;
+  actual_json: string | null;
   after_json: string | null;
   attempted_at: string;
   before_json: string | null;
@@ -128,6 +132,10 @@ interface EffectRow {
 }
 
 interface DesiredOperation {
+  force?: {
+    evidence: string;
+    reason: string;
+  };
   plan: TeamPlan;
 }
 
@@ -414,6 +422,7 @@ function snapshotFromRow(row: SnapshotRow): TeamSnapshot {
 function receiptFromRow(row: ReceiptRow): TeamReceipt {
   return {
     actor: row.actor,
+    actual: json<Record<string, unknown> | null>(row.actual_json, null),
     after: json<TeamReceipt["after"]>(row.after_json, null),
     attemptedAt: row.attempted_at,
     before: json<TeamReceipt["before"]>(row.before_json, null),
@@ -660,8 +669,10 @@ function finalizeReceiptAndSnapshot(
   input: {
     axes: TeamAxes;
     effects: RuntimeEffect[];
+    forced?: boolean;
     inspection: TeamInspection;
     operationId: string;
+    overrideReason?: string;
     plan: TeamPlan;
     previous: TeamSnapshot | null;
     result: string;
@@ -686,7 +697,8 @@ function finalizeReceiptAndSnapshot(
       .query(
         `UPDATE team_receipts
          SET observed_runtime_revision = ?, completed_at = ?, observed_at = ?,
-             actual_json = ?, status = 'FINALIZED', result = ?, after_json = ?, missing_json = ?
+             actual_json = ?, status = 'FINALIZED', result = ?, after_json = ?, missing_json = ?,
+             forced = ?, override_reason = ?
          WHERE operation_id = ? AND status = 'ATTEMPTED'`,
       )
       .run(
@@ -697,6 +709,8 @@ function finalizeReceiptAndSnapshot(
         input.result,
         JSON.stringify(after),
         JSON.stringify(input.inspection.missing),
+        input.forced ? 1 : 0,
+        input.overrideReason ?? null,
         input.operationId,
       );
     if (finalized.changes !== 1) {
@@ -1779,6 +1793,595 @@ async function bindTeamProject(
   }
 }
 
+async function reconcileTeam(
+  context: PluginContext,
+  runtime: TeamRuntime,
+  invocation: CliInvocation,
+): Promise<CliResult> {
+  const teamId = normalizeTeamId(requiredPosition(invocation, 0, "team id"));
+  const operationId = requiredOperation(invocation);
+  const existing = findReceipt(context, operationId);
+  if (existing) {
+    validateReceiptIdentity(existing, "team.reconcile", teamId);
+    if (existing.status === "FINALIZED") {
+      const receipt = receiptFromRow(existing);
+      const team = requireSnapshot(context, teamId);
+      if (receipt.result === "RECONCILE_INCOMPLETE") {
+        throw new CliError(
+          "TEAM_RECONCILE_INCOMPLETE",
+          `${teamId} still misses ${receipt.missing.length} postconditions`,
+          { receipt, team },
+        );
+      }
+      return {
+        data: { receipt, team },
+        text: `${teamId} reconciled: ${team.verdict}`,
+      };
+    }
+  }
+  const snapshot = requireSnapshot(context, teamId);
+  if (snapshot.stage !== "ACTIVE" && snapshot.stage !== "STARTING") {
+    throw new CliError("INVALID_STATE", `${teamId} is ${snapshot.stage}`, {
+      stage: snapshot.stage,
+      teamId,
+    });
+  }
+  const requestedBy = requiredStringOption(invocation, "requested-by");
+  assertTeamSupervisor(teamId, requestedBy);
+  const rawResources = [...new Set(stringOptions(invocation, "resource"))];
+  const allowedResources = new Set<TeamRepairResource>([
+    "workspace",
+    "supervisor",
+    "lead",
+    "observer",
+    "sensor",
+  ]);
+  if (rawResources.length === 0) {
+    throw new CliError("MISSING_ARGUMENT", "pass at least one --resource to reconcile");
+  }
+  const invalid = rawResources.filter(
+    (resource): resource is string => !allowedResources.has(resource as TeamRepairResource),
+  );
+  if (invalid.length > 0) {
+    throw new CliError(
+      "INVALID_ARGUMENT",
+      `unknown reconcile resource: ${invalid.join(", ")}`,
+      { allowed: [...allowedResources], invalid },
+    );
+  }
+  const resources = rawResources as TeamRepairResource[];
+  const plan = planForSnapshot(context, snapshot);
+  if (!existing) {
+    insertAttempt(context, {
+      desired: { plan },
+      generation: snapshot.generation,
+      kind: "team.reconcile",
+      operationId,
+      requestedBy,
+      snapshot,
+      teamId,
+    });
+  }
+  let effects = snapshot.resources;
+  let inspection: TeamInspection;
+  try {
+    effects = await runtime.reconcile(
+      plan,
+      resources,
+      effects,
+      (effect) => recordEffect(context, operationId, effect),
+    );
+    inspection = await runtime.inspect(plan, effects);
+  } catch (error) {
+    effects = [
+      ...snapshot.resources.filter(
+        (effect) => !latestEffects(context, operationId).some((current) => current.key === effect.key),
+      ),
+      ...latestEffects(context, operationId),
+    ];
+    inspection = runtimeFailureInspection(error);
+  }
+  const axes: TeamAxes = inspection.complete
+    ? { health: "READY", review: snapshot.review, stage: "ACTIVE" }
+    : snapshot.stage === "STARTING"
+      ? { health: null, review: snapshot.review, stage: "STARTING" }
+      : { health: "DEGRADED", review: snapshot.review, stage: "ACTIVE" };
+  const outcome = finalizeReceiptAndSnapshot(context, {
+    axes,
+    effects,
+    inspection,
+    operationId,
+    plan,
+    previous: snapshot,
+    result: inspection.complete ? "RECONCILED" : "RECONCILE_INCOMPLETE",
+  });
+  context.log.append({
+    entityId: teamId,
+    entityType: "team",
+    payload: {
+      missing: inspection.missing,
+      operationId,
+      resources,
+      result: outcome.receipt.result,
+    },
+    sessionId: context.sessions.current().id,
+    type: "team.reconcile",
+  });
+  if (!inspection.complete) {
+    throw new CliError(
+      "TEAM_RECONCILE_INCOMPLETE",
+      `${teamId} still misses ${inspection.missing.length} postconditions after selected repair`,
+      { receipt: outcome.receipt, team: outcome.team },
+    );
+  }
+  return {
+    data: { receipt: outcome.receipt, team: outcome.team },
+    text: `${teamId} reconciled: ${outcome.team.verdict}`,
+  };
+}
+
+interface ProjectBindingRow {
+  binding_id: string;
+  project_root: string;
+  project_store_path: string;
+}
+
+function mergeRuntimeEffects(...groups: readonly RuntimeEffect[][]): RuntimeEffect[] {
+  const effects = new Map<string, RuntimeEffect>();
+  for (const group of groups) {
+    for (const effect of group) effects.set(effect.key, effect);
+  }
+  return [...effects.values()];
+}
+
+function tableExists(store: Store, name: string): boolean {
+  return store.database
+    .query<{ name: string }, [string]>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .get(name) !== null;
+}
+
+function projectDrainBlockers(
+  context: PluginContext,
+  snapshot: TeamSnapshot,
+): MissingPostcondition[] {
+  const blockers: MissingPostcondition[] = [];
+  const bindings = context.store.database
+    .query<ProjectBindingRow, [string, number]>(
+      `SELECT binding_id, project_root, project_store_path
+       FROM team_project_bindings
+       WHERE team_id = ? AND generation = ? AND status = 'ACTIVE'
+       ORDER BY project_root`,
+    )
+    .all(snapshot.teamId, snapshot.generation);
+  for (const binding of bindings) {
+    const shared = resolve(binding.project_store_path) === resolve(context.store.path);
+    let projectStore: Store | null = null;
+    try {
+      projectStore = shared ? context.store : new Store(binding.project_store_path, { readonly: true });
+      if (tableExists(projectStore, "work")) {
+        const workRows = projectStore.database
+          .query<{
+            held_by: string | null;
+            id: string;
+            state: string;
+          }, []>(
+            `SELECT id, state, held_by
+             FROM work
+             WHERE cancelled_at IS NULL
+               AND state != 'done'
+               AND (state = 'active' OR held_by IS NOT NULL)
+             ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
+          )
+          .all();
+        for (const work of workRows) {
+          if (work.held_by) {
+            blockers.push({
+              actual: {
+                bindingId: binding.binding_id,
+                heldBy: work.held_by,
+                projectRoot: binding.project_root,
+                state: work.state,
+              },
+              code: "shutdown.lease",
+              expected: "work lease released",
+              resource: `work:${work.id}`,
+            });
+          } else {
+            blockers.push({
+              actual: {
+                bindingId: binding.binding_id,
+                projectRoot: binding.project_root,
+                state: work.state,
+              },
+              code: "shutdown.work",
+              expected: "active work settled",
+              resource: `work:${work.id}`,
+            });
+          }
+        }
+      }
+      if (tableExists(projectStore, "dispatches") && tableExists(projectStore, "handbacks")) {
+        const dispatchRows = projectStore.database
+          .query<{
+            held_by: string | null;
+            id: string;
+            pane: string | null;
+            target_session: string | null;
+            work_id: string;
+          }, []>(
+            `SELECT d.id, d.work_id, d.held_by, d.pane, d.target_session
+             FROM dispatches d
+             LEFT JOIN handbacks h ON h.dispatch_id = d.id
+             WHERE d.cancelled_at IS NULL AND h.id IS NULL
+             ORDER BY CAST(SUBSTR(d.id, 2) AS INTEGER)`,
+          )
+          .all();
+        for (const dispatch of dispatchRows) {
+          blockers.push({
+            actual: {
+              bindingId: binding.binding_id,
+              heldBy: dispatch.held_by,
+              pane: dispatch.pane,
+              projectRoot: binding.project_root,
+              targetSession: dispatch.target_session,
+              workId: dispatch.work_id,
+            },
+            code: "shutdown.handback",
+            expected: "handback filed or dispatch cancelled",
+            resource: `dispatch:${dispatch.id}`,
+          });
+        }
+      }
+    } catch (error) {
+      blockers.push({
+        actual: {
+          bindingId: binding.binding_id,
+          error: error instanceof Error ? error.message : String(error),
+          projectRoot: binding.project_root,
+          projectStorePath: binding.project_store_path,
+        },
+        code: "shutdown.project-store",
+        expected: "readable bound project store",
+        resource: `binding:${binding.binding_id}`,
+      });
+    } finally {
+      if (projectStore && !shared) projectStore.close();
+    }
+  }
+  const activeAdvisors = context.store.database
+    .query<{ operation_id: string; requested_by: string }, [string, number]>(
+      `SELECT operation_id, requested_by
+       FROM team_advisor_consultations
+       WHERE team_id = ? AND generation = ? AND status = 'RUNNING'
+       ORDER BY created_at`,
+    )
+    .all(snapshot.teamId, snapshot.generation);
+  for (const advisor of activeAdvisors) {
+    blockers.push({
+      actual: { operationId: advisor.operation_id, requestedBy: advisor.requested_by },
+      code: "shutdown.advisor",
+      expected: "Advisor consultation returned and stopped",
+      resource: `advisor:${advisor.operation_id}`,
+    });
+  }
+  return blockers;
+}
+
+function drainDeliveryBlockers(
+  effects: readonly RuntimeEffect[],
+  operationId: string,
+): MissingPostcondition[] {
+  const prefix = `shutdown.${operationId}.drain.`;
+  return effects
+    .filter((effect) => effect.key.startsWith(prefix) && !effect.ok)
+    .map((effect) => ({
+      actual: effect.data,
+      code: "shutdown.drain-delivery",
+      expected: "bounded drain notice delivered",
+      resource: effect.resourceKey,
+    }));
+}
+
+async function awaitProjectDrain(
+  context: PluginContext,
+  snapshot: TeamSnapshot,
+  fixed: readonly MissingPostcondition[],
+  waitMs: number,
+): Promise<MissingPostcondition[]> {
+  const deadline = Date.now() + waitMs;
+  while (true) {
+    const blockers = [...fixed, ...projectDrainBlockers(context, snapshot)];
+    if (blockers.length === 0 || Date.now() >= deadline) return blockers;
+    await Bun.sleep(Math.min(100, Math.max(1, deadline - Date.now())));
+  }
+}
+
+function combineShutdownInspection(
+  runtime: TeamInspection,
+  blockers: readonly MissingPostcondition[],
+  actual: Record<string, unknown>,
+): TeamInspection {
+  return {
+    actual: { ...runtime.actual, ...actual },
+    complete: runtime.complete && blockers.length === 0,
+    inspectedAt: runtime.inspectedAt,
+    missing: [...blockers, ...runtime.missing],
+    runtimeRevision: runtime.runtimeRevision,
+  };
+}
+
+async function stopTeam(
+  context: PluginContext,
+  runtime: TeamRuntime,
+  invocation: CliInvocation,
+): Promise<CliResult> {
+  const teamId = normalizeTeamId(requiredPosition(invocation, 0, "team id"));
+  const operationId = requiredOperation(invocation);
+  const existing = findReceipt(context, operationId);
+  if (existing) {
+    validateReceiptIdentity(existing, "team.stop", teamId);
+    if (existing.status === "FINALIZED") {
+      const receipt = receiptFromRow(existing);
+      const team = requireSnapshot(context, teamId);
+      if (["STOP_TIMEOUT", "STOP_INCOMPLETE", "FORCED_STOP_INCOMPLETE"].includes(receipt.result ?? "")) {
+        throw new CliError(
+          "TEAM_STOPPING",
+          `${teamId} stop did not prove generation absence`,
+          { receipt, team },
+        );
+      }
+      return {
+        data: { receipt, team },
+        text: `${teamId} ${receipt.result}`,
+      };
+    }
+  }
+
+  let snapshot = requireSnapshot(context, teamId);
+  if (snapshot.stage === "STOPPED") {
+    throw new CliError("INVALID_STATE", `${teamId} is already STOPPED`, {
+      generation: snapshot.generation,
+      teamId,
+    });
+  }
+  if (!["STARTING", "ACTIVE", "STOPPING"].includes(snapshot.stage)) {
+    throw new CliError("INVALID_STATE", `${teamId} is ${snapshot.stage}`, {
+      stage: snapshot.stage,
+      teamId,
+    });
+  }
+  const requestedBy = requiredStringOption(invocation, "requested-by");
+  assertTeamSupervisor(teamId, requestedBy);
+  const priorStage = findReceipt(context, `${operationId}:stage`);
+  if (priorStage) validateReceiptIdentity(priorStage, "team.stop.stage", teamId);
+  const resumingStagedOperation =
+    !existing &&
+    priorStage?.status === "FINALIZED" &&
+    priorStage.generation === snapshot.generation &&
+    snapshot.stage === "STOPPING";
+  if (!existing && !resumingStagedOperation) {
+    const expectedRevision = nonNegativeIntegerOption(
+      invocation,
+      "expected-revision",
+      snapshot.revision,
+      Number.MAX_SAFE_INTEGER,
+    );
+    if (expectedRevision !== snapshot.revision) {
+      throw new CliError(
+        "STALE_REVISION",
+        `expected revision ${expectedRevision} does not match current team revision ${snapshot.revision}`,
+        { actualRevision: snapshot.revision, expectedRevision },
+      );
+    }
+  }
+  const forced = invocation.options.force === true;
+  const forceReason = forced ? requiredStringOption(invocation, "reason") : null;
+  const forceEvidence = forced ? requiredStringOption(invocation, "evidence") : null;
+  if (!forced && (stringOption(invocation, "reason") || stringOption(invocation, "evidence"))) {
+    throw new CliError("INVALID_ARGUMENT", "--reason and --evidence require --force");
+  }
+  if (existing && existing.generation !== snapshot.generation) {
+    throw new CliError(
+      "STALE_GENERATION",
+      `${operationId} belongs to generation ${existing.generation}, current generation is ${snapshot.generation}`,
+      { currentGeneration: snapshot.generation, operationGeneration: existing.generation },
+    );
+  }
+
+  if (snapshot.stage !== "STOPPING") {
+    const stageOperationId = `${operationId}:stage`;
+    const stageReceipt = priorStage;
+    if (!stageReceipt || stageReceipt.status !== "FINALIZED") {
+      const stagePlan = stageReceipt
+        ? json<DesiredOperation>(stageReceipt.desired_json, {} as DesiredOperation).plan
+        : planForSnapshot(context, snapshot);
+      if (!stageReceipt) {
+        insertAttempt(context, {
+          desired: { plan: stagePlan },
+          generation: snapshot.generation,
+          kind: "team.stop.stage",
+          operationId: stageOperationId,
+          requestedBy,
+          snapshot,
+          teamId,
+        });
+      }
+      snapshot = finalizeReceiptAndSnapshot(context, {
+        axes: { health: null, review: snapshot.review, stage: "STOPPING" },
+        effects: snapshot.resources,
+        inspection: receiptInspection({
+          actual: { gates: "CLOSED", stage: "STOPPING" },
+          revision: `ledger:${teamId}:g${snapshot.generation}:stopping`,
+        }),
+        operationId: stageOperationId,
+        plan: stagePlan,
+        previous: snapshot,
+        result: "STOPPING",
+      }).team;
+    } else {
+      snapshot = requireSnapshot(context, teamId);
+    }
+  }
+
+  const desired: DesiredOperation = existing
+    ? json<DesiredOperation>(existing.desired_json, {} as DesiredOperation)
+    : {
+      ...(forced && forceReason && forceEvidence
+        ? { force: { evidence: forceEvidence, reason: forceReason } }
+        : {}),
+      plan: planForSnapshot(context, snapshot),
+    };
+  if (existing && Boolean(desired.force) !== forced) {
+    throw new CliError(
+      "OPERATION_CONFLICT",
+      `${operationId} force mode does not match its attempted receipt`,
+      { attemptedForced: Boolean(desired.force), requestedForced: forced },
+    );
+  }
+  if (!existing) {
+    insertAttempt(context, {
+      desired,
+      generation: snapshot.generation,
+      kind: "team.stop",
+      operationId,
+      requestedBy,
+      snapshot,
+      teamId,
+    });
+  }
+
+  let effects = mergeRuntimeEffects(snapshot.resources, latestEffects(context, operationId));
+  let blockers: MissingPostcondition[] = [];
+  if (forced) {
+    blockers = projectDrainBlockers(context, snapshot);
+  } else {
+    let drainFailure: MissingPostcondition[] = [];
+    try {
+      effects = await runtime.requestDrain(
+        desired.plan,
+        operationId,
+        effects,
+        (effect) => recordEffect(context, operationId, effect),
+      );
+      drainFailure = drainDeliveryBlockers(effects, operationId);
+    } catch (error) {
+      drainFailure = runtimeFailureInspection(error).missing;
+      effects = mergeRuntimeEffects(snapshot.resources, latestEffects(context, operationId));
+    }
+    blockers = await awaitProjectDrain(
+      context,
+      snapshot,
+      drainFailure,
+      nonNegativeIntegerOption(invocation, "wait-ms", 30_000, 600_000),
+    );
+    if (blockers.length > 0) {
+      let presence: TeamInspection;
+      try {
+        presence = await runtime.inspectAbsence(desired.plan, effects);
+      } catch (error) {
+        presence = runtimeFailureInspection(error);
+      }
+      const inspection = combineShutdownInspection(presence, blockers, {
+        drain: "timed out before runtime removal",
+      });
+      const outcome = finalizeReceiptAndSnapshot(context, {
+        axes: { health: null, review: snapshot.review, stage: "STOPPING" },
+        effects,
+        inspection,
+        operationId,
+        plan: desired.plan,
+        previous: snapshot,
+        result: "STOP_TIMEOUT",
+      });
+      throw new CliError(
+        "TEAM_STOPPING",
+        `${teamId} remains STOPPING with ${inspection.missing.length} unsettled postconditions`,
+        { receipt: outcome.receipt, team: outcome.team },
+      );
+    }
+  }
+
+  let inspection: TeamInspection;
+  try {
+    const shutdown = await runtime.shutdown(
+      desired.plan,
+      effects,
+      (effect) => recordEffect(context, operationId, effect),
+    );
+    effects = shutdown.effects;
+    inspection = combineShutdownInspection(
+      shutdown.inspection,
+      [],
+      forced
+        ? {
+          evidence: forceEvidence,
+          forceReason,
+          possibleLoss: blockers,
+        }
+        : { graceful: true },
+    );
+  } catch (error) {
+    effects = mergeRuntimeEffects(snapshot.resources, latestEffects(context, operationId));
+    inspection = runtimeFailureInspection(error);
+  }
+  const stopped = inspection.complete;
+  const result = stopped
+    ? forced ? "FORCED_STOPPED" : "STOPPED"
+    : forced ? "FORCED_STOP_INCOMPLETE" : "STOP_INCOMPLETE";
+  const outcome = finalizeReceiptAndSnapshot(context, {
+    axes: {
+      health: null,
+      review: snapshot.review,
+      stage: stopped ? "STOPPED" : "STOPPING",
+    },
+    effects,
+    forced,
+    inspection,
+    operationId,
+    overrideReason: forced ? forceReason ?? undefined : undefined,
+    plan: desired.plan,
+    previous: snapshot,
+    result,
+    transactionMutation: stopped
+      ? () => {
+        context.store.database
+          .query(
+            `UPDATE team_project_bindings
+             SET status = 'STOPPED', updated_at = ?
+             WHERE team_id = ? AND generation = ? AND status = 'ACTIVE'`,
+          )
+          .run(new Date().toISOString(), teamId, snapshot.generation);
+      }
+      : undefined,
+  });
+  context.log.append({
+    entityId: teamId,
+    entityType: "team",
+    payload: {
+      forced,
+      missing: inspection.missing,
+      operationId,
+      possibleLoss: forced ? blockers : [],
+      result,
+    },
+    sessionId: context.sessions.current().id,
+    type: "team.stop",
+  });
+  if (!stopped) {
+    throw new CliError(
+      "TEAM_STOPPING",
+      `${teamId} remains STOPPING; generation absence was not proved`,
+      { receipt: outcome.receipt, team: outcome.team },
+    );
+  }
+  return {
+    data: { receipt: outcome.receipt, team: outcome.team },
+    text: `${teamId} ${result}`,
+  };
+}
+
 const commonMutationFlags = {
   "--expected-revision": {
     description: "Require the current Room-ledger revision before effects.",
@@ -2060,23 +2663,46 @@ export const teamPlugin: BuiltInPlugin = {
         },
       ),
     );
-    for (const [command, description] of [
-      ["team reconcile", "Repair explicitly selected team resources and re-prove readiness."],
-      ["team stop", "Drain and stop one team generation."],
-    ] as const) {
-      context.effect(() =>
-        registerSessionCommand(
-          context,
-          command,
-          () => {
-            throw new CliError(
-              "TEAM_OPERATION_UNAVAILABLE",
-              `${command} is not available in the readiness-core slice`,
-            );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "team reconcile",
+        (invocation) => reconcileTeam(context, runtime, invocation),
+        {
+          description: "Repair explicitly selected team resources and re-prove readiness.",
+          flags: {
+            ...commonMutationFlags,
+            "--resource": {
+              description: "Repair one named team resource.",
+              multiple: true,
+              value: true,
+            },
           },
-          { description, rootDescription },
-        ),
-      );
-    }
+          json: true,
+          positionals: [{ name: "team-id", required: true }],
+          rootDescription,
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "team stop",
+        (invocation) => stopTeam(context, runtime, invocation),
+        {
+          description: "Drain and stop one team generation.",
+          flags: {
+            ...commonMutationFlags,
+            "--evidence": { description: "Cite evidence authorizing possible loss.", value: true },
+            "--force": { description: "Bypass unsettled work with a forced-loss receipt." },
+            "--reason": { description: "Record why forced shutdown is necessary.", value: true },
+            "--wait-ms": { description: "Bound the foreground drain wait.", value: true },
+          },
+          json: true,
+          positionals: [{ name: "team-id", required: true }],
+          rootDescription,
+        },
+      ),
+    );
   },
 };

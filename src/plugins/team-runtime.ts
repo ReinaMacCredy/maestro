@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { basename, resolve } from "node:path";
 
 export type TeamRole = "supervisor" | "lead" | "observer";
+export type TeamRepairResource = TeamRole | "sensor" | "workspace";
 
 export interface TeamRolePlan {
   agentName: string;
@@ -65,6 +66,11 @@ export interface AdvisorRuntimeResult {
   tabId: string | null;
 }
 
+export interface TeamShutdownResult {
+  effects: RuntimeEffect[];
+  inspection: TeamInspection;
+}
+
 export interface TeamRuntime {
   consultAdvisor(
     plan: TeamPlan,
@@ -84,11 +90,29 @@ export interface TeamRuntime {
     recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
   ): Promise<RuntimeEffect[]>;
   inspect(plan: TeamPlan, effects: readonly RuntimeEffect[]): Promise<TeamInspection>;
+  inspectAbsence(plan: TeamPlan, effects: readonly RuntimeEffect[]): Promise<TeamInspection>;
+  reconcile(
+    plan: TeamPlan,
+    resources: readonly TeamRepairResource[],
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect[]>;
   probeObserver(
     plan: TeamPlan,
     knownEffects: readonly RuntimeEffect[],
     recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
   ): Promise<RuntimeEffect[]>;
+  requestDrain(
+    plan: TeamPlan,
+    operationId: string,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect[]>;
+  shutdown(
+    plan: TeamPlan,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<TeamShutdownResult>;
 }
 
 export class TeamRuntimeError extends Error {
@@ -569,6 +593,251 @@ export class HerdrTeamRuntime implements TeamRuntime {
     };
   }
 
+  async requestDrain(
+    plan: TeamPlan,
+    operationId: string,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect[]> {
+    const effects = new Map(knownEffects.map((effect) => [effect.key, effect]));
+    const workspaceIds = new Set(
+      (await this.workspaces(plan))
+        .filter((workspace) => workspace.label === plan.workspaceLabel)
+        .map((workspace) => workspace.workspace_id)
+        .filter((workspaceId): workspaceId is string => Boolean(workspaceId)),
+    );
+    if (workspaceIds.size === 0) return [...effects.values()];
+    const leadName = plan.roles.find((role) => role.role === "lead")?.agentName;
+    const advisorName = `advisor-${plan.teamId}`;
+    const targets = (await this.agents(plan)).filter((agent) =>
+      Boolean(agent.name && agent.workspace_id && workspaceIds.has(agent.workspace_id)) &&
+      (agent.name === leadName || agent.name === advisorName || agent.name?.startsWith("peer-"))
+    );
+    for (const target of targets) {
+      if (!target.name) continue;
+      const effectKey = `shutdown.${operationId}.drain.${target.name}`;
+      if (effects.get(effectKey)?.ok) continue;
+      const response = resultOf(await this.command([
+        "agent",
+        "prompt",
+        target.name,
+        [
+          `[from room][drain ${plan.teamId} g${plan.generation}]`,
+          "Reach the current recorded stop without starting new work.",
+          "File the bounded handback or note evidence, then release the work lease.",
+          "Observer and sensor remain live until the drain is settled.",
+        ].join(" "),
+      ], plan.repoPath));
+      const role = plan.roles.find((candidate) => candidate.agentName === target.name);
+      const effect: RuntimeEffect = {
+        data: {
+          agentName: target.name,
+          delivered: accepted(response),
+          generation: plan.generation,
+          paneId: target.pane_id ?? null,
+          workspaceId: target.workspace_id ?? null,
+        },
+        key: effectKey,
+        kind: "agent.prompt",
+        ok: accepted(response),
+        resourceKey: role?.resourceKey ?? `team:${plan.teamId}:g${plan.generation}:seat:${target.name}`,
+      };
+      effects.set(effect.key, effect);
+      await recordEffect(effect);
+    }
+    return [...effects.values()];
+  }
+
+  async inspectAbsence(
+    plan: TeamPlan,
+    effects: readonly RuntimeEffect[],
+  ): Promise<TeamInspection> {
+    const missing: MissingPostcondition[] = [];
+    const matchingWorkspaces = (await this.workspaces(plan)).filter(
+      (workspace) => workspace.label === plan.workspaceLabel,
+    );
+    const workspaceIds = new Set(
+      matchingWorkspaces
+        .map((workspace) => workspace.workspace_id)
+        .filter((workspaceId): workspaceId is string => Boolean(workspaceId)),
+    );
+    const knownWorkspaceIds = new Set(workspaceIds);
+    for (const effect of effects) {
+      const workspaceId = effect.data.workspaceId;
+      if (typeof workspaceId === "string") knownWorkspaceIds.add(workspaceId);
+    }
+    for (const workspace of matchingWorkspaces) {
+      missing.push({
+        actual: workspace,
+        code: "shutdown.workspace",
+        expected: "generation workspace absent",
+        resource: plan.workspaceResourceKey,
+      });
+    }
+
+    const plannedNames = new Set([
+      ...plan.roles.map((role) => role.agentName),
+      `advisor-${plan.teamId}`,
+    ]);
+    const remainingAgents = (await this.agents(plan)).filter((agent) =>
+      Boolean(agent.workspace_id && knownWorkspaceIds.has(agent.workspace_id)) ||
+      Boolean(agent.name && plannedNames.has(agent.name))
+    );
+    for (const agent of remainingAgents) {
+      const role = plan.roles.find((candidate) => candidate.agentName === agent.name);
+      missing.push({
+        actual: agent,
+        code: "shutdown.role",
+        expected: "generation role absent",
+        resource: role?.resourceKey ?? `team:${plan.teamId}:g${plan.generation}:seat:${agent.name ?? "unknown"}`,
+      });
+    }
+
+    const remainingPanes: PaneRecord[] = [];
+    const remainingProcesses: Array<{ info: Record<string, unknown>; paneId: string }> = [];
+    for (const workspaceId of workspaceIds) {
+      const panes = await this.panes(plan, workspaceId);
+      remainingPanes.push(...panes);
+      for (const pane of panes) {
+        if (!pane.pane_id) continue;
+        const info = await this.processInfo(plan, pane.pane_id);
+        if (processIsForeground(info)) {
+          remainingProcesses.push({ info, paneId: pane.pane_id });
+        }
+      }
+    }
+    for (const pane of remainingPanes) {
+      missing.push({
+        actual: pane,
+        code: "shutdown.pane",
+        expected: "generation pane absent",
+        resource: `team:${plan.teamId}:g${plan.generation}:pane:${pane.pane_id ?? "unknown"}`,
+      });
+    }
+    for (const process of remainingProcesses) {
+      missing.push({
+        actual: process.info,
+        code: "shutdown.process",
+        expected: "generation foreground process absent",
+        resource: `team:${plan.teamId}:g${plan.generation}:process:${process.paneId}`,
+      });
+    }
+    const actual = {
+      agents: remainingAgents,
+      panes: remainingPanes,
+      processes: remainingProcesses,
+      workspaces: matchingWorkspaces,
+    };
+    return {
+      actual,
+      complete: missing.length === 0,
+      inspectedAt: new Date().toISOString(),
+      missing,
+      runtimeRevision: canonicalHash(actual),
+    };
+  }
+
+  async shutdown(
+    plan: TeamPlan,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<TeamShutdownResult> {
+    const effects = new Map(knownEffects.map((effect) => [effect.key, effect]));
+    const remember = async (effect: RuntimeEffect): Promise<void> => {
+      effects.set(effect.key, effect);
+      await recordEffect(effect);
+    };
+    const closeTab = async (
+      tab: TabRecord,
+      resourceKey: string,
+    ): Promise<void> => {
+      if (!tab.tab_id) return;
+      const response = resultOf(await this.command(["tab", "close", tab.tab_id], plan.repoPath));
+      await remember({
+        data: { closed: response.closed !== false, tabId: tab.tab_id, workspaceId: tab.workspace_id },
+        key: `shutdown.tab.${tab.tab_id}`,
+        kind: "tab.close",
+        ok: response.closed !== false,
+        resourceKey,
+      });
+    };
+    const closePane = async (paneId: string, workspaceId: string): Promise<void> => {
+      const response = resultOf(await this.command(["pane", "close", paneId], plan.repoPath));
+      await remember({
+        data: { closed: response.closed !== false, paneId, workspaceId },
+        key: `shutdown.pane.${paneId}`,
+        kind: "pane.close",
+        ok: response.closed !== false,
+        resourceKey: plan.sensorResourceKey,
+      });
+    };
+
+    const matchingWorkspaces = (await this.workspaces(plan)).filter(
+      (workspace) => workspace.label === plan.workspaceLabel,
+    );
+    const supervisor = plan.roles.find((role) => role.role === "supervisor");
+    const observer = plan.roles.find((role) => role.role === "observer");
+    for (const workspace of matchingWorkspaces) {
+      if (!workspace.workspace_id) continue;
+      const workspaceId = workspace.workspace_id;
+      const tabs = await this.tabs(plan, workspaceId);
+      const panes = await this.panes(plan, workspaceId);
+      const supervisorTabs = tabs.filter((tab) => tab.label === supervisor?.label);
+      const observerTabs = tabs.filter((tab) => tab.label === observer?.label);
+      const workTabs = tabs
+        .filter((tab) => tab.label !== supervisor?.label && tab.label !== observer?.label)
+        .sort((left, right) => (left.label ?? "").localeCompare(right.label ?? ""));
+
+      for (const tab of workTabs) {
+        const role = plan.roles.find((candidate) => candidate.label === tab.label);
+        await closeTab(
+          tab,
+          role?.resourceKey ?? `team:${plan.teamId}:g${plan.generation}:seat:${tab.label ?? tab.tab_id}`,
+        );
+      }
+
+      const sensorPaneIds = new Set<string>();
+      const recordedSensorPane = stringAt(effectData([...effects.values()], "sensor.pane") ?? {}, "paneId");
+      if (recordedSensorPane && panes.some((pane) => pane.pane_id === recordedSensorPane)) {
+        sensorPaneIds.add(recordedSensorPane);
+      }
+      for (const pane of panes) {
+        if (!pane.pane_id) continue;
+        const info = await this.processInfo(plan, pane.pane_id);
+        const text = processText(info);
+        if (
+          processIsForeground(info) &&
+          text.includes("team-sensor") &&
+          text.includes(plan.teamId.toLowerCase()) &&
+          text.includes(String(plan.generation))
+        ) {
+          sensorPaneIds.add(pane.pane_id);
+        }
+      }
+      for (const paneId of sensorPaneIds) await closePane(paneId, workspaceId);
+      for (const tab of observerTabs) {
+        await closeTab(tab, observer?.resourceKey ?? plan.sensorResourceKey);
+      }
+      for (const tab of supervisorTabs) {
+        await closeTab(tab, supervisor?.resourceKey ?? plan.workspaceResourceKey);
+      }
+      const response = resultOf(await this.command([
+        "workspace",
+        "close",
+        workspaceId,
+      ], plan.repoPath));
+      await remember({
+        data: { closed: response.closed !== false, workspaceId },
+        key: `shutdown.workspace.${workspaceId}`,
+        kind: "workspace.close",
+        ok: response.closed !== false,
+        resourceKey: plan.workspaceResourceKey,
+      });
+    }
+    const inspection = await this.inspectAbsence(plan, [...effects.values()]);
+    return { effects: [...effects.values()], inspection };
+  }
+
   async ensure(
     plan: TeamPlan,
     knownEffects: readonly RuntimeEffect[],
@@ -810,6 +1079,218 @@ export class HerdrTeamRuntime implements TeamRuntime {
       }
     }
 
+    effects.delete("sensor.probe");
+    return this.probeObserver(plan, [...effects.values()], recordEffect);
+  }
+
+  async reconcile(
+    plan: TeamPlan,
+    resources: readonly TeamRepairResource[],
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect[]> {
+    const selected = new Set(resources);
+    const effects = new Map(knownEffects.map((effect) => [effect.key, effect]));
+    const remember = async (effect: RuntimeEffect): Promise<void> => {
+      effects.set(effect.key, effect);
+      await recordEffect(effect);
+    };
+    let matchingWorkspaces = (await this.workspaces(plan)).filter(
+      (workspace) => workspace.label === plan.workspaceLabel,
+    );
+    if (matchingWorkspaces.length === 0 && selected.has("workspace")) {
+      const response = resultOf(await this.command([
+        "workspace",
+        "create",
+        "--cwd",
+        plan.repoPath,
+        "--label",
+        plan.workspaceLabel,
+        "--no-focus",
+      ], plan.repoPath));
+      const workspace = objectAt(response, "workspace");
+      await remember({
+        data: {
+          cwd: stringAt(workspace, "cwd") ?? plan.repoPath,
+          label: stringAt(workspace, "label") ?? plan.workspaceLabel,
+          workspaceId: stringAt(workspace, "workspace_id"),
+        },
+        key: "workspace",
+        kind: "workspace.create",
+        ok: Boolean(stringAt(workspace, "workspace_id")),
+        resourceKey: plan.workspaceResourceKey,
+      });
+      matchingWorkspaces = (await this.workspaces(plan)).filter(
+        (workspace) => workspace.label === plan.workspaceLabel,
+      );
+    }
+    if (matchingWorkspaces.length !== 1 || !matchingWorkspaces[0]?.workspace_id) {
+      return [...effects.values()];
+    }
+    const workspaceId = matchingWorkspaces[0].workspace_id;
+    for (const role of plan.roles) {
+      if (!selected.has(role.role)) continue;
+      const matches = (await this.agents(plan)).filter(
+        (agent) => agent.name === role.agentName && agent.workspace_id === workspaceId,
+      );
+      if (matches.length > 1) {
+        await remember({
+          data: { duplicates: matches.map((agent) => agent.pane_id), workspaceId },
+          key: `role.${role.role}.agent`,
+          kind: "agent.adopt",
+          ok: false,
+          resourceKey: role.resourceKey,
+        });
+        continue;
+      }
+      let paneId = matches[0]?.pane_id;
+      if (!paneId) {
+        const matchingTabs = (await this.tabs(plan, workspaceId)).filter(
+          (tab) => tab.label === role.label,
+        );
+        if (matchingTabs.length > 1) {
+          await remember({
+            data: { duplicates: matchingTabs.map((tab) => tab.tab_id), workspaceId },
+            key: `role.${role.role}.pane`,
+            kind: "tab.adopt",
+            ok: false,
+            resourceKey: role.resourceKey,
+          });
+          continue;
+        }
+        paneId = matchingTabs[0]?.root_pane_id;
+        if (!paneId) {
+          const response = resultOf(await this.command([
+            "tab",
+            "create",
+            "--workspace",
+            workspaceId,
+            "--cwd",
+            plan.repoPath,
+            "--label",
+            role.label,
+            "--no-focus",
+          ], plan.repoPath));
+          const rootPane = objectAt(response, "root_pane");
+          paneId = stringAt(rootPane, "pane_id");
+          await remember({
+            data: { paneId, workspaceId },
+            key: `role.${role.role}.pane`,
+            kind: "tab.create",
+            ok: Boolean(paneId),
+            resourceKey: role.resourceKey,
+          });
+        }
+        if (paneId) {
+          const response = resultOf(await this.command([
+            "agent",
+            "start",
+            role.agentName,
+            "--kind",
+            role.kind,
+            "--pane",
+            paneId,
+          ], plan.repoPath));
+          await remember({
+            data: { accepted: accepted(response), agentName: role.agentName, paneId, workspaceId },
+            key: `role.${role.role}.agent`,
+            kind: "agent.start",
+            ok: accepted(response),
+            resourceKey: role.resourceKey,
+          });
+        }
+      }
+      if (!paneId) continue;
+      const response = resultOf(await this.command([
+        "agent",
+        "prompt",
+        role.agentName,
+        `[from room][reconcile ${plan.teamId} g${plan.generation}] resume only role ${role.role}; preserve current assignment and report identity`,
+      ], plan.repoPath));
+      await remember({
+        data: {
+          agentName: role.agentName,
+          delivered: accepted(response),
+          generation: plan.generation,
+          paneId,
+        },
+        key: `role.${role.role}.prompt`,
+        kind: "agent.prompt",
+        ok: accepted(response),
+        resourceKey: role.resourceKey,
+      });
+    }
+
+    if (selected.has("sensor")) {
+      const observer = plan.roles.find((role) => role.role === "observer");
+      const observerAgent = observer
+        ? (await this.agents(plan)).find(
+          (agent) => agent.name === observer.agentName && agent.workspace_id === workspaceId,
+        )
+        : undefined;
+      if (observer && observerAgent?.pane_id) {
+        const panes = await this.panes(plan, workspaceId);
+        let sensorPaneId = stringAt(effectData([...effects.values()], "sensor.pane") ?? {}, "paneId");
+        if (!sensorPaneId || !panes.some((pane) => pane.pane_id === sensorPaneId)) {
+          const matching: string[] = [];
+          for (const candidate of panes) {
+            if (!candidate.pane_id) continue;
+            const info = await this.processInfo(plan, candidate.pane_id);
+            const text = processText(info);
+            if (
+              processIsForeground(info) &&
+              text.includes("team-sensor") &&
+              text.includes(plan.teamId.toLowerCase()) &&
+              text.includes(String(plan.generation))
+            ) matching.push(candidate.pane_id);
+          }
+          if (matching.length === 1) sensorPaneId = matching[0];
+          if (matching.length === 0) {
+            const response = resultOf(await this.command([
+              "pane",
+              "split",
+              "--pane",
+              observerAgent.pane_id,
+              "--direction",
+              "down",
+              "--cwd",
+              plan.repoPath,
+              "--no-focus",
+            ], plan.repoPath));
+            sensorPaneId = stringAt(objectAt(response, "pane"), "pane_id");
+          }
+          await remember({
+            data: { adopted: matching.length === 1, paneId: sensorPaneId, workspaceId },
+            key: "sensor.pane",
+            kind: matching.length === 1 ? "pane.adopt" : "pane.split",
+            ok: Boolean(sensorPaneId) && matching.length <= 1,
+            resourceKey: plan.sensorResourceKey,
+          });
+        }
+        if (sensorPaneId) {
+          const response = resultOf(await this.command([
+            "pane",
+            "run",
+            sensorPaneId,
+            "maestro-team-sensor",
+            "--team",
+            plan.teamId,
+            "--generation",
+            String(plan.generation),
+            "--observer",
+            observer.agentName,
+          ], plan.repoPath));
+          await remember({
+            data: { accepted: accepted(response), generation: plan.generation, paneId: sensorPaneId, workspaceId },
+            key: "sensor.run",
+            kind: "pane.run",
+            ok: accepted(response),
+            resourceKey: plan.sensorResourceKey,
+          });
+        }
+      }
+    }
+    effects.delete("sensor.probe");
     return this.probeObserver(plan, [...effects.values()], recordEffect);
   }
 

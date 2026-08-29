@@ -5,6 +5,7 @@ import type { Fixture } from "./helpers.ts";
 export interface FakeHerdrBehavior {
   agents?: boolean;
   advisorRecommendation?: string | null;
+  closeResources?: boolean;
   prompts?: boolean;
   roleProcesses?: boolean;
   sensor?: boolean;
@@ -50,6 +51,24 @@ if (command === "workspace list") {
   state.workspaces.push(workspace);
   state.panes.push(rootPane);
   await respond({ workspace, root_pane: rootPane });
+} else if (command === "workspace close") {
+  const workspaceId = args[2];
+  const closed = state.behavior.closeResources !== false;
+  if (closed) {
+    const paneIds = new Set(
+      state.panes
+        .filter((candidate) => candidate.workspace_id === workspaceId)
+        .map((candidate) => candidate.pane_id),
+    );
+    state.workspaces = state.workspaces.filter(
+      (candidate) => candidate.workspace_id !== workspaceId,
+    );
+    state.tabs = state.tabs.filter((candidate) => candidate.workspace_id !== workspaceId);
+    state.panes = state.panes.filter((candidate) => candidate.workspace_id !== workspaceId);
+    state.agents = state.agents.filter((candidate) => candidate.workspace_id !== workspaceId);
+    for (const paneId of paneIds) delete state.processes[paneId];
+  }
+  await respond({ closed, workspace_id: workspaceId });
 } else if (command === "tab list") {
   const workspaceId = value("--workspace");
   await respond({
