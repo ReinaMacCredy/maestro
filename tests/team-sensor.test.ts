@@ -159,7 +159,7 @@ test("one live sensor cycle creates deduped capped packets and wakes Observer on
   });
 });
 
-test("sensor authority rejects a stale generation before reading any pane", async () => {
+test("575 sensor authority rejects a stale generation before reading any pane", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
     await mkdir(room);
@@ -169,6 +169,7 @@ test("sensor authority rejects a stale generation before reading any pane", asyn
     const workspaceId = state.workspaces[0]?.workspace_id as string;
     const before = await fakeHerdrCommands(fake);
 
+    // Perturbation: a stale generation must fail before the sensor can inspect runtime state.
     let failure: unknown;
     try {
       await runTeamSensorCycle({

@@ -155,7 +155,7 @@ test("semantic trigger thresholds, evidence bounds, and dedupe produce one Obser
   });
 });
 
-test("only a live packet capability raises REVIEW_HOLD and Supervisor rationale clears it", async () => {
+test("573 only a live packet capability raises REVIEW_HOLD and Supervisor rationale clears it", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
     await mkdir(room);
@@ -185,6 +185,7 @@ test("only a live packet capability raises REVIEW_HOLD and Supervisor rationale 
     );
     const packet = envelope(triggered.stdout).data.packet;
 
+    // Perturbation: a forged capability must be refused before review state changes.
     const denied = await runCliAt(
       fixture,
       room,

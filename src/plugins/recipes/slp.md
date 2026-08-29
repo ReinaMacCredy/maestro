@@ -159,7 +159,7 @@ All lifecycle operations run against the Room ledger:
   `--requested-by owner --owner-intervention` with the same two evidence
   fields. Override authority stays separate from force-stop loss authority.
 
-`team status` never upgrades health. STARTING, REVIEW_HOLD, DRAINING, and
+`maestro team status` never upgrades health. STARTING, REVIEW_HOLD, DRAINING, and
 CLOSED are explicit non-operable results. Every protected project gate consumes
 the same fresh TeamControl verdict from the Room ledger rather than a local
 READY copy.

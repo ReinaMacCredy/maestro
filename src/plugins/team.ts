@@ -2682,6 +2682,7 @@ export const teamPlugin: BuiltInPlugin = {
     registerGate("dispatch.open", "dispatch.open");
     registerGate("bundle.close", "bundle.close");
     registerGate("handback.final", "handback.final");
+    registerGate("external.effect", "external.effect");
     context.effect(() =>
       registerSessionCommand(
         context,

@@ -11,7 +11,7 @@ import {
   installFakeHerdr,
   readFakeHerdrState,
 } from "./fake-herdr.ts";
-import { runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 function envelope(value: string): Record<string, any> {
   return JSON.parse(value) as Record<string, any>;
@@ -145,6 +145,52 @@ test("mechanical trigger rules declare deterministic threshold, consequence, and
     expect(repeated.dedupeKey).toBe(first.dedupeKey);
     expect(changed.dedupeKey).not.toBe(first.dedupeKey);
   }
+});
+
+test("574 a duplicate required role identity in another workspace degrades and closes project gates", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.root, "room");
+    await mkdir(room);
+    const fake = await installFakeHerdr(fixture);
+    await openTeam(fixture, room, "cross-workspace", fake.env);
+    await editFakeHerdrState(fake, (state) => {
+      const agents = state.agents as Array<Record<string, string>>;
+      const workspaces = state.workspaces as Array<Record<string, string>>;
+      const panes = state.panes as Array<Record<string, string>>;
+      const observer = agents.find((agent) =>
+        agent.name === "observer-cross-workspace"
+      );
+      if (!observer) throw new Error("fake Observer missing");
+      const workspaceId = "foreign-workspace";
+      const paneId = "foreign-workspace:p1";
+      workspaces.push({ cwd: fixture.repo, label: "unmanaged-foreign", workspace_id: workspaceId });
+      panes.push({ cwd: fixture.repo, pane_id: paneId, workspace_id: workspaceId });
+      agents.push({ ...observer, pane_id: paneId, workspace_id: workspaceId });
+    });
+
+    // Perturbation: a globally duplicated authority alias must not be hidden by workspace filtering.
+    const health = await runCliAt(
+      fixture,
+      room,
+      ["team", "health", "cross-workspace", "--operation", "health-cross-workspace", "--json"],
+      fake.env,
+    );
+    expect(health.exitCode, health.stderr).toBe(0);
+    const result = envelope(health.stdout).data;
+    expect(result.team).toMatchObject({ health: "DEGRADED", verdict: "DRAINING" });
+    expect(result.receipt.missing).toContainEqual(expect.objectContaining({
+      code: "role.duplicate",
+      resource: "team:cross-workspace:g1:observer",
+    }));
+
+    const blocked = await runCli(
+      fixture,
+      ["work", "add", "must stay closed", "--atomic-reason", "duplicate authority"],
+      fake.env,
+    );
+    expect(blocked.exitCode).not.toBe(0);
+    expect(envelope(blocked.stderr).error.code).toBe("GATE_BLOCKED");
+  });
 });
 
 type RuntimeFault = {

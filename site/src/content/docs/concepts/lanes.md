@@ -49,14 +49,14 @@ the fact, not prevented.
 | B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
 | B9 | tool and call budgets | nothing | soft-audited | the assignment text |
 | B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |
-| B11 | team membership | Room binding plus fresh TeamRuntime generation inspection | lifecycle receipt | cwd and a pane label alone remain non-authoritative |
-| B12 | Observer authority | one-use `team review raise` packet capability | review packet and receipt | whether the model reads outside the bounded packet remains a role obligation |
-| B13 | deterministic team resources | generation-scoped TeamRuntime identities and duplicate rejection | health/open receipt | Herdr itself does not understand the Room ledger |
-| B14 | a clean room workspace | TeamRuntime opens team resources in the generation workspace | open receipt | panes the owner opens manually in the room |
+| B11 | team membership | Room binding plus TeamControl fresh inspection and fail-closed gate refusal | test 572 | cwd and a pane label alone remain non-authoritative |
+| B12 | Observer authority | one-use `team review raise` packet capability; `REVIEW_HOLD` on a validated finding | test 573 | whether the model reads outside the bounded packet remains a role obligation |
+| B13 | deterministic team resources | generation-scoped resource keys and global required-role duplicate rejection | test 574 | Herdr itself does not understand the Room ledger |
+| B14 | a clean room workspace | TeamRuntime generation-workspace inspection rejects a required identity duplicated elsewhere | test 574 | panes the owner opens manually in the room |
 | B15 | the upward channel | nothing | soft-audited | `supervisor-<team>` is the only pane that prompts the room (d36) |
 | B16 | a misrouted report | nothing | soft-audited | a supervisor bounces a `[from lead]` prompt from a Lead it does not own (d35) |
-| B17 | the Observer sensor | TeamRuntime starts and inspects one foreground generation-scoped process | health receipt plus sensor-delivery effect | the semantics of model judgment after a packet |
-| B18 | the external-effect gate | nothing | soft-audited | the room runs an external effect only after a locked room decision names the candidate and the evidence, and records the command and its output (d37, room d6) |
+| B17 | the Observer sensor | TeamRuntime starts one foreground generation-scoped process and rejects stale sensor authority | test 575 | the semantics of model judgment after a packet |
+| B18 | the external-effect gate | TeamControl on the `external.effect` plugin event denies non-OPERABLE teams before the effect | test 577 | shell effects outside the plugin event boundary remain behind the Human gate (d37, room d6) |
 
 ## Open a dispatch
 

@@ -14,7 +14,7 @@ import {
   fakeHerdrCommands,
   installFakeHerdr,
 } from "./fake-herdr.ts";
-import { idFrom, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, runCliAt, withFixture, writePlugin, type Fixture } from "./helpers.ts";
 
 function envelope(value: string): Record<string, any> {
   return JSON.parse(value) as Record<string, any>;
@@ -96,7 +96,7 @@ async function raiseReview(
   expect(raised.exitCode).toBe(0);
 }
 
-test("project binding stores no READY copy and fresh TeamControl gates REVIEW_HOLD/DRAINING", async () => {
+test("576 project binding stores no READY copy and fresh TeamControl gates REVIEW_HOLD/DRAINING", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
     await mkdir(room);
@@ -113,7 +113,11 @@ test("project binding stores no READY copy and fresh TeamControl gates REVIEW_HO
     const beforeStart = await fakeHerdrCommands(fake);
     const started = await runCli(fixture, ["work", "start", firstId], fake.env);
     expect(started.exitCode).toBe(0);
-    expect((await fakeHerdrCommands(fake)).length).toBeGreaterThan(beforeStart.length);
+    const startCommands = (await fakeHerdrCommands(fake)).slice(beforeStart.length);
+    expect(startCommands.length).toBeGreaterThan(0);
+    expect(startCommands.some((command) =>
+      command[0] === "agent" && command[1] === "prompt" && command[2] === "observer-omicron"
+    )).toBe(false);
     const bundle = await runCli(
       fixture,
       ["bundle", "open", "gate-bundle", "--work", firstId],
@@ -249,11 +253,72 @@ test("project binding stores no READY copy and fresh TeamControl gates REVIEW_HO
         )
         .get()?.count,
     ).toBeGreaterThan(0);
+    expect(
+      roomDatabase
+        .query<{ executed_by: string; requested_by: string }, []>(
+          `SELECT executed_by, requested_by FROM team_receipts
+           WHERE kind = 'team.control.work.start' ORDER BY attempted_at LIMIT 1`,
+        )
+        .get(),
+    ).toEqual({ executed_by: "test-session", requested_by: "test-session" });
     roomDatabase.close();
   });
 });
 
-test("invalid project binding fails closed before runtime inspection", async () => {
+test("577 a plugin external-effect event is denied before its effect when the team is DRAINING", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.root, "room");
+    await mkdir(room);
+    const fake = await installFakeHerdr(fixture);
+    await openTeam(fixture, room, "external-gate", fake.env);
+    await editFakeHerdrState(fake, (state) => {
+      const agents = state.agents as Array<Record<string, unknown>>;
+      const observer = agents.find((agent) => agent.name === "observer-external-gate");
+      if (!observer) throw new Error("fake Observer missing");
+      agents.push({ ...observer });
+    });
+    const health = await runCliAt(
+      fixture,
+      room,
+      ["team", "health", "external-gate", "--operation", "health-external-gate", "--json"],
+      fake.env,
+    );
+    expect(envelope(health.stdout).data.team.verdict).toBe("DRAINING");
+
+    const externalEffect = join(fixture.root, "external-effect-ran");
+    await writePlugin(
+      fixture,
+      "repo",
+      "external-effect-probe",
+      `
+import { writeFile } from "node:fs/promises";
+export default {
+  name: "external-effect-probe",
+  apply(ctx) {
+    ctx.effect(() => ctx.cli.register("external-effect-probe", async () => {
+      const gate = await ctx.events.waterfall(
+        "external.effect",
+        { effect: "fixture sentinel write" },
+        async () => ({ blocked: false }),
+      );
+      if (gate.blocked) throw new Error("external effect blocked: " + gate.reason);
+      await writeFile(${JSON.stringify(externalEffect)}, "ran\\n");
+      return "external effect ran";
+    }));
+  },
+};
+`,
+    );
+
+    // Perturbation: the real plugin event must refuse before the sentinel effect.
+    const blocked = await runCli(fixture, ["external-effect-probe"], fake.env);
+    expect(blocked.exitCode).not.toBe(0);
+    expect(blocked.stderr).toContain("DRAINING");
+    expect(existsSync(externalEffect)).toBe(false);
+  });
+});
+
+test("572 invalid project binding fails closed before runtime inspection", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
     await mkdir(room);
@@ -274,6 +339,7 @@ test("invalid project binding fails closed before runtime inspection", async () 
     const blocked = await runCli(fixture, ["work", "start", workId], fake.env);
 
     expect(blocked.exitCode).toBe(1);
+    expect(envelope(blocked.stderr).error.code).toBe("GATE_BLOCKED");
     expect(envelope(blocked.stderr).error).toMatchObject({
       code: "GATE_BLOCKED",
       origin: "team-control",

@@ -1355,13 +1355,27 @@ export class HerdrTeamRuntime implements TeamRuntime {
     const processByPane: Record<string, Record<string, unknown>> = {};
 
     for (const role of plan.roles) {
-      const matches = agents.filter(
-        (agent) => agent.name === role.agentName && agent.workspace_id === workspaceId,
+      const namedMatches = agents.filter((agent) => agent.name === role.agentName);
+      const matches = namedMatches.filter(
+        (agent) => agent.workspace_id === workspaceId,
       );
+      if (namedMatches.length > 1) {
+        missing.push({
+          actual: namedMatches.map((agent) => ({
+            paneId: agent.pane_id,
+            status: agent.agent_status,
+            workspaceId: agent.workspace_id,
+          })),
+          code: "role.duplicate",
+          expected: { count: 1, name: role.agentName, workspaceId },
+          resource: role.resourceKey,
+        });
+        continue;
+      }
       if (matches.length !== 1) {
         missing.push({
           actual: matches.map((agent) => ({ paneId: agent.pane_id, status: agent.agent_status })),
-          code: matches.length === 0 ? "role.missing" : "role.duplicate",
+          code: "role.missing",
           expected: { count: 1, name: role.agentName, workspaceId },
           resource: role.resourceKey,
         });

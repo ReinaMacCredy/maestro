@@ -283,32 +283,6 @@ function runtimeFailure(error: unknown): TeamInspection {
   };
 }
 
-function latestEffects(store: Store, operationId: string): RuntimeEffect[] {
-  const rows = store.database
-    .query<{
-      data_json: string;
-      effect_key: string;
-      kind: string;
-      ok: number;
-      resource_key: string;
-    }, [string]>(
-      `SELECT effect_key, kind, resource_key, ok, data_json
-       FROM team_operation_effects WHERE operation_id = ? ORDER BY id`,
-    )
-    .all(operationId);
-  const effects = new Map<string, RuntimeEffect>();
-  for (const row of rows) {
-    effects.set(row.effect_key, {
-      data: json<Record<string, unknown>>(row.data_json),
-      key: row.effect_key,
-      kind: row.kind,
-      ok: row.ok === 1,
-      resourceKey: row.resource_key,
-    });
-  }
-  return [...effects.values()];
-}
-
 function allowed(boundary: TeamControlBoundary, verdict: TeamRow["verdict"]): boolean {
   if (verdict === "OPERABLE") return true;
   if (verdict === "REVIEW_HOLD") {
@@ -462,40 +436,11 @@ export class TeamControl {
           JSON.stringify(before),
           JSON.stringify({ bindingId: binding.bindingId, boundary, plan }),
         );
-      let operationEffects: RuntimeEffect[] = [];
       let inspection: TeamInspection;
       try {
-        operationEffects = await this.runtime.probeObserver(
-          plan,
-          operationEffects,
-          (effect) => {
-            roomStore.database
-              .query(
-                `INSERT INTO team_operation_effects
-                  (operation_id, effect_key, kind, resource_key, ok, data_json, recorded_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              )
-              .run(
-                operationId,
-                effect.key,
-                effect.kind,
-                effect.resourceKey,
-                effect.ok ? 1 : 0,
-                JSON.stringify(effect.data),
-                new Date().toISOString(),
-              );
-          },
-        );
         const baseline = json<RuntimeEffect[]>(team.resources_json);
-        const combined = [
-          ...baseline.filter(
-            (effect) => !operationEffects.some((current) => current.key === effect.key),
-          ),
-          ...operationEffects,
-        ];
-        inspection = await this.runtime.inspect(plan, combined);
+        inspection = await this.runtime.inspect(plan, baseline);
       } catch (error) {
-        operationEffects = latestEffects(roomStore, operationId);
         inspection = runtimeFailure(error);
       }
       const refreshed = roomStore.database

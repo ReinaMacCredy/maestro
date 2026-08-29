@@ -17,6 +17,11 @@ The baseline generation contains `supervisor-<team>`, the repository Lead,
 `observer-<team>`, and a dedicated foreground sensor process. Advisor and
 dispatch Peers are bounded operations, not baseline readiness seats.
 
+The familiar agent names are authority aliases. Generation ownership lives in
+the resource key and pane label, such as `team:<team>:g<n>:observer`; fresh
+inspection rejects the same required alias if it also exists in another
+workspace.
+
 ```mermaid
 flowchart LR
   Room["Room ledger"] --> Runtime["TeamRuntime"]
@@ -76,6 +81,9 @@ maestro team await-ready <team> \
 
 Missing, dead, mismatched, or duplicate required resources make the team
 non-operable. Health inspection records evidence but never restarts a role.
+Maestro plugins that perform an external effect emit `external.effect` before
+the effect so TeamControl can deny it under a non-operable verdict. Shell
+effects outside that plugin event remain behind the separate Human gate.
 
 ## Supervised checks and Observer review
 
