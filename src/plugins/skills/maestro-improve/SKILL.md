@@ -65,8 +65,8 @@ text that already covers it, or the reading that was wrong.
 ## The replay gate
 
 Doctrine has golden scenarios: a script of maestro commands and the transcript
-it produced. In this repository they are `tests/scenarios/<case>.script` and
-`<case>.golden`, replayed by `bun test tests/scenario-golden.test.ts`.
+it produced. In this repository they are `tests/scenarios/<name>.script` and
+`<name>.golden`, replayed by `bun test tests/scenario-golden.test.ts`.
 
 Run the replay after every edit. An edit is accepted only when it still matches
 the golden set, or matches the change a lesson explicitly expected. A replay

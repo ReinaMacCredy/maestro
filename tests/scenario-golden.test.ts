@@ -91,5 +91,11 @@ test("558 the replay gate is named where the improver reads it (d43)", async () 
     const text = await readFile(doctrine, "utf8");
     expect(text).toContain("tests/scenario-golden.test.ts");
     expect(text).toContain("MAESTRO_GOLDEN_UPDATE=1");
+    // The scenarios are named for what they replay, not all for a case:
+    // lesson-loop.script sits beside case-1-atomic-fix.script, so doctrine
+    // that says <case> sends the reader looking for a file shape that is
+    // only half the directory.
+    expect(text).toContain("tests/scenarios/<name>.script");
+    expect(text).not.toContain("<case>");
   }
 });

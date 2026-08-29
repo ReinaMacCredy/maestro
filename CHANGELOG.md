@@ -60,6 +60,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
   pass wrote the new one; the room saw it at v0.113.0, where `maestro-improve`
   appeared on the second update. Skills are materialized from the post-swap
   runtime in a fresh process, the same way the room templates already were.
+- The slp recipe and the `maestro-improve` skill name the golden scenarios
+  `tests/scenarios/<name>.script`, the placeholder the site and the CHANGELOG
+  already used. They said `<case>`, which is only half the directory:
+  `lesson-loop.script` sits beside `case-1-atomic-fix.script`.
 
 ## [0.113.0] - 2026-08-29
 

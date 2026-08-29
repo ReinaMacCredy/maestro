@@ -525,7 +525,7 @@ prevent.
 
 The harness is scenario golden output. Each SLP scenario is a script of maestro
 commands with the transcript it produced beside it - in this repository,
-`tests/scenarios/<case>.script` and `<case>.golden`, replayed by
+`tests/scenarios/<name>.script` and `<name>.golden`, replayed by
 `tests/scenario-golden.test.ts`. An improver edit is accepted only when the
 replay still matches the golden set, or matches the change a lesson expected; a
 change a lesson asked for is re-recorded with `MAESTRO_GOLDEN_UPDATE=1` and the
