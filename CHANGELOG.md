@@ -11,6 +11,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.114.0] - 2026-08-29
+
 ### Added
 
 - `maestro handback file --lessons <lesson id>@<store path>` repeats and names
