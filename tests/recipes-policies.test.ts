@@ -499,6 +499,12 @@ test("372 [lint] recipe slp and lane.md state the one-dispatch-one-handback boun
   expect(boundary).toContain('"after h<id>: <evidence>"');
   expect(boundary).toMatch(/never starts with `failed:`/);
 
+  // l4: a blocked attempt's dead mechanisms lived only in a pane, and the
+  // outgoing Lead had to spell four of them out in a stand-down message.
+  expect(boundary.replace(/\s+/g, " ")).toContain(
+    "Its claim names the mechanism that failed and the alternatives that attempt killed, its proof names what falsified each one",
+  );
+
   const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
   expect(room).toMatch(/file exactly once, when the stop condition is met/);
   expect(room).toMatch(/second stop point needs a second dispatch/);

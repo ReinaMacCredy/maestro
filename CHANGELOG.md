@@ -38,6 +38,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
   the command with `<record holder>` and says which name that resolves to, and
   the team table says only `supervisor-<team>` has a channel out of the
   workspace (l3: w6, d28, d30, d36).
+- A BLOCKED handback now records the negative knowledge: its claim names the
+  mechanism that failed and the alternatives that attempt killed, and its proof
+  names what falsified each one, beside the retry condition it already carried.
+  On w9 the mechanism-level cause of a blocked return lived only in a pane, and
+  the outgoing Lead had to spell out four dead mechanisms in a stand-down
+  message or they would have closed with it (l4: w6, d41).
 
 ### Fixed
 

@@ -324,6 +324,13 @@ work item and the same pane, names the prior dispatch and handback in the
 objective, and the lane accepts the new dispatch before continuing. A brief
 that pauses for review or a later signal after a handback is two dispatches.
 
+A BLOCKED return carries the negative knowledge, not only the verdict. Its
+claim names the mechanism that failed and the alternatives that attempt killed,
+its proof names what falsified each one, and `--request` still carries the retry
+condition. The rest of a handback describes the attempt that just ended; this is
+the only part that makes the next attempt cheap, and left unwritten it lives in
+a pane and dies when that pane closes.
+
 A return packet is evidence for the exact contract it was filed under, and it
 never changes; that is what makes a sealed council meaningful. Evidence that
 arrives after the return with no new assignment is a work note prefixed with
