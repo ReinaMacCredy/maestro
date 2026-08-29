@@ -15,7 +15,8 @@ export type AttentionKind =
   | "SCOPE_COLLISION"
   | "DISPATCH_UNACCEPTED"
   | "DISPATCH_UNRETURNED"
-  | "HANDBACK_UNREVIEWED";
+  | "HANDBACK_UNREVIEWED"
+  | "LESSONS_PENDING";
 
 interface AttentionWorkRow {
   heldBy: string | null;
@@ -40,7 +41,7 @@ interface FailedNoteRow {
 
 interface Detection {
   entityId: string;
-  entityType: "decision" | "dispatch" | "work";
+  entityType: "decision" | "dispatch" | "lesson" | "work";
   fingerprint: string;
   holderRole?: "lead" | "peer";
   kind: AttentionKind;
@@ -72,7 +73,7 @@ export interface AttentionService {
   scan(options: AttentionOptions): AttentionFinding[];
 }
 
-const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
+const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "lesson" | "work"> = {
   STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
   DECISION_STALE: "decision",
@@ -83,7 +84,12 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "work"> = {
   DISPATCH_UNACCEPTED: "dispatch",
   DISPATCH_UNRETURNED: "dispatch",
   HANDBACK_UNREVIEWED: "dispatch",
+  LESSONS_PENDING: "lesson",
 };
+
+// d42 runs the improver on a schedule or a threshold, never per correction.
+const lessonsPendingCount = 5;
+const lessonsPendingDays = 7;
 
 function numericOption(
   invocation: CliInvocation,
@@ -705,6 +711,68 @@ function handbackUnreviewedDetections(
   });
 }
 
+interface PendingLessonRow {
+  created_at: string;
+  id: string;
+  project: string;
+}
+
+function lessonsPendingDetections(context: PluginContext, now: number): Detection[] {
+  if (!context.store.hasColumn("lessons", "state")) return [];
+  const pending = context.store.database
+    .query<PendingLessonRow, []>(
+      `SELECT id, project, created_at FROM lessons
+       WHERE state = 'pending'
+       ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
+    )
+    .all();
+  const byProject = new Map<string, PendingLessonRow[]>();
+  for (const lesson of pending) {
+    const group = byProject.get(lesson.project);
+    if (group) group.push(lesson);
+    else byProject.set(lesson.project, [lesson]);
+  }
+  return [...byProject].flatMap(([project, lessons]): Detection[] => {
+    const oldest = lessons[0];
+    if (!oldest) return [];
+    // An improver run is what marks lessons processed, so the last one in this
+    // project is the run; before the first, the oldest lesson starts the clock.
+    const lastRun = context.store.database
+      .query<{ created_at: string }, [string]>(
+        `SELECT event_log.created_at FROM event_log
+         JOIN lessons ON lessons.id = event_log.entity_id
+         WHERE event_log.type = 'lesson.process' AND lessons.project = ?
+         ORDER BY event_log.id DESC LIMIT 1`,
+      )
+      .get(project);
+    const since = lastRun?.created_at ?? oldest.created_at;
+    const overdue = now - Date.parse(since) >= lessonsPendingDays * 24 * 60 * 60_000;
+    if (lessons.length < lessonsPendingCount && !overdue) return [];
+    const clock = lastRun
+      ? `last improver run ${since}`
+      : `no improver run yet, oldest filed ${since}`;
+    return [{
+      entityId: oldest.id,
+      entityType: "lesson",
+      fingerprint: `lessons:${project}:${oldest.id}:${
+        lessons.length >= lessonsPendingCount ? "count" : "age"
+      }`,
+      kind: "LESSONS_PENDING",
+      packet: packet("LESSONS_PENDING", oldest.id, {
+        observed: `${lessons.length} lessons pending for ${project}; ${clock}`,
+        evidence: lastRun
+          ? `event_log lesson.process ${since}`
+          : `lessons.created_at ${since}`,
+        unknown: "whether these corrections still describe the doctrine as it stands",
+        question: `run the improver on ${project}?`,
+        smallestAction: `maestro lesson list --project ${project}`,
+      }),
+      subjectSession: null,
+      subjectWork: null,
+    }];
+  });
+}
+
 function detect(context: PluginContext, options: AttentionOptions): Detection[] {
   const now = Date.now();
   const works = workRows(context);
@@ -738,6 +806,7 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
     ),
     ...dispatchUnacceptedDetections(context, workById, sessions, now),
     ...handbackUnreviewedDetections(context, workById, now),
+    ...lessonsPendingDetections(context, now),
   ];
 }
 

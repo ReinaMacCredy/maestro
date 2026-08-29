@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runCli, withFixture, type Fixture } from "./helpers.ts";
 
@@ -169,5 +170,73 @@ test("547 a lesson carries evidence and a project from another store as written 
     expect(scoped.stdout).toContain("l1");
     expect(scoped.stdout).toContain("cmux");
     expect(scoped.stdout).not.toContain("l2");
+  });
+});
+
+function backdate(fixture: Fixture, id: string, days: number): void {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+  try {
+    const when = new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
+    database.query("UPDATE lessons SET created_at = ? WHERE id = ?").run(when, id);
+  } finally {
+    database.close();
+  }
+}
+
+test("548 five pending lessons raise LESSONS_PENDING for their project (w551/d42)", async () => {
+  await withFixture(async (fixture) => {
+    for (let index = 0; index < 4; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+
+    const quiet = await runCli(fixture, ["attention"]);
+    expect(quiet.exitCode).toBe(0);
+    expect(quiet.stdout).not.toContain("LESSONS_PENDING");
+
+    expect((await runCli(fixture, fileArgs("correction 4"))).exitCode).toBe(0);
+
+    const raised = await runCli(fixture, ["attention"]);
+    expect(raised.exitCode).toBe(0);
+    expect(raised.stdout).toContain("attention LESSONS_PENDING lesson l1");
+    expect(raised.stdout).toContain("5 lessons pending for repo");
+    expect(raised.stdout).toContain("maestro lesson list --project repo");
+  });
+});
+
+test("549 seven days without an improver run raise it before the count does (w551/d724)", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, fileArgs("the only correction"))).exitCode).toBe(0);
+
+    const fresh = await runCli(fixture, ["attention"]);
+    expect(fresh.stdout).not.toContain("LESSONS_PENDING");
+
+    backdate(fixture, "l1", 8);
+    const aged = await runCli(fixture, ["attention"]);
+    expect(aged.stdout).toContain("attention LESSONS_PENDING lesson l1");
+    expect(aged.stdout).toContain("no improver run");
+
+    // Processing it is the improver run: the clock restarts from there, so a
+    // lesson filed today does not re-raise.
+    expect((await runCli(fixture, ["lesson", "process", "l1", "--commit", "806ba20e"])).exitCode)
+      .toBe(0);
+    expect((await runCli(fixture, fileArgs("a fresh correction"))).exitCode).toBe(0);
+    const quiet = await runCli(fixture, ["attention"]);
+    expect(quiet.stdout).not.toContain("LESSONS_PENDING");
+  });
+});
+
+test("550 brief carries LESSONS_PENDING from a registered project (w551/d42)", async () => {
+  await withFixture(async (fixture) => {
+    for (let index = 0; index < 5; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+    await mkdir(join(fixture.home, "maestro"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
+
+    const brief = await runCli(fixture, ["brief"], { MAESTRO_READ_ONLY: "1" });
+
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain("LESSONS_PENDING");
+    expect(brief.stdout).toContain(fixture.repo);
   });
 });

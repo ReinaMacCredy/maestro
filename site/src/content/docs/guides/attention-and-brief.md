@@ -19,6 +19,14 @@ mailbox message and does not require a daemon. The detector set is:
 - `DISPATCH_UNACCEPTED`
 - `DISPATCH_UNRETURNED`
 - `HANDBACK_UNREVIEWED`
+- `LESSONS_PENDING`
+
+`LESSONS_PENDING` is the improver's trigger. It is raised for a project when
+five lessons are pending for it, or when seven days have passed since the last
+improver run in that project, whichever comes first; before any run, the oldest
+pending lesson starts that clock. It is grouped by the lesson's project tag,
+because the room relays "run improver" to the Lead of the doctrine the lessons
+target. The improver never runs per correction.
 
 Threshold flags tune stale leases, draft decisions, and unreturned dispatches.
 For a compact machine-readable result, run:

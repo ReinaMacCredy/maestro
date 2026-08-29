@@ -445,6 +445,26 @@ test("260 every exported attention kind has an independent read-only detection s
       ).exitCode,
     ).toBe(0);
 
+    for (let index = 0; index < 5; index += 1) {
+      expect(
+        (
+          await runCli(fixture, [
+            "lesson",
+            "file",
+            `correction ${index}`,
+            "--target",
+            "recipe work",
+            "--expected",
+            "one command",
+            "--why",
+            "a relay card is a handoff",
+            "--evidence",
+            stalled,
+          ])
+        ).exitCode,
+      ).toBe(0);
+    }
+
     const database = openDatabase(fixture);
     try {
       database
@@ -491,8 +511,9 @@ test("260 every exported attention kind has an independent read-only detection s
       LEAD_COLLISION: stalled,
       REPEATED_FAILURE: repeated,
       SCOPE_COLLISION: collisionA,
+      LESSONS_PENDING: null,
       STALLED_LEASE: stalled,
-    } satisfies Record<AttentionKind, string>;
+    } satisfies Record<AttentionKind, string | null>;
     const expectedPacketHeads = {
       DECISION_REVIEW_DUE: `attention DECISION_REVIEW_DUE decision ${reviewDecision}`,
       DECISION_STALE: `attention DECISION_STALE decision ${decision}`,
@@ -503,6 +524,7 @@ test("260 every exported attention kind has an independent read-only detection s
       LEAD_COLLISION: `attention LEAD_COLLISION work ${stalled},${repeated}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
       SCOPE_COLLISION: `attention SCOPE_COLLISION work ${collisionA},${collisionB}`,
+      LESSONS_PENDING: "attention LESSONS_PENDING lesson l1",
       STALLED_LEASE: `attention STALLED_LEASE work ${stalled}`,
     } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();

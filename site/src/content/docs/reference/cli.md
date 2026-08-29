@@ -20,7 +20,9 @@ maestro <verb> --help
 
 `maestro attention` scans current store state without mutating work. Flags:
 `--stale <minutes>` (default 30), `--decision-stale <hours>` (default 24),
-`--dispatch-stale <hours>` (default 2), and `--json`.
+`--dispatch-stale <hours>` (default 2), and `--json`. `LESSONS_PENDING` has no
+flag: it is raised at five pending lessons for a project, or seven days since
+that project's last improver run.
 
 ### `brief`
 
