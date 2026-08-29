@@ -147,25 +147,31 @@ test("mechanical trigger rules declare deterministic threshold, consequence, and
   }
 });
 
-test("574 a duplicate required role identity in another workspace degrades and closes project gates", async () => {
+test("574 every required role identity duplicated in another workspace degrades and closes project gates", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.root, "room");
     await mkdir(room);
     const fake = await installFakeHerdr(fixture);
     await openTeam(fixture, room, "cross-workspace", fake.env);
+    const plan = buildTeamPlan({
+      expectedRevision: 0,
+      generation: 1,
+      repoPath: fixture.repo,
+      teamId: "cross-workspace",
+    });
     await editFakeHerdrState(fake, (state) => {
       const agents = state.agents as Array<Record<string, string>>;
       const workspaces = state.workspaces as Array<Record<string, string>>;
       const panes = state.panes as Array<Record<string, string>>;
-      const observer = agents.find((agent) =>
-        agent.name === "observer-cross-workspace"
-      );
-      if (!observer) throw new Error("fake Observer missing");
       const workspaceId = "foreign-workspace";
-      const paneId = "foreign-workspace:p1";
       workspaces.push({ cwd: fixture.repo, label: "unmanaged-foreign", workspace_id: workspaceId });
-      panes.push({ cwd: fixture.repo, pane_id: paneId, workspace_id: workspaceId });
-      agents.push({ ...observer, pane_id: paneId, workspace_id: workspaceId });
+      for (const [index, role] of plan.roles.entries()) {
+        const agent = agents.find((candidate) => candidate.name === role.agentName);
+        if (!agent) throw new Error(`fake ${role.role} missing`);
+        const paneId = `${workspaceId}:p${index + 1}`;
+        panes.push({ cwd: fixture.repo, pane_id: paneId, workspace_id: workspaceId });
+        agents.push({ ...agent, pane_id: paneId, workspace_id: workspaceId });
+      }
     });
 
     // Perturbation: a globally duplicated authority alias must not be hidden by workspace filtering.
@@ -178,10 +184,12 @@ test("574 a duplicate required role identity in another workspace degrades and c
     expect(health.exitCode, health.stderr).toBe(0);
     const result = envelope(health.stdout).data;
     expect(result.team).toMatchObject({ health: "DEGRADED", verdict: "DRAINING" });
-    expect(result.receipt.missing).toContainEqual(expect.objectContaining({
-      code: "role.duplicate",
-      resource: "team:cross-workspace:g1:observer",
-    }));
+    for (const role of plan.roles) {
+      expect(result.receipt.missing).toContainEqual(expect.objectContaining({
+        code: "role.duplicate",
+        resource: role.resourceKey,
+      }));
+    }
 
     const blocked = await runCli(
       fixture,

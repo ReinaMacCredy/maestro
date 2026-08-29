@@ -115,6 +115,15 @@ test("576 project binding stores no READY copy and fresh TeamControl gates REVIE
     expect(started.exitCode).toBe(0);
     const startCommands = (await fakeHerdrCommands(fake)).slice(beforeStart.length);
     expect(startCommands.length).toBeGreaterThan(0);
+    const readOnlyRuntimeCommands = [
+      "workspace list",
+      "pane list",
+      "agent list",
+      "pane process-info",
+    ];
+    for (const command of startCommands) {
+      expect(readOnlyRuntimeCommands).toContain(command.slice(0, 2).join(" "));
+    }
     expect(startCommands.some((command) =>
       command[0] === "agent" && command[1] === "prompt" && command[2] === "observer-omicron"
     )).toBe(false);
