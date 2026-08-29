@@ -2086,6 +2086,13 @@ test("539 [lint] the room holds owner authority in full behind the external-effe
     }
     expect(identity).toContain("names the exact candidate and the verified evidence");
 
+    // l2: v0.113.0 passed the gate as "docs and site refreshed" while the site
+    // held scattered mentions and no page, because nothing said where a claim
+    // is checked. Verified evidence is checked at the surface the claim names.
+    expect(identity).toContain(
+      "verified by opening the reader-facing page a reader would land on",
+    );
+
     // Intervention reaches any team, but a code correction still goes through
     // that team's Lead: the room does not become a second Lead.
     expect(slp).toContain("It may intervene in any team to stop or correct an error");

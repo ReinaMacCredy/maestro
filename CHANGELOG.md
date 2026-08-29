@@ -21,6 +21,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
   reference, Attention and brief, SLP scenarios, and Recipes, skills, and
   plugins.
 
+### Changed
+
+- The room's external-effect gate now says where a claim is checked: verified
+  evidence means every claim in the locked decision checked at the surface it
+  names, and a docs or site claim is verified by opening the reader-facing page
+  a reader would land on, not by mentions inside existing pages. The v0.113.0
+  release passed the gate as "docs and site refreshed" while the site had no
+  page on the self-improvement loop, and the owner found the gap (l2: w9, w10,
+  d47).
+
 ### Fixed
 
 - One `maestro update` now materializes the managed skills shipped by the commit
