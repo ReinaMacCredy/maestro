@@ -9,6 +9,7 @@ export interface FlagDefinition {
 export interface CommandOptions {
   description?: string;
   flags?: Record<string, FlagDefinition>;
+  json?: boolean;
   maxPositionals?: number;
   mutates?: boolean;
   positionals?: PositionalDefinition[];
@@ -73,6 +74,7 @@ interface CommandDefinition {
   description: string;
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
+  json: boolean;
   maxPositionals: number;
   mutates: boolean;
   positionals: PositionalDefinition[];
@@ -195,6 +197,7 @@ export class Cli {
       description: this.oneLine(options.description, `Run ${command}.`),
       handler,
       flags: new Map(Object.entries(options.flags ?? {})),
+      json: options.json ?? false,
       maxPositionals: options.maxPositionals ?? options.positionals?.length ?? 0,
       mutates: options.mutates ?? true,
       positionals: options.positionals ?? [],
@@ -524,7 +527,8 @@ export class Cli {
   }
 
   private supportsJson(command: string): boolean {
-    return command === "status" ||
+    return this.commands.get(command)?.json === true ||
+      command === "status" ||
       command === "ready" ||
       command === "handoff" ||
       command === "bundle show" ||

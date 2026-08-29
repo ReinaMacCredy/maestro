@@ -25,6 +25,7 @@ import { recipePlugin } from "./recipe.ts";
 import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
 import { workPlugin } from "./work.ts";
+import { teamPlugin } from "./team.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
@@ -52,5 +53,6 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   mcpPlugin,
   versionPlugin,
   installPlugin,
+  teamPlugin,
   lifecyclePlugin,
 ];
