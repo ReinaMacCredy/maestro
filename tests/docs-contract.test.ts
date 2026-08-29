@@ -160,4 +160,10 @@ test("309 [lint] every README verb-tour command resolves through CLI help", asyn
       });
     }
   });
-});
+  // 17 documented commands, one CLI process each, serially: 1.38s on an idle
+  // machine (junit reporter, three runs, 1.32 to 1.39). The default 5000ms
+  // tolerates a 3.6x slowdown and nothing more, and it ran out once during a
+  // release gate while several agents shared the machine. 30s keeps the test
+  // honest about a genuine hang while surviving the contention this repository
+  // actually works under.
+}, 30_000);
