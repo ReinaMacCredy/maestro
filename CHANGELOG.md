@@ -11,6 +11,61 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.113.0] - 2026-08-29
+
+The self-improvement release. A correction stops being a remark in a transcript
+and becomes a record: whoever makes one files it where it happened, an improver
+lane reads the pile on a threshold rather than reacting to each one, and a
+golden replay decides whether the doctrine edit it proposes was an improvement.
+
+### Added
+
+- Lessons (room d40, relay w9, card w550, decisions d722 and d723).
+  `maestro lesson file` records a correction as a store row naming the doctrine
+  it corrects, what happened, what was expected instead, why that expectation is
+  the right one, and the work, handback or decision ids that evidence it.
+  `lesson list` shows what is still pending and `--all` includes what is not;
+  `lesson show` reads one; `lesson process` marks it with the commit that
+  carries its edit, or with `--answer`, the reason it produced none. Nothing
+  deletes a lesson. Evidence ids are text rather than foreign keys, so a
+  repository lesson may cite room ids that do not exist in its store (d723), and
+  the project tag defaults to the store's own project, the registry name the
+  room renders its per-project view from.
+- `LESSONS_PENDING`, an attention finding (room d42, card w551, decision d724).
+  Five pending lessons for a project, or seven days since that project's last
+  improver run, raise it; before any run the oldest pending lesson starts the
+  clock. It is computed at read time from store state like every other detector,
+  so `maestro brief` carries it across registered projects with nothing
+  resident, and it groups by project tag rather than by store, because the room
+  relays "run the improver" to the Lead of the doctrine those lessons target and
+  a store-wide count names no Lead.
+- `maestro lesson render` (room d42, card w552, decision d725), which writes
+  `~/maestro/PROJECT/<project>.md`, one file per project tag, from the store it
+  runs in plus every store in `~/maestro/registry`, each read through a
+  read-only child process rather than by opening another store's database.
+  Pending and processed lessons both appear, so a new team inherits the whole
+  record. Like `registry` it is a rendered view and is never hand-edited. The
+  room runs it before it hands intent to a Lead, and the start prompt now names
+  that path for the Lead to read before its first card.
+- `maestro-improve`, a fifth managed method skill (room d44, card w553). The
+  improver lane groups pending lessons by target, proposes the smallest edit per
+  group as a commit carrying their evidence ids, marks each lesson processed by
+  that commit or answered with the reason it was rejected, and stops at the
+  handback for the Lead. Its target catalogue is a reference file, so the skill
+  itself stays short.
+- A scenario golden harness (room d43, card w554, decision d726). Each SLP
+  scenario is a script of maestro commands in `tests/scenarios/<name>.script`
+  with the transcript it produced beside it in `<name>.golden`, replayed against
+  a fresh store by `tests/scenario-golden.test.ts`. A line prefixed with
+  `@<session>` runs as that lane, so one script holds both the Lead and the
+  Peer; timestamps, paths and pids are normalised, so a diff in a golden is a
+  change in behaviour. The four scripts cover the atomic fix, the delivery lane
+  through dispatch, confirm, handback, attention and review, the sealed decision
+  council, and the lesson loop itself. Scenarios are data: the improver adds one
+  without writing test code, and an improver edit is accepted only when the
+  replay still matches, or matches the change a lesson asked for, re-recorded
+  with `MAESTRO_GOLDEN_UPDATE=1` in the same commit as the edit.
+
 ### Changed
 
 - `maestro work done` takes the lease itself when no session holds the item,
@@ -22,6 +77,20 @@ TypeScript-on-Bun line and continues the existing version sequence.
   `work.done` event carries `claimedOnDone`. When a previous holder lost the
   lease, the completion text names that holder and the liveness reason the
   removed `LEASE_REQUIRED` error used to carry.
+- The SLP recipe carries the self-improvement loop it all sits in (d40, d42,
+  d43, d44): who may file a lesson and why a Peer's finding travels through its
+  handback and the Lead, the threshold that starts a run rather than a
+  correction firing one, the delivery lane on the strong rung followed by a
+  challenge lane on the diverse rung, and the golden replay that gates an edit.
+
+### Fixed
+
+- The room's Lead start prompt named the rendered project view inside backticks,
+  which a shell would have run as command substitution instead of passing as
+  text.
+- `.claude/`, `.codex/` and `.idea/` are ignored rather than tracked. The
+  installer owns the harness wiring and the IDE file is per-checkout state; both
+  were committed by accident with the lesson view.
 
 ## [0.112.0] - 2026-08-29
 
