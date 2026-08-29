@@ -2176,3 +2176,28 @@ test("569 [lint] the room's evidence rule names the two surfaces that read as ev
     );
   });
 });
+
+test("570 [lint] a brief body is sent through a file, not as a rescanned inline argument", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const lane = flat(await readFile(join(room, "lane.md"), "utf8"));
+    const lead = flat(await readFile(join(room, "lead.md"), "utf8"));
+
+    // room l8: a relayed note lost the command it was about, because the
+    // sender's shell evaluated the formatting marks in the body. The mechanics
+    // sit next to the send, in lane.md step 5.
+    expect(lane).toContain(
+      'sent as `herdr agent prompt peer-<dispatch id> "$(cat <file>)"`, never typed inline',
+    );
+    expect(lane).toContain("An inline body carries no backtick, no dollar sign and no dollar-parens at all.");
+
+    // The room's own sends are the larger exposure: every brief leaves here as
+    // a double-quoted argument, and the quiet failure removes text silently.
+    expect(lead).toContain(
+      'Every `herdr agent prompt` body this room sends is written to a file and passed as `"$(cat <file>)"`',
+    );
+    expect(lead).toContain("an unset variable expands to nothing");
+  });
+});

@@ -45,6 +45,14 @@ TypeScript-on-Bun line and continues the existing version sequence.
   nearly reported to a Lead as a live hazard, and the length of a `head -5`
   listing was quoted in a brief as a count of five where the real number was
   fifty-eight (room l7: room w9, room d53; room l10: room w6).
+- A brief body is now sent through a file, `herdr agent prompt <name>
+  "$(cat <file>)"`, in `lane.md` step 5 and for every prompt the room itself
+  sends in `lead.md`. A double-quoted argument is still scanned by the sending
+  shell, so a backtick or a dollar-parens in text describing a command runs on
+  the sender's machine, and an unset variable expands to nothing, leaving a
+  brief that arrives complete-looking with its verb removed. That is what
+  happened to a relayed note, whose literal command text vanished before it
+  reached the room (room l8: room w6).
 
 ## [0.113.1] - 2026-08-29
 
