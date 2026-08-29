@@ -64,6 +64,11 @@ TypeScript-on-Bun line and continues the existing version sequence.
   `tests/scenarios/<name>.script`, the placeholder the site and the CHANGELOG
   already used. They said `<case>`, which is only half the directory:
   `lesson-loop.script` sits beside `case-1-atomic-fix.script`.
+- `maestro lesson render` prints a repository it could not read before the
+  summary that repository is missing from, and the line names the command that
+  shows why: `cd <repo> && maestro lesson list --all`. The warning was right to
+  be loud but landed under the summary and said nothing about what to do, so a
+  store left out of the view read as a footnote to it.
 
 ## [0.113.0] - 2026-08-29
 

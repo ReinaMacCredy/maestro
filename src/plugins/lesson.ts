@@ -411,10 +411,15 @@ export const lessonPlugin: BuiltInPlugin = {
           result.missing
             ? [`skipped: ${result.repo} (missing)`]
             : result.error
-              ? [`Unreadable repository: ${result.repo}`]
+              // The child's stderr is discarded, so the line names the command
+              // that shows what it said; a store left out is why the view below
+              // is incomplete, so it is read before the view, not after it.
+              ? [
+                `Unreadable repository: ${result.repo}; run: cd ${result.repo} && maestro lesson list --all`,
+              ]
               : []
         );
-        const lines = [...written, ...unavailable];
+        const lines = [...unavailable, ...written];
         return {
           data: { directory, projects: [...byProject.keys()], written: written.length },
           text: lines.length > 0 ? lines.join("\n") : "No lessons to render.",

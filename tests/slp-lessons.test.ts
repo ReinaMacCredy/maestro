@@ -355,3 +355,31 @@ test("556 [lint] slp.md carries the improver loop from threshold to challenge (w
   expect(slp).toContain("through its handback");
   expect(slp).toContain("never deleted");
 });
+
+test("560 lesson render warns before it summarises and names the command that shows why (w558)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    const broken = join(fixture.root, "broken");
+    await mkdir(join(broken, ".maestro"), { recursive: true });
+    await writeFile(join(broken, ".maestro", "config"), "not json\n");
+    await writeFile(join(room, "registry"), `${fixture.repo}\n${broken}\n`);
+
+    expect((await runCli(fixture, fileArgs("a correction worth rendering"))).exitCode).toBe(0);
+
+    const rendered = await runCliAt(fixture, room, ["lesson", "render"]);
+    expect(rendered.exitCode).toBe(0);
+
+    const lines = rendered.stdout.trim().split("\n");
+    const warning = lines.findIndex((line) => line.startsWith("Unreadable repository:"));
+    const summary = lines.findIndex((line) => line.startsWith("PROJECT/"));
+    // A store the render could not read is why the view below it is
+    // incomplete, so it is read before the view it qualifies, not after.
+    expect(warning).toBeGreaterThanOrEqual(0);
+    expect(summary).toBeGreaterThanOrEqual(0);
+    expect(warning).toBeLessThan(summary);
+    // render discards the child's stderr, so the line names the command that
+    // shows what the child said.
+    expect(rendered.stdout).toContain(`cd ${broken} && maestro lesson list --all`);
+  });
+});
