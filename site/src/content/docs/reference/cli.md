@@ -107,6 +107,20 @@ inside the room store to record that the store is the Supervisor's.
 - `show <id>` reads one decision and its links.
 - `list [--json]` lists current decision states.
 
+### `lesson`
+
+- `file <what-happened> --target <value> --expected <value> --why <value>
+  --evidence <value>` files a correction where it happened; `--evidence`
+  repeats and takes work, handback, or decision ids, unvalidated so a lesson
+  can cite another store; `--project <value>` overrides the tag, which
+  otherwise names this store's project.
+- `process <id> --commit <value> | --answer <value>` marks a lesson processed
+  by the commit that carries its edit, or by the reason it produced none.
+  Nothing deletes a lesson.
+- `show <id>` reads one lesson and its evidence.
+- `list [--all] [--project <value>]` lists pending lessons; `--all` includes
+  processed ones.
+
 ### `bundle`
 
 - `open <id> [--work <value>]` scaffolds SPEC/NOTES/VERIFY; `--work` repeats.

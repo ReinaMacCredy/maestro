@@ -6,6 +6,7 @@ import { decisionPlugin } from "./decision.ts";
 import { dispatchPlugin } from "./dispatch.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
+import { lessonPlugin } from "./lesson.ts";
 import { lifecyclePlugin } from "./lifecycle.ts";
 import { mcpPlugin } from "./mcp.ts";
 import { observabilityPlugin } from "./observability.ts";
@@ -32,6 +33,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   workPlugin,
   dispatchPlugin,
   decisionPlugin,
+  lessonPlugin,
   coordinationPlugin,
   attentionPlugin,
   policyDispatchPlugin,
