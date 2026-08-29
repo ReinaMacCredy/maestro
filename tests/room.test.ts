@@ -2231,9 +2231,12 @@ test("571 [lint] a recorded green names its skip count and its environment (d7)"
     // room l9: a lane reported 490 pass 2 skip on a tree the room knew as 492
     // pass 0 skip, and it took three messages to establish that the gap was
     // two environment-gated tests the lane's shell could not run.
+    // h118: the duty belongs to the closure line this rule describes. The
+    // room-side half was orphaned here; d7 is the room record that holds it.
     expect(lead).toContain(
-      "carries pass, fail and skip counts together and names the environment it ran in",
+      "A suite result in that line carries pass, fail and skip counts together and names the environment it ran in",
     );
+    expect(lead).not.toContain("or in any green this room records");
     expect(lead).toContain("a runner prints no skip line when the count is zero");
     expect(lead).toContain("A pass count alone is an incomplete claim, not a green (d7).");
   });

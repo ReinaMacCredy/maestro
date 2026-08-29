@@ -59,8 +59,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
   script expanding its own variables on purpose, and the send forms in those
   steps are file-backed themselves, so no example teaches the form the rule
   forbids (room l8: room w6).
-- A green the room records now carries pass, fail and skip counts together and
-  names the environment it ran in, in `lead.md` rule 6, and a pass count alone
+- A suite result in a Lead's closure line now carries pass, fail and skip
+  counts together and names the environment it ran in, in `lead.md` rule 6, and a pass count alone
   is an incomplete claim rather than a green. A runner prints no skip line when
   the count is zero, so two environment-gated tests a lane's shell could not run
   were silently missing from its total: the lane reported 490 pass 2 skip on the
