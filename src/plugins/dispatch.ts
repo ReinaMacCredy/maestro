@@ -800,7 +800,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "dispatch open",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           const workId = requiredPosition(invocation, 0, "work id");
           const work = context.work as WorkService;
           const objective = requiredOption(invocation, "--objective");
@@ -847,6 +847,19 @@ export const dispatchPlugin: BuiltInPlugin = {
             }
           }
           const openedBy = context.sessions.current().id;
+          const gate = await context.events.waterfall<
+            { lane: string; sessionId: string; workId: string },
+            { blocked: boolean; origin?: string; reason?: string }
+          >(
+            "dispatch.open",
+            { lane, sessionId: openedBy, workId },
+            async () => ({ blocked: false }),
+          );
+          if (gate.blocked) {
+            throw new CliError("GATE_BLOCKED", gate.reason ?? "dispatch.open gate blocked", {
+              origin: gate.origin ?? "unknown",
+            });
+          }
           const open = context.store.database.transaction(() => {
             const subject = work.get(workId);
             if (!subject) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
@@ -1458,7 +1471,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "handback review",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           const id = requiredPosition(invocation, 0, "handback id");
           const note = requiredOption(invocation, "--note").trim();
           if (!note) {
@@ -1479,6 +1492,19 @@ export const dispatchPlugin: BuiltInPlugin = {
           }
           const already = handbackService.reviewed(handback.id);
           if (!already) {
+            const gate = await context.events.waterfall<
+              { dispatchId: string; handbackId: string; sessionId: string },
+              { blocked: boolean; origin?: string; reason?: string }
+            >(
+              "handback.final",
+              { dispatchId: dispatch.id, handbackId: handback.id, sessionId: reviewer },
+              async () => ({ blocked: false }),
+            );
+            if (gate.blocked) {
+              throw new CliError("GATE_BLOCKED", gate.reason ?? "handback.final gate blocked", {
+                origin: gate.origin ?? "unknown",
+              });
+            }
             context.store.database
               .query(
                 `INSERT INTO handback_reviews (handback_id, reviewed_by, note, created_at)

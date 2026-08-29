@@ -46,7 +46,38 @@ export interface TeamInspection {
   runtimeRevision: string;
 }
 
+export interface AdvisorConsultationRequest {
+  contextRefs: string[];
+  decisionRef: string;
+  operationId: string;
+  question: string;
+  requestedBy: string;
+  stopCondition: string;
+  timeoutMs: number;
+}
+
+export interface AdvisorRuntimeResult {
+  effects: RuntimeEffect[];
+  error: string | null;
+  paneId: string | null;
+  recommendation: string | null;
+  stopped: boolean;
+  tabId: string | null;
+}
+
 export interface TeamRuntime {
+  consultAdvisor(
+    plan: TeamPlan,
+    request: AdvisorConsultationRequest,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<AdvisorRuntimeResult>;
+  deliverObserver(
+    plan: TeamPlan,
+    body: string,
+    effectKey: string,
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect>;
   ensure(
     plan: TeamPlan,
     knownEffects: readonly RuntimeEffect[],
@@ -243,6 +274,28 @@ export class HerdrTeamRuntime implements TeamRuntime {
     }
   }
 
+  private async textCommand(args: string[], cwd: string): Promise<string> {
+    const child = Bun.spawn(["herdr", ...args], {
+      cwd,
+      env: process.env,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new TeamRuntimeError(
+        `Herdr command failed (${exitCode}): ${args.join(" ")}`,
+        args,
+        stderr.trim(),
+      );
+    }
+    return stdout;
+  }
+
   private async workspaces(plan: TeamPlan): Promise<WorkspaceRecord[]> {
     return recordArray<WorkspaceRecord>(resultOf(await this.command(["workspace", "list"], plan.repoPath)), "workspaces");
   }
@@ -267,6 +320,253 @@ export class HerdrTeamRuntime implements TeamRuntime {
 
   private async processInfo(plan: TeamPlan, paneId: string): Promise<Record<string, unknown>> {
     return resultOf(await this.command(["pane", "process-info", "--pane", paneId], plan.repoPath));
+  }
+
+  async deliverObserver(
+    plan: TeamPlan,
+    body: string,
+    effectKey: string,
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<RuntimeEffect> {
+    const observer = plan.roles.find((role) => role.role === "observer");
+    if (!observer) {
+      throw new TeamRuntimeError("observer role is missing from the team plan", ["agent", "prompt"]);
+    }
+    const response = resultOf(await this.command(
+      ["agent", "prompt", observer.agentName, body],
+      plan.repoPath,
+    ));
+    const effect: RuntimeEffect = {
+      data: {
+        agentName: observer.agentName,
+        delivered: accepted(response),
+        generation: plan.generation,
+      },
+      key: effectKey,
+      kind: "agent.prompt",
+      ok: accepted(response),
+      resourceKey: plan.sensorResourceKey,
+    };
+    await recordEffect(effect);
+    return effect;
+  }
+
+  async consultAdvisor(
+    plan: TeamPlan,
+    request: AdvisorConsultationRequest,
+    knownEffects: readonly RuntimeEffect[],
+    recordEffect: (effect: RuntimeEffect) => Promise<void> | void,
+  ): Promise<AdvisorRuntimeResult> {
+    const effects = new Map(knownEffects.map((effect) => [effect.key, effect]));
+    const remember = async (effect: RuntimeEffect): Promise<void> => {
+      effects.set(effect.key, effect);
+      await recordEffect(effect);
+    };
+    const advisorName = `advisor-${plan.teamId}`;
+    const advisorKey = `team:${plan.teamId}:g${plan.generation}:advisor`;
+    const advisorLabel = `${advisorKey}:${request.operationId}`;
+    let paneId: string | null = null;
+    let tabId: string | null = null;
+    let recommendation: string | null = null;
+    let failure: string | null = null;
+    try {
+      const matchingWorkspaces = (await this.workspaces(plan)).filter(
+        (workspace) => workspace.label === plan.workspaceLabel,
+      );
+      if (matchingWorkspaces.length !== 1 || !matchingWorkspaces[0]?.workspace_id) {
+        throw new TeamRuntimeError(
+          `advisor requires one workspace ${plan.workspaceLabel}; found ${matchingWorkspaces.length}`,
+          ["workspace", "list"],
+        );
+      }
+      const workspaceId = matchingWorkspaces[0].workspace_id;
+      const matchingAgents = (await this.agents(plan)).filter(
+        (agent) => agent.name === advisorName && agent.workspace_id === workspaceId,
+      );
+      if (matchingAgents.length > 1) {
+        throw new TeamRuntimeError(
+          `advisor identity is duplicated: ${advisorName}`,
+          ["agent", "list"],
+        );
+      }
+      if (matchingAgents.length === 1) {
+        paneId = matchingAgents[0]?.pane_id ?? null;
+        const attached = paneId
+          ? (await this.panes(plan, workspaceId)).find((pane) => pane.pane_id === paneId)
+          : undefined;
+        tabId = attached?.tab_id ?? null;
+        await remember({
+          data: { adopted: true, agentName: advisorName, paneId, tabId, workspaceId },
+          key: "advisor.agent",
+          kind: "agent.adopt",
+          ok: Boolean(paneId),
+          resourceKey: advisorKey,
+        });
+      } else {
+        const matchingTabs = (await this.tabs(plan, workspaceId)).filter(
+          (tab) => tab.label === advisorLabel,
+        );
+        if (matchingTabs.length > 1) {
+          throw new TeamRuntimeError(
+            `advisor tab identity is duplicated: ${advisorLabel}`,
+            ["tab", "list"],
+          );
+        }
+        if (matchingTabs.length === 1) {
+          tabId = matchingTabs[0]?.tab_id ?? null;
+          paneId = matchingTabs[0]?.root_pane_id ?? null;
+        } else {
+          const created = resultOf(await this.command([
+            "tab",
+            "create",
+            "--workspace",
+            workspaceId,
+            "--cwd",
+            plan.repoPath,
+            "--label",
+            advisorLabel,
+            "--no-focus",
+          ], plan.repoPath));
+          const tab = objectAt(created, "tab");
+          const rootPane = objectAt(created, "root_pane");
+          tabId = stringAt(tab, "tab_id") ?? null;
+          paneId = stringAt(rootPane, "pane_id") ?? null;
+          await remember({
+            data: { paneId, tabId, workspaceId },
+            key: "advisor.pane",
+            kind: "tab.create",
+            ok: Boolean(paneId && tabId),
+            resourceKey: advisorKey,
+          });
+        }
+        if (!paneId) throw new TeamRuntimeError("advisor pane was not created", ["tab", "create"]);
+        const started = resultOf(await this.command([
+          "agent",
+          "start",
+          advisorName,
+          "--kind",
+          "codex",
+          "--pane",
+          paneId,
+        ], plan.repoPath));
+        await remember({
+          data: { accepted: accepted(started), agentName: advisorName, paneId, tabId, workspaceId },
+          key: "advisor.agent",
+          kind: "agent.start",
+          ok: accepted(started),
+          resourceKey: advisorKey,
+        });
+        if (!accepted(started)) {
+          throw new TeamRuntimeError("advisor agent did not start", ["agent", "start", advisorName]);
+        }
+      }
+
+      const priorRecommendation = effects.get("advisor.recommendation");
+      if (priorRecommendation?.ok && typeof priorRecommendation.data.recommendation === "string") {
+        recommendation = priorRecommendation.data.recommendation;
+      } else {
+        const body = [
+          `[advisor-consultation ${request.operationId}]`,
+          `team=${plan.teamId}`,
+          `generation=${plan.generation}`,
+          `requestedBy=${request.requestedBy}`,
+          `decision=${request.decisionRef}`,
+          `question=${JSON.stringify(request.question)}`,
+          `context=${JSON.stringify(request.contextRefs)}`,
+          `stop=${JSON.stringify(request.stopCondition)}`,
+          "You hold no work, lease, decision, mutation, or store authority.",
+          "Finish with exactly one line: MAESTRO_ADVISOR_RETURN {\"recommendation\":\"non-empty text\"}",
+        ].join("\n");
+        const prompted = resultOf(await this.command([
+          "agent",
+          "prompt",
+          advisorName,
+          body,
+          "--wait",
+          "--until",
+          "idle",
+          "--until",
+          "done",
+          "--timeout",
+          String(request.timeoutMs),
+        ], plan.repoPath));
+        await remember({
+          data: { agentName: advisorName, delivered: accepted(prompted), paneId },
+          key: "advisor.prompt",
+          kind: "agent.prompt",
+          ok: accepted(prompted),
+          resourceKey: advisorKey,
+        });
+        if (!accepted(prompted)) {
+          throw new TeamRuntimeError("advisor prompt was not accepted", ["agent", "prompt", advisorName]);
+        }
+        const output = await this.textCommand(
+          ["agent", "read", advisorName, "--source", "recent-unwrapped", "--lines", "120"],
+          plan.repoPath,
+        );
+        const marker = "MAESTRO_ADVISOR_RETURN ";
+        const line = output.split("\n").reverse().find((candidate) => candidate.startsWith(marker));
+        if (line) {
+          try {
+            const parsed = JSON.parse(line.slice(marker.length)) as { recommendation?: unknown };
+            if (typeof parsed.recommendation === "string" && parsed.recommendation.trim()) {
+              recommendation = parsed.recommendation.trim();
+            }
+          } catch {}
+        }
+        await remember({
+          data: { outputTail: output.slice(-4_096), recommendation },
+          key: "advisor.recommendation",
+          kind: "agent.read",
+          ok: recommendation !== null,
+          resourceKey: advisorKey,
+        });
+        if (!recommendation) {
+          failure = "advisor completed without a valid MAESTRO_ADVISOR_RETURN marker";
+        }
+      }
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+    } finally {
+      try {
+        if (tabId) {
+          const closed = resultOf(await this.command(["tab", "close", tabId], plan.repoPath));
+          await remember({
+            data: { closed: closed.closed !== false, tabId },
+            key: "advisor.close",
+            kind: "tab.close",
+            ok: closed.closed !== false,
+            resourceKey: advisorKey,
+          });
+        } else if (paneId) {
+          const closed = resultOf(await this.command(["pane", "close", paneId], plan.repoPath));
+          await remember({
+            data: { closed: closed.closed !== false, paneId },
+            key: "advisor.close",
+            kind: "pane.close",
+            ok: closed.closed !== false,
+            resourceKey: advisorKey,
+          });
+        }
+      } catch (error) {
+        failure = failure ?? (error instanceof Error ? error.message : String(error));
+      }
+    }
+    let stopped = false;
+    try {
+      stopped = !(await this.agents(plan)).some((agent) => agent.name === advisorName);
+    } catch (error) {
+      failure = failure ?? (error instanceof Error ? error.message : String(error));
+    }
+    if (!stopped) failure = failure ?? `advisor still live after bounded stop: ${advisorName}`;
+    return {
+      effects: [...effects.values()],
+      error: failure,
+      paneId,
+      recommendation,
+      stopped,
+      tabId,
+    };
   }
 
   async ensure(

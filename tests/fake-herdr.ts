@@ -4,6 +4,7 @@ import type { Fixture } from "./helpers.ts";
 
 export interface FakeHerdrBehavior {
   agents?: boolean;
+  advisorRecommendation?: string | null;
   prompts?: boolean;
   roleProcesses?: boolean;
   sensor?: boolean;
@@ -101,6 +102,12 @@ if (command === "workspace list") {
     };
   }
   await respond({ accepted, pane_id: paneId });
+} else if (command === "pane close") {
+  const paneId = args[2];
+  state.panes = state.panes.filter((candidate) => candidate.pane_id !== paneId);
+  state.agents = state.agents.filter((candidate) => candidate.pane_id !== paneId);
+  delete state.processes[paneId];
+  await respond({ closed: true, pane_id: paneId });
 } else if (command === "pane process-info") {
   const paneId = value("--pane");
   const target = pane(paneId);
@@ -148,8 +155,35 @@ if (command === "workspace list") {
   const accepted = isProbe
     ? state.behavior.sensorDelivery !== false
     : state.behavior.prompts !== false;
-  if (accepted) state.prompts.push({ name, body: args[3] ?? "" });
+  if (accepted) {
+    const body = args[3] ?? "";
+    state.prompts.push({ name, body });
+    if (name.startsWith("advisor-") && body.includes("[advisor-consultation")) {
+      const recommendation = state.behavior.advisorRecommendation === undefined
+        ? "Use the bounded supervised path."
+        : state.behavior.advisorRecommendation;
+      state.outputs[name] = recommendation === null
+        ? "Advisor completed without a return marker.\\n"
+        : "analysis complete\\nMAESTRO_ADVISOR_RETURN " + JSON.stringify({ recommendation }) + "\\n";
+      const advisor = state.agents.find((candidate) => candidate.name === name);
+      if (advisor) advisor.agent_status = "done";
+    }
+  }
   await respond({ accepted, delivered: accepted, name });
+} else if (command === "agent read") {
+  const name = args[2];
+  await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+  process.stdout.write(state.outputs[name] ?? "");
+} else if (command === "tab close") {
+  const tabId = args[2];
+  const paneIds = new Set(
+    state.panes.filter((candidate) => candidate.tab_id === tabId).map((candidate) => candidate.pane_id),
+  );
+  state.tabs = state.tabs.filter((candidate) => candidate.tab_id !== tabId);
+  state.panes = state.panes.filter((candidate) => !paneIds.has(candidate.pane_id));
+  state.agents = state.agents.filter((candidate) => !paneIds.has(candidate.pane_id));
+  for (const paneId of paneIds) delete state.processes[paneId];
+  await respond({ closed: true, tab_id: tabId });
 } else {
   process.stderr.write("unsupported fake Herdr command: " + args.join(" ") + "\\n");
   process.exit(64);
@@ -174,6 +208,7 @@ export async function installFakeHerdr(
       panes: [],
       processes: {},
       prompts: [],
+      outputs: {},
       sequence: 0,
       tabs: [],
       workspaces: [],
@@ -216,4 +251,10 @@ export async function editFakeHerdrState(
   const state = JSON.parse(await readFile(fake.state, "utf8")) as Record<string, unknown>;
   edit(state);
   await writeFile(fake.state, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+export async function readFakeHerdrState(
+  fake: FakeHerdrFixture,
+): Promise<Record<string, any>> {
+  return JSON.parse(await readFile(fake.state, "utf8")) as Record<string, any>;
 }

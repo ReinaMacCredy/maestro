@@ -546,6 +546,19 @@ export const bundlePlugin: BuiltInPlugin = {
           if (bundle.state !== "active") {
             throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`);
           }
+          const gate = await context.events.waterfall<
+            { bundleId: string; sessionId: string },
+            { blocked: boolean; origin?: string; reason?: string }
+          >(
+            "bundle.close",
+            { bundleId: id, sessionId: context.sessions.current().id },
+            async () => ({ blocked: false }),
+          );
+          if (gate.blocked) {
+            throw new CliError("GATE_BLOCKED", gate.reason ?? "bundle.close gate blocked", {
+              origin: gate.origin ?? "unknown",
+            });
+          }
           const trio = await readTrio(bundle.directory);
           if (handoffPlaceholders(trio.notes).any) {
             const command = `maestro bundle close ${id}`;
