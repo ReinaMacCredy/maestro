@@ -55,7 +55,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
   the sender's machine, and an unset variable expands to nothing, leaving a
   brief that arrives complete-looking with its verb removed. That is what
   happened to a relayed note, whose literal command text vanished before it
-  reached the room (room l8: room w6).
+  reached the room. The rule governs literal or owner-supplied text and not a
+  script expanding its own variables on purpose, and the send forms in those
+  steps are file-backed themselves, so no example teaches the form the rule
+  forbids (room l8: room w6).
 - A green the room records now carries pass, fail and skip counts together and
   names the environment it ran in, in `lead.md` rule 6, and a pass count alone
   is an incomplete claim rather than a green. A runner prints no skip line when

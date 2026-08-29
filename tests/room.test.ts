@@ -473,7 +473,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
     expect(lead).not.toContain("`MAESTRO_READ_ONLY=1 maestro status --live`");
     expect(lead).toContain("`herdr agent list`");
     expect(lead).toContain(
-      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>"`',
+      '`[from supervisor][intent] <owner words verbatim>` to a file and run `herdr agent prompt lead-<repo basename> "$(cat <file>)"`',
     );
     expect(lead).toContain(
       "`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus`",
@@ -489,7 +489,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
     );
     expect(lead).toContain(
-      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read ~/maestro/PROJECT/<repo basename>.md before your first card, it holds every correction already filed against this project."`',
+      '`[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read ~/maestro/PROJECT/<repo basename>.md before your first card, it holds every correction already filed against this project.` to a file and run `herdr agent prompt lead-<repo basename> "$(cat <file>)"`',
     );
     expect(lead).toContain(
       "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
@@ -2199,10 +2199,19 @@ test("570 [lint] a brief body is sent through a file, not as a rescanned inline 
     // room l8: a relayed note lost the command it was about, because the
     // sender's shell evaluated the formatting marks in the body. The mechanics
     // sit next to the send, in lane.md step 5.
+    expect(lane).toContain("The body goes through a file and is never typed inline");
+    // h118: the absolute was false of the observer watcher, which expands its
+    // own variables inline on purpose. The invariant is scoped, and the step's
+    // own send form no longer models what the rule forbids.
     expect(lane).toContain(
-      'sent as `herdr agent prompt peer-<dispatch id> "$(cat <file>)"`, never typed inline',
+      'send it with `herdr agent prompt peer-<dispatch id> "$(cat <file>)"`',
     );
-    expect(lane).toContain("An inline body carries no backtick, no dollar sign and no dollar-parens at all.");
+    expect(lane).toContain(
+      "That governs literal or owner-supplied text: a contract, owner words repeated verbatim, a note about a command.",
+    );
+    expect(lane).toContain(
+      "It does not govern a script expanding its own variables on purpose, as the observer's watcher does",
+    );
 
     // The room's own sends are the larger exposure: every brief leaves here as
     // a double-quoted argument, and the quiet failure removes text silently.
