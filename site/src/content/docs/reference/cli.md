@@ -52,6 +52,9 @@ stores. It has no flags.
 
 - `file <dispatch-id>` requires `--status`, `--claim`, `--proof`,
   `--assumptions`, `--residual-risks`, and `--incidental-findings`.
+  `--lessons <lesson id>@<store path>` repeats and names the lessons this
+  return answers; each id is resolved against the store it names when the
+  handback is filed, so an absent id refuses and an unreadable store warns.
 - `list <dispatch-or-work-id> [--json]` lists handbacks for one dispatch or
   work item.
 - `show <id>` reads the handback for a handback or dispatch id.

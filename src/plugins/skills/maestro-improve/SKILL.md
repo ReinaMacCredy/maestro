@@ -88,7 +88,10 @@ the next improver run needs the same evidence trail this one had.
 ## Handback
 
 File one handback with the branch and the commits, the lessons processed, the
-lessons answered, and any lesson left pending with the reason. Then stop: the
+lessons answered, and any lesson left pending with the reason. Name each of
+them on the handback itself with `--lessons <lesson id>@<store path>`, repeated
+once per lesson: a lesson living in another store is processed by whoever holds
+that store, reading this field rather than parsing your claim. Then stop: the
 challenge lane runs on a different model family, the Lead reconciles the two,
 and the room holds the gate. Improving the doctrine you then approve alone is
 the loop this lane exists to break.

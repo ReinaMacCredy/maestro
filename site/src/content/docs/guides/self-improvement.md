@@ -95,6 +95,20 @@ threshold, and a lesson is **never deleted** either way: a rejected one stays
 readable, because wrong feedback is still data about which rule confused someone.
 "Out of scope" is not an answer; name the text that already covers it.
 
+`lesson process` writes to the store it runs in and no other, so a lane cannot
+process a lesson the room filed. It names them on its return instead:
+
+```sh
+maestro handback file x42 --status DONE --lessons l3@/Users/you/maestro \
+  --lessons l4@/Users/you/maestro --claim ... --proof ...
+```
+
+`--lessons` repeats, and each `<lesson id>@<store path>` is resolved when the
+handback is filed: an id absent from a store that reads refuses at the keyboard,
+and a store that cannot be read warns and files anyway. The room reads the
+return, sees which lessons it answers and where they live, and runs `lesson
+process` in its own cwd.
+
 ## The replay gate
 
 Doctrine has golden scenarios: a script of maestro commands and the transcript

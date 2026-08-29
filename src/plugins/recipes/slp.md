@@ -513,8 +513,12 @@ The Lead opens one delivery lane on the strong rung with the shared
 `maestro-improve` skill, pointed at the target. The lane groups pending lessons
 by target, proposes the smallest edit per group as a commit on a branch with the
 evidence ids in the message, marks each lesson processed by pointing at that
-commit, and files a handback. A lesson it rejects is answered with the reason on
-the lesson itself and marked processed, never deleted, so it stops counting
+commit, and files a handback that names every lesson it answers,
+`--lessons <lesson id>@<store path>` once per lesson. `maestro lesson process`
+writes only to the store it runs in, so a lesson filed in another store is
+answered by naming it on the return and letting that store's holder run the
+verb in its own cwd, never by retyping commit shas out of a relay. A lesson it
+rejects is answered with the reason on the lesson itself and marked processed, never deleted, so it stops counting
 toward the next threshold while staying readable.
 
 Every improver run is followed by a challenge lane on the diverse rung: a

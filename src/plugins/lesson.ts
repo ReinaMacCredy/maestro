@@ -122,7 +122,7 @@ interface SourcedLesson {
   source: string;
 }
 
-interface RepoLessons {
+export interface RepoLessons {
   error: boolean;
   lessons: LessonRecord[];
   missing: boolean;
@@ -137,7 +137,7 @@ async function registeredRepos(home: string): Promise<string[]> {
 
 // The store a repository owns is read through its own CLI, never by opening its
 // database here: the child is what keeps a store too new to read honest.
-async function readRepoLessons(repo: string): Promise<RepoLessons> {
+export async function readRepoLessons(repo: string): Promise<RepoLessons> {
   if (!existsSync(repo) || !existsSync(join(repo, ".maestro"))) {
     return { error: false, lessons: [], missing: true, repo };
   }

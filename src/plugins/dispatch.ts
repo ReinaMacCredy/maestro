@@ -1,11 +1,14 @@
+import { isAbsolute } from "node:path";
 import {
   CliError,
   requiredPosition,
   stringOption,
+  stringOptions,
   type CliInvocation,
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { readRepoLessons } from "./lesson.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
@@ -94,6 +97,7 @@ export interface HandbackRecord {
   assumptions: string;
   residualRisks: string;
   incidentalFindings: string;
+  lessons: string[];
   createdAt: string;
 }
 
@@ -108,6 +112,7 @@ interface HandbackRow {
   assumptions: string;
   residual_risks: string;
   incidental_findings: string;
+  lessons: string | null;
   created_at: string;
 }
 
@@ -318,8 +323,60 @@ function fromHandbackRow(row: HandbackRow): HandbackRecord {
     assumptions: row.assumptions,
     residualRisks: row.residual_risks,
     incidentalFindings: row.incidental_findings,
+    lessons: row.lessons ? (JSON.parse(row.lessons) as string[]) : [],
     createdAt: row.created_at,
   };
+}
+
+// A lesson id is half an id: every store numbers lessons from l1 and lesson
+// process writes only to the store it runs in, so a return that answers one
+// names where it lives (d729).
+function parseLessonReference(value: string): { id: string; store: string } {
+  const match = /^(l\d+)@(.+)$/.exec(value.trim());
+  const id = match?.[1];
+  const store = match?.[2];
+  if (!id || !store || !isAbsolute(store)) {
+    throw new CliError(
+      "INVALID_LESSON_REFERENCE",
+      `--lessons takes <lesson id>@<store path> with an absolute path, not: ${value}`,
+      { value },
+    );
+  }
+  return { id, store };
+}
+
+// Resolved when the handback is filed, not merely echoed: an id that resolves
+// nowhere is prose again, and the lane at the keyboard fixes it cheaper than
+// the room reading NOT_FOUND downstream (d729).
+async function resolveLessons(
+  values: string[],
+): Promise<{ references: string[]; warnings: string[] }> {
+  const parsed = values.map(parseLessonReference);
+  const byStore = new Map<string, string[]>();
+  for (const { id, store } of parsed) byStore.set(store, [...byStore.get(store) ?? [], id]);
+  const warnings: string[] = [];
+  for (const [store, ids] of byStore) {
+    const read = await readRepoLessons(store);
+    if (read.missing || read.error) {
+      // An unreadable store is a fact the room needs told, not a reason to
+      // block a return; the child's stderr is discarded, so the warning names
+      // the command that shows what it said.
+      warnings.push(
+        `[lessons] ${store} could not be read; filing ${ids.join(", ")} unresolved; run: cd ${store} && maestro lesson list --all`,
+      );
+      continue;
+    }
+    const known = new Set(read.lessons.map((lesson) => lesson.id));
+    const absent = ids.filter((id) => !known.has(id));
+    if (absent.length > 0) {
+      throw new CliError(
+        "LESSON_NOT_FOUND",
+        `${absent.join(", ")} not in the store at ${store}; run: cd ${store} && maestro lesson list --all`,
+        { ids: absent, store },
+      );
+    }
+  }
+  return { references: parsed.map(({ id, store }) => `${id}@${store}`), warnings };
 }
 
 function getHandback(context: PluginContext, id: string): HandbackRecord | null {
@@ -474,6 +531,7 @@ function formatHandback(handback: HandbackRecord): string {
     `assumptions not verified: ${handback.assumptions}`,
     `residual risks: ${handback.residualRisks}`,
     `incidental findings: ${handback.incidentalFindings}`,
+    handback.lessons.length > 0 ? `lessons: ${handback.lessons.join(", ")}` : null,
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
@@ -700,6 +758,11 @@ export const dispatchPlugin: BuiltInPlugin = {
       "handbacks",
       "candidate",
       "ALTER TABLE handbacks ADD COLUMN candidate TEXT",
+    );
+    context.store.ensureColumn(
+      "handbacks",
+      "lessons",
+      "ALTER TABLE handbacks ADD COLUMN lessons TEXT",
     );
     context.store.migrate(`
       UPDATE dispatches
@@ -1209,7 +1272,7 @@ export const dispatchPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "handback file",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           const dispatchId = requiredPosition(invocation, 0, "dispatch id");
           const dispatch = requireDispatch(context, dispatchId);
           if (dispatch.state === "cancelled") {
@@ -1241,6 +1304,9 @@ export const dispatchPlugin: BuiltInPlugin = {
           const assumptions = requiredOption(invocation, "--assumptions");
           const residualRisks = requiredOption(invocation, "--residual-risks");
           const incidentalFindings = requiredOption(invocation, "--incidental-findings");
+          const { references, warnings } = await resolveLessons(
+            stringOptions(invocation, "lessons"),
+          );
           const sessionId = context.sessions.current().id;
           const file = context.store.database.transaction(() => {
             const current = requireDispatch(context, dispatchId);
@@ -1283,8 +1349,8 @@ export const dispatchPlugin: BuiltInPlugin = {
               .query(
                 `INSERT INTO handbacks
                   (id, dispatch_id, status, request, candidate, claim, proof, assumptions,
-                   residual_risks, incidental_findings, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   residual_risks, incidental_findings, lessons, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .run(
                 id,
@@ -1297,6 +1363,7 @@ export const dispatchPlugin: BuiltInPlugin = {
                 assumptions,
                 residualRisks,
                 incidentalFindings,
+                JSON.stringify(references),
                 createdAt,
               );
             context.store.database
@@ -1312,6 +1379,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             return handbackService.get(id) as HandbackRecord;
           });
           const filed = file.immediate();
+          for (const warning of warnings) process.stderr.write(`${warning}\n`);
           return { data: { handback: filed }, text: formatHandback(filed) };
         },
         {
@@ -1326,6 +1394,11 @@ export const dispatchPlugin: BuiltInPlugin = {
             "--residual-risks": { description: "List residual risks or None.", value: true },
             "--incidental-findings": {
               description: "List incidental findings or None.",
+              value: true,
+            },
+            "--lessons": {
+              description: "Name a lesson this return answers as <lesson id>@<store path>; repeats.",
+              multiple: true,
               value: true,
             },
           },

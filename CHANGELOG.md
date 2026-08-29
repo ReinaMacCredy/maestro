@@ -11,6 +11,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- `maestro handback file --lessons <lesson id>@<store path>` repeats and names
+  the lessons a return answers. Each id is resolved against the store it names
+  when the handback is filed: an id absent from a readable store refuses, and a
+  store that cannot be read warns and files. `lesson process` still writes only
+  to the store it runs in, so the room reads the field and runs the verb in its
+  own cwd instead of retyping commit shas out of a relay.
+
 ### Changed
 
 - `maestro update` refuses a source checkout that has a remote but sits on a

@@ -2,7 +2,14 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import {
+  idFrom,
+  prepareInstallFixture,
+  runCli,
+  runCliAt,
+  withFixture,
+  type Fixture,
+} from "./helpers.ts";
 
 interface LessonRow {
   answer: string | null;
@@ -382,4 +389,171 @@ test("560 lesson render warns before it summarises and names the command that sh
     // shows what the child said.
     expect(rendered.stdout).toContain(`cd ${broken} && maestro lesson list --all`);
   });
+});
+
+function improverSession(): Record<string, string> {
+  return { MAESTRO_SESSION_ID: "improver-session", MAESTRO_SESSION_PID: String(process.pid) };
+}
+
+async function acceptedDispatch(fixture: Fixture): Promise<string> {
+  const work = idFrom(
+    await runCli(fixture, [
+      "work",
+      "add",
+      "answer the pending lessons",
+      "--atomic-reason",
+      "one improver pass",
+    ]),
+  );
+  const opened = await runCli(fixture, [
+    "dispatch",
+    "open",
+    work,
+    "--objective",
+    "process the pending lessons",
+    "--owned-scope",
+    "doctrine files",
+    "--excluded-scope",
+    "product source",
+    "--mutation",
+    "write-bounded: doctrine files",
+    "--stop-condition",
+    "the lessons are answered",
+    "--lane",
+    "delivery",
+    "--evidence-required",
+    "source: the replay",
+    "--pane",
+    "w1:pA",
+    "--target-session",
+    "improver-session",
+  ]);
+  const dispatch = opened.stdout.match(/^(x\d+) \[open\]/)?.[1];
+  if (!dispatch) throw new Error(`missing dispatch id: ${opened.stdout}${opened.stderr}`);
+  expect((await runCli(fixture, ["dispatch", "accept", dispatch], improverSession())).exitCode)
+    .toBe(0);
+  return dispatch;
+}
+
+function handbackArgs(dispatch: string, extra: string[]): string[] {
+  return [
+    "handback",
+    "file",
+    dispatch,
+    "--status",
+    "DONE",
+    "--claim",
+    "the pending lessons are answered by one commit",
+    "--proof",
+    "source: the doctrine diff",
+    "--assumptions",
+    "None",
+    "--residual-risks",
+    "None",
+    "--incidental-findings",
+    "None",
+    ...extra,
+  ];
+}
+
+test("563 a handback names the lessons it answers, repeatable and store-qualified (w561/d729)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    // A store path can carry a comma, which is why the option repeats instead
+    // of splitting one value: a comma-split fails at resolution, not at parse.
+    const team = join(fixture.root, "team,one");
+    await makeStore(team);
+    expect((await runCliAt(fixture, room, fileArgs("the room retyped four commit shas"))).exitCode)
+      .toBe(0);
+    expect((await runCliAt(fixture, team, fileArgs("the team cited a decision it cannot read")))
+      .exitCode).toBe(0);
+
+    const dispatch = await acceptedDispatch(fixture);
+    const filed = await runCli(
+      fixture,
+      handbackArgs(dispatch, ["--lessons", `l1@${room}`, "--lessons", `l1@${team}`]),
+      improverSession(),
+    );
+
+    expect(filed.exitCode).toBe(0);
+    expect(filed.stdout).toContain(`lessons: l1@${room}, l1@${team}`);
+
+    // The room reads the return in this store read-only and then runs
+    // lesson process in its own cwd, so the field is what it parses.
+    const shown = await runCli(fixture, ["handback", "show", dispatch], improverSession());
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`lessons: l1@${room}, l1@${team}`);
+    const listed = await runCli(fixture, ["handback", "list", dispatch, "--json"]);
+    expect(listed.exitCode).toBe(0);
+    const envelope = JSON.parse(listed.stdout) as { data: { handbacks: { lessons: string[] }[] } };
+    expect(envelope.data.handbacks[0]?.lessons).toEqual([`l1@${room}`, `l1@${team}`]);
+  });
+});
+
+test("564 an absent lesson id refuses and an unreadable store warns and files (w561/d729)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    expect((await runCliAt(fixture, room, fileArgs("the room retyped four commit shas"))).exitCode)
+      .toBe(0);
+    const broken = join(fixture.root, "broken");
+    await mkdir(join(broken, ".maestro"), { recursive: true });
+    await writeFile(join(broken, ".maestro", "config"), "not json\n");
+
+    const dispatch = await acceptedDispatch(fixture);
+    const absent = await runCli(
+      fixture,
+      handbackArgs(dispatch, ["--lessons", `l9@${room}`]),
+      improverSession(),
+    );
+
+    // A readable store with an absent id is the lane's own mistake, cheap to
+    // fix at the keyboard and expensive as a NOT_FOUND in the room later.
+    expect(absent.exitCode).not.toBe(0);
+    expect(absent.stderr).toContain("LESSON_NOT_FOUND");
+    expect(absent.stderr).toContain("l9");
+    expect(absent.stderr).toContain(room);
+
+    const filed = await runCli(
+      fixture,
+      handbackArgs(dispatch, ["--lessons", `l1@${room}`, "--lessons", `l1@${broken}`]),
+      improverSession(),
+    );
+    // An unreadable store is a fact the room needs told, not a reason to block
+    // a return, and the refusal above left the dispatch open to file this one.
+    expect(filed.exitCode).toBe(0);
+    expect(filed.stdout).toContain(`lessons: l1@${room}, l1@${broken}`);
+    expect(filed.stderr).toContain(broken);
+    expect(filed.stderr).toContain("l1");
+    expect(filed.stderr).toContain(`cd ${broken} && maestro lesson list --all`);
+  });
+});
+
+test("565 --lessons takes a lesson id and an absolute store path or it refuses (w561/d729)", async () => {
+  await withFixture(async (fixture) => {
+    const dispatch = await acceptedDispatch(fixture);
+    for (const value of ["l1", "l1@team/one", `12@${join(fixture.root, "room")}`]) {
+      const refused = await runCli(
+        fixture,
+        handbackArgs(dispatch, ["--lessons", value]),
+        improverSession(),
+      );
+      expect(refused.exitCode).not.toBe(0);
+      expect(refused.stderr).toContain("<lesson id>@<store path>");
+      expect(refused.stderr).toContain(value);
+    }
+  });
+});
+
+test("566 [lint] the doctrine that answers a lesson names the field that carries it (w561/d729)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const slp = await readFile(join(root, "recipes", "slp.md"), "utf8");
+  const skill = await readFile(join(root, "skills", "maestro-improve", "SKILL.md"), "utf8");
+
+  for (const text of [slp, skill]) {
+    expect(text).toContain("--lessons");
+    // The store is half the id: lesson process writes only where it runs.
+    expect(text).toContain("<lesson id>@<store path>");
+  }
 });
