@@ -642,6 +642,7 @@ export const installPlugin: BuiltInPlugin = {
         }
         const localBin = join(home, ".local", "bin");
         const shim = join(localBin, "maestro");
+        const sensorShim = join(localBin, "maestro-team-sensor");
         const legacy = join(localBin, "maestro-legacy");
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
@@ -726,6 +727,11 @@ export const installPlugin: BuiltInPlugin = {
             `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro.ts")).href)});\n`,
           );
           await chmod(shim, 0o755);
+          await writeFile(
+            sensorShim,
+            `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-team-sensor.ts")).href)});\n`,
+          );
+          await chmod(sensorShim, 0o755);
         }
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);
@@ -742,7 +748,7 @@ export const installPlugin: BuiltInPlugin = {
           payload: { runtimeRoot, shim },
         });
         return {
-          data: { repo, runtimeRoot, shim, legacy },
+          data: { repo, runtimeRoot, sensorShim, shim, legacy },
           text:
             `maestro installed for ${repo}` +
             "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/, AGENTS.md, CLAUDE.md" +

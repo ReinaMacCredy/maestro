@@ -20,6 +20,7 @@ test("282 first install needs no rollback binary and targets the detected shell"
 
     expect(installed.exitCode).toBe(0);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro")).exists()).toBe(true);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists()).toBe(true);
   });
 
   await withFixture(async (fixture) => {
