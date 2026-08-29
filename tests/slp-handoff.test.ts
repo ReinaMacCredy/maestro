@@ -278,14 +278,20 @@ test("171 handoff rejects work ids and unknown bundles with the next command", a
   });
 });
 
-test("172 [lint] the four-skill roster points handoffs at maestro handoff", async () => {
+test("172 [lint] the method-skill roster points handoffs at maestro handoff", async () => {
   // Proves source artifact content, not installed skill discovery by a harness.
   const root = join(import.meta.dir, "..", "src", "plugins", "skills");
   const roster = (await readdir(root, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
-  expect(roster).toEqual(["maestro-bundle", "maestro-design", "maestro-verify", "maestro-work"]);
+  expect(roster).toEqual([
+    "maestro-bundle",
+    "maestro-design",
+    "maestro-improve",
+    "maestro-verify",
+    "maestro-work",
+  ]);
 
   const skill = await Bun.file(join(root, "maestro-bundle", "SKILL.md")).text();
   expect(skill).toContain("Run `maestro handoff <bundle-id>` to seed untouched NOTES.md sections");

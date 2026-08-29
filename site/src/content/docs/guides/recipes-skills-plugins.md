@@ -23,16 +23,17 @@ source-owned Markdown and are loaded only when requested.
 
 ## Skills
 
-Install materializes four managed method skills under `~/maestro/skills/`:
+Install materializes five managed method skills under `~/maestro/skills/`:
 
 - `maestro-bundle` chooses direct work or a durable SPEC/NOTES/VERIFY bundle.
 - `maestro-design` settles one fork at a time and records locked decisions.
 - `maestro-work` drives one accepted implementation unit through proof.
 - `maestro-verify` checks evidence layers and controls close and delivery gates.
+- `maestro-improve` turns filed lessons into the smallest doctrine edit.
 
 The installer links these skills for Claude without overwriting an unmanaged
 skill. Coordination remains in the Supervisor room's lane instructions rather
-than a fifth global skill.
+than a skill of its own.
 
 ## Plugins
 

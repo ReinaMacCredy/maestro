@@ -201,7 +201,7 @@ test("129 [lint] install materializes the 4 maestro skills with a version stamp 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
     const skillsRoot = join(fixture.home, "maestro", "skills");
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
       const skill = await Bun.file(join(skillsRoot, name, "SKILL.md")).text();
       expect(skill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
     }

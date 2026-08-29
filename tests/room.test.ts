@@ -399,6 +399,7 @@ test("247 [lint] room harness files give agents the pane-lane contract without a
     expect((await readdir(join(room, "skills"))).sort()).toEqual([
       "maestro-bundle",
       "maestro-design",
+      "maestro-improve",
       "maestro-verify",
       "maestro-work",
     ]);
@@ -1392,7 +1393,7 @@ test("241 install moves the four method skills into the room and links only thos
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
     expect(installed.exitCode).toBe(0);
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
       const roomSkill = join(fixture.home, "maestro", "skills", name, "SKILL.md");
       expect(await readFile(roomSkill, "utf8")).toMatch(
         /<!-- maestro-skill-version: [0-9a-f]{40} -->/,
@@ -1419,7 +1420,7 @@ test("442 install preserves review-date frontmatter in every method skill", asyn
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
     expect(installed.exitCode).toBe(0);
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
       const skill = await readFile(
         join(fixture.home, "maestro", "skills", name, "SKILL.md"),
         "utf8",

@@ -31,6 +31,7 @@ const mechanismAllowlist: Record<string, string> = {
   HANDBACK_UNREVIEWED: "Attention finding label; it reports lifecycle state rather than refusing an action.",
   HUMAN_DECISION_REQUIRED: "Attention finding label; it routes a decision rather than enforcing a boundary.",
   LEAD_COLLISION: "Attention finding label; it reports a collision rather than refusing an action.",
+  LESSONS_PENDING: "Attention finding label; it observes pending corrections rather than refusing an action.",
   REOPEN_REQUEST: "Peer return status, not a runtime enforcement mechanism.",
   REPEATED_FAILURE: "Attention finding label; it aggregates failures rather than refusing an action.",
   SCOPE_COLLISION: "Attention finding label; it reports overlapping scopes rather than refusing an action.",

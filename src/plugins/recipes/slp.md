@@ -277,8 +277,8 @@ split-brain: the later one must stop and read `maestro status`.
 The room reads, it is not pushed to: `maestro brief` runs `maestro attention`
 in every registered repository. Findings are STALLED_LEASE, REPEATED_FAILURE,
 DECISION_STALE, DECISION_REVIEW_DUE, HUMAN_DECISION_REQUIRED, LEAD_COLLISION,
-SCOPE_COLLISION, DISPATCH_UNACCEPTED, DISPATCH_UNRETURNED and HANDBACK_UNREVIEWED,
-each as a packet. `DISPATCH_UNRETURNED` fires after `--dispatch-stale` hours
+SCOPE_COLLISION, DISPATCH_UNACCEPTED, DISPATCH_UNRETURNED, HANDBACK_UNREVIEWED
+and LESSONS_PENDING, each as a packet. `DISPATCH_UNRETURNED` fires after `--dispatch-stale` hours
 (default 2). A lane expected to run longer is opened with its expected duration
 in the stop condition, and the Lead reads
 `maestro attention --dispatch-stale <h>` for it. `maestro brief` in the room
@@ -470,6 +470,52 @@ supervisor owns a Lead is read from that Lead's `workspace_id` in
 `herdr agent list`, never from cwd. Absorbing a misrouted report is worse than
 refusing it, because the team's own record holder then never learns the work
 closed.
+
+## Self-improvement
+
+A correction is a record, not a remark. Whoever makes one files it where it
+happened - the owner, the room, a `supervisor-<team>`, or a Lead - with
+`maestro lesson file`, naming the doctrine it corrects, what happened, what was
+expected, why, and the w/h/d ids that evidence it. A Peer has no channel of its
+own: its finding reaches a lesson through its handback and the Lead. The
+improver reads lessons and nothing else, which is what makes filing one worth
+the minute it costs.
+
+The improver runs on a threshold or a schedule, never per correction. `maestro
+brief` raises LESSONS_PENDING for a project when five lessons are pending for
+it, or when seven days have passed since its last improver run, whichever comes
+first. The room relays "run the improver" to the Lead of the doctrine those
+lessons target; nothing runs it automatically. Running per correction would
+make every correction a negotiation, and a pile is what shows which rule is
+actually ambiguous.
+
+The Lead opens one delivery lane on the strong rung with the shared
+`maestro-improve` skill, pointed at the target. The lane groups pending lessons
+by target, proposes the smallest edit per group as a commit on a branch with the
+evidence ids in the message, marks each lesson processed by pointing at that
+commit, and files a handback. A lesson it rejects is answered with the reason on
+the lesson itself and marked processed, never deleted, so it stops counting
+toward the next threshold while staying readable.
+
+Every improver run is followed by a challenge lane on the diverse rung: a
+different model family reads the same lessons and the proposed diff. The Lead
+reconciles the two, reports done, and the room gates the result. A doctrine edit
+approved only by the model that wrote it is the failure this pairing exists to
+prevent.
+
+The harness is scenario golden output. The SLP scenarios and the cross-harness
+journey are replayable scripts, and an improver edit is accepted only when the
+replay still matches the golden set, or matches the change a lesson expected.
+The harness is a prerequisite for the first improver run: lessons accumulate
+before it exists and LESSONS_PENDING stays visible, but the room does not relay
+"run the improver" until there is something to replay against.
+
+The room renders the per-project view with `maestro lesson render`, which writes
+`~/maestro/PROJECT/<project>.md` from the room store and each registered
+repository's store. Like `registry`, it is rendered and never hand-edited. The
+room hands that path in the prompt that starts a Lead, and a new Lead reads it
+before its first card: it holds every correction already filed against the
+project, processed ones included.
 
 ## Lane procedure
 

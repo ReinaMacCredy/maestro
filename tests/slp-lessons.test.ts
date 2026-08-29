@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 interface LessonRow {
   answer: string | null;
@@ -300,4 +300,58 @@ test("552 a new team inherits processed lessons as well as pending ones (w552/d4
     expect(view).toContain("the correction already answered");
     expect(view).toContain("25f6cd03");
   });
+});
+
+test("554 install ships maestro-improve beside the other method skills (w553/d42)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const skill = join(fixture.home, "maestro", "skills", "maestro-improve", "SKILL.md");
+    expect(await readFile(skill, "utf8")).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
+    expect(await realpath(join(fixture.home, ".claude", "skills", "maestro-improve"))).toBe(
+      await realpath(join(fixture.home, "maestro", "skills", "maestro-improve")),
+    );
+  });
+});
+
+test("555 [lint] the improver skill is one lane parameterised by target (w553/d42, d44)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-improve");
+  const skill = await readFile(join(root, "SKILL.md"), "utf8");
+
+  // One skill, one parameter: the target is what the lane is pointed at.
+  expect(skill).toContain("maestro lesson list");
+  expect(skill).toContain("target");
+  // The smallest edit per group, and the evidence ids travel into the commit.
+  expect(skill).toContain("smallest edit");
+  expect(skill).toContain("evidence ids");
+  // A lesson is closed by pointing at the commit, or answered when it is wrong.
+  expect(skill).toContain("maestro lesson process");
+  expect(skill).toContain("--answer");
+  expect(skill).toContain("never deletes");
+  // Progressive disclosure: the target catalogue is a reference, not the skill.
+  expect(skill).toContain("references/targets.md");
+  expect(await readFile(join(root, "references", "targets.md"), "utf8")).toContain(
+    "Workspace Protocol",
+  );
+});
+
+test("556 [lint] slp.md carries the improver loop from threshold to challenge (w553/d42, d43, d44)", async () => {
+  const slp = await readFile(
+    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
+    "utf8",
+  );
+
+  // The trigger is a threshold the room reads, never a correction firing a run.
+  expect(slp).toContain("LESSONS_PENDING");
+  expect(slp).toContain("never per correction");
+  // One delivery lane on the strong rung, then a challenge on the diverse one.
+  expect(slp).toContain("`maestro-improve`");
+  expect(slp).toContain("strong rung");
+  expect(slp).toContain("diverse rung");
+  // d43: the scenario harness gates the first run.
+  expect(slp).toContain("golden");
+  // d44: sources, and a rejection that stays as data.
+  expect(slp).toContain("through its handback");
+  expect(slp).toContain("never deleted");
 });
