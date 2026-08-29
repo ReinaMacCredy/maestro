@@ -1882,8 +1882,16 @@ test("533 [lint] the slp recipe carries the d28 team model", async () => {
   expect(slp).toContain("supervisor-<team>");
   expect(slp).toContain("advisor-<team>");
   expect(slp).toContain("observer-<team>");
-  expect(slp).toContain("consult-<repo basename>");
   expect(slp).toContain("exactly one record holder");
+
+  // room d58: the investigator rung beside each Lead is retired and its duty
+  // is the advisor's, so the recipe names the ladder that replaced it and the
+  // retired seat appears nowhere.
+  expect(slp).not.toContain("consult-<repo basename>");
+  expect(slp).toContain(
+    "The help ladder is peers, then the Lead, then `advisor-<team>`, then `supervisor-<team>`.",
+  );
+  expect(slp).toContain("it is the team's read-only investigator");
 
   // l3: the seats read this table about themselves, so it carries the report
   // target and the fact that a support seat has no way out of the workspace.
@@ -1891,7 +1899,7 @@ test("533 [lint] the slp recipe carries the d28 team model", async () => {
     "Every seat in a team reports to `supervisor-<team>`, the name the prompt that opened it gave, and never to the bare `supervisor`, which is the room.",
   );
   expect(slp).toContain(
-    "`advisor-<team>`, `observer-<team>` and `consult-<repo basename>` have none at all",
+    "`advisor-<team>` and `observer-<team>` have none at all",
   );
 
   // The observer speaks, it never acts: no assignment change, no freeze, no

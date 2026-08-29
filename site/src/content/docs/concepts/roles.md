@@ -85,11 +85,13 @@ reuses a matching workspace before creating one.
 | name | what it is | writes? |
 |---|---|---|
 | `supervisor-<team>` | the team's one record holder: locks decisions, receives done reports, holds the owner gates for the team | yes, records |
-| `advisor-<team>` | counsel for the record holder when it is stuck or the owner is away | no |
+| `advisor-<team>` | counsel for the record holder when it is stuck or the owner is away, and the team's read-only investigator | no |
 | `observer-<team>` | drift watch for as long as the team is working | no |
 | `lead-<repo basename>` | Lead of that repository; a team spanning repositories holds several | yes, in that repository |
-| `consult-<repo basename>` | the Lead's counterpart beside it | no |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
+
+The help ladder is peers, then the Lead, then `advisor-<team>`, then
+`supervisor-<team>`; there is no seat between the Lead and the advisor.
 
 The observer reads the panes of its own workspace and speaks to whoever drifts
 as `[from observer][suspected] <pane> <quoted evidence> <why>`, once per issue

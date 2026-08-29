@@ -104,18 +104,24 @@ two supports that hold no records, and below it the ordinary project roles:
 | name | what it is | writes? |
 |---|---|---|
 | `supervisor-<team>` | the team's record holder: locks decisions, receives done reports, holds the owner gates for this team | yes, records |
-| `advisor-<team>` | support for the record holder when it is stuck or the owner is away; it is the counsel a Codex Supervisor has no tool for | no: no cards, no records |
+| `advisor-<team>` | support for the record holder when it is stuck or the owner is away; it is the counsel a Codex Supervisor has no tool for, and it is the team's read-only investigator, the seat a Lead takes a hard question to | no: no cards, no records |
 | `observer-<team>` | drift watch, running for as long as the team is working | no |
 | `lead-<repo basename>` | Lead of that repository (a team may hold several when it spans repositories) | yes, in that repository |
-| `consult-<repo basename>` | the Lead's counterpart beside it (d27) | see d27 |
 | `peer-<dispatch id>` | one bounded assignment | inside its mutation boundary |
+
+The help ladder is peers, then the Lead, then `advisor-<team>`, then
+`supervisor-<team>`. There is no seat between the Lead and the advisor: a
+separate investigator rung beside each Lead was retired because a team given one
+skipped it. It sat on the same model and the same read-only grant as the two
+seats around it, so it added a hop and nothing else, and every difficulty went
+from the Lead to the record holder directly. The duty is the advisor's now, and
+the advisor still runs no write verb, holds no cards and holds no records.
 
 Every seat in a team reports to `supervisor-<team>`, the name the prompt that
 opened it gave, and never to the bare `supervisor`, which is the room. Only
-`supervisor-<team>` has a channel out of the workspace (d36): `advisor-<team>`,
-`observer-<team>` and `consult-<repo basename>` have none at all, so a support
-seat reporting ready, or anything else, sends it to `supervisor-<team>` inside
-its own workspace.
+`supervisor-<team>` has a channel out of the workspace (d36): `advisor-<team>`
+and `observer-<team>` have none at all, so a support seat reporting ready, or
+anything else, sends it to `supervisor-<team>` inside its own workspace.
 
 Example models for the team roles, dated 2026-08-29 and owner-editable exactly
 like the Model table below: `supervisor-<team>` on the `lead` rung, and both

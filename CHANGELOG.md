@@ -38,6 +38,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
   pane re-fired the whole settled set every cycle: events grew by one line per
   settled pane per cycle and a settled pane whose tail held a matching line woke
   the model every 15 seconds until that tail scrolled away (room d60).
+- The `consult-<repo basename>` rung is retired from the slp recipe and the
+  roles page. Its read-only investigator duty is `advisor-<team>`'s, and the
+  help ladder is peers, then the Lead, then `advisor-<team>`, then
+  `supervisor-<team>`, with no seat between the Lead and the advisor. The rung
+  sat on the same model and the same read-only grant as the seats on either side
+  of it, so it added a hop and nothing else, and the team that had one skipped
+  it on its own: every difficulty went from the Lead to the record holder
+  directly (room d58). The ruling was made for one team and is generalised to
+  the recipe here on the room's stated assumption, which the owner may override.
 - `maestro decision draft` refuses a lone positional that names an existing
   decision, instead of creating a second decision whose text is that id, and
   refuses `--supersedes`, `--parent` and `--work` on an edit, which the edit
