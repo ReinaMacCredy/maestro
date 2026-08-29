@@ -489,7 +489,7 @@ test("450 [lint] installed lead guidance hands owner intent to the repository Le
       "a Claude Lead is started with `-- --model <name> --effort <level> --autocompact 250000`",
     );
     expect(lead).toContain(
-      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read `~/maestro/PROJECT/<repo basename>.md` before your first card, it holds every correction already filed against this project."`',
+      '`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>; read ~/maestro/PROJECT/<repo basename>.md before your first card, it holds every correction already filed against this project."`',
     );
     expect(lead).toContain(
       "`herdr agent wait lead-<repo basename> --until working --timeout 60000`",
