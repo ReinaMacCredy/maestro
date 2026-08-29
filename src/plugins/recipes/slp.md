@@ -324,6 +324,12 @@ work item and the same pane, names the prior dispatch and handback in the
 objective, and the lane accepts the new dispatch before continuing. A brief
 that pauses for review or a later signal after a handback is two dispatches.
 
+A retry condition that names a record in another store names that store too,
+"room d41" rather than a bare "d41". Every store numbers decisions from d1, so
+an unqualified id read in the wrong store resolves to nothing at best and
+someone else's decision at worst, and the reader the retry condition is written
+for is exactly the one standing in the other store.
+
 A BLOCKED return carries the negative knowledge, not only the verdict. Its
 claim names the mechanism that failed and the alternatives that attempt killed,
 its proof names what falsified each one, and `--request` still carries the retry

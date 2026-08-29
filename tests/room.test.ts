@@ -1849,6 +1849,12 @@ test("529 [lint] relayed intent reports on close even without a room decision id
     // The same Lead then hunted for the room with ListAgents and dispatch
     // list. The room agent name is fixed, so searching is always wrong.
     expect(step6).toContain("herdr agent prompt <record holder>");
+
+    // l5: every store numbers decisions from d1, so the room citing d41 at a
+    // team whose store held d1 to d4 hid the premise blocking that team.
+    expect(step6).toContain(
+      "a record id that crosses a store boundary in either direction is written with its store",
+    );
     expect(step6).toMatch(/only channel|reached only by/);
     expect(step6).toContain("herdr agent list");
     expect(step6).toContain("maestro dispatch list");

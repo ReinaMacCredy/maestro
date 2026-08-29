@@ -44,6 +44,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
   On w9 the mechanism-level cause of a blocked return lived only in a pane, and
   the outgoing Lead had to spell out four dead mechanisms in a stand-down
   message or they would have closed with it (l4: w6, d41).
+- A record id that crosses a store boundary now names its store, `room d41`
+  rather than `d41`, in `lead.md` rule 6 and in the retry condition of a
+  handback. Every store numbers decisions from d1: the room cited d41 at a team
+  whose store held d1 to d4, `maestro decision show d41` returned NOT_FOUND
+  there, and the team could neither read nor correct the decision blocking its
+  handback (l5: w6, d41, d51).
 
 ### Fixed
 

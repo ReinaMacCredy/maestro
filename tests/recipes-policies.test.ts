@@ -499,6 +499,12 @@ test("372 [lint] recipe slp and lane.md state the one-dispatch-one-handback boun
   expect(boundary).toContain('"after h<id>: <evidence>"');
   expect(boundary).toMatch(/never starts with `failed:`/);
 
+  // l5: a retry condition is read from the other store, where a bare d-number
+  // is a different decision or none at all.
+  expect(boundary.replace(/\s+/g, " ")).toContain(
+    'A retry condition that names a record in another store names that store too, "room d41" rather than a bare "d41".',
+  );
+
   // l4: a blocked attempt's dead mechanisms lived only in a pane, and the
   // outgoing Lead had to spell four of them out in a stand-down message.
   expect(boundary.replace(/\s+/g, " ")).toContain(
