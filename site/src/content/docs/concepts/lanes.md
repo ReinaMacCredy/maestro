@@ -53,6 +53,9 @@ the fact, not prevented.
 | B12 | observer read scope | nothing | soft-audited | the observer speaks only inside its own workspace and runs no write verb (d28) |
 | B13 | one workspace per team cwd | nothing | soft-audited | the room reads `herdr workspace list` and reuses a match before creating one (d29) |
 | B14 | a clean room workspace | nothing | soft-audited | the room opens every team pane in that team's workspace (d29) |
+| B15 | the upward channel | nothing | soft-audited | `supervisor-<team>` is the only pane that prompts the room (d36) |
+| B16 | a misrouted report | nothing | soft-audited | a supervisor bounces a `[from lead]` prompt from a Lead it does not own (d35) |
+| B17 | the observer sensor | nothing | soft-audited | the watcher lives in the observer's own pane and no maestro verb starts it (d33) |
 
 ## Open a dispatch
 

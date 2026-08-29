@@ -124,6 +124,8 @@ test("267 reinstall preserves OWNER.md while refreshing generated room files", a
       "CLAUDE.md",
       "lane.md",
       "lead.md",
+      "observer.md",
+      "observer-watch.sh",
       "shellrc",
       ".claude/settings.json",
     ];
@@ -1940,5 +1942,116 @@ test("535 [lint] the room's transcript denial stays while observer-<team> reads 
     // d29: the room supervisor opens no agent in the room's own workspace.
     expect(agents).toContain("opens no agent in this workspace");
     expect(agents).toContain("the owner may open their own");
+  });
+});
+
+test("536 [lint] the room scaffolds the observer watcher and its start template (d33)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const watcher = await readFile(join(room, "observer-watch.sh"), "utf8");
+    const observer = flat(await readFile(join(room, "observer.md"), "utf8"));
+    const lead = flat(await readFile(join(room, "lead.md"), "utf8"));
+
+    // The watcher is a sensor: it wakes the model, it never judges.
+    expect(watcher).toContain("herdr agent wait");
+    expect(watcher).toContain("--source recent-unwrapped");
+    expect(watcher).toContain("[watch] $name");
+    expect(watcher).toContain("LEASE_HELD");
+    expect(watcher).toContain("not my role");
+    expect(flat(watcher)).toContain("Sensor, not judgment");
+
+    // It belongs to the observer's pane, not to maestro: this is what keeps
+    // the deleted supervisor daemon deleted.
+    expect(flat(watcher)).toContain("No maestro verb starts it");
+    expect(watcher).toContain("HERDR_WORKSPACE_ID");
+
+    // Counting is what makes a trigger countable rather than a matter of taste.
+    expect(watcher).toContain("doubt >= 2");
+    expect(watcher).toContain("seen[$0] == 3");
+
+    // The start template tells the room how to open the observer, and the
+    // observer what to do when the watcher wakes it.
+    expect(observer).toContain("herdr agent start observer-<team>");
+    expect(observer).toContain("observer-watch.sh observer-<team>");
+    expect(observer).toContain("[from observer][suspected]");
+    expect(observer).toContain("once per issue");
+    expect(observer).toContain("ledger");
+    expect(observer).toContain("never writes the store");
+
+    // A bare maestro command creates the store where none exists and refreshes
+    // a session row, so every store read the observer makes carries the prefix
+    // or the template contradicts itself.
+    const reads = [...observer.matchAll(/(\S*\s?)maestro (status|work show)/g)];
+    expect(reads.length).toBeGreaterThan(0);
+    for (const read of reads) expect(read[1]).toContain("MAESTRO_READ_ONLY=1");
+
+    // The executable bit matters: the observer runs this, it does not read it.
+    const mode = (await stat(join(room, "observer-watch.sh"))).mode & 0o777;
+    expect(mode & 0o100).toBe(0o100);
+
+    // Opening the observer is part of opening a team.
+    expect(lead).toContain("observer.md");
+  });
+});
+
+test("537 [lint] a misrouted [from lead] prompt is bounced, not processed (d35)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const identity = flat(await readFile(join(room, "IDENTITY.md"), "utf8"));
+    const lead = flat(await readFile(join(room, "lead.md"), "utf8"));
+    const slp = flat(
+      await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8"),
+    );
+
+    const bounce = "not my supervisor: send to supervisor-<team>";
+    for (const [name, text] of [
+      ["IDENTITY.md", identity],
+      ["lead.md", lead],
+      ["slp.md", slp],
+    ] as const) {
+      expect(text, name).toContain(bounce);
+      // Fail closed: the bounce replaces verification and the record, it does
+      // not precede them.
+      expect(text, name).toContain("neither verified nor recorded");
+      // Ownership is a workspace fact, never a cwd one.
+      expect(text, name).toContain("workspace_id");
+    }
+
+    // The rule is symmetric: a team supervisor bounces a foreign Lead too.
+    expect(slp).toContain("a Lead outside its workspace");
+  });
+});
+
+test("538 [lint] a team reaches the room only through supervisor-<team> (d36)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const room = join(fixture.home, "maestro");
+    const identity = flat(await readFile(join(room, "IDENTITY.md"), "utf8"));
+    const slp = flat(
+      await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8"),
+    );
+
+    const channel =
+      "herdr agent prompt supervisor \"[from supervisor-<team>][report|ask|done w<room-id>] ...\"";
+    expect(slp).toContain(channel);
+    expect(identity).toContain(channel);
+
+    // One channel up, and only one: everyone else in the team is silent
+    // towards the room.
+    for (const text of [slp, identity]) {
+      expect(text).toContain("the only prompt crossing a workspace boundary upward");
+      expect(text).toContain(
+        "Leads, advisors, observers and peers never prompt the room",
+      );
+      expect(text).toContain("only through its `supervisor-<team>`");
+    }
+
+    // The d35 exception is the same one: a Lead the room opened and still owns.
+    expect(slp).toContain("the room itself opened and still owns");
   });
 });

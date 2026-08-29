@@ -420,6 +420,39 @@ A first view or a duplicate that lost is withdrawn with its reason, never locked
   Peers never message the Supervisor, and the Supervisor never messages a Peer.
 - Long messages are written to a file and sent with `"$(cat file)"`.
 
+### Who may prompt whom
+
+A prompt that crosses a workspace boundary is the exception, not the norm, and
+it goes in exactly one direction. `supervisor-<team>` may report across
+workspaces to the room at any time:
+
+```
+herdr agent prompt supervisor "[from supervisor-<team>][report|ask|done w<room-id>] ..."
+```
+
+That is the one channel between a team and the room, and the only prompt
+crossing a workspace boundary upward (d36). A report carries what the team
+recorded, a card, a decision or a candidate, plus one line on any deviation; an
+ask carries an owner gate or a cross-team fork (d30). Leads, advisors, observers
+and peers never prompt the room, and the room reaches a team only through its
+`supervisor-<team>`, except for a Lead the room itself opened and still owns.
+
+Downward, a misrouted report fails closed rather than being helpfully absorbed
+(d35). A supervisor processes a `[from lead]` prompt only from a Lead it opened
+and still owns; a `[from lead]` prompt from a Lead that belongs to a team with
+its own `supervisor-<team>` is answered with exactly one line,
+
+```
+not my supervisor: send to supervisor-<team>
+```
+
+and is neither verified nor recorded. The rule is symmetric: a
+`supervisor-<team>` bounces the same line at a Lead outside its workspace. Which
+supervisor owns a Lead is read from that Lead's `workspace_id` in
+`herdr agent list`, never from cwd. Absorbing a misrouted report is worse than
+refusing it, because the team's own record holder then never learns the work
+closed.
+
 ## Lane procedure
 
 The mechanics of opening, briefing, waking and closing a lane live in

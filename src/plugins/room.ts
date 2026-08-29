@@ -48,6 +48,12 @@ Before handing owner intent to a repository, read \`lead.md\`.
 - Recovery or replacement lease: none
 - Review date: set by the owner in \`OWNER.md\`
 
+## Who may prompt this room
+
+\`supervisor-<team>\` may report across workspaces to this room at any time with \`herdr agent prompt supervisor "[from supervisor-<team>][report|ask|done w<room-id>] ..."\`. That is the one channel between a team and the room, and the only prompt crossing a workspace boundary upward (d36): a report carries what the team recorded, a card, a decision or a candidate, plus one line on any deviation, and an ask carries an owner gate or a cross-team fork (d30). Leads, advisors, observers and peers never prompt the room, and this room reaches a team only through its \`supervisor-<team>\`, except for a Lead it opened and still owns.
+
+A misrouted report fails closed (d35). This room processes a \`[from lead]\` prompt only from a Lead it opened and still owns. A \`[from lead]\` prompt from a Lead that belongs to a team with its own \`supervisor-<team>\` is answered with exactly one line, \`not my supervisor: send to supervisor-<team>\`, and is neither verified nor recorded: absorbing it would leave that team's record holder never learning the work closed. Which supervisor owns a Lead is read from that Lead's \`workspace_id\` in \`herdr agent list\`, never from cwd.
+
 The room store is the notebook: record only novel or material observations, aggregated by pattern. When stuck, escalate with a packet whose \`human decision needed\` is \`yes\` and wait; never open a second Supervisor. Any expansion of this binding is written here by the owner.
 `;
 
@@ -108,9 +114,9 @@ The room relays owner intent to the repository Lead without taking project autho
 1. When the owner states intent in the room, find the repository in \`registry\`. When the owner says fix or do, relay without asking whether to relay; ask the owner a question only for a real fork.
 2. Run \`herdr agent list\`. The room finds a Lead only as a Herdr agent named \`lead-<repo basename>\` whose cwd is the repository; every other pane is absent. Never prompt a pane with any other name.
 3. If that exact agent exists, run \`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>"\`.
-4. If it does not exist, resolve the team's workspace before opening any pane. Read \`herdr workspace list\` and reuse the workspace whose label is \`team-<name>\` or whose cwd is the team cwd; only when none matches, run \`herdr workspace create --cwd <team cwd> --label team-<name> --no-focus\`. One team cwd maps to exactly one workspace, so the room never opens a duplicate, and a second workspace on the same cwd would split the team without saying so. That workspace id is the \`--workspace\` of every pane the room then opens for this team, never in the room's own workspace, which stays clean; agents the owner opens in the room while it runs are the exception. The same resolution comes first whether the room is opening a team, a \`supervisor-<team>\`, or a Lead. Then run \`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus\`, then \`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>\`. Pick the Lead's model from the \`lead\` rung of the Model table in \`maestro recipe show slp\`; a Claude Lead is started with \`-- --model <name> --effort <level> --autocompact 250000\` and a Codex Lead with its own model and effort flags. Run \`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>."\`, then \`herdr agent wait lead-<repo basename> --until working --timeout 60000\`. \`<record holder>\` is the team's record holder, \`supervisor-<team>\`, and the room's own \`supervisor\` when the team has none (d719): the Lead reads its return address from this prompt and never searches for it.
+4. If it does not exist, resolve the team's workspace before opening any pane. Read \`herdr workspace list\` and reuse the workspace whose label is \`team-<name>\` or whose cwd is the team cwd; only when none matches, run \`herdr workspace create --cwd <team cwd> --label team-<name> --no-focus\`. One team cwd maps to exactly one workspace, so the room never opens a duplicate, and a second workspace on the same cwd would split the team without saying so. That workspace id is the \`--workspace\` of every pane the room then opens for this team, never in the room's own workspace, which stays clean; agents the owner opens in the room while it runs are the exception. The same resolution comes first whether the room is opening a team, a \`supervisor-<team>\`, or a Lead; \`observer.md\` holds the observer's own start template and its watcher. Then run \`herdr tab create --workspace <workspace-id> --cwd <repo> --label lead-<repo basename> --no-focus\`, then \`herdr agent start lead-<repo basename> --kind <harness OWNER.md names> --pane <pane-id>\`. Pick the Lead's model from the \`lead\` rung of the Model table in \`maestro recipe show slp\`; a Claude Lead is started with \`-- --model <name> --effort <level> --autocompact 250000\` and a Codex Lead with its own model and effort flags. Run \`herdr agent prompt lead-<repo basename> "[from supervisor][intent] <owner words verbatim>. You are the Lead of <repo>; this is owner intent relayed by the room; record it as work and choose your own route (d700); report to <record holder>."\`, then \`herdr agent wait lead-<repo basename> --until working --timeout 60000\`. \`<record holder>\` is the team's record holder, \`supervisor-<team>\`, and the room's own \`supervisor\` when the team has none (d719): the Lead reads its return address from this prompt and never searches for it.
 5. In the room store, run \`maestro work note <room-work-id> "handed intent to <repo>: <one-line summary>"\`.
-6. Every card opened from a \`[from supervisor][intent]\` prompt reports once when it closes, whether or not it carries a room decision id: \`herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"\`. \`<room record>\` is whatever the relaying prompt named: \`d<room-id>\` for a decision, \`w<room-id>\` for a room work item when the prompt names no decision. Note that id on the card when you open it, so the close can name it. This is one prompt per closed card, after \`maestro work done\`, never before. \`maestro brief\` prints attention findings only, so without this the room cannot see a closure at all; the room still never polls the Lead. \`herdr agent prompt <record holder>\` is the only channel to the room, and the name is the one the opening prompt gave, \`supervisor\` when it gave none (d719): never look for the room with \`herdr agent list\`, \`maestro dispatch list\`, or any other search.
+6. Every card opened from a \`[from supervisor][intent]\` prompt reports once when it closes, whether or not it carries a room decision id: \`herdr agent prompt supervisor "[from lead][done w<id> re <room record>] <candidate commit; one line on any deviation>"\`. \`<room record>\` is whatever the relaying prompt named: \`d<room-id>\` for a decision, \`w<room-id>\` for a room work item when the prompt names no decision. Note that id on the card when you open it, so the close can name it. This is one prompt per closed card, after \`maestro work done\`, never before. \`maestro brief\` prints attention findings only, so without this the room cannot see a closure at all; the room still never polls the Lead. A report sent to the wrong holder is bounced, not absorbed: a supervisor answers a \`[from lead]\` prompt from a Lead it does not own with exactly one line, \`not my supervisor: send to supervisor-<team>\`, and it is neither verified nor recorded, ownership being read from the Lead's \`workspace_id\` in \`herdr agent list\` and never from cwd (d35). \`herdr agent prompt <record holder>\` is the only channel to the room, and the name is the one the opening prompt gave, \`supervisor\` when it gave none (d719): never look for the room with \`herdr agent list\`, \`maestro dispatch list\`, or any other search.
 7. Never run \`maestro work add\` or any write in the project store, run \`maestro dispatch open\`, suggest topology in the prompt, or read the pane transcript. When the Lead needs a room decision, run \`maestro decision draft "<the choice>" --rationale "<why, options>" --work <id>\`, then \`herdr agent prompt supervisor "[from lead][ask d<id>] <question>"\`. A non-decision question is a work note sent the same way. The room never runs \`herdr agent wait\` on a Lead: Herdr reports \`working\` while any background shell lives, the store is the truth and the room's next prompt shows it. The room's reply is a prompt and the record (lock or supersede) is what the Lead acts on.
 `;
 
@@ -156,6 +162,183 @@ function maestro_lanes() {
 }
 `;
 
+const observer = `# Starting observer-<team>
+
+\`observer-<team>\` is the team's drift watch (d28). It runs for as long as the
+team is working, reads only the panes of its own workspace, and speaks to
+whoever drifts. It never changes an assignment, never freezes, never runs a
+write verb, and never writes the store: the addressee or \`supervisor-<team>\`
+decides, and \`supervisor-<team>\` records.
+
+Sensor and judgment are split (d33). \`observer-watch.sh\` is the sensor: a small
+shell watcher in the observer's own pane that matches the countable triggers and
+does nothing else. The model is the judgment, and it wakes only when the sensor
+says so.
+
+## The room opens it
+
+The observer belongs to the team's workspace, never the room's (d29), so its
+workspace is already resolved by the time the room gets here (\`lead.md\`).
+
+\`\`\`sh
+herdr tab create --workspace <workspace-id> --cwd <team cwd> --label observer-<team> --no-focus
+herdr agent start observer-<team> --kind codex --pane <pane-id> -- <model and effort flags>
+\`\`\`
+
+The example model is \`gpt-5.6-luna\` at \`xhigh\`, dated 2026-08-29 and
+owner-editable exactly like the Model table in \`maestro recipe show slp\`: an
+unmetered rung is what lets the observer stay up for a whole working session.
+
+Then send it this, once:
+
+\`\`\`
+[from supervisor][observer] You are observer-<team> for the panes of this
+workspace. Read ~/maestro/observer.md, then start the sensor in the background
+with \`~/maestro/observer-watch.sh observer-<team> &\` and wait. It wakes you with
+\`[watch] <pane> <state> <matched lines>\`; nothing else is your business.
+\`\`\`
+
+## When the watcher wakes you
+
+A \`[watch]\` line is a suspicion, not a verdict. On each one:
+
+1. Read that pane further with
+   \`herdr agent read <pane> --source recent-unwrapped --lines 200\`.
+2. Check the claim against the store: \`MAESTRO_READ_ONLY=1 maestro status\` and
+   \`MAESTRO_READ_ONLY=1 maestro work show <id>\` in that pane's cwd. A pane's cwd
+   decides which store answers (d717), so read the store the pane itself reads.
+   The prefix is what makes those reads free: without it a maestro command
+   creates the store where none exists and refreshes a session row, and you are
+   the one role that must leave no trace in a store it does not own.
+3. Decide. Either send the d28 message to that member and to nobody else:
+
+   \`\`\`
+   herdr agent prompt <pane> "[from observer][suspected] <pane> <quoted evidence> <why>"
+   \`\`\`
+
+   or stay silent. Silence is the common answer; the sensor is deliberately
+   noisier than you are.
+4. Write what you sent to the ledger, and never send the same issue twice.
+
+## The ledger
+
+The ledger is a plain file outside every store, at
+\`~/maestro/.observer/<workspace-id>/ledger\`, one line per issue you have already
+raised: the pane, a short issue key, and the timestamp. Before sending, grep it;
+after sending, append to it. You raise an issue once per issue and again only on
+new evidence, and the ledger is the only thing that remembers which. It is
+yours: no maestro verb reads or writes it.
+
+## What you never do
+
+You never change an assignment, never freeze work, never run a maestro write
+verb, and never write any store. You read panes only in your own workspace: the
+room's binding denies it raw transcript access, and your grant stops at this
+workspace, so neither of you can read the other's team. Your word is
+"suspected", and the decision belongs to the addressee or \`supervisor-<team>\`.
+`;
+
+const observerWatch = `#!/bin/sh
+# Sensor, not judgment (d33): this matches the countable triggers of d28 and
+# wakes observer-<team>; every verdict stays the model's. It runs in the
+# observer's own pane and dies with it. No maestro verb starts it, it opens no
+# store, and nothing restarts it.
+set -u
+
+observer="\${1:-}"
+if [ -z "$observer" ]; then
+  echo "usage: observer-watch.sh observer-<team>" >&2
+  exit 2
+fi
+workspace="\${HERDR_WORKSPACE_ID:-}"
+if [ -z "$workspace" ]; then
+  echo "observer-watch: no workspace id in the environment; start this inside the team's own pane" >&2
+  exit 2
+fi
+
+state="$HOME/maestro/.observer/$workspace"
+mkdir -p "$state/armed"
+events="$state/events"
+[ -f "$events" ] || : > "$events"
+[ -f "$state/cursor" ] || echo 0 > "$state/cursor"
+[ -f "$state/sweep" ] || echo 0 > "$state/sweep"
+
+sweep_seconds="\${OBSERVER_SWEEP_SECONDS:-300}"
+arm_seconds="\${OBSERVER_ARM_SECONDS:-15}"
+tail_lines="\${OBSERVER_TAIL_LINES:-80}"
+
+# Every pane of this team, minus the observer itself. Team is the workspace the
+# pane sits in (d28), never its cwd.
+peers() {
+  herdr agent list 2>/dev/null | OBSERVER_WORKSPACE="$workspace" OBSERVER_SELF="$observer" bun -e 'const input = JSON.parse(await Bun.stdin.text()); const workspace = Bun.env.OBSERVER_WORKSPACE; const self = Bun.env.OBSERVER_SELF; process.stdout.write((input.result?.agents ?? []).filter((agent) => agent.workspace_id === workspace && agent.name !== self).map((agent) => agent.name + " " + agent.agent_status).join("\\n"));' 2>/dev/null
+}
+
+# The counting half of "countable, not taste": a hard marker fires on sight, a
+# self-doubt phrase needs a second one in the same tail, an error needs a third.
+matches() {
+  awk '
+    /LEASE_HELD/ || /not my role/ { hard = hard $0 "\\n"; next }
+    tolower($0) ~ /(i was wrong|let me reconsider|actually, no|that was wrong|i misread|on second thought)/ {
+      doubt++; doubted = doubted $0 "\\n"; next
+    }
+    /[Ee]rror|FAILED|failed:/ { seen[$0]++; if (seen[$0] == 3) repeated = repeated $0 "\\n" }
+    END {
+      if (hard != "") printf "%s", hard
+      if (doubt >= 2) printf "%s", doubted
+      if (repeated != "") printf "%s", repeated
+    }
+  '
+}
+
+inspect() {
+  name="$1"
+  reason="$2"
+  tail_text="$(herdr agent read "$name" --source recent-unwrapped --lines "$tail_lines" 2>/dev/null)" || return 0
+  [ -n "$tail_text" ] || return 0
+  matched="$(printf '%s\\n' "$tail_text" | matches)"
+  [ -n "$matched" ] || return 0
+  herdr agent prompt "$observer" "[watch] $name $reason $matched" >/dev/null 2>&1 || true
+}
+
+while :; do
+  # One background wait per pane, re-armed after it settles. With no --until it
+  # matches idle, done and blocked.
+  peers | while read -r name status; do
+    [ -n "$name" ] || continue
+    marker="$state/armed/$name"
+    if [ ! -e "$marker" ]; then
+      : > "$marker"
+      (
+        herdr agent wait "$name" >/dev/null 2>&1
+        printf '%s\\n' "$name" >> "$events"
+        rm -f "$marker"
+      ) &
+    fi
+  done
+
+  cursor="$(cat "$state/cursor" 2>/dev/null || echo 0)"
+  total="$(wc -l < "$events" | tr -d ' ')"
+  if [ "$total" -gt "$cursor" ]; then
+    sed -n "$((cursor + 1)),\${total}p" "$events" | while read -r name; do
+      [ -n "$name" ] && inspect "$name" settled
+    done
+    echo "$total" > "$state/cursor"
+  fi
+
+  # A pane that never settles never fires a wait, so sweep the working ones.
+  now="$(date +%s)"
+  last="$(cat "$state/sweep" 2>/dev/null || echo 0)"
+  if [ $((now - last)) -ge "$sweep_seconds" ]; then
+    peers | while read -r name status; do
+      [ "$status" = "working" ] && inspect "$name" working
+    done
+    echo "$now" > "$state/sweep"
+  fi
+
+  sleep "$arm_seconds"
+done
+`;
+
 export async function scaffoldRoom(home: string): Promise<string> {
   const room = join(home, "maestro");
   await mkdir(room, { recursive: true });
@@ -166,10 +349,13 @@ export async function scaffoldRoom(home: string): Promise<string> {
     ["CLAUDE.md", agents],
     ["lane.md", lane],
     ["lead.md", lead],
+    ["observer.md", observer],
+    ["observer-watch.sh", observerWatch],
     ["shellrc", shellrc],
   ] as const) {
     await writeFile(join(room, name), content);
   }
+  await chmod(join(room, "observer-watch.sh"), 0o755);
   try {
     await writeFile(join(room, "OWNER.md"), owner, { flag: "wx" });
   } catch (error) {

@@ -87,6 +87,23 @@ claim contradicting `maestro status` or `maestro work show`, a role answering a
 question type it does not own, a pane silent past its stop condition, and
 self-doubt phrases repeated in one turn.
 
+`observer-<team>` splits sensor from judgment: a small shell watcher in its own
+pane matches the countable triggers and wakes the model with
+`[watch] <pane> <state> <matched lines>`; the model then reads further, checks
+the store, and either speaks or stays silent. The watcher is not a maestro
+process: no verb starts it, it opens no store, and it dies with its pane.
+
+Between a team and the room there is one channel, and it runs upward:
+`supervisor-<team>` reports to the room with
+`herdr agent prompt supervisor "[from supervisor-<team>][report|ask|done w<room-id>] ..."`.
+Leads, advisors, observers and peers never prompt the room, and the room reaches
+a team only through its `supervisor-<team>`, except for a Lead it opened and
+still owns. A misrouted report fails closed: a supervisor answers a
+`[from lead]` prompt from a Lead it does not own with the single line
+`not my supervisor: send to supervisor-<team>`, neither verifying nor recording
+it, because absorbing it would leave that team's record holder never learning
+the work closed.
+
 The room at `~/maestro` is its own workspace and opens no agent there; it opens
 each team's panes in that team's workspace. Team membership, the observer's
 read scope, one workspace per team cwd, and the room's clean workspace are all
