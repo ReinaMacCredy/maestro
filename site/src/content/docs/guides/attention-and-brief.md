@@ -1,74 +1,50 @@
 ---
 title: Attention and brief
-description: Compute project attention at read time and summarize registered repositories.
+description: Read administrative project summaries at the Hub without adding a background team watcher.
 ---
 
-## Scan one repository
+`attention` and `brief` are Hub and development administration tools. They are
+not part of the nine-operation SLP role toolbelt and do not monitor a running
+team's transcript.
+
+## Attention
 
 ```sh
 maestro attention
-```
-
-Attention is computed from current store state when read. It does not deliver a
-mailbox message and does not require a daemon. The detector set is:
-
-- `STALLED_LEASE`
-- `REPEATED_FAILURE`
-- `DECISION_STALE`
-- `SCOPE_COLLISION`
-- `DISPATCH_UNACCEPTED`
-- `DISPATCH_UNRETURNED`
-- `HANDBACK_UNREVIEWED`
-- `LESSONS_PENDING`
-
-`LESSONS_PENDING` is the improver's trigger. It is raised for a project when
-five lessons are pending for it, or when seven days have passed since the last
-improver run in that project, whichever comes first; before any run, the oldest
-pending lesson starts that clock. It is grouped by the lesson's project tag,
-because the room relays "run improver" to the Lead of the doctrine the lessons
-target. The improver never runs per correction.
-
-The loop it triggers, from filing a lesson to gating the edit, is in
-[Self-improvement](/guides/self-improvement/).
-
-Threshold flags tune stale leases, draft decisions, and unreturned dispatches.
-For a compact machine-readable result, run:
-
-```sh
 maestro attention --json
 ```
 
-## Failure routing
+Attention computes findings from the current store when called. It can surface
+stale development work, unresolved design decisions, repeated failed attempts,
+pending lessons, and scope collisions.
 
-`REPEATED_FAILURE` follows the holder role. Failures on a Peer-held lease go
-only to the repository hook brief, where the Lead owns recovery. Failures on a
-Lead-held lease go only to the room brief, where the Supervisor owns the next
-governance question. `maestro attention` still lists both and names the holder
-role and route.
+It does not run continuously, open a pane, prompt an agent, change work state,
+or claim semantic awareness between calls. Inside a running SLP team,
+`maestro status` is the authoritative current-state view.
 
-```mermaid
-flowchart LR
-  PeerFailure["Peer-held repeated failure"] --> Hook["Repository hook brief"]
-  Hook --> Lead
-  LeadFailure["Lead-held repeated failure"] --> Room["maestro brief in room"]
-  Room --> Supervisor
-```
-
-## Brief all registered repositories
+Threshold flags tune administrative stale-work and decision checks:
 
 ```sh
+maestro attention --stale 30 --decision-stale 24
+```
+
+## Brief
+
+```sh
+cd ~/maestro
 maestro brief
 ```
 
-Brief reads `~/maestro/registry`, opens each registered repository with
-`MAESTRO_READ_ONLY=1`, and reports only what needs attention. Missing
-repositories are named and skipped. When every repository is running normally,
-the brief says so in one line instead of listing ordinary progress.
+Brief reads the Hub registry and summarizes project stores without mutating
+them. It is useful when Hub Supervisor needs a cross-project overview before
+starting a team or recording an owner decision.
 
-The Supervisor room's `hm` shell function focuses the `maestro` Herdr workspace
-and prints this brief. It returns to the shell and does not start an agent.
+Brief is not a team control plane. Hub communicates with a running team through
+Team Supervisor, and team work remains in that project's store.
 
-The Supervisor separates observation, hypothesis, and verdict. It answers an
-attention packet with an open question to the Lead, a recommendation, a
-decision relayed in the owner's name, or a freeze when the owner granted that
-recovery lease. It does not inspect raw pane transcripts or edit the project.
+## Watch Pane is separate
+
+An optional Watch Pane is foreground runtime support owned by Team Supervisor.
+It displays rolling labelled pane output and has no store authority. Attention
+reads durable administrative records; Watch reads temporary runtime output.
+Neither silently changes the other.

@@ -1,211 +1,164 @@
 ---
 title: Supervised teams
-description: Open, inspect, review, repair, and stop a generation-scoped SLP team through the Room ledger.
+description: Start, operate, inspect, and stop a direct SLP v2 team with nine public operations.
 ---
 
-A supervised team is not a collection of panes that happen to share a name.
-It is one generation recorded in the Supervisor Room ledger, backed by
-deterministic Herdr resources, and accepted only after a fresh runtime receipt
-proves every required postcondition.
+An SLP team is one generation with exactly one Team Supervisor, exactly one
+Lead, and zero or more Peers. Maestro stores material state; Herdr provides the
+live workspace and direct conversations.
 
-Run these commands from the Room store. Project stores receive only a verified
-binding to the Room ledger; they do not keep a copied `READY` value.
+For installation paths and data ownership, start with
+[SLP setup and storage](/getting-started/slp-setup/).
 
 ## Topology
 
-The baseline generation contains `supervisor-<team>`, the repository Lead,
-`observer-<team>`, and a dedicated foreground sensor process. Advisor and
-dispatch Peers are bounded operations, not baseline readiness seats.
+```mermaid
+flowchart TB
+  Hub["Hub Supervisor"] <--> Team["Team Supervisor"]
+  Team <--> Lead["Lead"]
+  Team <--> PeerA["Peer A"]
+  Team <--> PeerB["Peer B"]
+  Lead <--> PeerA
+  Lead <--> PeerB
+  PeerA <--> PeerB
+```
 
-The familiar agent names are authority aliases. Generation ownership lives in
-the resource key and pane label, such as `team:<team>:g<n>:observer`; fresh
-inspection rejects the same required alias if it also exists in another
-workspace.
+Every displayed edge is a direct bidirectional conversation channel. The Hub
+Supervisor reaches the team only through its Team Supervisor; it never manages
+the Lead or Peers directly.
+
+There is no Observer, Advisor, sensor, scheduler or background agent role.
+
+## Public operations
+
+SLP roles use exactly nine operations:
+
+```text
+maestro team start
+maestro team stop
+maestro status [work-id]
+maestro work add
+maestro work take
+maestro work note
+maestro work return
+maestro work accept
+maestro decide
+```
+
+Flags configure one operation; they are not separate tools. Development and
+administrative Maestro commands remain outside the SLP role toolbelt.
+
+## Start
+
+Run start from the Hub room:
+
+```sh
+cd ~/maestro
+maestro team start /absolute/path/to/project "<observable objective>"
+```
+
+One call pins the Workspace Pack, creates or reuses one Herdr workspace, opens
+Team Supervisor and Lead, and creates initial `OPEN` work for the Lead. Peers
+have no lifecycle command: a Lead creates assigned work and Maestro reuses or
+opens the named Peer in the same operation.
+
+```sh
+maestro work add "<bounded objective>" --to peer-api
+```
+
+## Work lifecycle
 
 ```mermaid
 flowchart LR
-  Room["Room ledger"] --> Runtime["TeamRuntime"]
-  Runtime --> Workspace["Herdr workspace: team-<team>-g<n>"]
-  Workspace --> TeamSupervisor["supervisor-<team>"]
-  Workspace --> Lead["lead-<repo>"]
-  Workspace --> Sensor["foreground sensor"]
-  Sensor --> Packet["bounded evidence packet"]
-  Packet --> Observer["observer-<team>"]
-  Observer --> Review["REVIEW_REQUIRED or no finding"]
-  TeamSupervisor -. "on demand" .-> Advisor["temporary Advisor"]
+  Open["OPEN"] -->|"work take"| Active["ACTIVE"]
+  Active -->|"work return"| Returned["RETURNED"]
+  Returned -->|"work accept"| Done["DONE"]
+  Returned -->|"review note, then retake"| Active
 ```
 
-Pane labels, an old workspace, a prompt attempt, or an earlier receipt are not
-readiness. A legacy pane-only team is unmanaged until `team open` creates or
-adopts a generation and proves it.
+- `work add` creates assigned `OPEN` work.
+- `work take` lets the assignee take `OPEN` or `RETURNED` work.
+- `work note` records material context without changing state.
+- `work return` carries the result, proof, blocker and residual risk when they
+  apply.
+- `work accept` is performed by the reviewer: Lead accepts Peer work and Team
+  Supervisor accepts Lead work.
 
-## Open and prove readiness
+A Peer never accepts its own work. Blocked work is returned with the blocker;
+there is no `BLOCKED` state. Rework is a reviewer note followed by the same
+assignee taking the returned work again.
+
+A reviewer may close `OPEN` or `RETURNED` work as cancelled:
 
 ```sh
-maestro team open <team> \
-  --repo <repository> \
-  --operation <stable-id> \
-  --requested-by supervisor \
-  --wait-ms 30000 \
-  --json
+maestro work accept <work-id> --outcome cancelled
 ```
 
-`team open` records its attempt before any runtime command. It creates or
-adopts deterministic generation resources, delivers the role bootstrap
-prompts, starts the foreground sensor, probes Observer delivery, and then
-inspects the complete topology. A bounded failure returns `STARTING` with exact
-missing postconditions; it never rounds partial startup up to success.
+`ACTIVE` work must return first unless Hub emergency-stops the team.
 
-For an existing team, `status` is snapshot-only. Use `health` or
-`await-ready` for fresh runtime evidence:
+## Decisions
+
+Record a settled choice in one operation:
 
 ```sh
-maestro team status <team> --json
-maestro team health <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --json
-maestro team await-ready <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --wait-ms 30000 \
-  --json
+maestro decide "<choice>" --why "<reason>"
 ```
 
-| Stage / health / review | Verdict | Consequence |
-|---|---|---|
-| `ACTIVE / READY / CLEAR` | `OPERABLE` | consequential project gates may proceed |
-| `ACTIVE / READY / REVIEW_REQUIRED` | `REVIEW_HOLD` | bounded work may continue; completion and final acceptance stop |
-| `ACTIVE / DEGRADED / *` | `DRAINING` | only bounded return, notes, release, inspection, repair, and stop remain |
-| any non-`ACTIVE` stage | `CLOSED` | normal team work is denied |
+Use `--work <id>` to link work and `--replaces <decision-id>` to replace an
+older immutable decision. Unresolved discussion stays in chat or a work note.
 
-Missing, dead, mismatched, or duplicate required resources make the team
-non-operable. Health inspection records evidence but never restarts a role.
-Maestro plugins that perform an external effect emit `external.effect` before
-the effect so TeamControl can deny it under a non-operable verdict. Shell
-effects outside that plugin event remain behind the separate Human gate.
+Lead decides technical scope, Team Supervisor decides team scope, and Hub
+Supervisor decides owner or cross-team scope. Peers propose through direct
+conversation or a work note.
 
-## Supervised checks and Observer review
-
-A supervised check is the boss-style one-shot inspection. It is bound to one
-question, generation, evidence window, and stop; it does not install a watcher.
+## Status
 
 ```sh
-maestro team review spot-check <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --question "<one question>" \
-  --window "<bounded evidence window>" \
-  --stop "<one verdict>" \
-  --json
+maestro status
+maestro status <work-id>
 ```
 
-The foreground sensor handles the fixed semantic triggers and sends only
-capped evidence packets. Observer does not receive a continuous whole-team
-transcript and has no work, decision, reconcile, or general store authority.
-It can submit one finding only with the packet's live capability. A validated
-finding sets `REVIEW_REQUIRED`; `supervisor-<team>` resolves it with rationale:
+Status is read-only and role-scoped. Hub sees teams, projects, generations,
+pack identity, roles, Watch state and work counts. Team roles see their team
+and the work that requires return or acceptance. Work status includes its
+objective, owner, state, notes, current return, acceptance and linked
+decisions.
+
+There is no separate team health, attention, review, packet or reconcile
+layer.
+
+## Watch Pane
+
+The Team Supervisor may use existing Herdr pane control to open at most one
+foreground Watch Pane. It labels and refreshes currently available raw output
+from team panes. It is not an agent and never prompts, writes to the store,
+gates work or intervenes.
+
+Watch failure does not block work. Status exposes only `watch: on|off`. Raw
+transcript is runtime-only and is deleted at stop.
+
+## Stop
 
 ```sh
-maestro team review clear <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --rationale "<why the finding is resolved>" \
-  --json
-
-maestro team review escalate <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --rationale "<why this is now a health failure>" \
-  --json
+maestro team stop <team-id>
 ```
 
-Clear preserves health. Escalation writes separate review and health receipts
-and moves an active generation to `DEGRADED`.
+Normal stop changes nothing while unfinished work remains and lists those work
+items. Once all work is `DONE`, shutdown closes Peers, Lead, Watch and runtime
+transcript, then Team Supervisor. The pinned pack and durable records remain.
 
-## Ask Advisor only when needed
-
-Advisor is created or adopted for one decision-focused consultation, returns
-one recommendation, and is closed at the declared stop:
+Hub Supervisor performs emergency stop from `~/maestro`:
 
 ```sh
-maestro team advise <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --decision <decision-id> \
-  --question "<one question>" \
-  --context <record> \
-  --stop-condition "<bounded return>" \
-  --timeout-ms 120000 \
-  --json
+maestro team stop <team-id> --emergency
 ```
 
-The registered Lead may also request Advisor. Advisor receives no project
-work, lease, decision, reconcile, or store authority.
+Unfinished work keeps its current state, and the next start creates a new
+generation.
 
-## Repair explicitly
+## Hard cut from the previous SLP
 
-Only named resources are repaired, followed by a complete readiness proof:
-
-```sh
-maestro team reconcile <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --resource observer \
-  --resource sensor \
-  --json
-```
-
-Valid resource names are `workspace`, `supervisor`, `lead`, `observer`, and
-`sensor`. Reconcile does not clear a review hold.
-
-## Authority and emergency override
-
-While a team is active, `supervisor-<team>` authorizes routine reconcile,
-review resolution, normal stop, and force stop. A foreground Room session
-executes the runtime mutation, so every receipt stores `requestedBy` separately
-from `executedBy`.
-
-Room emergency authority is fail-closed. A Room request is rejected while the
-team Supervisor is reachable. When a fresh inspection proves that Supervisor
-absent or unreachable, use:
-
-```sh
---requested-by supervisor \
---override-reason "<why override is necessary>" \
---override-evidence "<fresh absence or reachability evidence>"
-```
-
-Explicit owner intervention uses:
-
-```sh
---requested-by owner \
---owner-intervention \
---override-reason "<why override is necessary>" \
---override-evidence "<owner decision or instruction>"
-```
-
-These fields establish who may act. They are separate from force-stop
-`--reason` and `--evidence`, which authorize possible loss.
-
-## Stop and prove absence
-
-```sh
-maestro team stop <team> \
-  --operation <stable-id> \
-  --requested-by supervisor-<team> \
-  --wait-ms 30000 \
-  --json
-```
-
-Stop records `STOPPING` before drain, closes new gates, gives work seats a
-bounded chance to return evidence and release leases, then stops the sensor and
-Observer. The external Room session closes `supervisor-<team>` last. `STOPPED`
-is recorded only after fresh inspection proves all generation-owned resources
-absent.
-
-A timeout remains `STOPPING` with exact leftovers. Forced stop requires
-`--force --reason <value> --evidence <value>` and records possible loss; it
-cannot claim graceful completion.
-
-See the complete flags in the [CLI reference](/reference/cli/#team).
+SLP v2 does not wrap or emulate the old team lifecycle. Removed commands fail
+with a message naming the corresponding new operation. Old records remain
+read-only legacy history and are not translated into the four-state work
+model. See the compact mapping in the [CLI reference](/reference/cli/).

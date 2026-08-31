@@ -1,36 +1,33 @@
 ---
-title: Observer mode
-description: Read Maestro state without persisting session, lease, or liveness updates.
+title: Read-only mode
+description: Read Maestro state without persisting session, lease, liveness, or application records.
 ---
 
-This page is the read-only store mode. The team role `observer-<team>` is a
-different thing: it consumes bounded sensor packets and can submit only a
-packet-capability review verdict. That role receives no general store access
-from this mode. See [Roles](/concepts/roles/) and
-[Supervised teams](/guides/supervised-teams/).
+Read-only mode is a store access setting. It is not an SLP role: SLP v2 has no
+Observer agent.
 
-Set `MAESTRO_READ_ONLY=1` for a fail-closed observer process:
+Set `MAESTRO_READ_ONLY=1` for a process that must fail closed on mutation:
 
 ```sh
 MAESTRO_READ_ONLY=1 maestro status
+MAESTRO_READ_ONLY=1 maestro search "<query>"
 ```
 
-Pure commands remain available, including status, search, recipes, and
-read-only list and show operations:
+## What it protects
 
-```sh
-MAESTRO_READ_ONLY=1 maestro search "release"
-MAESTRO_READ_ONLY=1 maestro recipe list
-```
+The process opens the Maestro store without persisting session, lease or
+liveness updates. Mutating commands refuse rather than partially writing.
 
-## What observer mode protects
+Use it for diagnostics, reporting and bounded inspection where even normal
+session bookkeeping would be an unwanted side effect.
 
-Observer mode does not persist session, lease, or liveness updates. Mutating
-commands fail with a `READ_ONLY` JSON error envelope, and external plugins are
-not loaded. Built-in read paths remain available so a cross-repository brief
-can inspect projects without changing their stores.
+## What it does not do
 
-Search also fails closed. If its index cannot be refreshed in read-only mode,
-Maestro reports the stale-index problem instead of returning stale results as
-current. Run search once without observer mode to refresh the index, then retry
-the read-only query.
+- It does not create a monitoring role or background process.
+- It does not read raw Herdr pane transcript.
+- It does not make stale state current.
+- It does not grant access to another project store.
+- It does not replace role-scoped `maestro status` inside an SLP team.
+
+If a read depends on an index normally refreshed by a write-capable command,
+refresh that index explicitly outside read-only mode, then retry the read.

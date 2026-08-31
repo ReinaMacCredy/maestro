@@ -1,146 +1,79 @@
 ---
-title: Lanes
-description: Store a bounded Peer contract, deliver it through Herdr, and read the returned handback.
+title: Team collaboration
+description: Direct conversation, recorded work boundaries, rework, and blind design in SLP v2.
 ---
 
-Coordination lanes are Herdr panes, never subprocess agents created by Maestro.
-The Lead owns topology and delivery; Maestro owns the durable contract and
-return packet.
+SLP collaboration uses direct conversation plus a small durable work record.
+There is no separate lane, envelope, return-packet or council state machine.
 
-## Lane lifecycle
+## Talk directly, record material change
 
-```mermaid
-flowchart LR
-  Open["dispatch open"] --> Accept["dispatch accept"]
-  Accept --> Handback["handback file"]
-  Handback --> Review["Lead reviews claim and proof"]
-  Review --> Close["Herdr pane close"]
-```
+Team Supervisor, Lead and Peers can communicate directly along the team
+topology. A message needs no work ID unless the people involved need it for
+clarity.
 
-The stored dispatch is the assignment. Acceptance binds its session to the
-Peer role, the handback returns a claim, and only the Lead's review can accept
-that claim before the pane closes.
-
-## Lane types
-
-- `scout` holds a no-write lease: discovery only, reports state.
-- `decision` holds a no-write lease: investigates alternatives and recommends.
-- `delivery` owns bounded writes inside the declared mutation scope.
-- `challenge` holds a no-write lease: tries to break a premise or candidate and
-  returns findings, not fixes.
-- `shadow` holds a no-write lease beside the owner and returns comparison
-  evidence that is never a candidate or a work write lease.
-
-A no-write lease is enforced at the store, not at the filesystem: the lane
-gate refuses `work start` to a session holding a no-write dispatch, and
-nothing intercepts what the harness writes. The table says which boundary is
-which. A soft-audited boundary is binding on the role and checkable after
-the fact, not prevented.
-
-| id | Boundary | Enforced by | Proof | Soft-audited |
-|---|---|---|---|---|
-| B1 | work write lease | `LEASE_HELD` on `work start`; the lane gate for no-write dispatch holders | test 470 | file writes by the harness |
-| B2 | council seal | recorded council membership; `handback show`, `handback list`, attention and bundle handoff hide sealed returns | test 474 | the SQLite file and note files on disk stay readable |
-| B3 | one handback per dispatch | `UNIQUE(handbacks.dispatch_id)` | test 476 | the truth of the claim |
-| B4 | untargeted accept | opener confirmation before work or handback | test 423 | which pane the brief reached |
-| B5 | dispatch cancel | the recorded opener | test 478 | the stated cancellation reason |
-| B6 | Supervisor sub-agents | `PreToolUse` denies `Agent` and `Task` in the room's Claude settings | test 447 | Codex, and any Peer pane in a repository |
-| B7 | Supervisor project writes | `MAESTRO_READ_ONLY=1` on the `hm` brief | test 214 | every other verb the room session runs |
-| B8 | external effects (push, tag, publish, deploy, spend, delete) | nothing | soft-audited | the Human gate in the role contract |
-| B9 | tool and call budgets | nothing | soft-audited | the assignment text |
-| B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |
-| B11 | team membership | Room binding plus TeamControl fresh inspection and fail-closed gate refusal | test 572 | cwd and a pane label alone remain non-authoritative |
-| B12 | Observer authority | one-use `team review raise` packet capability; `REVIEW_HOLD` on a validated finding | test 573 | whether the model reads outside the bounded packet remains a role obligation |
-| B13 | deterministic team resources | generation-scoped resource keys and global required-role duplicate rejection | test 574 | Herdr itself does not understand the Room ledger |
-| B14 | a clean room workspace | TeamRuntime generation-workspace inspection rejects a required identity duplicated elsewhere | test 574 | panes the owner opens manually in the room |
-| B15 | the upward channel | nothing | soft-audited | `supervisor-<team>` is the only pane that prompts the room (d36) |
-| B16 | a misrouted report | nothing | soft-audited | a supervisor bounces a `[from lead]` prompt from a Lead it does not own (d35) |
-| B17 | the Observer sensor | TeamRuntime starts one foreground generation-scoped process and rejects stale sensor authority | test 575 | the semantics of model judgment after a packet |
-| B18 | the external-effect gate | TeamControl on the `external.effect` plugin event denies non-OPERABLE teams before the effect | test 577 | shell effects outside the plugin event boundary remain behind the Human gate (d37, room d6) |
-
-## Open a dispatch
-
-After the Lead creates the work item and opens an unwatched Herdr lane pane, it
-stores the complete contract:
+Conversation does not silently change authority or state. Before a changed
+objective, acceptance condition or settled choice governs work, record it:
 
 ```sh
-maestro dispatch open <work-id> --objective "<observable outcome>" --owned-scope "<paths or responsibility>" --excluded-scope "<explicit non-goals>" --mutation "<no-write or write-bounded paths>" --stop-condition "<done or blocked boundary>" --lane delivery --evidence-required "source: <falsifier>" --pane <pane-id> --target-session <session-id>
+maestro work note <work-id> "<material change>"
+maestro decide "<settled choice>" --why "<reason>" --work <work-id>
 ```
 
-For a Codex pane whose session does not exist until its first turn, the Lead
-opens the pane-bound dispatch without `--target-session`, sends the real stored
-contract as the first prompt, then verifies the holder after acceptance.
+## Assign and return work
 
-The Lead reads the stored contract and work context before sending it:
+A Team Supervisor creates Lead work. A Lead names the Peer when creating Peer
+work:
 
 ```sh
-maestro dispatch show <dispatch-id>
-maestro dispatch list <work-id>
+maestro work add "<objective>"
+maestro work add "<objective>" --to peer-api
 ```
 
-## Accept the lane
-
-The Peer begins by accepting exactly the stored dispatch:
+The assigned Lead or Peer then owns the execution cycle:
 
 ```sh
-maestro dispatch accept <dispatch-id>
+maestro work take <work-id>
+maestro work note <work-id> "<material progress or changed fact>"
+maestro work return <work-id> "<result; proof; blocker; residual risk>"
 ```
 
-Acceptance binds the session to the Peer role without taking the work write
-lease. A delivery Peer starts the assigned work separately when the contract
-requires the write lease.
-
-## Return a handback
-
-The Peer stops at the contract boundary and files the complete return packet:
+The reviewer accepts separately:
 
 ```sh
-maestro handback file <dispatch-id> --status DONE --claim "<current belief>" --proof "source: <falsifier>" --assumptions "None" --residual-risks "None" --incidental-findings "None"
+maestro work accept <work-id>
 ```
 
-The Lead reads the handback, checks its evidence, decides whether the work is
-complete, and only then closes or reuses the lane pane. A handback is a claim,
-not acceptance. A Peer that discovers a topology dependency returns
-`DEPENDENCY_REQUEST`; one that discovers the assignment needs several
-independent judgments returns `COUNCIL_REQUEST`. The Lead either opens the
-required work or council, or records why it declined with `maestro work note`.
+## Rework and blockers
 
-## Herdr procedure
+Returned work stays `RETURNED` until accepted. If it needs another pass, the
+reviewer records the specific gap and the same assignee takes it again:
 
-The full `~/maestro/lane.md` procedure has the Lead create an unwatched lane
-tab, split panes, start the requested harness, resolve session identity, store
-and send the exact dispatch, wait for `working`, then wait for any terminal
-Herdr state. Both `idle` and `done` mean to read the handback; `blocked` needs
-inspection. A wait that returns without a state is re-armed. No Maestro verb
-pushes a brief into a pane or calls Herdr.
-
-## Councils
-
-Concurrent dispatches in one generation on the same work item form a council.
-The council remains sealed until every lane returns, which prevents one view
-from biasing another. The Lead reconciles the complete set; it does not count
-votes.
-
-When the returned views conflict or the risk warrants cross-examination, the
-Lead opens a second generation on the same work item. Each new dispatch quotes
-the other Peers' handbacks verbatim and asks one targeted question. Peers never
-prompt each other. They answer by handback with `DONE` and a `CONFIRM` claim,
-`CHALLENGE`, or `REOPEN_REQUEST` (`CONFIRM` is claim text, not a status), and
-the Lead records the final decision, dissent, and next
-proof. A third round requires a new question.
-
-```mermaid
-flowchart LR
-  Gen1["Generation 1 sealed"] --> Returns["Every handback returned"]
-  Returns --> Unsealed["Views unsealed"]
-  Unsealed --> Gen2["Generation 2 targeted dispatches"]
-  Gen2 --> Answers["DONE with CONFIRM claim / CHALLENGE / REOPEN_REQUEST"]
-  Answers --> Reconcile["Lead reconciles decision, dissent, proof"]
+```sh
+maestro work note <work-id> "rework: <specific gap and acceptance condition>"
+maestro work take <work-id>
 ```
 
-Implementation of the ruling belongs on separate work, not as a later
-dispatch that silently changes council membership.
+A blocker uses the same path. The assignee returns it with the blocker in the
+body; the team resolves the dependency through conversation or a note, then
+the assignee retakes it. SLP adds no `BLOCKED` or `REOPENED` state.
 
-Team roles and their Room-ledger lifecycle are documented separately in
-[Supervised teams](/guides/supervised-teams/). Dispatch Peers remain bounded
-lanes and are not baseline team-readiness seats.
+## Blind design
+
+Blind design is a Lead-managed collaboration pattern, not runtime state:
+
+1. Create separate work for two or three Peers with the same neutral question.
+2. Ask each Peer to return independently before sharing another view.
+3. Compare all returned work after every independent view is available.
+4. Record the selected choice, rationale and dissent with `maestro decide`.
+5. Create separate implementation work after the decision.
+
+Peers may talk directly in ordinary work. The temporary no-sharing boundary
+exists only because the Lead explicitly chose blind design for that question.
+
+## External effects
+
+Push, publish, deploy, send, spend and delete use their native tools. When
+owner authority is required, Hub Supervisor records the exact decision and
+Team Supervisor relays it down the topology. A Maestro record never executes
+the external effect by itself.

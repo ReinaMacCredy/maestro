@@ -1,32 +1,32 @@
 ---
-title: maestro
-description: Local-first coordination for human and agent work, with durable work, decisions, and evidence in each repository.
+title: Maestro
+description: Durable coordination for direct, supervised AI teams.
+template: splash
+hero:
+  tagline: One Workspace Pack, four roles, nine operations, and project-owned work.
+  actions:
+    - text: Install Maestro
+      link: /getting-started/install/
+      icon: right-arrow
+    - text: Set up SLP
+      link: /getting-started/slp-setup/
+      variant: minimal
 ---
 
-Maestro is a local-first coordination system for human and agent work. It keeps
-durable work, decisions, sessions, evidence, dispatches, and handbacks in each
-repository's shared Git root. It is written in TypeScript, runs on Bun, and does
-not require a background service.
+Maestro separates durable coordination from live team conversation. It stores
+work, decisions, lifecycle and minimal activity in each owning store, while
+Herdr provides the running workspace and panes.
 
-## Install
+## SLP v2 at a glance
 
-Install Maestro from its source repository:
+- Four roles: Hub Supervisor, Team Supervisor, Lead and Peer.
+- Direct Team Supervisor, Lead and Peer conversation; Hub speaks only through
+  Team Supervisor.
+- Nine public SLP operations.
+- One work lifecycle: `OPEN → ACTIVE → RETURNED → DONE`.
+- One canonical `~/maestro/SLP.md`, pinned into each project generation.
+- Optional foreground Watch Pane with runtime-only transcript.
 
-```sh
-curl -fsSL https://maestro.maccredyreina.me/install.sh | sh
-```
-
-The installer creates a source checkout that `maestro update` can
-fast-forward, installs the runtime and shim, wires the current repository, and
-registers it with the Supervisor room.
-
-## Start here
-
-- [Install Maestro](/getting-started/install/) and verify the runtime.
-- [Run a first work session](/getting-started/quick-start/).
-- Learn the [three layers](/concepts/three-layers/) and the
-  [Supervisor, Lead, and Peer roles](/concepts/roles/).
-- Open and operate a generation-scoped [supervised team](/guides/supervised-teams/).
-- Use the generated [CLI reference](/reference/cli/) for current verbs and flags.
-- See how a correction becomes doctrine in
-  [Self-improvement](/guides/self-improvement/).
+Start with [SLP setup and storage](/getting-started/slp-setup/), then read
+[Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), and the
+[SLP scenarios](/guides/slp-scenarios/).

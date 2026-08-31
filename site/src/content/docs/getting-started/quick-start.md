@@ -43,8 +43,8 @@ maestro work done w1 --claim "docs: README links to the installer" --proof "sour
 ```
 
 The claim states the observable result. The proof names the evidence layer and
-the falsifier. Enabled policies can require a pair, a child breakdown, or a
-returned dispatch before completion.
+the falsifier. Enabled development policies can require a pair, a child
+breakdown, or an independent acceptance step before completion.
 
 ## 6. Read what is next
 
@@ -53,3 +53,9 @@ maestro ready
 ```
 
 Ready lists work that can start and names the gates blocking other items.
+
+## Start a supervised team instead
+
+This page demonstrates Maestro's development workflow in one session. To open
+an SLP v2 team with Team Supervisor, Lead and Peers, continue with
+[SLP setup and storage](/getting-started/slp-setup/).

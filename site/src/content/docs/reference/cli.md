@@ -1,281 +1,261 @@
 ---
 title: CLI reference
-description: Every top-level verb reported by Maestro source at commit f120871e.
+description: The SLP v2 role toolbelt plus Maestro's separate development and administrative commands.
 ---
 
-This reference was generated from Maestro source at
-commit `f120871ec385a5c58eacf4ac3eb654963454ff37`, version 0.114.0.
+The live binary is the final source of flag details:
 
 ```sh
 maestro help
 maestro <verb> --help
 ```
 
-`maestro help` and `maestro help --help` print the top-level inventory.
-`maestro help <verb>` prints one verb's help.
+SLP roles have exactly nine public operations. Other commands on this page are
+development or administrative Maestro surfaces and are not extra SLP tools.
 
-## Coordination and observation
+## SLP v2 operations
 
-### `attention`
+### `team start`
 
-`maestro attention` scans current store state without mutating work. Flags:
-`--stale <minutes>` (default 30), `--decision-stale <hours>` (default 24),
-`--dispatch-stale <hours>` (default 2), and `--json`. `LESSONS_PENDING` has no
-flag: it is raised at five pending lessons for a project, or seven days since
-that project's last improver run.
+```sh
+maestro team start <project> "<objective>" \
+  [--supervisor-model <model>] \
+  [--lead-model <model>] \
+  [--peer-model <model>] \
+  [--json]
+```
 
-### `brief`
+Hub Supervisor authority. It runs from `~/maestro`, pins the canonical
+Workspace Pack into the project, opens Team Supervisor and Lead, and creates
+initial `OPEN` work for Lead. Repeating an identical running start verifies
+and restores required roles without duplicates.
 
-`maestro brief` summarizes registered repository work without changing project
-stores. It has no flags.
+### `team stop`
 
-### `dispatch`
+```sh
+maestro team stop <team-id>
+```
 
-- `accept <id>` accepts a dispatch without taking the work write lease.
-- `cancel <id> --reason <value>` records why an open dispatch was abandoned;
-  only the session that opened it may cancel it.
-- `confirm <id> --session <value>` confirms a claimed dispatch as its opener;
-  a targeted dispatch already held by that session confirms as a no-op.
-- `list [work-id] [--json]` lists contracts, optionally for one work item.
-- `open <work-id>` requires `--objective`, `--owned-scope`, `--excluded-scope`,
-  `--mutation`, `--stop-condition`, `--lane`, `--evidence-required`, and
-  `--pane`; `--target-session` is optional and takes the accepting session's
-  harness session id, the value Herdr reports as `agent_session.value`, never
-  the Herdr agent name. `--council-members <n>` declares
-  a council of `n` seats on a new anchor, and `--council-anchor <id>` adds a
-  seat to a declared council; the two are mutually exclusive. One handback per
-  dispatch is a store constraint.
-- `show <id>` reads one stored contract.
-- `unseal <work-id> --reason <value>` opens a sealed council early and records why.
+Team Supervisor authority for normal stop; Hub Supervisor authority for an
+emergency stop. Normal stop requires every work item to be `DONE`. The
+generation snapshot and durable records remain after runtime panes and raw
+transcript are removed.
 
-### `handback`
-
-- `file <dispatch-id>` requires `--status`, `--claim`, `--proof`,
-  `--assumptions`, `--residual-risks`, and `--incidental-findings`.
-  `--lessons <lesson id>@<store path>` repeats and names the lessons this
-  return answers; each id is resolved against the store it names when the
-  handback is filed, so an absent id refuses and an unreadable store warns.
-- `list <dispatch-or-work-id> [--json]` lists handbacks for one dispatch or
-  work item.
-- `show <id>` reads the handback for a handback or dispatch id.
-- `review <id> --note <text>` records that the opener read the return packet,
-  which clears its `HANDBACK_UNREVIEWED` finding. Only the session that opened
-  the dispatch may file it, and a second review is a no-op. Closing the work,
-  or citing the handback in a later dispatch on the same item, still clears the
-  finding on their own.
-
-### `prompt`
-
-`maestro prompt list [--session <value>] [--json]` lists the 20 most recent
-recorded user prompts, optionally for one session.
-
-### `ready`
-
-`maestro ready [--json]` lists ready work and gated items with their blockers.
-
-### `room`
-
-`maestro room forget <path>` removes one repository from the room registry
-without uninstalling it. `maestro room mark` is internal: the installer runs it
-inside the room store to record that the store is the Supervisor's.
+```sh
+cd ~/maestro
+maestro team stop <team-id> --emergency
+```
 
 ### `status`
 
-`maestro status [--live] [--json]` shows sessions, live peers, and held work.
+```sh
+maestro status
+maestro status <work-id>
+```
 
-### `team`
+Read-only and role-scoped. Hub sees team generations and counts; team roles see
+their team's actionable work; the work form includes notes, current return,
+acceptance and linked decisions.
 
-`maestro team` manages the generation-scoped supervised-team lifecycle stored
-in the Room ledger. Lifecycle mutations use `--operation <value>` as an
-idempotency key, `--requested-by <value>` for the authorizing actor,
-`--expected-revision <value>` for optimistic concurrency, and `--json` for a
-compact receipt envelope.
+### `work add`
 
-- `open <team-id> --repo <value> [--wait-ms <value>]` creates or adopts the
-  deterministic workspace, roles, prompts, and foreground sensor, then returns
-  success only after bounded readiness proof.
-- `status <team-id>` reads the last ledger snapshot without refreshing health.
-- `health <team-id>` performs one fresh runtime inspection; `await-ready
-  <team-id> [--wait-ms <value>]` performs the bounded foreground wait.
-- `bind <team-id> --repo <value>` binds another project to the authoritative
-  Room generation without copying its `READY` state into that project.
-- `review <team-id>` reads packet state. `review trigger` applies a versioned
-  semantic rule, `review spot-check` runs one Supervisor question, `review
-  raise` consumes one packet capability, and `review clear|escalate` requires
-  Supervisor rationale.
-- `advise <team-id>` requires `--decision`, `--question`, `--stop-condition`,
-  and optional repeatable `--context`; it runs one bounded Advisor consultation
-  and closes the temporary seat.
-- `reconcile <team-id> --resource <value>` repairs repeatable named resources:
-  `workspace`, `supervisor`, `lead`, `observer`, or `sensor`. It always
-  re-inspects the complete generation and never clears review state.
-- `stop <team-id> [--wait-ms <value>]` records STOPPING before drain and records
-  STOPPED only after absence proof. `--force` additionally requires
-  `--reason <value> --evidence <value>` and records possible loss.
+```sh
+maestro work add "<objective>"
+maestro work add "<objective>" --to <peer-name>
+```
 
-Routine reconcile, review resolution, and stop are authorized by
-`supervisor-<team>`. Emergency mutation flags are `--override-reason <value>`,
-`--override-evidence <value>`, and, for explicit owner authority,
-`--owner-intervention`; Room override without owner intervention is denied
-while the team Supervisor is reachable. See [Supervised teams](/guides/supervised-teams/)
-for the state model and command sequences.
+Team Supervisor creates work for Lead. Lead must name a Peer with `--to`;
+Maestro reuses that Peer or opens it with the generation's pinned Peer model.
+The new work state is `OPEN`.
 
-## Work, decisions, and bundles
+### `work take`
 
-### `work`
+```sh
+maestro work take <work-id>
+```
 
-- `add <title>` accepts repeatable `--blocked-by`, plus `--acceptance`,
-  `--atomic-reason`, `--kind`, and `--parent`. Kinds are `feature`, `task`,
-  `bug`, `chore`, `implement`, `idea`, and `research`; default is `task`.
-- `start <id> [--atomic-reason <value>]` takes the live session lease.
-- `show <id> [--json]` reads blockers, children, notes, evidence, and lease.
-- `list [--json]` lists tracked work.
-- `note <id> <text>` appends a durable note.
-- `done <id>` accepts repeatable `--claim` and `--proof`, plus opaque
-  `--evidence`, and completes through enabled policy gates. When no session
-  holds the item it takes the lease itself, through the same gates and blocker
-  checks as `start`; a lease another live session holds still refuses.
-- `cancel <id> --reason <value>` permanently cancels open or held work and its
-  open or active descendants, each with the reason prefixed `parent <id>
-  cancelled:`.
-- `release <id>` releases the current session's lease without completion.
-- `reclaim <id> --reason <value>` takes an existing lease with a recorded reason.
+The assigned Lead or Peer moves its `OPEN` or `RETURNED` work to `ACTIVE`.
+
+### `work note`
+
+```sh
+maestro work note <work-id> "<material note>"
+```
+
+Appends context without changing state. Use it for a changed fact, rework
+condition or material objective clarification.
+
+### `work return`
+
+```sh
+maestro work return <work-id> "<result; proof; blocker; residual risk>"
+```
+
+The current owner moves `ACTIVE` work to `RETURNED`. One concise body carries
+the bounded result and any blocker or residual risk.
+
+### `work accept`
+
+```sh
+maestro work accept <work-id>
+maestro work accept <work-id> --outcome cancelled
+```
+
+Moves `RETURNED` work to `DONE`. Lead accepts Peer work; Team Supervisor
+accepts Lead work. A worker cannot accept its own return. Cancellation may
+close `OPEN` or `RETURNED` work; `ACTIVE` work must return first.
+
+### `decide`
+
+```sh
+maestro decide "<choice>" --why "<reason>" \
+  [--work <work-id>] \
+  [--replaces <decision-id>] \
+  [--scope owner|cross-team]
+```
+
+Writes one immutable settled decision. Lead owns technical scope, Team
+Supervisor owns team scope, and Hub Supervisor owns owner or cross-team scope.
+
+## Work states
+
+```text
+OPEN -> ACTIVE -> RETURNED -> DONE
+```
+
+`work note` changes no state. Rework is a reviewer note followed by the
+assignee retaking `RETURNED` work. A blocker is written in the return body;
+there is no separate blocked state.
+
+## Hard-cut mapping
+
+These mappings explain removed SLP commands. They perform no alias or
+compatibility action.
+
+| Previous SLP command or layer | SLP v2 operation |
+| --- | --- |
+| `team open` | `team start` |
+| `team status`, `team health`, `team await-ready` | `status` |
+| `team bind` | removed; one start owns one project generation |
+| `team review`, `team advise` | direct conversation, then `work note` or `decide` when material |
+| `team reconcile` | repeat identical `team start`, or stop then start a changed generation |
+| `dispatch open` | `work add` |
+| `dispatch accept` and SLP `work start` | `work take` |
+| `handback file` | `work return` |
+| `handback review` and SLP `work done` | `work accept` |
+| `decision draft` plus `decision lock` | `decide` |
+| team `ready`, `attention`, review holds and health receipts | `status` plus direct supervision |
+
+Old lifecycle data remains read-only legacy history and is not translated into
+new work.
+
+## Administrative observation
+
+These commands remain available to the Hub or project maintainer, but are not
+team role operations.
+
+### `attention`
+
+`maestro attention [--stale <minutes>] [--decision-stale <hours>] [--json]`
+scans administrative store state at read time. It is not a background watcher
+and does not replace SLP `status`.
+
+### `brief`
+
+`maestro brief` summarizes registered repositories without changing their
+stores.
+
+### `prompt`
+
+`maestro prompt list [--session <value>] [--json]` lists recent recorded user
+prompts.
+
+### `ready`
+
+`maestro ready [--json]` lists ready development work and its gates. It is not
+an SLP team-readiness operation.
+
+### `room`
+
+`maestro room forget <path>` removes one repository from the Hub registry
+without uninstalling it. `room mark` is installer-owned.
+
+## Development workflow commands
+
+Outside an active SLP team, the existing Maestro development workflow remains
+available. Its work commands include `work start`, `work show`, `work list`,
+`work done`, `work cancel`, `work release`, and `work reclaim`. These lease and
+policy operations are not part of the SLP role toolbelt.
 
 ### `decision`
 
-- `draft <text-or-id> [replacement]` creates or edits a draft; flags are
-  `--rationale`, `--work`, `--parent`, and `--supersedes`. An edit is the
-  two-positional form: naming an existing decision with no replacement text
-  refuses rather than creating a decision whose text is that id, and
-  `--work`, `--parent` and `--supersedes` are refused on an edit because an
-  edit changes text, rationale, dissent, review date and owner requirement
-  only.
-- `lock <id>` locks a draft against further edits.
-- `show <id>` reads one decision and its links.
-- `list [--json]` lists current decision states.
+`decision draft`, `decision lock`, `decision show`, and `decision list` remain
+for Maestro's design and bundle workflow. A running SLP role records its
+settled choice with the one-step `decide` operation instead.
 
 ### `lesson`
 
-The loop these verbs serve is in
-[Self-improvement](/guides/self-improvement/).
+- `file <what-happened>` requires `--target`, `--expected`, `--why`, and one or
+  more `--evidence` values.
+- `process <id> --commit <value> | --answer <value>` marks a lesson processed.
+- `show <id>` and `list [--all] [--project <value>]` read lessons.
+- `render` writes generated project views under `~/maestro/PROJECT/`.
 
-- `file <what-happened> --target <value> --expected <value> --why <value>
-  --evidence <value>` files a correction where it happened; `--evidence`
-  repeats and takes work, handback, or decision ids, unvalidated so a lesson
-  can cite another store; `--project <value>` overrides the tag, which
-  otherwise names this store's project.
-- `process <id> --commit <value> | --answer <value>` marks a lesson processed
-  by the commit that carries its edit, or by the reason it produced none.
-  Nothing deletes a lesson.
-- `show <id>` reads one lesson and its evidence.
-- `list [--all] [--project <value>]` lists pending lessons; `--all` includes
-  processed ones.
-- `render` writes `~/maestro/PROJECT/<project>.md`, one file per project tag,
-  from the store it runs in plus every store in `~/maestro/registry`, read
-  through a read-only child. Pending and processed lessons both appear, so a
-  new team inherits the whole record. The room runs it before it hands intent
-  to a Lead; the files are a view and are never hand-edited.
+See [Self-improvement](/guides/self-improvement/).
 
 ### `bundle`
 
-- `open <id> [--work <value>]` scaffolds SPEC/NOTES/VERIFY; `--work` repeats.
-- `close <id>` snapshots the trio and archives the bundle.
-- `show <id> [--json]` composes trio text, linked work, and decisions.
-- `list [--json]` lists active and archived bundles.
-- `save <directory>` ingests a foreign trio directly as archived.
+- `open <id> [--work <value>]` scaffolds `SPEC.md`, `NOTES.md`, and `VERIFY.md`.
+- `close <id>` snapshots and archives the bundle.
+- `show`, `list`, and `save` read or ingest bundle state.
 
-### `handoff`
+### `handoff` and `trace`
 
-`maestro handoff <bundle-id> [--json]` seeds untouched `NOTES.md` sections from
-store and Git evidence.
-
-### `trace`
-
-`maestro trace <id>` reconstructs one work item's event history.
+`maestro handoff <bundle-id>` composes a recovery packet.
+`maestro trace <id>` reconstructs development work history.
 
 ## Methods and extensions
 
 ### `recipe`
 
-- `list [--json]` lists shipped workflow recipes.
-- `show <name>` prints one recipe.
+`recipe list` lists shipped methods; `recipe show <name>` prints one.
 
 ### `plugin`
 
-- `list [--json]` lists built-in, global, and repository plugins, including
-  untrusted ones, which are named from the filesystem and never imported.
-- `add <url>` clones a plugin from Git and trusts the cloned bytes. It does not
-  import the clone; the plugin loads on the next invocation.
-- `new <name>` scaffolds a repository-local plugin. The scaffold is untrusted
-  until you run `plugin trust`.
-- `trust <name>` records that the plugin's current source may execute, and
-  prints the path and digest it vouched for.
-- `untrust <name>` withdraws that grant.
-- `enable <name>` and `disable <name>` change installed plugin state. Enabling
-  never confers trust; an untrusted plugin is refused with a pointer to
-  `plugin trust`.
-- `remove <name>` removes a managed plugin and its files.
+`plugin list`, `add`, `new`, `trust`, `untrust`, `enable`, `disable`, and
+`remove` manage plugin lifecycle. Enabling a plugin never grants trust.
 
 ### `mcp`
 
-`maestro mcp serve` starts the foreground stdio server with the
-`maestro_find` and `maestro_run` meta-tools.
+`maestro mcp serve` starts the foreground stdio server.
 
 ## Runtime and harness
 
-### `install`
+### `install`, `update`, and `uninstall`
 
-`maestro install` installs the runtime and current repository hook wiring. It
-has no flags. Run inside the Supervisor room it refuses with `INSTALL_IN_ROOM`;
-the room is maintained by installing from a repository checkout.
+- `maestro install` installs the runtime, wires the current repository and
+  scaffolds the Hub room including `~/maestro/SLP.md`.
+- `maestro update` fast-forwards the recorded source and resynchronizes the
+  runtime.
+- `maestro uninstall` removes managed repository wiring without deleting its
+  data or the Hub room.
 
-### `update`
+### `doctor`, `version`, and `hook`
 
-`maestro update` fast-forwards the recorded source and resynchronizes the
-runtime. It has no flags.
-
-### `uninstall`
-
-`maestro uninstall` removes Maestro-managed wiring from the current repository.
-It has no flags.
-
-### `doctor`
-
-`maestro doctor` diagnoses the machine runtime and repository wiring read-only.
-It has no flags. In the Supervisor room it applies the room contract (room
-files, registry, hooks, deny list, store) instead of the repository wiring
-checks.
-
-### `version`
-
-`maestro version` prints the package version and installed or source commit.
-
-### `hook`
-
-`maestro hook record` records a harness event and prints the dynamic brief.
-Flags are `--event <value>` and `--harness <value>`.
+- `maestro doctor` checks runtime and repository wiring read-only.
+- `maestro version` prints the package and source identity.
+- `maestro hook record --event <value> [--harness <value>]` records a harness
+  event and prints the dynamic brief.
 
 ## Search and legacy data
 
-### `search`
-
-`maestro search <query> [--json]` searches work, decisions, notes, event
-history, bundles, and imported Rust records.
-
-### `import`
-
-`maestro import rust --path <value> [--promote]` imports one legacy Rust store
-read-only and optionally promotes cards into native work and decisions.
-
-### `legacy`
-
-`maestro legacy show <id> [--file <value>]` reads an imported legacy card and
-its files, or only one named file.
+- `maestro search <query> [--json]` searches native work, decisions, notes,
+  bundles and imported legacy records.
+- `maestro import rust --path <value> [--promote]` imports a preserved Rust
+  store read-only.
+- `maestro legacy show <id> [--file <value>]` reads imported legacy content.
 
 ## Help
 
-### `help`
-
-`maestro help` and `maestro help --help` show the top-level verb inventory.
-`maestro help <verb>` prints the same per-verb description that registered
-verbs expose through `--help`.
+`maestro help`, `maestro help <verb>`, and `maestro <verb> --help` print the
+inventory registered by the running binary.

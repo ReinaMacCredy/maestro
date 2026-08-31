@@ -1,515 +1,174 @@
 ---
 title: SLP scenarios
-description: Six cases seen from the owner's seat, from what you type to what your session does with it and what it reports back.
+description: Seven end-to-end SLP v2 journeys from team start through work, decisions, rework, and stop.
 ---
 
-You never write a dispatch envelope by hand. You type to a session the way you
-always have, short or long, and the session decides whether it is the Lead of
-a repository or the Supervisor of the room, whether one session is enough, and
-when to open lanes. This page shows six cases from your seat: what you type,
-how the session reads it, what it does, and what comes back. The role
-contracts are in [Roles](/concepts/roles/) and the lane mechanics in
-[Lanes](/concepts/lanes/).
+These scenarios show what each role records. Team conversation itself remains
+natural and direct; commands appear only where material state changes.
 
-## Where you start is who you talk to
+## 1. Start one project team
 
-The role of the session you are typing to comes from where it was started, not
-from anything you say.
-
-| You start an agent in | You are talking to | It reads |
-|---|---|---|
-| a repository working tree | the Lead of that repository | the repo `AGENTS.md` maestro block and the hook brief |
-| `~/maestro`, after `hm` | the Supervisor, your embodiment across projects, holding your authority in full | `IDENTITY.md`, `OWNER.md`, then `maestro brief` |
-
-You never talk to a Peer. Peers are panes the Lead opens with a stored
-dispatch; they take orders from that contract and return to the Lead, and the
-Lead reports to you. If you find yourself copying answers between panes, you
-are playing Lead by hand.
-
-## How the Lead reads a prompt
-
-You never name a shape. The Lead turns your prompt into one sentence:
-
-```text
-For <person or system>, reach <observable outcome> inside <boundary>,
-because <impact>, without <excluded effect>.
-```
-
-If it cannot write that sentence because it does not know the code, it opens a
-read-only lane to find out; it does not ask you to explain the codebase. Then
-it scores five questions, 0 to 2 each. Three it answers from the repository:
-is a wrong framing expensive, is the change hard to reverse, could an
-independent judgment really disagree. Two it reads off what you wrote, in any
-language: did you say you do not know this area or cannot choose; did you say
-you are busy or away. With no signal those two score 0, and it tells you it
-assumed so. Score 0-2 means it does the work itself, 3-5 one delivery Peer,
-6-8 several independent lanes, 9-10 the room.
-
-It asks you at most one question, and only when the answer is yours to give:
-the work implies a push, publish, spend or delete you have not granted, or
-your sentence has two readings that would produce different results and the
-store does not settle which. It never asks how many lanes to open.
-
-Then, before it opens anything, it tells you in three lines: the score and
-the problem as it understood it, what it is doing and the one thing that decided it, and the
-route it did not take with the phrase that switches to it:
-
-```text
-Score 7. Fifteen audit gaps, one option each, no code yet.
-Two independent reads on the same brief, sealed, because you said you cannot
-choose and every gap has more than one defensible answer; I assumed you are
-around. The other route is that I pick and report; say "just pick" and I will.
-```
-
-Your reply is the override. Echo the phrase, or say anything that asks for
-more or less independent judgment, and the route changes on the same problem;
-panes already open close and nothing from them is recorded. If you name a
-shape yourself ("two panes", "a review"), that is an override too; the three
-lines say which won. The announcement never waits for you: if you said you are
-busy, the route and the work start in the same turn.
-
-## Case 0: the first session in the room
-
-After `maestro install` in your first repository, `~/maestro` exists with
-`IDENTITY.md`, `AGENTS.md`, `lane.md`, and `shellrc` (managed, rewritten on
-every install or update) and `OWNER.md` (yours, written once, never
-overwritten). `OWNER.md` starts as a template with questions under four
-headings; the room's first job is to ask them.
-
-**You type**, after `hm` and starting an agent in `~/maestro`:
-
-```text
-hi, first time here
-```
-
-**The Supervisor reads it as**: `OWNER.md` still holds unanswered questions,
-so this session is an interview, and the brief comes after.
-
-**What you get back** is the questions, one group at a time:
-
-```text
-OWNER.md is still the template, so I'll ask before I read the brief.
-Environment first: where does code live, which terminal workspace manager opens panes, which harnesses run here, and is there anything that must never run on this machine?
-```
-
-You answer in plain words. Stable facts go into `OWNER.md`; anything that
-could change later is recorded as a decision in the room store, so a reversal
-supersedes it instead of leaving two preferences side by side:
-
-```text
-Written to OWNER.md: code under ~/Code, Herdr for panes, Claude Code and Codex, no rm -rf, no git checkout --.
-Recorded as room decisions: d1 answer in Vietnamese, terse, no emoji; d2 push, tag, publish, deploy, delete, spend always ask; d3 implementation details, sequencing, test strategy, retries, and opening lanes are mine to decide.
-Brief: one repository registered, ~/Code/example, nothing needs attention.
-```
-
-From then on every room session reads the answers instead of asking. To
-change one later, say so; the Supervisor drafts the replacement with
-`--supersedes` and locks it.
-
-## Case 1: a fix you could check yourself
-
-**You type**, in the repository:
-
-```text
-the README still points at the old install path, fix it
-```
-
-**The Lead reads it as**: for a new user, the README names `install.sh`,
-inside one file, so the install works first time, without touching anything
-else. Score 0: small, reversible, and you can check it by reading one line.
-
-**What it does**: the change itself. A one-line diff needs no record; a change
-that needs a claim and proof to outlive the session gets a work item:
+From the Hub room, the Hub Supervisor starts the project with one objective:
 
 ```sh
-maestro work add "README names install.sh" --kind task --atomic-reason "one-line doc fix" --acceptance "README install line matches scripts/install.sh"
-maestro work start w40
-maestro work done w40 --claim "docs: README names install.sh" --proof "source: rg -n 'install.sh' README.md"
+cd ~/maestro
+maestro team start ~/Code/example "Ship the validated import fix"
 ```
 
-**What you get back**:
+Maestro pins `~/maestro/SLP.md` into the project, opens Team Supervisor and
+Lead, and creates initial `OPEN` work assigned to Lead. There is no second
+readiness sequence.
 
-```text
-Fixed README.md:12; w40 closed. Proof: rg -n 'install.sh' README.md shows the new line. Not committed.
-```
-
-No pane, no dispatch. If you had wanted it routed through a lane anyway, the
-contract would have been longer than the diff.
-
-## Case 2: a bounded change while you are busy
-
-**You type**:
-
-```text
-add a --since flag to audit so old entries are filtered out. test first. I'm in meetings all afternoon, don't push anything
-```
-
-**The Lead reads it as**: for an operator reading the audit log, entries older
-than a date are omitted, inside one verb and its tests, because long logs are
-unreadable, without a push. Score 4: one moving scope that touches real code,
-you are not watching, and a dependency (the store's date format) might turn
-up. One delivery Peer, with the Lead keeping integration and review.
-
-**What it does**: records the work, releases its own lease so the Peer can take
-it, opens a pane, stores the contract, and sends it as the Peer's first prompt:
+Read the returned team and work identifiers rather than assuming them:
 
 ```sh
-maestro work add "audit --since omits older entries" --kind task --atomic-reason "one verb, one flag" --acceptance "entries before the date are omitted"
-maestro work release w41
-herdr tab create --workspace w1 --cwd ~/Code/example --label lanes --no-focus
-herdr agent start lane-since --kind claude --pane <pane-id>
-maestro dispatch open w41 --lane delivery --objective "audit --since <date> omits entries older than the date, test-first" --owned-scope "src/plugins/audit.ts, tests/audit.test.ts" --excluded-scope "store schema, other verbs, docs" --mutation "write-bounded to the owned scope; no commit, no push" --stop-condition "new test green and full suite passes, or BLOCKED" --evidence-required "source: bun test tests/audit.test.ts with counts" --pane <pane-id> --target-session <session-id>
+maestro status
 ```
 
-The Peer's prompt is the stored contract with the role line in front; your
-"test first" and "don't push" are in it because the Lead carried them over:
+## 2. Lead executes the initial work
 
-```text
-You are lane-since, a delivery lane for dispatch x12 on work w41 in ~/Code/example (branch main, HEAD 1a2b3c4d).
-First `maestro dispatch show x12`, `maestro dispatch accept x12`, then `maestro work start w41`.
-Objective: `example audit --since <date>` omits entries older than the date. Write the failing test first.
-Owned scope: src/plugins/audit.ts and tests/audit.test.ts. Excluded: the store schema, other verbs, docs.
-Mutation: write-bounded to the owned scope. No commit, no push; the Lead integrates.
-Stop condition: the new test is green and the full suite passes, or you are BLOCKED. Then file exactly once:
-maestro handback file x12 --status DONE --claim "<what is now true>" --proof "source: bun test tests/audit.test.ts <pass/fail>" --assumptions "<or None>" --residual-risks "<or None>" --incidental-findings "<or None>"
-and go idle. A bug outside the scope goes in --incidental-findings, not in the diff.
-```
-
-The Lead waits for the pane to go `working`, then for any terminal state, and
-does not prompt the Peer again in between. The Peer returns once, as a claim:
-
-```text
-h7 x12 DONE
-claim: audit --since omits entries older than the date; 2 new tests
-proof: source: bun test tests/audit.test.ts 14 pass 0 fail; bun test 336 pass 0 fail
-assumptions: dates are ISO-8601 in the store
-residual risks: None
-incidental findings: audit --json prints the date in local time, not UTC
-```
-
-The Lead runs the falsifier itself, commits, closes w41 with its own claim,
-closes the pane, and turns the incidental finding into a card rather than
-letting it leak into the diff.
-
-**What you get back**, when you look up from your meetings:
-
-```text
-w41 closed: audit --since omits older entries, 2 tests, suite 336/0, committed as 5e6f7a8b, not pushed.
-One incidental finding from the lane, filed as w42: audit --json prints local time instead of UTC. Not fixed; your call whether it matters.
-```
-
-Had the Peer returned `DEPENDENCY_REQUEST` because the store's date column
-needed a change, the Lead would have opened that as its own work item with its
-own owner and told you the flag is waiting on it, not widened x12 quietly.
-
-## Case 3: a decision you do not want made blindly
-
-**You type**, a longer one:
-
-```text
-I'm worried about session identity. when the OS reuses a pid, a new process could inherit a dead session's lease and we'd never know. I don't know this part of the code well and I don't want a random first answer. figure out the options properly, no code yet, and tell me what you'd pick and why
-```
-
-**The Lead reads it as**: for the runtime, a dead session never inherits a
-live lease and a live one is never declared dead by a pid collision, inside
-the session model, because a wrong scheme is expensive to reverse, without
-writing code. Score 7: irreversible, new to you, more than one defensible
-answer. A council of two decision lanes with one neutral brief, sealed until
-both return.
-
-**What it does**: opens one work item, two panes (here one Claude, one Codex),
-and two dispatches with the same wording:
+In the Lead pane:
 
 ```sh
-maestro work add "Session identity after pid reuse" --kind task --atomic-reason "one decision, no code" --acceptance "a locked decision with a falsifier"
-herdr pane split --pane <pane-id> --direction right --cwd ~/Code/example --no-focus
-herdr agent start decision-a --kind claude --pane <pane-a>
-herdr agent start decision-b --kind codex --pane <pane-b>
-maestro dispatch open w47 --lane decision --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation "no-write" --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane <pane-a> --target-session <session-a>
-maestro dispatch open w47 --lane decision --objective "recommend how a session proves it is still the same process after the OS reuses its pid" --owned-scope "src/kernel/sessions.ts and its tests, read only" --excluded-scope "any code change" --mutation "no-write" --stop-condition "options, recommendation, and falsifier written" --evidence-required "source: note path with mechanism per option" --pane <pane-b>
+maestro work take w1
+maestro work note w1 "reproduced: empty CSV loses the final column"
+maestro work return w1 "fixed CSV termination; source: focused test and full suite pass; residual risk: none"
 ```
 
-The brief is neutral: all the facts, none of the Lead's preference. Your
-sentence "I don't want a random first answer" became "do not assume":
-
-```text
-You are decision-a, a decision lane for dispatch x20 on work w47 in ~/Code/example (branch main, HEAD 1a2b3c4d).
-First `maestro dispatch show x20` and `maestro dispatch accept x20`. Do not run `maestro work start`; this lane does not write. A sibling lane holds the same question; do not read its notes.
-Decision question: how should a session prove it is still the same process after the operating system reuses its pid?
-Outcome: a dead session never inherits a live lease, and a live session is never declared dead by a pid collision.
-Constraints already binding: SQLite store; no daemon or background process (decision d5); sessions are recorded by harness hooks at SessionStart.
-Evidence bundle: src/kernel/sessions.ts, tests/sessions.test.ts, decision d9 (lease liveness).
-Do not assume: that a pid alone identifies a session, or that the answer must be a schema change.
-Return: each option with its mechanism and trade-offs, one recommendation, and the observation that would change it, written to <note path>. Then file exactly once:
-maestro handback file x20 --status DONE --claim "<recommendation in one sentence>" --proof "source: <note path>" --assumptions "..." --residual-risks "..." --incidental-findings "..."
-and go idle.
-```
-
-While one lane is still out, the other's return is sealed: `handback show`
-refuses it and `handback list w47` marks it `[SEALED]`, so the Lead cannot
-lean on the first view. When both are in, the Lead compares them with its own
-reading and records the ruling and the dissent:
+The Team Supervisor reads the current work and accepts it:
 
 ```sh
-maestro decision draft "sessions carry a start-time incarnation; a pid match without a matching incarnation is dead" --rationale "both lanes reject pid-only identity; A proposes an incarnation stamp, B a heartbeat row; a heartbeat needs a writer that d5 forbids" --work w47
-maestro decision lock d31
-maestro work note w47 "dissent from x21: a heartbeat would also detect a hung process; deferred, not rejected"
+maestro status w1
+maestro work accept w1
 ```
 
-**What you get back**:
+The separation is intentional: Lead owns the technical result; Team
+Supervisor owns acceptance of Lead work.
 
-```text
-Council on w47 returned, both lanes.
-Both reject pid-only identity. A: stamp each session with its process start time (incarnation); a pid match without the stamp is dead. B: a heartbeat row refreshed by the hook; needs a writer we forbade in d5.
-Locked d31: incarnation stamp. Dissent recorded: B's heartbeat also catches hung processes; parked, not rejected.
-Falsifier that would change it: a platform where process start time is not readable from the hook.
-Nothing implemented. Say the word and it becomes a delivery lane on a new work item.
-```
+## 3. Lead assigns bounded work to a Peer
 
-If the two lanes had contradicted each other on a fact rather than a
-preference, the Lead would have opened a second generation: one new dispatch
-per lane, quoting the other's handback verbatim with one targeted question,
-answered by handback (`DONE` with a `CONFIRM` claim, `CHALLENGE`, or
-`REOPEN_REQUEST`). Lanes never talk to each other; you would have seen the
-reconciled result, not the debate.
-
-## Case 4: you do not trust what just landed
-
-**You type**:
-
-```text
-a lot landed this week and I haven't read it. before we tag, get someone to try and break the dispatch code. real bugs only, I don't want a list of nitpicks
-```
-
-**The Lead reads it as**: for the release, the SLP runtime since the last tag
-holds its own invariants, inside the dispatch and attention plugins, because a
-broken seal or lease is a governance bug, without any fix in the same breath.
-Score 6 on the "independent judgment" axis: the code exists, and what is
-missing is someone whose job is to break it with no authority to repair it.
-One or more challenge lanes, no-write, returning findings rather than patches.
-
-**What it does**: a challenge dispatch whose prompt names the invariants to
-attack and separates what is trusted from what is still a claim. "Real bugs
-only" became "a repro is required for high":
+The Lead creates the assignment and names the Peer:
 
 ```sh
-maestro work add "Review the dispatch runtime since v0.108.0" --kind task --atomic-reason "one review, one note" --acceptance "findings with severity, file:line, and a repro for each high"
-maestro dispatch open w51 --lane challenge --objective "find where the SLP runtime since v0.108.0 breaks its own invariants" --owned-scope "src/plugins/dispatch.ts, attention.ts, policy-dispatch.ts and their tests, read only" --excluded-scope "fixes, redesign, install or update" --mutation "no-write" --stop-condition "review note written with counts by severity" --evidence-required "source: note path; each high finding carries a repro or failing-test sketch" --pane <pane-id> --target-session <session-id>
+maestro work add "Add the missing CSV regression test" --to peer-csv
 ```
 
-```text
-You are swarm-review, a challenge lane for dispatch x64 on work w51 in ~/Code/example (branch main, HEAD 1a2b3c4d).
-First `maestro dispatch show x64` and `maestro dispatch accept x64`. Do not run `maestro work start`; the Lead holds w51.
-Scope: the SLP runtime as it changed since tag v0.108.0. Read `git log --oneline v0.108.0..HEAD` and the diffs of the dispatch, attention, and policy-dispatch commits, with their tests.
-Review like a skeptical second engineer: invariants (one handback per dispatch, council sealed by first return, lease ownership on file), transaction boundaries between concurrent lanes, id parsing (h1 versus h10), error envelopes that name the next command, and anything a test asserts by string that the code could drift from. Read `maestro recipe show slp` so doctrine and code are compared.
-Trusted: the store schema and the passing suite at HEAD. Still a claim: everything the commit messages say.
-Deliver <note path>: for each finding, severity, file:line, the commit that introduced it, what goes wrong and when, a repro or failing-test sketch (required for high), and the smallest fix. End with counts by severity and what you checked and found sound.
-No code edits, no commits, no push, no install or update. Then file exactly once:
-maestro handback file x64 --status DONE --claim "<counts and the one finding that matters most>" --proof "source: <note path>; <N> findings cite file:line and commit" --assumptions "..." --residual-risks "..." --incidental-findings "..."
-and go idle.
-```
-
-A lane that finds nothing returns `DONE` with a claim that says so and lists
-what it probed. A suspicion it could not reproduce stays `UNKNOWN` rather than
-being rounded up. A lane that finds the premise itself wrong returns
-`CHALLENGE`. Three lanes at once on the same work (review, simplify, bug hunt)
-form a council and stay sealed until all three are in.
-
-**What you get back** is a triage, not the raw note:
-
-```text
-Challenge lane on w51 returned: 4 high, 3 medium, 0 low.
-Fixed now, each with a test, committed, not pushed: sealed council readable through handback list --json; a no-write lane could take the work lease; a dispatch opened before the handback could clear HANDBACK_UNREVIEWED.
-Cards, too deep for tonight: w52 cancel has no authority check; w53 one-handback-per-dispatch is not a store constraint.
-Rejected with reason in the work note: the lane wants the handback to release the work lease; d21 says the Lead reclaims, and it stands.
-Suite 339/0. Tag when you say.
-```
-
-## Case 5: you are away and several projects are moving
-
-**You type**, in the room after `hm`:
-
-```text
-I'm out until tomorrow morning. three repos have work running. keep an eye on them. anything that's my call waits for me, anything a Lead can answer, ask the Lead. don't freeze anyone
-```
-
-**The Supervisor reads it as**: a lease for the day: observe, ask, advise;
-relay nothing in your name that you have not said; no recovery lease, so no
-freeze and no Lead replacement. Score 9: long horizon, split attention, more
-than one Lead.
-
-**What it does**: reads the brief, which computes attention across every
-registered repository at read time; nothing is pushed into the room. A
-packet keeps observation, hypothesis, and question apart:
+Maestro reuses `peer-csv` if it already belongs to this generation, otherwise
+it opens the Peer with the generation's pinned Peer contract. The Peer then
+runs only the normal work lifecycle:
 
 ```sh
-maestro brief
+maestro work take w2
+maestro work return w2 "added the failing case and verified it passes with the fix; source: focused test"
 ```
 
-```text
-attention REPEATED_FAILURE work w47 (~/Code/example)
-  observed: three work done attempts in 40 minutes, each rejected by policy-proof
-  evidence: event log entries for w47; holder role Lead; route room
-  unknown: whether the proof layer is wrong or the falsifier itself is failing
-  question: what did the third attempt change from the second?
-  smallest action: stop retrying; record the failure episode before a fourth attempt
-  human decision needed: no
-```
-
-The Supervisor answers it with a question into the Lead's pane, provenance
-first, and never by editing the project or prompting a Peer:
+The Lead reviews and accepts:
 
 ```sh
-herdr agent prompt <lead-agent> "[from supervisor][ask w47] Three proof rejections in 40 minutes. What changed between the second and third attempt, and what is the smallest new information a fourth attempt would need?"
+maestro status w2
+maestro work accept w2
 ```
 
-The wrong version of that message is "the Lead is doing proof wrong, tell it
-to use the suite": observation, verdict, and command in one line, over the
-Lead's head.
+There is no separate Peer lifecycle, assignment envelope or return packet.
 
-**What you get back**, the next morning, is the room's notebook rather than a
-transcript:
+## 4. A Peer is blocked
 
-```text
-Overnight, three repositories.
-example: w47 stalled on proof; asked the Lead what changed between attempts; it found the falsifier itself was wrong, fixed, w47 closed. No decision needed.
-site: quiet.
-tools: the Lead drafted d12 (drop the Windows build) and it is waiting for you. human decision needed: yes. Nothing else touched.
-```
-
-You answer d12 in a sentence; the Supervisor relays it by locking the draft in
-that project's store, the one write it makes there:
+A blocker is part of the return body, not a fifth state:
 
 ```sh
-maestro decision lock d12
+maestro work return w3 "blocked: fixture format is undecided; proof: both current fixtures are accepted; need: choose canonical format"
 ```
 
-## Case 6: one project needs a team, not a Lead
-
-**You type**, in the room after `hm`:
-
-```text
-the rewrite is too big for one pane. give it a proper team: someone holding the records, someone to think with when it gets stuck, and someone watching that nobody drifts
-```
-
-**The Supervisor reads it as**: open a team. A managed generation owns one
-Herdr workspace, so the first thing it needs is a Room-ledger generation, not
-a hand-built pane.
-
-**What it does**: invokes the lifecycle service. TeamRuntime creates or adopts
-the deterministic workspace, Supervisor, Lead, Observer, bootstrap prompts,
-and foreground sensor. Advisor is not an idle baseline pane.
+The Lead resolves the missing fact through conversation, records the material
+change, and asks the same Peer to continue:
 
 ```sh
-maestro team open rewrite \
-  --repo ~/Code/rewrite \
-  --operation open-rewrite-1 \
-  --requested-by supervisor \
-  --wait-ms 30000 \
-  --json
+maestro work note w3 "canonical fixture format is UTF-8 CSV with LF endings"
 ```
 
-The result is accepted only at `ACTIVE / READY / CLEAR`, whose verdict is
-`OPERABLE`. `STARTING` names every missing postcondition. Before relaying later
-intent, the room runs `team health`; `team status` alone is only the last
-snapshot and cannot prove that a process is still live.
-
-**While the team works**, the foreground sensor applies the countable semantic
-triggers and sends a capped, deduplicated evidence packet to Observer. Observer
-does not read a continuous whole-team transcript. It can return one finding
-only through that packet's capability; a validated finding moves the team to
-`REVIEW_HOLD`, and `supervisor-rewrite` either clears it with rationale or
-escalates it into `DEGRADED` health.
-
-When the boss wants one direct inspection without installing a new rule, the
-Supervisor runs a one-shot supervised check:
+The Peer retakes the returned work:
 
 ```sh
-maestro team review spot-check rewrite \
-  --operation spot-rewrite-w88 \
-  --requested-by supervisor-rewrite \
-  --question "Does the green claim match the recorded verification?" \
-  --window "w88 current handback" \
-  --stop "one verdict" \
-  --json
+maestro work take w3
+maestro work return w3 "implemented against the recorded format; source: fixture tests pass"
 ```
 
-When the team needs counsel, `team advise` starts one temporary Advisor,
-collects one decision-focused recommendation, and closes it at the declared
-stop. Advisor receives no work, lease, decision, reconcile, or store authority.
+## 5. Returned work needs rework
 
-**What you get back** comes up one channel. Only `supervisor-<team>` reports to
-the room:
+The reviewer does not create a reopen state. It records the exact gap:
 
 ```sh
-herdr agent prompt supervisor "[from supervisor-rewrite][done w88 re w12] closed at 1a2b3c4d; the observer caught a green claim with no verify note, the Lead re-ran it before the close"
+maestro work note w4 "rework: add the Windows line-ending case before acceptance"
 ```
 
-A report that arrives from anywhere else is refused rather than absorbed: a
-supervisor that gets a `[from lead]` prompt from a Lead it does not own answers
-`not my supervisor: send to supervisor-<team>` and records nothing, so the
-team's own record holder still learns that the work closed.
-
-**Your own seat is unchanged.** The room holds your authority in full, so it
-can freeze that team, supersede one of its decisions, or replace its Supervisor.
-Routine repair, review resolution, and stop are authorized by
-`supervisor-rewrite` and executed from the external Room session. Room
-emergency override is refused while that Supervisor is reachable; proved
-absence or explicit owner intervention must carry separate reason and evidence.
-What the room still cannot do quietly is an external effect: a push, tag,
-release, or `maestro update` runs only after a locked room decision names the
-exact candidate and evidence, and the room records the command and output.
-
-The full command sequence is in
-[Supervised teams](/guides/supervised-teams/).
-
-## Reading a report
-
-Every case ends with a claim coming back to you. Behind it, the Lead ran the
-same check before writing the report, and you can ask for any line of it:
-
-1. The actor and dispatch match: the handback is on the dispatch that was sent, from the session that accepted it.
-2. The candidate is stable: the claim names a commit, not "the current tree".
-3. The writes stayed inside the lease.
-4. The required checks ran on that candidate, and the proof names its layer: `source:`, `artifact:`, `installed:`, `live:`.
-5. Independence fits the claim: a review that read the author's notes first is not independent.
-6. Unknowns and residual risks are still visible, not rounded to `DONE`.
-7. No external effect happened outside its gate: you granted it, or the room granted it in your name with a locked decision naming that candidate and its evidence.
-
-Completion is reported only to the layer that was proved. "source: PASS at
-1a2b3c4d; installed: BLOCKED, an active agent prevents restart; live: NOT
-TESTED" is an honest report; "done" is not.
-
-## Replaying these cases
-
-Cases 1 to 3, and the lesson loop behind them, are also runnable. Each is a
-script of maestro commands in `tests/scenarios/<name>.script` with the
-transcript it produced beside it in `<name>.golden`, replayed against a fresh
-store by:
+The assignee retakes `RETURNED` work, returns the new result, and the reviewer
+accepts only after the gap is closed.
 
 ```sh
-bun test tests/scenario-golden.test.ts
+maestro work take w4
+maestro work return w4 "added CRLF coverage; source: focused matrix passes"
+maestro work accept w4
 ```
 
-A line prefixed with `@<session>` runs as that lane, which is how one script
-holds both the Lead and the Peer. Timestamps, paths and pids are normalised, so
-a diff in a golden is a change in behaviour, not in the clock.
+## 6. Blind design with independent Peers
 
-The goldens exist for the improver, the loop in
-[Self-improvement](/guides/self-improvement/) (d43): a doctrine edit is accepted only when
-the replay still matches, or matches the change a lesson asked for. When a
-lesson did ask for it, the golden is re-recorded with `MAESTRO_GOLDEN_UPDATE=1`
-and travels in the same commit, so the diff shows the behaviour that changed
-next to the sentence that changed it. The herdr half of a case, the panes and
-prompts, is not replayed; the scripts pin the maestro spine of the round, which
-is why the cases that are mostly panes and relays have no script yet.
+Blind design is a collaboration pattern owned by Lead. It adds no council or
+seal state.
 
-## What it looks like when it goes wrong
+```sh
+maestro work add "Independently design session incarnation identity" --to peer-incarnation
+maestro work add "Independently design session incarnation identity" --to peer-heartbeat
+```
 
-- The Supervisor edits a file, prompts a Peer, or accepts a candidate: it has become a second Lead, and the Peer now has two authority paths.
-- The Lead opens lanes before it can write the one-sentence problem: you get three reports it cannot reconcile.
-- The Lead implements a material change and accepts it alone: `work done` with a proof nobody else ran.
-- A decision brief says "show that X is best": the Peer is a function call, and the council added nothing.
-- A second lane is briefed after the first returned, or two lanes share a scratch file: independence is theatre, and the seal was pointless.
-- `DONE` is treated as done: the work closes without anyone running the falsifier.
-- A Case 1 change goes through a Case 2 lane: the contract is longer than the diff.
+Lead asks both Peers not to share views until both have returned. Each Peer
+takes and returns its own work normally. After both returns are visible, Lead
+compares them and records one settled decision:
+
+```sh
+maestro decide "Use a process start-time incarnation with the PID" \
+  --why "It rejects PID reuse without introducing a background writer" \
+  --work w5
+```
+
+Implementation is new work after the decision, never a silent extension of a
+design assignment.
+
+## 7. Watch, status, and stop
+
+When Team Supervisor needs continuous situational awareness, it may open one
+foreground Watch Pane with existing Herdr pane control. This does not add a
+Maestro command. Watch only labels currently available raw output; it never
+prompts or intervenes.
+
+Use status for authoritative current state:
+
+```sh
+maestro status
+maestro status w5
+```
+
+Normal stop succeeds only after all work is `DONE`:
+
+```sh
+maestro team stop example
+```
+
+Maestro closes Peers, Lead, Watch and its raw transcript, then Team Supervisor.
+The project Workspace Pack snapshot and durable records remain. Emergency stop
+is Hub authority and preserves unfinished work in its current state:
+
+```sh
+cd ~/maestro
+maestro team stop example --emergency
+```
+
+## What not to do
+
+- Do not edit either SQLite store manually.
+- Do not edit `<project>/.maestro/SLP.md` during a running generation.
+- Do not treat chat or transcript as a decision or acceptance record.
+- Do not let a Peer accept its own work.
+- Do not send Hub instructions directly to Lead or Peers; Hub speaks through
+  Team Supervisor.
+- Do not recreate removed lifecycle layers. The compact old-to-new mapping is
+  in the [CLI reference](/reference/cli/).

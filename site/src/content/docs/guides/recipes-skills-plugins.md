@@ -14,12 +14,16 @@ maestro recipe list
 Read one without copying it into the repository:
 
 ```sh
-maestro recipe show slp
+maestro recipe show work
 ```
 
 The current runtime includes design, work, audit, ship, unattended, learning,
-worktree, conflict-handoff, SLP, and language/style recipes. Recipes are
+worktree, conflict-handoff, and language/style recipes. Recipes are
 source-owned Markdown and are loaded only when requested.
+
+SLP role behavior is not assembled from recipes or a skills tree. Its
+canonical contract is `~/maestro/SLP.md`, pinned into the project at team
+start.
 
 ## Skills
 
@@ -33,8 +37,8 @@ Install materializes five managed method skills under `~/maestro/skills/`:
   loop around it is in [Self-improvement](/guides/self-improvement/).
 
 The installer links these skills for Claude without overwriting an unmanaged
-skill. Coordination remains in the Supervisor room's lane instructions rather
-than a skill of its own.
+skill. Team coordination comes from the pinned Workspace Pack and direct role
+topology rather than a coordination skill.
 
 ## Plugins
 

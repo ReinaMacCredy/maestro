@@ -9,7 +9,7 @@ their gates and agents to load deeper guidance only when needed.
 
 ## Kernel
 
-The mechanism kernel owns the SQLite store, event log, sessions, CLI dispatch,
+The mechanism kernel owns the SQLite store, event log, sessions, CLI routing,
 plugin loading, and readiness projection. It contains mechanism only: work and
 decision records, leases, events, and plugin lifecycle. It does not encode a
 particular workflow policy.

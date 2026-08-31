@@ -15,37 +15,37 @@ export default defineConfig({
             theme: 'base',
             themeVariables: {
               background: '#ffffff',
-              primaryColor: '#334155',
-              primaryTextColor: '#ffffff',
-              primaryBorderColor: '#64748b',
-              secondaryColor: '#475569',
-              secondaryTextColor: '#ffffff',
-              secondaryBorderColor: '#64748b',
-              tertiaryColor: '#e2e8f0',
-              tertiaryTextColor: '#0f172a',
-              tertiaryBorderColor: '#64748b',
-              lineColor: '#64748b',
-              textColor: '#334155',
+              primaryColor: '#ffffff',
+              primaryTextColor: '#000000',
+              primaryBorderColor: '#000000',
+              secondaryColor: '#ffffff',
+              secondaryTextColor: '#000000',
+              secondaryBorderColor: '#000000',
+              tertiaryColor: '#ffffff',
+              tertiaryTextColor: '#000000',
+              tertiaryBorderColor: '#000000',
+              lineColor: '#000000',
+              textColor: '#000000',
             },
             themeCSS: `
               .node rect, .node circle, .node ellipse, .node polygon, .node path {
-                fill: var(--sl-color-bg-accent) !important;
-                stroke: var(--sl-color-accent) !important;
+                fill: #ffffff !important;
+                stroke: #000000 !important;
               }
               .nodeLabel, .label text, .cluster-label text {
-                color: var(--sl-color-text) !important;
-                fill: var(--sl-color-text) !important;
+                color: #000000 !important;
+                fill: #000000 !important;
               }
               .edgePath .path, .flowchart-link {
-                stroke: var(--sl-color-gray-3) !important;
+                stroke: #000000 !important;
               }
               .arrowheadPath, marker path {
-                fill: var(--sl-color-gray-3) !important;
-                stroke: var(--sl-color-gray-3) !important;
+                fill: #000000 !important;
+                stroke: #000000 !important;
               }
               .edgeLabel {
-                background-color: var(--sl-color-bg) !important;
-                color: var(--sl-color-text) !important;
+                background-color: #ffffff !important;
+                color: #000000 !important;
               }
             `,
           },
@@ -73,6 +73,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'index' },
             { label: 'Install', slug: 'getting-started/install' },
+            { label: 'SLP setup and storage', slug: 'getting-started/slp-setup' },
             { label: 'Quick start', slug: 'getting-started/quick-start' },
           ],
         },
@@ -81,7 +82,7 @@ export default defineConfig({
           items: [
             { label: 'Three layers', slug: 'concepts/three-layers' },
             { label: 'Roles', slug: 'concepts/roles' },
-            { label: 'Lanes', slug: 'concepts/lanes' },
+            { label: 'Team collaboration', slug: 'concepts/lanes' },
             {
               label: 'Work, decisions, and evidence',
               slug: 'concepts/work-decisions-evidence',
@@ -95,7 +96,7 @@ export default defineConfig({
             { label: 'Supervised teams', slug: 'guides/supervised-teams' },
             { label: 'Self-improvement', slug: 'guides/self-improvement' },
             { label: 'Attention and brief', slug: 'guides/attention-and-brief' },
-            { label: 'Observer mode', slug: 'guides/observer-mode' },
+            { label: 'Read-only mode', slug: 'guides/observer-mode' },
             { label: 'Harness integration', slug: 'guides/harness-integration' },
             {
               label: 'Recipes, skills, and plugins',

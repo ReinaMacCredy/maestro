@@ -1,121 +1,75 @@
 ---
 title: Work, decisions, and evidence
-description: Track one work entity, settle choices durably, and finish with layered proof.
+description: Keep SLP state small while preserving the result, rationale, and falsifier that matter.
 ---
 
-## Work items
+SLP v2 durably stores work and settled decisions. Conversation remains natural;
+raw transcript is not promoted into an evidence system.
 
-Maestro uses one work entity for features, tasks, bugs, chores, implementation,
-ideas, and research. Work can form a parent tree, depend on other items, carry a
-live lease, and end with claims and proofs.
+## Work is the coordination unit
 
-Parentless write-like work needs either a child breakdown or an explicit atomic
-reason:
+Every SLP work item has one objective, one assignee and one current state:
+
+```text
+OPEN -> ACTIVE -> RETURNED -> DONE
+```
+
+The return body is deliberately compact. Include only what the reviewer needs:
+
+```text
+result: <what is now true>
+proof: <what could falsify the result>
+blocker: <if present>
+residual risk: <if present>
+```
+
+`work note` preserves a material fact or acceptance change without adding a
+new state. The reviewer accepts at the boundary above the worker.
+
+## Decisions are settled in one write
 
 ```sh
-maestro work add "<title>" --kind task --atomic-reason "<why this is one bounded unit>" --acceptance "<observable result>"
+maestro decide "<choice>" --why "<reason>"
 ```
 
-Use `maestro work show <id>` to read its blockers, children, notes, lease, and
-evidence. Use `maestro ready` to see which work can start.
+A decision is immutable when written. Link it with `--work`; replace an older
+decision with `--replaces`. The old record remains so future readers can see
+what changed and why.
 
-## Decisions
+Discussion that is not settled stays in chat or a work note. There is no draft
+decision lifecycle inside SLP.
 
-Draft the settled choice with its rationale and rejected alternative, then lock
-it as a separate transition:
+## Evidence names its layer
 
-```sh
-maestro decision draft "<choice>" --rationale "<why, including the rejected alternative>" --work <work-id>
-maestro decision lock <decision-id>
+Use the narrowest true claim:
+
+| Layer | What it proves |
+| --- | --- |
+| `source` | source inspection, test, lint or type check |
+| `artifact` | the built or packaged output was read back |
+| `installed` | the installed bytes or stamp match the artifact |
+| `live` | the running process matches the installed layer |
+| `journey` | the real user path reaches the intended result |
+
+Do not claim a higher layer from a lower one. A passing source test does not by
+itself prove the installed runtime or user journey.
+
+## Minimal activity, not receipts
+
+A successful state-changing operation updates current state and appends one
+minimal internal activity line in the same transaction:
+
+```text
+who did what to which target and when
 ```
 
-To replace a locked decision, draft a new one with `--supersedes
-<decision-id>` and lock the replacement. Supersession takes effect at lock,
-not while the replacement remains a draft. History is never rewritten.
+Activity is for recovery and debugging. It has no SLP command, carries no raw
+transcript, and does not create a receipt or event domain. `status` reads the
+current tables directly.
 
-## Talking across roles
+## Store ownership
 
-Herdr carries the words; the store carries the truth. A prompt alone has no
-durable provenance, so a question that needs an owner or Supervisor decision
-starts as a draft linked to the work:
-
-```sh
-maestro decision draft "<choice>" --rationale "<why, options>" --work <work-id>
-herdr agent prompt <name> "[from lead][ask <decision-id>] <question>"
-```
-
-The answer is recorded, not merely prompted. When the Supervisor relays an
-owner instruction, it locks the draft with
-`maestro decision lock <decision-id>`. Supervisor advice is a default, not an
-owner instruction: the Lead locks the matching draft or drafts a superseding
-decision whose rationale starts `supervisor default, not owner instruction`.
-
-Questions that are not decisions are notes on the same work item:
-
-```sh
-maestro work note <work-id> "<question>"
-```
-
-Peers prompt only the Lead and prefix the message with `[from peer]` and the
-dispatch id. Peers never prompt the Supervisor, and the Supervisor never
-prompts a Peer.
-
-```mermaid
-flowchart LR
-  Draft["decision draft --work"] --> Prompt["Herdr prompt names role and decision"]
-  Prompt --> Record["lock or superseding decision in store"]
-```
-
-## Method tiers
-
-Decide the tier from the request before any recon:
-
-- **quickfix**: the diff fits in one sentence and hits no Full trigger. Work
-  directly, verify inline, and create no store record. If the change grows
-  beyond that sentence, stop and add a work item.
-- **Light**: the work lasts one session on one branch and its acceptance fits
-  in one sentence. Use `maestro work add`, `maestro work start`, and
-  `maestro work done` so ready, attention, and brief can see it.
-- **Full**: the work spans sessions, branches, or agents on the same moving
-  scope, is high risk, or repeats a failed fix. Link the work to a bundle:
-
-```sh
-maestro bundle open <bundle-id> --work <work-id>
-```
-
-The active bundle contains `SPEC.md` for the contract, `NOTES.md` for the
-handoff, and `VERIFY.md` for scenarios and results. Close it only after the
-verification table passes:
-
-```sh
-maestro bundle close <bundle-id>
-```
-
-## Claims and proofs
-
-Complete work with an observable claim paired to evidence that could falsify
-it:
-
-```sh
-maestro work done <work-id> --claim "test: <behavior>" --proof "source: <falsifier>"
-```
-
-Evidence layers are `source`, `artifact`, `installed`, `live`, and `journey`.
-Claim only as far as the last proven link and name untested links explicitly.
-
-If no session holds the item, `done` takes the lease as part of that command,
-through the same gates and blocker checks as `start`. Taking it first is still
-how a delivery card announces its holder before the editing begins; a card that
-only records a handoff can close in one command.
-
-## Default policy gates
-
-- `policy-breakdown` requires parentless write-like work to have a child
-  breakdown or `--atomic-reason`; open write-like children block their parent.
-- `policy-dispatch` blocks completion or cancellation while a dispatch lacks a
-  handback and blocks work start while a sealed council is open.
-- `policy-proof` requires opaque `--evidence` or paired `--claim` and `--proof`
-  on completion.
-
-The TDD, QA, research, witness, and lifecycle policy plugins ship disabled and
-can be enabled per repository.
+Hub keeps team generations and pack identity. Each project keeps its work,
+notes, returns, acceptances and decisions. See
+[SLP setup and storage](/getting-started/slp-setup/) for the exact paths and
+lifetime of each record.
