@@ -8,6 +8,7 @@ import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
+import { maybeHandleSlpStatus } from "./slp-v2.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -375,6 +376,8 @@ export const coordinationPlugin: BuiltInPlugin = {
       context.cli.register(
         "status",
         async (invocation): Promise<CliResult> => {
+          const slp = await maybeHandleSlpStatus(context, invocation);
+          if (slp) return slp;
           const currentSession = context.sessions.current().id;
           const sessions = context.sessions
             .list()
@@ -410,6 +413,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           description: "Show sessions, live peers, and held work.",
           flags: { "--live": { description: "Show live sessions only." } },
           mutates: false,
+          positionals: [{ name: "work-id", required: false }],
         },
       ),
     );

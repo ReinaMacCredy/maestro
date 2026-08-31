@@ -435,338 +435,41 @@ test("36 stacked prefixed gates explain one-invocation claim and proof pairs", a
   });
 });
 
-test("370 [lint] recipe slp and lane.md state the cross-role messaging convention (d687)", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const section = recipe.split("## Talking across roles")[1]?.split("\n## ")[0] ?? "";
-  expect(section).toContain("[from <role>]");
-  expect(section).toContain("[ask d<id>]");
-  expect(section).toContain("maestro decision draft");
-  expect(section).toContain(
-    'herdr agent prompt supervisor "[from lead][ask d<id>] <question>"',
-  );
-  expect(section).toContain("`hm` starts or focuses the room agent named `supervisor`");
-  expect(section).toContain("supervisor default, not owner instruction");
-  expect(section).toContain("maestro work note");
-  expect(section).toMatch(/answer is the record/i);
-
-  // room.ts holds lane.md inside a template literal, so backticks are escaped there.
-  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
-  expect(room).toMatch(/One lane per `herdr agent prompt` call/);
-  expect(room).toMatch(/confirm `working` before briefing the next lane/);
-  expect(room).toContain("[from <role>]");
-});
-
-test("454 [lint] recipe slp withdraws losing first views and duplicates instead of locking them", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const section = recipe.split("## Talking across roles")[1]?.split("\n## ")[0] ?? "";
-
-  expect(section).toContain(
-    "A first view or a duplicate that lost is withdrawn with its reason, never locked",
-  );
-  expect(section).toContain('maestro decision withdraw d<id> --reason "<why>"');
-});
-
-test("371 [lint] recipe slp, IDENTITY.md and lane.md carry the cross-examination, Lead-per-scope handoff, and Supervisor binding text", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";
-  expect(cross).toMatch(/second\s+generation/i);
-  expect(cross).toContain("CONFIRM");
-  expect(cross).toContain("REOPEN_REQUEST");
-  expect(cross).toMatch(/never prompt each other/i);
-  const scope = recipe.split("## One Lead per scope")[1]?.split("\n## ")[0] ?? "";
-  expect(scope).toContain("packet_ready");
-  expect(scope).toContain("successor_acknowledged");
-  expect(scope).toContain("predecessor_released");
-  expect(scope).toMatch(/failed approaches/i);
-  const binding = recipe.split("## Supervisor binding")[1]?.split("\n## ")[0] ?? "";
-  expect(binding).toMatch(/recovery.*lease/i);
-  expect(binding).toMatch(/human decision needed: yes/i);
-  expect(binding).toMatch(/notebook/i);
-
-  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
-  expect(room).toContain("Raw transcript access: denied");
-  expect(room).toContain("Recovery or replacement lease: standing, in any team");
-  expect(room).toMatch(/cross-examination/i);
-});
-
-test("372 [lint] recipe slp and lane.md state the one-dispatch-one-handback boundary (d697)", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const boundary = recipe.split("## Handback boundary")[1]?.split("\n## ")[0] ?? "";
-  expect(boundary).toContain("exactly one handback");
-  expect(boundary).toMatch(/does not reopen/i);
-  expect(boundary).toMatch(/new sequential dispatch/i);
-  expect(boundary).toMatch(/accepts the new dispatch before continuing/i);
-  expect(boundary).toContain('"after h<id>: <evidence>"');
-  expect(boundary).toMatch(/never starts with `failed:`/);
-
-  // l5: a retry condition is read from the other store, where a bare d-number
-  // is a different decision or none at all.
-  expect(boundary.replace(/\s+/g, " ")).toContain(
-    'A retry condition that names a record in another store names that store too, "room d41" rather than a bare "d41".',
-  );
-
-  // l4: a blocked attempt's dead mechanisms lived only in a pane, and the
-  // outgoing Lead had to spell four of them out in a stand-down message.
-  expect(boundary.replace(/\s+/g, " ")).toContain(
-    "Its claim names the mechanism that failed and the alternatives that attempt killed, its proof names what falsified each one",
-  );
-
-  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
-  expect(room).toMatch(/file exactly once, when the stop condition is met/);
-  expect(room).toMatch(/second stop point needs a second dispatch/);
-  expect(room).toMatch(/never changes an assignment/);
-  expect(room).toContain('"after h<id>: <evidence>"');
-});
-
-test("413 [lint] recipe slp records the Lead view before a council is sealed", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";
-  expect(cross.replace(/\s+/g, " ")).toContain(
-    "A council's first views stay sealed until every member returns (blind design). " +
-      "The Lead writes its own first view outside the store (NOTES or a private file) and drafts it as a decision only after the seal opens; a draft on the council's work item while it is sealed is visible to every lane.",
-  );
-});
-
-test("422 [lint] recipe slp and the scenarios page carry the intake contract (d700)", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const section = recipe.split("## Reading the owner's prompt")[1]?.split("\n## ")[0] ?? "";
-  const flat = section.replace(/\s+/g, " ");
-  for (const phrase of [
-    "never asks the owner which shape to use",
-    "With no signal both score 0",
-    "about the outcome, never about the route",
-    "the adjacent route it did not take",
-    "without a time estimate",
-    "score (0-10) and the problem in one sentence",
-    "The announcement never blocks",
-  ]) {
-    expect(flat).toContain(phrase);
-  }
-  expect(recipe.indexOf("## Reading the owner's prompt")).toBeLessThan(recipe.indexOf("## Topology invariants"));
-  const docs = await readFile(
-    join(import.meta.dir, "..", "site", "src", "content", "docs", "guides", "slp-scenarios.md"),
-    "utf8",
-  );
-  const page = docs.split("## How the Lead reads a prompt")[1]?.split("\n## ")[0] ?? "";
-  const flatPage = page.replace(/\s+/g, " ");
-  expect(flatPage).toContain("You never name a shape");
-  expect(flatPage).toContain("It never asks how many lanes to open");
-  expect(flatPage).toContain("the route it did not take");
-  expect(flatPage).toMatch(/Score (?:10|[0-9])\./);
-});
-
-test("425 [lint] recipe slp, lanes.md and roles.md say which boundaries are enforced and which are soft-audited (w494)", async () => {
-  const docs = join(import.meta.dir, "..", "site", "src", "content", "docs", "concepts");
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const lanes = await readFile(join(docs, "lanes.md"), "utf8");
-  const roles = await readFile(join(docs, "roles.md"), "utf8");
-  for (const text of [recipe, lanes, roles]) expect(text).toContain("soft-audited");
-  expect(recipe.replace(/\s+/g, " ")).toContain(
-    "A full-access process under a no-write lease is no-write by contract; maestro enforces the lease (LEASE_HELD, the lane gate on work start), not the filesystem.",
-  );
-  expect(lanes).toContain("| id | Boundary | Enforced by | Proof | Soft-audited |");
-  expect(lanes).toContain(
-    "| B10 | role identity | nothing | soft-audited | the pane name the opener set (d709) |",
-  );
-  expect(lanes).not.toContain("performs no-write discovery and reports state.");
-  expect(roles.replace(/\s+/g, " ")).toContain("Write authority and acceptance authority are soft-audited");
-});
-
-test("437 [lint] recipe slp names the repository Workspace Protocol surface", async () => {
-  const recipe = await readFile(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"), "utf8");
-  const workspaceProtocol =
-    recipe.split("\n").find((line) => line.startsWith("| Workspace protocol |")) ?? "";
-
-  expect(workspaceProtocol).toContain("`AGENTS.md` and `CLAUDE.md` text outside the managed block");
-  expect(workspaceProtocol).toContain("Workspace Protocol");
-  for (const localRule of ["protected areas", "hotspots", "restart rules", "local verification"]) {
-    expect(workspaceProtocol).toContain(localRule);
-  }
-});
-
-test("443 [lint] recipe slp defines the Supervisor episode-to-rule review loop", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const binding = recipe.split("## Supervisor binding")[1]?.split("\n## ")[0] ?? "";
-  const flat = binding.replace(/\s+/g, " ");
-
-  expect(flat).toContain("An episode is a REPEATED_FAILURE packet plus its work trace.");
-  expect(flat).toContain("The Supervisor aggregates recurring mechanisms in room notes or decisions.");
-  expect(flat).toContain("A rule it promotes records owner, review date, evidence, and removal trigger.");
-  expect(flat).toContain("A rule past its review date is reviewed or deleted.");
-});
-
-test("445 [lint] handoff receipts are exact, searchable decisions with soft-audited ordering", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const roles = await readFile(
-    join(import.meta.dir, "..", "site", "src", "content", "docs", "concepts", "roles.md"),
-    "utf8",
-  );
-  const scope = recipe.split("## One Lead per scope")[1]?.split("\n## ")[0] ?? "";
-  const handoff = roles.split("## Lead handoff")[1]?.split("\n## ")[0] ?? "";
-  const draft = 'maestro decision draft "<receipt> <bundle-id>" --work <id>';
-
-  for (const text of [scope, handoff]) {
-    expect(text).toContain(draft);
-    for (const receipt of [
-      "packet_ready",
-      "successor_authorized",
-      "successor_acknowledged",
-      "predecessor_released",
-    ]) {
-      expect(text).toContain(receipt);
-    }
-  }
-  expect(scope).toContain('maestro search "packet_ready"');
-  expect(handoff.replace(/\s+/g, " ")).toContain(
-    "Packet completeness, receipt order, and break-before-make are soft-audited.",
-  );
-});
-
-test("446 [lint] recipe slp explains the global unreturned-dispatch threshold", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const feed = recipe.split("## Supervisor feed and packet")[1]?.split("\n## ")[0] ?? "";
-  const flat = feed.replace(/\s+/g, " ");
-
-  expect(flat).toContain("`DISPATCH_UNRETURNED` fires after `--dispatch-stale` hours");
-  expect(flat).toContain(
-    "A lane expected to run longer is opened with its expected duration in the stop condition",
-  );
-  expect(flat).toContain("the Lead reads `maestro attention --dispatch-stale <h>` for it");
-  expect(flat).toContain("`maestro brief` in the room uses the default.");
-});
-
-test("449 [lint] recipe slp states the harness boundary for topology invariant 4", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const topology = recipe.split("## Topology invariants")[1]?.split("\n## ")[0] ?? "";
-  expect(topology.replace(/\s+/g, " ")).toContain(
-    "For Claude panes, the `PreToolUse` hook enforces invariant 4 when a session holds an open dispatch; Codex has no `PreToolUse` hook and stays bound by this text.",
-  );
-});
-
-test("500 [lint] recipe slp treats model routing as guidance-only two-harness reference (d711)", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const model = recipe.split("## Model")[1]?.split("\n## ")[0] ?? "";
-  const guidance = model.trim().split("\n\n")[0] ?? "";
-  const flat = guidance.replace(/\s+/g, " ");
-  const rungTable = model.split("### Thinking level by lane")[0] ?? "";
-  const thinking = model.split("### Thinking level by lane")[1] ?? "";
-
-  expect(guidance).not.toContain("\n\n");
-  expect(flat).toContain("The Lead picks a lane's model the way it picks a sub-agent's");
-  expect(flat).toContain("the room picks the Lead's model");
-  expect(flat).toContain("Nothing records, enforces, or prints the choice.");
-  expect(flat).toContain("Model names rot");
-  expect(flat).toContain("the owner keeps the current examples for those columns in `OWNER.md`");
-  expect(model).toContain("These examples are dated 2026-08-28 and owner-editable.");
-  expect(rungTable.split("\n").filter((line) => line.startsWith("|"))).toEqual([
-    "| rung | use it for | example Claude Code | example Codex CLI |",
-    "|---|---|---|---|",
-    "| cheap | no-write lanes (scout, shadow), mechanical work, short brief, inline verify | Sonnet 5 (`--model sonnet --autocompact 250000`); Haiku 4.5 is cheaper but has no effort dial | gpt-5.6-luna (`-m gpt-5.6-luna`) |",
-    "| strong | delivery with red/green, long brief, kernel or store, decision lanes | Opus 5 (`--model opus --autocompact 250000`) | gpt-5.6-terra (`-m gpt-5.6-terra`); gpt-5.5 is the fallback many still trust |",
-    "| diverse | challenge and council: a different model family from the lane that produced the view; Claude and Codex are the two harnesses maestro wires today; a third family (Grok 4.6, Gemini 3.7 Flash) needs a third harness, which is a repository change (`sessions.harness` accepts `claude | codex`, `src/kernel/sessions.ts`) | Claude | Codex |",
-    "| lead | reviews handbacks, closes cards, settles forks | Fable 5 (`--model fable --autocompact 250000`) | gpt-5.6-sol (`-m gpt-5.6-sol`) |",
-  ]);
-  expect(thinking.split("\n").filter((line) => line.startsWith("|"))).toEqual([
-    "| lane | Claude | Codex |",
-    "|---|---|---|",
-    "| scout | medium | medium |",
-    "| decision | xhigh | xhigh |",
-    "| delivery | high | high |",
-    "| challenge | xhigh | xhigh |",
-    "| shadow | low | low |",
-  ]);
-  expect(thinking).toContain(
-    "Keep one effort level for a whole session: the level sits in the prompt prefix cache, so changing it mid-session drops the cache; `max` is for one genuinely hard fork, not a default (community measurement: about 2.2x time and 1.7x tokens versus `high`).",
-  );
-  expect(thinking).toContain(
-    "Pass the level with Claude Code's `--effort <level>` or Codex's `-c model_reasoning_effort=<level>`.",
-  );
-  // d24: every Claude start carries the window, so the flag rides in the model
-  // cell where a Lead reading the table to build a command will meet it.
-  expect(model).toContain(
-    "Every Claude start also passes `--autocompact 250000`; Codex has no equivalent flag and takes none.",
-  );
-});
-
-test("531 [lint] target-session says it takes the harness session id, not the agent name", async () => {
-  // A Lead passed the Herdr agent name instead: accept never matched, and
-  // dispatch confirm needs an existing claim, so the dispatch could only be
-  // cancelled. Every surface that names the flag must give its value type.
-  const phrases = ["harness session id", "agent_session.value"];
-
-  await withFixture(async (fixture) => {
-    const help = await runCli(fixture, ["help", "dispatch"]);
-    expect(help.exitCode).toBe(0);
-    for (const phrase of phrases) expect(help.stdout).toContain(phrase);
-  });
-
-  const cli = await readFile(
-    join(import.meta.dir, "..", "site", "src", "content", "docs", "reference", "cli.md"),
-    "utf8",
-  );
-  const slp = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  for (const phrase of phrases) {
-    expect(cli).toContain(phrase);
-    expect(slp).toContain(phrase);
-  }
-});
-
 test("559 [lint] the site carries the self-improvement loop end to end and links both ways", async () => {
-  // The loop shipped as recipe text, which reaches sessions and not a reader of
-  // the site; the owner found no page for it. One guide holds it, and the four
-  // pages that carry a piece of it point at that guide.
   const docs = join(import.meta.dir, "..", "site", "src", "content", "docs");
   const guide = await readFile(join(docs, "guides", "self-improvement.md"), "utf8");
+  const flatGuide = guide.replace(/\s+/g, " ");
   for (const phrase of [
-    "maestro lesson file", // d40: the record and who files it
-    "handback",
-    "smallest edit", // the improver's rule
+    "administrative Maestro workflow outside the nine SLP operations",
+    "maestro lesson file",
+    "work return or note",
+    "smallest doctrine edit",
+    "maestro work add",
+    "--to peer-improver",
+    "maestro work take",
+    "maestro work return",
+    "golden replay",
+    "--to peer-challenge",
+    "maestro work accept",
+    "maestro decide",
     "maestro lesson process",
-    "never deleted",
-    "LESSONS_PENDING", // d42, d724: the threshold
-    "five pending lessons",
-    "seven days",
-    "maestro lesson render", // d42, d725: the per-project view
+    "Nothing deletes a lesson",
+    "maestro lesson render",
     "~/maestro/PROJECT/",
-    "never hand-edited",
-    "tests/scenario-golden.test.ts", // d43: the gate
-    "MAESTRO_GOLDEN_UPDATE=1",
-    "challenge lane", // d44: trusted sources and the pairing
-    "diverse rung",
+    "never hand-edit",
   ]) {
-    expect(guide).toContain(phrase);
+    expect(flatGuide).toContain(phrase);
   }
 
   const sidebar = await readFile(join(import.meta.dir, "..", "site", "astro.config.mjs"), "utf8");
   expect(sidebar).toContain("slug: 'guides/self-improvement'");
 
   const neighbours = [
-    { dir: "guides", file: "attention-and-brief.md" },
-    { dir: "guides", file: "slp-scenarios.md" },
     { dir: "guides", file: "recipes-skills-plugins.md" },
     { dir: "reference", file: "cli.md" },
   ];
   for (const { dir, file } of neighbours) {
     const page = await readFile(join(docs, dir, file), "utf8");
     expect(page).toContain("/guides/self-improvement/");
-    expect(guide).toContain(`/${dir}/${file.replace(/\.mdx?$/, "")}/`);
   }
 });

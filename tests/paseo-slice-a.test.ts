@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture, type CliResult, type Fixture } from "./helpers.ts";
 
@@ -171,44 +170,6 @@ test("382 accepting a shadow dispatch never takes the work write lease", async (
   });
 });
 
-test("383 SLP maps all five maestro lanes to Paseo dispositions and shadow evidence semantics", async () => {
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const peer = recipe.match(/### Peer\n([\s\S]*?)\n## Topology invariants/)?.[1] ?? "";
-  for (const row of [
-    "| scout | Scout | no |",
-    "| decision | Architect | no |",
-    "| delivery | Engineer/Owner | yes, one owner per scope |",
-    "| challenge | Reviewer | no |",
-    "| shadow | Shadow | no, evidence only |",
-  ]) {
-    expect(peer).toContain(row);
-  }
-  expect(peer).toMatch(/shadow.*comparison evidence/i);
-  expect(peer).toMatch(/never.*candidate/i);
-});
-
-test("384 lane.md step 5 and the SLP role binding list all five lane types", async () => {
-  const room = (
-    await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")
-  ).replace(/\\`/g, "`");
-  const stepFive = room.match(/^5\. .*$/m)?.[0] ?? "";
-  for (const lane of ["scout", "decision", "delivery", "challenge", "shadow"]) {
-    expect(stepFive).toContain(lane);
-  }
-
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const binding = recipe.match(/\| a pane the Lead opened with a dispatch \|.*$/m)?.[0] ?? "";
-  for (const lane of ["scout", "decision", "delivery", "challenge", "shadow"]) {
-    expect(binding).toContain(lane);
-  }
-});
-
 test("385 handback files and shows COUNCIL_REQUEST", async () => {
   await withFixture(async (fixture) => {
     const holder = "council-request-peer";
@@ -331,7 +292,7 @@ test("388 COUNCIL_REQUEST raises HANDBACK_UNREVIEWED and names the status", asyn
   });
 });
 
-test("389 policy-dispatch accepts COUNCIL_REQUEST and SLP documents the Lead response", async () => {
+test("389 administrative policy-dispatch still accepts COUNCIL_REQUEST", async () => {
   await withFixture(async (fixture) => {
     const holder = "policy-council-peer";
     const { dispatch, work } = await openAcceptedDispatch(
@@ -353,13 +314,4 @@ test("389 policy-dispatch accepts COUNCIL_REQUEST and SLP documents the Lead res
     );
   });
 
-  const recipe = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-  const cross = recipe.split("## Cross-examination")[1]?.split("\n## ")[0] ?? "";
-  expect(cross).toContain("COUNCIL_REQUEST");
-  expect(cross).toContain("d688");
-  expect(cross).toMatch(/second generation/i);
-  expect(cross).toMatch(/declin.*work note/i);
 });

@@ -9,6 +9,7 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
 import { registerSessionCommand } from "./session-required.ts";
+import { maybeHandleSlpWorkAdd, maybeHandleSlpWorkNote } from "./slp-v2.ts";
 
 export interface WorkRecord {
   id: string;
@@ -330,6 +331,8 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work add",
         async (invocation): Promise<CliResult> => {
+          const slp = await maybeHandleSlpWorkAdd(context, invocation);
+          if (slp) return slp;
           const title = requiredPosition(invocation, 0, "work title");
           const parentId = stringOption(invocation, "parent") ?? null;
           const blockers = stringOptions(invocation, "blocked-by");
@@ -387,6 +390,7 @@ export const workPlugin: BuiltInPlugin = {
         },
         {
           description: "Add a tracked work item.",
+          json: true,
           flags: {
             "--kind": {
               description:
@@ -402,6 +406,10 @@ export const workPlugin: BuiltInPlugin = {
             "--acceptance": { description: "Record the observable acceptance condition.", value: true },
             "--atomic-reason": {
               description: "Explain why parentless work needs no child breakdown.",
+              value: true,
+            },
+            "--to": {
+              description: "Assign SLP work to a Peer; Team Supervisor work defaults to Lead.",
               value: true,
             },
           },
@@ -616,6 +624,8 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work note", (invocation): CliResult => {
+        const slp = maybeHandleSlpWorkNote(context, invocation);
+        if (slp) return slp;
         const id = requiredPosition(invocation, 0, "work id");
         const text = requiredPosition(invocation, 1, "note text");
         requireWork(context, id);
@@ -633,6 +643,7 @@ export const workPlugin: BuiltInPlugin = {
         return { data: { id, text }, text: `${id} note: ${text}` };
       }, {
         description: "Append a note to a work item.",
+        json: true,
         positionals: [
           { name: "id", required: true },
           { name: "text", required: true },

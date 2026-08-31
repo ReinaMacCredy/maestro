@@ -154,8 +154,11 @@ maestro team stop example
 ```
 
 Maestro closes Peers, Lead, Watch and its raw transcript, then Team Supervisor.
-The project Workspace Pack snapshot and durable records remain. Emergency stop
-is Hub authority and preserves unfinished work in its current state:
+A transient foreground non-agent helper pane in the Hub completes the
+self-closing sequence. Only a fully absent team workspace becomes `STOPPED`;
+a partial close stays `RUNNING` and the same stop command resumes cleanup. The
+project Workspace Pack snapshot and durable records remain. Emergency stop is
+Hub authority and preserves unfinished work in its current state:
 
 ```sh
 cd ~/maestro

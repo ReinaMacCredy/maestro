@@ -1,129 +1,49 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { runCli, withFixture } from "./helpers.ts";
 
-const handbackStatuses = [
-  "DONE",
-  "BLOCKED",
-  "UNTESTABLE",
-  "UNKNOWN",
-  "FAILED",
-  "CHALLENGE",
-  "REOPEN_REQUEST",
-  "DEPENDENCY_REQUEST",
-  "COUNCIL_REQUEST",
+const slpOperations = [
+  "maestro team start",
+  "maestro team stop",
+  "maestro status [work-id]",
+  "maestro work add",
+  "maestro work take",
+  "maestro work note",
+  "maestro work return",
+  "maestro work accept",
+  "maestro decide",
 ] as const;
 
-const requestStatuses = new Set<string>([
-  "BLOCKED",
-  "REOPEN_REQUEST",
-  "DEPENDENCY_REQUEST",
-  "COUNCIL_REQUEST",
-]);
+test("308 [lint] the canonical Workspace Pack exposes only the locked SLP v2 contract", async () => {
+  const pack = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"))
+    .text();
+  const publicSurface = (
+    pack.match(/The public SLP surface is exactly:\n\n```text\n([\s\S]*?)\n```/)?.[1] ?? ""
+  ).split("\n");
+  expect(publicSurface).toEqual([...slpOperations]);
+  expect(pack).toContain("OPEN -> ACTIVE -> RETURNED -> DONE");
 
-function session(id: string): Record<string, string> {
-  return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(process.pid) };
-}
+  const peer = pack.match(
+    /<!-- slp:role:peer:begin -->([\s\S]*?)<!-- slp:role:peer:end -->/,
+  )?.[1] ?? "";
+  for (const allowed of ["status", "take assigned work", "notes", "return results"]) {
+    expect(peer).toContain(allowed);
+  }
+  for (const forbidden of ["team start", "team stop", "accept Peer", "decide technical"]) {
+    expect(peer).not.toContain(forbidden);
+  }
 
-function dispatchId(stdout: string): string {
-  const id = stdout.match(/^(x\d+) \[open\]/)?.[1];
-  if (!id) throw new Error(`missing dispatch id in stdout: ${stdout}`);
-  return id;
-}
-
-async function openDispatch(fixture: Fixture, index: number): Promise<string> {
-  const work = idFrom(
-    await runCli(fixture, [
-      "work",
-      "add",
-      `documented handback ${index}`,
-      "--atomic-reason",
-      "docs contract",
-    ]),
-  );
-  const opened = await runCli(fixture, [
-    "dispatch",
-    "open",
-    work,
-    "--objective",
-    "validate one documented return status",
-    "--owned-scope",
-    "docs contract fixture",
-    "--excluded-scope",
-    "product source",
-    "--mutation",
-    "no-write",
-    "--stop-condition",
-    "handback accepted",
-    "--lane",
-    "delivery",
-    "--evidence-required",
-    "source: CLI response",
-    "--pane",
-    `docs:${index}`,
-  ]);
-  expect(opened.exitCode).toBe(0);
-  return dispatchId(opened.stdout);
-}
-
-test("308 SLP Peer return statuses are exactly the runtime vocabulary", async () => {
   const recipe = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"))
     .text();
-  const peer = recipe.match(/### Peer\n([\s\S]*?)(?=\n### |\n## )/)?.[1] ?? "";
-  const documented = [
-    ...new Set([...peer.matchAll(/\b[A-Z][A-Z_]+\b/g)].map((match) => match[0])),
-  ];
-  expect(documented).toEqual([...handbackStatuses]);
-
-  await withFixture(async (fixture) => {
-    for (const [index, status] of handbackStatuses.entries()) {
-      const dispatch = await openDispatch(fixture, index);
-      const holder = session(`docs-holder-${index}`);
-      expect((await runCli(fixture, ["dispatch", "accept", dispatch], holder)).exitCode).toBe(0);
-      expect(
-        (
-          await runCli(fixture, [
-            "dispatch",
-            "confirm",
-            dispatch,
-            "--session",
-            `docs-holder-${index}`,
-          ])
-        ).exitCode,
-      ).toBe(0);
-      const filed = await runCli(
-        fixture,
-        [
-          "handback",
-          "file",
-          dispatch,
-          "--status",
-          status,
-          ...(requestStatuses.has(status)
-            ? ["--request", `documented ${status} request`]
-            : []),
-          "--claim",
-          status === "DEPENDENCY_REQUEST"
-            ? "topology dependency requested through the Lead"
-            : `documented ${status} return accepted`,
-          "--proof",
-          "source: CLI response",
-          "--assumptions",
-          "None",
-          "--residual-risks",
-          "None",
-          "--incidental-findings",
-          "None",
-        ],
-        holder,
-      );
-      expect(filed.exitCode).toBe(0);
-      if (status === "DEPENDENCY_REQUEST") expect(filed.stdout).toContain(status);
-    }
-  });
-  // Nine statuses, each several CLI spawns: 5.4s on an idle developer machine,
-  // so the 5s default is a flake waiting for a loaded CI runner.
-}, 120_000);
+  const readme = await Bun.file(join(import.meta.dir, "..", "README.md")).text();
+  for (const surface of [recipe, readme]) {
+    for (const operation of slpOperations) expect(surface).toContain(operation);
+    expect(surface).toContain("~/maestro/SLP.md");
+    expect(surface).not.toContain("advisor-<team>");
+    expect(surface).not.toContain("observer-<team>");
+    expect(surface).not.toContain("maestro-team-sensor");
+  }
+});
 
 function documentedCommands(readme: string): string[][] {
   const verbTour = readme.match(/## Verb tour\n([\s\S]*?)(?=\n## )/)?.[1] ?? "";
@@ -170,47 +90,36 @@ test("309 [lint] every README verb-tour command resolves through CLI help", asyn
 
 test("310 [lint] supervised-team site guidance matches the registered lifecycle surface", async () => {
   const docsRoot = join(import.meta.dir, "..", "site", "src", "content", "docs");
+  const setup = await Bun.file(join(docsRoot, "getting-started", "slp-setup.md")).text();
   const guide = await Bun.file(join(docsRoot, "guides", "supervised-teams.md")).text();
   const roles = await Bun.file(join(docsRoot, "concepts", "roles.md")).text();
   const lanes = await Bun.file(join(docsRoot, "concepts", "lanes.md")).text();
   const observerMode = await Bun.file(join(docsRoot, "guides", "observer-mode.md")).text();
   const scenarios = await Bun.file(join(docsRoot, "guides", "slp-scenarios.md")).text();
   const reference = await Bun.file(join(docsRoot, "reference", "cli.md")).text();
-  const combined = [guide, roles, lanes, observerMode, scenarios, reference].join("\n");
+  const combined = [setup, guide, roles, lanes, observerMode, scenarios, reference].join("\n");
 
-  for (const command of [
-    "maestro team open",
-    "maestro team status",
-    "maestro team health",
-    "maestro team await-ready",
-    "maestro team review spot-check",
-    "maestro team review clear",
-    "maestro team review escalate",
-    "maestro team advise",
-    "maestro team reconcile",
-    "maestro team stop",
-  ]) expect(combined).toContain(command);
-  expect(combined).toContain("continuous whole-team transcript");
-  expect(combined).toContain("--owner-intervention");
-  expect(combined).toContain("requestedBy");
-  expect(combined).toContain("executedBy");
-  expect(combined).not.toContain("observer-watch");
-  expect(combined).not.toContain("watcher in its own pane");
+  for (const command of slpOperations) expect(combined).toContain(command);
+  expect(guide).toContain("There is no Observer, Advisor, sensor, scheduler or background agent role.");
+  expect(guide).toContain("foreground Watch Pane");
+  expect(guide).toContain("not an agent");
+  expect(guide).toContain("transcript is runtime-only and is deleted at stop.");
+  expect(setup).toContain("~/maestro/SLP.md");
+  expect(setup).toContain("<project>/.maestro/SLP.md");
   expect(scenarios).not.toContain("herdr workspace create --cwd ~/Code/rewrite");
 
   await withFixture(async (fixture) => {
     for (const command of [
       ["team"],
-      ["team", "open"],
-      ["team", "status"],
-      ["team", "health"],
-      ["team", "await-ready"],
-      ["team", "review", "spot-check"],
-      ["team", "review", "clear"],
-      ["team", "review", "escalate"],
-      ["team", "advise"],
-      ["team", "reconcile"],
+      ["team", "start"],
       ["team", "stop"],
+      ["status"],
+      ["work", "add"],
+      ["work", "take"],
+      ["work", "note"],
+      ["work", "return"],
+      ["work", "accept"],
+      ["decide"],
     ]) {
       const result = await runCli(fixture, ["help", ...command]);
       expect({ command: command.join(" "), exitCode: result.exitCode }).toEqual({

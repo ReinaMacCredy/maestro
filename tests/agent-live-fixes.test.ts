@@ -115,16 +115,17 @@ test("95 status reflects completion instead of pinning the last start", async ()
   });
 });
 
-test("96 [lint] installed harness docs name the stderr JSON failure envelope", async () => {
-  // Documentation lint: proves the installed guidance text, not the runtime failure stream or envelope shape.
-  await withFixture(async (fixture) => {
-    const { path } = await prepareInstallFixture(fixture);
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-    const block = await readFile(join(fixture.repo, "CLAUDE.md"), "utf8");
-    expect(block).toContain("JSON error envelope");
-    expect(block).toContain("stderr");
-    expect(block).toContain("when the fix is mechanical");
-  });
+test("96 [lint] public docs name the stderr JSON failure envelope", async () => {
+  const root = join(import.meta.dir, "..");
+  const readme = await readFile(join(root, "README.md"), "utf8");
+  const troubleshooting = await readFile(
+    join(root, "site", "src", "content", "docs", "troubleshooting.md"),
+    "utf8",
+  );
+  for (const text of [readme, troubleshooting]) {
+    expect(text).toContain("JSON error envelope");
+    expect(text).toContain("stderr");
+  }
 });
 
 test("97 [lint] work recipe disambiguates claim tagging and evidence forms", async () => {
@@ -308,16 +309,18 @@ test("106 empty ready with held work points at finishing it", async () => {
   });
 });
 
-test("107 install reports what it wrote and names the dual-harness mirror", async () => {
+test("107 install reports harness wiring and the SLP v2 mirror removal", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
-    expect(installed.stdout).toContain(".claude/");
-    expect(installed.stdout).toContain(".codex/");
+    expect(installed.stdout).toContain(".claude/hooks/");
+    expect(installed.stdout).toContain(".codex/hooks/");
     expect(installed.stdout).toContain("AGENTS.md");
     expect(installed.stdout).toContain("CLAUDE.md");
-    expect(installed.stdout).toContain("same maestro block");
+    expect(installed.stdout).toContain("removed only the legacy managed block");
+    expect(await Bun.file(join(fixture.repo, "AGENTS.md")).exists()).toBe(false);
+    expect(await Bun.file(join(fixture.repo, "CLAUDE.md")).exists()).toBe(false);
   });
 });
 
@@ -549,7 +552,10 @@ test("116 repository install from the installed runtime avoids machine-global wr
       expect(stdout).toContain("maestro installed for");
       expect(await readFile(stamp, "utf8")).toBe(stampBefore);
       expect(await readFile(shim, "utf8")).toBe(shimBefore);
-      expect(await readFile(join(secondRepo, "AGENTS.md"), "utf8")).toContain("maestro:begin");
+      expect(await Bun.file(join(secondRepo, "AGENTS.md")).exists()).toBe(false);
+      expect(await Bun.file(join(secondRepo, "CLAUDE.md")).exists()).toBe(false);
+      expect(await Bun.file(join(secondRepo, ".claude", "hooks", "maestro-record.ts")).exists())
+        .toBe(true);
     } finally {
       if (await Bun.file(stamp).exists()) await chmod(stamp, 0o644);
       if (await Bun.file(shim).exists()) await chmod(shim, 0o755);

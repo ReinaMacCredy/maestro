@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -20,7 +21,8 @@ test("282 first install needs no rollback binary and targets the detected shell"
 
     expect(installed.exitCode).toBe(0);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro")).exists()).toBe(true);
-    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists()).toBe(true);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists()).toBe(true);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists()).toBe(false);
   });
 
   await withFixture(async (fixture) => {
@@ -46,7 +48,7 @@ test("282 first install needs no rollback binary and targets the detected shell"
     expect(await Bun.file(join(fixture.home, ".bashrc")).exists()).toBe(false);
     expect(installed.stdout).toContain(shellSourceLine);
   });
-});
+}, 20_000);
 
 test("439 install warns about a live dispatch holder and still completes", async () => {
   await withFixture(async (fixture) => {
@@ -117,6 +119,42 @@ test("439 install warns about a live dispatch holder and still completes", async
   });
 });
 
+test("SLP v2 install refuses runtime replacement while a v1 team is live", async () => {
+  await withFixture(async (fixture) => {
+    await mkdir(join(fixture.home, "maestro"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    database.exec(`
+      CREATE TABLE team_lifecycle (
+        team_id TEXT PRIMARY KEY,
+        generation INTEGER NOT NULL,
+        stage TEXT NOT NULL
+      );
+      INSERT INTO team_lifecycle (team_id, generation, stage)
+      VALUES ('legacy-live', 7, 'ACTIVE');
+    `);
+    database.close();
+    const { path } = await prepareInstallFixture(fixture);
+    const runtimeCli = join(fixture.home, ".maestro", "runtime", "bin", "maestro.ts");
+    await mkdir(dirname(runtimeCli), { recursive: true });
+    await writeFile(runtimeCli, "old runtime bytes\n");
+
+    const blocked = await runCli(fixture, ["install"], { PATH: path });
+
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain('"code":"SLP_V1_TEAM_RUNNING"');
+    expect(blocked.stderr).toContain("legacy-live:g7");
+    expect(await readFile(runtimeCli, "utf8")).toBe("old runtime bytes\n");
+
+    const stopped = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    stopped.query("UPDATE team_lifecycle SET stage = 'STOPPED'").run();
+    stopped.close();
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    expect(await readFile(runtimeCli, "utf8")).not.toBe("old runtime bytes\n");
+  });
+}, 30_000);
+
 test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
     const legacySource = "#!/bin/sh\necho legacy-maestro\n";
@@ -150,8 +188,9 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     expect(codexHooks.hooks.UserPromptSubmit).toBeArray();
     expect(claudeHooks.hooks.SessionStart).toBeArray();
     expect(claudeHooks.hooks.UserPromptSubmit).toBeArray();
-    expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8")).toContain("maestro status");
-    expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8")).toContain("maestro ready");
+    expect(existsSync(join(fixture.repo, "AGENTS.md"))).toBe(false);
+    expect(existsSync(join(fixture.repo, "CLAUDE.md"))).toBe(false);
+    expect(await Bun.file(join(localBin, "maestro-slp-watch")).exists()).toBe(true);
 
     const codexHooksBefore = await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8");
     const repeated = await runCli(fixture, ["install"], { PATH: path });
@@ -210,7 +249,7 @@ test("270 unverified Codex hook hashes never suppress room trust guidance", asyn
     expect(first.stdout).toContain(
       `${roomTrustPrefix} trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`,
     );
-    for (const name of ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "lane.md"]) {
+    for (const name of ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "SLP.md"]) {
       expect(await readFile(join(room, name), "utf8")).not.toContain(roomTrustPrefix);
     }
 
@@ -291,37 +330,32 @@ test("29 [lint] install writes portable hook files without machine-absolute path
   });
 });
 
-test("45 install mirrors name the manual hookless SessionStart bootstrap without Cursor wiring", async () => {
+test("45 install relies on harness hooks without creating repository instruction mirrors", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
-    const agents = await readFile(join(fixture.repo, "AGENTS.md"), "utf8");
-    const claude = await readFile(join(fixture.repo, "CLAUDE.md"), "utf8");
-    const bootstrap =
-      "If no harness hook fired, run `maestro hook record --event SessionStart` and read the brief from stdout.";
 
     expect(installed.exitCode).toBe(0);
-    expect(agents).toContain(bootstrap);
-    expect(claude).toContain(bootstrap);
+    expect(existsSync(join(fixture.repo, "AGENTS.md"))).toBe(false);
+    expect(existsSync(join(fixture.repo, "CLAUDE.md"))).toBe(false);
     expect(existsSync(join(fixture.repo, ".cursor"))).toBe(false);
   });
 });
 
-test("436 install mirrors identify the repository Workspace Protocol", async () => {
+test("436 install preserves the repository Workspace Protocol byte for byte", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
-
+    const protocols = new Map([
+      ["AGENTS.md", "# Agent protocol\n\nuser-owned\n"],
+      ["CLAUDE.md", "# Claude protocol\r\nuser-owned\r\n"],
+    ]);
+    for (const [name, content] of protocols) await writeFile(join(fixture.repo, name), content);
     const installed = await runCli(fixture, ["install"], { PATH: path });
-    const workspaceProtocol =
-      "The repository's own `AGENTS.md` and `CLAUDE.md` text outside this block is its Workspace Protocol and may declare protected areas, hotspots, restart rules, and local verification; read it before taking work or opening a dispatch.";
 
     expect(installed.exitCode).toBe(0);
-    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
-      const instructions = await readFile(join(fixture.repo, name), "utf8");
-      const managedBlock =
-        instructions.split("<!-- maestro:begin -->")[1]?.split("<!-- maestro:end -->")[0] ?? "";
-      expect(managedBlock).toContain(workspaceProtocol);
+    for (const [name, content] of protocols) {
+      expect(await readFile(join(fixture.repo, name), "utf8")).toBe(content);
     }
   });
 });

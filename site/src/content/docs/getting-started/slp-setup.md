@@ -50,10 +50,10 @@ maestro work take <work-id>
 
 | Location | Owner | What it stores | Lifetime |
 | --- | --- | --- | --- |
-| `~/maestro/SLP.md` | Hub | Canonical shared contract, role sections, model defaults, Watch rules | Durable; edits affect the next generation only |
-| `~/maestro/.maestro/maestro.db` | Hub | Team ID, project path, generation, pack version/digest, runtime role identities, lifecycle and minimal activity | Durable |
+| `~/maestro/SLP.md` | Hub owner | Canonical shared contract, role sections, model defaults, Watch rules | Seeded only when absent; install and update preserve owner edits; edits affect the next generation only |
+| `~/maestro/.maestro/maestro.db` | Hub | Team ID, project path, generation, pack version/digest, runtime role identities, owner/cross-team decisions, lifecycle and minimal activity | Durable |
 | `<project>/.maestro/SLP.md` | Project | Exact managed snapshot used by the active generation | Remains after stop; replaced at the next start |
-| `<git-common-root>/.maestro/maestro.db` | Project | Team binding, roles, work, notes, returns, acceptances, decisions and minimal activity | Durable and shared by linked worktrees |
+| `<git-common-root>/.maestro/maestro.db` | Project | Checkout-scoped team bindings and roles, work, notes, returns, acceptances, team/technical decisions and minimal activity | Durable and shared by linked worktrees; every read is filtered to the current checkout |
 | Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and optional Watch Pane | Exists only while the generation runs |
 | `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | Rolling labelled Watch output and generation temporary data | Temporary; deleted at team stop |
 

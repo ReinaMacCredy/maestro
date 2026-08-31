@@ -314,6 +314,7 @@ async function update(): Promise<CliResult> {
         { currentCommit, oldCommit, recoveryCommand, resetStderr: reset.stderr },
       );
     }
+    if (error instanceof CliError && error.code === "SLP_V1_TEAM_RUNNING") throw error;
     throw new CliError(
       "UPDATE_RESYNC_FAILED",
       `source fast-forward was rolled back because runtime resync failed: ${error instanceof Error ? error.message : String(error)}; fix the runtime path, then run maestro update`,
@@ -563,7 +564,7 @@ async function doctor(): Promise<CliResult> {
 
   if (room) {
     let filesHealthy = true;
-    for (const name of ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "lane.md", "lead.md", "OWNER.md"]) {
+    for (const name of ["IDENTITY.md", "AGENTS.md", "CLAUDE.md", "SLP.md", "OWNER.md"]) {
       const path = join(repo, name);
       if (!existsSync(path)) {
         filesHealthy = false;
@@ -617,12 +618,6 @@ async function doctor(): Promise<CliResult> {
       const settings = await readJsonObject(path);
       if (!settings || !JSON.stringify(settings).includes("maestro-record.ts")) {
         issues.push({ component: "wiring", fix: "run maestro install", message: `missing managed settings in ${path}` });
-      }
-    }
-    for (const path of [join(repo, "AGENTS.md"), join(repo, "CLAUDE.md")]) {
-      const text = existsSync(path) ? await readFile(path, "utf8") : "";
-      if (!text.includes("<!-- maestro:begin -->")) {
-        issues.push({ component: "wiring", fix: "run maestro install", message: `missing mirror block in ${path}` });
       }
     }
     const policy = await readJsonObject(join(repo, ".maestro", "config"));

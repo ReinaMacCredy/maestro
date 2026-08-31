@@ -104,8 +104,10 @@ Record a settled choice in one operation:
 maestro decide "<choice>" --why "<reason>"
 ```
 
-Use `--work <id>` to link work and `--replaces <decision-id>` to replace an
-older immutable decision. Unresolved discussion stays in chat or a work note.
+Inside the team workspace, use `--work <id>` to link work. At Hub, a unique
+work id resolves directly; if the same id exists in several teams, qualify it
+as `<team-id>:<work-id>`. Use `--replaces <decision-id>` to replace an older
+immutable decision. Unresolved discussion stays in chat or a work note.
 
 Lead decides technical scope, Team Supervisor decides team scope, and Hub
 Supervisor decides owner or cross-team scope. Peers propose through direct
@@ -145,7 +147,11 @@ maestro team stop <team-id>
 
 Normal stop changes nothing while unfinished work remains and lists those work
 items. Once all work is `DONE`, shutdown closes Peers, Lead, Watch and runtime
-transcript, then Team Supervisor. The pinned pack and durable records remain.
+transcript, then Team Supervisor. A transient foreground non-agent pane in the
+Hub performs the self-closing sequence; it is internal and adds no public
+operation. Maestro records `STOPPED` only after the team workspace is absent.
+A partial close stays `RUNNING`, so repeating the same command continues
+cleanup. The pinned pack and durable records remain.
 
 Hub Supervisor performs emergency stop from `~/maestro`:
 

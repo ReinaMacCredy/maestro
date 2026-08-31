@@ -32,9 +32,11 @@ new state. The reviewer accepts at the boundary above the worker.
 maestro decide "<choice>" --why "<reason>"
 ```
 
-A decision is immutable when written. Link it with `--work`; replace an older
-decision with `--replaces`. The old record remains so future readers can see
-what changed and why.
+A decision is immutable when written. Inside a team workspace, link it with
+`--work`; replace an older decision with `--replaces`. Hub decisions remain
+owner or cross-team records and may link a unique project work id; qualify a
+shared id as `<team-id>:<work-id>`. The old record remains so future readers
+can see what changed and why.
 
 Discussion that is not settled stays in chat or a work note. There is no draft
 decision lifecycle inside SLP.

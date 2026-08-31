@@ -3,13 +3,21 @@ import { dirname, join } from "node:path";
 import type { Fixture } from "./helpers.ts";
 
 export interface FakeHerdrBehavior {
+  agentBusyAttempts?: number;
+  agentStartDelayMs?: number;
   agents?: boolean;
-  advisorRecommendation?: string | null;
   closeResources?: boolean;
+  closeWorkspaceWithLastTab?: boolean;
+  closeWorkspace?: boolean;
+  failWorkspaceId?: string;
+  paneRunEmptyOutput?: boolean;
+  processInfo?: boolean;
+  processInfoDelayMs?: number;
+  promptStalledAttempts?: number;
   prompts?: boolean;
-  roleProcesses?: boolean;
-  sensor?: boolean;
-  sensorDelivery?: boolean;
+  settleAgents?: boolean;
+  workspaceCloseListLag?: number;
+  workspaceListDelayMs?: number;
 }
 
 export interface FakeHerdrFixture {
@@ -27,7 +35,7 @@ const statePath = Bun.env.FAKE_HERDR_STATE;
 const logPath = Bun.env.FAKE_HERDR_LOG;
 if (!statePath || !logPath) throw new Error("fake Herdr paths are required");
 await appendFile(logPath, JSON.stringify(args) + "\\n");
-const state = JSON.parse(await readFile(statePath, "utf8"));
+let state = JSON.parse(await readFile(statePath, "utf8"));
 const value = (name) => {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
@@ -65,6 +73,17 @@ if (receiptDatabasePath && receiptOperation && receiptTeam) {
   }
 }
 if (command === "workspace list") {
+  if (state.behavior.workspaceListDelayMs) await Bun.sleep(state.behavior.workspaceListDelayMs);
+  for (const [workspaceId, remaining] of Object.entries(state.pending_workspace_closes)) {
+    if (remaining <= 0) {
+      state.workspaces = state.workspaces.filter(
+        (candidate) => candidate.workspace_id !== workspaceId,
+      );
+      delete state.pending_workspace_closes[workspaceId];
+    } else {
+      state.pending_workspace_closes[workspaceId] = remaining - 1;
+    }
+  }
   await respond({ type: "workspace_list", workspaces: state.workspaces });
 } else if (command === "workspace create") {
   const workspaceId = next("w");
@@ -78,16 +97,31 @@ if (command === "workspace list") {
   await respond({ workspace, root_pane: rootPane });
 } else if (command === "workspace close") {
   const workspaceId = args[2];
-  const closed = state.behavior.closeResources !== false;
+  if (!state.workspaces.some((candidate) => candidate.workspace_id === workspaceId)) {
+    process.stderr.write(JSON.stringify({
+      id: "cli:workspace:close",
+      error: { code: "workspace_not_found", message: "workspace not found: " + workspaceId },
+    }) + "\\n");
+    process.exit(1);
+  }
+  const closed =
+    state.behavior.closeResources !== false &&
+    state.behavior.closeWorkspace !== false &&
+    state.behavior.failWorkspaceId !== workspaceId;
   if (closed) {
     const paneIds = new Set(
       state.panes
         .filter((candidate) => candidate.workspace_id === workspaceId)
         .map((candidate) => candidate.pane_id),
     );
-    state.workspaces = state.workspaces.filter(
-      (candidate) => candidate.workspace_id !== workspaceId,
-    );
+    if ((state.behavior.workspaceCloseListLag ?? 0) > 0) {
+      state.pending_workspace_closes[workspaceId] = state.behavior.workspaceCloseListLag;
+      state.behavior.workspaceCloseListLag = 0;
+    } else {
+      state.workspaces = state.workspaces.filter(
+        (candidate) => candidate.workspace_id !== workspaceId,
+      );
+    }
     state.tabs = state.tabs.filter((candidate) => candidate.workspace_id !== workspaceId);
     state.panes = state.panes.filter((candidate) => candidate.workspace_id !== workspaceId);
     state.agents = state.agents.filter((candidate) => candidate.workspace_id !== workspaceId);
@@ -130,37 +164,100 @@ if (command === "workspace list") {
   await respond({ pane: created });
 } else if (command === "pane run") {
   const paneId = args[2];
-  const accepted = state.behavior.sensor !== false;
-  if (accepted) {
-    const target = pane(paneId);
+  const target = pane(paneId);
+  const runArgs = args.slice(3);
+  const stopGrant = runArgs.some((arg) => arg.startsWith("MAESTRO_SLP_STOP_GRANT="));
+  if (runArgs[0] === "/usr/bin/env" && stopGrant) {
+    const extraEnvironment = {};
+    let commandIndex = 1;
+    while (commandIndex < runArgs.length && runArgs[commandIndex].includes("=")) {
+      const assignment = runArgs[commandIndex];
+      const separator = assignment.indexOf("=");
+      extraEnvironment[assignment.slice(0, separator)] = assignment.slice(separator + 1);
+      commandIndex += 1;
+    }
+    const childCommand = runArgs.slice(commandIndex);
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    const child = Bun.spawn(childCommand, {
+      cwd: target?.cwd,
+      env: {
+        ...process.env,
+        ...extraEnvironment,
+        HERDR_PANE_ID: paneId,
+        HERDR_WORKSPACE_ID: target?.workspace_id,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    state = JSON.parse(await readFile(statePath, "utf8"));
+    if (exitCode !== 0) {
+      process.stderr.write(stderr || stdout || "stop helper failed\\n");
+      process.exit(exitCode);
+    }
+    if (state.behavior.paneRunEmptyOutput) {
+      await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    } else {
+      await respond({ accepted: true, pane_id: paneId });
+    }
+  } else {
     state.processes[paneId] = {
       pane_id: paneId,
       cwd: target?.cwd,
       shell_pid: 1000 + state.sequence,
-      foreground_pgid: 2000 + state.sequence,
+      foreground_process_group_id: 2000 + state.sequence,
       foreground_processes: [{
         pid: 2000 + state.sequence,
-        command: args.slice(3).join(" "),
-        args: args.slice(3),
+        command: runArgs.join(" "),
+        args: runArgs,
       }],
     };
+    if (state.behavior.paneRunEmptyOutput) {
+      await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    } else {
+      await respond({ accepted: true, pane_id: paneId });
+    }
   }
-  await respond({ accepted, pane_id: paneId });
 } else if (command === "pane close") {
   const paneId = args[2];
-  state.panes = state.panes.filter((candidate) => candidate.pane_id !== paneId);
-  state.agents = state.agents.filter((candidate) => candidate.pane_id !== paneId);
-  delete state.processes[paneId];
-  await respond({ closed: true, pane_id: paneId });
+  const closed = state.behavior.closeResources !== false;
+  if (closed) {
+    const target = pane(paneId);
+    state.panes = state.panes.filter((candidate) => candidate.pane_id !== paneId);
+    state.agents = state.agents.filter((candidate) => candidate.pane_id !== paneId);
+    delete state.processes[paneId];
+    if (target?.tab_id) {
+      const remaining = state.panes.filter((candidate) => candidate.tab_id === target.tab_id);
+      const tab = state.tabs.find((candidate) => candidate.tab_id === target.tab_id);
+      if (remaining.length === 0) {
+        state.tabs = state.tabs.filter((candidate) => candidate.tab_id !== target.tab_id);
+      } else if (tab?.root_pane_id === paneId) {
+        tab.root_pane_id = remaining[0].pane_id;
+      }
+    }
+  }
+  await respond({ closed, pane_id: paneId });
 } else if (command === "pane process-info") {
+  if (state.behavior.processInfoDelayMs) await Bun.sleep(state.behavior.processInfoDelayMs);
+  if (state.behavior.processInfo === false) {
+    process.stderr.write("injected process-info failure\\n");
+    process.exit(66);
+  }
   const paneId = value("--pane");
   const target = pane(paneId);
-  await respond(state.processes[paneId] ?? {
-    pane_id: paneId,
-    cwd: target?.cwd,
-    shell_pid: 1000 + state.sequence,
-    foreground_pgid: null,
-    foreground_processes: [],
+  await respond({
+    type: "pane_process_info",
+    process_info: state.processes[paneId] ?? {
+      pane_id: paneId,
+      cwd: target?.cwd,
+      shell_pid: 1000 + state.sequence,
+      foreground_process_group_id: null,
+      foreground_processes: [],
+    },
   });
 } else if (command === "agent list") {
   await respond({ type: "agent_list", agents: state.agents });
@@ -168,6 +265,19 @@ if (command === "workspace list") {
   const name = args[2];
   const paneId = value("--pane");
   const kind = value("--kind") ?? "codex";
+  if (state.behavior.agentStartDelayMs) await Bun.sleep(state.behavior.agentStartDelayMs);
+  if ((state.behavior.agentBusyAttempts ?? 0) > 0) {
+    state.behavior.agentBusyAttempts -= 1;
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stderr.write(JSON.stringify({
+      id: "cli:agent:start",
+      error: {
+        code: "agent_pane_busy",
+        message: "agent target pane " + paneId + " is not an available shell",
+      },
+    }) + "\\n");
+    process.exit(1);
+  }
   const accepted = state.behavior.agents !== false;
   if (accepted && !state.agents.some((candidate) => candidate.name === name)) {
     const target = pane(paneId);
@@ -178,39 +288,40 @@ if (command === "workspace list") {
       agent_status: "working",
       kind,
     });
-    if (state.behavior.roleProcesses !== false) {
-      state.processes[paneId] = {
-        pane_id: paneId,
-        cwd: target?.cwd,
-        shell_pid: 3000 + state.sequence,
-        foreground_pgid: 4000 + state.sequence,
-        foreground_processes: [{
-          pid: 4000 + state.sequence,
-          command: kind,
-          args: [kind],
-        }],
-      };
-    }
+    state.processes[paneId] = {
+      pane_id: paneId,
+      cwd: target?.cwd,
+      shell_pid: 3000 + state.sequence,
+      foreground_process_group_id: 4000 + state.sequence,
+      foreground_processes: [{
+        pid: 4000 + state.sequence,
+        command: kind,
+        args: [kind],
+      }],
+    };
   }
   await respond({ accepted, name, pane_id: paneId });
 } else if (command === "agent prompt") {
   const name = args[2];
-  const isProbe = String(args[3] ?? "").includes("team-sensor-probe");
-  const accepted = isProbe
-    ? state.behavior.sensorDelivery !== false
-    : state.behavior.prompts !== false;
+  if ((state.behavior.promptStalledAttempts ?? 0) > 0) {
+    state.behavior.promptStalledAttempts -= 1;
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stderr.write(JSON.stringify({
+      id: "cli:agent:prompt",
+      error: {
+        code: "agent_prompt_stalled",
+        message: "agent prompt produced no observed state change within 5000 ms",
+      },
+    }) + "\\n");
+    process.exit(1);
+  }
+  const accepted = state.behavior.prompts !== false;
   if (accepted) {
     const body = args[3] ?? "";
     state.prompts.push({ name, body });
-    if (name.startsWith("advisor-") && body.includes("[advisor-consultation")) {
-      const recommendation = state.behavior.advisorRecommendation === undefined
-        ? "Use the bounded supervised path."
-        : state.behavior.advisorRecommendation;
-      state.outputs[name] = recommendation === null
-        ? "Advisor completed without a return marker.\\n"
-        : "analysis complete\\nMAESTRO_ADVISOR_RETURN " + JSON.stringify({ recommendation }) + "\\n";
-      const advisor = state.agents.find((candidate) => candidate.name === name);
-      if (advisor) advisor.agent_status = "done";
+    if (state.behavior.settleAgents !== false) {
+      const agent = state.agents.find((candidate) => candidate.name === name);
+      if (agent) agent.agent_status = "idle";
     }
   }
   await respond({ accepted, delivered: accepted, name });
@@ -220,14 +331,27 @@ if (command === "workspace list") {
   process.stdout.write(state.outputs[name] ?? "");
 } else if (command === "tab close") {
   const tabId = args[2];
+  const targetTab = state.tabs.find((candidate) => candidate.tab_id === tabId);
+  const closed = state.behavior.closeResources !== false;
   const paneIds = new Set(
     state.panes.filter((candidate) => candidate.tab_id === tabId).map((candidate) => candidate.pane_id),
   );
-  state.tabs = state.tabs.filter((candidate) => candidate.tab_id !== tabId);
-  state.panes = state.panes.filter((candidate) => !paneIds.has(candidate.pane_id));
-  state.agents = state.agents.filter((candidate) => !paneIds.has(candidate.pane_id));
-  for (const paneId of paneIds) delete state.processes[paneId];
-  await respond({ closed: true, tab_id: tabId });
+  if (closed) {
+    state.tabs = state.tabs.filter((candidate) => candidate.tab_id !== tabId);
+    state.panes = state.panes.filter((candidate) => !paneIds.has(candidate.pane_id));
+    state.agents = state.agents.filter((candidate) => !paneIds.has(candidate.pane_id));
+    for (const paneId of paneIds) delete state.processes[paneId];
+    if (
+      state.behavior.closeWorkspaceWithLastTab &&
+      targetTab?.workspace_id &&
+      !state.tabs.some((candidate) => candidate.workspace_id === targetTab.workspace_id)
+    ) {
+      state.workspaces = state.workspaces.filter(
+        (candidate) => candidate.workspace_id !== targetTab.workspace_id,
+      );
+    }
+  }
+  await respond({ closed, tab_id: tabId });
 } else {
   process.stderr.write("unsupported fake Herdr command: " + args.join(" ") + "\\n");
   process.exit(64);
@@ -254,6 +378,7 @@ export async function installFakeHerdr(
       prompts: [],
       receipt_audit: [],
       outputs: {},
+      pending_workspace_closes: {},
       sequence: 0,
       tabs: [],
       workspaces: [],

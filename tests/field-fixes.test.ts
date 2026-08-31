@@ -212,63 +212,38 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
   });
 });
 
-test("63 [lint] install mirrors teach the work lifecycle", async () => {
+test("63 [lint] install leaves repository instructions owner-managed", async () => {
   await withFixture(async (fixture) => {
-    // Proves mirror documentation content, not that an agent loads or follows the lifecycle.
     const { path } = await prepareInstallFixture(fixture);
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
-    const agents = await readFile(join(fixture.repo, "AGENTS.md"), "utf8");
-    const claude = await readFile(join(fixture.repo, "CLAUDE.md"), "utf8");
-
     expect(installed.exitCode).toBe(0);
-    for (const mirror of [agents, claude]) {
-      expect(mirror).toContain("maestro work add");
-      expect(mirror).toContain("maestro recipe show work");
-    }
+    expect(await Bun.file(join(fixture.repo, "AGENTS.md")).exists()).toBe(false);
+    expect(await Bun.file(join(fixture.repo, "CLAUDE.md")).exists()).toBe(false);
+    expect(await Bun.file(join(fixture.home, "maestro", "SLP.md")).exists()).toBe(true);
   });
 });
 
-test("289 [lint] recipe slp presents the SLP roles and install mirrors state the role bindings", async () => {
+test("289 [lint] recipe and installed Hub expose the same simplified SLP roles", async () => {
   await withFixture(async (fixture) => {
-    // Proves doctrine text, not runtime enforcement of dispatch or session role ownership.
     const { path } = await prepareInstallFixture(fixture);
     const recipe = await runCli(fixture, ["recipe", "show", "slp"]);
     expect(recipe.exitCode).toBe(0);
-    for (const heading of ["### Human", "### Supervisor", "### Lead", "### Peer"]) {
+    for (const heading of ["### Hub Supervisor", "### Team Supervisor", "### Lead", "### Peer"]) {
       expect(recipe.stdout).toContain(heading);
     }
-    for (const status of [
-      "DONE",
-      "BLOCKED",
-      "UNTESTABLE",
-      "UNKNOWN",
-      "FAILED",
-      "CHALLENGE",
-      "REOPEN_REQUEST",
-      "DEPENDENCY_REQUEST",
-      "COUNCIL_REQUEST",
-    ]) {
-      expect(recipe.stdout).toContain(status);
-    }
-    expect(recipe.stdout).toContain("## How maestro binds a session to a role");
-    expect(recipe.stdout).toContain("HANDBACK_UNREVIEWED");
-    expect(recipe.stdout).toContain("HUMAN_DECISION_REQUIRED");
-    expect(recipe.stdout).toContain("LEAD_COLLISION");
-    expect(recipe.stdout).toContain("DECISION_REVIEW_DUE");
+    expect(recipe.stdout).toContain("OPEN -> ACTIVE -> RETURNED -> DONE");
+    expect(recipe.stdout).toContain("~/maestro/SLP.md");
+    expect(recipe.stdout).not.toContain("advisor-<team>");
+    expect(recipe.stdout).not.toContain("observer-<team>");
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
-    for (const name of ["AGENTS.md", "CLAUDE.md"]) {
-      const mirror = await readFile(join(fixture.repo, name), "utf8");
-      expect(mirror).toContain(
-        "The Lead of this repository is the agent the room started as `lead-<repo basename>`; a pane it opens with a dispatch is a Peer named `peer-<dispatch id>`; a session with any other name holds only what its accepted dispatch says; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.",
-      );
-      expect(mirror).not.toContain(
-        "A session in this repository is its Lead; panes it opens with a dispatch are Peers; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.",
-      );
-    }
     const room = await readFile(join(fixture.home, "maestro", "AGENTS.md"), "utf8");
-    expect(room).toContain("This room is the Supervisor; roles: `maestro recipe show slp`.");
+    const pack = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
+    expect(room).toContain("This workspace is the Hub Supervisor.");
+    expect(room).toContain("read `SLP.md`");
+    expect(pack).toContain("<!-- slp:version=2 -->");
+    expect(pack).toContain("## Team Supervisor");
   });
 });

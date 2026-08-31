@@ -65,114 +65,62 @@ wiring, permissions, and store access without repairing them. A healthy report
 exits zero; a reported problem names the next command when the repair is
 mechanical.
 
-## Roles and lanes
+## SLP supervised teams
 
-Maestro uses four durable roles. The **Human** owns purpose, risk, priority,
-and external effects. The single **Supervisor** in `~/maestro` is the Human's
-embodiment across registered projects and carries that authority in full,
-external effects included; it normally works through each project's Lead and
-does not edit project code, dispatch Peers directly, or accept technical work.
-Its owner, scope, observation boundary, authorities, and external-effect gate
-are explicit in `~/maestro/IDENTITY.md`: raw transcript access stays denied,
-and a push, tag, release, or `maestro update` runs only after a locked room
-decision names the exact candidate and the verified evidence. The installer
-also denies Claude's `Agent` and `Task` tools in that room.
-
-A repository session is the **Lead** for that scope. The Lead owns the outcome,
-contracts, topology, one write owner per moving scope, integration, and
-technical acceptance. A pane opened with a dispatch becomes a **Peer** when it
-accepts the stored contract. The Peer owns independent judgment or bounded
-delivery and returns a handback with layered evidence.
+SLP v2 uses one direct Herdr workspace per running team generation:
 
 ```mermaid
 flowchart TB
-  Human --> Supervisor
-  Human --> Lead
-  Supervisor -. "owner authority through Lead" .-> Lead
-  Lead --> PeerA["Peer: bounded scope A"]
-  Lead --> PeerB["Peer: bounded scope B"]
-  Lead --> PeerC["Peer: independent review"]
+  Hub["Hub Supervisor"] <--> Team["Team Supervisor"]
+  Team <--> Lead
+  Team <--> PeerA["Peer A"]
+  Team <--> PeerB["Peer B"]
+  Lead <--> PeerA
+  Lead <--> PeerB
+  PeerA <--> PeerB
 ```
 
-Read the full authority model with `maestro recipe show slp`.
+The Hub Supervisor reaches the team only through its Team Supervisor. Inside
+the team, the Team Supervisor, Lead, and Peers communicate directly. There is
+no Observer, Advisor, sensor, scheduler, or background agent role.
 
-Using SLP requires [Herdr](https://herdr.dev), which hosts the Supervisor
-room and every lane pane. Install it with:
+The canonical Workspace Pack lives at `~/maestro/SLP.md`. Starting a team
+copies its exact bytes to `<project>/.maestro/SLP.md`, pins its version and
+digest for that generation, creates exactly one Team Supervisor and one Lead,
+and creates initial `OPEN` work for the Lead. Peers are opened lazily by
+assigned work. Install seeds the Hub pack only when it is absent; later installs
+and updates preserve owner edits.
 
-```sh
-curl -fsSL https://herdr.dev/install.sh | sh
+SLP roles use exactly nine operations:
+
+```text
+maestro team start
+maestro team stop
+maestro status [work-id]
+maestro work add
+maestro work take
+maestro work note
+maestro work return
+maestro work accept
+maestro decide
 ```
 
-Lanes are Herdr panes, not subprocess agents created by Maestro. A Lead stores
-the lane contract with `maestro dispatch open`, the Peer takes it with
-`maestro dispatch accept`, and the Peer returns a packet with
-`maestro handback file`. Herdr owns pane creation, agent startup, prompting,
-wake-up, and pane closure; Maestro owns the durable contract and evidence.
-The room's `~/maestro/lane.md` contains the complete lane procedure.
+Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Lead accepts
+Peer returns; Team Supervisor accepts Lead returns. Settled choices use one
+immutable `maestro decide` record and explicit replacement.
 
-The five lane types are `scout` for no-write discovery, `decision` for a
-recommendation, `delivery` for bounded writes, `challenge` for trying to break
-a premise or candidate, and `shadow` for no-write comparison evidence that is
-never a candidate. Concurrent dispatches on one work item form a sealed
-council. If the first views conflict, the Lead can open a targeted second
-generation that quotes the other handbacks; Peers answer by handback and never
-prompt each other.
+The Team Supervisor may open one optional foreground Watch Pane with existing
+Herdr pane control. Watch labels currently available raw output, but is not an
+agent and has no prompt, store write, gate, intervention, or decision
+authority. Its rolling transcript is runtime-only and is deleted at stop.
 
-Each moving scope has one Lead. Continuing or replacing that Lead requires a
-frozen handoff packet and the ordered receipts `packet_ready`,
-`successor_authorized`, `successor_acknowledged`, and
-`predecessor_released` before the predecessor stops writing.
+Normal stop uses one transient foreground non-agent helper pane in the Hub so
+the Team Supervisor can close itself safely. This is internal, not another SLP
+operation: `STOPPED` is recorded only after the team workspace is absent, and
+a partial close remains `RUNNING` for retry.
 
-## Teams
-
-A team is one Herdr workspace. A session reads its two coordinates from
-different places: its role from its agent name prefix, its team from the
-workspace it sits in, never from cwd. cwd decides only which store a verb
-reads, so two teams working the same repository read the same store and stay
-distinct teams.
-
-| name | what it is |
-|---|---|
-| `supervisor-<team>` | the team's record holder: locks decisions, receives done reports, holds the owner gates for this team |
-| `advisor-<team>` | read-only support for the record holder when it is stuck or the owner is away; no cards, no records |
-| `observer-<team>` | drift watch, running while the team works |
-| `lead-<repo basename>` | Lead of that repository |
-| `consult-<repo basename>` | the Lead's counterpart beside it |
-| `peer-<dispatch id>` | one bounded assignment |
-
-One team cwd maps to exactly one workspace: an opener reuses a match from
-`herdr workspace list` before creating one, because a second workspace on the
-same cwd splits a team in half without saying so. The Supervisor room is its
-own workspace and stays clean: it opens every team pane in that team's
-workspace, never in its own.
-
-`observer-<team>` may read the panes of its own workspace and nothing else. A
-watcher script in its own pane arms one `herdr agent wait` per team agent plus
-a periodic sweep, and wakes the model only when a tail matches a countable
-trigger: the same failure a third time, a pane claim contradicting the store, a
-role answering a question type it does not own, a pane silent past its stop
-condition, or self-doubt repeated in one turn. The model then reads further,
-checks the store with `MAESTRO_READ_ONLY=1` (see [Observer mode](#observer-mode);
-the role and the store mode share a word, not a definition), and either says one
-thing to the member that drifted or stays silent:
-
-```
-[from observer][suspected] <pane> <quoted evidence> <why>
-```
-
-It says that once per issue and again only on new evidence. It never changes an
-assignment, freezes work, runs a write verb, or writes any store; the addressee
-or `supervisor-<team>` decides, and `supervisor-<team>` records.
-
-Exactly one prompt crosses a workspace boundary upward: `supervisor-<team>`
-reports to the Supervisor room. Leads, advisors, observers, and Peers never
-prompt the room, and the room reaches a team through its `supervisor-<team>`,
-except for a Lead the room itself opened and still owns. A report that arrives
-anywhere else fails closed: a supervisor answers a `[from lead]` prompt from a
-Lead it does not own with `not my supervisor: send to supervisor-<team>` and
-neither verifies nor records it, because absorbing it would leave that team's
-record holder never learning the work closed. Which supervisor owns a Lead is
-read from that Lead's `workspace_id`, never from cwd.
+Read the compact operating guide with `maestro recipe show slp` and the full
+setup at [SLP setup and storage](https://maestro.maccredyreina.me/getting-started/slp-setup/).
 
 ## Work, decisions, and evidence
 
@@ -239,8 +187,8 @@ and prints this brief; it does not start an agent.
 
 ## Observer mode
 
-This is the read-only store mode, not the `observer-<team>` role under
-[Teams](#teams); that role uses this mode for its store reads.
+This is the read-only store mode for administrative inspection. It is not an
+SLP role and does not create a background observer.
 
 Set `MAESTRO_READ_ONLY=1` to run Maestro as an observer. Pure commands such as
 status, search, recipes, and read-only list/show operations remain available.

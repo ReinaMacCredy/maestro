@@ -1,0 +1,2438 @@
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, realpathSync } from "node:fs";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
+import {
+  CliError,
+  requiredPosition,
+  stringOption,
+  type CliInvocation,
+  type CliOptions,
+  type CliResult,
+} from "../kernel/cli.ts";
+import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { Store, resolveStoreLocation } from "../kernel/store.ts";
+import { isRoom } from "./room.ts";
+import {
+  buildSlpTeamPlan,
+  HerdrSlpRuntime,
+  slpStopEnvironment,
+  type SlpRole,
+  type SlpRolePlan,
+  type SlpRuntimeRole,
+  type SlpRuntimeStart,
+  type SlpTeamPlan,
+} from "./slp-runtime.ts";
+import { registerSessionCommand } from "./session-required.ts";
+
+type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
+
+interface PackModels {
+  lead: string;
+  peer: string;
+  teamSupervisor: string;
+}
+
+interface SlpWorkRecord {
+  assignedTo: string;
+  createdAt: string;
+  createdBy: string;
+  generation: number;
+  id: string;
+  objective: string;
+  owner: string | null;
+  state: WorkState;
+  teamId: string;
+  updatedAt: string;
+}
+
+const packSource = join(import.meta.dir, "resources", "SLP.md");
+
+const retiredSlpOperations = new Map<string, string>([
+  ["attention", "status"],
+  ["brief", "status"],
+  ["decision", "decide"],
+  ["dispatch", "work add, work take, or work return"],
+  ["handback", "work return or work accept"],
+  ["ready", "status"],
+  ["team advise", "decide"],
+  ["team await-ready", "status"],
+  ["team bind", "team start"],
+  ["team health", "status"],
+  ["team open", "team start"],
+  ["team reconcile", "status or team start"],
+  ["team review", "work note or work accept"],
+  ["team status", "status"],
+  ["work done", "work return then work accept"],
+  ["work list", "status"],
+  ["work reclaim", "work take"],
+  ["work release", "work return"],
+  ["work reopen", "work take"],
+  ["work repair", "work note"],
+  ["work show", "status <work-id>"],
+  ["work start", "work take"],
+]);
+
+function canonicalCheckoutRoot(cwd: string): string {
+  return realpathSync.native(resolveStoreLocation(cwd).root);
+}
+
+function adoptedSlpProjectAt(cwd: string): boolean {
+  const location = resolveStoreLocation(cwd);
+  const path = location.path;
+  if (!existsSync(path)) return false;
+  const store = new Store(path, { readonly: true });
+  try {
+    return tableExists(store, "slp_local_teams") &&
+      store.database
+        .query<{ present: number }, [string]>(
+          "SELECT 1 AS present FROM slp_local_teams WHERE project_path = ? LIMIT 1",
+        )
+        .get(canonicalCheckoutRoot(cwd))?.present === 1;
+  } finally {
+    store.close();
+  }
+}
+
+function retiredReplacement(command: string): string | null {
+  const matches = [...retiredSlpOperations.entries()]
+    .filter(([retired]) => command === retired || command.startsWith(`${retired} `))
+    .sort(([left], [right]) => right.length - left.length);
+  return matches[0]?.[1] ?? null;
+}
+
+function rejectRetiredSlp(command: string, replacement: string): never {
+  throw new CliError(
+    "SLP_V2_CUTOVER",
+    `${command} was retired by SLP v2; use maestro ${replacement}`,
+    { command, replacement },
+  );
+}
+
+export function slpV2CliOptions(cwd = process.cwd()): CliOptions {
+  return {
+    beforeInvoke(command) {
+      const replacement = retiredReplacement(command);
+      if (!replacement || !adoptedSlpProjectAt(cwd)) return;
+      const location = resolveStoreLocation(cwd);
+      const paneId = process.env.HERDR_PANE_ID;
+      if (!paneId || !existsSync(location.path)) return;
+      const store = new Store(location.path, { readonly: true });
+      try {
+        if (!tableExists(store, "slp_local_teams") || !tableExists(store, "slp_local_roles")) return;
+        const activeRole = store.database
+          .query<{ present: number }, [string, string]>(
+            `SELECT 1 AS present
+             FROM slp_local_teams AS team
+             JOIN slp_local_roles AS role
+               ON role.team_id = team.team_id AND role.generation = team.generation
+             WHERE team.project_path = ? AND team.state = 'RUNNING' AND role.pane_id = ?
+             LIMIT 1`,
+          )
+          .get(canonicalCheckoutRoot(cwd), paneId);
+        if (activeRole) rejectRetiredSlp(command, replacement);
+      } finally {
+        store.close();
+      }
+    },
+    beforeUnknown(args) {
+      const command = args.slice(0, 3).join(" ");
+      const replacement = retiredReplacement(command);
+      if (replacement) rejectRetiredSlp(command, replacement);
+    },
+  };
+}
+
+export async function defaultSlpPack(): Promise<Uint8Array> {
+  return new Uint8Array(await readFile(packSource));
+}
+
+function migrateRoom(store: Store): void {
+  store.migrate(`
+    CREATE TABLE IF NOT EXISTS slp_teams (
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      project_path TEXT NOT NULL,
+      objective TEXT NOT NULL,
+      configuration_json TEXT NOT NULL,
+      pack_version TEXT NOT NULL,
+      pack_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK(state IN ('RUNNING', 'STOPPED')),
+      workspace_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      stopped_at TEXT,
+      PRIMARY KEY(team_id, generation),
+      UNIQUE(project_path, generation)
+    );
+    CREATE TABLE IF NOT EXISTS slp_team_roles (
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer')),
+      name TEXT NOT NULL,
+      pane_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(team_id, generation, name),
+      FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation)
+    );
+    CREATE TABLE IF NOT EXISTS slp_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      actor TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_decisions (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      choice TEXT NOT NULL,
+      why TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      work_id TEXT,
+      replaces_id TEXT,
+      actor TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+}
+
+function migrateProject(store: Store): void {
+  store.migrate(`
+    CREATE TABLE IF NOT EXISTS slp_local_teams (
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      room_store_path TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      configuration_json TEXT NOT NULL,
+      pack_version TEXT NOT NULL,
+      pack_digest TEXT NOT NULL,
+      state TEXT NOT NULL CHECK(state IN ('RUNNING', 'STOPPED')),
+      workspace_id TEXT NOT NULL,
+      bound_at TEXT NOT NULL,
+      PRIMARY KEY(team_id, generation)
+    );
+    CREATE TABLE IF NOT EXISTS slp_local_roles (
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer')),
+      name TEXT NOT NULL,
+      pane_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(team_id, generation, name)
+    );
+    CREATE TABLE IF NOT EXISTS slp_work (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      objective TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      assigned_to TEXT NOT NULL,
+      owner TEXT,
+      state TEXT NOT NULL CHECK(state IN ('OPEN', 'ACTIVE', 'RETURNED', 'DONE')),
+      current_return TEXT,
+      acceptance_outcome TEXT,
+      accepted_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_work_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      work_id TEXT NOT NULL REFERENCES slp_work(id),
+      kind TEXT NOT NULL CHECK(kind IN ('NOTE', 'RETURN', 'ACCEPTANCE')),
+      actor TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_decisions (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      choice TEXT NOT NULL,
+      why TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      work_id TEXT,
+      replaces_id TEXT,
+      actor TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      actor TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_stop_grants (
+      token TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      requested_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(team_id, generation)
+    );
+  `);
+  store.ensureColumn(
+    "slp_local_teams",
+    "configuration_json",
+    "ALTER TABLE slp_local_teams ADD COLUMN configuration_json TEXT NOT NULL DEFAULT '{}'",
+  );
+}
+
+function slug(value: string): string {
+  const normalized = value.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
+  if (!normalized) throw new CliError("INVALID_TEAM_ID", "project basename cannot form a team id");
+  return normalized;
+}
+
+function teamIdForProject(projectPath: string): string {
+  const readable = slug(basename(projectPath)).slice(0, 10).replace(/-$/, "");
+  const canonicalPath = realpathSync.native(projectPath);
+  const identity = createHash("sha256").update(canonicalPath).digest("hex").slice(0, 10);
+  return `${readable}-${identity}`;
+}
+
+function section(pack: string, name: string): string {
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(
+    `<!-- slp:${escaped}:begin -->([\\s\\S]*?)<!-- slp:${escaped}:end -->`,
+  ).exec(pack);
+  if (!match?.[1]?.trim()) {
+    throw new CliError("INVALID_SLP_PACK", `SLP.md is missing section: ${name}`);
+  }
+  return match[1].trim();
+}
+
+function packVersion(pack: string): string {
+  const version = /<!-- slp:version=([^\s]+) -->/.exec(pack)?.[1];
+  if (!version) throw new CliError("INVALID_SLP_PACK", "SLP.md is missing its version marker");
+  return version;
+}
+
+function packModel(pack: string, role: "team-supervisor" | "lead" | "peer"): string {
+  const escaped = role.replace("-", "\\-");
+  const value = new RegExp(`<!-- slp:model:${escaped}=[^:>]+:([^\\s>]+) -->`).exec(pack)?.[1];
+  if (!value) throw new CliError("INVALID_SLP_PACK", `SLP.md is missing the ${role} model`);
+  return value;
+}
+
+function roleContracts(pack: string, teamId: string, generation: number): Map<SlpRole, string> {
+  const shared = section(pack, "shared");
+  const contract = (role: SlpRole, body: string): string => [
+    `[SLP ${teamId} generation ${generation}]`,
+    shared,
+    body,
+    `This message only initializes the ${role} role. Do not run tools, inspect or claim work, ` +
+      `or ask a question. Reply with exactly: SLP_ROLE_READY ${role}. Then wait.`,
+  ].join("\n\n");
+  return new Map<SlpRole, string>([
+    ["team-supervisor", contract("team-supervisor", section(pack, "role:team-supervisor"))],
+    ["lead", contract("lead", section(pack, "role:lead"))],
+    ["peer", contract("peer", section(pack, "role:peer"))],
+  ]);
+}
+
+function tableExists(store: Store, name: string): boolean {
+  return store.database
+    .query<{ present: number }, [string]>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .get(name)?.present === 1;
+}
+
+function nextWorkId(store: Store): string {
+  const ids = store.database
+    .query<{ id: string }, []>("SELECT id FROM slp_work")
+    .all()
+    .map((row) => row.id);
+  if (tableExists(store, "work")) {
+    ids.push(...store.database.query<{ id: string }, []>("SELECT id FROM work").all().map((row) => row.id));
+  }
+  const maximum = ids.reduce((current, id) => {
+    const value = /^w(\d+)$/.exec(id)?.[1];
+    return value ? Math.max(current, Number(value)) : current;
+  }, 0);
+  return `w${maximum + 1}`;
+}
+
+function nextDecisionId(store: Store): string {
+  const ids = store.database
+    .query<{ id: string }, []>("SELECT id FROM slp_decisions")
+    .all()
+    .map((row) => row.id);
+  if (tableExists(store, "decisions")) {
+    ids.push(
+      ...store.database.query<{ id: string }, []>("SELECT id FROM decisions").all().map((row) => row.id),
+    );
+  }
+  const maximum = ids.reduce((current, id) => {
+    const value = /^d(\d+)$/.exec(id)?.[1];
+    return value ? Math.max(current, Number(value)) : current;
+  }, 0);
+  return `d${maximum + 1}`;
+}
+
+function toWork(row: {
+  assigned_to: string;
+  created_at: string;
+  created_by: string;
+  generation: number;
+  id: string;
+  objective: string;
+  owner: string | null;
+  state: WorkState;
+  team_id: string;
+  updated_at: string;
+}): SlpWorkRecord {
+  return {
+    assignedTo: row.assigned_to,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    generation: row.generation,
+    id: row.id,
+    objective: row.objective,
+    owner: row.owner,
+    state: row.state,
+    teamId: row.team_id,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function restoreSnapshot(path: string, previous: Uint8Array | null): Promise<void> {
+  if (previous === null) {
+    await rm(path, { force: true });
+  } else {
+    await writeFile(path, previous);
+  }
+}
+
+async function startTeam(
+  context: PluginContext,
+  runtime: HerdrSlpRuntime,
+  projectInput: string,
+  objective: string,
+  overrides: Partial<PackModels>,
+): Promise<CliResult> {
+  if (!isRoom(context.store.database)) {
+    throw new CliError("ROLE_FORBIDDEN", "team start is Hub Supervisor authority and must run from ~/maestro");
+  }
+  const resolvedProjectPath = resolve(projectInput);
+  const projectStat = await stat(resolvedProjectPath).catch(() => null);
+  if (!projectStat?.isDirectory()) {
+    throw new CliError("NOT_FOUND", `project directory not found: ${resolvedProjectPath}`);
+  }
+  const projectLocation = resolveStoreLocation(resolvedProjectPath);
+  const projectPath = realpathSync.native(projectLocation.root);
+  const teamId = teamIdForProject(projectPath);
+  const roomRoot = resolveStoreLocation(process.cwd()).root;
+  const packPath = join(roomRoot, "SLP.md");
+  if (!existsSync(packPath)) {
+    throw new CliError("SLP_PACK_MISSING", `missing canonical Workspace Pack: ${packPath}`);
+  }
+  const hubPackBytes = new Uint8Array(await readFile(packPath));
+  migrateRoom(context.store);
+  const snapshotPath = join(projectPath, ".maestro", "SLP.md");
+  let previousSnapshot: Uint8Array | null = null;
+  let snapshotWritten = false;
+  let started: SlpRuntimeStart | null = null;
+  let plan: SlpTeamPlan | null = null;
+  let attachedRoom = false;
+  let transactionOpen = false;
+  let persisted = false;
+  const projectStore = new Store(projectLocation.path);
+  try {
+    migrateProject(projectStore);
+    projectStore.database.query("ATTACH DATABASE ? AS slp_room").run(context.store.path);
+    attachedRoom = true;
+    projectStore.database.exec("PRAGMA busy_timeout = 300000");
+    projectStore.database.exec("BEGIN IMMEDIATE");
+    transactionOpen = true;
+
+    const collision = projectStore.database
+      .query<{ project_path: string }, [string, string]>(
+        `SELECT project_path FROM slp_room.slp_teams
+         WHERE team_id = ? AND project_path <> ? LIMIT 1`,
+      )
+      .get(teamId, projectPath);
+    if (collision) {
+      throw new CliError(
+        "TEAM_ID_COLLISION",
+        `${teamId} already identifies another project`,
+        { existingProjectPath: collision.project_path, projectPath },
+      );
+    }
+
+    const running = projectStore.database
+      .query<{
+        configuration_json: string;
+        generation: number;
+        objective: string;
+        pack_digest: string;
+        pack_version: string;
+        project_path: string;
+        team_id: string;
+      }, [string]>(
+        `SELECT team_id, generation, objective, project_path, configuration_json,
+                pack_version, pack_digest
+         FROM slp_room.slp_teams
+         WHERE project_path = ? AND state = 'RUNNING'
+         ORDER BY generation DESC LIMIT 1`,
+      )
+      .get(projectPath);
+
+    let generation: number;
+    let pack: string;
+    let version: string;
+    let digest: string;
+    let models: PackModels;
+    let workId: string;
+    let work: {
+      assigned_to: string;
+      created_at: string;
+      created_by: string;
+      generation: number;
+      id: string;
+      objective: string;
+      owner: string | null;
+      state: WorkState;
+      team_id: string;
+      updated_at: string;
+    } | null;
+
+    if (running) {
+      models = JSON.parse(running.configuration_json) as PackModels;
+      const changedConfiguration =
+        (overrides.lead !== undefined && overrides.lead !== models.lead) ||
+        (overrides.peer !== undefined && overrides.peer !== models.peer) ||
+        (overrides.teamSupervisor !== undefined &&
+          overrides.teamSupervisor !== models.teamSupervisor);
+      if (running.objective !== objective || changedConfiguration) {
+        throw new CliError(
+          "TEAM_RUNNING",
+          `${running.team_id} is already running; run maestro team stop before changing its objective or configuration`,
+          {
+            generation: running.generation,
+            objective: running.objective,
+            projectPath: running.project_path,
+          },
+        );
+      }
+      if (!existsSync(snapshotPath)) {
+        throw new CliError(
+          "SLP_SNAPSHOT_MISSING",
+          `running generation ${running.team_id}:g${running.generation} is missing ${snapshotPath}`,
+        );
+      }
+      const snapshotBytes = new Uint8Array(await readFile(snapshotPath));
+      const snapshotDigest = createHash("sha256").update(snapshotBytes).digest("hex");
+      if (snapshotDigest !== running.pack_digest) {
+        throw new CliError(
+          "SLP_SNAPSHOT_CHANGED",
+          `running generation ${running.team_id}:g${running.generation} must keep its pinned Workspace Pack`,
+          { actual: snapshotDigest, expected: running.pack_digest },
+        );
+      }
+      generation = running.generation;
+      pack = new TextDecoder().decode(snapshotBytes);
+      version = running.pack_version;
+      digest = running.pack_digest;
+      plan = buildSlpTeamPlan({
+        generation,
+        leadModel: models.lead,
+        projectPath,
+        supervisorModel: models.teamSupervisor,
+        teamId: running.team_id,
+      });
+      started = await runtime.start(plan, roleContracts(pack, running.team_id, generation));
+      const now = new Date().toISOString();
+      const upsertLocalRole = projectStore.database.query(
+        `INSERT INTO slp_local_roles
+          (team_id, generation, role, name, pane_id, workspace_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(team_id, generation, name) DO UPDATE SET
+           role = excluded.role,
+           pane_id = excluded.pane_id,
+           workspace_id = excluded.workspace_id`,
+      );
+      const upsertRoomRole = projectStore.database.query(
+        `INSERT INTO slp_room.slp_team_roles
+          (team_id, generation, role, name, pane_id, workspace_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(team_id, generation, name) DO UPDATE SET
+           role = excluded.role,
+           pane_id = excluded.pane_id,
+           workspace_id = excluded.workspace_id`,
+      );
+      for (const role of started.roles) {
+        upsertLocalRole.run(
+          running.team_id,
+          generation,
+          role.role,
+          role.name,
+          role.paneId,
+          role.workspaceId,
+          now,
+        );
+        upsertRoomRole.run(
+          running.team_id,
+          generation,
+          role.role,
+          role.name,
+          role.paneId,
+          role.workspaceId,
+          now,
+        );
+      }
+      work = projectStore.database
+        .query<{
+          assigned_to: string;
+          created_at: string;
+          created_by: string;
+          generation: number;
+          id: string;
+          objective: string;
+          owner: string | null;
+          state: WorkState;
+          team_id: string;
+          updated_at: string;
+        }, [string, number]>(
+          `SELECT * FROM slp_work
+           WHERE team_id = ? AND generation = ? AND created_by = 'hub-supervisor'
+           ORDER BY created_at LIMIT 1`,
+        )
+        .get(running.team_id, generation) ?? null;
+      if (!work) {
+        throw new CliError(
+          "SLP_INITIAL_WORK_MISSING",
+          `running generation ${running.team_id}:g${generation} has no initial work`,
+        );
+      }
+      workId = work.id;
+    } else {
+      pack = new TextDecoder().decode(hubPackBytes);
+      version = packVersion(pack);
+      digest = createHash("sha256").update(hubPackBytes).digest("hex");
+      models = {
+        lead: overrides.lead ?? packModel(pack, "lead"),
+        peer: overrides.peer ?? packModel(pack, "peer"),
+        teamSupervisor: overrides.teamSupervisor ?? packModel(pack, "team-supervisor"),
+      };
+      generation = (projectStore.database
+        .query<{ generation: number }, [string, string]>(
+          `SELECT COALESCE(MAX(generation), 0) AS generation
+           FROM slp_room.slp_teams WHERE team_id = ? OR project_path = ?`,
+        )
+        .get(teamId, projectPath)?.generation ?? 0) + 1;
+      plan = buildSlpTeamPlan({
+        generation,
+        leadModel: models.lead,
+        projectPath,
+        supervisorModel: models.teamSupervisor,
+        teamId,
+      });
+      previousSnapshot = existsSync(snapshotPath)
+        ? new Uint8Array(await readFile(snapshotPath))
+        : null;
+      await mkdir(join(projectPath, ".maestro"), { recursive: true });
+      await writeFile(snapshotPath, hubPackBytes);
+      snapshotWritten = true;
+      started = await runtime.start(plan, roleContracts(pack, teamId, generation));
+      const now = new Date().toISOString();
+      const lead = started.roles.find((role) => role.role === "lead");
+      if (!lead) throw new CliError("RUNTIME_INCOMPLETE", "Lead was not ready after team start");
+      workId = nextWorkId(projectStore);
+      projectStore.database
+        .query(
+          `INSERT INTO slp_local_teams
+            (team_id, generation, room_store_path, project_path,
+             configuration_json, pack_version, pack_digest, state, workspace_id,
+             bound_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)`,
+        )
+        .run(
+          teamId,
+          generation,
+          context.store.path,
+          projectPath,
+          JSON.stringify(models),
+          version,
+          digest,
+          started.workspaceId,
+          now,
+        );
+      const insertRole = projectStore.database.query(
+        `INSERT INTO slp_local_roles
+          (team_id, generation, role, name, pane_id, workspace_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const role of started.roles) {
+        insertRole.run(teamId, generation, role.role, role.name, role.paneId, role.workspaceId, now);
+      }
+      projectStore.database
+        .query(
+          `INSERT INTO slp_work
+            (id, team_id, generation, objective, created_by, assigned_to, owner,
+             state, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'hub-supervisor', ?, NULL, 'OPEN', ?, ?)`,
+        )
+        .run(workId, teamId, generation, objective, lead.name, now, now);
+      projectStore.database
+        .query(
+          `INSERT INTO slp_activity
+            (team_id, generation, actor, operation, target_type, target_id, created_at)
+           VALUES (?, ?, 'hub-supervisor', 'work.add', 'work', ?, ?)`,
+        )
+        .run(teamId, generation, workId, now);
+      projectStore.database
+        .query(
+          `INSERT INTO slp_room.slp_teams
+            (team_id, generation, project_path, objective, configuration_json,
+             pack_version, pack_digest, state, workspace_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)`,
+        )
+        .run(
+          teamId,
+          generation,
+          projectPath,
+          objective,
+          JSON.stringify(models),
+          version,
+          digest,
+          started.workspaceId,
+          now,
+        );
+      const insertRoomRole = projectStore.database.query(
+        `INSERT INTO slp_room.slp_team_roles
+          (team_id, generation, role, name, pane_id, workspace_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const role of started.roles) {
+        insertRoomRole.run(
+          teamId,
+          generation,
+          role.role,
+          role.name,
+          role.paneId,
+          role.workspaceId,
+          now,
+        );
+      }
+      projectStore.database
+        .query(
+          `INSERT INTO slp_room.slp_activity
+            (team_id, generation, actor, operation, target_type, target_id, created_at)
+           VALUES (?, ?, 'hub-supervisor', 'team.start', 'team', ?, ?)`,
+        )
+        .run(teamId, generation, `${teamId}:g${generation}`, now);
+      work = projectStore.database
+        .query<{
+          assigned_to: string;
+          created_at: string;
+          created_by: string;
+          generation: number;
+          id: string;
+          objective: string;
+          owner: string | null;
+          state: WorkState;
+          team_id: string;
+          updated_at: string;
+        }, [string]>("SELECT * FROM slp_work WHERE id = ?")
+        .get(workId) ?? null;
+      if (!work) throw new Error(`created work disappeared: ${workId}`);
+    }
+
+    projectStore.database.exec("COMMIT");
+    transactionOpen = false;
+    persisted = true;
+    context.sessions.record("team.start");
+    return {
+      data: {
+        team: {
+          generation,
+          packDigest: digest,
+          packVersion: version,
+          projectPath,
+          roles: started.roles,
+          state: "RUNNING",
+          teamId: plan.teamId,
+          workspaceId: started.workspaceId,
+        },
+        work: toWork(work),
+      },
+      text:
+        `${plan.teamId} generation ${generation} running; ` +
+        `${workId} ${work.state} for ${work.assigned_to}`,
+    };
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        projectStore.database.exec("ROLLBACK");
+      } catch {}
+      transactionOpen = false;
+    }
+    let rollbackError: unknown = null;
+    if (plan && started && !persisted) {
+      try {
+        await runtime.rollback(plan, {
+          createdTabIds: started.createdTabIds,
+          createdWorkspace: started.createdWorkspace,
+          startedPaneIds: started.startedPaneIds,
+          workspaceId: started.workspaceId,
+        });
+      } catch (caught) {
+        rollbackError = caught;
+      }
+    }
+    if (snapshotWritten && !persisted) await restoreSnapshot(snapshotPath, previousSnapshot);
+    if (rollbackError) throw rollbackError;
+    throw error;
+  } finally {
+    if (attachedRoom) projectStore.database.exec("DETACH DATABASE slp_room");
+    projectStore.close();
+  }
+}
+
+interface ActiveLocalTeam {
+  configuration_json: string;
+  generation: number;
+  pack_digest: string;
+  project_path: string;
+  room_store_path: string;
+  team_id: string;
+  workspace_id: string;
+}
+
+interface SlpActor {
+  name: string;
+  role: SlpRole;
+  team: ActiveLocalTeam;
+}
+
+interface SlpWorkRow {
+  acceptance_outcome: string | null;
+  accepted_by: string | null;
+  assigned_to: string;
+  created_at: string;
+  created_by: string;
+  current_return: string | null;
+  generation: number;
+  id: string;
+  objective: string;
+  owner: string | null;
+  state: WorkState;
+  team_id: string;
+  updated_at: string;
+}
+
+function activeLocalTeam(context: PluginContext): ActiveLocalTeam | null {
+  if (!tableExists(context.store, "slp_local_teams")) return null;
+  return context.store.database
+    .query<ActiveLocalTeam, [string]>(
+      `SELECT team_id, generation, room_store_path, project_path,
+              configuration_json, pack_digest, workspace_id
+       FROM slp_local_teams
+       WHERE state = 'RUNNING' AND project_path = ?
+       ORDER BY generation DESC LIMIT 1`,
+    )
+    .get(canonicalCheckoutRoot(process.cwd())) ?? null;
+}
+
+function hasAdoptedLocalSlp(context: PluginContext): boolean {
+  return tableExists(context.store, "slp_local_teams") &&
+    context.store.database
+      .query<{ present: number }, [string]>(
+        "SELECT 1 AS present FROM slp_local_teams WHERE project_path = ? LIMIT 1",
+      )
+      .get(canonicalCheckoutRoot(process.cwd()))?.present === 1;
+}
+
+function requireActiveOrLegacy(context: PluginContext): ActiveLocalTeam | null {
+  const active = activeLocalTeam(context);
+  if (!active && hasAdoptedLocalSlp(context)) {
+    throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
+  }
+  return active;
+}
+
+function requireSlpActor(context: PluginContext, allowed: readonly SlpRole[]): SlpActor {
+  const team = activeLocalTeam(context);
+  if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
+  const paneId = process.env.HERDR_PANE_ID;
+  if (!paneId) {
+    throw new CliError(
+      "ROLE_UNPROVEN",
+      "SLP role authority requires the current Herdr pane identity",
+    );
+  }
+  const role = context.store.database
+    .query<{ name: string; role: SlpRole }, [string, number, string]>(
+      `SELECT name, role FROM slp_local_roles
+       WHERE team_id = ? AND generation = ? AND pane_id = ?`,
+    )
+    .get(team.team_id, team.generation, paneId);
+  if (!role) {
+    throw new CliError(
+      "ROLE_UNPROVEN",
+      `pane ${paneId} is not a role in ${team.team_id}:g${team.generation}`,
+    );
+  }
+  if (!allowed.includes(role.role)) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${role.role} cannot perform this operation`,
+      { actor: role.name, allowed, role: role.role },
+    );
+  }
+  return { ...role, team };
+}
+
+function requireSlpWork(context: PluginContext, actor: SlpActor, id: string): SlpWorkRow {
+  const work = context.store.database
+    .query<SlpWorkRow, [string, string, number]>(
+      "SELECT * FROM slp_work WHERE id = ? AND team_id = ? AND generation = ?",
+    )
+    .get(id, actor.team.team_id, actor.team.generation);
+  if (!work) throw new CliError("NOT_FOUND", `SLP work not found: ${id}`);
+  return work;
+}
+
+function requireRunningState(store: Store, team: ActiveLocalTeam): void {
+  const state = store.database
+    .query<{ state: string }, [string, number]>(
+      "SELECT state FROM slp_local_teams WHERE team_id = ? AND generation = ?",
+    )
+    .get(team.team_id, team.generation)?.state;
+  if (state !== "RUNNING") {
+    throw new CliError("NO_ACTIVE_TEAM", `no running SLP team in ${team.project_path}`);
+  }
+}
+
+function requireRunningGeneration(
+  store: Store,
+  team: ActiveLocalTeam,
+  allowedStopToken: string | null = null,
+): void {
+  requireRunningState(store, team);
+  if (!tableExists(store, "slp_stop_grants")) return;
+  const grant = store.database
+    .query<{ token: string }, [string, number]>(
+      "SELECT token FROM slp_stop_grants WHERE team_id = ? AND generation = ?",
+    )
+    .get(team.team_id, team.generation);
+  if (grant && grant.token !== allowedStopToken) {
+    throw new CliError(
+      "TEAM_STOP_IN_PROGRESS",
+      `${team.team_id}:g${team.generation} is shutting down; retry after team stop finishes`,
+    );
+  }
+}
+
+function workData(work: SlpWorkRow): Record<string, unknown> {
+  return {
+    acceptanceOutcome: work.acceptance_outcome,
+    acceptedBy: work.accepted_by,
+    assignedTo: work.assigned_to,
+    createdAt: work.created_at,
+    createdBy: work.created_by,
+    currentReturn: work.current_return,
+    generation: work.generation,
+    id: work.id,
+    objective: work.objective,
+    owner: work.owner,
+    state: work.state,
+    teamId: work.team_id,
+    updatedAt: work.updated_at,
+  };
+}
+
+function readSlpWork(context: PluginContext, actor: SlpActor, id: string): SlpWorkRow {
+  return requireSlpWork(context, actor, id);
+}
+
+function recordProjectActivity(
+  context: PluginContext,
+  actor: SlpActor,
+  operation: string,
+  targetId: string,
+  now: string,
+): void {
+  context.store.database
+    .query(
+      `INSERT INTO slp_activity
+        (team_id, generation, actor, operation, target_type, target_id, created_at)
+       VALUES (?, ?, ?, ?, 'work', ?, ?)`,
+    )
+    .run(actor.team.team_id, actor.team.generation, actor.name, operation, targetId, now);
+}
+
+function requireWorkTransition(changes: number, id: string, operation: string): void {
+  if (changes !== 1) {
+    throw new CliError(
+      "INVALID_STATE",
+      `${id} changed before ${operation}; inspect its current status and retry`,
+    );
+  }
+}
+
+function normalizedPeerName(teamId: string, raw: string, existing: readonly string[]): string {
+  if (existing.includes(raw)) return raw;
+  const candidate = raw.startsWith("peer-") ? raw.slice("peer-".length) : raw;
+  const normalized = candidate
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9-]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(normalized)) {
+    throw new CliError("INVALID_PEER", "--to must name a Peer using letters, numbers, or hyphens");
+  }
+  const readable = normalized.slice(0, 20).replace(/-$/, "");
+  const identity = createHash("sha256")
+    .update(`${teamId}\0${normalized}`)
+    .digest("hex")
+    .slice(0, 6);
+  return `peer-${readable}-${identity}`;
+}
+
+export async function maybeHandleSlpWorkAdd(
+  context: PluginContext,
+  invocation: CliInvocation,
+): Promise<CliResult | null> {
+  if (isRoom(context.store.database) && invocation.options.to !== undefined) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      "Hub Supervisor cannot assign team work directly; communicate through Team Supervisor",
+    );
+  }
+  if (!requireActiveOrLegacy(context)) return null;
+  const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
+  const objective = requiredPosition(invocation, 0, "work objective");
+  const requestedTarget = stringOption(invocation, "to");
+  const roles = context.store.database
+    .query<{ name: string; pane_id: string; role: SlpRole; workspace_id: string }, [string, number]>(
+      `SELECT name, pane_id, role, workspace_id FROM slp_local_roles
+       WHERE team_id = ? AND generation = ?`,
+    )
+    .all(actor.team.team_id, actor.team.generation);
+  let assignee = roles.find((role) => role.role === "lead") ?? null;
+  let createdPeerTab: string | null = null;
+  let startedPeerPane: string | null = null;
+  let plan: SlpTeamPlan | null = null;
+  const runtime = new HerdrSlpRuntime();
+  if (actor.role === "team-supervisor") {
+    if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
+    if (requestedTarget && requestedTarget !== "lead" && requestedTarget !== assignee.name) {
+      throw new CliError("ROLE_FORBIDDEN", "Team Supervisor work is assigned to the Lead");
+    }
+  } else {
+    if (!requestedTarget) {
+      throw new CliError("MISSING_ARGUMENT", "Lead work add requires --to <peer>");
+    }
+    const peerName = normalizedPeerName(
+      actor.team.team_id,
+      requestedTarget,
+      roles.filter((role) => role.role === "peer").map((role) => role.name),
+    );
+    const configuration = JSON.parse(actor.team.configuration_json) as PackModels;
+    const snapshotPath = join(actor.team.project_path, ".maestro", "SLP.md");
+    const snapshot = new Uint8Array(await readFile(snapshotPath));
+    const digest = createHash("sha256").update(snapshot).digest("hex");
+    if (digest !== actor.team.pack_digest) {
+      throw new CliError(
+        "SLP_SNAPSHOT_CHANGED",
+        `running generation ${actor.team.team_id}:g${actor.team.generation} must keep its pinned Workspace Pack`,
+      );
+    }
+    const pack = new TextDecoder().decode(snapshot);
+    plan = buildSlpTeamPlan({
+      generation: actor.team.generation,
+      leadModel: configuration.lead,
+      projectPath: actor.team.project_path,
+      supervisorModel: configuration.teamSupervisor,
+      teamId: actor.team.team_id,
+    });
+    const peerPlan: SlpRolePlan = {
+      kind: "codex",
+      label: `slp:${actor.team.team_id}:g${actor.team.generation}:peer:${peerName}`,
+      model: configuration.peer,
+      name: peerName,
+      role: "peer",
+    };
+    const ensured = await runtime.ensurePeer(
+      plan,
+      peerPlan,
+      roleContracts(pack, actor.team.team_id, actor.team.generation).get("peer") as string,
+    );
+    createdPeerTab = ensured.createdTabId;
+    startedPeerPane = ensured.startedPaneId;
+    assignee = {
+      name: ensured.role.name,
+      pane_id: ensured.role.paneId,
+      role: ensured.role.role,
+      workspace_id: ensured.role.workspaceId,
+    };
+  }
+  if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
+
+  const now = new Date().toISOString();
+  let attachedRoom = false;
+  let id = "";
+  try {
+    if (actor.role === "lead") {
+      const roomStore = new Store(actor.team.room_store_path);
+      try {
+        migrateRoom(roomStore);
+      } finally {
+        roomStore.close();
+      }
+      context.store.database.query("ATTACH DATABASE ? AS slp_room").run(actor.team.room_store_path);
+      attachedRoom = true;
+    }
+    context.store.database.exec("BEGIN IMMEDIATE");
+    requireRunningGeneration(context.store, actor.team);
+    if (actor.role === "lead") {
+      context.store.database
+        .query(
+          `INSERT INTO slp_local_roles
+            (team_id, generation, role, name, pane_id, workspace_id, created_at)
+           VALUES (?, ?, 'peer', ?, ?, ?, ?)
+           ON CONFLICT(team_id, generation, name) DO UPDATE SET
+             pane_id = excluded.pane_id,
+             workspace_id = excluded.workspace_id`,
+        )
+        .run(
+          actor.team.team_id,
+          actor.team.generation,
+          assignee.name,
+          assignee.pane_id,
+          assignee.workspace_id,
+          now,
+        );
+      context.store.database
+        .query(
+          `INSERT INTO slp_room.slp_team_roles
+            (team_id, generation, role, name, pane_id, workspace_id, created_at)
+           VALUES (?, ?, 'peer', ?, ?, ?, ?)
+           ON CONFLICT(team_id, generation, name) DO UPDATE SET
+             pane_id = excluded.pane_id,
+             workspace_id = excluded.workspace_id`,
+        )
+        .run(
+          actor.team.team_id,
+          actor.team.generation,
+          assignee.name,
+          assignee.pane_id,
+          assignee.workspace_id,
+          now,
+        );
+    }
+    id = nextWorkId(context.store);
+    context.store.database
+      .query(
+        `INSERT INTO slp_work
+          (id, team_id, generation, objective, created_by, assigned_to, owner,
+           state, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, 'OPEN', ?, ?)`,
+      )
+      .run(
+        id,
+        actor.team.team_id,
+        actor.team.generation,
+        objective,
+        actor.name,
+        assignee.name,
+        now,
+        now,
+      );
+    recordProjectActivity(context, actor, "work.add", id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    let cleanupError: unknown = null;
+    if ((startedPeerPane || createdPeerTab) && plan) {
+      try {
+        if (startedPeerPane) await runtime.closeStartedPane(plan, startedPeerPane);
+        else if (createdPeerTab) await runtime.closeCreatedTab(plan, createdPeerTab);
+      } catch (caught) {
+        cleanupError = caught;
+      }
+    }
+    if (cleanupError) throw cleanupError;
+    throw error;
+  } finally {
+    if (attachedRoom) context.store.database.exec("DETACH DATABASE slp_room");
+  }
+  context.sessions.record("work.add");
+  const work = readSlpWork(context, actor, id);
+  return {
+    data: {
+      role: {
+        name: assignee.name,
+        paneId: assignee.pane_id,
+        role: assignee.role,
+        workspaceId: assignee.workspace_id,
+      },
+      work: workData(work),
+    },
+    text: `${id} OPEN for ${assignee.name}`,
+  };
+}
+
+export function maybeHandleSlpWorkNote(
+  context: PluginContext,
+  invocation: CliInvocation,
+): CliResult | null {
+  if (!requireActiveOrLegacy(context)) return null;
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const id = requiredPosition(invocation, 0, "work id");
+  const body = requiredPosition(invocation, 1, "note body");
+  const work = requireSlpWork(context, actor, id);
+  if (actor.role === "peer" && work.assigned_to !== actor.name) {
+    throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
+  }
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    requireRunningGeneration(context.store, actor.team);
+    context.store.database
+      .query(
+        `INSERT INTO slp_work_entries (work_id, kind, actor, body, created_at)
+         VALUES (?, 'NOTE', ?, ?, ?)`,
+      )
+      .run(id, actor.name, body, now);
+    recordProjectActivity(context, actor, "work.note", id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("work.note");
+  return {
+    data: { note: { actor: actor.name, body, createdAt: now }, work: workData(work) },
+    text: `${id} note by ${actor.name}: ${body}`,
+  };
+}
+
+function takeWork(context: PluginContext, id: string): CliResult {
+  const actor = requireSlpActor(context, ["lead", "peer"]);
+  const work = requireSlpWork(context, actor, id);
+  if (work.assigned_to !== actor.name) {
+    throw new CliError("ROLE_FORBIDDEN", `${id} is assigned to ${work.assigned_to}`, {
+      actor: actor.name,
+      assignedTo: work.assigned_to,
+    });
+  }
+  if (work.state !== "OPEN" && work.state !== "RETURNED") {
+    throw new CliError("INVALID_STATE", `${id} must be OPEN or RETURNED before work take`);
+  }
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    requireRunningGeneration(context.store, actor.team);
+    const transition = context.store.database
+      .query(
+        `UPDATE slp_work
+         SET state = 'ACTIVE', owner = ?, current_return = NULL, updated_at = ?
+         WHERE id = ? AND state IN ('OPEN', 'RETURNED')`,
+      )
+      .run(actor.name, now, id);
+    requireWorkTransition(transition.changes, id, "work take");
+    recordProjectActivity(context, actor, "work.take", id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("work.take");
+  const current = readSlpWork(context, actor, id);
+  return { data: { work: workData(current) }, text: `${id} ACTIVE by ${actor.name}` };
+}
+
+function returnWork(context: PluginContext, id: string, body: string): CliResult {
+  const actor = requireSlpActor(context, ["lead", "peer"]);
+  const work = requireSlpWork(context, actor, id);
+  if (work.state !== "ACTIVE" || work.owner !== actor.name) {
+    throw new CliError(
+      "INVALID_STATE",
+      `${id} must be ACTIVE and owned by ${actor.name} before work return`,
+    );
+  }
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    requireRunningGeneration(context.store, actor.team);
+    const transition = context.store.database
+      .query(
+        `UPDATE slp_work
+         SET state = 'RETURNED', owner = NULL, current_return = ?, updated_at = ?
+         WHERE id = ? AND state = 'ACTIVE' AND owner = ?`,
+      )
+      .run(body, now, id, actor.name);
+    requireWorkTransition(transition.changes, id, "work return");
+    context.store.database
+      .query(
+        `INSERT INTO slp_work_entries (work_id, kind, actor, body, created_at)
+         VALUES (?, 'RETURN', ?, ?, ?)`,
+      )
+      .run(id, actor.name, body, now);
+    recordProjectActivity(context, actor, "work.return", id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("work.return");
+  const current = readSlpWork(context, actor, id);
+  return { data: { work: workData(current) }, text: `${id} RETURNED by ${actor.name}` };
+}
+
+function acceptWork(context: PluginContext, id: string, outcome: string): CliResult {
+  const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
+  const work = requireSlpWork(context, actor, id);
+  const assignee = context.store.database
+    .query<{ role: SlpRole }, [string, number, string]>(
+      `SELECT role FROM slp_local_roles
+       WHERE team_id = ? AND generation = ? AND name = ?`,
+    )
+    .get(actor.team.team_id, actor.team.generation, work.assigned_to);
+  const expectedReviewer = assignee?.role === "lead" ? "team-supervisor" : "lead";
+  if (actor.role !== expectedReviewer || actor.name === work.assigned_to) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${actor.role} cannot accept work assigned to ${work.assigned_to}`,
+      { actor: actor.name, expectedReviewer },
+    );
+  }
+  if (outcome !== "accepted" && outcome !== "cancelled") {
+    throw new CliError("INVALID_VALUE", "--outcome must be accepted or cancelled");
+  }
+  if (outcome === "cancelled" && work.state === "ACTIVE") {
+    throw new CliError(
+      "INVALID_STATE",
+      `${id} is ACTIVE; its assignee must work return before cancellation`,
+    );
+  }
+  if (
+    (outcome === "accepted" && work.state !== "RETURNED") ||
+    (outcome === "cancelled" && work.state !== "OPEN" && work.state !== "RETURNED")
+  ) {
+    throw new CliError(
+      "INVALID_STATE",
+      `${id} cannot be accepted with outcome ${outcome} from ${work.state}`,
+    );
+  }
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    requireRunningGeneration(context.store, actor.team);
+    const transition = outcome === "accepted"
+      ? context.store.database
+        .query(
+          `UPDATE slp_work
+           SET state = 'DONE', acceptance_outcome = ?, accepted_by = ?, updated_at = ?
+           WHERE id = ? AND state = 'RETURNED'`,
+        )
+        .run(outcome, actor.name, now, id)
+      : context.store.database
+        .query(
+          `UPDATE slp_work
+           SET state = 'DONE', acceptance_outcome = ?, accepted_by = ?, updated_at = ?
+           WHERE id = ? AND state IN ('OPEN', 'RETURNED')`,
+        )
+        .run(outcome, actor.name, now, id);
+    requireWorkTransition(transition.changes, id, "work accept");
+    context.store.database
+      .query(
+        `INSERT INTO slp_work_entries (work_id, kind, actor, body, created_at)
+         VALUES (?, 'ACCEPTANCE', ?, ?, ?)`,
+      )
+      .run(id, actor.name, outcome, now);
+    recordProjectActivity(context, actor, "work.accept", id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("work.accept");
+  const current = readSlpWork(context, actor, id);
+  return {
+    data: { work: workData(current) },
+    text: `${id} DONE (${outcome}) by ${actor.name}`,
+  };
+}
+
+interface HubWorkTarget {
+  generation: number;
+  projectPath: string;
+  teamId: string;
+  workId: string;
+}
+
+function resolveHubWorkTarget(context: PluginContext, reference: string): HubWorkTarget {
+  migrateRoom(context.store);
+  const separator = reference.indexOf(":");
+  const qualifiedTeam = separator > 0 ? reference.slice(0, separator) : null;
+  const workId = separator > 0 ? reference.slice(separator + 1) : reference;
+  if (!workId) throw new CliError("INVALID_WORK_ID", "--work requires a work id");
+  const teams = context.store.database
+    .query<{
+      generation: number;
+      project_path: string;
+      team_id: string;
+    }, []>(
+      `SELECT team_id, generation, project_path FROM slp_teams
+       WHERE state = 'RUNNING'
+       ORDER BY project_path, generation`,
+    )
+    .all()
+    .filter((team) => qualifiedTeam === null || team.team_id === qualifiedTeam);
+  const matches: HubWorkTarget[] = [];
+  for (const team of teams) {
+    let projectStore: Store;
+    try {
+      projectStore = new Store(resolveStoreLocation(team.project_path).path, { readonly: true });
+    } catch (error) {
+      throw new CliError(
+        "PROJECT_UNAVAILABLE",
+        `cannot inspect SLP work in ${team.project_path}`,
+        { cause: error instanceof Error ? error.message : String(error) },
+      );
+    }
+    try {
+      if (!tableExists(projectStore, "slp_work")) continue;
+      const present = projectStore.database
+        .query<{ present: number }, [string, string, number]>(
+          `SELECT 1 AS present FROM slp_work
+           WHERE id = ? AND team_id = ? AND generation = ?`,
+        )
+        .get(workId, team.team_id, team.generation);
+      if (present) {
+        matches.push({
+          generation: team.generation,
+          projectPath: team.project_path,
+          teamId: team.team_id,
+          workId,
+        });
+      }
+    } finally {
+      projectStore.close();
+    }
+  }
+  if (matches.length === 0) {
+    throw new CliError("NOT_FOUND", `SLP work not found from Hub: ${reference}`);
+  }
+  if (matches.length > 1) {
+    throw new CliError(
+      "AMBIGUOUS_WORK",
+      `${workId} exists in multiple teams; qualify it as <team-id>:${workId}`,
+      { candidates: matches.map((match) => `${match.teamId}:${match.workId}`) },
+    );
+  }
+  return matches[0] as HubWorkTarget;
+}
+
+function decideHubWork(
+  context: PluginContext,
+  input: {
+    choice: string;
+    replaces: string | null;
+    scope: string;
+    target: HubWorkTarget;
+    why: string;
+  },
+): CliResult {
+  let transactionOpen = false;
+  let id = "";
+  const now = new Date().toISOString();
+  try {
+    context.store.database.exec("BEGIN IMMEDIATE");
+    transactionOpen = true;
+    const running = context.store.database
+      .query<{ present: number }, [string, number]>(
+        `SELECT 1 AS present FROM slp_teams
+         WHERE team_id = ? AND generation = ? AND state = 'RUNNING'`,
+      )
+      .get(input.target.teamId, input.target.generation);
+    if (!running) {
+      throw new CliError(
+        "NO_ACTIVE_TEAM",
+        `${input.target.teamId}:g${input.target.generation} is no longer running`,
+      );
+    }
+    if (input.replaces) {
+      const prior = context.store.database
+        .query<{ scope: string }, [string]>(
+          "SELECT scope FROM slp_decisions WHERE id = ?",
+        )
+        .get(input.replaces);
+      if (!prior) throw new CliError("NOT_FOUND", `decision to replace not found: ${input.replaces}`);
+      if (prior.scope !== input.scope) {
+        throw new CliError("INVALID_SCOPE", `${input.replaces} has scope ${prior.scope}, not ${input.scope}`);
+      }
+    }
+    id = nextDecisionId(context.store);
+    const insertDecision = context.store.database.query(
+      `INSERT INTO slp_decisions
+        (id, team_id, generation, choice, why, scope, work_id, replaces_id,
+         actor, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'hub-supervisor', ?)`,
+    );
+    const values = [
+      id,
+      input.target.teamId,
+      input.target.generation,
+      input.choice,
+      input.why,
+      input.scope,
+      input.target.workId,
+      input.replaces,
+      now,
+    ] as const;
+    insertDecision.run(...values);
+    context.store.database
+      .query(
+        `INSERT INTO slp_activity
+          (team_id, generation, actor, operation, target_type, target_id, created_at)
+         VALUES (?, ?, 'hub-supervisor', 'decide', 'decision', ?, ?)`,
+      )
+      .run(input.target.teamId, input.target.generation, id, now);
+    context.store.database.exec("COMMIT");
+    transactionOpen = false;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        context.store.database.exec("ROLLBACK");
+      } catch {}
+    }
+    throw error;
+  }
+  context.sessions.record("decide");
+  const decision = {
+    actor: "hub-supervisor",
+    choice: input.choice,
+    createdAt: now,
+    id,
+    replaces: input.replaces,
+    scope: input.scope,
+    why: input.why,
+    workId: input.target.workId,
+  };
+  return { data: { decision }, text: `${id} [${input.scope}] ${input.choice}` };
+}
+
+function decide(context: PluginContext, invocation: CliInvocation): CliResult {
+  const choice = requiredPosition(invocation, 0, "choice");
+  const why = stringOption(invocation, "why")?.trim();
+  if (!why) throw new CliError("MISSING_ARGUMENT", "decide requires --why <reason>");
+  const local = activeLocalTeam(context);
+  let actor: string;
+  let teamId: string;
+  let generation: number;
+  let defaultScope: "technical" | "team" | "owner";
+  let allowedScopes: readonly string[];
+  if (local) {
+    const role = requireSlpActor(context, ["team-supervisor", "lead"]);
+    actor = role.name;
+    teamId = role.team.team_id;
+    generation = role.team.generation;
+    defaultScope = role.role === "lead" ? "technical" : "team";
+    allowedScopes = [defaultScope];
+  } else if (isRoom(context.store.database)) {
+    actor = "hub-supervisor";
+    teamId = "hub";
+    generation = 0;
+    defaultScope = "owner";
+    allowedScopes = ["owner", "cross-team"];
+  } else {
+    throw new CliError("NO_ACTIVE_TEAM", "decide requires a Hub or running team context");
+  }
+  const scope = stringOption(invocation, "scope") ?? defaultScope;
+  if (!allowedScopes.includes(scope)) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${actor} cannot decide scope ${scope}; allowed: ${allowedScopes.join(", ")}`,
+    );
+  }
+  const workId = stringOption(invocation, "work") ?? null;
+  const replaces = stringOption(invocation, "replaces") ?? null;
+  if (workId && !local) {
+    return decideHubWork(context, {
+      choice,
+      replaces,
+      scope,
+      target: resolveHubWorkTarget(context, workId),
+      why,
+    });
+  }
+  if (workId && local) {
+    const present = context.store.database
+      .query<{ present: number }, [string, string, number]>(
+        "SELECT 1 AS present FROM slp_work WHERE id = ? AND team_id = ? AND generation = ?",
+      )
+      .get(workId, teamId, generation);
+    if (!present) throw new CliError("NOT_FOUND", `SLP work not found: ${workId}`);
+  }
+  if (replaces) {
+    if (!tableExists(context.store, "slp_decisions")) {
+      throw new CliError("NOT_FOUND", `decision to replace not found: ${replaces}`);
+    }
+    const prior = context.store.database
+      .query<{ scope: string }, [string, string, number]>(
+        `SELECT scope FROM slp_decisions
+         WHERE id = ? AND team_id = ? AND generation = ?`,
+      )
+      .get(replaces, teamId, generation);
+    if (!prior) throw new CliError("NOT_FOUND", `decision to replace not found: ${replaces}`);
+    if (prior.scope !== scope) {
+      throw new CliError("INVALID_SCOPE", `${replaces} has scope ${prior.scope}, not ${scope}`);
+    }
+  }
+  if (!local) migrateRoom(context.store);
+  let id = "";
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    if (local) requireRunningGeneration(context.store, local);
+    id = nextDecisionId(context.store);
+    context.store.database
+      .query(
+        `INSERT INTO slp_decisions
+          (id, team_id, generation, choice, why, scope, work_id, replaces_id,
+           actor, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
+    context.store.database
+      .query(
+        `INSERT INTO slp_activity
+          (team_id, generation, actor, operation, target_type, target_id, created_at)
+         VALUES (?, ?, ?, 'decide', 'decision', ?, ?)`,
+      )
+      .run(teamId, generation, actor, id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("decide");
+  const decision = { actor, choice, createdAt: now, id, replaces, scope, why, workId };
+  return { data: { decision }, text: `${id} [${scope}] ${choice}` };
+}
+
+function stopPlan(team: ActiveLocalTeam): SlpTeamPlan {
+  const models = JSON.parse(team.configuration_json) as PackModels;
+  return buildSlpTeamPlan({
+    generation: team.generation,
+    leadModel: models.lead,
+    projectPath: team.project_path,
+    supervisorModel: models.teamSupervisor,
+    teamId: team.team_id,
+  });
+}
+
+function stopRoles(store: Store, team: ActiveLocalTeam): SlpRuntimeRole[] {
+  return roleRows(store, team.team_id, team.generation, true).map((role) => ({
+    name: role.name,
+    paneId: role.pane_id,
+    role: role.role,
+    workspaceId: role.workspace_id,
+  }));
+}
+
+function unfinishedWork(store: Store, team: ActiveLocalTeam): Array<{ id: string; state: WorkState }> {
+  return store.database
+    .query<{ id: string; state: WorkState }, [string, number]>(
+      `SELECT id, state FROM slp_work
+       WHERE team_id = ? AND generation = ? AND state <> 'DONE'
+       ORDER BY created_at, id`,
+    )
+    .all(team.team_id, team.generation);
+}
+
+interface StopProxyEnvironment {
+  closeWorkspace: boolean;
+  helperTabId: string;
+  helperWorkspaceId: string;
+  projectPath: string;
+  token: string;
+}
+
+function stopProxyEnvironment(): StopProxyEnvironment | null {
+  const token = process.env[slpStopEnvironment.token];
+  if (!token) return null;
+  const projectPath = process.env[slpStopEnvironment.project];
+  const helperTabId = process.env[slpStopEnvironment.helperTab];
+  const helperWorkspaceId = process.env[slpStopEnvironment.helperWorkspace];
+  const closeWorkspace = process.env[slpStopEnvironment.closeWorkspace];
+  if (
+    !projectPath ||
+    !helperTabId ||
+    !helperWorkspaceId ||
+    (closeWorkspace !== "0" && closeWorkspace !== "1")
+  ) {
+    throw new CliError("INVALID_STOP_GRANT", "incomplete SLP stop helper authority");
+  }
+  return {
+    closeWorkspace: closeWorkspace === "1",
+    helperTabId,
+    helperWorkspaceId,
+    projectPath,
+    token,
+  };
+}
+
+function localTeamState(store: Store, team: ActiveLocalTeam): "RUNNING" | "STOPPED" | null {
+  return store.database
+    .query<{ state: "RUNNING" | "STOPPED" }, [string, number]>(
+      "SELECT state FROM slp_local_teams WHERE team_id = ? AND generation = ?",
+    )
+    .get(team.team_id, team.generation)?.state ?? null;
+}
+
+function clearStopGrant(store: Store, team: ActiveLocalTeam, token: string): void {
+  if (!tableExists(store, "slp_stop_grants")) return;
+  store.database
+    .query(
+      "DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ? AND token = ?",
+    )
+    .run(team.team_id, team.generation, token);
+}
+
+function stopResult(team: ActiveLocalTeam, emergency: boolean): CliResult {
+  return {
+    data: {
+      emergency,
+      team: {
+        generation: team.generation,
+        projectPath: team.project_path,
+        state: "STOPPED",
+        teamId: team.team_id,
+      },
+    },
+    text: `${team.team_id} generation ${team.generation} STOPPED${emergency ? " (emergency)" : ""}`,
+  };
+}
+
+function issueStopGrant(store: Store, team: ActiveLocalTeam, actor: string): string {
+  migrateProject(store);
+  const token = randomUUID();
+  store.database.exec("BEGIN IMMEDIATE");
+  try {
+    requireRunningState(store, team);
+    const unfinished = unfinishedWork(store, team);
+    if (unfinished.length > 0) {
+      throw new CliError(
+        "TEAM_UNFINISHED",
+        `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
+        { unfinished },
+      );
+    }
+    store.database
+      .query("DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ?")
+      .run(team.team_id, team.generation);
+    store.database
+      .query(
+        `INSERT INTO slp_stop_grants
+          (token, team_id, generation, requested_by, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(token, team.team_id, team.generation, actor, new Date().toISOString());
+    store.database.exec("COMMIT");
+    return token;
+  } catch (error) {
+    try {
+      store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+}
+
+async function waitForStopped(
+  store: Store,
+  team: ActiveLocalTeam,
+  token: string,
+): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (localTeamState(store, team) === "STOPPED") return;
+    const grant = store.database
+      .query<{ token: string }, [string, number]>(
+        "SELECT token FROM slp_stop_grants WHERE team_id = ? AND generation = ?",
+      )
+      .get(team.team_id, team.generation);
+    if (!grant || grant.token !== token) {
+      throw new CliError(
+        "TEAM_STOP_INCOMPLETE",
+        `${team.team_id}:g${team.generation} remains RUNNING; inspect status and retry team stop`,
+      );
+    }
+    await Bun.sleep(50);
+  }
+  throw new CliError(
+    "TEAM_STOP_PENDING",
+    `${team.team_id}:g${team.generation} remains RUNNING while its stop helper finishes; inspect status before retrying`,
+  );
+}
+
+async function requestNormalStop(
+  context: PluginContext,
+  runtime: HerdrSlpRuntime,
+  actor: SlpActor,
+): Promise<CliResult> {
+  const team = actor.team;
+  const token = issueStopGrant(context.store, team, actor.name);
+  const cliEntry = process.argv[1];
+  if (!cliEntry) {
+    clearStopGrant(context.store, team, token);
+    throw new CliError("RUNTIME_UNAVAILABLE", "cannot locate the running Maestro entrypoint");
+  }
+  try {
+    await runtime.delegateStop(
+      stopPlan(team),
+      dirname(dirname(team.room_store_path)),
+      token,
+      resolve(cliEntry),
+    );
+    await waitForStopped(context.store, team, token);
+    return stopResult(team, false);
+  } catch (error) {
+    if (localTeamState(context.store, team) === "STOPPED") return stopResult(team, false);
+    if (!(error instanceof CliError && error.code === "TEAM_STOP_PENDING")) {
+      try {
+        clearStopGrant(context.store, team, token);
+      } catch {}
+    }
+    throw error;
+  }
+}
+
+async function stopTeam(
+  context: PluginContext,
+  runtime: HerdrSlpRuntime,
+  invocation: CliInvocation,
+): Promise<CliResult> {
+  const requestedTeam = requiredPosition(invocation, 0, "team id");
+  const emergency = invocation.options.emergency === true;
+  const proxy = stopProxyEnvironment();
+  if (!isRoom(context.store.database)) {
+    if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper must run from its Hub");
+    if (emergency) {
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        "--emergency is Hub Supervisor authority and must run from ~/maestro",
+      );
+    }
+    const actor = requireSlpActor(context, ["team-supervisor"]);
+    if (requestedTeam !== actor.team.team_id) {
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        `${actor.name} cannot stop ${requestedTeam}; current team is ${actor.team.team_id}`,
+      );
+    }
+    return requestNormalStop(context, runtime, actor);
+  }
+
+  if (!emergency && !proxy) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      "Hub Supervisor may stop a team only with --emergency; normal stop belongs to Team Supervisor",
+    );
+  }
+  if (emergency && proxy) {
+    throw new CliError("INVALID_STOP_GRANT", "stop helper cannot claim emergency authority");
+  }
+  if (!tableExists(context.store, "slp_teams")) {
+    throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
+  }
+  const roomTeam = context.store.database
+    .query<{
+      configuration_json: string;
+      generation: number;
+      pack_digest: string;
+      project_path: string;
+      state: "RUNNING" | "STOPPED";
+      team_id: string;
+      workspace_id: string;
+    }, [string]>(
+      `SELECT team_id, generation, project_path, configuration_json,
+              pack_digest, state, workspace_id
+       FROM slp_teams WHERE team_id = ?
+       ORDER BY generation DESC LIMIT 1`,
+    )
+    .get(requestedTeam);
+  if (!roomTeam) throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
+  if (proxy && canonicalCheckoutRoot(proxy.projectPath) !== roomTeam.project_path) {
+    throw new CliError("INVALID_STOP_GRANT", "stop helper project does not match its Hub team");
+  }
+
+  const projectStore = new Store(resolveStoreLocation(roomTeam.project_path).path);
+  migrateProject(projectStore);
+  const team = projectStore.database
+    .query<ActiveLocalTeam, [string, number]>(
+      `SELECT team_id, generation, room_store_path, project_path,
+              configuration_json, pack_digest, workspace_id
+       FROM slp_local_teams WHERE team_id = ? AND generation = ?`,
+    )
+    .get(roomTeam.team_id, roomTeam.generation);
+  if (!team) {
+    projectStore.close();
+    throw new CliError(
+      "SLP_BINDING_MISSING",
+      `project binding missing for ${roomTeam.team_id}:g${roomTeam.generation}`,
+    );
+  }
+  if (resolve(team.room_store_path) !== resolve(context.store.path)) {
+    projectStore.close();
+    throw new CliError("INVALID_STOP_GRANT", `${team.team_id} is bound to another Hub`);
+  }
+
+  let attachedRoom = false;
+  let transactionOpen = false;
+  try {
+    if (roomTeam.state === "STOPPED") {
+      if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
+      await runtime.stop(stopPlan(team), stopRoles(projectStore, team));
+      context.sessions.record("team.stop.emergency");
+      return {
+        data: {
+          emergency: true,
+          team: {
+            generation: team.generation,
+            projectPath: team.project_path,
+            state: "STOPPED",
+            teamId: team.team_id,
+          },
+        },
+        text: `${team.team_id} generation ${team.generation} already STOPPED; runtime cleanup complete`,
+      };
+    }
+    projectStore.database.query("ATTACH DATABASE ? AS slp_room").run(team.room_store_path);
+    attachedRoom = true;
+    projectStore.database.exec("BEGIN IMMEDIATE");
+    transactionOpen = true;
+    try {
+      let actor = "hub-supervisor";
+      if (proxy) {
+        requireRunningGeneration(projectStore, team, proxy.token);
+        const grant = projectStore.database
+          .query<{ requested_by: string }, [string, number, string]>(
+            `SELECT requested_by FROM slp_stop_grants
+             WHERE team_id = ? AND generation = ? AND token = ?`,
+          )
+          .get(team.team_id, team.generation, proxy.token);
+        if (!grant) throw new CliError("INVALID_STOP_GRANT", "stop helper authority expired");
+        actor = grant.requested_by;
+        const unfinished = unfinishedWork(projectStore, team);
+        if (unfinished.length > 0) {
+          throw new CliError(
+            "TEAM_UNFINISHED",
+            `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
+            { unfinished },
+          );
+        }
+      } else {
+        requireRunningState(projectStore, team);
+      }
+      const roles = stopRoles(projectStore, team);
+      await runtime.stop(stopPlan(team), roles);
+      const now = new Date().toISOString();
+      const localTransition = projectStore.database
+        .query(
+          `UPDATE slp_local_teams SET state = 'STOPPED'
+           WHERE team_id = ? AND generation = ? AND state = 'RUNNING'`,
+        )
+        .run(team.team_id, team.generation);
+      const roomTransition = projectStore.database
+        .query(
+          `UPDATE slp_room.slp_teams SET state = 'STOPPED', stopped_at = ?
+           WHERE team_id = ? AND generation = ? AND state = 'RUNNING'`,
+        )
+        .run(now, team.team_id, team.generation);
+      if (localTransition.changes !== 1 || roomTransition.changes !== 1) {
+        throw new CliError(
+          "INVALID_STATE",
+          `${team.team_id}:g${team.generation} changed before team stop could commit`,
+        );
+      }
+      projectStore.database
+        .query(
+          `INSERT INTO slp_activity
+            (team_id, generation, actor, operation, target_type, target_id, created_at)
+           VALUES (?, ?, ?, ?, 'team', ?, ?)`,
+        )
+        .run(
+          team.team_id,
+          team.generation,
+          actor,
+          emergency ? "team.stop.emergency" : "team.stop",
+          team.team_id,
+          now,
+        );
+      projectStore.database
+        .query("DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ?")
+        .run(team.team_id, team.generation);
+      projectStore.database.exec("COMMIT");
+      transactionOpen = false;
+    } catch (error) {
+      if (transactionOpen) {
+        try {
+          projectStore.database.exec("ROLLBACK");
+        } catch {}
+        transactionOpen = false;
+      }
+      if (proxy) {
+        try {
+          clearStopGrant(projectStore, team, proxy.token);
+        } catch {}
+      }
+      throw error;
+    }
+    context.sessions.record(emergency ? "team.stop.emergency" : "team.stop");
+    return stopResult(team, emergency);
+  } finally {
+    if (attachedRoom) projectStore.database.exec("DETACH DATABASE slp_room");
+    projectStore.close();
+    if (proxy) {
+      try {
+        await runtime.closeStopHelper(
+          dirname(dirname(context.store.path)),
+          proxy.helperTabId,
+          proxy.helperWorkspaceId,
+          proxy.closeWorkspace,
+        );
+      } catch {}
+    }
+  }
+}
+
+function roleRows(store: Store, teamId: string, generation: number, local: boolean) {
+  const table = local ? "slp_local_roles" : "slp_team_roles";
+  return store.database
+    .query<{
+      name: string;
+      pane_id: string;
+      role: SlpRole;
+      workspace_id: string;
+    }, [string, number]>(
+      `SELECT name, pane_id, role, workspace_id FROM ${table}
+       WHERE team_id = ? AND generation = ?
+       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
+    )
+    .all(teamId, generation);
+}
+
+export async function maybeHandleSlpStatus(
+  context: PluginContext,
+  invocation: CliInvocation,
+): Promise<CliResult | null> {
+  const requestedWork = invocation.positionals[0] ?? null;
+  if (isRoom(context.store.database)) {
+    if (requestedWork) {
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        "Hub Supervisor does not manage project work directly; run status <work-id> in the team workspace",
+      );
+    }
+    const rows = tableExists(context.store, "slp_teams")
+      ? context.store.database
+      .query<{
+        configuration_json: string;
+        generation: number;
+        pack_digest: string;
+        pack_version: string;
+        project_path: string;
+        state: "RUNNING" | "STOPPED";
+        team_id: string;
+        workspace_id: string;
+      }, []>(
+        `SELECT team_id, generation, project_path, configuration_json, pack_version,
+                pack_digest, state, workspace_id
+         FROM slp_teams
+         ORDER BY project_path, generation`,
+      )
+      .all()
+      : [];
+    const runtime = new HerdrSlpRuntime();
+    const teams = [] as Array<Record<string, unknown>>;
+    for (const row of rows) {
+      const roles = roleRows(context.store, row.team_id, row.generation, false);
+      let missingPanes: string[] = [];
+      let runtimeState: "available" | "unavailable" | "not-running" = "not-running";
+      let watch = false;
+      const models = JSON.parse(row.configuration_json) as PackModels;
+      const plan = buildSlpTeamPlan({
+        generation: row.generation,
+        leadModel: models.lead,
+        projectPath: row.project_path,
+        supervisorModel: models.teamSupervisor,
+        teamId: row.team_id,
+      });
+      try {
+        const inspection = await runtime.inspect(
+          plan,
+          roles.map((role) => ({
+            name: role.name,
+            paneId: role.pane_id,
+            role: role.role,
+            workspaceId: role.workspace_id,
+          })),
+        );
+        if (row.state === "RUNNING" || inspection.workspace) {
+          missingPanes = inspection.missingPanes;
+          runtimeState = inspection.runtime;
+          watch = inspection.watch;
+        }
+      } catch {
+        runtimeState = "unavailable";
+      }
+      const counts: Record<WorkState, number> = { ACTIVE: 0, DONE: 0, OPEN: 0, RETURNED: 0 };
+      const projectStore = new Store(resolveStoreLocation(row.project_path).path, { readonly: true });
+      try {
+        if (tableExists(projectStore, "slp_work")) {
+          for (const count of projectStore.database
+            .query<{ count: number; state: WorkState }, [string, number]>(
+              `SELECT state, COUNT(*) AS count FROM slp_work
+               WHERE team_id = ? AND generation = ? GROUP BY state`,
+            )
+            .all(row.team_id, row.generation)) {
+            counts[count.state] = count.count;
+          }
+        }
+      } finally {
+        projectStore.close();
+      }
+      teams.push({
+        generation: row.generation,
+        missingPanes,
+        packDigest: row.pack_digest,
+        packVersion: row.pack_version,
+        projectPath: row.project_path,
+        roles: roles.map((role) => ({
+          name: role.name,
+          paneId: role.pane_id,
+          role: role.role,
+        })),
+        runtime: runtimeState,
+        state: row.state,
+        teamId: row.team_id,
+        watch: watch ? "on" : "off",
+        workCounts: counts,
+        workspaceId: row.workspace_id,
+      });
+    }
+    return {
+      data: { teams },
+      text: teams.length === 0
+        ? "no SLP teams"
+        : teams.map((team) =>
+          `${team.teamId} g${team.generation} ${team.state}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
+        ).join("\n"),
+    };
+  }
+
+  if (!requireActiveOrLegacy(context)) return null;
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const roles = roleRows(context.store, actor.team.team_id, actor.team.generation, true);
+  if (requestedWork) {
+    const work = requireSlpWork(context, actor, requestedWork);
+    if (actor.role === "peer" && work.assigned_to !== actor.name) {
+      throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${requestedWork}`);
+    }
+    if (
+      actor.role === "lead" &&
+      work.assigned_to !== actor.name &&
+      work.created_by !== actor.name
+    ) {
+      throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${requestedWork}`);
+    }
+    const entries = context.store.database
+      .query<{
+        actor: string;
+        body: string;
+        created_at: string;
+        kind: "NOTE" | "RETURN" | "ACCEPTANCE";
+      }, [string]>(
+        `SELECT kind, actor, body, created_at FROM slp_work_entries
+         WHERE work_id = ? ORDER BY id`,
+      )
+      .all(requestedWork);
+    const localDecisions = context.store.database
+      .query<{
+        actor: string;
+        choice: string;
+        created_at: string;
+        id: string;
+        replaces_id: string | null;
+        scope: string;
+        why: string;
+      }, [string]>(
+        `SELECT id, choice, why, scope, replaces_id, actor, created_at
+         FROM slp_decisions WHERE work_id = ? ORDER BY created_at, id`,
+      )
+      .all(requestedWork)
+      .map((decision) => ({
+        actor: decision.actor,
+        choice: decision.choice,
+        createdAt: decision.created_at,
+        id: decision.id,
+        replaces: decision.replaces_id,
+        scope: decision.scope,
+        why: decision.why,
+      }));
+    const roomStore = new Store(actor.team.room_store_path, { readonly: true });
+    let hubDecisions: typeof localDecisions = [];
+    try {
+      if (tableExists(roomStore, "slp_decisions")) {
+        hubDecisions = roomStore.database
+          .query<{
+            actor: string;
+            choice: string;
+            created_at: string;
+            id: string;
+            replaces_id: string | null;
+            scope: string;
+            why: string;
+          }, [string, number, string]>(
+            `SELECT id, choice, why, scope, replaces_id, actor, created_at
+             FROM slp_decisions
+             WHERE team_id = ? AND generation = ? AND work_id = ?
+             ORDER BY created_at, id`,
+          )
+          .all(actor.team.team_id, actor.team.generation, requestedWork)
+          .map((decision) => ({
+            actor: decision.actor,
+            choice: decision.choice,
+            createdAt: decision.created_at,
+            id: decision.id,
+            replaces: decision.replaces_id,
+            scope: decision.scope,
+            why: decision.why,
+          }));
+      }
+    } finally {
+      roomStore.close();
+    }
+    const decisions = [...new Map(
+      [...localDecisions, ...hubDecisions].map((decision) => [decision.id, decision]),
+    ).values()].sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+    );
+    return {
+      data: {
+        acceptance: entries.findLast((entry) => entry.kind === "ACCEPTANCE") ?? null,
+        decisions,
+        notes: entries
+          .filter((entry) => entry.kind === "NOTE")
+          .map((entry) => ({ actor: entry.actor, body: entry.body, createdAt: entry.created_at })),
+        returns: entries
+          .filter((entry) => entry.kind === "RETURN")
+          .map((entry) => ({ actor: entry.actor, body: entry.body, createdAt: entry.created_at })),
+        work: workData(work),
+      },
+      text: `${work.id} ${work.state} assigned to ${work.assigned_to}`,
+    };
+  }
+
+  const allWork = context.store.database
+    .query<SlpWorkRow, [string, number]>(
+      `SELECT * FROM slp_work WHERE team_id = ? AND generation = ? ORDER BY created_at, id`,
+    )
+    .all(actor.team.team_id, actor.team.generation);
+  const scoped = allWork.filter((work) => {
+    if (actor.role === "team-supervisor") return work.state === "ACTIVE" || work.state === "RETURNED";
+    if (actor.role === "peer") return work.assigned_to === actor.name && work.state !== "DONE";
+    return (
+      work.assigned_to === actor.name || work.created_by === actor.name
+    ) && work.state !== "DONE";
+  });
+  let missingPanes: string[] = [];
+  let runtimeState: "available" | "unavailable" = "available";
+  let watch = false;
+  const models = JSON.parse(actor.team.configuration_json) as PackModels;
+  const plan = buildSlpTeamPlan({
+    generation: actor.team.generation,
+    leadModel: models.lead,
+    projectPath: actor.team.project_path,
+    supervisorModel: models.teamSupervisor,
+    teamId: actor.team.team_id,
+  });
+  try {
+    const inspection = await new HerdrSlpRuntime().inspect(
+      plan,
+      roles.map((role) => ({
+        name: role.name,
+        paneId: role.pane_id,
+        role: role.role,
+        workspaceId: role.workspace_id,
+      })),
+    );
+    missingPanes = inspection.missingPanes;
+    watch = inspection.watch;
+  } catch {
+    runtimeState = "unavailable";
+  }
+  return {
+    data: {
+      generation: actor.team.generation,
+      missingPanes,
+      role: { name: actor.name, role: actor.role },
+      roles: roles.map((role) => ({ name: role.name, paneId: role.pane_id, role: role.role })),
+      runtime: runtimeState,
+      teamId: actor.team.team_id,
+      watch: watch ? "on" : "off",
+      work: scoped.map(workData),
+    },
+    text: `${actor.team.team_id} g${actor.team.generation}; ${scoped.length} relevant work`,
+  };
+}
+
+export const slpV2Plugin: BuiltInPlugin = {
+  name: "slp-v2",
+  apply(context) {
+    const runtime = new HerdrSlpRuntime();
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "team start",
+        (invocation): Promise<CliResult> =>
+          startTeam(
+            context,
+            runtime,
+            requiredPosition(invocation, 0, "project"),
+            requiredPosition(invocation, 1, "objective"),
+            {
+              lead: stringOption(invocation, "lead-model"),
+              peer: stringOption(invocation, "peer-model"),
+              teamSupervisor: stringOption(invocation, "supervisor-model"),
+            },
+          ),
+        {
+          description: "Start or restore one supervised SLP team generation.",
+          json: true,
+          flags: {
+            "--lead-model": { description: "Override the Workspace Pack Lead model.", value: true },
+            "--peer-model": { description: "Override the Workspace Pack Peer model.", value: true },
+            "--supervisor-model": {
+              description: "Override the Workspace Pack Team Supervisor model.",
+              value: true,
+            },
+          },
+          positionals: [
+            { name: "project", required: true },
+            { name: "objective", required: true },
+          ],
+          rootDescription: "Run the simplified supervised-team lifecycle.",
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "team stop",
+        (invocation): Promise<CliResult> => stopTeam(context, runtime, invocation),
+        {
+          description: "Stop one SLP team after work completes, or emergency-stop it from Hub.",
+          flags: {
+            "--emergency": { description: "Use Hub owner authority and preserve unfinished work." },
+          },
+          json: true,
+          positionals: [{ name: "team-id", required: true }],
+          rootDescription: "Run the simplified supervised-team lifecycle.",
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "work take",
+        (invocation): CliResult =>
+          takeWork(context, requiredPosition(invocation, 0, "work id")),
+        {
+          description: "Take assigned OPEN or RETURNED SLP work.",
+          json: true,
+          positionals: [{ name: "work-id", required: true }],
+          rootDescription: "Move supervised work through its four-state lifecycle.",
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "work return",
+        (invocation): CliResult =>
+          returnWork(
+            context,
+            requiredPosition(invocation, 0, "work id"),
+            requiredPosition(invocation, 1, "return body"),
+          ),
+        {
+          description: "Return ACTIVE SLP work with its bounded result body.",
+          json: true,
+          positionals: [
+            { name: "work-id", required: true },
+            { name: "body", required: true },
+          ],
+          rootDescription: "Move supervised work through its four-state lifecycle.",
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "work accept",
+        (invocation): CliResult =>
+          acceptWork(
+            context,
+            requiredPosition(invocation, 0, "work id"),
+            stringOption(invocation, "outcome") ?? "accepted",
+          ),
+        {
+          description: "Accept RETURNED SLP work at the reviewer boundary.",
+          flags: {
+            "--outcome": {
+              description: "Record accepted or cancelled; cancellation may close OPEN work.",
+              value: true,
+            },
+          },
+          json: true,
+          positionals: [{ name: "work-id", required: true }],
+          rootDescription: "Move supervised work through its four-state lifecycle.",
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(context, "decide", (invocation): CliResult => decide(context, invocation), {
+        description: "Record one immutable settled decision.",
+        flags: {
+          "--replaces": { description: "Link the decision it replaces.", value: true },
+          "--scope": {
+            description: "Select owner or cross-team scope when acting as Hub Supervisor.",
+            value: true,
+          },
+          "--why": { description: "Record why this choice is settled.", value: true },
+          "--work": { description: "Link the decision to SLP work.", value: true },
+        },
+        json: true,
+        positionals: [{ name: "choice", required: true }],
+        rootDescription: "Record a settled SLP decision in one operation.",
+      }),
+    );
+  },
+};

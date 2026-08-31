@@ -156,7 +156,7 @@ test("547 a lesson carries evidence and a project from another store as written 
       "file",
       "the relay card needed two commands to close",
       "--target",
-      "lead.md: reporting a relay",
+      "SLP.md: recording a material relay",
       "--expected",
       "one command",
       "--why",
@@ -322,7 +322,7 @@ test("554 install ships maestro-improve beside the other method skills (w553/d42
   });
 });
 
-test("555 [lint] the improver skill is one lane parameterised by target (w553/d42, d44)", async () => {
+test("555 [lint] the improver skill is one Peer assignment parameterised by target", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-improve");
   const skill = await readFile(join(root, "SKILL.md"), "utf8");
 
@@ -338,29 +338,14 @@ test("555 [lint] the improver skill is one lane parameterised by target (w553/d4
   expect(skill).toContain("never deletes");
   // Progressive disclosure: the target catalogue is a reference, not the skill.
   expect(skill).toContain("references/targets.md");
-  expect(await readFile(join(root, "references", "targets.md"), "utf8")).toContain(
-    "Workspace Protocol",
-  );
-});
-
-test("556 [lint] slp.md carries the improver loop from threshold to challenge (w553/d42, d43, d44)", async () => {
-  const slp = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"),
-    "utf8",
-  );
-
-  // The trigger is a threshold the room reads, never a correction firing a run.
-  expect(slp).toContain("LESSONS_PENDING");
-  expect(slp).toContain("never per correction");
-  // One delivery lane on the strong rung, then a challenge on the diverse one.
-  expect(slp).toContain("`maestro-improve`");
-  expect(slp).toContain("strong rung");
-  expect(slp).toContain("diverse rung");
-  // d43: the scenario harness gates the first run.
-  expect(slp).toContain("golden");
-  // d44: sources, and a rejection that stays as data.
-  expect(slp).toContain("through its handback");
-  expect(slp).toContain("never deleted");
+  const targets = await readFile(join(root, "references", "targets.md"), "utf8");
+  expect(targets).toContain("Workspace Protocol");
+  expect(skill).toContain("Workspace Pack in `src/plugins/resources/SLP.md`");
+  expect(targets).toContain("`src/plugins/resources/SLP.md`");
+  for (const retired of ["`lane.md`", "`lead.md`"]) {
+    expect(skill).not.toContain(retired);
+    expect(targets).not.toContain(retired);
+  }
 });
 
 test("560 lesson render warns before it summarises and names the command that shows why (w558)", async () => {
@@ -546,14 +531,12 @@ test("565 --lessons takes a lesson id and an absolute store path or it refuses (
   });
 });
 
-test("566 [lint] the doctrine that answers a lesson names the field that carries it (w561/d729)", async () => {
+test("566 [lint] the improver skill returns through the SLP work surface", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
-  const slp = await readFile(join(root, "recipes", "slp.md"), "utf8");
   const skill = await readFile(join(root, "skills", "maestro-improve", "SKILL.md"), "utf8");
 
-  for (const text of [slp, skill]) {
-    expect(text).toContain("--lessons");
-    // The store is half the id: lesson process writes only where it runs.
-    expect(text).toContain("<lesson id>@<store path>");
-  }
+  expect(skill).toContain("maestro work return <work-id>");
+  expect(skill).toContain("lesson in another store is processed by that store's holder");
+  expect(skill).not.toContain("--lessons");
+  expect(skill).not.toContain("File one handback");
 });

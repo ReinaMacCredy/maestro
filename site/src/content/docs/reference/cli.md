@@ -38,8 +38,11 @@ maestro team stop <team-id>
 
 Team Supervisor authority for normal stop; Hub Supervisor authority for an
 emergency stop. Normal stop requires every work item to be `DONE`. The
-generation snapshot and durable records remain after runtime panes and raw
-transcript are removed.
+Team Supervisor delegates its own final close to a transient foreground
+non-agent Hub pane; this is internal, not a tenth operation. State changes to
+`STOPPED` only after every team pane, the workspace, and raw transcript are
+gone. A partial close remains `RUNNING`, and retry continues cleanup. The
+generation snapshot and durable records remain.
 
 ```sh
 cd ~/maestro
@@ -116,6 +119,9 @@ maestro decide "<choice>" --why "<reason>" \
 
 Writes one immutable settled decision. Lead owns technical scope, Team
 Supervisor owns team scope, and Hub Supervisor owns owner or cross-team scope.
+Inside a team workspace, `--work <work-id>` links local work. At Hub, a unique
+work id resolves directly; qualify an id shared by several teams as
+`<team-id>:<work-id>`.
 
 ## Work states
 

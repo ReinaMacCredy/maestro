@@ -206,19 +206,16 @@ function upsertManagedBlock(existing: string, pattern: RegExp, block: string): s
   return `${cleaned.trimEnd()}${cleaned.trim() ? "\n\n" : ""}${block}\n`;
 }
 
-async function writeMirror(path: string): Promise<void> {
-  const begin = "<!-- maestro:begin -->";
-  const end = "<!-- maestro:end -->";
-  const block = `${begin}\nThe Lead of this repository is the agent the room started as \`lead-<repo basename>\`; a pane it opens with a dispatch is a Peer named \`peer-<dispatch id>\`; a session with any other name holds only what its accepted dispatch says; the room at ~/maestro is the Supervisor. Roles: \`maestro recipe show slp\`.\nThe repository's own \`AGENTS.md\` and \`CLAUDE.md\` text outside this block is its Workspace Protocol and may declare protected areas, hotspots, restart rules, and local verification; read it before taking work or opening a dispatch.\nLive maestro state is injected by hooks. Use \`maestro status\` for the current session view and \`maestro ready\` for available work.\nTrack work with \`maestro work add|start|done\`; method depth: \`maestro recipe show work\`.\nIf no harness hook fired, run \`maestro hook record --event SessionStart\` and read the brief from stdout.\nFailed commands print a JSON error envelope on stderr and exit nonzero; when the fix is mechanical, the message names the next command to run.\n${end}`;
-  const existing = existsSync(path) ? await readFile(path, "utf8") : "";
-  await writeFile(
-    path,
-    upsertManagedBlock(
-      existing,
-      /\n?<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->\n?/g,
-      block,
-    ),
+async function removeLegacySlpMirror(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false;
+  const existing = await readFile(path, "utf8");
+  const cleaned = existing.replace(
+    /<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->/g,
+    "",
   );
+  if (cleaned === existing) return false;
+  await writeFile(path, cleaned);
+  return true;
 }
 
 async function writeManagedIgnore(path: string): Promise<void> {
@@ -643,6 +640,7 @@ export const installPlugin: BuiltInPlugin = {
         const localBin = join(home, ".local", "bin");
         const shim = join(localBin, "maestro");
         const sensorShim = join(localBin, "maestro-team-sensor");
+        const watchShim = join(localBin, "maestro-slp-watch");
         const legacy = join(localBin, "maestro-legacy");
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
@@ -668,7 +666,7 @@ export const installPlugin: BuiltInPlugin = {
           await warnBeforeRuntimeActivation(home, "install");
           await syncRuntime(sourceRoot, runtimeRoot);
           await stampRuntime(sourceRoot, runtimeRoot);
-          // Wiring content (mirror blocks, hook sources) lives as constants in
+          // Wiring content (hook sources and generated Hub files) lives as constants in
           // the RUNNING process, which may still be the pre-sync runtime; when
           // the synced code changed, re-exec install in the new runtime so the
           // wiring it writes matches the code it installs.
@@ -714,8 +712,8 @@ export const installPlugin: BuiltInPlugin = {
             "codex",
           );
         }
-        await writeMirror(join(repo, "AGENTS.md"));
-        await writeMirror(join(repo, "CLAUDE.md"));
+        await removeLegacySlpMirror(join(repo, "AGENTS.md"));
+        await removeLegacySlpMirror(join(repo, "CLAUDE.md"));
 
         const skillCommit = (await readGitHeadCommit(sourceRoot)) ??
           (await readStampedCommit(runtimeRoot));
@@ -727,12 +725,14 @@ export const installPlugin: BuiltInPlugin = {
             `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro.ts")).href)});\n`,
           );
           await chmod(shim, 0o755);
-          await writeFile(
-            sensorShim,
-            `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-team-sensor.ts")).href)});\n`,
-          );
-          await chmod(sensorShim, 0o755);
         }
+        await mkdir(localBin, { recursive: true });
+        await writeFile(
+          watchShim,
+          `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-watch.ts")).href)});\n`,
+        );
+        await chmod(watchShim, 0o755);
+        await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
@@ -748,11 +748,11 @@ export const installPlugin: BuiltInPlugin = {
           payload: { runtimeRoot, shim },
         });
         return {
-          data: { repo, runtimeRoot, sensorShim, shim, legacy },
+          data: { repo, runtimeRoot, watchShim, shim, legacy },
           text:
             `maestro installed for ${repo}` +
-            "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/, AGENTS.md, CLAUDE.md" +
-            " (AGENTS.md and CLAUDE.md carry the same maestro block for Claude and Codex)" +
+            "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/" +
+            "\nSLP v2 removed only the legacy managed block from AGENTS.md and CLAUDE.md" +
             (mainWorktree
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +

@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, runCli, setPlugin, withFixture, type Fixture } from "./helpers.ts";
 
@@ -234,11 +234,4 @@ test("479 cancelling a parent cascades through mutable descendants and frees the
       `parent ${parent} cancelled: ${reason}`,
     ]);
   });
-});
-
-test("469 [lint] lane.md tells the Lead that a handback finding is not a card (d703)", async () => {
-  const room = (await readFile(join(import.meta.dir, "..", "src", "plugins", "room.ts"), "utf8")).replace(/\\`/g, "`");
-  const step = room.split("\n11. ")[1]?.split("\n12. ")[0] ?? "";
-  expect(step).toMatch(/finding returned in a handback is closed by that handback/);
-  expect(step).toMatch(/becomes a card only when it is the next thing the Lead will actually do/);
 });

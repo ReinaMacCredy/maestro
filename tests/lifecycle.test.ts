@@ -206,13 +206,13 @@ test("497 doctor applies the room contract instead of repository wiring checks",
   });
 });
 
-test("498 a missing room file gets only the repository-checkout repair", async () => {
+test("498 a missing Hub Workspace Pack gets only the repository-checkout repair", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const room = join(fixture.home, "maestro");
-    const missing = join(room, "lead.md");
-    const reportedMissing = join(await realpath(room), "lead.md");
+    const missing = join(room, "SLP.md");
+    const reportedMissing = join(await realpath(room), "SLP.md");
     await rm(missing);
 
     const diagnosed = await runInstalledCliAt(fixture, room, ["doctor"], { PATH: path });
@@ -507,28 +507,30 @@ test("64 update ignores untracked source files but still refuses tracked changes
   });
 });
 
-test("65 install writes wiring from the freshly synced runtime, not the stale running one", async () => {
+test("65 install updates the runtime Workspace Pack without overwriting the Hub owner's pack", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
+    const hubPackBefore = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
 
-    // Change the wiring content in the source and commit it; the installed
-    // runtime still carries the old constant in its loaded code.
-    const installPath = join(source, "src", "plugins", "install.ts");
-    const installCode = await readFile(installPath, "utf8");
+    const packPath = join(source, "src", "plugins", "resources", "SLP.md");
+    const pack = await readFile(packPath, "utf8");
+    const marker = "FRESH-INSTALL-PACK-MARKER";
     await writeFile(
-      installPath,
-      installCode.replace("method depth:", "method depth (v2-marker):"),
+      packPath,
+      pack.replace("# SLP v2 Workspace Pack", `# SLP v2 Workspace Pack ${marker}`),
     );
-    await git(source, ["add", "src/plugins/install.ts"]);
-    await git(source, ["commit", "-m", "wiring marker"]);
+    await git(source, ["add", "src/plugins/resources/SLP.md"]);
+    await git(source, ["commit", "-m", "Workspace Pack marker"]);
     const newCommit = await git(source, ["rev-parse", "HEAD"]);
 
     const installed = await runInstalled(fixture, runtime, source, ["install"]);
 
     expect(installed.exitCode).toBe(0);
-    expect(await readFile(join(source, "AGENTS.md"), "utf8")).toContain("v2-marker");
-    expect(await readFile(join(source, "CLAUDE.md"), "utf8")).toContain("v2-marker");
+    expect(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8")).toBe(hubPackBefore);
+    expect(
+      await readFile(join(runtime.runtimeRoot, "src", "plugins", "resources", "SLP.md"), "utf8"),
+    ).toContain(marker);
     const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
     expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(newCommit);
   });
@@ -907,25 +909,24 @@ test("518 update moves a pinned source tag to tag, not to the branch tip", async
   });
 });
 
-test("411 update regenerates the room's generated files and keeps OWNER.md", async () => {
+test("411 update preserves owner Hub files and retires old role files", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
     const room = join(fixture.home, "maestro");
     const owner = join(room, "OWNER.md");
     await writeFile(owner, "# owner notes\nkeep me\n");
-    await writeFile(join(room, "lane.md"), "stale lane text\n");
-    await writeFile(join(room, "lead.md"), "stale lead text\n");
+    await writeFile(join(room, "SLP.md"), "stale pack text\n");
+    await writeFile(join(room, "lane.md"), "legacy lane text\n");
+    await writeFile(join(room, "lead.md"), "legacy lead text\n");
 
     const updated = await runInstalled(fixture, runtime, source, ["update"]);
 
     expect(updated.exitCode).toBe(0);
-    const lane = await readFile(join(room, "lane.md"), "utf8");
-    expect(lane).not.toContain("stale lane text");
-    expect(lane).toContain("a lane with a second stop point needs a second dispatch");
-    const lead = await readFile(join(room, "lead.md"), "utf8");
-    expect(lead).not.toContain("stale lead text");
-    expect(lead).toContain("[from supervisor][intent]");
+    const pack = await readFile(join(room, "SLP.md"), "utf8");
+    expect(pack).toBe("stale pack text\n");
+    expect(existsSync(join(room, "lane.md"))).toBe(false);
+    expect(existsSync(join(room, "lead.md"))).toBe(false);
     expect(await readFile(owner, "utf8")).toBe("# owner notes\nkeep me\n");
   });
 });
@@ -972,23 +973,20 @@ test("531 one update materializes a managed skill the commit it installs adds", 
   });
 }, 120_000);
 
-test("530 one update materializes the room templates shipped by the commit it installs", async () => {
+test("530 one update installs its runtime Workspace Pack without overwriting the Hub owner's pack", async () => {
   await withFixture(async (fixture) => {
     const { publisher, source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
+    const hubPackBefore = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
 
-    // update calls scaffoldRoom after swapRuntime, but the running process
-    // imported room.ts before the swap, so the templates were written from the
-    // outgoing runtime and the room read doctrine one release behind. The
-    // marker below ships in the new commit; one update must materialize it.
-    const marker = "ROOM-TEMPLATE-MARKER-530";
-    const roomPath = join(publisher, "src", "plugins", "room.ts");
-    const roomSource = await readFile(roomPath, "utf8");
-    const heading = "# Handing owner intent to a repository Lead";
-    expect(roomSource).toContain(heading);
-    await writeFile(roomPath, roomSource.replace(heading, `${heading} ${marker}`));
-    await git(publisher, ["add", "src/plugins/room.ts"]);
-    await git(publisher, ["commit", "-m", "ship a new lead template"]);
+    const marker = "WORKSPACE-PACK-MARKER-530";
+    const packPath = join(publisher, "src", "plugins", "resources", "SLP.md");
+    const packSource = await readFile(packPath, "utf8");
+    const heading = "# SLP v2 Workspace Pack";
+    expect(packSource).toContain(heading);
+    await writeFile(packPath, packSource.replace(heading, `${heading} ${marker}`));
+    await git(publisher, ["add", "src/plugins/resources/SLP.md"]);
+    await git(publisher, ["commit", "-m", "ship a new Workspace Pack"]);
     await git(publisher, ["push", "origin", "main"]);
     const remoteCommit = await git(publisher, ["rev-parse", "HEAD"]);
 
@@ -999,10 +997,55 @@ test("530 one update materializes the room templates shipped by the commit it in
     // and never an update that failed to install the commit at all.
     const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
     expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(remoteCommit);
-    expect(await readFile(join(runtime.runtimeRoot, "src", "plugins", "room.ts"), "utf8")).toContain(
-      marker,
-    );
+    expect(
+      await readFile(join(runtime.runtimeRoot, "src", "plugins", "resources", "SLP.md"), "utf8"),
+    ).toContain(marker);
+    expect(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8")).toBe(hubPackBefore);
+  });
+}, 120_000);
 
-    expect(await readFile(join(fixture.home, "maestro", "lead.md"), "utf8")).toContain(marker);
+test("SLP v2 update refuses runtime replacement until every v1 team is stopped", async () => {
+  await withFixture(async (fixture) => {
+    const { publisher, source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const sourceBefore = await git(source, ["rev-parse", "HEAD"]);
+    const stampPath = join(runtime.runtimeRoot, ".maestro-install.json");
+    const stampBefore = await readFile(stampPath, "utf8");
+    const databasePath = join(source, ".maestro", "maestro.db");
+    const database = new Database(databasePath);
+    database.exec(`
+      CREATE TABLE team_lifecycle (
+        team_id TEXT PRIMARY KEY,
+        generation INTEGER NOT NULL,
+        stage TEXT NOT NULL
+      );
+      INSERT INTO team_lifecycle (team_id, generation, stage)
+      VALUES ('legacy-update-live', 4, 'STARTING');
+    `);
+    database.close();
+
+    const packagePath = join(publisher, "package.json");
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+    packageJson.activationGateMarker = "remote update";
+    await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+    await git(publisher, ["add", "package.json"]);
+    await git(publisher, ["commit", "-m", "exercise legacy activation gate"]);
+    await git(publisher, ["push", "origin", "main"]);
+    const remoteCommit = await git(publisher, ["rev-parse", "HEAD"]);
+
+    const blocked = await runInstalled(fixture, runtime, source, ["update"]);
+
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain("SLP_V1_TEAM_RUNNING");
+    expect(blocked.stderr).toContain("legacy-update-live:g4");
+    expect(await readFile(stampPath, "utf8")).toBe(stampBefore);
+    expect(await git(source, ["rev-parse", "HEAD"])).toBe(sourceBefore);
+
+    const stopped = new Database(databasePath);
+    stopped.query("UPDATE team_lifecycle SET stage = 'STOPPED'").run();
+    stopped.close();
+    const updated = await runInstalled(fixture, runtime, source, ["update"]);
+    expect(updated.exitCode).toBe(0);
+    expect(JSON.parse(await readFile(stampPath, "utf8")).commit).toBe(remoteCommit);
   });
 }, 120_000);
