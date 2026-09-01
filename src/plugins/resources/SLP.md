@@ -40,7 +40,9 @@ changed scope requires new work. `RETURNED` work can be retaken only once after
 its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
 for that return revision. Notes add context but do not rewrite the contract. A
 Watch Pane is optional foreground support, never an agent or an authority
-holder.
+holder. `maestro team start` and `maestro work add --to` return only after the
+new pane has acknowledged its contract, normally within a minute; they print
+their phases on stderr, so do not re-run either while it is still running.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->

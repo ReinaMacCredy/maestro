@@ -1,7 +1,17 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { CliError } from "../kernel/cli.ts";
 import { slpWatchRuntimeDirectory } from "./slp-watch.ts";
+
+// d755: the acknowledgement is polled inside a fixed window with non-scrolling
+// reads; d756: a blocked pane is classified from its own text.
+const acknowledgementWindowMs = 30_000;
+const acknowledgementPollMs = 1_000;
+const acknowledgementQuietPolls = 4;
+const paneTailLines = 15;
+const trustDialogPattern =
+  /Do you trust the contents of this directory|Quick safety check: Is this a project you created or one you trust|Yes, I trust this folder/;
 
 export type SlpRole = "team-supervisor" | "lead" | "peer";
 
@@ -96,14 +106,39 @@ interface AgentRecord {
   workspace_id?: string;
 }
 
-export class SlpRuntimeError extends Error {
+interface SlpRuntimeEvidence {
+  code?: string;
+  directory?: string;
+  harness?: string;
+  paneTail?: readonly string[];
+}
+
+export class SlpRuntimeError extends CliError {
   constructor(
     message: string,
     readonly command: readonly string[],
     readonly stderr?: string,
+    evidence: SlpRuntimeEvidence = {},
   ) {
-    super(message);
+    super(evidence.code ?? "SLP_RUNTIME", message, {
+      command: [...command],
+      ...(stderr ? { stderr } : {}),
+      ...(evidence.harness ? { harness: evidence.harness } : {}),
+      ...(evidence.directory ? { directory: evidence.directory } : {}),
+      ...(evidence.paneTail ? { paneTail: [...evidence.paneTail] } : {}),
+    });
   }
+}
+
+function cleanPaneLines(output: string): string[] {
+  return output
+    .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .split(/\r?\n/)
+    .map(normalizeAcknowledgementLine);
+}
+
+function paneTailOf(lines: readonly string[]): string[] {
+  return lines.filter((line) => line !== "").slice(-paneTailLines);
 }
 
 function resultOf(value: unknown): Record<string, unknown> {
@@ -326,24 +361,96 @@ export class HerdrSlpRuntime {
     return stdout;
   }
 
+  private note(line: string): void {
+    process.stderr.write(`${line}\n`);
+  }
+
+  private async readPane(
+    plan: SlpTeamPlan,
+    target: string,
+    source: "visible" | "recent-unwrapped",
+    lines: number,
+  ): Promise<string[]> {
+    return cleanPaneLines(
+      await this.textCommand(
+        ["agent", "read", target, "--source", source, "--lines", String(lines), "--format", "text"],
+        plan.projectPath,
+      ),
+    );
+  }
+
+  private async paneTail(plan: SlpTeamPlan, target: string): Promise<string[]> {
+    try {
+      return paneTailOf(await this.readPane(plan, target, "visible", 40));
+    } catch {
+      return [];
+    }
+  }
+
+  private async blockedFailure(
+    plan: SlpTeamPlan,
+    name: string,
+    harness: string,
+    command: readonly string[],
+    stderr: string | undefined,
+  ): Promise<SlpRuntimeError> {
+    let lines: string[] = [];
+    try {
+      lines = await this.readPane(plan, name, "visible", 40);
+    } catch {}
+    const paneTail = paneTailOf(lines);
+    if (lines.some((line) => trustDialogPattern.test(line))) {
+      return new SlpRuntimeError(
+        `${harness} is waiting on its directory trust dialog in ${plan.projectPath}; open that directory once, run ${harness}, accept the dialog, then rerun this command`,
+        command,
+        stderr,
+        { code: "TRUST_DIALOG", directory: plan.projectPath, harness, paneTail },
+      );
+    }
+    return new SlpRuntimeError(
+      `agent ${name} is blocked on interactive input in ${plan.projectPath}`,
+      command,
+      stderr,
+      { code: "AGENT_BLOCKED", directory: plan.projectPath, harness, paneTail },
+    );
+  }
+
+  private async settledAgent(plan: SlpTeamPlan, name: string): Promise<boolean> {
+    const matches = (await this.agents(plan)).filter((agent) => agent.name === name);
+    return matches.length === 1 && settled(matches[0] as AgentRecord);
+  }
+
   private async requireAcknowledgement(
     plan: SlpTeamPlan,
     roleName: string,
     contract: SlpRoleContract,
   ): Promise<void> {
-    const output = await this.textCommand(
-      ["agent", "read", roleName, "--source", "recent-unwrapped", "--lines", "120", "--format", "text"],
-      plan.projectPath,
-    );
-    const lines = output
-      .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-      .split(/\r?\n/)
-      .map(normalizeAcknowledgementLine);
-    if (!includesExactAcknowledgement(lines, contract.acknowledgement)) {
-      throw new SlpRuntimeError(
-        `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement`,
-        ["agent", "read", roleName],
-      );
+    const deadline = Date.now() + acknowledgementWindowMs;
+    let previous: string | null = null;
+    let quietPolls = 0;
+    while (true) {
+      const visible = await this.readPane(plan, roleName, "visible", 60);
+      if (includesExactAcknowledgement(visible, contract.acknowledgement)) return;
+      const snapshot = visible.join("\n");
+      if (snapshot === previous) quietPolls += 1;
+      else {
+        previous = snapshot;
+        quietPolls = 0;
+      }
+      const remaining = deadline - Date.now();
+      const quiet =
+        quietPolls >= acknowledgementQuietPolls && (await this.settledAgent(plan, roleName));
+      if (remaining <= 0 || quiet) {
+        const recent = await this.readPane(plan, roleName, "recent-unwrapped", 120);
+        if (includesExactAcknowledgement(recent, contract.acknowledgement)) return;
+        throw new SlpRuntimeError(
+          `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement within ${Math.round(acknowledgementWindowMs / 1000)}s`,
+          ["agent", "read", roleName],
+          undefined,
+          { code: "ROLE_ACKNOWLEDGEMENT_MISMATCH", paneTail: paneTailOf(visible) },
+        );
+      }
+      await Bun.sleep(Math.min(acknowledgementPollMs, remaining));
     }
   }
 
@@ -386,6 +493,9 @@ export class HerdrSlpRuntime {
           const name = args[2];
           const paneOption = args.indexOf("--pane");
           const paneId = paneOption >= 0 ? args[paneOption + 1] : undefined;
+          const kindOption = args.indexOf("--kind");
+          const harness = kindOption >= 0 ? args[kindOption + 1] ?? "agent" : "agent";
+          const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
           if (!name || !paneId) throw error;
           while (true) {
             const matches = (await this.agents(plan)).filter((agent) => agent.name === name);
@@ -396,12 +506,20 @@ export class HerdrSlpRuntime {
             ) {
               return { result: { accepted: true, name } };
             }
+            if (
+              matches.length === 1 &&
+              matches[0]?.pane_id === paneId &&
+              matches[0].agent_status === "blocked"
+            ) {
+              throw await this.blockedFailure(plan, name, harness, args, stderr);
+            }
             const remaining = deadline - Date.now();
             if (remaining <= 0) {
               throw new SlpRuntimeError(
                 `agent ${name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
                 args,
-                error instanceof SlpRuntimeError ? error.stderr : undefined,
+                stderr,
+                { paneTail: await this.paneTail(plan, name) },
               );
             }
             await Bun.sleep(Math.min(100, remaining));
@@ -427,13 +545,21 @@ export class HerdrSlpRuntime {
       try {
         return await this.command(args, plan.projectPath, 130_000);
       } catch (error) {
-        if (herdrErrorCode(error) !== "agent_prompt_stalled") throw error;
+        const code = herdrErrorCode(error);
+        const name = args[2] ?? "";
+        const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
+        if (code === "agent_blocked") {
+          const harness = plan.roles.find((role) => role.name === name)?.kind ?? "codex";
+          throw await this.blockedFailure(plan, name, harness, args, stderr);
+        }
+        if (code !== "agent_prompt_stalled") throw error;
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new SlpRuntimeError(
             `role contract prompt remained stalled for ${this.promptReadyTimeoutMs}ms`,
             args,
-            error instanceof SlpRuntimeError ? error.stderr : undefined,
+            stderr,
+            { paneTail: await this.paneTail(plan, name) },
           );
         }
         await Bun.sleep(Math.min(100, remaining));
@@ -536,6 +662,7 @@ export class HerdrSlpRuntime {
       workspaceId = matching[0].workspace_id;
 
       for (const role of plan.roles) {
+        const startedAt = Date.now();
         const globalMatches = (await this.agents(plan)).filter(
           (agent) => agent.name === role.name,
         );
@@ -585,6 +712,7 @@ export class HerdrSlpRuntime {
           if (!paneId) {
             throw new SlpRuntimeError(`role pane was not created: ${role.name}`, ["tab", "create"]);
           }
+          this.note(`${role.name}: starting ${role.kind} pane in ${plan.workspaceLabel}`);
           const args = [
             "agent",
             "start",
@@ -606,6 +734,9 @@ export class HerdrSlpRuntime {
         if (!contract) {
           throw new SlpRuntimeError(`missing role contract: ${role.role}`, ["agent", "prompt"]);
         }
+        this.note(
+          `${role.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
+        );
         const prompted = resultOf(
           await this.promptAgent(plan, [
             "agent",
@@ -625,6 +756,7 @@ export class HerdrSlpRuntime {
           ]);
         }
         await this.requireAcknowledgement(plan, role.name, contract);
+        this.note(`${role.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
 
       const roles = await this.inspectRequired(plan, workspaceId, contracts);
@@ -686,6 +818,7 @@ export class HerdrSlpRuntime {
     peer: SlpRolePlan,
     contract: SlpRoleContract,
   ): Promise<SlpRuntimePeer> {
+    const startedAt = Date.now();
     const matchingWorkspaces = (await this.workspaces(plan)).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
     );
@@ -738,6 +871,7 @@ export class HerdrSlpRuntime {
         if (!paneId) {
           throw new SlpRuntimeError(`peer pane was not created: ${peer.name}`, ["tab", "create"]);
         }
+        this.note(`${peer.name}: starting ${peer.kind} pane in ${plan.workspaceLabel}`);
         const args = [
           "agent",
           "start",
@@ -755,6 +889,9 @@ export class HerdrSlpRuntime {
           throw new SlpRuntimeError(`peer did not start: ${peer.name}`, args);
         }
       }
+      this.note(
+        `${peer.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
+      );
       const prompted = resultOf(
         await this.promptAgent(plan, [
           "agent",
@@ -774,6 +911,7 @@ export class HerdrSlpRuntime {
         ]);
       }
       await this.requireAcknowledgement(plan, peer.name, contract);
+      this.note(`${peer.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       const matches = (await this.agents(plan)).filter(
         (agent) => agent.name === peer.name && agent.workspace_id === workspaceId,
       );

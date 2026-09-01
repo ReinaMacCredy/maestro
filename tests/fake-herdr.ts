@@ -5,6 +5,7 @@ import type { Fixture } from "./helpers.ts";
 
 export interface FakeHerdrBehavior {
   acknowledgementPrefixes?: Partial<Record<"team-supervisor" | "lead" | "peer", string>>;
+  acknowledgementDelayReads?: number;
   agentBusyAttempts?: number;
   agentStartDelayMs?: number;
   agents?: boolean;
@@ -20,6 +21,7 @@ export interface FakeHerdrBehavior {
   promptStalledAttempts?: number;
   prompts?: boolean;
   settleAgents?: boolean;
+  trustDialog?: "claude" | "codex";
   wrapAcknowledgements?: boolean;
   workspaceCloseListLag?: number;
   workspaceListDelayMs?: number;
@@ -326,6 +328,23 @@ if (command === "workspace list") {
       }],
     };
   }
+  if (state.behavior.trustDialog && kind === state.behavior.trustDialog) {
+    const blocked = state.agents.find((candidate) => candidate.name === name);
+    if (blocked) blocked.agent_status = "blocked";
+    const cwd = pane(paneId)?.cwd ?? "";
+    state.outputs[name] = kind === "claude"
+      ? " Accessing workspace:\\n\\n " + cwd + "\\n\\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).\\n\\n Claude Code'll be able to read, edit, and execute files here.\\n\\n \\u276f No, exit\\n   Yes, I trust this folder\\n\\n Enter to confirm \\u00b7 Esc to cancel\\n"
+      : "> You are in " + cwd + "\\n\\n  Do you trust the contents of this directory? Working with untrusted contents comes with higher risk of prompt injection.\\n\\n\\u203a 1. Yes, continue\\n  2. No, quit\\n\\n  Press enter to continue\\n";
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stderr.write(JSON.stringify({
+      id: "cli:agent:start",
+      error: {
+        code: "agent_not_ready",
+        message: "agent " + name + " is blocked during startup and is not ready for prompts",
+      },
+    }) + "\\n");
+    process.exit(1);
+  }
   if (kind === "codex" && (state.behavior.codexNotReadyAttempts ?? 0) > 0) {
     state.behavior.codexNotReadyAttempts -= 1;
     const agent = state.agents.find((candidate) => candidate.name === name);
@@ -410,8 +429,17 @@ if (command === "workspace list") {
   await respond({ accepted, delivered: accepted, name });
 } else if (command === "agent read") {
   const name = args[2];
-  await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
-  process.stdout.write(state.outputs[name] ?? "");
+  if (
+    (state.behavior.acknowledgementDelayReads ?? 0) > 0 &&
+    (state.outputs[name] ?? "").includes("SLP_ROLE_READY")
+  ) {
+    state.behavior.acknowledgementDelayReads -= 1;
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stdout.write("\\u00b7 Thinking (" + state.behavior.acknowledgementDelayReads + ")\\n");
+  } else {
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stdout.write(state.outputs[name] ?? "");
+  }
 } else if (command === "tab close") {
   const tabId = args[2];
   const targetTab = state.tabs.find((candidate) => candidate.tab_id === tabId);

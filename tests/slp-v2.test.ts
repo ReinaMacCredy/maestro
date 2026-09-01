@@ -30,6 +30,17 @@ function envelope<T>(stdout: string): T {
   return (JSON.parse(stdout) as { data: T }).data;
 }
 
+const runtimePhaseLine =
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s)$/;
+
+// Runtime phase lines (d757) are progress, not failures.
+function phaseFree(stderr: string): string {
+  return stderr
+    .split("\n")
+    .filter((line) => line !== "" && !runtimePhaseLine.test(line))
+    .join("\n");
+}
+
 function watchRuntimeDirectory(projectPath: string, teamId: string, generation: number): string {
   const projectKey = createHash("sha256")
     .update(realpathSync.native(resolve(projectPath)))
@@ -105,7 +116,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
       fake.env,
     );
 
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const startData = envelope<{
       team: {
@@ -241,7 +252,7 @@ test("SLP v2 accepts presentation-only markers before exact role acknowledgement
       fake.env,
     );
 
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const startData = envelope<{
       team: { roles: Array<{ name: string; paneId: string; role: string }> };
@@ -258,7 +269,7 @@ test("SLP v2 accepts presentation-only markers before exact role acknowledgement
       { ...fake.env, HERDR_PANE_ID: lead?.paneId },
     );
 
-    expect(delegated.stderr).toBe("");
+    expect(phaseFree(delegated.stderr)).toBe("");
     expect(delegated.exitCode).toBe(0);
     const delegatedData = envelope<{ role: { name: string } }>(delegated.stdout);
     const runtime = await readFakeHerdrState(fake);
@@ -295,7 +306,7 @@ test("SLP v2 rejects content before an otherwise exact role acknowledgement", as
     expect(failed.stderr).toContain("ROLE_ACKNOWLEDGEMENT_MISMATCH");
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
   });
-});
+}, 20_000);
 
 test("SLP v2 rejects stale digest or challenge acknowledgements before granting authority", async () => {
   for (const invalidAcknowledgementField of ["pack", "challenge"] as const) {
@@ -335,7 +346,7 @@ test("SLP v2 rejects stale digest or challenge acknowledgements before granting 
       projectDatabase.close();
     });
   }
-});
+}, 30_000);
 
 test("SLP v2 waits for newly created panes to become available shells", async () => {
   await withFixture(async (fixture) => {
@@ -357,7 +368,7 @@ test("SLP v2 waits for newly created panes to become available shells", async ()
       fake.env,
     );
 
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     expect(
       (await fakeHerdrCommands(fake)).filter(
@@ -388,7 +399,7 @@ test("SLP v2 retries a transient contract prompt stall without restarting roles"
       fake.env,
     );
 
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const commands = await fakeHerdrCommands(fake);
     expect(
@@ -421,7 +432,7 @@ test("SLP v2 waits for an agent_not_ready launch without restarting the agent", 
       fake.env,
     );
 
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const commands = await fakeHerdrCommands(fake);
     const startIndex = commands.findIndex(
@@ -523,8 +534,8 @@ test("SLP v2 canonicalizes a project subdirectory to its checkout root", async (
       fake.env,
     );
 
-    expect(nestedStart.stderr).toBe("");
-    expect(rootStart.stderr).toBe("");
+    expect(phaseFree(nestedStart.stderr)).toBe("");
+    expect(phaseFree(rootStart.stderr)).toBe("");
     const nestedData = envelope<{
       team: { generation: number; projectPath: string; teamId: string };
       work: { id: string };
@@ -652,7 +663,7 @@ test("SLP v2 derives cooperative authority only from the current Herdr pane bind
         HERDR_PANE_ID: secondSupervisor.paneId,
       },
     );
-    expect(accepted.stderr).toBe("");
+    expect(phaseFree(accepted.stderr)).toBe("");
     expect(accepted.exitCode).toBe(0);
 
     database = new Database(databasePath, { readonly: true });
@@ -698,7 +709,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
     ]);
     expect([firstResult, secondResult].map((result) => ({
       exitCode: result.exitCode,
-      stderr: result.stderr,
+      stderr: phaseFree(result.stderr),
     }))).toEqual([
       { exitCode: 0, stderr: "" },
       { exitCode: 0, stderr: "" },
@@ -931,7 +942,7 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     const repeated = await runCliAt(fixture, room, args, fake.env);
 
     expect(first.exitCode).toBe(0);
-    expect(repeated.stderr).toBe("");
+    expect(phaseFree(repeated.stderr)).toBe("");
     expect(repeated.exitCode).toBe(0);
     const firstData = envelope<{
       team: { generation: number; roles: Array<{ instanceId: string; readyChallenge: string; role: string }> };
@@ -972,7 +983,7 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
 
     const repaired = await runCliAt(fixture, room, args, fake.env);
 
-    expect(repaired.stderr).toBe("");
+    expect(phaseFree(repaired.stderr)).toBe("");
     expect(repaired.exitCode).toBe(0);
     expect(
       envelope<{ team: { generation: number }; work: { id: string } }>(repaired.stdout),
@@ -1021,7 +1032,7 @@ test("SLP v2 serializes ten concurrent starts into one generation and rejects co
     ]);
 
     const identical = [first, ...contenders.slice(0, 9)];
-    expect(identical.map((result) => ({ exitCode: result.exitCode, stderr: result.stderr })))
+    expect(identical.map((result) => ({ exitCode: result.exitCode, stderr: phaseFree(result.stderr) })))
       .toEqual(Array.from({ length: 10 }, () => ({ exitCode: 0, stderr: "" })));
     const outputs = identical.map((result) =>
       envelope<{ team: { generation: number; teamId: string }; work: { id: string } }>(
@@ -1119,7 +1130,7 @@ test("SLP v2 waits for a running-generation repair before emergency stop", async
 
     expect([repaired, stopped].map((result) => ({
       exitCode: result.exitCode,
-      stderr: result.stderr,
+      stderr: phaseFree(result.stderr),
     }))).toEqual([
       { exitCode: 0, stderr: "" },
       { exitCode: 0, stderr: "" },
@@ -1186,7 +1197,7 @@ test("SLP v2 releases SQLite before Herdr and persists monotonic start phases", 
     const started = await starting;
     expect(writeError).toBeNull();
     expect(reserved).toEqual({ phase: "RESERVED", revision: 1 });
-    expect(started.stderr).toBe("");
+    expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const after = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
@@ -1290,7 +1301,7 @@ test("SLP v2 retries start finalization from a durable RUNTIME_READY phase", asy
     const commandCount = (await fakeHerdrCommands(fake)).length;
     const retried = await runCliAt(fixture, room, args, fake.env);
 
-    expect(retried.stderr).toBe("");
+    expect(phaseFree(retried.stderr)).toBe("");
     expect(retried.exitCode).toBe(0);
     const retryCommands = (await fakeHerdrCommands(fake)).slice(commandCount);
     expect(retryCommands.some((command) => command[0] === "workspace" && command[1] === "create"))
@@ -1344,8 +1355,8 @@ test("SLP v2 resolves symlink aliases to one canonical running project", async (
       fake.env,
     );
 
-    expect(first.stderr).toBe("");
-    expect(repeated.stderr).toBe("");
+    expect(phaseFree(first.stderr)).toBe("");
+    expect(phaseFree(repeated.stderr)).toBe("");
     const firstData = envelope<{
       team: { generation: number; projectPath: string; teamId: string };
       work: { id: string };
@@ -1475,8 +1486,8 @@ test("SLP v2 gives same-basename projects distinct Herdr-safe team and role iden
       fake.env,
     );
 
-    expect(first.stderr).toBe("");
-    expect(second.stderr).toBe("");
+    expect(phaseFree(first.stderr)).toBe("");
+    expect(phaseFree(second.stderr)).toBe("");
     const firstTeam = envelope<{
       team: { roles: Array<{ name: string }>; teamId: string };
     }>(first.stdout).team;
@@ -1530,7 +1541,7 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
     await setFakeHerdrBehavior(fake, { agents: true });
     const retried = await runCliAt(fixture, room, args, fake.env);
 
-    expect(retried.stderr).toBe("");
+    expect(phaseFree(retried.stderr)).toBe("");
     expect(retried.exitCode).toBe(0);
     expect(envelope<{ team: { generation: number } }>(retried.stdout).team.generation).toBe(1);
     runtime = await readFakeHerdrState(fake);
@@ -1700,7 +1711,7 @@ test("SLP v2 drives one work item through OPEN ACTIVE RETURNED DONE with atomic 
       ["work", "take", startData.work.id, "--json"],
       { ...fake.env, HERDR_PANE_ID: lead?.paneId },
     );
-    expect(taken.stderr).toBe("");
+    expect(phaseFree(taken.stderr)).toBe("");
     expect(envelope<{ work: { owner: string; state: string } }>(taken.stdout).work).toMatchObject({
       owner: lead?.name,
       state: "ACTIVE",
@@ -1712,7 +1723,7 @@ test("SLP v2 drives one work item through OPEN ACTIVE RETURNED DONE with atomic 
       ["work", "return", startData.work.id, "result: complete; proof: focused test", "--json"],
       { ...fake.env, HERDR_PANE_ID: lead?.paneId },
     );
-    expect(returned.stderr).toBe("");
+    expect(phaseFree(returned.stderr)).toBe("");
     expect(envelope<{ work: { owner: null; state: string } }>(returned.stdout).work).toMatchObject({
       owner: null,
       state: "RETURNED",
@@ -1724,7 +1735,7 @@ test("SLP v2 drives one work item through OPEN ACTIVE RETURNED DONE with atomic 
       ["work", "accept", startData.work.id, "--json"],
       { ...fake.env, HERDR_PANE_ID: supervisor?.paneId },
     );
-    expect(accepted.stderr).toBe("");
+    expect(phaseFree(accepted.stderr)).toBe("");
     expect(envelope<{ work: { state: string } }>(accepted.stdout).work.state).toBe("DONE");
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
@@ -2224,7 +2235,7 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
       ["work", "add", "Design independently", "--to", "peer-design", "--json"],
       environment,
     );
-    expect(first.stderr).toBe("");
+    expect(phaseFree(first.stderr)).toBe("");
     expect(first.exitCode).toBe(0);
     const firstData = envelope<{
       role: { name: string; role: string };
@@ -2239,7 +2250,7 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
       ["work", "add", "Implement independently", "--to", "peer-design", "--json"],
       environment,
     );
-    expect(second.stderr).toBe("");
+    expect(phaseFree(second.stderr)).toBe("");
     expect(second.exitCode).toBe(0);
     const secondData = envelope<{
       role: { name: string; role: string };
@@ -2446,7 +2457,7 @@ test("SLP v2 rejects Peer self-acceptance and lets the Lead accept the return", 
       ["work", "note", addedData.work.id, "Lead grants Peer rework", "--rework", "--json"],
       { ...fake.env, HERDR_PANE_ID: lead?.paneId },
     );
-    expect(leadGrant.stderr).toBe("");
+    expect(phaseFree(leadGrant.stderr)).toBe("");
     expect(leadGrant.exitCode).toBe(0);
 
     const leadAccepted = await runCliAt(
@@ -2455,7 +2466,7 @@ test("SLP v2 rejects Peer self-acceptance and lets the Lead accept the return", 
       ["work", "accept", addedData.work.id, "--json"],
       { ...fake.env, HERDR_PANE_ID: lead?.paneId },
     );
-    expect(leadAccepted.stderr).toBe("");
+    expect(phaseFree(leadAccepted.stderr)).toBe("");
     expect(leadAccepted.exitCode).toBe(0);
     expect(envelope<{ work: { acceptedBy: string; state: string } }>(leadAccepted.stdout).work)
       .toMatchObject({ acceptedBy: lead?.name, state: "DONE" });
@@ -2559,7 +2570,7 @@ test("SLP v2 rework requires one correct reviewer grant for the current return r
       ],
       { ...fake.env, HERDR_PANE_ID: supervisorPane },
     );
-    expect(granted.stderr).toBe("");
+    expect(phaseFree(granted.stderr)).toBe("");
     expect(granted.exitCode).toBe(0);
     expect(envelope<{ work: { state: string } }>(granted.stdout).work.state).toBe("RETURNED");
     const duplicateGrant = await runCliAt(
@@ -2577,7 +2588,7 @@ test("SLP v2 rework requires one correct reviewer grant for the current return r
       ["work", "take", startData.work.id, "--json"],
       leadEnvironment,
     );
-    expect(retaken.stderr).toBe("");
+    expect(phaseFree(retaken.stderr)).toBe("");
     expect(envelope<{ work: { currentReturn: string | null; state: string } }>(retaken.stdout).work)
       .toMatchObject({ currentReturn: null, state: "ACTIVE" });
 
@@ -2743,7 +2754,7 @@ test("SLP v2 cancels OPEN work through acceptance and requires ACTIVE work to re
       ["work", "accept", startData.work.id, "--outcome", "cancelled", "--json"],
       supervisorEnvironment,
     );
-    expect(openCancelled.stderr).toBe("");
+    expect(phaseFree(openCancelled.stderr)).toBe("");
     expect(
       envelope<{ work: { acceptanceOutcome: string; state: string } }>(openCancelled.stdout).work,
     ).toMatchObject({ acceptanceOutcome: "cancelled", state: "DONE" });
@@ -2789,7 +2800,7 @@ test("SLP v2 cancels OPEN work through acceptance and requires ACTIVE work to re
       ["work", "accept", activeId, "--outcome", "cancelled", "--json"],
       supervisorEnvironment,
     );
-    expect(returnedCancelled.stderr).toBe("");
+    expect(phaseFree(returnedCancelled.stderr)).toBe("");
     expect(
       envelope<{ work: { acceptanceOutcome: string; state: string } }>(returnedCancelled.stdout).work,
     ).toMatchObject({ acceptanceOutcome: "cancelled", state: "DONE" });
@@ -2835,7 +2846,7 @@ test("SLP v2 records one-step immutable decisions and preserves the replaced rec
       ],
       environment,
     );
-    expect(original.stderr).toBe("");
+    expect(phaseFree(original.stderr)).toBe("");
     expect(original.exitCode).toBe(0);
     const originalDecision = envelope<{
       decision: { choice: string; id: string; scope: string };
@@ -2861,7 +2872,7 @@ test("SLP v2 records one-step immutable decisions and preserves the replaced rec
       ],
       environment,
     );
-    expect(replacement.stderr).toBe("");
+    expect(phaseFree(replacement.stderr)).toBe("");
     const replacementDecision = envelope<{
       decision: { id: string; replaces: string };
     }>(replacement.stdout).decision;
@@ -2995,7 +3006,7 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
     ).toBe(0);
 
     const hubStatus = await runCliAt(fixture, room, ["status", "--json"], fake.env);
-    expect(hubStatus.stderr).toBe("");
+    expect(phaseFree(hubStatus.stderr)).toBe("");
     expect(envelope<{ teams: Array<{ packDigest: string; state: string }> }>(hubStatus.stdout).teams)
       .toEqual([expect.objectContaining({ packDigest: expect.any(String), state: "RUNNING" })]);
 
@@ -3005,7 +3016,7 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
       ["status", "--json"],
       supervisorEnvironment,
     );
-    expect(teamStatus.stderr).toBe("");
+    expect(phaseFree(teamStatus.stderr)).toBe("");
     const teamData = envelope<{
       missingPanes: string[];
       runtime: string;
@@ -3054,7 +3065,7 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
       ["status", startData.work.id, "--json"],
       supervisorEnvironment,
     );
-    expect(workStatus.stderr).toBe("");
+    expect(phaseFree(workStatus.stderr)).toBe("");
     expect(envelope<{
       decisions: Array<{ id: string }>;
       notes: Array<{ body: string }>;
@@ -3226,7 +3237,7 @@ test("SLP v2 pins Hub pack changes until the next stopped generation", async () 
       ["team", "stop", firstData.team.teamId, "--json"],
       { ...fake.env, HERDR_PANE_ID: supervisorPane },
     );
-    expect(stopped.stderr).toBe("");
+    expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
 
     const second = await runCliAt(
@@ -3235,7 +3246,7 @@ test("SLP v2 pins Hub pack changes until the next stopped generation", async () 
       ["team", "start", fixture.repo, "Run generation two", "--json"],
       fake.env,
     );
-    expect(second.stderr).toBe("");
+    expect(phaseFree(second.stderr)).toBe("");
     const secondTeam = envelope<{ team: { generation: number; packDigest: string } }>(
       second.stdout,
     ).team;
@@ -3457,7 +3468,7 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
       ["team", "stop", data.team.teamId, "--json"],
       supervisorEnvironment,
     );
-    expect(stopped.stderr).toBe("");
+    expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
     expect(envelope<{ team: { state: string } }>(stopped.stdout).team.state).toBe("STOPPED");
     const after = await readFakeHerdrState(fake);
@@ -3605,7 +3616,7 @@ test("SLP v2 interrupted stop stays RUNNING and retry continues without duplicat
       ["team", "stop", data.team.teamId, "--json"],
       supervisorEnvironment,
     );
-    expect(retried.stderr).toBe("");
+    expect(phaseFree(retried.stderr)).toBe("");
     expect(retried.exitCode).toBe(0);
     const retryCommands = (await fakeHerdrCommands(fake)).slice(firstCommands.length);
     expect(retryCommands.some((command) => command[0] === "tab" && command[1] === "close"))
@@ -3743,7 +3754,7 @@ test("SLP v2 final workspace close failure leaves RUNNING and a restored Supervi
       ["team", "stop", started.team.teamId, "--json"],
       { ...fake.env, HERDR_PANE_ID: restoredSupervisor },
     );
-    expect(recovered.stderr).toBe("");
+    expect(phaseFree(recovered.stderr)).toBe("");
     expect(recovered.exitCode).toBe(0);
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
     const projectAfterRecovery = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
@@ -3827,7 +3838,7 @@ test("SLP v2 releases SQLite before Herdr and persists monotonic stop phases", a
     const stopped = await stopping;
     expect(writeError).toBeNull();
     expect(reserved).toEqual({ phase: "RESERVED", revision: 1 });
-    expect(stopped.stderr).toBe("");
+    expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
     const after = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
@@ -3970,7 +3981,7 @@ test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", asyn
       fake.env,
     );
 
-    expect(retried.stderr).toBe("");
+    expect(phaseFree(retried.stderr)).toBe("");
     expect(retried.exitCode).toBe(0);
     expect(
       (await fakeHerdrCommands(fake))
@@ -4136,7 +4147,7 @@ test("SLP v2 stop fences every competing mutation and repeated stop before commi
     const duringStop = await statusDuringStop;
     const stopped = await stopping;
 
-    expect(stopped.stderr).toBe("");
+    expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
     expect(duringStop.exitCode).toBe(0);
     expect(envelope<{ teamId: string }>(duringStop.stdout).teamId).toBe(started.team.teamId);
@@ -4260,7 +4271,7 @@ test("SLP v2 Hub emergency stop abandons every unfinished item in its original g
       ["team", "stop", data.team.teamId, "--emergency", "--reason", reason, "--json"],
       fake.env,
     );
-    expect(stopped.stderr).toBe("");
+    expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
     expect(envelope<{ emergency: boolean; team: { state: string } }>(stopped.stdout)).toMatchObject({
       emergency: true,
@@ -4321,7 +4332,7 @@ test("SLP v2 Hub emergency stop abandons every unfinished item in its original g
       ["team", "start", fixture.repo, "Start a clean generation", "--json"],
       fake.env,
     );
-    expect(restarted.stderr).toBe("");
+    expect(phaseFree(restarted.stderr)).toBe("");
     const restartedData = envelope<{
       team: { generation: number; roles: Array<{ paneId: string; role: string }> };
       work: { id: string };
@@ -4408,7 +4419,7 @@ test("SLP v2 enforces the locked operation authority matrix without forbidden mu
     ];
     for (const command of allowed) {
       const result = await runCliAt(fixture, command.cwd, command.args, command.env);
-      expect(result.stderr).toBe("");
+      expect(phaseFree(result.stderr)).toBe("");
       expect(result.exitCode).toBe(0);
     }
 
@@ -4635,7 +4646,7 @@ test("SLP v2 Hub decisions link unique work and require team qualification when 
       ],
       fake.env,
     );
-    expect(linked.stderr).toBe("");
+    expect(phaseFree(linked.stderr)).toBe("");
     expect(linked.exitCode).toBe(0);
     const linkedDecision = envelope<{
       decision: { id: string; replaces: string; workId: string };
@@ -4716,7 +4727,7 @@ test("SLP v2 Hub decisions link unique work and require team qualification when 
       ],
       fake.env,
     );
-    expect(qualified.stderr).toBe("");
+    expect(phaseFree(qualified.stderr)).toBe("");
     expect(qualified.exitCode).toBe(0);
     const secondProject = new Database(join(secondRepo, ".maestro", "maestro.db"), {
       readonly: true,
@@ -4797,7 +4808,7 @@ test("SLP v2 install removes only the old managed block and leaves clean file en
       PATH: cleanPath,
       SHELL: "/bin/zsh",
     });
-    expect(installed.stderr).toBe("");
+    expect(phaseFree(installed.stderr)).toBe("");
     expect(installed.exitCode).toBe(0);
     expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8"))
       .toBe(`${agentsPrefix}${agentsSuffix}`);
@@ -4933,7 +4944,7 @@ test("SLP v2 Watch is one foreground non-agent reader whose death never blocks w
       ["work", "take", data.work.id, "--json"],
       { ...fake.env, HERDR_PANE_ID: lead.paneId },
     );
-    expect(taken.stderr).toBe("");
+    expect(phaseFree(taken.stderr)).toBe("");
     expect(taken.exitCode).toBe(0);
 
     const reopened = Bun.spawn(watchCommand, {
@@ -4961,3 +4972,111 @@ test("SLP v2 Watch is one foreground non-agent reader whose death never blocks w
       .toBe(false);
   });
 }, 20_000);
+
+function failureEnvelope(stderr: string): { error: Record<string, unknown> } {
+  const line = phaseFree(stderr).split("\n").findLast((candidate) => candidate.startsWith("{"));
+  return JSON.parse(line ?? "{}") as { error: Record<string, unknown> };
+}
+
+test("SLP v2 polls for a late acknowledgement instead of failing on the first read", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { acknowledgementDelayReads: 3 });
+
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Wait for a slow acknowledgement", "--json"],
+      fake.env,
+    );
+
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const reads = (await fakeHerdrCommands(fake)).filter(
+      (command) => command[0] === "agent" && command[1] === "read",
+    );
+    expect(reads.length).toBeGreaterThanOrEqual(5);
+    expect(reads.every((command) => command.includes("visible"))).toBe(true);
+    expect(started.stderr).toContain("waiting for acknowledgement (up to 30s)");
+    expect(started.stderr).toMatch(/^supervisor-\S+: starting claude pane in slp-/m);
+    expect(started.stderr).toMatch(/^lead-\S+: ready in \d+s$/m);
+  });
+}, 30_000);
+
+test("SLP v2 reports an expired acknowledgement window with the pane tail", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { invalidAcknowledgementField: "challenge" });
+
+    const failed = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Expire the acknowledgement window", "--json"],
+      fake.env,
+    );
+
+    expect(failed.exitCode).toBe(1);
+    const { error } = failureEnvelope(failed.stderr);
+    expect(error.code).toBe("ROLE_ACKNOWLEDGEMENT_MISMATCH");
+    expect(error.command).toEqual(["agent", "read", expect.stringMatching(/^supervisor-/)]);
+    expect((error.paneTail as string[]).join("\n")).toContain("SLP_ROLE_READY");
+    const reads = (await fakeHerdrCommands(fake)).filter(
+      (command) => command[0] === "agent" && command[1] === "read",
+    );
+    expect(reads.length).toBeGreaterThanOrEqual(4);
+    expect(reads.at(-1)).toContain("recent-unwrapped");
+    expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
+  });
+}, 30_000);
+
+for (const harness of ["claude", "codex"] as const) {
+  test(`SLP v2 names the ${harness} directory trust dialog instead of a generic not-ready failure`, async () => {
+    await withFixture(async (fixture) => {
+      const room = await scaffoldRoom(fixture.home);
+      expect(
+        (
+          await runCliAt(fixture, room, ["room", "mark"], {
+            MAESTRO_ROOM_SCAFFOLD: "1",
+            MAESTRO_SESSION_NONE: "1",
+          })
+        ).exitCode,
+      ).toBe(0);
+      const fake = await installFakeHerdr(fixture, { trustDialog: harness });
+
+      const failed = await runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Hit the directory trust dialog", "--json"],
+        fake.env,
+      );
+
+      expect(failed.exitCode).toBe(1);
+      const { error } = failureEnvelope(failed.stderr);
+      expect(error.code).toBe("TRUST_DIALOG");
+      expect(error.harness).toBe(harness);
+      expect(error.message).toContain(`${harness} is waiting on its directory trust dialog in `);
+      expect(error.message).toContain(String(error.directory));
+      expect((error.paneTail as string[]).join("\n")).toMatch(/trust/);
+      expect(error.command).toEqual(expect.arrayContaining(["agent", "start", "--kind", harness]));
+      const runtime = await readFakeHerdrState(fake);
+      expect(runtime.workspaces).toEqual([]);
+      expect(runtime.agents).toEqual([]);
+    });
+  }, 30_000);
+}

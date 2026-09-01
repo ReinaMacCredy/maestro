@@ -47,6 +47,14 @@ That single operation:
 5. opens the Team Supervisor and Lead with only their relevant pack sections;
 6. creates the initial `OPEN` work item assigned to the Lead.
 
+Both `team start` and `work add --to` block while a pane opens and acknowledges
+its contract, normally under a minute, and print their phases on stderr
+(`starting`, `waiting for acknowledgement (up to 30s)`, `ready in`); do not
+re-run either while it is still running. Every pane must already trust the
+project directory: the first start in a fresh directory fails with
+`TRUST_DIALOG` naming the harness and directory. Open that directory once with
+that harness, accept its trust dialog, and rerun.
+
 The printed result contains the team generation and initial work ID. The Lead
 takes that work from its own pane:
 

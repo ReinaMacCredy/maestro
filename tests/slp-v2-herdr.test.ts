@@ -19,8 +19,19 @@ const maestroCli = join(import.meta.dir, "..", "bin", "maestro.ts");
 const roleCommandRunner = join(import.meta.dir, "slp-role-command.ts");
 const watchOpener = join(import.meta.dir, "slp-open-watch.ts");
 
+const runtimePhaseLine =
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s)$/;
+
+// Runtime phase lines (d757) are progress, not failures.
+function phaseFree(stderr: string): string {
+  return stderr
+    .split("\n")
+    .filter((line) => line !== "" && !runtimePhaseLine.test(line))
+    .join("\n");
+}
+
 function envelope<T>(result: CliResult): T {
-  expect(result.stderr).toBe("");
+  expect(phaseFree(result.stderr)).toBe("");
   expect(result.exitCode).toBe(0);
   return (JSON.parse(result.stdout) as { data: T }).data;
 }
@@ -82,7 +93,7 @@ async function promptRoleCommand(
     );
   }
   expect(receipt.exitCode).toBe(0);
-  expect(receipt.stderr).toBe("");
+  expect(phaseFree(receipt.stderr)).toBe("");
   return receipt;
 }
 
@@ -152,7 +163,7 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         MAESTRO_ROOM_SCAFFOLD: "1",
         MAESTRO_SESSION_NONE: "1",
       });
-      expect(marked.stderr).toBe("");
+      expect(phaseFree(marked.stderr)).toBe("");
       expect(marked.exitCode).toBe(0);
       let teamId: string | null = null;
       let stopped = false;
