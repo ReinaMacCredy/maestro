@@ -8,6 +8,14 @@ one ephemeral Herdr workspace per running generation. The split is deliberate:
 the Hub knows which teams exist, while each project owns its own work and
 decisions.
 
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy.
+
 ## Before you start
 
 Install Maestro from a checkout or with the installer, then install Herdr as

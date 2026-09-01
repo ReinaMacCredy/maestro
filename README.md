@@ -80,9 +80,18 @@ flowchart TB
   PeerA <--> PeerB
 ```
 
-The Hub Supervisor reaches the team only through its Team Supervisor. Inside
-the team, the Team Supervisor, Lead, and Peers communicate directly. There is
-no Observer, Advisor, sensor, scheduler, or background agent role.
+In the supported SLP flow, the Hub Supervisor reaches the team only through
+its Team Supervisor. Inside the team, the Team Supervisor, Lead, and Peers
+communicate directly. There is no Observer, Advisor, sensor, scheduler, or
+background agent role.
+
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy.
 
 The canonical Workspace Pack lives at `~/maestro/SLP.md`. Starting a team
 copies its exact bytes to `<project>/.maestro/SLP.md`, pins its version and

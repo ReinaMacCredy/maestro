@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { builtInPlugins } from "../src/plugins/index.ts";
 import { runCli, withFixture } from "./helpers.ts";
 
 const slpOperations = [
@@ -129,3 +130,27 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
     }
   });
 }, 30_000);
+
+test("311 [lint] SLP v2 is the only registered team architecture and states its cooperative boundary", async () => {
+  const root = join(import.meta.dir, "..");
+  const pluginNames = builtInPlugins.map((plugin) => plugin.name);
+  expect(pluginNames.filter((name) => name === "slp-v2")).toEqual(["slp-v2"]);
+  for (const retired of ["team", "team-runtime", "team-observer", "team-sensor", "team-advisor"]) {
+    expect(pluginNames).not.toContain(retired);
+    expect(await Bun.file(join(root, "src", "plugins", `${retired}.ts`)).exists()).toBe(false);
+  }
+
+  const surfaces = await Promise.all([
+    Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text(),
+    Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text(),
+    Bun.file(join(root, "README.md")).text(),
+    Bun.file(join(root, "site", "src", "content", "docs", "guides", "supervised-teams.md")).text(),
+    Bun.file(join(root, "site", "src", "content", "docs", "concepts", "roles.md")).text(),
+    Bun.file(join(root, "site", "src", "content", "docs", "getting-started", "slp-setup.md")).text(),
+  ]);
+  for (const surface of surfaces) {
+    expect(surface).toContain("cooperative-agent protocol");
+    expect(surface).toContain("not a shell security sandbox");
+    expect(surface).toContain("direct Herdr");
+  }
+});

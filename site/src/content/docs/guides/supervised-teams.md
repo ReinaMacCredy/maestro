@@ -23,11 +23,19 @@ flowchart TB
   PeerA <--> PeerB
 ```
 
-Every displayed edge is a direct bidirectional conversation channel. The Hub
-Supervisor reaches the team only through its Team Supervisor; it never manages
-the Lead or Peers directly.
+Every displayed edge is a direct bidirectional conversation channel. In the
+supported SLP flow, the Hub Supervisor reaches the team only through its Team
+Supervisor; it never manages the Lead or Peers directly.
 
 There is no Observer, Advisor, sensor, scheduler or background agent role.
+
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy.
 
 ## Public operations
 

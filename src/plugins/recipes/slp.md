@@ -18,12 +18,20 @@ Hub Supervisor <-> Team Supervisor
                 Peer 1  <-> Peer 2
 ```
 
-Every displayed edge is a direct conversation channel. The Hub Supervisor
-reaches a team only through its Team Supervisor. The Team Supervisor, Lead,
-and Peers may talk directly within the team workspace.
+Every displayed edge is a direct conversation channel. In the supported SLP
+flow, the Hub Supervisor reaches a team only through its Team Supervisor. The
+Team Supervisor, Lead, and Peers may talk directly within the team workspace.
 
 There is no Observer, Advisor, sensor, scheduler, daemon, packet, review, or
 reconcile role in SLP.
+
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy.
 
 ## Roles
 

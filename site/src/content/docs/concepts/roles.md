@@ -6,6 +6,16 @@ description: The Hub Supervisor, Team Supervisor, Lead, and Peer authority model
 SLP v2 has four roles. The Human remains the owner above the system, but is not
 an additional team seat.
 
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy. Within those operations, `MAESTRO_SESSION_ID` and
+`MAESTRO_SESSION_PID` do not grant an SLP role; a missing, mismatched, or
+prior-generation pane binding fails closed.
+
 ## Topology
 
 ```mermaid
@@ -20,8 +30,9 @@ flowchart TB
   PeerA <--> PeerB
 ```
 
-Every double arrow is a direct conversation channel. The Hub Supervisor has no
-direct channel to the Lead or Peers.
+Every double arrow is a direct conversation channel in the SLP protocol. The
+supported Hub flow has no Hub-to-Lead or Hub-to-Peer channel; unrestricted
+Herdr itself is outside that guarantee.
 
 ## Authority
 

@@ -12,6 +12,14 @@ You belong to one supervised team generation. Communicate directly along the
 team topology, but record work, returns, reviewer acceptance, and settled
 decisions through Maestro before they govern execution.
 
+SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
+checks the nine SLP operations at their supported boundaries: Hub operations
+must run from the Hub room, while project role operations require the current
+generation's stored Herdr pane binding. It does not block native commands,
+administrative Maestro commands, or direct Herdr calls; topology and
+external-effect limits remain obligations enforced by the Human and host
+policy.
+
 The public SLP surface is exactly:
 
 ```text

@@ -412,6 +412,128 @@ test("SLP v2 canonicalizes a project subdirectory to its checkout root", async (
   });
 }, 20_000);
 
+test("SLP v2 derives cooperative authority only from the current Herdr pane binding", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const first = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+    }>((
+      await runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Prove current pane authority", "--json"],
+        fake.env,
+      )
+    ).stdout);
+    const firstSupervisor = first.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!;
+    const forgedSession = {
+      ...fake.env,
+      MAESTRO_SESSION_ID: firstSupervisor.name,
+      MAESTRO_SESSION_PID: String(process.pid),
+    };
+
+    for (const environment of [
+      { ...forgedSession, HERDR_PANE_ID: undefined },
+      { ...forgedSession, HERDR_PANE_ID: "pane-not-in-this-generation" },
+    ]) {
+      const rejected = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "add", "Forged role must not write", "--json"],
+        environment,
+      );
+      expect(rejected.exitCode).toBe(1);
+      expect(JSON.parse(rejected.stderr).error.code).toBe("ROLE_UNPROVEN");
+    }
+
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "stop", first.team.teamId, "--emergency", "--json"],
+          fake.env,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const second = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+      };
+    }>((
+      await runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Prove stale pane rejection", "--json"],
+        fake.env,
+      )
+    ).stdout);
+    expect(second.team.generation).toBe(first.team.generation + 1);
+
+    const stale = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Stale role must not write", "--json"],
+      { ...forgedSession, HERDR_PANE_ID: firstSupervisor.paneId },
+    );
+    expect(stale.exitCode).toBe(1);
+    expect(JSON.parse(stale.stderr).error.code).toBe("ROLE_UNPROVEN");
+
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    let database = new Database(databasePath, { readonly: true });
+    expect(
+      database
+        .query<{ count: number }, [number]>(
+          "SELECT COUNT(*) AS count FROM slp_work WHERE generation = ?",
+        )
+        .get(second.team.generation)?.count,
+    ).toBe(1);
+    database.close();
+
+    const secondSupervisor = second.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!;
+    const accepted = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Current pane may write", "--json"],
+      {
+        ...forgedSession,
+        MAESTRO_SESSION_ID: "irrelevant-forged-session",
+        HERDR_PANE_ID: secondSupervisor.paneId,
+      },
+    );
+    expect(accepted.stderr).toBe("");
+    expect(accepted.exitCode).toBe(0);
+
+    database = new Database(databasePath, { readonly: true });
+    expect(
+      database
+        .query<{ count: number }, [number]>(
+          "SELECT COUNT(*) AS count FROM slp_work WHERE generation = ?",
+        )
+        .get(second.team.generation)?.count,
+    ).toBe(2);
+    database.close();
+  });
+}, 25_000);
+
 test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves the other running", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
