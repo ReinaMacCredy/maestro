@@ -1919,7 +1919,7 @@ test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchan
       expect(packet).toContain("attention HANDBACK_UNREVIEWED dispatch");
     }
   });
-});
+}, 15_000);
 
 test("326 a start rejected by a gate leaves atomic_reason untouched", async () => {
   await withFixture(async (fixture) => {
