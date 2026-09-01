@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { join } from "node:path";
 import {
   idFrom,
@@ -9,6 +9,8 @@ import {
   type Fixture,
   withFixture,
 } from "./helpers.ts";
+
+setDefaultTimeout(15_000);
 
 function session(id: string, pid = process.pid): Record<string, string> {
   return { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) };

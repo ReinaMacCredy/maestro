@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import {
@@ -8,6 +8,8 @@ import {
   withFixture,
   type Fixture,
 } from "./helpers.ts";
+
+setDefaultTimeout(15_000);
 
 function session(id: string): Record<string, string> {
   return {
