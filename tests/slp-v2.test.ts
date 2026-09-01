@@ -4648,15 +4648,14 @@ test("SLP v2 Hub scaffold retires every old role file in favor of one canonical 
   });
 });
 
-test("SLP v2 install removes only old managed block bytes and replaces sensor with Watch shim", async () => {
+test("SLP v2 install removes only the old managed block and leaves clean file endings", async () => {
   await withFixture(async (fixture) => {
     const managed = "<!-- maestro:begin -->\nold managed SLP\n<!-- maestro:end -->";
     const agentsPrefix = "alpha\r\nuser spacing\r\n";
     const agentsSuffix = "\r\nomega\r\n";
-    const claudePrefix = "custom-one\n\n\n";
-    const claudeSuffix = "\n\ncustom-two";
+    const claudePrefix = "custom-one\n\n";
     await writeFile(join(fixture.repo, "AGENTS.md"), `${agentsPrefix}${managed}${agentsSuffix}`);
-    await writeFile(join(fixture.repo, "CLAUDE.md"), `${claudePrefix}${managed}${claudeSuffix}`);
+    await writeFile(join(fixture.repo, "CLAUDE.md"), `${claudePrefix}${managed}\n`);
     const cleanPath = [join(import.meta.dir, "..", "node_modules", ".bin"), process.execPath, "/usr/bin", "/bin"]
       .map((entry) => entry.endsWith("/bun") ? join(entry, "..") : entry)
       .join(":");
@@ -4670,7 +4669,7 @@ test("SLP v2 install removes only old managed block bytes and replaces sensor wi
     expect(await readFile(join(fixture.repo, "AGENTS.md"), "utf8"))
       .toBe(`${agentsPrefix}${agentsSuffix}`);
     expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8"))
-      .toBe(`${claudePrefix}${claudeSuffix}`);
+      .toBe("custom-one\n");
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists())
       .toBe(true);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists())

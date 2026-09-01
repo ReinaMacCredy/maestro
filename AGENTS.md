@@ -27,15 +27,6 @@ Rules:
   (A3). Run `bun test`, `bunx tsc --noEmit`, and those greps before pushing.
 - Test-first: red test, minimal change, green; the full suite runs after
   install, from the checkout being installed.
-- Never hand-edit the maestro managed block below or the `.claude/` and
-  `.codex/` wiring; the installer owns them.
+- Never hand-edit the `.claude/` and `.codex/` wiring; the installer owns those
+  files.
 - Commit per verified step; never push, tag, or release unasked.
-
-<!-- maestro:begin -->
-The Lead of this repository is the agent the room started as `lead-<repo basename>`; a pane it opens with a dispatch is a Peer named `peer-<dispatch id>`; a session with any other name holds only what its accepted dispatch says; the room at ~/maestro is the Supervisor. Roles: `maestro recipe show slp`.
-The repository's own `AGENTS.md` and `CLAUDE.md` text outside this block is its Workspace Protocol and may declare protected areas, hotspots, restart rules, and local verification; read it before taking work or opening a dispatch.
-Live maestro state is injected by hooks. Use `maestro status` for the current session view and `maestro ready` for available work.
-Track work with `maestro work add|start|done`; method depth: `maestro recipe show work`.
-If no harness hook fired, run `maestro hook record --event SessionStart` and read the brief from stdout.
-Failed commands print a JSON error envelope on stderr and exit nonzero; when the fix is mechanical, the message names the next command to run.
-<!-- maestro:end -->

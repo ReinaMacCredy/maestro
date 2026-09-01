@@ -209,11 +209,20 @@ function upsertManagedBlock(existing: string, pattern: RegExp, block: string): s
 async function removeLegacySlpMirror(path: string): Promise<boolean> {
   if (!existsSync(path)) return false;
   const existing = await readFile(path, "utf8");
-  const cleaned = existing.replace(
+  const blockEndsFile = /<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->(?:\r?\n)?$/.test(
+    existing,
+  );
+  let cleaned = existing.replace(
     /<!-- maestro:begin -->[\s\S]*?<!-- maestro:end -->/g,
     "",
   );
   if (cleaned === existing) return false;
+  if (blockEndsFile) {
+    const lineEnding = existing.includes("\r\n") ? "\r\n" : "\n";
+    cleaned = cleaned.trim()
+      ? cleaned.replace(/(?:\r?\n)+$/, lineEnding)
+      : "";
+  }
   await writeFile(path, cleaned);
   return true;
 }
