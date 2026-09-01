@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -17,8 +17,6 @@ import {
   runTool,
   withFixture,
 } from "./helpers.ts";
-
-setDefaultTimeout(15_000);
 
 const projectRoot = resolve(import.meta.dir, "..");
 

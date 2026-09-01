@@ -1,2 +1,3 @@
 [test]
 root = "tests"
+timeout = 15000
