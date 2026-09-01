@@ -5112,3 +5112,241 @@ for (const harness of ["claude", "codex"] as const) {
     });
   }, 30_000);
 }
+
+test("SLP v2 pushes one notice line to the counterpart after return, rework, and accept", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Push notices", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const notices = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
+      );
+    const id = data.work.id;
+
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
+    ).toBe(0);
+    const returned = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "return", id, "result: first pass\nmore detail below", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(returned.stderr)).toBe("");
+    expect(returned.exitCode).toBe(0);
+    expect(await notices()).toEqual([
+      ["agent", "prompt", supervisor.name, `[from lead][${id} RETURNED] result: first pass; read: maestro status ${id}`],
+    ]);
+
+    const rework = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", id, "needs a test", "--rework", "--json"],
+      supervisorEnvironment,
+    );
+    expect(phaseFree(rework.stderr)).toBe("");
+    expect(rework.exitCode).toBe(0);
+    expect((await notices()).at(-1)).toEqual([
+      "agent",
+      "prompt",
+      lead.name,
+      `[from team-supervisor][${id} RETURNED] rework granted: needs a test; read: maestro status ${id}`,
+    ]);
+
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", id, "result: with test", "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const accepted = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "accept", id, "--json"],
+      supervisorEnvironment,
+    );
+    expect(phaseFree(accepted.stderr)).toBe("");
+    expect(accepted.exitCode).toBe(0);
+    expect((await notices()).slice(-2)).toEqual([
+      ["agent", "prompt", lead.name, `[from team-supervisor][${id} DONE] accepted; read: maestro status ${id}`],
+      [
+        "agent",
+        "prompt",
+        "supervisor",
+        `[from team-supervisor][${id} DONE] accepted in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
+      ],
+    ]);
+
+    const peerWork = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Peer task", "--to", "peer-notice", "--json"],
+      leadEnvironment,
+    );
+    expect(peerWork.exitCode).toBe(0);
+    const peerData = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(
+      peerWork.stdout,
+    );
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peerData.role.paneId };
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", peerData.work.id, "--json"],
+          peerEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    await setFakeHerdrBehavior(fake, { prompts: false });
+    const refused = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "return", peerData.work.id, "result: peer done", "--json"],
+      peerEnvironment,
+    );
+    expect(refused.exitCode).toBe(0);
+    expect(refused.stderr).toContain(
+      `warning: could not notify ${lead.name} about ${peerData.work.id} RETURNED`,
+    );
+    expect(envelope<{ work: { state: string } }>(refused.stdout).work.state).toBe("RETURNED");
+  });
+}, 20_000);
+
+test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status, and named Hub agent", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Stop with a report", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    for (const args of [
+      ["work", "take", data.work.id, "--json"],
+      ["work", "return", data.work.id, "result: done", "--json"],
+    ]) {
+      expect((await runCliAt(fixture, fixture.repo, args, leadEnvironment)).exitCode).toBe(0);
+    }
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "accept", data.work.id, "--json"],
+          supervisorEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    const hubRefused = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--reason", "not the Hub's call", "--json"],
+      fake.env,
+    );
+    expect(hubRefused.exitCode).toBe(1);
+    expect(hubRefused.stderr).toContain("INVALID_OPTION");
+
+    const reason = "all green: w1 accepted, nothing left";
+    const stopped = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["team", "stop", data.team.teamId, "--reason", reason, "--json"],
+      supervisorEnvironment,
+    );
+    expect(phaseFree(stopped.stderr)).toBe("");
+    expect(stopped.exitCode).toBe(0);
+    expect(envelope<{ team: { state: string } }>(stopped.stdout).team.state).toBe("STOPPED");
+
+    const hub = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
+    expect(
+      hub
+        .query<{ actor: string; emergency: number; reason: string }, [string]>(
+          `SELECT actor, emergency, reason FROM slp_lifecycle_operations
+           WHERE operation = 'STOP' AND phase = 'COMMITTED' AND team_id = ?`,
+        )
+        .get(data.team.teamId),
+    ).toEqual({ actor: supervisor.name, emergency: 0, reason });
+    hub.close();
+
+    const status = await runCliAt(fixture, room, ["status"], fake.env);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain(
+      `${data.team.teamId} g${data.team.generation} STOPPED (supervisor): ${reason}`,
+    );
+    const statusJson = envelope<{ teams: Array<{ stop: unknown }> }>(
+      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
+    );
+    expect(statusJson.teams[0]?.stop).toEqual({ actor: supervisor.name, emergency: false, reason });
+
+    const hubNotice = (await fakeHerdrCommands(fake)).find(
+      (command) =>
+        command[0] === "agent" && command[1] === "prompt" && command[2] === "supervisor" &&
+        (command[3] ?? "").includes("STOPPED"),
+    );
+    expect(hubNotice).toEqual([
+      "agent",
+      "prompt",
+      "supervisor",
+      `[from team-supervisor][${data.team.teamId} g${data.team.generation} STOPPED] ${reason}; read: maestro status`,
+    ]);
+  });
+}, 30_000);

@@ -623,8 +623,8 @@ export const workPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      registerSessionCommand(context, "work note", (invocation): CliResult => {
-        const slp = maybeHandleSlpWorkNote(context, invocation);
+      registerSessionCommand(context, "work note", async (invocation): Promise<CliResult> => {
+        const slp = await maybeHandleSlpWorkNote(context, invocation);
         if (slp) return slp;
         if (invocation.options.rework === true) {
           throw new CliError("INVALID_OPTION", "--rework is available only for SLP RETURNED work");

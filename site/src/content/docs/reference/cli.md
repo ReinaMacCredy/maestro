@@ -33,11 +33,15 @@ and restores required roles without duplicates.
 ### `team stop`
 
 ```sh
-maestro team stop <team-id>
+maestro team stop <team-id> --reason "<closing report>"
 ```
 
 Team Supervisor authority for normal stop; Hub Supervisor authority for an
-emergency stop. Normal stop requires every work item to be `DONE`. The
+emergency stop. The optional `--reason` is the Team Supervisor's closing
+report: it is stored on the Hub's STOP record, printed by Hub `status` as
+`<team> g<n> STOPPED (supervisor): <reason>`, and pushed to the Hub agent named
+`supervisor` when one exists. Normal stop requires every work item to be
+`DONE`. The
 Team Supervisor delegates its own final close to a transient foreground
 non-agent Hub pane; this is internal, not a tenth operation. State changes to
 `STOPPED` only after every team pane, the workspace, and raw transcript are

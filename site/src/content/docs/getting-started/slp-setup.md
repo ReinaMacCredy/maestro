@@ -59,6 +59,15 @@ whose pane is still alive are left alone (`already acknowledged in <pane>; left
 alone`), closed panes are reopened and acknowledged again, and the START record
 in both stores is refreshed to the current pane ids.
 
+Hand-offs push a wake-up: after `work return`, `work accept`, and `work note
+--rework` commit, Maestro sends one line to the counterpart pane through Herdr
+(`[from lead][w1 RETURNED] <summary>; read: maestro status w1`). The store
+stays the truth; a push that fails prints a warning and nothing else changes.
+The Team Supervisor closes with `maestro team stop <team-id> --reason
+"<report>"`: the Hub sees `<team> g<n> STOPPED (supervisor): <report>` in
+`maestro status`, and the same line is pushed to the Hub only when its room
+agent is named `supervisor`.
+
 The printed result contains the team generation and initial work ID. The Lead
 takes that work from its own pane:
 

@@ -43,6 +43,12 @@ Watch Pane is optional foreground support, never an agent or an authority
 holder. `maestro team start` and `maestro work add --to` return only after the
 new pane has acknowledged its contract, normally within a minute; they print
 their phases on stderr, so do not re-run either while it is still running.
+After `maestro work return`, `maestro work accept`, and `maestro work note
+--rework` commit, Maestro pushes one line to the counterpart pane
+(`[from <role>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`);
+the store stays the truth and that line is only the wake-up. Hand-typed asks
+stay allowed: record first (a decision with `--work`, a note), then prompt the
+counterpart about the stored record.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->
@@ -54,7 +60,10 @@ stop marks every unfinished item abandoned in its original generation without
 adding a fifth work state. Communicate with a team only through its Team
 Supervisor. Do not manage its Lead or Peers directly. A Hub decision may link
 unique work as `wN`; when that id exists in several teams, qualify it as
-`<team-id>:wN`.
+`<team-id>:wN`. Run as the Herdr agent named `supervisor` in the `maestro`
+workspace so acceptance and stop notices reach you; an unnamed Hub reads
+`maestro status`, which prints a normal stop as
+`<team> g<n> STOPPED (supervisor): <reason>`.
 <!-- slp:role:hub-supervisor:end -->
 
 <!-- slp:role:team-supervisor:begin -->
@@ -62,7 +71,10 @@ unique work as `wN`; when that id exists in several teams, qualify it as
 
 You own team-level coordination and acceptance. You may stop the team, inspect
 status, add or note work, accept Lead returns, and decide within team scope.
-Communicate directly with the Hub Supervisor, Lead, and every Peer.
+Communicate directly with the Hub Supervisor, Lead, and every Peer. Close the
+team with `maestro team stop <team-id> --reason "<closing report>"`; the
+reason lands on the Hub ledger and is pushed to the Hub agent named
+`supervisor` when it exists.
 <!-- slp:role:team-supervisor:end -->
 
 <!-- slp:role:lead:begin -->

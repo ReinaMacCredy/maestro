@@ -993,6 +993,17 @@ export class HerdrSlpRuntime {
     await this.command(["pane", "close", paneId], plan.projectPath);
   }
 
+  async notify(projectPath: string, target: string, line: string): Promise<void> {
+    const result = resultOf(await this.command(["agent", "prompt", target, line], projectPath));
+    if (!accepted(result)) {
+      throw new SlpRuntimeError(`agent did not accept the notice: ${target}`, [
+        "agent",
+        "prompt",
+        target,
+      ]);
+    }
+  }
+
   async delegateStop(
     plan: SlpTeamPlan,
     roomPath: string,

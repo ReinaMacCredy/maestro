@@ -372,6 +372,7 @@ function migrateProject(store: Store): void {
       generation INTEGER NOT NULL,
       requested_by TEXT NOT NULL,
       owner_pid INTEGER,
+      reason TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       UNIQUE(team_id, generation)
     );
@@ -434,6 +435,11 @@ function migrateProject(store: Store): void {
     "slp_stop_grants",
     "owner_pid",
     "ALTER TABLE slp_stop_grants ADD COLUMN owner_pid INTEGER",
+  );
+  store.ensureColumn(
+    "slp_stop_grants",
+    "reason",
+    "ALTER TABLE slp_stop_grants ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
   );
   store.ensureColumn(
     "slp_local_roles",
@@ -1767,6 +1773,50 @@ function requireWorkReviewer(
   }
 }
 
+function stopSuffix(stop: { emergency: boolean; reason: string } | null): string {
+  if (!stop || stop.emergency || stop.reason === "") return "";
+  return ` (supervisor): ${stop.reason}`;
+}
+
+function noticeSummary(body: string): string {
+  const line = body.split("\n").map((part) => part.trim()).find((part) => part !== "") ?? "";
+  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
+}
+
+// d753/d760: the store is the truth; the pushed line is only the wake-up.
+async function pushNotice(
+  projectPath: string,
+  fromRole: SlpRole,
+  target: string | null,
+  subject: string,
+  summary: string,
+  read: string,
+): Promise<void> {
+  const line = `[from ${fromRole}][${subject}] ${noticeSummary(summary)}; read: ${read}`;
+  if (!target) {
+    process.stderr.write(`warning: no pane to notify about ${subject}; the store remains the truth\n`);
+    return;
+  }
+  try {
+    await new HerdrSlpRuntime().notify(projectPath, target, line);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `warning: could not notify ${target} about ${subject}: ${message}; the store remains the truth\n`,
+    );
+  }
+}
+
+function rolePaneName(context: PluginContext, actor: SlpActor, role: SlpRole): string | null {
+  return context.store.database
+    .query<{ name: string }, [string, number, string]>(
+      `SELECT name FROM slp_local_roles
+       WHERE team_id = ? AND generation = ? AND role = ?
+       ORDER BY created_at LIMIT 1`,
+    )
+    .get(actor.team.team_id, actor.team.generation, role)?.name ?? null;
+}
+
 function readSlpWork(context: PluginContext, actor: SlpActor, id: string): SlpWorkRow {
   return requireSlpWork(context, actor, id);
 }
@@ -2048,10 +2098,10 @@ export async function maybeHandleSlpWorkAdd(
   };
 }
 
-export function maybeHandleSlpWorkNote(
+export async function maybeHandleSlpWorkNote(
   context: PluginContext,
   invocation: CliInvocation,
-): CliResult | null {
+): Promise<CliResult | null> {
   if (!requireActiveOrLegacy(context)) return null;
   migrateProject(context.store);
   const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
@@ -2120,6 +2170,16 @@ export function maybeHandleSlpWorkNote(
     throw error;
   }
   context.sessions.record("work.note");
+  if (rework) {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      work.assigned_to,
+      `${id} RETURNED`,
+      `rework granted: ${body}`,
+      `maestro status ${id}`,
+    );
+  }
   return {
     data: {
       note: { actor: actor.name, body, createdAt: now, rework },
@@ -2198,7 +2258,7 @@ function takeWork(context: PluginContext, id: string): CliResult {
   return { data: { work: workData(current) }, text: `${id} ACTIVE by ${actor.name}` };
 }
 
-function returnWork(context: PluginContext, id: string, body: string): CliResult {
+async function returnWork(context: PluginContext, id: string, body: string): Promise<CliResult> {
   migrateProject(context.store);
   const actor = requireSlpActor(context, ["lead", "peer"]);
   requireRunningGeneration(context.store, actor.team);
@@ -2238,10 +2298,18 @@ function returnWork(context: PluginContext, id: string, body: string): CliResult
   }
   context.sessions.record("work.return");
   const current = readSlpWork(context, actor, id);
+  await pushNotice(
+    actor.team.project_path,
+    actor.role,
+    rolePaneName(context, actor, expectedReviewerRole(context, actor, current)),
+    `${id} RETURNED`,
+    body,
+    `maestro status ${id}`,
+  );
   return { data: { work: workData(current) }, text: `${id} RETURNED by ${actor.name}` };
 }
 
-function acceptWork(context: PluginContext, id: string, outcome: string): CliResult {
+async function acceptWork(context: PluginContext, id: string, outcome: string): Promise<CliResult> {
   migrateProject(context.store);
   const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
   requireRunningGeneration(context.store, actor.team);
@@ -2301,6 +2369,24 @@ function acceptWork(context: PluginContext, id: string, outcome: string): CliRes
   }
   context.sessions.record("work.accept");
   const current = readSlpWork(context, actor, id);
+  await pushNotice(
+    actor.team.project_path,
+    actor.role,
+    current.assigned_to,
+    `${id} DONE`,
+    outcome,
+    `maestro status ${id}`,
+  );
+  if (current.created_by === "hub-supervisor") {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      "supervisor",
+      `${id} DONE`,
+      `${outcome} in ${actor.team.team_id} g${actor.team.generation}`,
+      "maestro status",
+    );
+  }
   return {
     data: { work: workData(current) },
     text: `${id} DONE (${outcome}) by ${actor.name}`,
@@ -2666,7 +2752,12 @@ function stopResult(team: ActiveLocalTeam, emergency: boolean): CliResult {
   };
 }
 
-function issueStopGrant(store: Store, team: ActiveLocalTeam, actor: string): string {
+function issueStopGrant(
+  store: Store,
+  team: ActiveLocalTeam,
+  actor: string,
+  reason: string,
+): string {
   migrateProject(store);
   const token = randomUUID();
   store.database.exec("BEGIN IMMEDIATE");
@@ -2698,10 +2789,18 @@ function issueStopGrant(store: Store, team: ActiveLocalTeam, actor: string): str
     store.database
       .query(
         `INSERT INTO slp_stop_grants
-          (token, team_id, generation, requested_by, owner_pid, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+          (token, team_id, generation, requested_by, owner_pid, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(token, team.team_id, team.generation, actor, process.pid, new Date().toISOString());
+      .run(
+        token,
+        team.team_id,
+        team.generation,
+        actor,
+        process.pid,
+        reason,
+        new Date().toISOString(),
+      );
     store.database.exec("COMMIT");
     return token;
   } catch (error) {
@@ -2743,9 +2842,10 @@ async function requestNormalStop(
   context: PluginContext,
   runtime: HerdrSlpRuntime,
   actor: SlpActor,
+  reason: string,
 ): Promise<CliResult> {
   const team = actor.team;
-  const token = issueStopGrant(context.store, team, actor.name);
+  const token = issueStopGrant(context.store, team, actor.name, reason);
   const cliEntry = process.argv[1];
   if (!cliEntry) {
     clearStopGrant(context.store, team, token);
@@ -2759,6 +2859,14 @@ async function requestNormalStop(
       resolve(cliEntry),
     );
     await waitForStopped(context.store, team, token);
+    await pushNotice(
+      team.project_path,
+      "team-supervisor",
+      "supervisor",
+      `${team.team_id} g${team.generation} STOPPED`,
+      reason || "normal stop",
+      "maestro status",
+    );
     return stopResult(team, false);
   } catch (error) {
     if (localTeamState(context.store, team) === "STOPPED") return stopResult(team, false);
@@ -2851,16 +2959,18 @@ function reserveStop(
     }
 
     let actor = "hub-supervisor";
+    let reason = input.reason;
     if (input.proxyToken) {
       requireRunningGeneration(store, team, input.proxyToken);
       const grant = store.database
-        .query<{ requested_by: string }, [string, number, string]>(
-          `SELECT requested_by FROM slp_stop_grants
+        .query<{ reason: string; requested_by: string }, [string, number, string]>(
+          `SELECT requested_by, reason FROM slp_stop_grants
            WHERE team_id = ? AND generation = ? AND token = ?`,
         )
         .get(team.team_id, team.generation, input.proxyToken);
       if (!grant) throw new CliError("INVALID_STOP_GRANT", "stop helper authority expired");
       actor = grant.requested_by;
+      reason = grant.reason;
       const unfinished = unfinishedWork(store, team);
       if (unfinished.length > 0) {
         throw new CliError(
@@ -2893,7 +3003,7 @@ function reserveStop(
           `${team.team_id}:g${team.generation} is already under emergency stop`,
         );
       }
-      if (pending.emergency === 1 && pending.reason !== input.reason) {
+      if (pending.emergency === 1 && pending.reason !== reason) {
         throw new CliError(
           "EMERGENCY_REASON_CHANGED",
           `${team.team_id}:g${team.generation} emergency reason is already pinned`,
@@ -2902,7 +3012,7 @@ function reserveStop(
       }
       const effectiveActor = pending.emergency === 1 ? pending.actor : actor;
       const effectiveEmergency = pending.emergency === 1 || input.emergency;
-      const effectiveReason = pending.emergency === 1 ? pending.reason : input.reason;
+      const effectiveReason = pending.emergency === 1 ? pending.reason : reason;
       const now = new Date().toISOString();
       const claim = (table: string) =>
         store.database
@@ -2951,7 +3061,7 @@ function reserveStop(
       "",
       team.workspace_id,
       actor,
-      input.reason,
+      reason,
       input.emergency ? 1 : 0,
       input.ownerToken,
       process.pid,
@@ -3108,9 +3218,6 @@ async function stopTeam(
   const requestedTeam = requiredPosition(invocation, 0, "team id");
   const emergency = invocation.options.emergency === true;
   const requestedReason = stringOption(invocation, "reason");
-  if (requestedReason !== undefined && !emergency) {
-    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
-  }
   const emergencyReason = emergency
     ? requestedReason ?? "Hub Supervisor emergency stop"
     : "";
@@ -3130,9 +3237,12 @@ async function stopTeam(
         `${actor.name} cannot stop ${requestedTeam}; current team is ${actor.team.team_id}`,
       );
     }
-    return requestNormalStop(context, runtime, actor);
+    return requestNormalStop(context, runtime, actor, requestedReason ?? "");
   }
 
+  if (requestedReason !== undefined && !emergency) {
+    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
+  }
   if (!emergency && !proxy) {
     throw new CliError(
       "ROLE_FORBIDDEN",
@@ -3382,6 +3492,14 @@ export async function maybeHandleSlpStatus(
       } finally {
         projectStore.close();
       }
+      const stopRecord = tableExists(context.store, "slp_lifecycle_operations")
+        ? context.store.database
+          .query<{ actor: string; emergency: number; reason: string }, [string, number]>(
+            `SELECT actor, emergency, reason FROM slp_lifecycle_operations
+             WHERE team_id = ? AND generation = ? AND operation = 'STOP' AND phase = 'COMMITTED'`,
+          )
+          .get(row.team_id, row.generation) ?? null
+        : null;
       teams.push({
         abandonedWorkCount,
         generation: row.generation,
@@ -3400,6 +3518,9 @@ export async function maybeHandleSlpStatus(
         })),
         runtime: runtimeState,
         state: row.state,
+        stop: stopRecord
+          ? { actor: stopRecord.actor, emergency: stopRecord.emergency === 1, reason: stopRecord.reason }
+          : null,
         teamId: row.team_id,
         watch: watch ? "on" : "off",
         workCounts: counts,
@@ -3411,7 +3532,7 @@ export async function maybeHandleSlpStatus(
       text: teams.length === 0
         ? "no SLP teams"
         : teams.map((team) =>
-          `${team.teamId} g${team.generation} ${team.state}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
+          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
         ).join("\n"),
     };
   }
@@ -3633,7 +3754,8 @@ export const slpV2Plugin: BuiltInPlugin = {
           flags: {
             "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
             "--reason": {
-              description: "Record why unfinished work is abandoned by emergency stop.",
+              description:
+                "Team Supervisor: the closing report shown to the Hub. Hub: why unfinished work is abandoned by emergency stop.",
               value: true,
             },
           },
@@ -3661,7 +3783,7 @@ export const slpV2Plugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "work return",
-        (invocation): CliResult =>
+        (invocation): Promise<CliResult> =>
           returnWork(
             context,
             requiredPosition(invocation, 0, "work id"),
@@ -3682,7 +3804,7 @@ export const slpV2Plugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "work accept",
-        (invocation): CliResult =>
+        (invocation): Promise<CliResult> =>
           acceptWork(
             context,
             requiredPosition(invocation, 0, "work id"),
