@@ -73,11 +73,12 @@ flowchart LR
   Open["OPEN"] -->|"work take"| Active["ACTIVE"]
   Active -->|"work return"| Returned["RETURNED"]
   Returned -->|"work accept"| Done["DONE"]
-  Returned -->|"review note, then retake"| Active
+  Returned -->|"review note --rework, then retake"| Active
 ```
 
 - `work add` creates assigned `OPEN` work.
-- `work take` lets the assignee take `OPEN` or `RETURNED` work.
+- `work take` lets the assignee take `OPEN` work, or `RETURNED` work with the
+  unused reviewer grant for its current return revision.
 - `work note` records material context without changing state.
 - `work return` carries the result, proof, blocker and residual risk when they
   apply.
@@ -85,8 +86,8 @@ flowchart LR
   Supervisor accepts Lead work.
 
 A Peer never accepts its own work. Blocked work is returned with the blocker;
-there is no `BLOCKED` state. Rework is a reviewer note followed by the same
-assignee taking the returned work again.
+there is no `BLOCKED` state. Rework is `work note --rework` by the correct
+reviewer followed by one retake by the same assignee.
 
 A reviewer may close `OPEN` or `RETURNED` work as cancelled:
 

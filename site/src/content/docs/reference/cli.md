@@ -77,16 +77,19 @@ The new work state is `OPEN`.
 maestro work take <work-id>
 ```
 
-The assigned Lead or Peer moves its `OPEN` or `RETURNED` work to `ACTIVE`.
+The assigned Lead or Peer moves `OPEN` work to `ACTIVE`. `RETURNED` work also
+requires an unused reviewer grant for its current return revision.
 
 ### `work note`
 
 ```sh
 maestro work note <work-id> "<material note>"
+maestro work note <work-id> "<specific gap>" --rework
 ```
 
-Appends context without changing state. Use it for a changed fact, rework
-condition or material objective clarification.
+Appends context without changing state. `--rework` is restricted to the
+reviewer responsible for that return. It grants the same assignee one retake
+of the current return revision; an ordinary note never grants a retake.
 
 ### `work return`
 
@@ -129,9 +132,9 @@ work id resolves directly; qualify an id shared by several teams as
 OPEN -> ACTIVE -> RETURNED -> DONE
 ```
 
-`work note` changes no state. Rework is a reviewer note followed by the
-assignee retaking `RETURNED` work. A blocker is written in the return body;
-there is no separate blocked state.
+`work note` changes no state. Rework is `work note --rework` by the correct
+reviewer followed by one assignee retake of that exact return revision. A
+blocker is written in the return body; there is no separate blocked state.
 
 ## Hard-cut mapping
 

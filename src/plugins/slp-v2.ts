@@ -311,6 +311,7 @@ function migrateProject(store: Store): void {
       owner TEXT,
       state TEXT NOT NULL CHECK(state IN ('OPEN', 'ACTIVE', 'RETURNED', 'DONE')),
       current_return TEXT,
+      return_revision INTEGER NOT NULL DEFAULT 0,
       acceptance_outcome TEXT,
       accepted_by TEXT,
       created_at TEXT NOT NULL,
@@ -323,6 +324,14 @@ function migrateProject(store: Store): void {
       actor TEXT NOT NULL,
       body TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS slp_rework_grants (
+      work_id TEXT NOT NULL REFERENCES slp_work(id),
+      return_revision INTEGER NOT NULL CHECK(return_revision > 0),
+      reviewer TEXT NOT NULL,
+      granted_at TEXT NOT NULL,
+      consumed_at TEXT,
+      PRIMARY KEY(work_id, return_revision)
     );
     CREATE TABLE IF NOT EXISTS slp_decisions (
       id TEXT PRIMARY KEY,
@@ -382,6 +391,11 @@ function migrateProject(store: Store): void {
     "slp_local_teams",
     "configuration_json",
     "ALTER TABLE slp_local_teams ADD COLUMN configuration_json TEXT NOT NULL DEFAULT '{}'",
+  );
+  store.ensureColumn(
+    "slp_work",
+    "return_revision",
+    "ALTER TABLE slp_work ADD COLUMN return_revision INTEGER NOT NULL DEFAULT 0",
   );
   store.ensureColumn(
     "slp_local_roles",
@@ -1365,6 +1379,7 @@ interface SlpWorkRow {
   id: string;
   objective: string;
   owner: string | null;
+  return_revision: number;
   state: WorkState;
   team_id: string;
   updated_at: string;
@@ -1500,10 +1515,47 @@ function workData(work: SlpWorkRow): Record<string, unknown> {
     id: work.id,
     objective: work.objective,
     owner: work.owner,
+    returnRevision: work.return_revision,
     state: work.state,
     teamId: work.team_id,
     updatedAt: work.updated_at,
   };
+}
+
+function expectedReviewerRole(
+  context: PluginContext,
+  actor: SlpActor,
+  work: SlpWorkRow,
+): "team-supervisor" | "lead" {
+  const assignee = context.store.database
+    .query<{ role: SlpRole }, [string, number, string]>(
+      `SELECT role FROM slp_local_roles
+       WHERE team_id = ? AND generation = ? AND name = ?`,
+    )
+    .get(actor.team.team_id, actor.team.generation, work.assigned_to);
+  if (!assignee) {
+    throw new CliError(
+      "SLP_BINDING_MISSING",
+      `assignee role is missing for ${work.assigned_to}`,
+    );
+  }
+  return assignee.role === "lead" ? "team-supervisor" : "lead";
+}
+
+function requireWorkReviewer(
+  context: PluginContext,
+  actor: SlpActor,
+  work: SlpWorkRow,
+  operation: "accept" | "grant rework",
+): void {
+  const expectedReviewer = expectedReviewerRole(context, actor, work);
+  if (actor.role !== expectedReviewer || actor.name === work.assigned_to) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${actor.role} cannot ${operation} for work assigned to ${work.assigned_to}`,
+      { actor: actor.name, expectedReviewer },
+    );
+  }
 }
 
 function readSlpWork(context: PluginContext, actor: SlpActor, id: string): SlpWorkRow {
@@ -1781,17 +1833,57 @@ export function maybeHandleSlpWorkNote(
   invocation: CliInvocation,
 ): CliResult | null {
   if (!requireActiveOrLegacy(context)) return null;
+  migrateProject(context.store);
   const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
   const id = requiredPosition(invocation, 0, "work id");
   const body = requiredPosition(invocation, 1, "note body");
   const work = requireSlpWork(context, actor, id);
+  const rework = invocation.options.rework === true;
   if (actor.role === "peer" && work.assigned_to !== actor.name) {
     throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
+  }
+  if (rework) {
+    requireWorkReviewer(context, actor, work, "grant rework");
+    if (work.state !== "RETURNED") {
+      throw new CliError(
+        "INVALID_STATE",
+        `${id} must be RETURNED before its reviewer grants rework`,
+      );
+    }
   }
   const now = new Date().toISOString();
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     requireRunningGeneration(context.store, actor.team);
+    const current = requireSlpWork(context, actor, id);
+    if (rework) {
+      requireWorkReviewer(context, actor, current, "grant rework");
+      if (current.state !== "RETURNED" || current.return_revision <= 0) {
+        throw new CliError(
+          "INVALID_STATE",
+          `${id} changed before its reviewer could grant rework`,
+        );
+      }
+      const existing = context.store.database
+        .query<{ present: number }, [string, number]>(
+          `SELECT 1 AS present FROM slp_rework_grants
+           WHERE work_id = ? AND return_revision = ?`,
+        )
+        .get(id, current.return_revision);
+      if (existing) {
+        throw new CliError(
+          "REWORK_ALREADY_GRANTED",
+          `${id} return revision ${current.return_revision} already has a rework grant`,
+        );
+      }
+      context.store.database
+        .query(
+          `INSERT INTO slp_rework_grants
+            (work_id, return_revision, reviewer, granted_at)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run(id, current.return_revision, actor.name, now);
+    }
     context.store.database
       .query(
         `INSERT INTO slp_work_entries (work_id, kind, actor, body, created_at)
@@ -1808,12 +1900,16 @@ export function maybeHandleSlpWorkNote(
   }
   context.sessions.record("work.note");
   return {
-    data: { note: { actor: actor.name, body, createdAt: now }, work: workData(work) },
-    text: `${id} note by ${actor.name}: ${body}`,
+    data: {
+      note: { actor: actor.name, body, createdAt: now, rework },
+      work: workData(readSlpWork(context, actor, id)),
+    },
+    text: `${id} ${rework ? "rework grant" : "note"} by ${actor.name}: ${body}`,
   };
 }
 
 function takeWork(context: PluginContext, id: string): CliResult {
+  migrateProject(context.store);
   const actor = requireSlpActor(context, ["lead", "peer"]);
   const work = requireSlpWork(context, actor, id);
   if (work.assigned_to !== actor.name) {
@@ -1829,14 +1925,44 @@ function takeWork(context: PluginContext, id: string): CliResult {
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     requireRunningGeneration(context.store, actor.team);
+    const current = requireSlpWork(context, actor, id);
+    if (current.assigned_to !== actor.name) {
+      throw new CliError("ROLE_FORBIDDEN", `${id} is assigned to ${current.assigned_to}`);
+    }
+    if (current.state !== "OPEN" && current.state !== "RETURNED") {
+      throw new CliError("INVALID_STATE", `${id} changed before work take`);
+    }
+    if (current.state === "RETURNED") {
+      const grant = context.store.database
+        .query<{ consumed_at: string | null }, [string, number, string]>(
+          `SELECT consumed_at FROM slp_rework_grants
+           WHERE work_id = ? AND return_revision = ? AND reviewer <> ?`,
+        )
+        .get(id, current.return_revision, actor.name);
+      if (!grant || grant.consumed_at !== null) {
+        throw new CliError(
+          "REWORK_REQUIRED",
+          `${id} return revision ${current.return_revision} requires an unused grant from its reviewer`,
+        );
+      }
+    }
     const transition = context.store.database
       .query(
         `UPDATE slp_work
          SET state = 'ACTIVE', owner = ?, current_return = NULL, updated_at = ?
-         WHERE id = ? AND state IN ('OPEN', 'RETURNED')`,
+         WHERE id = ? AND state = ?`,
       )
-      .run(actor.name, now, id);
+      .run(actor.name, now, id, current.state);
     requireWorkTransition(transition.changes, id, "work take");
+    if (current.state === "RETURNED") {
+      const consumed = context.store.database
+        .query(
+          `UPDATE slp_rework_grants SET consumed_at = ?
+           WHERE work_id = ? AND return_revision = ? AND consumed_at IS NULL`,
+        )
+        .run(now, id, current.return_revision);
+      requireWorkTransition(consumed.changes, id, "rework grant consumption");
+    }
     recordProjectActivity(context, actor, "work.take", id, now);
     context.store.database.exec("COMMIT");
   } catch (error) {
@@ -1851,6 +1977,7 @@ function takeWork(context: PluginContext, id: string): CliResult {
 }
 
 function returnWork(context: PluginContext, id: string, body: string): CliResult {
+  migrateProject(context.store);
   const actor = requireSlpActor(context, ["lead", "peer"]);
   const work = requireSlpWork(context, actor, id);
   if (work.state !== "ACTIVE" || work.owner !== actor.name) {
@@ -1866,7 +1993,8 @@ function returnWork(context: PluginContext, id: string, body: string): CliResult
     const transition = context.store.database
       .query(
         `UPDATE slp_work
-         SET state = 'RETURNED', owner = NULL, current_return = ?, updated_at = ?
+         SET state = 'RETURNED', owner = NULL, current_return = ?,
+             return_revision = return_revision + 1, updated_at = ?
          WHERE id = ? AND state = 'ACTIVE' AND owner = ?`,
       )
       .run(body, now, id, actor.name);
@@ -1891,22 +2019,10 @@ function returnWork(context: PluginContext, id: string, body: string): CliResult
 }
 
 function acceptWork(context: PluginContext, id: string, outcome: string): CliResult {
+  migrateProject(context.store);
   const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
   const work = requireSlpWork(context, actor, id);
-  const assignee = context.store.database
-    .query<{ role: SlpRole }, [string, number, string]>(
-      `SELECT role FROM slp_local_roles
-       WHERE team_id = ? AND generation = ? AND name = ?`,
-    )
-    .get(actor.team.team_id, actor.team.generation, work.assigned_to);
-  const expectedReviewer = assignee?.role === "lead" ? "team-supervisor" : "lead";
-  if (actor.role !== expectedReviewer || actor.name === work.assigned_to) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      `${actor.role} cannot accept work assigned to ${work.assigned_to}`,
-      { actor: actor.name, expectedReviewer },
-    );
-  }
+  requireWorkReviewer(context, actor, work, "accept");
   if (outcome !== "accepted" && outcome !== "cancelled") {
     throw new CliError("INVALID_VALUE", "--outcome must be accepted or cancelled");
   }
@@ -3205,7 +3321,7 @@ export const slpV2Plugin: BuiltInPlugin = {
         (invocation): CliResult =>
           takeWork(context, requiredPosition(invocation, 0, "work id")),
         {
-          description: "Take assigned OPEN or RETURNED SLP work.",
+          description: "Take assigned OPEN work or reviewer-granted RETURNED SLP work.",
           json: true,
           positionals: [{ name: "work-id", required: true }],
           rootDescription: "Move supervised work through its four-state lifecycle.",

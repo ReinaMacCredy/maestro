@@ -1188,6 +1188,7 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
       team: { roles: Array<{ name: string; paneId: string; role: string }> };
     }>(started.stdout);
     const lead = startData.team.roles.find((role) => role.role === "lead");
+    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor");
     expect(lead).toBeDefined();
     const environment = { ...fake.env, HERDR_PANE_ID: lead?.paneId };
 
@@ -1362,6 +1363,7 @@ test("SLP v2 rejects Peer self-acceptance and lets the Lead accept the return", 
       team: { roles: Array<{ name: string; paneId: string; role: string }> };
     }>(started.stdout);
     const lead = startData.team.roles.find((role) => role.role === "lead");
+    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor");
     expect(lead).toBeDefined();
     const added = await runCliAt(
       fixture,
@@ -1404,6 +1406,23 @@ test("SLP v2 rejects Peer self-acceptance and lets the Lead accept the return", 
     expect(selfAccepted.exitCode).toBe(1);
     expect(selfAccepted.stderr).toContain("ROLE_FORBIDDEN");
 
+    const wrongReviewer = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", addedData.work.id, "Supervisor cannot grant Peer rework", "--rework", "--json"],
+      { ...fake.env, HERDR_PANE_ID: supervisor?.paneId },
+    );
+    expect(wrongReviewer.exitCode).toBe(1);
+    expect(JSON.parse(wrongReviewer.stderr).error.code).toBe("ROLE_FORBIDDEN");
+    const leadGrant = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", addedData.work.id, "Lead grants Peer rework", "--rework", "--json"],
+      { ...fake.env, HERDR_PANE_ID: lead?.paneId },
+    );
+    expect(leadGrant.stderr).toBe("");
+    expect(leadGrant.exitCode).toBe(0);
+
     const leadAccepted = await runCliAt(
       fixture,
       fixture.repo,
@@ -1417,7 +1436,7 @@ test("SLP v2 rejects Peer self-acceptance and lets the Lead accept the return", 
   });
 }, 15_000);
 
-test("SLP v2 rework is one reviewer note followed by the assignee taking RETURNED work", async () => {
+test("SLP v2 rework requires one correct reviewer grant for the current return revision", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -1465,15 +1484,66 @@ test("SLP v2 rework is one reviewer note followed by the assignee taking RETURNE
       ).exitCode,
     ).toBe(0);
 
-    const noted = await runCliAt(
+    const directRetake = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "note", startData.work.id, "rework: add the missing negative case", "--json"],
+      ["work", "take", startData.work.id, "--json"],
+      leadEnvironment,
+    );
+    expect(directRetake.exitCode).toBe(1);
+    expect(JSON.parse(directRetake.stderr).error.code).toBe("REWORK_REQUIRED");
+
+    const wrongReviewer = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", startData.work.id, "self-granted rework", "--rework", "--json"],
+      leadEnvironment,
+    );
+    expect(wrongReviewer.exitCode).toBe(1);
+    expect(JSON.parse(wrongReviewer.stderr).error.code).toBe("ROLE_FORBIDDEN");
+
+    const ordinaryNote = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", startData.work.id, "context: the missing case is Windows", "--json"],
       { ...fake.env, HERDR_PANE_ID: supervisorPane },
     );
-    expect(noted.stderr).toBe("");
-    expect(noted.exitCode).toBe(0);
-    expect(envelope<{ work: { state: string } }>(noted.stdout).work.state).toBe("RETURNED");
+    expect(ordinaryNote.exitCode).toBe(0);
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", startData.work.id, "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(1);
+
+    const granted = await runCliAt(
+      fixture,
+      fixture.repo,
+      [
+        "work",
+        "note",
+        startData.work.id,
+        "add the missing Windows negative case",
+        "--rework",
+        "--json",
+      ],
+      { ...fake.env, HERDR_PANE_ID: supervisorPane },
+    );
+    expect(granted.stderr).toBe("");
+    expect(granted.exitCode).toBe(0);
+    expect(envelope<{ work: { state: string } }>(granted.stdout).work.state).toBe("RETURNED");
+    const duplicateGrant = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", startData.work.id, "duplicate grant", "--rework", "--json"],
+      { ...fake.env, HERDR_PANE_ID: supervisorPane },
+    );
+    expect(duplicateGrant.exitCode).toBe(1);
+    expect(JSON.parse(duplicateGrant.stderr).error.code).toBe("REWORK_ALREADY_GRANTED");
 
     const retaken = await runCliAt(
       fixture,
@@ -1484,6 +1554,57 @@ test("SLP v2 rework is one reviewer note followed by the assignee taking RETURNE
     expect(retaken.stderr).toBe("");
     expect(envelope<{ work: { currentReturn: string | null; state: string } }>(retaken.stdout).work)
       .toMatchObject({ currentReturn: null, state: "ACTIVE" });
+
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", startData.work.id, "result: second attempt", "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const staleGrant = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "take", startData.work.id, "--json"],
+      leadEnvironment,
+    );
+    expect(staleGrant.exitCode).toBe(1);
+    expect(JSON.parse(staleGrant.stderr).error.code).toBe("REWORK_REQUIRED");
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "note", startData.work.id, "review the second return", "--rework", "--json"],
+          { ...fake.env, HERDR_PANE_ID: supervisorPane },
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", startData.work.id, "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      database
+        .query<{ count: number }, []>(
+          `SELECT COUNT(*) AS count FROM slp_rework_grants
+           WHERE consumed_at IS NOT NULL`,
+        )
+        .get()?.count,
+    ).toBe(2);
+    database.close();
   });
 }, 15_000);
 
@@ -1539,7 +1660,14 @@ test("SLP v2 keeps a blocker in the return body and resumes without a BLOCKED st
         await runCliAt(
           fixture,
           fixture.repo,
-          ["work", "note", startData.work.id, "resolved: contract supplied", "--json"],
+          [
+            "work",
+            "note",
+            startData.work.id,
+            "resolved: contract supplied",
+            "--rework",
+            "--json",
+          ],
           { ...fake.env, HERDR_PANE_ID: supervisorPane },
         )
       ).exitCode,

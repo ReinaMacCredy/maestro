@@ -27,8 +27,10 @@ maestro decide
 ```
 
 Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Raw transcript is
-runtime-only. A Watch Pane is optional foreground support, never an agent or an
-authority holder.
+runtime-only. `RETURNED` work can be retaken only once after its correct
+reviewer records `maestro work note <id> "<specific gap>" --rework` for that
+return revision. A Watch Pane is optional foreground support, never an agent
+or an authority holder.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->

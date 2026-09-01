@@ -83,7 +83,7 @@ The Lead resolves the missing fact through conversation, records the material
 change, and asks the same Peer to continue:
 
 ```sh
-maestro work note w3 "canonical fixture format is UTF-8 CSV with LF endings"
+maestro work note w3 "canonical fixture format is UTF-8 CSV with LF endings" --rework
 ```
 
 The Peer retakes the returned work:
@@ -98,7 +98,7 @@ maestro work return w3 "implemented against the recorded format; source: fixture
 The reviewer does not create a reopen state. It records the exact gap:
 
 ```sh
-maestro work note w4 "rework: add the Windows line-ending case before acceptance"
+maestro work note w4 "add the Windows line-ending case before acceptance" --rework
 ```
 
 The assignee retakes `RETURNED` work, returns the new result, and the reviewer

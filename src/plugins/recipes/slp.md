@@ -78,10 +78,12 @@ Work has exactly four states:
 OPEN -> ACTIVE -> RETURNED -> DONE
 ```
 
-The assignee takes `OPEN` or returned work. The reviewer accepts the return:
-Lead accepts Peer work and Team Supervisor accepts Lead work. Rework is a
-reviewer note followed by the same assignee taking `RETURNED` work again.
-Blocked work is returned with a blocker; there is no `BLOCKED` state.
+The assignee takes `OPEN` work. The reviewer accepts the return: Lead accepts
+Peer work and Team Supervisor accepts Lead work. Rework requires that same
+reviewer to run `maestro work note <id> "<specific gap>" --rework`; the grant
+belongs only to the current return revision and is consumed when the same
+assignee takes it once. Blocked work is returned with a blocker; there is no
+`BLOCKED` state.
 
 `maestro decide` records one settled immutable choice. Technical scope belongs
 to the Lead, team scope to the Team Supervisor, and owner or cross-team scope

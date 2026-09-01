@@ -626,6 +626,9 @@ export const workPlugin: BuiltInPlugin = {
       registerSessionCommand(context, "work note", (invocation): CliResult => {
         const slp = maybeHandleSlpWorkNote(context, invocation);
         if (slp) return slp;
+        if (invocation.options.rework === true) {
+          throw new CliError("INVALID_OPTION", "--rework is available only for SLP RETURNED work");
+        }
         const id = requiredPosition(invocation, 0, "work id");
         const text = requiredPosition(invocation, 1, "note text");
         requireWork(context, id);
@@ -643,6 +646,11 @@ export const workPlugin: BuiltInPlugin = {
         return { data: { id, text }, text: `${id} note: ${text}` };
       }, {
         description: "Append a note to a work item.",
+        flags: {
+          "--rework": {
+            description: "Grant the current SLP return revision one reviewer-authorized retake.",
+          },
+        },
         json: true,
         positionals: [
           { name: "id", required: true },

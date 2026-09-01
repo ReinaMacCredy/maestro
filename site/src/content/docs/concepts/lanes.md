@@ -50,13 +50,14 @@ Returned work stays `RETURNED` until accepted. If it needs another pass, the
 reviewer records the specific gap and the same assignee takes it again:
 
 ```sh
-maestro work note <work-id> "rework: <specific gap and acceptance condition>"
+maestro work note <work-id> "<specific gap and acceptance condition>" --rework
 maestro work take <work-id>
 ```
 
 A blocker uses the same path. The assignee returns it with the blocker in the
-body; the team resolves the dependency through conversation or a note, then
-the assignee retakes it. SLP adds no `BLOCKED` or `REOPENED` state.
+body; after the dependency is resolved, the correct reviewer records
+`--rework`, then the assignee retakes it once. SLP adds no `BLOCKED` or
+`REOPENED` state.
 
 ## Blind design
 
