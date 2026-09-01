@@ -11,6 +11,52 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.115.0] - 2026-09-01
+
+### Added
+
+- SLP v2 provides one direct supervised-team architecture with four roles,
+  exactly nine public operations, one canonical Hub-owned Workspace Pack, and
+  a content-addressed generation snapshot copied into each project. Start
+  provisions an exact Team Supervisor and Lead contract, Peers are opened only
+  by assigned work, and each role must acknowledge its team, generation,
+  instance, pack, brief, and challenge before it receives project authority.
+- Project-owned work uses the single `OPEN -> ACTIVE -> RETURNED -> DONE`
+  lifecycle. Objectives and acceptance contracts are immutable; reviewer-owned
+  `work note --rework` grants one retake of one return revision, while emergency
+  stop records explicit abandonment metadata without inventing a fifth state.
+- An optional foreground Watch Pane labels currently available raw role output.
+  It is a non-agent reader with no prompt, gate, store mutation, or decision
+  authority, and its runtime-only transcript is deleted when the team stops.
+- Start and stop now carry durable internal lifecycle phases, revisions, exact
+  role bindings, and recovery metadata so interrupted external Herdr effects
+  can converge on retry without exposing more than public `RUNNING` and
+  `STOPPED` states.
+
+### Changed
+
+- The earlier layered team lifecycle is a hard cut to SLP v2. Observer,
+  Advisor, sensor, review, reconcile, packet, and background-agent SLP roles are
+  removed; their previous records remain readable legacy history. Team
+  Supervisor, Lead, and Peers communicate directly, while the supported Hub
+  flow reaches a team through its Team Supervisor.
+- The SLP contract now states its actual boundary: it is a cooperative-agent
+  protocol, not a shell security sandbox. Hub operations are scoped by the Hub
+  room and project role operations by the current generation's stored Herdr
+  pane binding; native commands, administrative Maestro commands, and direct
+  Herdr calls remain outside that enforcement boundary.
+
+### Fixed
+
+- SLP mutations and their minimal activity records commit atomically, including
+  start, stop, decisions, work transitions, and rework grants. Audit insertion
+  failures and SQLite contention return structured errors without partial
+  authoritative state.
+- Concurrent identical starts converge on one generation, changed contracts
+  are rejected, work and decision identifiers do not collide, start repair and
+  stop are mutually fenced, and linked Git worktrees retain distinct project,
+  runtime, role, work, decision, and shutdown boundaries.
+
 ## [0.114.0] - 2026-08-29
 
 ### Added
