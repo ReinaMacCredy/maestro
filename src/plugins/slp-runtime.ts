@@ -13,6 +13,15 @@ export interface SlpRolePlan {
   role: SlpRole;
 }
 
+export interface SlpRoleContract {
+  acknowledgement: string;
+  body: string;
+  briefDigest: string;
+  instanceId: string;
+  packDigest: string;
+  readyChallenge: string;
+}
+
 export interface SlpTeamPlan {
   generation: number;
   projectPath: string;
@@ -22,8 +31,12 @@ export interface SlpTeamPlan {
 }
 
 export interface SlpRuntimeRole {
+  briefDigest: string;
+  instanceId: string;
   name: string;
+  packDigest: string;
   paneId: string;
+  readyChallenge: string;
   role: SlpRole;
   workspaceId: string;
 }
@@ -242,6 +255,75 @@ export class HerdrSlpRuntime {
     }
   }
 
+  private async textCommand(
+    args: string[],
+    cwd: string,
+    timeoutMs = this.commandTimeoutMs,
+  ): Promise<string> {
+    let child: ReturnType<typeof Bun.spawn>;
+    try {
+      child = Bun.spawn(["herdr", ...args], {
+        cwd,
+        env: this.environment,
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+    } catch (error) {
+      throw new SlpRuntimeError(
+        `cannot start Herdr: ${error instanceof Error ? error.message : String(error)}`,
+        args,
+      );
+    }
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill(9);
+    }, timeoutMs);
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout as ReadableStream<Uint8Array>).text(),
+      new Response(child.stderr as ReadableStream<Uint8Array>).text(),
+      child.exited,
+    ]).finally(() => clearTimeout(timer));
+    const commandName = args.slice(0, 3).join(" ");
+    if (timedOut) {
+      throw new SlpRuntimeError(
+        `Herdr command timed out after ${timeoutMs}ms: ${commandName}`,
+        args,
+        stderr.trim(),
+      );
+    }
+    if (exitCode !== 0) {
+      const diagnostic = stderr.trim();
+      throw new SlpRuntimeError(
+        `Herdr command failed (${exitCode}): ${commandName}${diagnostic ? `; ${diagnostic}` : ""}`,
+        args,
+        diagnostic,
+      );
+    }
+    return stdout;
+  }
+
+  private async requireAcknowledgement(
+    plan: SlpTeamPlan,
+    roleName: string,
+    contract: SlpRoleContract,
+  ): Promise<void> {
+    const output = await this.textCommand(
+      ["agent", "read", roleName, "--source", "recent-unwrapped", "--lines", "120", "--format", "text"],
+      plan.projectPath,
+    );
+    const lines = output
+      .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+      .split(/\r?\n/)
+      .map((line) => line.trim());
+    if (!lines.includes(contract.acknowledgement)) {
+      throw new SlpRuntimeError(
+        `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement`,
+        ["agent", "read", roleName],
+      );
+    }
+  }
+
   private async workspaces(plan: SlpTeamPlan): Promise<WorkspaceRecord[]> {
     return records<WorkspaceRecord>(
       await this.command(["workspace", "list"], plan.projectPath),
@@ -368,7 +450,7 @@ export class HerdrSlpRuntime {
 
   async start(
     plan: SlpTeamPlan,
-    contracts: ReadonlyMap<SlpRole, string>,
+    contracts: ReadonlyMap<SlpRole, SlpRoleContract>,
   ): Promise<SlpRuntimeStart> {
     const createdTabIds: string[] = [];
     const startedPaneIds: string[] = [];
@@ -480,7 +562,7 @@ export class HerdrSlpRuntime {
             "agent",
             "prompt",
             role.name,
-            contract,
+            contract.body,
             "--wait",
             "--timeout",
             "120000",
@@ -493,9 +575,10 @@ export class HerdrSlpRuntime {
             role.name,
           ]);
         }
+        await this.requireAcknowledgement(plan, role.name, contract);
       }
 
-      const roles = await this.inspectRequired(plan, workspaceId);
+      const roles = await this.inspectRequired(plan, workspaceId, contracts);
       return { createdTabIds, createdWorkspace, roles, startedPaneIds, workspaceId };
     } catch (error) {
       await this.rollback(plan, { createdTabIds, createdWorkspace, startedPaneIds, workspaceId });
@@ -506,6 +589,7 @@ export class HerdrSlpRuntime {
   private async inspectRequired(
     plan: SlpTeamPlan,
     workspaceId: string,
+    contracts: ReadonlyMap<SlpRole, SlpRoleContract>,
   ): Promise<SlpRuntimeRole[]> {
     const panes = await this.panes(plan, workspaceId);
     const paneIds = new Set(panes.flatMap((pane) => pane.pane_id ? [pane.pane_id] : []));
@@ -530,7 +614,20 @@ export class HerdrSlpRuntime {
           paneId,
         ]);
       }
-      roles.push({ name: role.name, paneId, role: role.role, workspaceId });
+      const contract = contracts.get(role.role);
+      if (!contract) {
+        throw new SlpRuntimeError(`missing role contract: ${role.role}`, ["agent", "read", role.name]);
+      }
+      roles.push({
+        briefDigest: contract.briefDigest,
+        instanceId: contract.instanceId,
+        name: role.name,
+        packDigest: contract.packDigest,
+        paneId,
+        readyChallenge: contract.readyChallenge,
+        role: role.role,
+        workspaceId,
+      });
     }
     return roles;
   }
@@ -538,7 +635,7 @@ export class HerdrSlpRuntime {
   async ensurePeer(
     plan: SlpTeamPlan,
     peer: SlpRolePlan,
-    contract: string,
+    contract: SlpRoleContract,
   ): Promise<SlpRuntimePeer> {
     const matchingWorkspaces = (await this.workspaces(plan)).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
@@ -614,7 +711,7 @@ export class HerdrSlpRuntime {
           "agent",
           "prompt",
           peer.name,
-          contract,
+          contract.body,
           "--wait",
           "--timeout",
           "120000",
@@ -627,6 +724,7 @@ export class HerdrSlpRuntime {
           peer.name,
         ]);
       }
+      await this.requireAcknowledgement(plan, peer.name, contract);
       const matches = (await this.agents(plan)).filter(
         (agent) => agent.name === peer.name && agent.workspace_id === workspaceId,
       );
@@ -647,7 +745,16 @@ export class HerdrSlpRuntime {
       }
       return {
         createdTabId,
-        role: { name: peer.name, paneId, role: "peer", workspaceId },
+        role: {
+          briefDigest: contract.briefDigest,
+          instanceId: contract.instanceId,
+          name: peer.name,
+          packDigest: contract.packDigest,
+          paneId,
+          readyChallenge: contract.readyChallenge,
+          role: "peer",
+          workspaceId,
+        },
         startedPaneId,
       };
     } catch (error) {

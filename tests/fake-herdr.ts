@@ -10,6 +10,7 @@ export interface FakeHerdrBehavior {
   closeWorkspaceWithLastTab?: boolean;
   closeWorkspace?: boolean;
   failWorkspaceId?: string;
+  invalidAcknowledgements?: boolean;
   paneRunEmptyOutput?: boolean;
   processInfo?: boolean;
   processInfoDelayMs?: number;
@@ -319,6 +320,35 @@ if (command === "workspace list") {
   if (accepted) {
     const body = args[3] ?? "";
     state.prompts.push({ name, body });
+    const field = (label) => {
+      const match = new RegExp("^" + label + ": (.+)$", "m").exec(body);
+      return match?.[1]?.trim();
+    };
+    const team = field("Team");
+    const generation = field("Generation");
+    const role = field("Role");
+    const instance = field("Role instance");
+    const pack = field("Pack SHA-256");
+    const brief = field("Brief SHA-256");
+    const challengeLeft = field("Challenge left");
+    const challengeRight = field("Challenge right");
+    if (
+      team && generation && role && instance && pack && brief &&
+      challengeLeft && challengeRight
+    ) {
+      state.outputs[name] = state.behavior.invalidAcknowledgements
+        ? "SLP_ROLE_READY invalid\\n"
+        : [
+          "SLP_ROLE_READY",
+          "team=" + team,
+          "generation=" + generation,
+          "role=" + role,
+          "instance=" + instance,
+          "pack=" + pack,
+          "brief=" + brief,
+          "challenge=" + challengeLeft + challengeRight,
+        ].join(" ") + "\\n";
+    }
     if (state.behavior.settleAgents !== false) {
       const agent = state.agents.find((candidate) => candidate.name === name);
       if (agent) agent.agent_status = "idle";

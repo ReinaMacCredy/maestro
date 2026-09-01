@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   CliError,
@@ -18,6 +18,7 @@ import {
   HerdrSlpRuntime,
   slpStopEnvironment,
   type SlpRole,
+  type SlpRoleContract,
   type SlpRolePlan,
   type SlpRuntimeRole,
   type SlpRuntimeStart,
@@ -171,6 +172,10 @@ function migrateRoom(store: Store): void {
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
+      instance_id TEXT NOT NULL,
+      pack_digest TEXT NOT NULL,
+      brief_digest TEXT NOT NULL,
+      ready_challenge TEXT NOT NULL,
       created_at TEXT NOT NULL,
       PRIMARY KEY(team_id, generation, name),
       FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation)
@@ -198,6 +203,26 @@ function migrateRoom(store: Store): void {
       created_at TEXT NOT NULL
     );
   `);
+  store.ensureColumn(
+    "slp_team_roles",
+    "instance_id",
+    "ALTER TABLE slp_team_roles ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_team_roles",
+    "pack_digest",
+    "ALTER TABLE slp_team_roles ADD COLUMN pack_digest TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_team_roles",
+    "brief_digest",
+    "ALTER TABLE slp_team_roles ADD COLUMN brief_digest TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_team_roles",
+    "ready_challenge",
+    "ALTER TABLE slp_team_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
+  );
 }
 
 function migrateProject(store: Store): void {
@@ -222,6 +247,10 @@ function migrateProject(store: Store): void {
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
+      instance_id TEXT NOT NULL,
+      pack_digest TEXT NOT NULL,
+      brief_digest TEXT NOT NULL,
+      ready_challenge TEXT NOT NULL,
       created_at TEXT NOT NULL,
       PRIMARY KEY(team_id, generation, name)
     );
@@ -284,6 +313,26 @@ function migrateProject(store: Store): void {
     "configuration_json",
     "ALTER TABLE slp_local_teams ADD COLUMN configuration_json TEXT NOT NULL DEFAULT '{}'",
   );
+  store.ensureColumn(
+    "slp_local_roles",
+    "instance_id",
+    "ALTER TABLE slp_local_roles ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_local_roles",
+    "pack_digest",
+    "ALTER TABLE slp_local_roles ADD COLUMN pack_digest TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_local_roles",
+    "brief_digest",
+    "ALTER TABLE slp_local_roles ADD COLUMN brief_digest TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_local_roles",
+    "ready_challenge",
+    "ALTER TABLE slp_local_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
+  );
 }
 
 function slug(value: string): string {
@@ -323,20 +372,91 @@ function packModel(pack: string, role: "team-supervisor" | "lead" | "peer"): str
   return value;
 }
 
-function roleContracts(pack: string, teamId: string, generation: number): Map<SlpRole, string> {
+function roleContracts(
+  pack: string,
+  teamId: string,
+  generation: number,
+  packDigest: string,
+  existingInstances: Partial<Record<SlpRole, string>> = {},
+): Map<SlpRole, SlpRoleContract> {
   const shared = section(pack, "shared");
-  const contract = (role: SlpRole, body: string): string => [
-    `[SLP ${teamId} generation ${generation}]`,
-    shared,
-    body,
-    `This message only initializes the ${role} role. Do not run tools, inspect or claim work, ` +
-      `or ask a question. Reply with exactly: SLP_ROLE_READY ${role}. Then wait.`,
-  ].join("\n\n");
-  return new Map<SlpRole, string>([
+  const contract = (role: SlpRole, body: string): SlpRoleContract => {
+    const instanceId = existingInstances[role] || randomUUID();
+    const brief = [
+      `[SLP ${teamId} generation ${generation}]`,
+      shared,
+      body,
+      [
+        `Team: ${teamId}`,
+        `Generation: ${generation}`,
+        `Role: ${role}`,
+        `Role instance: ${instanceId}`,
+        `Pack SHA-256: ${packDigest}`,
+      ].join("\n"),
+    ].join("\n\n");
+    const briefDigest = createHash("sha256").update(brief).digest("hex");
+    const readyChallenge = randomUUID().replaceAll("-", "");
+    const challengeLeft = readyChallenge.slice(0, 16);
+    const challengeRight = readyChallenge.slice(16);
+    const acknowledgement = [
+      "SLP_ROLE_READY",
+      `team=${teamId}`,
+      `generation=${generation}`,
+      `role=${role}`,
+      `instance=${instanceId}`,
+      `pack=${packDigest}`,
+      `brief=${briefDigest}`,
+      `challenge=${readyChallenge}`,
+    ].join(" ");
+    return {
+      acknowledgement,
+      body: [
+        brief,
+        [
+          `Brief SHA-256: ${briefDigest}`,
+          `Challenge left: ${challengeLeft}`,
+          `Challenge right: ${challengeRight}`,
+          `This message only initializes the ${role} role. Do not run tools, inspect or claim work, or ask a question.`,
+          "Reply on one line using SLP_ROLE_READY followed by team, generation, role, instance, pack, brief, and challenge fields.",
+          "For challenge, concatenate the left and right values with no separator. Then wait.",
+        ].join("\n"),
+      ].join("\n\n"),
+      briefDigest,
+      instanceId,
+      packDigest,
+      readyChallenge,
+    };
+  };
+  return new Map<SlpRole, SlpRoleContract>([
     ["team-supervisor", contract("team-supervisor", section(pack, "role:team-supervisor"))],
     ["lead", contract("lead", section(pack, "role:lead"))],
     ["peer", contract("peer", section(pack, "role:peer"))],
   ]);
+}
+
+async function archivePack(roomRoot: string, bytes: Uint8Array, digest: string): Promise<string> {
+  const directory = join(roomRoot, ".maestro", "packs");
+  const path = join(directory, `${digest}.md`);
+  await mkdir(directory, { recursive: true });
+  if (!existsSync(path)) {
+    const temporary = join(directory, `.${digest}.${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporary, bytes, { flag: "wx" });
+      await rename(temporary, path);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+  }
+  const archived = new Uint8Array(await readFile(path));
+  const archivedDigest = createHash("sha256").update(archived).digest("hex");
+  if (archivedDigest !== digest) {
+    throw new CliError(
+      "SLP_PACK_ARCHIVE_CORRUPT",
+      `archived Workspace Pack ${path} does not match digest ${digest}`,
+      { actual: archivedDigest, expected: digest, path },
+    );
+  }
+  return path;
 }
 
 function tableExists(store: Store, name: string): boolean {
@@ -543,6 +663,7 @@ async function startTeam(
       pack = new TextDecoder().decode(snapshotBytes);
       version = running.pack_version;
       digest = running.pack_digest;
+      await archivePack(roomRoot, snapshotBytes, digest);
       plan = buildSlpTeamPlan({
         generation,
         leadModel: models.lead,
@@ -550,25 +671,47 @@ async function startTeam(
         supervisorModel: models.teamSupervisor,
         teamId: running.team_id,
       });
-      started = await runtime.start(plan, roleContracts(pack, running.team_id, generation));
+      const existingInstances = Object.fromEntries(
+        projectStore.database
+          .query<{ instance_id: string; role: SlpRole }, [string, number]>(
+            `SELECT role, instance_id FROM slp_local_roles
+             WHERE team_id = ? AND generation = ? AND instance_id <> ''`,
+          )
+          .all(running.team_id, generation)
+          .map((row) => [row.role, row.instance_id]),
+      ) as Partial<Record<SlpRole, string>>;
+      started = await runtime.start(
+        plan,
+        roleContracts(pack, running.team_id, generation, digest, existingInstances),
+      );
       const now = new Date().toISOString();
       const upsertLocalRole = projectStore.database.query(
         `INSERT INTO slp_local_roles
-          (team_id, generation, role, name, pane_id, workspace_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+          (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+           pack_digest, brief_digest, ready_challenge, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(team_id, generation, name) DO UPDATE SET
            role = excluded.role,
            pane_id = excluded.pane_id,
-           workspace_id = excluded.workspace_id`,
+           workspace_id = excluded.workspace_id,
+           instance_id = excluded.instance_id,
+           pack_digest = excluded.pack_digest,
+           brief_digest = excluded.brief_digest,
+           ready_challenge = excluded.ready_challenge`,
       );
       const upsertRoomRole = projectStore.database.query(
         `INSERT INTO slp_room.slp_team_roles
-          (team_id, generation, role, name, pane_id, workspace_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+          (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+           pack_digest, brief_digest, ready_challenge, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(team_id, generation, name) DO UPDATE SET
            role = excluded.role,
            pane_id = excluded.pane_id,
-           workspace_id = excluded.workspace_id`,
+           workspace_id = excluded.workspace_id,
+           instance_id = excluded.instance_id,
+           pack_digest = excluded.pack_digest,
+           brief_digest = excluded.brief_digest,
+           ready_challenge = excluded.ready_challenge`,
       );
       for (const role of started.roles) {
         upsertLocalRole.run(
@@ -578,6 +721,10 @@ async function startTeam(
           role.name,
           role.paneId,
           role.workspaceId,
+          role.instanceId,
+          role.packDigest,
+          role.briefDigest,
+          role.readyChallenge,
           now,
         );
         upsertRoomRole.run(
@@ -587,6 +734,10 @@ async function startTeam(
           role.name,
           role.paneId,
           role.workspaceId,
+          role.instanceId,
+          role.packDigest,
+          role.briefDigest,
+          role.readyChallenge,
           now,
         );
       }
@@ -619,6 +770,7 @@ async function startTeam(
       pack = new TextDecoder().decode(hubPackBytes);
       version = packVersion(pack);
       digest = createHash("sha256").update(hubPackBytes).digest("hex");
+      await archivePack(roomRoot, hubPackBytes, digest);
       models = {
         lead: overrides.lead ?? packModel(pack, "lead"),
         peer: overrides.peer ?? packModel(pack, "peer"),
@@ -643,7 +795,7 @@ async function startTeam(
       await mkdir(join(projectPath, ".maestro"), { recursive: true });
       await writeFile(snapshotPath, hubPackBytes);
       snapshotWritten = true;
-      started = await runtime.start(plan, roleContracts(pack, teamId, generation));
+      started = await runtime.start(plan, roleContracts(pack, teamId, generation, digest));
       const now = new Date().toISOString();
       const lead = started.roles.find((role) => role.role === "lead");
       if (!lead) throw new CliError("RUNTIME_INCOMPLETE", "Lead was not ready after team start");
@@ -669,11 +821,24 @@ async function startTeam(
         );
       const insertRole = projectStore.database.query(
         `INSERT INTO slp_local_roles
-          (team_id, generation, role, name, pane_id, workspace_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+           pack_digest, brief_digest, ready_challenge, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const role of started.roles) {
-        insertRole.run(teamId, generation, role.role, role.name, role.paneId, role.workspaceId, now);
+        insertRole.run(
+          teamId,
+          generation,
+          role.role,
+          role.name,
+          role.paneId,
+          role.workspaceId,
+          role.instanceId,
+          role.packDigest,
+          role.briefDigest,
+          role.readyChallenge,
+          now,
+        );
       }
       projectStore.database
         .query(
@@ -710,8 +875,9 @@ async function startTeam(
         );
       const insertRoomRole = projectStore.database.query(
         `INSERT INTO slp_room.slp_team_roles
-          (team_id, generation, role, name, pane_id, workspace_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+           pack_digest, brief_digest, ready_challenge, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const role of started.roles) {
         insertRoomRole.run(
@@ -721,6 +887,10 @@ async function startTeam(
           role.name,
           role.paneId,
           role.workspaceId,
+          role.instanceId,
+          role.packDigest,
+          role.briefDigest,
+          role.readyChallenge,
           now,
         );
       }
@@ -1014,8 +1184,18 @@ export async function maybeHandleSlpWorkAdd(
   const objective = requiredPosition(invocation, 0, "work objective");
   const requestedTarget = stringOption(invocation, "to");
   const roles = context.store.database
-    .query<{ name: string; pane_id: string; role: SlpRole; workspace_id: string }, [string, number]>(
-      `SELECT name, pane_id, role, workspace_id FROM slp_local_roles
+    .query<{
+      brief_digest: string;
+      instance_id: string;
+      name: string;
+      pack_digest: string;
+      pane_id: string;
+      ready_challenge: string;
+      role: SlpRole;
+      workspace_id: string;
+    }, [string, number]>(
+      `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
+              brief_digest, ready_challenge FROM slp_local_roles
        WHERE team_id = ? AND generation = ?`,
     )
     .all(actor.team.team_id, actor.team.generation);
@@ -1066,7 +1246,12 @@ export async function maybeHandleSlpWorkAdd(
     const ensured = await runtime.ensurePeer(
       plan,
       peerPlan,
-      roleContracts(pack, actor.team.team_id, actor.team.generation).get("peer") as string,
+      roleContracts(
+        pack,
+        actor.team.team_id,
+        actor.team.generation,
+        digest,
+      ).get("peer") as SlpRoleContract,
     );
     createdPeerTab = ensured.createdTabId;
     startedPeerPane = ensured.startedPaneId;
@@ -1075,6 +1260,10 @@ export async function maybeHandleSlpWorkAdd(
       pane_id: ensured.role.paneId,
       role: ensured.role.role,
       workspace_id: ensured.role.workspaceId,
+      instance_id: ensured.role.instanceId,
+      pack_digest: ensured.role.packDigest,
+      brief_digest: ensured.role.briefDigest,
+      ready_challenge: ensured.role.readyChallenge,
     };
   }
   if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
@@ -1099,11 +1288,16 @@ export async function maybeHandleSlpWorkAdd(
       context.store.database
         .query(
           `INSERT INTO slp_local_roles
-            (team_id, generation, role, name, pane_id, workspace_id, created_at)
-           VALUES (?, ?, 'peer', ?, ?, ?, ?)
+            (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+             pack_digest, brief_digest, ready_challenge, created_at)
+           VALUES (?, ?, 'peer', ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(team_id, generation, name) DO UPDATE SET
              pane_id = excluded.pane_id,
-             workspace_id = excluded.workspace_id`,
+             workspace_id = excluded.workspace_id,
+             instance_id = excluded.instance_id,
+             pack_digest = excluded.pack_digest,
+             brief_digest = excluded.brief_digest,
+             ready_challenge = excluded.ready_challenge`,
         )
         .run(
           actor.team.team_id,
@@ -1111,16 +1305,25 @@ export async function maybeHandleSlpWorkAdd(
           assignee.name,
           assignee.pane_id,
           assignee.workspace_id,
+          assignee.instance_id,
+          assignee.pack_digest,
+          assignee.brief_digest,
+          assignee.ready_challenge,
           now,
         );
       context.store.database
         .query(
           `INSERT INTO slp_room.slp_team_roles
-            (team_id, generation, role, name, pane_id, workspace_id, created_at)
-           VALUES (?, ?, 'peer', ?, ?, ?, ?)
+            (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+             pack_digest, brief_digest, ready_challenge, created_at)
+           VALUES (?, ?, 'peer', ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(team_id, generation, name) DO UPDATE SET
              pane_id = excluded.pane_id,
-             workspace_id = excluded.workspace_id`,
+             workspace_id = excluded.workspace_id,
+             instance_id = excluded.instance_id,
+             pack_digest = excluded.pack_digest,
+             brief_digest = excluded.brief_digest,
+             ready_challenge = excluded.ready_challenge`,
         )
         .run(
           actor.team.team_id,
@@ -1128,6 +1331,10 @@ export async function maybeHandleSlpWorkAdd(
           assignee.name,
           assignee.pane_id,
           assignee.workspace_id,
+          assignee.instance_id,
+          assignee.pack_digest,
+          assignee.brief_digest,
+          assignee.ready_challenge,
           now,
         );
     }
@@ -1649,8 +1856,12 @@ function stopPlan(team: ActiveLocalTeam): SlpTeamPlan {
 
 function stopRoles(store: Store, team: ActiveLocalTeam): SlpRuntimeRole[] {
   return roleRows(store, team.team_id, team.generation, true).map((role) => ({
+    briefDigest: role.brief_digest,
+    instanceId: role.instance_id,
     name: role.name,
+    packDigest: role.pack_digest,
     paneId: role.pane_id,
+    readyChallenge: role.ready_challenge,
     role: role.role,
     workspaceId: role.workspace_id,
   }));
@@ -2026,12 +2237,17 @@ function roleRows(store: Store, teamId: string, generation: number, local: boole
   const table = local ? "slp_local_roles" : "slp_team_roles";
   return store.database
     .query<{
+      brief_digest: string;
+      instance_id: string;
       name: string;
+      pack_digest: string;
       pane_id: string;
+      ready_challenge: string;
       role: SlpRole;
       workspace_id: string;
     }, [string, number]>(
-      `SELECT name, pane_id, role, workspace_id FROM ${table}
+      `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
+              brief_digest, ready_challenge FROM ${table}
        WHERE team_id = ? AND generation = ?
        ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
     )
@@ -2088,8 +2304,12 @@ export async function maybeHandleSlpStatus(
         const inspection = await runtime.inspect(
           plan,
           roles.map((role) => ({
+            briefDigest: role.brief_digest,
+            instanceId: role.instance_id,
             name: role.name,
+            packDigest: role.pack_digest,
             paneId: role.pane_id,
+            readyChallenge: role.ready_challenge,
             role: role.role,
             workspaceId: role.workspace_id,
           })),
@@ -2125,8 +2345,12 @@ export async function maybeHandleSlpStatus(
         packVersion: row.pack_version,
         projectPath: row.project_path,
         roles: roles.map((role) => ({
+          briefDigest: role.brief_digest,
+          instanceId: role.instance_id,
           name: role.name,
+          packDigest: role.pack_digest,
           paneId: role.pane_id,
+          readyChallenge: role.ready_challenge,
           role: role.role,
         })),
         runtime: runtimeState,
@@ -2277,8 +2501,12 @@ export async function maybeHandleSlpStatus(
     const inspection = await new HerdrSlpRuntime().inspect(
       plan,
       roles.map((role) => ({
+        briefDigest: role.brief_digest,
+        instanceId: role.instance_id,
         name: role.name,
+        packDigest: role.pack_digest,
         paneId: role.pane_id,
+        readyChallenge: role.ready_challenge,
         role: role.role,
         workspaceId: role.workspace_id,
       })),
@@ -2293,7 +2521,15 @@ export async function maybeHandleSlpStatus(
       generation: actor.team.generation,
       missingPanes,
       role: { name: actor.name, role: actor.role },
-      roles: roles.map((role) => ({ name: role.name, paneId: role.pane_id, role: role.role })),
+      roles: roles.map((role) => ({
+        briefDigest: role.brief_digest,
+        instanceId: role.instance_id,
+        name: role.name,
+        packDigest: role.pack_digest,
+        paneId: role.pane_id,
+        readyChallenge: role.ready_challenge,
+        role: role.role,
+      })),
       runtime: runtimeState,
       teamId: actor.team.team_id,
       watch: watch ? "on" : "off",

@@ -2,11 +2,15 @@ import { createHash } from "node:crypto";
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { buildSlpTeamPlan, HerdrSlpRuntime } from "../src/plugins/slp-runtime.ts";
+import {
+  buildSlpTeamPlan,
+  HerdrSlpRuntime,
+  type SlpRoleContract,
+} from "../src/plugins/slp-runtime.ts";
 import {
   editFakeHerdrState,
   fakeHerdrCommands,
@@ -33,6 +37,40 @@ function watchRuntimeDirectory(projectPath: string, teamId: string, generation: 
     .slice(0, 16);
   const user = typeof process.getuid === "function" ? String(process.getuid()) : "user";
   return join(tmpdir(), `maestro-slp-${user}`, projectKey, teamId, `g${generation}`);
+}
+
+function testRoleContract(teamId: string, generation: number): SlpRoleContract {
+  const instanceId = "00000000-0000-4000-8000-000000000001";
+  const packDigest = "a".repeat(64);
+  const briefDigest = "b".repeat(64);
+  const readyChallenge = "c".repeat(32);
+  const acknowledgement = [
+    "SLP_ROLE_READY",
+    `team=${teamId}`,
+    `generation=${generation}`,
+    "role=team-supervisor",
+    `instance=${instanceId}`,
+    `pack=${packDigest}`,
+    `brief=${briefDigest}`,
+    `challenge=${readyChallenge}`,
+  ].join(" ");
+  return {
+    acknowledgement,
+    body: [
+      `Team: ${teamId}`,
+      `Generation: ${generation}`,
+      "Role: team-supervisor",
+      `Role instance: ${instanceId}`,
+      `Pack SHA-256: ${packDigest}`,
+      `Brief SHA-256: ${briefDigest}`,
+      `Challenge left: ${readyChallenge.slice(0, 16)}`,
+      `Challenge right: ${readyChallenge.slice(16)}`,
+    ].join("\n"),
+    briefDigest,
+    instanceId,
+    packDigest,
+    readyChallenge,
+  };
 }
 
 async function waitForText(path: string, needle: string, timeoutMs = 3_000): Promise<void> {
@@ -74,7 +112,15 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
         generation: number;
         packDigest: string;
         projectPath: string;
-        roles: Array<{ name: string; paneId: string; role: string }>;
+        roles: Array<{
+          briefDigest: string;
+          instanceId: string;
+          name: string;
+          packDigest: string;
+          paneId: string;
+          readyChallenge: string;
+          role: string;
+        }>;
         state: string;
       };
       work: { assignedTo: string; state: string };
@@ -82,8 +128,10 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     const hubPack = await readFile(join(room, "SLP.md"));
     const projectPack = await readFile(join(fixture.repo, ".maestro", "SLP.md"));
     const expectedDigest = createHash("sha256").update(hubPack).digest("hex");
+    const archivedPack = join(room, ".maestro", "packs", `${expectedDigest}.md`);
 
     expect(projectPack).toEqual(hubPack);
+    expect(await readFile(archivedPack)).toEqual(hubPack);
     expect(startData.team).toMatchObject({
       generation: 1,
       packDigest: expectedDigest,
@@ -91,8 +139,20 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
       state: "RUNNING",
     });
     expect(startData.team.roles).toEqual([
-      expect.objectContaining({ role: "team-supervisor" }),
-      expect.objectContaining({ role: "lead" }),
+      expect.objectContaining({
+        briefDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        instanceId: expect.stringMatching(/^[a-f0-9-]{36}$/),
+        packDigest: expectedDigest,
+        readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
+        role: "team-supervisor",
+      }),
+      expect.objectContaining({
+        briefDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        instanceId: expect.stringMatching(/^[a-f0-9-]{36}$/),
+        packDigest: expectedDigest,
+        readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
+        role: "lead",
+      }),
     ]);
     expect(startData.work).toMatchObject({
       assignedTo: expect.stringMatching(/^lead-/),
@@ -148,6 +208,44 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     expect(
       prompts.every((command) => command[3]?.includes("SLP_ROLE_READY") === true),
     ).toBe(true);
+    expect(
+      commands.filter((command) => command[0] === "agent" && command[1] === "read"),
+    ).toHaveLength(2);
+  });
+});
+
+test("SLP v2 rejects an incorrect role acknowledgement before granting authority", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { invalidAcknowledgements: true });
+
+    const failed = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Reject the wrong role acknowledgement", "--json"],
+      fake.env,
+    );
+
+    expect(failed.exitCode).toBe(1);
+    expect(failed.stderr).toContain("ROLE_ACKNOWLEDGEMENT_MISMATCH");
+    expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectDatabase.query<{ count: number }, []>(
+        "SELECT COUNT(*) AS count FROM slp_local_roles",
+      ).get()?.count,
+    ).toBe(0);
+    projectDatabase.close();
   });
 });
 
@@ -230,7 +328,7 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
 
     const started = await runtime.start(
       plan,
-      new Map([["team-supervisor", "Reply SLP_ROLE_READY team-supervisor"]]),
+      new Map([["team-supervisor", testRoleContract(plan.teamId, plan.generation)]]),
     );
 
     expect(started.roles).toHaveLength(1);
@@ -252,7 +350,7 @@ test("SLP v2 waits for workspace-close visibility before declaring runtime absen
     const runtime = new HerdrSlpRuntime(15_000, { ...process.env, ...fake.env });
     const started = await runtime.start(
       plan,
-      new Map([["team-supervisor", "Reply SLP_ROLE_READY team-supervisor"]]),
+      new Map([["team-supervisor", testRoleContract(plan.teamId, plan.generation)]]),
     );
     await setFakeHerdrBehavior(fake, { workspaceCloseListLag: 2 });
 
@@ -298,7 +396,14 @@ test("SLP v2 canonicalizes a project subdirectory to its checkout root", async (
       team: { generation: number; projectPath: string; teamId: string };
       work: { id: string };
     }>(nestedStart.stdout);
-    expect(envelope(rootStart.stdout)).toMatchObject(nestedData);
+    expect(envelope(rootStart.stdout)).toMatchObject({
+      team: {
+        generation: nestedData.team.generation,
+        projectPath: nestedData.team.projectPath,
+        teamId: nestedData.team.teamId,
+      },
+      work: { id: nestedData.work.id },
+    });
     expect(nestedData.team.projectPath).toBe(realpathSync.native(fixture.repo));
     expect(await readFakeHerdrState(fake)).toMatchObject({
       agents: expect.arrayContaining([expect.any(Object), expect.any(Object)]),
@@ -414,11 +519,26 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     expect(first.exitCode).toBe(0);
     expect(repeated.stderr).toBe("");
     expect(repeated.exitCode).toBe(0);
-    const firstData = envelope<{ team: { generation: number }; work: { id: string } }>(first.stdout);
-    const repeatedData = envelope<{ team: { generation: number }; work: { id: string } }>(
+    const firstData = envelope<{
+      team: { generation: number; roles: Array<{ instanceId: string; readyChallenge: string; role: string }> };
+      work: { id: string };
+    }>(first.stdout);
+    const repeatedData = envelope<{
+      team: { generation: number; roles: Array<{ instanceId: string; readyChallenge: string; role: string }> };
+      work: { id: string };
+    }>(
       repeated.stdout,
     );
-    expect(repeatedData).toMatchObject(firstData);
+    expect(repeatedData).toMatchObject({
+      team: { generation: firstData.team.generation },
+      work: { id: firstData.work.id },
+    });
+    expect(repeatedData.team.roles.map((role) => [role.role, role.instanceId])).toEqual(
+      firstData.team.roles.map((role) => [role.role, role.instanceId]),
+    );
+    expect(repeatedData.team.roles.map((role) => role.readyChallenge)).not.toEqual(
+      firstData.team.roles.map((role) => role.readyChallenge),
+    );
     let runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
@@ -480,7 +600,10 @@ test("SLP v2 serializes concurrent identical starts into one generation", async 
     const secondData = envelope<{ team: { generation: number; teamId: string }; work: { id: string } }>(
       second.stdout,
     );
-    expect(secondData).toMatchObject(firstData);
+    expect(secondData).toMatchObject({
+      team: { generation: firstData.team.generation, teamId: firstData.team.teamId },
+      work: { id: firstData.work.id },
+    });
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
@@ -521,7 +644,18 @@ test("SLP v2 resolves symlink aliases to one canonical running project", async (
 
     expect(first.stderr).toBe("");
     expect(repeated.stderr).toBe("");
-    expect(envelope(repeated.stdout)).toMatchObject(envelope(first.stdout));
+    const firstData = envelope<{
+      team: { generation: number; projectPath: string; teamId: string };
+      work: { id: string };
+    }>(first.stdout);
+    expect(envelope(repeated.stdout)).toMatchObject({
+      team: {
+        generation: firstData.team.generation,
+        projectPath: firstData.team.projectPath,
+        teamId: firstData.team.teamId,
+      },
+      work: { id: firstData.work.id },
+    });
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
@@ -1653,7 +1787,15 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
       team: {
         generation: number;
         projectPath: string;
-        roles: Array<{ name: string; paneId: string; role: "lead" | "team-supervisor" }>;
+        roles: Array<{
+          briefDigest: string;
+          instanceId: string;
+          name: string;
+          packDigest: string;
+          paneId: string;
+          readyChallenge: string;
+          role: "lead" | "team-supervisor";
+        }>;
         teamId: string;
       };
     }>((await runCliAt(
@@ -1676,8 +1818,12 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
     await expect(runtime.inspect(
       plan,
       started.team.roles.map((role) => ({
+        briefDigest: role.briefDigest,
+        instanceId: role.instanceId,
         name: role.name,
+        packDigest: role.packDigest,
         paneId: role.paneId,
+        readyChallenge: role.readyChallenge,
         role: role.role,
         workspaceId: "unused-by-inspect",
       })),
@@ -1780,6 +1926,13 @@ test("SLP v2 pins Hub pack changes until the next stopped generation", async () 
     expect(await readFile(join(fixture.repo, ".maestro", "SLP.md"))).toEqual(
       await readFile(hubPackPath),
     );
+    await rm(join(fixture.repo, ".maestro", "SLP.md"));
+    expect(
+      await readFile(join(room, ".maestro", "packs", `${firstData.team.packDigest}.md`)),
+    ).toEqual(pinned);
+    expect(
+      await readFile(join(room, ".maestro", "packs", `${secondTeam.packDigest}.md`)),
+    ).toEqual(await readFile(hubPackPath));
   });
 }, 20_000);
 
