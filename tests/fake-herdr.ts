@@ -19,6 +19,7 @@ export interface FakeHerdrBehavior {
   promptStalledAttempts?: number;
   prompts?: boolean;
   settleAgents?: boolean;
+  wrapAcknowledgements?: boolean;
   workspaceCloseListLag?: number;
   workspaceListDelayMs?: number;
 }
@@ -375,9 +376,16 @@ if (command === "workspace list") {
       if (state.behavior.invalidAcknowledgementField === "challenge") {
         acknowledgement[7] = "challenge=" + "0".repeat(32);
       }
+      const acknowledgementLines = state.behavior.wrapAcknowledgements
+        ? [
+          acknowledgement.slice(0, 5).join(" "),
+          acknowledgement.slice(5, 7).join(" "),
+          acknowledgement.slice(7).join(" "),
+        ]
+        : [acknowledgement.join(" ")];
       state.outputs[name] =
         (state.behavior.acknowledgementPrefixes?.[role] ?? "") +
-        acknowledgement.join(" ") + "\\n";
+        acknowledgementLines.join("\\n") + "\\n";
     }
     if (state.behavior.settleAgents !== false) {
       const agent = state.agents.find((candidate) => candidate.name === name);

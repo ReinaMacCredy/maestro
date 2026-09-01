@@ -152,6 +152,23 @@ function normalizeAcknowledgementLine(line: string): string {
     .replace(/^[^\p{L}\p{N}]+(?=SLP_ROLE_READY(?:\s|$))/u, "");
 }
 
+function includesExactAcknowledgement(
+  lines: readonly string[],
+  acknowledgement: string,
+): boolean {
+  for (let start = 0; start < lines.length; start += 1) {
+    if (!/^SLP_ROLE_READY(?:\s|$)/.test(lines[start] ?? "")) continue;
+    let candidate = lines[start] ?? "";
+    for (let index = start; candidate.length <= acknowledgement.length; index += 1) {
+      if (candidate === acknowledgement) return true;
+      const continuation = lines[index + 1];
+      if (!continuation) break;
+      candidate = `${candidate} ${continuation}`;
+    }
+  }
+  return false;
+}
+
 function herdrErrorCode(error: unknown): string | null {
   if (!(error instanceof SlpRuntimeError) || !error.stderr) return null;
   try {
@@ -322,7 +339,7 @@ export class HerdrSlpRuntime {
       .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
       .split(/\r?\n/)
       .map(normalizeAcknowledgementLine);
-    if (!lines.includes(contract.acknowledgement)) {
+    if (!includesExactAcknowledgement(lines, contract.acknowledgement)) {
       throw new SlpRuntimeError(
         `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement`,
         ["agent", "read", roleName],

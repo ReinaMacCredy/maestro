@@ -231,6 +231,7 @@ test("SLP v2 accepts presentation-only markers before exact role acknowledgement
         lead: "• ",
         peer: "› ",
       },
+      wrapAcknowledgements: true,
     });
 
     const started = await runCliAt(
@@ -280,6 +281,7 @@ test("SLP v2 rejects content before an otherwise exact role acknowledgement", as
     ).toBe(0);
     const fake = await installFakeHerdr(fixture, {
       acknowledgementPrefixes: { "team-supervisor": "answer: " },
+      wrapAcknowledgements: true,
     });
 
     const failed = await runCliAt(
@@ -307,7 +309,10 @@ test("SLP v2 rejects stale digest or challenge acknowledgements before granting 
           })
         ).exitCode,
       ).toBe(0);
-      const fake = await installFakeHerdr(fixture, { invalidAcknowledgementField });
+      const fake = await installFakeHerdr(fixture, {
+        invalidAcknowledgementField,
+        wrapAcknowledgements: true,
+      });
 
       const failed = await runCliAt(
         fixture,
