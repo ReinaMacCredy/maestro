@@ -614,6 +614,158 @@ test("SLP v2 serializes concurrent identical starts into one generation", async 
   });
 }, 20_000);
 
+test("SLP v2 releases SQLite before Herdr and persists monotonic start phases", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { workspaceListDelayMs: 300 });
+    const starting = runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Release the database before Herdr", "--json"],
+      fake.env,
+    );
+    await waitForText(fake.log, '["workspace","list"]');
+
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    projectDatabase.exec("PRAGMA busy_timeout = 0");
+    let writeError: unknown = null;
+    try {
+      projectDatabase.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE lifecycle_writer_probe (value TEXT NOT NULL);
+        INSERT INTO lifecycle_writer_probe (value) VALUES ('writer-progressed');
+        COMMIT;
+      `);
+    } catch (error) {
+      writeError = error;
+      try {
+        projectDatabase.exec("ROLLBACK");
+      } catch {}
+    }
+    const reserved = projectDatabase
+      .query<{ phase: string; revision: number }, []>(
+        `SELECT phase, revision FROM slp_lifecycle_operations
+         WHERE operation = 'START'`,
+      )
+      .get();
+    projectDatabase.close();
+
+    const started = await starting;
+    expect(writeError).toBeNull();
+    expect(reserved).toEqual({ phase: "RESERVED", revision: 1 });
+    expect(started.stderr).toBe("");
+    expect(started.exitCode).toBe(0);
+    const after = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      after
+        .query<{ phase: string; revision: number }, []>(
+          `SELECT phase, revision FROM slp_lifecycle_operations
+           WHERE operation = 'START'`,
+        )
+        .get(),
+    ).toEqual({ phase: "COMMITTED", revision: 3 });
+    expect(
+      after.query<{ value: string }, []>("SELECT value FROM lifecycle_writer_probe").get()?.value,
+    ).toBe("writer-progressed");
+    after.close();
+  });
+}, 20_000);
+
+test("SLP v2 retries start finalization from a durable RUNTIME_READY phase", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { processInfoDelayMs: 500 });
+    const args = [
+      "team",
+      "start",
+      fixture.repo,
+      "Retry the durable runtime boundary",
+      "--json",
+    ];
+    const starting = runCliAt(fixture, room, args, fake.env);
+    await waitForText(fake.log, '["pane","process-info"');
+    const roomDatabasePath = join(room, ".maestro", "maestro.db");
+    const roomDatabase = new Database(roomDatabasePath);
+    roomDatabase.exec(`
+      CREATE TRIGGER reject_start_finalization
+      BEFORE INSERT ON slp_teams
+      BEGIN
+        SELECT RAISE(ABORT, 'injected start finalization failure');
+      END;
+    `);
+    roomDatabase.close();
+
+    const failed = await starting;
+    expect(failed.exitCode).toBe(1);
+    expect(failed.stderr).toContain("injected start finalization failure");
+    const projectAfterFailure = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectAfterFailure
+        .query<{ phase: string }, []>(
+          `SELECT phase FROM slp_lifecycle_operations WHERE operation = 'START'`,
+        )
+        .get()?.phase,
+    ).toBe("RUNTIME_READY");
+    expect(
+      projectAfterFailure
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_teams")
+        .get()?.count,
+    ).toBe(0);
+    projectAfterFailure.close();
+
+    const repairDatabase = new Database(roomDatabasePath);
+    repairDatabase.exec("DROP TRIGGER reject_start_finalization");
+    repairDatabase.close();
+    await setFakeHerdrBehavior(fake, { processInfoDelayMs: 0 });
+    const commandCount = (await fakeHerdrCommands(fake)).length;
+    const retried = await runCliAt(fixture, room, args, fake.env);
+
+    expect(retried.stderr).toBe("");
+    expect(retried.exitCode).toBe(0);
+    const retryCommands = (await fakeHerdrCommands(fake)).slice(commandCount);
+    expect(retryCommands.some((command) => command[0] === "workspace" && command[1] === "create"))
+      .toBe(false);
+    expect(retryCommands.some((command) => command[0] === "agent" && command[1] === "start"))
+      .toBe(false);
+    const projectAfterRetry = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectAfterRetry
+        .query<{ phase: string }, []>(
+          `SELECT phase FROM slp_lifecycle_operations WHERE operation = 'START'`,
+        )
+        .get()?.phase,
+    ).toBe("COMMITTED");
+    expect(
+      projectAfterRetry
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_teams")
+        .get()?.count,
+    ).toBe(1);
+    projectAfterRetry.close();
+  });
+}, 20_000);
+
 test("SLP v2 resolves symlink aliases to one canonical running project", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
@@ -812,6 +964,18 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
     expect(runtime.panes).toEqual([]);
     expect(runtime.agents).toEqual([]);
     expect(await Bun.file(join(fixture.repo, ".maestro", "SLP.md")).exists()).toBe(false);
+    const pendingDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      pendingDatabase
+        .query<{ phase: string; revision: number }, []>(
+          `SELECT phase, revision FROM slp_lifecycle_operations
+           WHERE operation = 'START'`,
+        )
+        .get(),
+    ).toEqual({ phase: "RESERVED", revision: 2 });
+    pendingDatabase.close();
 
     await setFakeHerdrBehavior(fake, { agents: true });
     const retried = await runCliAt(fixture, room, args, fake.env);
@@ -2269,6 +2433,14 @@ test("SLP v2 interrupted stop stays RUNNING and retry continues without duplicat
         )
         .get()?.count,
     ).toBe(0);
+    expect(
+      afterFirst
+        .query<{ phase: string; revision: number }, []>(
+          `SELECT phase, revision FROM slp_lifecycle_operations
+           WHERE operation = 'STOP'`,
+        )
+        .get(),
+    ).toEqual({ phase: "RESERVED", revision: 2 });
     afterFirst.close();
     const firstCommands = await fakeHerdrCommands(fake);
 
@@ -2431,6 +2603,207 @@ test("SLP v2 final workspace close failure leaves RUNNING and a restored Supervi
         .get()?.count,
     ).toBe(1);
     projectAfterRecovery.close();
+  });
+}, 20_000);
+
+test("SLP v2 releases SQLite before Herdr and persists monotonic stop phases", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = envelope<{ team: { teamId: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Release the database during stop", "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    await setFakeHerdrBehavior(fake, { workspaceListDelayMs: 300 });
+    const commandCount = (await fakeHerdrCommands(fake)).length;
+    const stopping = runCliAt(
+      fixture,
+      room,
+      ["team", "stop", started.team.teamId, "--emergency", "--json"],
+      fake.env,
+    );
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const commands = await fakeHerdrCommands(fake);
+      if (
+        commands
+          .slice(commandCount)
+          .some((command) => command[0] === "workspace" && command[1] === "list")
+      ) break;
+      await Bun.sleep(10);
+    }
+
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    projectDatabase.exec("PRAGMA busy_timeout = 0");
+    let writeError: unknown = null;
+    try {
+      projectDatabase.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE stop_writer_probe (value TEXT NOT NULL);
+        INSERT INTO stop_writer_probe (value) VALUES ('writer-progressed');
+        COMMIT;
+      `);
+    } catch (error) {
+      writeError = error;
+      try {
+        projectDatabase.exec("ROLLBACK");
+      } catch {}
+    }
+    const reserved = projectDatabase
+      .query<{ phase: string; revision: number }, []>(
+        `SELECT phase, revision FROM slp_lifecycle_operations
+         WHERE operation = 'STOP'`,
+      )
+      .get();
+    projectDatabase.close();
+
+    const stopped = await stopping;
+    expect(writeError).toBeNull();
+    expect(reserved).toEqual({ phase: "RESERVED", revision: 1 });
+    expect(stopped.stderr).toBe("");
+    expect(stopped.exitCode).toBe(0);
+    const after = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      after
+        .query<{ phase: string; revision: number }, []>(
+          `SELECT phase, revision FROM slp_lifecycle_operations
+           WHERE operation = 'STOP'`,
+        )
+        .get(),
+    ).toEqual({ phase: "COMMITTED", revision: 3 });
+    expect(
+      after.query<{ value: string }, []>("SELECT value FROM stop_writer_probe").get()?.value,
+    ).toBe("writer-progressed");
+    after.close();
+  });
+}, 20_000);
+
+test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = envelope<{ team: { teamId: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Retry stop finalization", "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    await setFakeHerdrBehavior(fake, { workspaceListDelayMs: 300 });
+    const commandCount = (await fakeHerdrCommands(fake)).length;
+    const stopping = runCliAt(
+      fixture,
+      room,
+      ["team", "stop", started.team.teamId, "--emergency", "--json"],
+      fake.env,
+    );
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const commands = await fakeHerdrCommands(fake);
+      if (
+        commands
+          .slice(commandCount)
+          .some((command) => command[0] === "workspace" && command[1] === "list")
+      ) break;
+      await Bun.sleep(10);
+    }
+    const roomDatabasePath = join(room, ".maestro", "maestro.db");
+    const roomDatabase = new Database(roomDatabasePath);
+    roomDatabase.exec(`
+      CREATE TRIGGER reject_stop_finalization
+      BEFORE UPDATE OF state ON slp_teams
+      WHEN NEW.state = 'STOPPED'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected stop finalization failure');
+      END;
+    `);
+    roomDatabase.close();
+
+    const failed = await stopping;
+    expect(failed.exitCode).toBe(1);
+    expect(failed.stderr).toContain("injected stop finalization failure");
+    const projectAfterFailure = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectAfterFailure
+        .query<{ phase: string }, []>(
+          `SELECT phase FROM slp_lifecycle_operations WHERE operation = 'STOP'`,
+        )
+        .get()?.phase,
+    ).toBe("RUNTIME_READY");
+    expect(
+      projectAfterFailure.query<{ state: string }, []>("SELECT state FROM slp_local_teams").get()?.state,
+    ).toBe("RUNNING");
+    projectAfterFailure.close();
+    expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
+
+    const repairDatabase = new Database(roomDatabasePath);
+    repairDatabase.exec("DROP TRIGGER reject_stop_finalization");
+    repairDatabase.close();
+    await setFakeHerdrBehavior(fake, { workspaceListDelayMs: 0 });
+    const retryCommandCount = (await fakeHerdrCommands(fake)).length;
+    const retried = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", started.team.teamId, "--emergency", "--json"],
+      fake.env,
+    );
+
+    expect(retried.stderr).toBe("");
+    expect(retried.exitCode).toBe(0);
+    expect(
+      (await fakeHerdrCommands(fake))
+        .slice(retryCommandCount)
+        .some((command) => command[0] === "tab" && command[1] === "close"),
+    ).toBe(false);
+    const projectAfterRetry = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectAfterRetry
+        .query<{ phase: string }, []>(
+          `SELECT phase FROM slp_lifecycle_operations WHERE operation = 'STOP'`,
+        )
+        .get()?.phase,
+    ).toBe("COMMITTED");
+    expect(
+      projectAfterRetry.query<{ state: string }, []>("SELECT state FROM slp_local_teams").get()?.state,
+    ).toBe("STOPPED");
+    expect(
+      projectAfterRetry
+        .query<{ count: number }, []>(
+          `SELECT COUNT(*) AS count FROM slp_activity
+           WHERE operation = 'team.stop.emergency'`,
+        )
+        .get()?.count,
+    ).toBe(1);
+    projectAfterRetry.close();
   });
 }, 20_000);
 
