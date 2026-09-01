@@ -46,7 +46,7 @@ interface EventOwner {
   type: string;
 }
 
-const searchResultLimit = 20;
+const searchResultLimit = 5;
 const SEARCH_INDEX_VERSION = 1;
 
 function oneLine(value: string, limit: number): string {
@@ -58,6 +58,19 @@ function required(invocation: CliInvocation, index: number, label: string): stri
   const value = invocation.positionals[index];
   if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
   return value;
+}
+
+function resultLimit(invocation: CliInvocation): number {
+  const value = invocation.options.limit;
+  if (value === undefined) return searchResultLimit;
+  if (
+    typeof value !== "string" ||
+    !/^[1-9]\d*$/.test(value) ||
+    !Number.isSafeInteger(Number(value))
+  ) {
+    throw new CliError("INVALID_OPTION", `--limit must be a positive integer: ${String(value)}`);
+  }
+  return Number(value);
 }
 
 function workHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
@@ -318,6 +331,7 @@ export const observabilityPlugin: BuiltInPlugin = {
             );
           }
           const term = required(invocation, 0, "search term");
+          const limit = resultLimit(invocation);
           const query = `"${term.replaceAll('"', '""')}"`;
           const matches = context.store.database
             .query<SearchRow, [string]>(
@@ -338,10 +352,10 @@ export const observabilityPlugin: BuiltInPlugin = {
               : nativeHit(context, match);
             if (hit) mergeHit(hits, hit);
           }
-          const bounded = [...hits.values()].slice(0, searchResultLimit);
+          const bounded = [...hits.values()].slice(0, limit);
           const lines = bounded.map(formatHit);
-          const more = hits.size - searchResultLimit;
-          if (more > 0) lines.push(`${more} more — refine query`);
+          const more = hits.size - limit;
+          if (more > 0) lines.push(`${more} more; raise --limit to see them`);
           return {
             data: { matches: bounded.map((hit) => hit.summary) },
             text: lines.join("\n"),
@@ -349,6 +363,9 @@ export const observabilityPlugin: BuiltInPlugin = {
         },
         {
           description: "Search work, decisions, notes, and event history.",
+          flags: {
+            "--limit": { description: "Set the maximum number of results.", value: true },
+          },
           mutates: false,
           positionals: [{ name: "query", required: true }],
         },

@@ -23,7 +23,7 @@ test("249 persisted session liveness remains PID and TTL based", async () => {
     insert.run("dead-pid", 2_147_483_647, new Date().toISOString(), "pid", fixture.repo);
     database.close();
 
-    const status = await runCli(fixture, ["status", "--json"], {
+    const status = await runCli(fixture, ["status", "--all", "--json"], {
       MAESTRO_SESSION_ID: "phase2-observer",
       MAESTRO_SESSION_PID: String(process.pid),
     });

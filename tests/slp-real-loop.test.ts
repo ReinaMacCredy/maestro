@@ -146,7 +146,9 @@ test("200 read-only status treats pre-anchor session rows as PID-anchored", asyn
 
     const diagnosed = await runCli(fixture, ["doctor"], { PATH: path });
     expect(diagnosed.exitCode).toBe(0);
-    const all = await runCli(fixture, ["status", "--json"], { MAESTRO_READ_ONLY: "1" });
+    const all = await runCli(fixture, ["status", "--all", "--json"], {
+      MAESTRO_READ_ONLY: "1",
+    });
     const live = await runCli(fixture, ["status", "--live", "--json"], {
       MAESTRO_READ_ONLY: "1",
     });

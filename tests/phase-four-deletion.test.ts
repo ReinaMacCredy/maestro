@@ -564,7 +564,7 @@ test("261 watch is absent and returns the ordinary UNKNOWN_VERB error", async ()
   });
 });
 
-test("262 status --live filters dead sessions while bare status remains unchanged", async () => {
+test("262 status hides dead noise by default while --all and --live remain explicit", async () => {
   await withFixture(async (fixture) => {
     for (const [id, pid] of [
       ["live-status", process.pid],
@@ -578,10 +578,17 @@ test("262 status --live filters dead sessions while bare status remains unchange
       expect(recorded.exitCode).toBe(0);
     }
 
-    const all = await runCli(fixture, ["status"]);
+    const status = await runCli(fixture, ["status"]);
+    const all = await runCli(fixture, ["status", "--all"]);
     const live = await runCli(fixture, ["status", "--live"]);
     const liveJson = await runCli(fixture, ["status", "--live", "--json"]);
 
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain("live-status [live]");
+    expect(status.stdout).not.toContain("dead-status [dead]");
+    expect(status.stdout.trim().split("\n").at(-1)).toBe(
+      "1 dead sessions hidden (0 hold work); --all to list",
+    );
     expect(all.exitCode).toBe(0);
     expect(all.stdout).toContain("live-status [live]");
     expect(all.stdout).toContain("dead-status [dead]");

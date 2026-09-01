@@ -187,7 +187,7 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
       gated: unknown[];
       works: Array<{ id: string }>;
     };
-    const status = await runCli(fixture, ["status", "--json"], observer);
+    const status = await runCli(fixture, ["status", "--all", "--json"], observer);
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ id: string; live: boolean }> };
     }).data.sessions;
@@ -315,24 +315,35 @@ test("59 native search bounds entities, collapses logs, and keeps JSON summaries
     const result = await runCli(fixture, ["search", "nativebound"]);
     const lines = result.stdout.trim().split("\n");
     const hits = lines.filter((line) => /^w\d+ \(idea, open\): nativebound/.test(line));
-    const dense = await runCli(fixture, ["search", "nativebound", "--json"]);
+    const limited = await runCli(fixture, ["search", "nativebound", "--limit", "7"]);
+    const limitedLines = limited.stdout.trim().split("\n");
+    const limitedHits = limitedLines.filter((line) =>
+      /^w\d+ \(idea, open\): nativebound/.test(line)
+    );
+    const dense = await runCli(fixture, ["search", "nativebound", "--limit", "7", "--json"]);
     const envelope = JSON.parse(dense.stdout) as {
       data: { matches: Array<Record<string, unknown>> };
     };
+    const invalid = await runCli(fixture, ["search", "nativebound", "--limit", "0"]);
 
     expect(result.exitCode).toBe(0);
-    expect(hits).toHaveLength(20);
-    expect(lines.at(-1)).toBe("5 more — refine query");
+    expect(hits).toHaveLength(5);
+    expect(lines.at(-1)).toBe("20 more; raise --limit to see them");
     expect(result.stdout).not.toContain("work.add");
     expect(result.stdout).not.toContain('{"title"');
     for (const hit of hits) expect(hit.split(" — ").at(-1)?.length).toBeLessThanOrEqual(200);
+    expect(limited.exitCode).toBe(0);
+    expect(limitedHits).toHaveLength(7);
+    expect(limitedLines.at(-1)).toBe("18 more; raise --limit to see them");
     expect(dense.exitCode).toBe(0);
-    expect(envelope.data.matches).toHaveLength(20);
+    expect(envelope.data.matches).toHaveLength(7);
     for (const match of envelope.data.matches) {
       expect(match).not.toHaveProperty("payload");
       expect(match).not.toHaveProperty("text");
       expect(match).not.toHaveProperty("snippet");
     }
+    expect(invalid.exitCode).toBe(1);
+    expect(invalid.stderr).toContain("INVALID_OPTION");
   });
 });
 

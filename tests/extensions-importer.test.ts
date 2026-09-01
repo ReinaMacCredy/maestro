@@ -450,8 +450,8 @@ test("52 legacy search summaries and result count stay bounded", async () => {
     const hits = lines.filter((line) => line.startsWith("[legacy]"));
 
     expect(result.exitCode).toBe(0);
-    expect(hits).toHaveLength(20);
-    expect(lines.at(-1)).toBe("40 more — refine query");
+    expect(hits).toHaveLength(5);
+    expect(lines.at(-1)).toBe("55 more; raise --limit to see them");
     for (const hit of hits) {
       expect(hit).toMatch(/^\[legacy\] \S+ \(feature, closed\): Context bomb \d+ — /);
       expect(hit.split(" — ").at(-1)?.length).toBeLessThanOrEqual(200);

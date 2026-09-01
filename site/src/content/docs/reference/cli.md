@@ -72,6 +72,10 @@ Read-only and role-scoped. Hub sees team generations and counts; team roles see
 their team's actionable work; the work form includes notes, current return,
 acceptance and linked decisions.
 
+Outside a running team, bare status shows live sessions plus dead sessions that
+still hold work or an open dispatch. `--all` lists every recorded session;
+`--live` lists only live sessions.
+
 ### `work add`
 
 ```sh
@@ -272,7 +276,7 @@ See [Self-improvement](/guides/self-improvement/).
 
 ## Search and legacy data
 
-- `maestro search <query> [--json]` searches native work, decisions, notes,
+- `maestro search <query> [--limit <n>] [--json]` searches native work, decisions, notes,
   bundles and imported legacy records.
 - `maestro import rust --path <value> [--promote]` imports a preserved Rust
   store read-only.

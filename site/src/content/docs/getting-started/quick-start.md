@@ -17,7 +17,8 @@ curl -fsSL https://maestro.maccredyreina.me/install.sh | sh
 maestro status
 ```
 
-Status shows the current session, live peers, and held work.
+Status shows live sessions and dead sessions that still hold work or an open
+dispatch. Use `maestro status --all` to include every recorded dead session.
 
 ## 3. Record one bounded task
 

@@ -378,18 +378,60 @@ export const coordinationPlugin: BuiltInPlugin = {
         async (invocation): Promise<CliResult> => {
           const slp = await maybeHandleSlpStatus(context, invocation);
           if (slp) return slp;
+          if (invocation.positionals[0]) {
+            throw new CliError(
+              "NO_ACTIVE_TEAM",
+              "status <work-id> reads SLP v2 team work from a role pane; outside a running team use: maestro work show <id>",
+            );
+          }
           const currentSession = context.sessions.current().id;
-          const sessions = context.sessions
-            .list()
-            .filter((session) => invocation.options.live !== true || session.live);
-          const items = work.list();
+          const allSessions = context.sessions.list();
+          const items = work.snapshot();
+          const holds = new Map<string, string[]>();
+          for (const item of items) {
+            if (!item.heldBy) continue;
+            holds.set(item.heldBy, [...holds.get(item.heldBy) ?? [], item.id]);
+          }
+          const openDispatchSessions = new Set<string>();
+          const itemsById = new Map(items.map((item) => [item.id, item]));
+          for (const dispatch of (context.dispatch as DispatchService).list()) {
+            const item = itemsById.get(dispatch.workId);
+            if (
+              dispatch.state !== "open" ||
+              !item ||
+              item.state === "done" ||
+              item.state === "cancelled"
+            ) continue;
+            for (const sessionId of [
+              dispatch.claimedBy,
+              dispatch.heldBy,
+              dispatch.targetSession,
+            ]) {
+              if (sessionId) openDispatchSessions.add(sessionId);
+            }
+          }
+          const preservesDeadSession = (sessionId: string) =>
+            (holds.get(sessionId)?.length ?? 0) > 0 || openDispatchSessions.has(sessionId);
+          const liveOnly = invocation.options.live === true;
+          const showAll = invocation.options.all === true;
+          const sessions = allSessions.filter((session) =>
+            liveOnly
+              ? session.live
+              : showAll || session.live || preservesDeadSession(session.id)
+          );
+          const shownSessionIds = new Set(sessions.map((session) => session.id));
+          const hiddenDead = allSessions.filter(
+            (session) => !session.live && !shownSessionIds.has(session.id),
+          ).length;
+          const shownDeadHolders = sessions.filter(
+            (session) => !session.live && preservesDeadSession(session.id),
+          ).length;
           const peers = livePeers(sessions, items, currentSession);
           const advisory = await driftAdvisory(
             process.env.HOME ?? process.cwd(),
             resolve(import.meta.dir, "..", ".."),
           );
-          const holdsFor = (sessionId: string) =>
-            items.filter((item) => item.heldBy === sessionId).map((item) => item.id);
+          const holdsFor = (sessionId: string) => holds.get(sessionId) ?? [];
           const sessionText =
             sessions.length > 0
               ? sessions
@@ -403,15 +445,26 @@ export const coordinationPlugin: BuiltInPlugin = {
             data: {
               currentSession,
               held: Object.fromEntries(sessions.map((session) => [session.id, holdsFor(session.id)])),
+              hiddenDead,
               livePeers: peers,
               sessions,
             },
-            text: [sessionText, formatLivePeers(peers), advisory].filter(Boolean).join("\n"),
+            text: [
+              sessionText,
+              formatLivePeers(peers),
+              advisory,
+              !liveOnly && hiddenDead > 0
+                ? `${hiddenDead} dead sessions hidden (${shownDeadHolders} hold work); --all to list`
+                : "",
+            ].filter(Boolean).join("\n"),
           };
         },
         {
           description: "Show sessions, live peers, and held work.",
-          flags: { "--live": { description: "Show live sessions only." } },
+          flags: {
+            "--all": { description: "Show all recorded sessions." },
+            "--live": { description: "Show live sessions only." },
+          },
           mutates: false,
           positionals: [{ name: "work-id", required: false }],
         },
