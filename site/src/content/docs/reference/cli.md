@@ -69,8 +69,11 @@ Hub status includes `abandonedWorkCount` per generation. Team work readback
 includes abandonment fields when present.
 
 Read-only and role-scoped. Hub sees team generations and counts; team roles see
-their team's actionable work; the work form includes notes, current return,
-acceptance and linked decisions.
+their team's non-DONE items (a Peer sees only its own) with `*` marking the ones
+waiting on the caller, DONE collapsed into a count that `--all` expands, and the
+generation's decision ids; the work form prints state, from -> to, revision,
+objective, the latest entry, linked decisions, and a `next:` line naming what
+the caller may run. `--json` output is unchanged.
 
 Outside a running team, bare status shows live sessions plus dead sessions that
 still hold work or an open dispatch. `--all` lists every recorded session;

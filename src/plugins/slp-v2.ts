@@ -3393,6 +3393,121 @@ function roleRows(store: Store, teamId: string, generation: number, local: boole
     .all(teamId, generation);
 }
 
+type SlpStatusRole = ReturnType<typeof roleRows>[number];
+
+interface SlpNextStep {
+  mayRun: string[];
+  waitingOn: string | null;
+}
+
+function clipLine(text: string, limit: number): string {
+  const line = text.split("\n").map((part) => part.trim()).find((part) => part !== "") ?? "";
+  return line.length > limit ? `${line.slice(0, limit - 3)}...` : line;
+}
+
+function reworkGrantOpen(context: PluginContext, work: SlpWorkRow): boolean {
+  if (work.state !== "RETURNED" || !tableExists(context.store, "slp_rework_grants")) return false;
+  return context.store.database
+    .query<{ present: number }, [string, number]>(
+      `SELECT 1 AS present FROM slp_rework_grants
+       WHERE work_id = ? AND return_revision = ? AND consumed_at IS NULL`,
+    )
+    .get(work.id, work.return_revision) !== null;
+}
+
+// d758: what the caller may run on one item, or whom it waits on.
+function nextStep(
+  actor: SlpActor,
+  roles: SlpStatusRole[],
+  work: SlpWorkRow,
+  grantOpen: boolean,
+): SlpNextStep {
+  const assigneeRole = roles.find((role) => role.name === work.assigned_to)?.role ?? "peer";
+  const reviewerRole: SlpRole = assigneeRole === "lead" ? "team-supervisor" : "lead";
+  const reviewerName = roles.find((role) => role.role === reviewerRole)?.name ?? reviewerRole;
+  const reviewing = actor.role === reviewerRole && actor.name !== work.assigned_to;
+  const mine = work.assigned_to === actor.name;
+  switch (work.state) {
+    case "OPEN":
+      return mine
+        ? { mayRun: [`work take ${work.id}`], waitingOn: null }
+        : {
+          mayRun: reviewing ? [`work accept ${work.id} --outcome cancelled`] : [],
+          waitingOn: work.assigned_to,
+        };
+    case "ACTIVE":
+      return work.owner === actor.name
+        ? { mayRun: [`work return ${work.id} "<result>"`], waitingOn: null }
+        : { mayRun: [], waitingOn: work.owner ?? work.assigned_to };
+    case "RETURNED":
+      if (grantOpen) {
+        return mine
+          ? { mayRun: [`work take ${work.id}`], waitingOn: null }
+          : { mayRun: reviewing ? [`work accept ${work.id}`] : [], waitingOn: work.assigned_to };
+      }
+      return reviewing
+        ? {
+          mayRun: [
+            `work accept ${work.id}`,
+            `work note ${work.id} "<gap>" --rework`,
+            `work accept ${work.id} --outcome cancelled`,
+          ],
+          waitingOn: null,
+        }
+        : { mayRun: [], waitingOn: reviewerName };
+    default:
+      return { mayRun: [], waitingOn: null };
+  }
+}
+
+function nextLine(work: SlpWorkRow, step: SlpNextStep): string {
+  if (work.state === "DONE") return `next: none (${work.acceptance_outcome ?? "done"})`;
+  if (step.waitingOn === null) return `next: ${step.mayRun.join(" | ")}`;
+  const optional = step.mayRun.length > 0 ? `; may run: ${step.mayRun.join(" | ")}` : "";
+  return `next: waiting on ${step.waitingOn}${optional}`;
+}
+
+function workLine(work: SlpWorkRow, step: SlpNextStep): string {
+  const marker = work.state !== "DONE" && step.waitingOn === null ? "*" : " ";
+  return `${marker} ${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}: ${
+    clipLine(work.objective, 72)
+  }`;
+}
+
+function decisionLine(refs: Array<{ id: string; workId: string | null }>): string {
+  if (refs.length === 0) return "decisions: none";
+  return `decisions: ${
+    refs.map((ref) => ref.workId ? `${ref.id} (${ref.workId})` : ref.id).join(", ")
+  }`;
+}
+
+function teamDecisionRefs(
+  context: PluginContext,
+  actor: SlpActor,
+): Array<{ id: string; workId: string | null }> {
+  const query = (store: Store) =>
+    tableExists(store, "slp_decisions")
+      ? store.database
+        .query<{ created_at: string; id: string; work_id: string | null }, [string, number]>(
+          `SELECT id, work_id, created_at FROM slp_decisions
+           WHERE team_id = ? AND generation = ? ORDER BY created_at, id`,
+        )
+        .all(actor.team.team_id, actor.team.generation)
+      : [];
+  const roomStore = new Store(actor.team.room_store_path, { readonly: true });
+  let rows = query(context.store);
+  try {
+    rows = [...rows, ...query(roomStore)];
+  } finally {
+    roomStore.close();
+  }
+  return [...new Map(rows.map((row) => [row.id, row])).values()]
+    .sort((left, right) =>
+      left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
+    )
+    .map((row) => ({ id: row.id, workId: row.work_id }));
+}
+
 export async function maybeHandleSlpStatus(
   context: PluginContext,
   invocation: CliInvocation,
@@ -3624,6 +3739,7 @@ export async function maybeHandleSlpStatus(
     ).values()].sort((left, right) =>
       left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
     );
+    const latest = entries.at(-1) ?? null;
     return {
       data: {
         acceptance: entries.findLast((entry) => entry.kind === "ACCEPTANCE") ?? null,
@@ -3636,7 +3752,16 @@ export async function maybeHandleSlpStatus(
           .map((entry) => ({ actor: entry.actor, body: entry.body, createdAt: entry.created_at })),
         work: workData(work),
       },
-      text: `${work.id} ${work.state} assigned to ${work.assigned_to}`,
+      text: [
+        `${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}`,
+        `revision: ${work.return_revision}`,
+        `objective: ${clipLine(work.objective, 160)}`,
+        latest
+          ? `${latest.kind.toLowerCase()} by ${latest.actor}: ${clipLine(latest.body, 160)}`
+          : "entries: none",
+        decisionLine(decisions.map((decision) => ({ id: decision.id, workId: null }))),
+        nextLine(work, nextStep(actor, roles, work, reworkGrantOpen(context, work))),
+      ].join("\n"),
     };
   }
 
@@ -3701,8 +3826,41 @@ export async function maybeHandleSlpStatus(
       watch: watch ? "on" : "off",
       work: scoped.map(workData),
     },
-    text: `${actor.team.team_id} g${actor.team.generation}; ${scoped.length} relevant work`,
+    text: teamStatusText(context, invocation, actor, roles, allWork, missingPanes),
   };
+}
+
+// d758: text lists the team's items; JSON keeps the relevance-scoped list.
+function teamStatusText(
+  context: PluginContext,
+  invocation: CliInvocation,
+  actor: SlpActor,
+  roles: SlpStatusRole[],
+  allWork: SlpWorkRow[],
+  missingPanes: string[],
+): string {
+  const order: Record<WorkState, number> = { ACTIVE: 1, DONE: 3, OPEN: 0, RETURNED: 2 };
+  const visible = actor.role === "peer"
+    ? allWork.filter((work) => work.assigned_to === actor.name)
+    : allWork;
+  const pending = visible
+    .filter((work) => work.state !== "DONE")
+    .sort((left, right) => order[left.state] - order[right.state]);
+  const done = visible.filter((work) => work.state === "DONE");
+  const line = (work: SlpWorkRow) =>
+    workLine(work, nextStep(actor, roles, work, reworkGrantOpen(context, work)));
+  const pane = roles.find((role) => role.name === actor.name)?.pane_id ?? "";
+  const missing = missingPanes.length > 0 ? `; missing ${missingPanes.join(", ")}` : "";
+  return [
+    `${actor.team.team_id} g${actor.team.generation} ${actor.role} ${actor.name} in ${pane}${missing}`,
+    ...pending.map(line),
+    ...(invocation.options.all === true
+      ? done.map(line)
+      : done.length > 0
+      ? [`${done.length} DONE; --all to list`]
+      : []),
+    decisionLine(teamDecisionRefs(context, actor)),
+  ].join("\n");
 }
 
 export const slpV2Plugin: BuiltInPlugin = {

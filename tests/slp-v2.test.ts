@@ -5350,3 +5350,145 @@ test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status
     ]);
   });
 }, 30_000);
+
+test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const objective = "Structured status objective";
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, objective, "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const id = data.work.id;
+    const header = (role: "lead" | "team-supervisor", who: { name: string; paneId: string }) =>
+      `${data.team.teamId} g${data.team.generation} ${role} ${who.name} in ${who.paneId}`;
+    const lines = async (args: string[], environment: Record<string, string>) => {
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      expect(result.exitCode).toBe(0);
+      return result.stdout.trim().split("\n");
+    };
+    const run = async (args: string[], environment: Record<string, string>) => {
+      expect((await runCliAt(fixture, fixture.repo, args, environment)).exitCode).toBe(0);
+    };
+
+    expect(await lines(["status"], leadEnvironment)).toEqual([
+      header("lead", lead),
+      `* ${id} OPEN hub-supervisor -> ${lead.name}: ${objective}`,
+      "decisions: none",
+    ]);
+    expect((await lines(["status"], supervisorEnvironment))[1]).toBe(
+      `  ${id} OPEN hub-supervisor -> ${lead.name}: ${objective}`,
+    );
+    expect(await lines(["status", id], leadEnvironment)).toEqual([
+      `${id} OPEN hub-supervisor -> ${lead.name}`,
+      "revision: 0",
+      `objective: ${objective}`,
+      "entries: none",
+      "decisions: none",
+      `next: work take ${id}`,
+    ]);
+
+    await run(["work", "take", id, "--json"], leadEnvironment);
+    expect((await lines(["status", id], leadEnvironment)).at(-1)).toBe(
+      `next: work return ${id} "<result>"`,
+    );
+    expect((await lines(["status", id], supervisorEnvironment)).at(-1)).toBe(
+      `next: waiting on ${lead.name}`,
+    );
+    await run(["work", "return", id, "result: first pass\nsecond line", "--json"], leadEnvironment);
+    await run(
+      ["decide", "Ship as is", "--why", "the first pass reads clean", "--work", id, "--json"],
+      supervisorEnvironment,
+    );
+    expect(await lines(["status"], supervisorEnvironment)).toEqual([
+      header("team-supervisor", supervisor),
+      `* ${id} RETURNED hub-supervisor -> ${lead.name}: ${objective}`,
+      `decisions: d1 (${id})`,
+    ]);
+    expect(await lines(["status", id], supervisorEnvironment)).toEqual([
+      `${id} RETURNED hub-supervisor -> ${lead.name}`,
+      "revision: 1",
+      `objective: ${objective}`,
+      `return by ${lead.name}: result: first pass`,
+      "decisions: d1",
+      `next: work accept ${id} | work note ${id} "<gap>" --rework | work accept ${id} --outcome cancelled`,
+    ]);
+    expect((await lines(["status", id], leadEnvironment)).at(-1)).toBe(
+      `next: waiting on ${supervisor.name}`,
+    );
+
+    await run(["work", "note", id, "needs a test", "--rework", "--json"], supervisorEnvironment);
+    const leadRework = await lines(["status", id], leadEnvironment);
+    expect(leadRework[3]).toBe(`note by ${supervisor.name}: needs a test`);
+    expect(leadRework.at(-1)).toBe(`next: work take ${id}`);
+    expect((await lines(["status"], supervisorEnvironment))[1]).toBe(
+      `  ${id} RETURNED hub-supervisor -> ${lead.name}: ${objective}`,
+    );
+
+    await run(["work", "take", id, "--json"], leadEnvironment);
+    await run(["work", "return", id, "result: with test", "--json"], leadEnvironment);
+    await run(["work", "accept", id, "--json"], supervisorEnvironment);
+    expect(await lines(["status"], leadEnvironment)).toEqual([
+      header("lead", lead),
+      "1 DONE; --all to list",
+      `decisions: d1 (${id})`,
+    ]);
+    expect(await lines(["status", "--all"], leadEnvironment)).toEqual([
+      header("lead", lead),
+      `  ${id} DONE hub-supervisor -> ${lead.name}: ${objective}`,
+      `decisions: d1 (${id})`,
+    ]);
+    const leadDone = await lines(["status", id], leadEnvironment);
+    expect(leadDone[3]).toBe(`acceptance by ${supervisor.name}: accepted`);
+    expect(leadDone.at(-1)).toBe("next: none (accepted)");
+
+    const teamJson = envelope<Record<string, unknown>>(
+      (await runCliAt(fixture, fixture.repo, ["status", "--json"], leadEnvironment)).stdout,
+    );
+    expect(Object.keys(teamJson).sort()).toEqual([
+      "generation",
+      "missingPanes",
+      "role",
+      "roles",
+      "runtime",
+      "teamId",
+      "watch",
+      "work",
+    ]);
+    expect(teamJson.work).toEqual([]);
+    const workJson = envelope<Record<string, unknown>>(
+      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], leadEnvironment)).stdout,
+    );
+    expect(Object.keys(workJson).sort()).toEqual([
+      "acceptance",
+      "decisions",
+      "notes",
+      "returns",
+      "work",
+    ]);
+  });
+}, 30_000);

@@ -48,7 +48,10 @@ After `maestro work return`, `maestro work accept`, and `maestro work note
 (`[from <role>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`);
 the store stays the truth and that line is only the wake-up. Hand-typed asks
 stay allowed: record first (a decision with `--work`, a note), then prompt the
-counterpart about the stored record.
+counterpart about the stored record. `maestro status` lists the team's non-DONE
+items with `*` on those waiting on you (a Peer sees only its own) and collapses
+DONE into a count that `--all` expands; `maestro status <work-id>` ends with a
+`next:` line naming what you may run on it.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->
