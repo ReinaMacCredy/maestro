@@ -146,6 +146,12 @@ function settled(agent: AgentRecord): boolean {
   return agent.agent_status === "idle" || agent.agent_status === "done";
 }
 
+function normalizeAcknowledgementLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[^\p{L}\p{N}]+(?=SLP_ROLE_READY(?:\s|$))/u, "");
+}
+
 function herdrErrorCode(error: unknown): string | null {
   if (!(error instanceof SlpRuntimeError) || !error.stderr) return null;
   try {
@@ -315,7 +321,7 @@ export class HerdrSlpRuntime {
     const lines = output
       .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
       .split(/\r?\n/)
-      .map((line) => line.trim());
+      .map(normalizeAcknowledgementLine);
     if (!lines.includes(contract.acknowledgement)) {
       throw new SlpRuntimeError(
         `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement`,

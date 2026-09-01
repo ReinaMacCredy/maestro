@@ -214,7 +214,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
   });
 });
 
-test("SLP v2 rejects an incorrect role acknowledgement before granting authority", async () => {
+test("SLP v2 accepts presentation-only markers before exact role acknowledgements", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -225,28 +225,111 @@ test("SLP v2 rejects an incorrect role acknowledgement before granting authority
         })
       ).exitCode,
     ).toBe(0);
-    const fake = await installFakeHerdr(fixture, { invalidAcknowledgements: true });
+    const fake = await installFakeHerdr(fixture, {
+      acknowledgementPrefixes: {
+        "team-supervisor": "⏺ ",
+        lead: "• ",
+        peer: "› ",
+      },
+    });
+
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Accept terminal presentation markers", "--json"],
+      fake.env,
+    );
+
+    expect(started.stderr).toBe("");
+    expect(started.exitCode).toBe(0);
+    const startData = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+    }>(started.stdout);
+    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor");
+    const lead = startData.team.roles.find((role) => role.role === "lead");
+    expect(supervisor).toBeDefined();
+    expect(lead).toBeDefined();
+
+    const delegated = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Check Peer acknowledgement marker", "--to", "peer-marker", "--json"],
+      { ...fake.env, HERDR_PANE_ID: lead?.paneId },
+    );
+
+    expect(delegated.stderr).toBe("");
+    expect(delegated.exitCode).toBe(0);
+    const delegatedData = envelope<{ role: { name: string } }>(delegated.stdout);
+    const runtime = await readFakeHerdrState(fake);
+    expect(runtime.outputs[supervisor?.name ?? ""]).toMatch(/^⏺ SLP_ROLE_READY /);
+    expect(runtime.outputs[lead?.name ?? ""]).toMatch(/^• SLP_ROLE_READY /);
+    expect(runtime.outputs[delegatedData.role.name]).toMatch(/^› SLP_ROLE_READY /);
+  });
+}, 15_000);
+
+test("SLP v2 rejects content before an otherwise exact role acknowledgement", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, {
+      acknowledgementPrefixes: { "team-supervisor": "answer: " },
+    });
 
     const failed = await runCliAt(
       fixture,
       room,
-      ["team", "start", fixture.repo, "Reject the wrong role acknowledgement", "--json"],
+      ["team", "start", fixture.repo, "Reject content before the acknowledgement", "--json"],
       fake.env,
     );
 
     expect(failed.exitCode).toBe(1);
     expect(failed.stderr).toContain("ROLE_ACKNOWLEDGEMENT_MISMATCH");
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
-    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
-      readonly: true,
-    });
-    expect(
-      projectDatabase.query<{ count: number }, []>(
-        "SELECT COUNT(*) AS count FROM slp_local_roles",
-      ).get()?.count,
-    ).toBe(0);
-    projectDatabase.close();
   });
+});
+
+test("SLP v2 rejects stale digest or challenge acknowledgements before granting authority", async () => {
+  for (const invalidAcknowledgementField of ["pack", "challenge"] as const) {
+    await withFixture(async (fixture) => {
+      const room = await scaffoldRoom(fixture.home);
+      expect(
+        (
+          await runCliAt(fixture, room, ["room", "mark"], {
+            MAESTRO_ROOM_SCAFFOLD: "1",
+            MAESTRO_SESSION_NONE: "1",
+          })
+        ).exitCode,
+      ).toBe(0);
+      const fake = await installFakeHerdr(fixture, { invalidAcknowledgementField });
+
+      const failed = await runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Reject the stale role acknowledgement", "--json"],
+        fake.env,
+      );
+
+      expect(failed.exitCode).toBe(1);
+      expect(failed.stderr).toContain("ROLE_ACKNOWLEDGEMENT_MISMATCH");
+      expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
+      const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+        readonly: true,
+      });
+      expect(
+        projectDatabase.query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_local_roles",
+        ).get()?.count,
+      ).toBe(0);
+      projectDatabase.close();
+    });
+  }
 });
 
 test("SLP v2 waits for newly created panes to become available shells", async () => {

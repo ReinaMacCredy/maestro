@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { Fixture } from "./helpers.ts";
 
 export interface FakeHerdrBehavior {
+  acknowledgementPrefixes?: Partial<Record<"team-supervisor" | "lead" | "peer", string>>;
   agentBusyAttempts?: number;
   agentStartDelayMs?: number;
   agents?: boolean;
@@ -11,7 +12,7 @@ export interface FakeHerdrBehavior {
   closeWorkspaceWithLastTab?: boolean;
   closeWorkspace?: boolean;
   failWorkspaceId?: string;
-  invalidAcknowledgements?: boolean;
+  invalidAcknowledgementField?: "challenge" | "pack";
   paneRunEmptyOutput?: boolean;
   processInfo?: boolean;
   processInfoDelayMs?: number;
@@ -358,18 +359,25 @@ if (command === "workspace list") {
       team && generation && role && instance && pack && brief &&
       challengeLeft && challengeRight
     ) {
-      state.outputs[name] = state.behavior.invalidAcknowledgements
-        ? "SLP_ROLE_READY invalid\\n"
-        : [
-          "SLP_ROLE_READY",
-          "team=" + team,
-          "generation=" + generation,
-          "role=" + role,
-          "instance=" + instance,
-          "pack=" + pack,
-          "brief=" + brief,
-          "challenge=" + challengeLeft + challengeRight,
-        ].join(" ") + "\\n";
+      const acknowledgement = [
+        "SLP_ROLE_READY",
+        "team=" + team,
+        "generation=" + generation,
+        "role=" + role,
+        "instance=" + instance,
+        "pack=" + pack,
+        "brief=" + brief,
+        "challenge=" + challengeLeft + challengeRight,
+      ];
+      if (state.behavior.invalidAcknowledgementField === "pack") {
+        acknowledgement[5] = "pack=" + "0".repeat(64);
+      }
+      if (state.behavior.invalidAcknowledgementField === "challenge") {
+        acknowledgement[7] = "challenge=" + "0".repeat(32);
+      }
+      state.outputs[name] =
+        (state.behavior.acknowledgementPrefixes?.[role] ?? "") +
+        acknowledgement.join(" ") + "\\n";
     }
     if (state.behavior.settleAgents !== false) {
       const agent = state.agents.find((candidate) => candidate.name === name);
