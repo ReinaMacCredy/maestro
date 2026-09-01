@@ -46,8 +46,13 @@ generation snapshot and durable records remain.
 
 ```sh
 cd ~/maestro
-maestro team stop <team-id> --emergency
+maestro team stop <team-id> --emergency --reason "<why this generation is abandoned>"
 ```
+
+Emergency stop keeps each unfinished item's existing four-state value and
+records immutable abandonment actor, reason, generation, and time metadata.
+Later generations neither inherit nor mutate those records. If `--reason` is
+omitted, Maestro records a generic Hub emergency reason.
 
 ### `status`
 
@@ -55,6 +60,9 @@ maestro team stop <team-id> --emergency
 maestro status
 maestro status <work-id>
 ```
+
+Hub status includes `abandonedWorkCount` per generation. Team work readback
+includes abandonment fields when present.
 
 Read-only and role-scoped. Hub sees team generations and counts; team roles see
 their team's actionable work; the work form includes notes, current return,

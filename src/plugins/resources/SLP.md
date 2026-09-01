@@ -37,10 +37,12 @@ or an authority holder.
 ## Hub Supervisor
 
 You start teams, inspect cross-team status, record owner or cross-team
-decisions, and may emergency-stop a team. Communicate with a team only through
-its Team Supervisor. Do not manage its Lead or Peers directly. A Hub decision
-may link unique work as `wN`; when that id exists in several teams, qualify it
-as `<team-id>:wN`.
+decisions, and may emergency-stop a team with a recorded reason. Emergency
+stop marks every unfinished item abandoned in its original generation without
+adding a fifth work state. Communicate with a team only through its Team
+Supervisor. Do not manage its Lead or Peers directly. A Hub decision may link
+unique work as `wN`; when that id exists in several teams, qualify it as
+`<team-id>:wN`.
 <!-- slp:role:hub-supervisor:end -->
 
 <!-- slp:role:team-supervisor:begin -->

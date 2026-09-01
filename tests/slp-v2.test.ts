@@ -2891,6 +2891,23 @@ test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", asyn
     projectAfterFailure.close();
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
 
+    const changedReason = await runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "stop",
+        started.team.teamId,
+        "--emergency",
+        "--reason",
+        "replace the already pinned reason",
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(changedReason.exitCode).toBe(1);
+    expect(JSON.parse(changedReason.stderr).error.code).toBe("EMERGENCY_REASON_CHANGED");
+
     const repairDatabase = new Database(roomDatabasePath);
     repairDatabase.exec("DROP TRIGGER reject_stop_finalization");
     repairDatabase.close();
@@ -3037,7 +3054,7 @@ test("SLP v2 stop excludes a late work mutation before committing STOPPED", asyn
   });
 }, 20_000);
 
-test("SLP v2 Hub emergency stop preserves active work and appends one emergency activity", async () => {
+test("SLP v2 Hub emergency stop abandons every unfinished item in its original generation", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -3056,25 +3073,71 @@ test("SLP v2 Hub emergency stop preserves active work and appends one emergency 
       fake.env,
     );
     const data = envelope<{
-      team: { roles: Array<{ paneId: string; role: string }>; teamId: string };
+      team: { generation: number; roles: Array<{ paneId: string; role: string }>; teamId: string };
       work: { id: string };
     }>(started.stdout);
     const leadPane = data.team.roles.find((role) => role.role === "lead")?.paneId;
+    const supervisorPane = data.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )?.paneId;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: leadPane };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisorPane };
     expect(
       (
         await runCliAt(
           fixture,
           fixture.repo,
           ["work", "take", data.work.id, "--json"],
-          { ...fake.env, HERDR_PANE_ID: leadPane },
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const openWork = envelope<{ work: { id: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "add", "Remain open during emergency", "--json"],
+          supervisorEnvironment,
+        )
+      ).stdout,
+    ).work;
+    const returnedWork = envelope<{ work: { id: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "add", "Return before emergency", "--json"],
+          supervisorEnvironment,
+        )
+      ).stdout,
+    ).work;
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", returnedWork.id, "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", returnedWork.id, "blocker: owner ended the generation", "--json"],
+          leadEnvironment,
         )
       ).exitCode,
     ).toBe(0);
 
+    const reason = "owner cancelled the generation after requirements changed";
     const stopped = await runCliAt(
       fixture,
       room,
-      ["team", "stop", data.team.teamId, "--emergency", "--json"],
+      ["team", "stop", data.team.teamId, "--emergency", "--reason", reason, "--json"],
       fake.env,
     );
     expect(stopped.stderr).toBe("");
@@ -3086,8 +3149,33 @@ test("SLP v2 Hub emergency stop preserves active work and appends one emergency 
     const project = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
     });
-    expect(project.query<{ state: string }, [string]>("SELECT state FROM slp_work WHERE id = ?").get(data.work.id)?.state)
-      .toBe("ACTIVE");
+    const abandoned = project
+      .query<{
+        abandoned_at: string;
+        abandoned_by: string;
+        abandonment_reason: string;
+        generation: number;
+        id: string;
+        state: string;
+      }, []>(
+        `SELECT id, generation, state, abandoned_at, abandoned_by, abandonment_reason
+         FROM slp_work ORDER BY id`,
+      )
+      .all();
+    expect(abandoned.map((work) => [work.id, work.state])).toEqual([
+      [data.work.id, "ACTIVE"],
+      [openWork.id, "OPEN"],
+      [returnedWork.id, "RETURNED"],
+    ]);
+    expect(
+      abandoned.every(
+        (work) =>
+          work.generation === data.team.generation &&
+          work.abandoned_by === "hub-supervisor" &&
+          work.abandonment_reason === reason &&
+          work.abandoned_at.length > 0,
+      ),
+    ).toBe(true);
     expect(
       project
         .query<{ count: number }, []>(
@@ -3099,6 +3187,48 @@ test("SLP v2 Hub emergency stop preserves active work and appends one emergency 
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toEqual([]);
     expect(runtime.panes).toEqual([]);
+    const stoppedStatus = envelope<{
+      teams: Array<{ abandonedWorkCount: number; generation: number }>;
+    }>((await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout);
+    expect(
+      stoppedStatus.teams.find((team) => team.generation === data.team.generation)
+        ?.abandonedWorkCount,
+    ).toBe(3);
+
+    const restarted = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Start a clean generation", "--json"],
+      fake.env,
+    );
+    expect(restarted.stderr).toBe("");
+    const restartedData = envelope<{
+      team: { generation: number; roles: Array<{ paneId: string; role: string }> };
+      work: { id: string };
+    }>(restarted.stdout);
+    expect(restartedData.team.generation).toBe(data.team.generation + 1);
+    expect([data.work.id, openWork.id, returnedWork.id]).not.toContain(restartedData.work.id);
+    const newLeadPane = restartedData.team.roles.find((role) => role.role === "lead")?.paneId;
+    const oldMutation = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", data.work.id, "mutate abandoned work", "--json"],
+      { ...fake.env, HERDR_PANE_ID: newLeadPane },
+    );
+    expect(oldMutation.exitCode).toBe(1);
+    expect(JSON.parse(oldMutation.stderr).error.code).toBe("NOT_FOUND");
+    const afterRestart = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      afterRestart
+        .query<{ count: number }, [number]>(
+          `SELECT COUNT(*) AS count FROM slp_work
+           WHERE generation = ? AND abandoned_at IS NOT NULL`,
+        )
+        .get(data.team.generation)?.count,
+    ).toBe(3);
+    afterRestart.close();
   });
 }, 20_000);
 

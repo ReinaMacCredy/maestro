@@ -158,12 +158,15 @@ A transient foreground non-agent helper pane in the Hub completes the
 self-closing sequence. Only a fully absent team workspace becomes `STOPPED`;
 a partial close stays `RUNNING` and the same stop command resumes cleanup. The
 project Workspace Pack snapshot and durable records remain. Emergency stop is
-Hub authority and preserves unfinished work in its current state:
+Hub authority and explicitly abandons unfinished work in its current state:
 
 ```sh
 cd ~/maestro
-maestro team stop example --emergency
+maestro team stop example --emergency --reason "owner cancelled this generation"
 ```
+
+Each unfinished record gains abandonment actor, reason, generation, and time;
+the next generation cannot inherit or mutate it.
 
 ## What not to do
 

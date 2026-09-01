@@ -157,11 +157,12 @@ cleanup. The pinned pack and durable records remain.
 Hub Supervisor performs emergency stop from `~/maestro`:
 
 ```sh
-maestro team stop <team-id> --emergency
+maestro team stop <team-id> --emergency --reason "<why this generation is abandoned>"
 ```
 
-Unfinished work keeps its current state, and the next start creates a new
-generation.
+Unfinished work keeps its current `OPEN`, `ACTIVE`, or `RETURNED` value and is
+marked abandoned with actor, reason, generation, and time. The next start
+creates new work in a new generation and cannot mutate the abandoned records.
 
 ## Hard cut from the previous SLP
 

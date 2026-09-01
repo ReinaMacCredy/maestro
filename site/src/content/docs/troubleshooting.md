@@ -122,8 +122,11 @@ and accept that work, or use the separately authorized Hub emergency stop:
 
 ```sh
 cd ~/maestro
-maestro team stop <team-id> --emergency
+maestro team stop <team-id> --emergency --reason "<why work is abandoned>"
 ```
+
+This keeps the four public work states and records explicit abandonment
+metadata on every unfinished item.
 
 ## Removed SLP commands
 

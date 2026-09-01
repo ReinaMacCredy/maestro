@@ -63,6 +63,7 @@ interface SlpLifecycleRow {
   pack_version: string;
   phase: LifecyclePhase;
   project_path: string;
+  reason: string;
   revision: number;
   runtime_json: string | null;
   team_id: string;
@@ -229,6 +230,7 @@ function migrateRoom(store: Store): void {
       workspace_id TEXT,
       runtime_json TEXT,
       actor TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
       emergency INTEGER NOT NULL CHECK(emergency IN (0, 1)),
       owner_token TEXT,
       owner_pid INTEGER,
@@ -254,6 +256,11 @@ function migrateRoom(store: Store): void {
     "slp_team_roles",
     "instance_id",
     "ALTER TABLE slp_team_roles ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''",
+  );
+  store.ensureColumn(
+    "slp_lifecycle_operations",
+    "reason",
+    "ALTER TABLE slp_lifecycle_operations ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
   );
   store.ensureColumn(
     "slp_team_roles",
@@ -312,6 +319,9 @@ function migrateProject(store: Store): void {
       state TEXT NOT NULL CHECK(state IN ('OPEN', 'ACTIVE', 'RETURNED', 'DONE')),
       current_return TEXT,
       return_revision INTEGER NOT NULL DEFAULT 0,
+      abandoned_at TEXT,
+      abandoned_by TEXT,
+      abandonment_reason TEXT,
       acceptance_outcome TEXT,
       accepted_by TEXT,
       created_at TEXT NOT NULL,
@@ -378,6 +388,7 @@ function migrateProject(store: Store): void {
       workspace_id TEXT,
       runtime_json TEXT,
       actor TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
       emergency INTEGER NOT NULL CHECK(emergency IN (0, 1)),
       owner_token TEXT,
       owner_pid INTEGER,
@@ -396,6 +407,26 @@ function migrateProject(store: Store): void {
     "slp_work",
     "return_revision",
     "ALTER TABLE slp_work ADD COLUMN return_revision INTEGER NOT NULL DEFAULT 0",
+  );
+  store.ensureColumn(
+    "slp_work",
+    "abandoned_at",
+    "ALTER TABLE slp_work ADD COLUMN abandoned_at TEXT",
+  );
+  store.ensureColumn(
+    "slp_work",
+    "abandoned_by",
+    "ALTER TABLE slp_work ADD COLUMN abandoned_by TEXT",
+  );
+  store.ensureColumn(
+    "slp_work",
+    "abandonment_reason",
+    "ALTER TABLE slp_work ADD COLUMN abandonment_reason TEXT",
+  );
+  store.ensureColumn(
+    "slp_lifecycle_operations",
+    "reason",
+    "ALTER TABLE slp_lifecycle_operations ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
   );
   store.ensureColumn(
     "slp_local_roles",
@@ -1371,6 +1402,9 @@ interface SlpActor {
 interface SlpWorkRow {
   acceptance_outcome: string | null;
   accepted_by: string | null;
+  abandoned_at: string | null;
+  abandoned_by: string | null;
+  abandonment_reason: string | null;
   assigned_to: string;
   created_at: string;
   created_by: string;
@@ -1507,6 +1541,9 @@ function workData(work: SlpWorkRow): Record<string, unknown> {
   return {
     acceptanceOutcome: work.acceptance_outcome,
     acceptedBy: work.accepted_by,
+    abandonedAt: work.abandoned_at,
+    abandonedBy: work.abandoned_by,
+    abandonmentReason: work.abandonment_reason,
     assignedTo: work.assigned_to,
     createdAt: work.created_at,
     createdBy: work.created_by,
@@ -2559,6 +2596,7 @@ function reserveStop(
     emergency: boolean;
     ownerToken: string;
     proxyToken: string | null;
+    reason: string;
   },
 ): StopReservation {
   return withImmediateTransaction(store, () => {
@@ -2620,19 +2658,36 @@ function reserveStop(
       ) {
         return { kind: "wait" };
       }
+      if (pending.emergency === 1 && !input.emergency) {
+        throw new CliError(
+          "TEAM_STOP_IN_PROGRESS",
+          `${team.team_id}:g${team.generation} is already under emergency stop`,
+        );
+      }
+      if (pending.emergency === 1 && pending.reason !== input.reason) {
+        throw new CliError(
+          "EMERGENCY_REASON_CHANGED",
+          `${team.team_id}:g${team.generation} emergency reason is already pinned`,
+          { reason: pending.reason },
+        );
+      }
+      const effectiveActor = pending.emergency === 1 ? pending.actor : actor;
+      const effectiveEmergency = pending.emergency === 1 || input.emergency;
+      const effectiveReason = pending.emergency === 1 ? pending.reason : input.reason;
       const now = new Date().toISOString();
       const claim = (table: string) =>
         store.database
           .query(
             `UPDATE ${table}
-             SET actor = ?, emergency = ?, owner_token = ?, owner_pid = ?,
+             SET actor = ?, reason = ?, emergency = ?, owner_token = ?, owner_pid = ?,
                  revision = revision + 1, updated_at = ?
              WHERE team_id = ? AND generation = ? AND operation = 'STOP'
                AND phase <> 'COMMITTED'`,
           )
           .run(
-            actor,
-            input.emergency ? 1 : 0,
+            effectiveActor,
+            effectiveReason,
+            effectiveEmergency ? 1 : 0,
             input.ownerToken,
             process.pid,
             now,
@@ -2667,6 +2722,7 @@ function reserveStop(
       "",
       team.workspace_id,
       actor,
+      input.reason,
       input.emergency ? 1 : 0,
       input.ownerToken,
       process.pid,
@@ -2679,9 +2735,9 @@ function reserveStop(
           `INSERT INTO ${table}
             (team_id, generation, operation, phase, revision, project_path,
              objective, configuration_json, pack_version, pack_digest, work_id,
-             workspace_id, actor, emergency, owner_token, owner_pid, created_at,
+             workspace_id, actor, reason, emergency, owner_token, owner_pid, created_at,
              updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(...values);
     insert("slp_lifecycle_operations");
@@ -2736,6 +2792,22 @@ function finalizeStop(
       );
     }
     const now = new Date().toISOString();
+    if (current.emergency === 1) {
+      store.database
+        .query(
+          `UPDATE slp_work
+           SET abandoned_at = ?, abandoned_by = ?, abandonment_reason = ?
+           WHERE team_id = ? AND generation = ? AND state <> 'DONE'
+             AND abandoned_at IS NULL`,
+        )
+        .run(
+          now,
+          current.actor,
+          current.reason,
+          current.team_id,
+          current.generation,
+        );
+    }
     const localTransition = store.database
       .query(
         `UPDATE slp_local_teams SET state = 'STOPPED'
@@ -2806,6 +2878,13 @@ async function stopTeam(
 ): Promise<CliResult> {
   const requestedTeam = requiredPosition(invocation, 0, "team id");
   const emergency = invocation.options.emergency === true;
+  const requestedReason = stringOption(invocation, "reason");
+  if (requestedReason !== undefined && !emergency) {
+    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
+  }
+  const emergencyReason = emergency
+    ? requestedReason ?? "Hub Supervisor emergency stop"
+    : "";
   const proxy = stopProxyEnvironment();
   if (!isRoom(context.store.database)) {
     if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper must run from its Hub");
@@ -2902,6 +2981,7 @@ async function stopTeam(
         emergency,
         ownerToken,
         proxyToken: proxy?.token ?? null,
+        reason: emergencyReason,
       });
       if (reservation.kind !== "wait") break;
       if (Date.now() >= deadline) {
@@ -3043,6 +3123,7 @@ export async function maybeHandleSlpStatus(
         runtimeState = "unavailable";
       }
       const counts: Record<WorkState, number> = { ACTIVE: 0, DONE: 0, OPEN: 0, RETURNED: 0 };
+      let abandonedWorkCount = 0;
       const projectStore = new Store(resolveStoreLocation(row.project_path).path, { readonly: true });
       try {
         if (tableExists(projectStore, "slp_work")) {
@@ -3054,11 +3135,26 @@ export async function maybeHandleSlpStatus(
             .all(row.team_id, row.generation)) {
             counts[count.state] = count.count;
           }
+          const hasAbandonment = projectStore.database
+            .query<{ present: number }, []>(
+              `SELECT 1 AS present FROM pragma_table_info('slp_work')
+               WHERE name = 'abandoned_at'`,
+            )
+            .get();
+          if (hasAbandonment) {
+            abandonedWorkCount = projectStore.database
+              .query<{ count: number }, [string, number]>(
+                `SELECT COUNT(*) AS count FROM slp_work
+                 WHERE team_id = ? AND generation = ? AND abandoned_at IS NOT NULL`,
+              )
+              .get(row.team_id, row.generation)?.count ?? 0;
+          }
         }
       } finally {
         projectStore.close();
       }
       teams.push({
+        abandonedWorkCount,
         generation: row.generation,
         missingPanes,
         packDigest: row.pack_digest,
@@ -3304,9 +3400,13 @@ export const slpV2Plugin: BuiltInPlugin = {
         "team stop",
         (invocation): Promise<CliResult> => stopTeam(context, runtime, invocation),
         {
-          description: "Stop one SLP team after work completes, or emergency-stop it from Hub.",
+          description: "Stop one complete SLP team, or abandon unfinished work from Hub.",
           flags: {
-            "--emergency": { description: "Use Hub owner authority and preserve unfinished work." },
+            "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
+            "--reason": {
+              description: "Record why unfinished work is abandoned by emergency stop.",
+              value: true,
+            },
           },
           json: true,
           positionals: [{ name: "team-id", required: true }],

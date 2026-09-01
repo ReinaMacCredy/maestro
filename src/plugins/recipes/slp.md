@@ -121,7 +121,9 @@ this self-closing sequence to one transient foreground non-agent helper pane
 in the Hub; this adds no role or public operation. The team becomes `STOPPED`
 only after the workspace is absent. A partial close leaves it `RUNNING`, and
 repeating the same stop continues cleanup. Hub may use
-`maestro team stop <team-id> --emergency`; unfinished work retains its state.
+`maestro team stop <team-id> --emergency --reason "<why>"`; unfinished work
+retains its four-state value but gains immutable abandonment actor, reason,
+generation, and time metadata.
 
 The project pack snapshot and durable stores remain after stop. Chat and raw
 transcript do not become authority; record material changes with
