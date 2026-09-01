@@ -401,6 +401,51 @@ test("SLP v2 retries a transient contract prompt stall without restarting roles"
   });
 });
 
+test("SLP v2 waits for an agent_not_ready launch without restarting the agent", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { codexNotReadyAttempts: 1 });
+
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Wait for the launched Codex role", "--json"],
+      fake.env,
+    );
+
+    expect(started.stderr).toBe("");
+    expect(started.exitCode).toBe(0);
+    const commands = await fakeHerdrCommands(fake);
+    const startIndex = commands.findIndex(
+      (command) =>
+        command[0] === "agent" && command[1] === "start" && command.includes("codex"),
+    );
+    const promptIndex = commands.findIndex(
+      (command) =>
+        command[0] === "agent" && command[1] === "prompt" && command[2]?.startsWith("lead-"),
+    );
+    expect(
+      commands.filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "start" && command.includes("codex"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      commands.slice(startIndex + 1, promptIndex).some(
+        (command) => command[0] === "agent" && command[1] === "list",
+      ),
+    ).toBe(true);
+  });
+});
+
 test("SLP v2 gives Herdr agent startup its own bounded readiness window", async () => {
   await withFixture(async (fixture) => {
     const fake = await installFakeHerdr(fixture, { agentStartDelayMs: 1_500 });

@@ -11,6 +11,7 @@ export interface FakeHerdrBehavior {
   closeResources?: boolean;
   closeWorkspaceWithLastTab?: boolean;
   closeWorkspace?: boolean;
+  codexNotReadyAttempts?: number;
   failWorkspaceId?: string;
   invalidAcknowledgementField?: "challenge" | "pack";
   paneRunEmptyOutput?: boolean;
@@ -324,6 +325,20 @@ if (command === "workspace list") {
         args: [kind],
       }],
     };
+  }
+  if (kind === "codex" && (state.behavior.codexNotReadyAttempts ?? 0) > 0) {
+    state.behavior.codexNotReadyAttempts -= 1;
+    const agent = state.agents.find((candidate) => candidate.name === name);
+    if (agent) agent.agent_status = "idle";
+    await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    process.stderr.write(JSON.stringify({
+      id: "cli:agent:start",
+      error: {
+        code: "agent_not_ready",
+        message: "agent " + name + " is blocked during startup and is not ready for prompts",
+      },
+    }) + "\\n");
+    process.exit(1);
   }
   await respond({ accepted, name, pane_id: paneId });
 } else if (command === "agent prompt") {

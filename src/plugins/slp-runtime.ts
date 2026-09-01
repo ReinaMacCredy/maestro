@@ -381,7 +381,33 @@ export class HerdrSlpRuntime {
       try {
         return await this.command(args, plan.projectPath, Math.max(this.commandTimeoutMs, 75_000));
       } catch (error) {
-        if (herdrErrorCode(error) !== "agent_pane_busy") throw error;
+        const errorCode = herdrErrorCode(error);
+        if (errorCode === "agent_not_ready") {
+          const name = args[2];
+          const paneOption = args.indexOf("--pane");
+          const paneId = paneOption >= 0 ? args[paneOption + 1] : undefined;
+          if (!name || !paneId) throw error;
+          while (true) {
+            const matches = (await this.agents(plan)).filter((agent) => agent.name === name);
+            if (
+              matches.length === 1 &&
+              matches[0]?.pane_id === paneId &&
+              settled(matches[0])
+            ) {
+              return { result: { accepted: true, name } };
+            }
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) {
+              throw new SlpRuntimeError(
+                `agent ${name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
+                args,
+                error instanceof SlpRuntimeError ? error.stderr : undefined,
+              );
+            }
+            await Bun.sleep(Math.min(100, remaining));
+          }
+        }
+        if (errorCode !== "agent_pane_busy") throw error;
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new SlpRuntimeError(
