@@ -53,7 +53,11 @@ its contract, normally under a minute, and print their phases on stderr
 re-run either while it is still running. Every pane must already trust the
 project directory: the first start in a fresh directory fails with
 `TRUST_DIALOG` naming the harness and directory. Open that directory once with
-that harness, accept its trust dialog, and rerun.
+that harness, accept its trust dialog, and rerun. Repeating the same
+`team start` against a running generation touches only what is missing: roles
+whose pane is still alive are left alone (`already acknowledged in <pane>; left
+alone`), closed panes are reopened and acknowledged again, and the START record
+in both stores is refreshed to the current pane ids.
 
 The printed result contains the team generation and initial work ID. The Lead
 takes that work from its own pane:

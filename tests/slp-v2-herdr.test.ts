@@ -20,7 +20,7 @@ const roleCommandRunner = join(import.meta.dir, "slp-role-command.ts");
 const watchOpener = join(import.meta.dir, "slp-open-watch.ts");
 
 const runtimePhaseLine =
-  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s)$/;
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|already acknowledged in \S+; left alone)$/;
 
 // Runtime phase lines (d757) are progress, not failures.
 function phaseFree(stderr: string): string {

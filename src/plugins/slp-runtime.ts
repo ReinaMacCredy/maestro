@@ -51,6 +51,11 @@ export interface SlpRuntimeRole {
   workspaceId: string;
 }
 
+export type SlpAcknowledgedRole = Pick<
+  SlpRuntimeRole,
+  "briefDigest" | "instanceId" | "packDigest" | "paneId" | "readyChallenge"
+>;
+
 export interface SlpRuntimeStart {
   createdTabIds: string[];
   createdWorkspace: boolean;
@@ -626,9 +631,11 @@ export class HerdrSlpRuntime {
   async start(
     plan: SlpTeamPlan,
     contracts: ReadonlyMap<SlpRole, SlpRoleContract>,
+    acknowledged: ReadonlyMap<SlpRole, SlpAcknowledgedRole> = new Map(),
   ): Promise<SlpRuntimeStart> {
     const createdTabIds: string[] = [];
     const startedPaneIds: string[] = [];
+    const reused = new Map<SlpRole, SlpAcknowledgedRole>();
     let createdWorkspace = false;
     let workspaceId: string | null = null;
     try {
@@ -676,6 +683,16 @@ export class HerdrSlpRuntime {
           );
         }
         let paneId = workspaceMatches[0]?.pane_id ?? null;
+        const contract = contracts.get(role.role);
+        if (!contract) {
+          throw new SlpRuntimeError(`missing role contract: ${role.role}`, ["agent", "prompt"]);
+        }
+        const prior = acknowledged.get(role.role);
+        if (paneId && prior && prior.paneId === paneId && prior.instanceId === contract.instanceId) {
+          reused.set(role.role, prior);
+          this.note(`${role.name}: already acknowledged in ${paneId}; left alone`);
+          continue;
+        }
         if (!paneId) {
           const matchingTabs = (await this.tabs(plan, workspaceId)).filter(
             (tab) => tab.label === role.label,
@@ -730,10 +747,6 @@ export class HerdrSlpRuntime {
             throw new SlpRuntimeError(`role did not start: ${role.name}`, args);
           }
         }
-        const contract = contracts.get(role.role);
-        if (!contract) {
-          throw new SlpRuntimeError(`missing role contract: ${role.role}`, ["agent", "prompt"]);
-        }
         this.note(
           `${role.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
         );
@@ -759,7 +772,7 @@ export class HerdrSlpRuntime {
         this.note(`${role.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
 
-      const roles = await this.inspectRequired(plan, workspaceId, contracts);
+      const roles = await this.inspectRequired(plan, workspaceId, contracts, reused);
       return { createdTabIds, createdWorkspace, roles, startedPaneIds, workspaceId };
     } catch (error) {
       await this.rollback(plan, { createdTabIds, createdWorkspace, startedPaneIds, workspaceId });
@@ -771,6 +784,7 @@ export class HerdrSlpRuntime {
     plan: SlpTeamPlan,
     workspaceId: string,
     contracts: ReadonlyMap<SlpRole, SlpRoleContract>,
+    reused: ReadonlyMap<SlpRole, SlpAcknowledgedRole>,
   ): Promise<SlpRuntimeRole[]> {
     const panes = await this.panes(plan, workspaceId);
     const paneIds = new Set(panes.flatMap((pane) => pane.pane_id ? [pane.pane_id] : []));
@@ -783,7 +797,8 @@ export class HerdrSlpRuntime {
       if (matches.length !== 1 || !matches[0]?.pane_id || !paneIds.has(matches[0].pane_id)) {
         throw new SlpRuntimeError(`role is not uniquely attached: ${role.name}`, ["agent", "list"]);
       }
-      if (!settled(matches[0])) {
+      const identity = reused.get(role.role);
+      if (!identity && !settled(matches[0])) {
         throw new SlpRuntimeError(`role is not ready: ${role.name}`, ["agent", "list"]);
       }
       const paneId = matches[0].pane_id;
@@ -799,13 +814,14 @@ export class HerdrSlpRuntime {
       if (!contract) {
         throw new SlpRuntimeError(`missing role contract: ${role.role}`, ["agent", "read", role.name]);
       }
+      const source = identity ?? contract;
       roles.push({
-        briefDigest: contract.briefDigest,
-        instanceId: contract.instanceId,
+        briefDigest: source.briefDigest,
+        instanceId: source.instanceId,
         name: role.name,
-        packDigest: contract.packDigest,
+        packDigest: source.packDigest,
         paneId,
-        readyChallenge: contract.readyChallenge,
+        readyChallenge: source.readyChallenge,
         role: role.role,
         workspaceId,
       });
@@ -817,6 +833,7 @@ export class HerdrSlpRuntime {
     plan: SlpTeamPlan,
     peer: SlpRolePlan,
     contract: SlpRoleContract,
+    acknowledged: SlpAcknowledgedRole | null = null,
   ): Promise<SlpRuntimePeer> {
     const startedAt = Date.now();
     const matchingWorkspaces = (await this.workspaces(plan)).filter(
@@ -840,6 +857,23 @@ export class HerdrSlpRuntime {
     let paneId = workspaceMatches[0]?.pane_id ?? null;
     let createdTabId: string | null = null;
     let startedPaneId: string | null = null;
+    if (paneId && acknowledged && acknowledged.paneId === paneId) {
+      this.note(`${peer.name}: already acknowledged in ${paneId}; left alone`);
+      return {
+        createdTabId: null,
+        role: {
+          briefDigest: acknowledged.briefDigest,
+          instanceId: acknowledged.instanceId,
+          name: peer.name,
+          packDigest: acknowledged.packDigest,
+          paneId,
+          readyChallenge: acknowledged.readyChallenge,
+          role: "peer",
+          workspaceId,
+        },
+        startedPaneId: null,
+      };
+    }
     try {
       if (!paneId) {
         const matchingTabs = (await this.tabs(plan, workspaceId)).filter(

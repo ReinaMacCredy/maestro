@@ -17,6 +17,7 @@ import {
   buildSlpTeamPlan,
   HerdrSlpRuntime,
   slpStopEnvironment,
+  type SlpAcknowledgedRole,
   type SlpRole,
   type SlpRoleContract,
   type SlpRolePlan,
@@ -1061,6 +1062,33 @@ function recordStartRuntimeReady(
   });
 }
 
+function refreshStartRuntime(
+  store: Store,
+  row: Pick<SlpLifecycleRow, "generation" | "team_id">,
+  ownerToken: string,
+  started: SlpRuntimeStart,
+  now: string,
+): void {
+  const runtimeJson = JSON.stringify(started.roles);
+  const update = (table: string) =>
+    store.database
+      .query(
+        `UPDATE ${table}
+         SET workspace_id = ?, runtime_json = ?, revision = revision + 1, updated_at = ?
+         WHERE team_id = ? AND generation = ? AND operation = 'START'
+           AND owner_token = ? AND phase = 'COMMITTED'`,
+      )
+      .run(started.workspaceId, runtimeJson, now, row.team_id, row.generation, ownerToken);
+  const local = update("slp_lifecycle_operations");
+  const room = update("slp_room.slp_lifecycle_operations");
+  if (local.changes !== 1 || room.changes !== 1) {
+    throw new CliError(
+      "SLP_LIFECYCLE_CHANGED",
+      `${row.team_id}:g${row.generation} changed before its runtime snapshot could be refreshed`,
+    );
+  }
+}
+
 function upsertStartedRoles(
   store: Store,
   table: "slp_local_roles" | "slp_room.slp_team_roles",
@@ -1328,15 +1356,35 @@ async function startTeam(
           supervisorModel: models.teamSupervisor,
           teamId: running.team_id,
         });
+        const recorded = projectStore.database
+          .query<{
+            brief_digest: string;
+            instance_id: string;
+            pack_digest: string;
+            pane_id: string;
+            ready_challenge: string;
+            role: SlpRole;
+          }, [string, number]>(
+            `SELECT role, pane_id, instance_id, pack_digest, brief_digest, ready_challenge
+             FROM slp_local_roles
+             WHERE team_id = ? AND generation = ? AND instance_id <> ''
+               AND role IN ('team-supervisor', 'lead')`,
+          )
+          .all(running.team_id, running.generation);
         const existingInstances = Object.fromEntries(
-          projectStore.database
-            .query<{ instance_id: string; role: SlpRole }, [string, number]>(
-              `SELECT role, instance_id FROM slp_local_roles
-               WHERE team_id = ? AND generation = ? AND instance_id <> ''`,
-            )
-            .all(running.team_id, running.generation)
-            .map((row) => [row.role, row.instance_id]),
+          recorded.map((row) => [row.role, row.instance_id]),
         ) as Partial<Record<SlpRole, string>>;
+        const acknowledged = new Map<SlpRole, SlpAcknowledgedRole>(
+          recorded
+            .filter((row) => row.pane_id !== "" && row.ready_challenge !== "")
+            .map((row) => [row.role, {
+              briefDigest: row.brief_digest,
+              instanceId: row.instance_id,
+              packDigest: row.pack_digest,
+              paneId: row.pane_id,
+              readyChallenge: row.ready_challenge,
+            }]),
+        );
         const started = await runtime.start(
           plan,
           roleContracts(
@@ -1346,6 +1394,7 @@ async function startTeam(
             running.pack_digest,
             existingInstances,
           ),
+          acknowledged,
         );
         try {
           const work = withImmediateTransaction(projectStore, () => {
@@ -1377,6 +1426,7 @@ async function startTeam(
               started.roles,
               now,
             );
+            refreshStartRuntime(projectStore, reservation.operation, ownerToken, started, now);
             const initial = initialWorkRow(projectStore, running.team_id, running.generation);
             if (!initial) {
               throw new CliError(
@@ -1839,6 +1889,7 @@ export async function maybeHandleSlpWorkAdd(
       name: peerName,
       role: "peer",
     };
+    const knownPeer = roles.find((role) => role.name === peerName) ?? null;
     const ensured = await runtime.ensurePeer(
       plan,
       peerPlan,
@@ -1848,6 +1899,15 @@ export async function maybeHandleSlpWorkAdd(
         actor.team.generation,
         digest,
       ).get("peer") as SlpRoleContract,
+      knownPeer && knownPeer.ready_challenge !== ""
+        ? {
+          briefDigest: knownPeer.brief_digest,
+          instanceId: knownPeer.instance_id,
+          packDigest: knownPeer.pack_digest,
+          paneId: knownPeer.pane_id,
+          readyChallenge: knownPeer.ready_challenge,
+        }
+        : null,
     );
     createdPeerTab = ensured.createdTabId;
     startedPeerPane = ensured.startedPaneId;

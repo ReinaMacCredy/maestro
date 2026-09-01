@@ -31,7 +31,7 @@ function envelope<T>(stdout: string): T {
 }
 
 const runtimePhaseLine =
-  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s)$/;
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|already acknowledged in \S+; left alone)$/;
 
 // Runtime phase lines (d757) are progress, not failures.
 function phaseFree(stderr: string): string {
@@ -961,9 +961,14 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     expect(repeatedData.team.roles.map((role) => [role.role, role.instanceId])).toEqual(
       firstData.team.roles.map((role) => [role.role, role.instanceId]),
     );
-    expect(repeatedData.team.roles.map((role) => role.readyChallenge)).not.toEqual(
+    expect(repeatedData.team.roles.map((role) => role.readyChallenge)).toEqual(
       firstData.team.roles.map((role) => role.readyChallenge),
     );
+    const prompts = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) => command[0] === "agent" && command[1] === "prompt",
+      );
+    expect(await prompts()).toHaveLength(2);
     let runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
@@ -995,6 +1000,27 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
     expect(runtime.agents.filter((agent: { name: string }) => agent.name.startsWith("lead-"))).toHaveLength(1);
+    const repairPrompts = await prompts();
+    expect(repairPrompts).toHaveLength(3);
+    expect(repairPrompts[2]?.[2]).toBe(lead.name);
+    const repairedData = envelope<{
+      team: { roles: Array<{ paneId: string; readyChallenge: string; role: string }>; teamId: string };
+    }>(repaired.stdout);
+    expect(repairedData.team.roles.find((role) => role.role === "team-supervisor")?.readyChallenge).toBe(
+      firstData.team.roles.find((role) => role.role === "team-supervisor")?.readyChallenge,
+    );
+    const newLead = runtime.agents.find((agent: { name: string }) => agent.name.startsWith("lead-"));
+    for (const storePath of [join(room, ".maestro", "maestro.db"), join(fixture.repo, ".maestro", "maestro.db")]) {
+      const database = new Database(storePath, { readonly: true });
+      const startRow = database
+        .query<{ revision: number; runtime_json: string }, [string]>(
+          "SELECT revision, runtime_json FROM slp_lifecycle_operations WHERE operation = 'START' AND team_id = ?",
+        )
+        .get(repairedData.team.teamId);
+      database.close();
+      const snapshot = JSON.parse(startRow?.runtime_json ?? "[]") as Array<{ paneId: string; role: string }>;
+      expect(snapshot.find((role) => role.role === "lead")?.paneId).toBe(newLead.pane_id);
+    }
   });
 });
 
@@ -2241,6 +2267,7 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
       role: { name: string; role: string };
       work: { assignedTo: string; id: string; state: string };
     }>(first.stdout);
+    const peerName = firstData.role.name;
     expect(firstData.role).toMatchObject({ name: expect.stringMatching(/^peer-design-/), role: "peer" });
     expect(firstData.work).toMatchObject({ assignedTo: firstData.role.name, state: "OPEN" });
 
@@ -2259,6 +2286,11 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
     expect(secondData.role).toEqual(firstData.role);
     expect(secondData.work).toMatchObject({ assignedTo: firstData.role.name, state: "OPEN" });
     expect(secondData.work.id).not.toBe(firstData.work.id);
+    const peerPrompts = (await fakeHerdrCommands(fake)).filter(
+      (command) =>
+        command[0] === "agent" && command[1] === "prompt" && command[2] === peerName,
+    );
+    expect(peerPrompts).toHaveLength(1);
 
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
