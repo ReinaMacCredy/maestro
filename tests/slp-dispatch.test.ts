@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import {
@@ -8,6 +8,8 @@ import {
   withFixture,
   type Fixture,
 } from "./helpers.ts";
+
+setDefaultTimeout(15_000);
 
 function session(id: string): Record<string, string> {
   return {
@@ -1919,7 +1921,7 @@ test("421 HANDBACK_UNREVIEWED branches by request status while DONE stays unchan
       expect(packet).toContain("attention HANDBACK_UNREVIEWED dispatch");
     }
   });
-}, 15_000);
+});
 
 test("326 a start rejected by a gate leaves atomic_reason untouched", async () => {
   await withFixture(async (fixture) => {
