@@ -23,8 +23,10 @@ blocker: <if present>
 residual risk: <if present>
 ```
 
-`work note` preserves a material fact or acceptance change without adding a
-new state. The reviewer accepts at the boundary above the worker.
+The objective and acceptance contract are immutable. `work note` preserves
+context without changing either one. Changed scope requires a new work item;
+the reviewer may cancel the superseded `OPEN` or `RETURNED` item. The reviewer
+accepts at the boundary above the worker.
 
 ## Decisions are settled in one write
 

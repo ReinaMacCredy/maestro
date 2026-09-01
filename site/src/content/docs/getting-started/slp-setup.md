@@ -70,14 +70,14 @@ what detects drift.
 Durable state is intentionally small:
 
 - current team generation and role binding;
-- work objectives, states, notes, returns and acceptances;
+- immutable work objectives and acceptance contracts, states, notes, returns and acceptances;
 - immutable decisions and their replacements;
 - lifecycle state and minimal `who did what to which target and when` activity;
 - the pinned Workspace Pack snapshot.
 
-Chat and raw transcript are not durable authority. A material objective,
-acceptance or decision change must be recorded with `work note` or `decide`
-before it governs work.
+Chat and raw transcript are not durable authority. Notes preserve context but
+cannot change a work objective or acceptance contract. Changed scope requires
+new work; settled choices are recorded with `decide` before they govern work.
 
 ## What is temporary
 

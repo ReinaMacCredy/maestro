@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Fixture } from "./helpers.ts";
@@ -35,6 +36,25 @@ const args = Bun.argv.slice(2);
 const statePath = Bun.env.FAKE_HERDR_STATE;
 const logPath = Bun.env.FAKE_HERDR_LOG;
 if (!statePath || !logPath) throw new Error("fake Herdr paths are required");
+const stateLock = new Database(statePath + ".lock.sqlite");
+stateLock.exec("PRAGMA busy_timeout = 300000");
+stateLock.exec("CREATE TABLE IF NOT EXISTS state_lock (id INTEGER PRIMARY KEY)");
+let stateLockHeld = false;
+const acquireStateLock = () => {
+  if (stateLockHeld) return;
+  stateLock.exec("BEGIN IMMEDIATE");
+  stateLockHeld = true;
+};
+const releaseStateLock = () => {
+  if (!stateLockHeld) return;
+  stateLock.exec("COMMIT");
+  stateLockHeld = false;
+};
+process.on("exit", () => {
+  try { releaseStateLock(); } catch {}
+  try { stateLock.close(); } catch {}
+});
+acquireStateLock();
 await appendFile(logPath, JSON.stringify(args) + "\\n");
 let state = JSON.parse(await readFile(statePath, "utf8"));
 const value = (name) => {
@@ -179,6 +199,7 @@ if (command === "workspace list") {
     }
     const childCommand = runArgs.slice(commandIndex);
     await writeFile(statePath, JSON.stringify(state, null, 2) + "\\n");
+    releaseStateLock();
     const child = Bun.spawn(childCommand, {
       cwd: target?.cwd,
       env: {
@@ -195,6 +216,7 @@ if (command === "workspace list") {
       new Response(child.stderr).text(),
       child.exited,
     ]);
+    acquireStateLock();
     state = JSON.parse(await readFile(statePath, "utf8"));
     if (exitCode !== 0) {
       process.stderr.write(stderr || stdout || "stop helper failed\\n");
@@ -433,28 +455,57 @@ export async function fakeHerdrCommands(fake: FakeHerdrFixture): Promise<string[
     : content.trim().split("\n").map((line) => JSON.parse(line) as string[]);
 }
 
+async function withFakeHerdrStateLock<T>(
+  fake: FakeHerdrFixture,
+  action: () => Promise<T>,
+): Promise<T> {
+  const lock = new Database(`${fake.state}.lock.sqlite`);
+  lock.exec("PRAGMA busy_timeout = 300000");
+  lock.exec("CREATE TABLE IF NOT EXISTS state_lock (id INTEGER PRIMARY KEY)");
+  lock.exec("BEGIN IMMEDIATE");
+  try {
+    const result = await action();
+    lock.exec("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      lock.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  } finally {
+    lock.close();
+  }
+}
+
 export async function setFakeHerdrBehavior(
   fake: FakeHerdrFixture,
   behavior: FakeHerdrBehavior,
 ): Promise<void> {
-  const state = JSON.parse(await readFile(fake.state, "utf8")) as {
-    behavior: FakeHerdrBehavior;
-  };
-  state.behavior = { ...state.behavior, ...behavior };
-  await writeFile(fake.state, `${JSON.stringify(state, null, 2)}\n`);
+  await withFakeHerdrStateLock(fake, async () => {
+    const state = JSON.parse(await readFile(fake.state, "utf8")) as {
+      behavior: FakeHerdrBehavior;
+    };
+    state.behavior = { ...state.behavior, ...behavior };
+    await writeFile(fake.state, `${JSON.stringify(state, null, 2)}\n`);
+  });
 }
 
 export async function editFakeHerdrState(
   fake: FakeHerdrFixture,
   edit: (state: Record<string, unknown>) => void,
 ): Promise<void> {
-  const state = JSON.parse(await readFile(fake.state, "utf8")) as Record<string, unknown>;
-  edit(state);
-  await writeFile(fake.state, `${JSON.stringify(state, null, 2)}\n`);
+  await withFakeHerdrStateLock(fake, async () => {
+    const state = JSON.parse(await readFile(fake.state, "utf8")) as Record<string, unknown>;
+    edit(state);
+    await writeFile(fake.state, `${JSON.stringify(state, null, 2)}\n`);
+  });
 }
 
 export async function readFakeHerdrState(
   fake: FakeHerdrFixture,
 ): Promise<Record<string, any>> {
-  return JSON.parse(await readFile(fake.state, "utf8")) as Record<string, any>;
+  return withFakeHerdrStateLock(
+    fake,
+    async () => JSON.parse(await readFile(fake.state, "utf8")) as Record<string, any>,
+  );
 }

@@ -97,7 +97,9 @@ maestro work note <work-id> "<specific gap>" --rework
 
 Appends context without changing state. `--rework` is restricted to the
 reviewer responsible for that return. It grants the same assignee one retake
-of the current return revision; an ordinary note never grants a retake.
+of the current return revision; an ordinary note never grants a retake. Neither
+form can change the work objective or acceptance contract. Changed scope is
+new work.
 
 ### `work return`
 

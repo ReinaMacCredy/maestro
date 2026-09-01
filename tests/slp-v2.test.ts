@@ -412,7 +412,7 @@ test("SLP v2 canonicalizes a project subdirectory to its checkout root", async (
   });
 }, 20_000);
 
-test("SLP v2 isolates generations and role lookup between linked worktree checkouts", async () => {
+test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves the other running", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     const linked = join(fixture.root, "linked");
@@ -427,23 +427,53 @@ test("SLP v2 isolates generations and role lookup between linked worktree checko
       ).exitCode,
     ).toBe(0);
     const fake = await installFakeHerdr(fixture);
+    const [firstResult, secondResult] = await Promise.all([
+      runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Main checkout team", "--json"],
+        fake.env,
+      ),
+      runCliAt(
+        fixture,
+        room,
+        ["team", "start", linked, "Linked checkout team", "--json"],
+        fake.env,
+      ),
+    ]);
+    expect([firstResult, secondResult].map((result) => ({
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+    }))).toEqual([
+      { exitCode: 0, stderr: "" },
+      { exitCode: 0, stderr: "" },
+    ]);
     const first = envelope<{
-      team: { roles: Array<{ paneId: string; role: string }>; teamId: string };
-    }>((await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Main checkout team", "--json"],
-      fake.env,
-    )).stdout);
+      team: {
+        packDigest: string;
+        projectPath: string;
+        roles: Array<{ paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(firstResult.stdout);
     const second = envelope<{
-      team: { roles: Array<{ paneId: string; role: string }>; teamId: string };
-    }>((await runCliAt(
-      fixture,
-      room,
-      ["team", "start", linked, "Linked checkout team", "--json"],
-      fake.env,
-    )).stdout);
+      team: {
+        packDigest: string;
+        projectPath: string;
+        roles: Array<{ paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(secondResult.stdout);
     expect(first.team.teamId).not.toBe(second.team.teamId);
+    expect(first.work.id).not.toBe(second.work.id);
+    expect(first.team.projectPath).toBe(realpathSync.native(fixture.repo));
+    expect(second.team.projectPath).toBe(realpathSync.native(linked));
+    expect(first.team.packDigest).toBe(second.team.packDigest);
+    expect(await readFile(join(fixture.repo, ".maestro", "SLP.md"))).toEqual(
+      await readFile(join(linked, ".maestro", "SLP.md")),
+    );
     const firstLead = first.team.roles.find((role) => role.role === "lead")!;
     const secondLead = second.team.roles.find((role) => role.role === "lead")!;
 
@@ -467,6 +497,135 @@ test("SLP v2 isolates generations and role lookup between linked worktree checko
     );
     expect(crossed.exitCode).toBe(1);
     expect(JSON.parse(crossed.stderr).error.code).toBe("ROLE_UNPROVEN");
+    const [firstDecision, secondDecision] = await Promise.all([
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["decide", "Main checkout choice", "--why", "main checkout evidence", "--json"],
+        { ...fake.env, HERDR_PANE_ID: firstLead.paneId },
+      ),
+      runCliAt(
+        fixture,
+        linked,
+        ["decide", "Linked checkout choice", "--why", "linked checkout evidence", "--json"],
+        { ...fake.env, HERDR_PANE_ID: secondLead.paneId },
+      ),
+    ]);
+    expect([firstDecision, secondDecision].map((result) => result.exitCode)).toEqual([0, 0]);
+    expect(
+      new Set(
+        [firstDecision, secondDecision].map(
+          (result) => envelope<{ decision: { id: string } }>(result.stdout).decision.id,
+        ),
+      ).size,
+    ).toBe(2);
+
+    const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      roomDatabase
+        .query<{ project_path: string; state: string; team_id: string }, []>(
+          "SELECT team_id, project_path, state FROM slp_teams ORDER BY project_path",
+        )
+        .all(),
+    ).toEqual([
+      { project_path: first.team.projectPath, state: "RUNNING", team_id: first.team.teamId },
+      { project_path: second.team.projectPath, state: "RUNNING", team_id: second.team.teamId },
+    ].toSorted((left, right) => left.project_path.localeCompare(right.project_path)));
+    roomDatabase.close();
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      projectDatabase
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_teams")
+        .get()?.count,
+    ).toBe(2);
+    expect(
+      projectDatabase
+        .query<{ id: string; team_id: string }, []>(
+          "SELECT id, team_id FROM slp_work ORDER BY id",
+        )
+        .all(),
+    ).toEqual([
+      { id: first.work.id, team_id: first.team.teamId },
+      { id: second.work.id, team_id: second.team.teamId },
+    ].toSorted((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true })));
+    expect(
+      projectDatabase
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_roles")
+        .get()?.count,
+    ).toBe(4);
+    expect(
+      projectDatabase
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_decisions")
+        .get()?.count,
+    ).toBe(2);
+    expect(
+      projectDatabase
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_lifecycle_operations WHERE operation = 'START'",
+        )
+        .get()?.count,
+    ).toBe(2);
+    projectDatabase.close();
+    const runtimeBeforeStop = await readFakeHerdrState(fake);
+    expect(runtimeBeforeStop.workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cwd: first.team.projectPath }),
+        expect.objectContaining({ cwd: second.team.projectPath }),
+      ]),
+    );
+    expect(runtimeBeforeStop.agents).toHaveLength(4);
+
+    const stoppedFirst = await runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "stop",
+        first.team.teamId,
+        "--emergency",
+        "--reason",
+        "prove linked-worktree stop isolation",
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(stoppedFirst.exitCode).toBe(0);
+    const secondStillRunning = await runCliAt(
+      fixture,
+      linked,
+      ["status", "--json"],
+      { ...fake.env, HERDR_PANE_ID: secondLead.paneId },
+    );
+    expect(secondStillRunning.exitCode).toBe(0);
+    expect(envelope<{ runtime: string; teamId: string }>(secondStillRunning.stdout))
+      .toMatchObject({ runtime: "available", teamId: second.team.teamId });
+    expect(await readFakeHerdrState(fake)).toMatchObject({
+      agents: [expect.any(Object), expect.any(Object)],
+      workspaces: [expect.objectContaining({ cwd: second.team.projectPath })],
+    });
+
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          [
+            "team",
+            "stop",
+            second.team.teamId,
+            "--emergency",
+            "--reason",
+            "finish linked-worktree proof",
+            "--json",
+          ],
+          fake.env,
+        )
+      ).exitCode,
+    ).toBe(0);
   });
 }, 25_000);
 
@@ -573,7 +732,7 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
   });
 });
 
-test("SLP v2 serializes concurrent identical starts into one generation", async () => {
+test("SLP v2 serializes ten concurrent starts into one generation and rejects contract contenders", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -587,29 +746,140 @@ test("SLP v2 serializes concurrent identical starts into one generation", async 
     const fake = await installFakeHerdr(fixture, { workspaceListDelayMs: 150 });
     const args = ["team", "start", fixture.repo, "Serialize identical starts", "--json"];
 
-    const [first, second] = await Promise.all([
-      runCliAt(fixture, room, args, fake.env),
-      runCliAt(fixture, room, args, fake.env),
+    const firstStart = runCliAt(fixture, room, args, fake.env);
+    await waitForText(fake.log, '["workspace","list"]');
+    const [first, ...contenders] = await Promise.all([
+      firstStart,
+      ...Array.from({ length: 9 }, () => runCliAt(fixture, room, args, fake.env)),
+      runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Changed concurrent objective", "--json"],
+        fake.env,
+      ),
+      runCliAt(
+        fixture,
+        room,
+        [...args.slice(0, -1), "--lead-model", "different-model", "--json"],
+        fake.env,
+      ),
     ]);
 
-    expect(first.stderr).toBe("");
-    expect(second.stderr).toBe("");
-    const firstData = envelope<{ team: { generation: number; teamId: string }; work: { id: string } }>(
-      first.stdout,
+    const identical = [first, ...contenders.slice(0, 9)];
+    expect(identical.map((result) => ({ exitCode: result.exitCode, stderr: result.stderr })))
+      .toEqual(Array.from({ length: 10 }, () => ({ exitCode: 0, stderr: "" })));
+    const outputs = identical.map((result) =>
+      envelope<{ team: { generation: number; teamId: string }; work: { id: string } }>(
+        result.stdout,
+      )
     );
-    const secondData = envelope<{ team: { generation: number; teamId: string }; work: { id: string } }>(
-      second.stdout,
-    );
-    expect(secondData).toMatchObject({
-      team: { generation: firstData.team.generation, teamId: firstData.team.teamId },
-      work: { id: firstData.work.id },
-    });
+    expect(new Set(outputs.map((output) => output.team.generation)).size).toBe(1);
+    expect(new Set(outputs.map((output) => output.team.teamId)).size).toBe(1);
+    expect(new Set(outputs.map((output) => output.work.id)).size).toBe(1);
+    for (const contender of contenders.slice(9)) {
+      expect(contender.exitCode).toBe(1);
+      expect(["TEAM_RUNNING", "TEAM_START_PENDING"]).toContain(
+        (JSON.parse(contender.stderr) as { error: { code: string } }).error.code,
+      );
+    }
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
     expect(runtime.agents).toHaveLength(2);
     const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
     expect(roomDatabase.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_teams").get()?.count)
       .toBe(1);
+    expect(
+      roomDatabase
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'team.start'",
+        )
+        .get()?.count,
+    ).toBe(1);
+    roomDatabase.close();
+  });
+}, 45_000);
+
+test("SLP v2 waits for a running-generation repair before emergency stop", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const args = ["team", "start", fixture.repo, "Serialize repair and stop", "--json"];
+    const first = await runCliAt(fixture, room, args, fake.env);
+    expect(first.exitCode).toBe(0);
+    const teamId = envelope<{ team: { teamId: string } }>(first.stdout).team.teamId;
+    await setFakeHerdrBehavior(fake, { processInfoDelayMs: 400 });
+    const commandCount = (await fakeHerdrCommands(fake)).length;
+    const repairing = runCliAt(fixture, room, args, fake.env);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const commands = await fakeHerdrCommands(fake);
+      if (
+        commands
+          .slice(commandCount)
+          .some((command) => command[0] === "pane" && command[1] === "process-info")
+      ) break;
+      await Bun.sleep(10);
+    }
+    const stopping = runCliAt(
+      fixture,
+      room,
+      [
+        "team",
+        "stop",
+        teamId,
+        "--emergency",
+        "--reason",
+        "serialize runtime repair before stop",
+        "--json",
+      ],
+      fake.env,
+    );
+    await Bun.sleep(100);
+    const duringRepair = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      duringRepair
+        .query<{ owner_token: string | null }, []>(
+          "SELECT owner_token FROM slp_lifecycle_operations WHERE operation = 'START'",
+        )
+        .get()?.owner_token,
+    ).not.toBeNull();
+    expect(
+      duringRepair
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_lifecycle_operations WHERE operation = 'STOP'",
+        )
+        .get()?.count,
+    ).toBe(0);
+    duringRepair.close();
+    const [repaired, stopped] = await Promise.all([repairing, stopping]);
+
+    expect([repaired, stopped].map((result) => ({
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+    }))).toEqual([
+      { exitCode: 0, stderr: "" },
+      { exitCode: 0, stderr: "" },
+    ]);
+    expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
+    const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(
+      roomDatabase
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'team.stop.emergency'",
+        )
+        .get()?.count,
+    ).toBe(1);
     roomDatabase.close();
   });
 }, 20_000);
@@ -706,7 +976,8 @@ test("SLP v2 retries start finalization from a durable RUNTIME_READY phase", asy
     const roomDatabase = new Database(roomDatabasePath);
     roomDatabase.exec(`
       CREATE TRIGGER reject_start_finalization
-      BEFORE INSERT ON slp_teams
+      BEFORE INSERT ON slp_activity
+      WHEN NEW.operation = 'team.start'
       BEGIN
         SELECT RAISE(ABORT, 'injected start finalization failure');
       END;
@@ -731,7 +1002,31 @@ test("SLP v2 retries start finalization from a durable RUNTIME_READY phase", asy
         .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_teams")
         .get()?.count,
     ).toBe(0);
+    expect(
+      projectAfterFailure.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work")
+        .get()?.count,
+    ).toBe(0);
+    expect(
+      projectAfterFailure
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_activity")
+        .get()?.count,
+    ).toBe(0);
     projectAfterFailure.close();
+    const roomAfterFailure = new Database(roomDatabasePath, { readonly: true });
+    expect(
+      roomAfterFailure.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_teams")
+        .get()?.count,
+    ).toBe(0);
+    expect(
+      roomAfterFailure
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_team_roles")
+        .get()?.count,
+    ).toBe(0);
+    expect(
+      roomAfterFailure.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_activity")
+        .get()?.count,
+    ).toBe(0);
+    roomAfterFailure.close();
 
     const repairDatabase = new Database(roomDatabasePath);
     repairDatabase.exec("DROP TRIGGER reject_start_finalization");
@@ -1030,6 +1325,91 @@ test("SLP v2 rejects a changed objective or configuration without mutating the r
   });
 });
 
+test("SLP v2 keeps work objective and acceptance contract immutable across notes", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const objective = "Ship parser; acceptance: malformed input is rejected";
+    const started = envelope<{
+      team: { roles: Array<{ paneId: string; role: string }> };
+      work: { id: string; objective: string };
+    }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, objective, "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    const supervisorPane = started.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!.paneId;
+    const environment = { ...fake.env, HERDR_PANE_ID: supervisorPane };
+
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          [
+            "work",
+            "note",
+            started.work.id,
+            "requested change: accept malformed input instead",
+            "--json",
+          ],
+          environment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    const status = envelope<{
+      notes: Array<{ body: string }>;
+      work: { objective: string };
+    }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["status", started.work.id, "--json"],
+          environment,
+        )
+      ).stdout,
+    );
+    expect(status.work.objective).toBe(objective);
+    expect(status.notes.map((note) => note.body)).toEqual([
+      "requested change: accept malformed input instead",
+    ]);
+
+    const replacement = await runCliAt(
+      fixture,
+      fixture.repo,
+      [
+        "work",
+        "add",
+        "Ship parser; acceptance: malformed input is accepted",
+        "--json",
+      ],
+      environment,
+    );
+    expect(replacement.exitCode).toBe(0);
+    expect(envelope<{ work: { id: string; objective: string } }>(replacement.stdout).work)
+      .toMatchObject({
+        id: "w2",
+        objective: "Ship parser; acceptance: malformed input is accepted",
+      });
+  });
+});
+
 test("SLP v2 drives one work item through OPEN ACTIVE RETURNED DONE with atomic activity", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
@@ -1164,6 +1544,397 @@ test("SLP v2 rejects a stale work transition without recording false activity", 
     after.close();
   });
 }, 15_000);
+
+test("SLP v2 rolls back every project mutation when its activity record cannot be inserted", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = envelope<{
+      team: { roles: Array<{ paneId: string; role: string }> };
+      work: { id: string };
+    }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Prove atomic project mutations", "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    const leadPane = started.team.roles.find((role) => role.role === "lead")!.paneId;
+    const supervisorPane = started.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!.paneId;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: leadPane };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisorPane };
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    const rejectActivity = async (
+      args: string[],
+      environment: Record<string, string | undefined>,
+    ) => {
+      const before = new Database(databasePath);
+      before.exec(`
+        CREATE TRIGGER reject_activity_insert
+        BEFORE INSERT ON slp_activity
+        BEGIN
+          SELECT RAISE(ABORT, 'injected activity insertion failure');
+        END;
+      `);
+      before.close();
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      const after = new Database(databasePath);
+      after.exec("DROP TRIGGER reject_activity_insert");
+      after.close();
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("injected activity insertion failure");
+    };
+    const readDatabase = () => new Database(databasePath, { readonly: true });
+
+    await rejectActivity(
+      ["work", "take", started.work.id, "--json"],
+      leadEnvironment,
+    );
+    let database = readDatabase();
+    expect(
+      database.query<{ state: string }, [string]>("SELECT state FROM slp_work WHERE id = ?")
+        .get(started.work.id)?.state,
+    ).toBe("OPEN");
+    database.close();
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", started.work.id, "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    await rejectActivity(
+      ["work", "note", started.work.id, "must roll back", "--json"],
+      leadEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM slp_work_entries WHERE work_id = ? AND kind = 'NOTE'",
+        )
+        .get(started.work.id)?.count,
+    ).toBe(0);
+    database.close();
+
+    await rejectActivity(
+      ["work", "return", started.work.id, "result: rejected audit", "--json"],
+      leadEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database
+        .query<{ current_return: string | null; return_revision: number; state: string }, [string]>(
+          "SELECT state, current_return, return_revision FROM slp_work WHERE id = ?",
+        )
+        .get(started.work.id),
+    ).toEqual({ current_return: null, return_revision: 0, state: "ACTIVE" });
+    expect(
+      database
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM slp_work_entries WHERE work_id = ? AND kind = 'RETURN'",
+        )
+        .get(started.work.id)?.count,
+    ).toBe(0);
+    database.close();
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", started.work.id, "result: first return", "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    await rejectActivity(
+      ["work", "note", started.work.id, "grant must roll back", "--rework", "--json"],
+      supervisorEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM slp_rework_grants WHERE work_id = ?",
+        )
+        .get(started.work.id)?.count,
+    ).toBe(0);
+    expect(
+      database
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM slp_work_entries WHERE work_id = ? AND kind = 'NOTE'",
+        )
+        .get(started.work.id)?.count,
+    ).toBe(0);
+    database.close();
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "note", started.work.id, "reviewer grants rework", "--rework", "--json"],
+          supervisorEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    await rejectActivity(
+      ["work", "take", started.work.id, "--json"],
+      leadEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database
+        .query<{ state: string }, [string]>("SELECT state FROM slp_work WHERE id = ?")
+        .get(started.work.id)?.state,
+    ).toBe("RETURNED");
+    expect(
+      database
+        .query<{ consumed_at: string | null }, [string]>(
+          "SELECT consumed_at FROM slp_rework_grants WHERE work_id = ?",
+        )
+        .get(started.work.id)?.consumed_at,
+    ).toBeNull();
+    database.close();
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "take", started.work.id, "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", started.work.id, "result: second return", "--json"],
+          leadEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    await rejectActivity(
+      ["work", "accept", started.work.id, "--json"],
+      supervisorEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database
+        .query<{ acceptance_outcome: string | null; state: string }, [string]>(
+          "SELECT state, acceptance_outcome FROM slp_work WHERE id = ?",
+        )
+        .get(started.work.id),
+    ).toEqual({ acceptance_outcome: null, state: "RETURNED" });
+    expect(
+      database
+        .query<{ count: number }, [string]>(
+          "SELECT COUNT(*) AS count FROM slp_work_entries WHERE work_id = ? AND kind = 'ACCEPTANCE'",
+        )
+        .get(started.work.id)?.count,
+    ).toBe(0);
+    database.close();
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "accept", started.work.id, "--json"],
+          supervisorEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+
+    await rejectActivity(
+      ["work", "add", "audit rejected work", "--json"],
+      supervisorEnvironment,
+    );
+    database = readDatabase();
+    expect(database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work").get()?.count)
+      .toBe(1);
+    database.close();
+    const added = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "audit accepted work", "--json"],
+      supervisorEnvironment,
+    );
+    expect(added.exitCode).toBe(0);
+    expect(envelope<{ work: { id: string } }>(added.stdout).work.id).toBe("w2");
+
+    await rejectActivity(
+      ["decide", "Rejected decision", "--why", "audit unavailable", "--json"],
+      supervisorEnvironment,
+    );
+    database = readDatabase();
+    expect(
+      database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_decisions").get()?.count,
+    ).toBe(0);
+    database.close();
+    const decided = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "Accepted decision", "--why", "audit available", "--json"],
+      supervisorEnvironment,
+    );
+    expect(decided.exitCode).toBe(0);
+    expect(envelope<{ decision: { id: string } }>(decided.stdout).decision.id).toBe("d1");
+  });
+}, 30_000);
+
+test("SLP v2 serializes ten concurrent work additions without duplicate ids or lost activity", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = envelope<{
+      team: { roles: Array<{ paneId: string; role: string }> };
+    }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Serialize concurrent work writes", "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    const supervisorPane = started.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!.paneId;
+    const environment = { ...fake.env, HERDR_PANE_ID: supervisorPane };
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "add", `Concurrent work ${index}`, "--json"],
+          environment,
+        )
+      ),
+    );
+
+    expect(results.map((result) => ({ exitCode: result.exitCode, stderr: result.stderr })))
+      .toEqual(Array.from({ length: 10 }, () => ({ exitCode: 0, stderr: "" })));
+    const ids = results.map(
+      (result) => envelope<{ work: { id: string } }>(result.stdout).work.id,
+    );
+    expect(new Set(ids).size).toBe(10);
+    expect(ids.toSorted()).toEqual(
+      ["w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11"].toSorted(),
+    );
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    expect(database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work").get()?.count)
+      .toBe(11);
+    expect(
+      database
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'work.add'",
+        )
+        .get()?.count,
+    ).toBe(11);
+    database.close();
+  });
+}, 20_000);
+
+test("SLP v2 reports a structured store-busy failure without partial mutation", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = envelope<{
+      team: { roles: Array<{ paneId: string; role: string }> };
+    }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Report busy stores", "--json"],
+          fake.env,
+        )
+      ).stdout,
+    );
+    const supervisorPane = started.team.roles.find(
+      (role) => role.role === "team-supervisor",
+    )!.paneId;
+    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["status", "--json"],
+          { ...fake.env, HERDR_PANE_ID: supervisorPane },
+        )
+      ).exitCode,
+    ).toBe(0);
+    const blocker = new Database(databasePath);
+    blocker.exec("BEGIN IMMEDIATE");
+    const rejected = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "must not partially commit", "--json"],
+      { ...fake.env, HERDR_PANE_ID: supervisorPane },
+    );
+    blocker.exec("ROLLBACK");
+    blocker.close();
+
+    expect(rejected.exitCode).toBe(1);
+    expect(JSON.parse(rejected.stderr)).toMatchObject({
+      error: { code: "STORE_BUSY", sqliteCode: expect.stringMatching(/^SQLITE_BUSY/) },
+      ok: false,
+    });
+    const database = new Database(databasePath, { readonly: true });
+    expect(database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work").get()?.count)
+      .toBe(1);
+    expect(
+      database
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'work.add'",
+        )
+        .get()?.count,
+    ).toBe(1);
+    database.close();
+  });
+}, 45_000);
 
 test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async () => {
   await withFixture(async (fixture) => {
@@ -1862,7 +2633,7 @@ test("SLP v2 records one-step immutable decisions and preserves the replaced rec
   });
 }, 15_000);
 
-test("SLP v2 serializes concurrent decision ids without dropping a decision", async () => {
+test("SLP v2 serializes ten concurrent decision ids without dropping a decision", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -1876,7 +2647,7 @@ test("SLP v2 serializes concurrent decision ids without dropping a decision", as
     expect((await runCliAt(fixture, room, ["status", "--json"])).exitCode).toBe(0);
 
     const results = await Promise.all(
-      Array.from({ length: 8 }, (_, index) =>
+      Array.from({ length: 10 }, (_, index) =>
         runCliAt(fixture, room, [
           "decide",
           `Concurrent choice ${index}`,
@@ -1887,11 +2658,11 @@ test("SLP v2 serializes concurrent decision ids without dropping a decision", as
       ),
     );
 
-    expect(results.map((result) => result.exitCode)).toEqual(Array(8).fill(0));
+    expect(results.map((result) => result.exitCode)).toEqual(Array(10).fill(0));
     const ids = results.map(
       (result) => envelope<{ decision: { id: string } }>(result.stdout).decision.id,
     );
-    expect(new Set(ids).size).toBe(8);
+    expect(new Set(ids).size).toBe(10);
   });
 }, 15_000);
 
@@ -2864,8 +3635,8 @@ test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", asyn
     const roomDatabase = new Database(roomDatabasePath);
     roomDatabase.exec(`
       CREATE TRIGGER reject_stop_finalization
-      BEFORE UPDATE OF state ON slp_teams
-      WHEN NEW.state = 'STOPPED'
+      BEFORE INSERT ON slp_activity
+      WHEN NEW.operation = 'team.stop.emergency'
       BEGIN
         SELECT RAISE(ABORT, 'injected stop finalization failure');
       END;
@@ -2888,7 +3659,31 @@ test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", asyn
     expect(
       projectAfterFailure.query<{ state: string }, []>("SELECT state FROM slp_local_teams").get()?.state,
     ).toBe("RUNNING");
+    expect(
+      projectAfterFailure
+        .query<{ abandoned_at: string | null }, []>("SELECT abandoned_at FROM slp_work")
+        .get()?.abandoned_at,
+    ).toBeNull();
+    expect(
+      projectAfterFailure
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'team.stop.emergency'",
+        )
+        .get()?.count,
+    ).toBe(0);
     projectAfterFailure.close();
+    const roomAfterFailure = new Database(roomDatabasePath, { readonly: true });
+    expect(
+      roomAfterFailure.query<{ state: string }, []>("SELECT state FROM slp_teams").get()?.state,
+    ).toBe("RUNNING");
+    expect(
+      roomAfterFailure
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'team.stop.emergency'",
+        )
+        .get()?.count,
+    ).toBe(0);
+    roomAfterFailure.close();
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
 
     const changedReason = await runCliAt(
@@ -2952,7 +3747,7 @@ test("SLP v2 retries stop finalization from a durable RUNTIME_READY phase", asyn
   });
 }, 20_000);
 
-test("SLP v2 stop excludes a late work mutation before committing STOPPED", async () => {
+test("SLP v2 stop fences every competing mutation and repeated stop before committing once", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -3027,19 +3822,77 @@ test("SLP v2 stop excludes a late work mutation before committing STOPPED", asyn
       if (commands.slice(commandCount).some((command) => command.join(" ") === "workspace list")) break;
       await Bun.sleep(10);
     }
-    const lateNote = await runCliAt(
+    const statusDuringStop = runCliAt(
       fixture,
       fixture.repo,
-      ["work", "note", started.work.id, "late mutation", "--json"],
+      ["status", "--json"],
       supervisorEnvironment,
     );
+    const competing = await Promise.all([
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "add", "late work", "--json"],
+        supervisorEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "note", started.work.id, "late note", "--json"],
+        supervisorEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "take", started.work.id, "--json"],
+        leadEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "return", started.work.id, "late return", "--json"],
+        leadEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "accept", started.work.id, "--json"],
+        supervisorEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["decide", "Late decision", "--why", "stop already fenced writes", "--json"],
+        supervisorEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        fixture.repo,
+        ["team", "stop", started.team.teamId, "--json"],
+        supervisorEnvironment,
+      ),
+      runCliAt(
+        fixture,
+        room,
+        ["team", "start", fixture.repo, "Serialize stop and work", "--json"],
+        fake.env,
+      ),
+    ]);
+    const duringStop = await statusDuringStop;
     const stopped = await stopping;
 
     expect(stopped.stderr).toBe("");
     expect(stopped.exitCode).toBe(0);
-    expect(lateNote.exitCode).toBe(1);
-    expect((JSON.parse(lateNote.stderr) as { error: { code: string } }).error.code)
-      .toBe("TEAM_STOP_IN_PROGRESS");
+    expect(duringStop.exitCode).toBe(0);
+    expect(envelope<{ teamId: string }>(duringStop.stdout).teamId).toBe(started.team.teamId);
+    expect(
+      competing.map((result) => ({
+        code: (JSON.parse(result.stderr) as { error: { code: string } }).error.code,
+        exitCode: result.exitCode,
+      })),
+    ).toEqual(
+      Array.from({ length: 8 }, () => ({ code: "TEAM_STOP_IN_PROGRESS", exitCode: 1 })),
+    );
     const project = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
     });
@@ -3049,6 +3902,18 @@ test("SLP v2 stop excludes a late work mutation before committing STOPPED", asyn
           "SELECT COUNT(*) AS count FROM slp_work_entries WHERE kind = 'NOTE'",
         )
         .get()?.count,
+    ).toBe(0);
+    expect(project.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work").get()?.count)
+      .toBe(1);
+    expect(
+      project
+        .query<{ count: number }, []>(
+          "SELECT COUNT(*) AS count FROM slp_activity WHERE operation = 'team.stop'",
+        )
+        .get()?.count,
+    ).toBe(1);
+    expect(
+      project.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_decisions").get()?.count,
     ).toBe(0);
     project.close();
   });

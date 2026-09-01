@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { failureEnvelope } from "../src/kernel/cli.ts";
 import { run } from "../src/kernel/index.ts";
 import { runLifecycleCommand } from "../src/plugins/lifecycle.ts";
 import { observerMode } from "../src/plugins/observer-mode.ts";
@@ -21,12 +22,17 @@ const cli = {
     await observer.cli.beforeUnknown?.(unknown);
   },
 };
-process.exitCode =
-  (await runLifecycleCommand(args, cli)) ??
-  (await run(args, {
-    allowBuiltIn: (plugin) => observer.allowBuiltIn(plugin.name),
-    cli,
-    loadExternalPlugins: observer.loadExternalPlugins,
-    readOnly: observer.enabled,
-    trustExternalPlugin: pluginTrustPredicate(process.env.HOME ?? process.cwd()),
-  }));
+try {
+  process.exitCode =
+    (await runLifecycleCommand(args, cli)) ??
+    (await run(args, {
+      allowBuiltIn: (plugin) => observer.allowBuiltIn(plugin.name),
+      cli,
+      loadExternalPlugins: observer.loadExternalPlugins,
+      readOnly: observer.enabled,
+      trustExternalPlugin: pluginTrustPredicate(process.env.HOME ?? process.cwd()),
+    }));
+} catch (error) {
+  process.stderr.write(`${JSON.stringify(failureEnvelope(error))}\n`);
+  process.exitCode = 1;
+}

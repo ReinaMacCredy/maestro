@@ -67,7 +67,8 @@ does not accept its own work and does not settle team decisions.
 Natural conversation needs no record ID. Chat alone does not mutate work,
 authority or accepted decisions. Record these changes before they govern:
 
-- changed objective or acceptance: `maestro work note`;
+- changed objective or acceptance: create new work; the existing contract is immutable;
+- material context on the same contract: `maestro work note`;
 - settled technical, team or owner choice: `maestro decide`;
 - completed or blocked execution: `maestro work return`;
 - reviewer acceptance: `maestro work accept`.

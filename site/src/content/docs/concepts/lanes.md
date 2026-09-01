@@ -12,11 +12,12 @@ Team Supervisor, Lead and Peers can communicate directly along the team
 topology. A message needs no work ID unless the people involved need it for
 clarity.
 
-Conversation does not silently change authority or state. Before a changed
-objective, acceptance condition or settled choice governs work, record it:
+Conversation does not silently change authority or state. A work objective and
+acceptance condition are immutable; changed scope becomes new work. Record
+context on the existing contract and settled choices explicitly:
 
 ```sh
-maestro work note <work-id> "<material change>"
+maestro work note <work-id> "<material context>"
 maestro decide "<settled choice>" --why "<reason>" --work <work-id>
 ```
 

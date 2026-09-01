@@ -83,7 +83,10 @@ Peer work and Team Supervisor accepts Lead work. Rework requires that same
 reviewer to run `maestro work note <id> "<specific gap>" --rework`; the grant
 belongs only to the current return revision and is consumed when the same
 assignee takes it once. Blocked work is returned with a blocker; there is no
-`BLOCKED` state.
+`BLOCKED` state. A work item's objective and acceptance contract are immutable.
+`work note` adds context only. Changed scope requires a new work item; the
+reviewer may close the superseded `OPEN` or `RETURNED` item with
+`work accept --outcome cancelled`.
 
 `maestro decide` records one settled immutable choice. Technical scope belongs
 to the Lead, team scope to the Team Supervisor, and owner or cross-team scope
@@ -126,8 +129,8 @@ retains its four-state value but gains immutable abandonment actor, reason,
 generation, and time metadata.
 
 The project pack snapshot and durable stores remain after stop. Chat and raw
-transcript do not become authority; record material changes with
-`maestro work note` or `maestro decide` before acting on them.
+transcript do not become authority. Record context with `maestro work note`,
+settled choices with `maestro decide`, and changed contracts as new work.
 
 ## Hard cut
 

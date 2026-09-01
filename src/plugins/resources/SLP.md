@@ -9,8 +9,8 @@
 ## Shared contract
 
 You belong to one supervised team generation. Communicate directly along the
-team topology, but record every material objective, acceptance change, return,
-and settled decision through Maestro before it governs work.
+team topology, but record work, returns, reviewer acceptance, and settled
+decisions through Maestro before they govern execution.
 
 The public SLP surface is exactly:
 
@@ -27,10 +27,12 @@ maestro decide
 ```
 
 Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Raw transcript is
-runtime-only. `RETURNED` work can be retaken only once after its correct
-reviewer records `maestro work note <id> "<specific gap>" --rework` for that
-return revision. A Watch Pane is optional foreground support, never an agent
-or an authority holder.
+runtime-only. A work item's objective and acceptance contract never change;
+changed scope requires new work. `RETURNED` work can be retaken only once after
+its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
+for that return revision. Notes add context but do not rewrite the contract. A
+Watch Pane is optional foreground support, never an agent or an authority
+holder.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->

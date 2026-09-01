@@ -1,3 +1,4 @@
+import { SQLiteError } from "bun:sqlite";
 import type { Disposer } from "./events.ts";
 
 export interface FlagDefinition {
@@ -137,9 +138,15 @@ export function stringOptions(invocation: CliInvocation, name: string): string[]
 }
 
 export function normalizeCliError(error: unknown): CliError {
-  return error instanceof CliError
-    ? error
-    : new CliError("INTERNAL", error instanceof Error ? error.message : String(error));
+  if (error instanceof CliError) return error;
+  if (error instanceof SQLiteError && error.code?.startsWith("SQLITE_BUSY")) {
+    return new CliError(
+      "STORE_BUSY",
+      "the Maestro store is busy; retry the command",
+      { sqliteCode: error.code },
+    );
+  }
+  return new CliError("INTERNAL", error instanceof Error ? error.message : String(error));
 }
 
 export function successEnvelope(result: CliResult): CliSuccessEnvelope {

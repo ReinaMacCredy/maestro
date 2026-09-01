@@ -34,7 +34,7 @@ Record what happened where it happened:
 ```sh
 maestro lesson file "A Peer changed scope without recording it" \
   --target "SLP shared contract" \
-  --expected "record a material objective change before it governs" \
+  --expected "create new work when the objective contract changes" \
   --why "chat alone does not mutate authority" \
   --evidence w42
 ```
