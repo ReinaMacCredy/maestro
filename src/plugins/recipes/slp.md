@@ -92,9 +92,9 @@ reviewer to run `maestro work note <id> "<specific gap>" --rework`; the grant
 belongs only to the current return revision and is consumed when the same
 assignee takes it once. Blocked work is returned with a blocker; there is no
 `BLOCKED` state. A work item's objective and acceptance contract are immutable.
-`work note` adds context only. Changed scope requires a new work item; the
+`maestro work note` adds context only. Changed scope requires a new work item; the
 reviewer may close the superseded `OPEN` or `RETURNED` item with
-`work accept --outcome cancelled`.
+`maestro work accept --outcome cancelled`.
 
 `maestro decide` records one settled immutable choice. Technical scope belongs
 to the Lead, team scope to the Team Supervisor, and owner or cross-team scope

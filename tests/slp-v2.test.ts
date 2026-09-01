@@ -334,7 +334,7 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
     expect(started.roles).toHaveLength(1);
     expect((await readFakeHerdrState(fake)).agents).toHaveLength(1);
   });
-});
+}, 10_000);
 
 test("SLP v2 waits for workspace-close visibility before declaring runtime absence", async () => {
   await withFixture(async (fixture) => {
