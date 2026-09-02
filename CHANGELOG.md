@@ -11,6 +11,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.117.0] - 2026-09-03
+
 ### Added
 
 - `maestro work note <id> "<what you need>" --blocked` stores the note with a
