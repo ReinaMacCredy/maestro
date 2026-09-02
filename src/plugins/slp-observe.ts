@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Store, resolveStoreLocation } from "../kernel/store.ts";
@@ -93,9 +94,12 @@ async function run(
 }
 
 // "pending" while the local team row does not exist yet; null once it exists
-// but is not RUNNING for this workspace, which ends the loop.
+// but is not RUNNING for this workspace, or once the store itself is gone
+// (a removed repo or test fixture), which ends the loop.
 function readStore(config: SlpObserveConfig): StoreSnapshot | "pending" | null {
-  const store = new Store(resolveStoreLocation(config.projectPath).path, { readonly: true });
+  const storePath = resolveStoreLocation(config.projectPath).path;
+  if (!existsSync(storePath)) return null;
+  const store = new Store(storePath, { readonly: true });
   try {
     const team = store.database
       .query<{ state: string; workspace_id: string }, [string, number]>(

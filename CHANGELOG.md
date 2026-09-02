@@ -69,6 +69,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Fixed
 
+- The sentinel `maestro-slp-observe` kept polling forever once its project store
+  was gone (a removed repo, or a test fixture cleaned up under a leaked shim),
+  logging the open error every poll; a missing store now ends the loop with
+  exit 0 like a stopped team.
 - A role command whose shell dropped `HERDR_PANE_ID` (Codex ran the Observer's
   `work note --stall` with no HERDR variables in lab g9 while its own process
   carried them) failed with ROLE_UNPROVEN. The pane identity now also comes

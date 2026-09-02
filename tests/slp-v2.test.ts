@@ -6225,3 +6225,75 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
     ]);
   });
 }, 30_000);
+
+test("SLP v2 sentinel exits once the project store is gone instead of polling the error forever (d765)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Sentinel without a store", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; role: string }>;
+        teamId: string;
+        workspaceId: string;
+      };
+    }>(started.stdout);
+    const observer = data.team.roles.find((role) => role.role === "observer")!;
+    const sentinel = Bun.spawn(
+      [
+        process.execPath,
+        join(import.meta.dir, "..", "bin", "maestro-slp-observe.ts"),
+        "--team",
+        data.team.teamId,
+        "--generation",
+        String(data.team.generation),
+        "--tick-ms",
+        "60000",
+        "--poll-ms",
+        "50",
+      ],
+      {
+        cwd: fixture.repo,
+        env: { ...process.env, ...fake.env, HERDR_WORKSPACE_ID: data.team.workspaceId },
+        stderr: "pipe",
+        stdout: "ignore",
+      },
+    );
+    try {
+      const deadline = Date.now() + 5_000;
+      let packets = 0;
+      while (packets === 0 && Date.now() < deadline) {
+        packets = (await fakeHerdrCommands(fake)).filter(
+          (command) =>
+            command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name,
+        ).length;
+        await Bun.sleep(25);
+      }
+      expect(packets).toBe(1);
+
+      await rm(join(fixture.repo, ".maestro", "maestro.db"));
+      const exit = await Promise.race([
+        sentinel.exited,
+        Bun.sleep(5_000).then(() => "still running"),
+      ]);
+      expect(exit).toBe(0);
+    } finally {
+      sentinel.kill();
+    }
+  });
+}, 30_000);
