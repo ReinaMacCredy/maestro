@@ -3676,6 +3676,7 @@ export async function maybeHandleSlpStatus(
       const roles = roleRows(context.store, row.team_id, row.generation, false);
       let missingPanes: string[] = [];
       let runtimeState: "available" | "unavailable" | "not-running" = "not-running";
+      let sentinel = false;
       let watch = false;
       const models = packModels(row.configuration_json);
       const plan = buildSlpTeamPlan({
@@ -3703,6 +3704,7 @@ export async function maybeHandleSlpStatus(
         if (row.state === "RUNNING" || inspection.workspace) {
           missingPanes = inspection.missingPanes;
           runtimeState = inspection.runtime;
+          sentinel = inspection.sentinel;
           watch = inspection.watch;
         }
       } catch {
@@ -3764,6 +3766,7 @@ export async function maybeHandleSlpStatus(
           role: role.role,
         })),
         runtime: runtimeState,
+        sentinel: sentinel ? "on" : "off",
         state: row.state,
         stop: stopRecord
           ? { actor: stopRecord.actor, emergency: stopRecord.emergency === 1, reason: stopRecord.reason }
@@ -3779,7 +3782,7 @@ export async function maybeHandleSlpStatus(
       text: teams.length === 0
         ? "no SLP teams"
         : teams.map((team) =>
-          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
+          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; sentinel ${team.sentinel}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
         ).join("\n"),
     };
   }
@@ -3920,6 +3923,7 @@ export async function maybeHandleSlpStatus(
   });
   let missingPanes: string[] = [];
   let runtimeState: "available" | "unavailable" = "available";
+  let sentinel = false;
   let watch = false;
   const models = packModels(actor.team.configuration_json);
   const plan = buildSlpTeamPlan({
@@ -3945,6 +3949,7 @@ export async function maybeHandleSlpStatus(
       })),
     );
     missingPanes = inspection.missingPanes;
+    sentinel = inspection.sentinel;
     watch = inspection.watch;
   } catch {
     runtimeState = "unavailable";
@@ -3964,6 +3969,7 @@ export async function maybeHandleSlpStatus(
         role: role.role,
       })),
       runtime: runtimeState,
+      sentinel: sentinel ? "on" : "off",
       teamId: actor.team.team_id,
       watch: watch ? "on" : "off",
       work: scoped.map(workData),

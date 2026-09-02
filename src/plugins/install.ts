@@ -650,6 +650,7 @@ export const installPlugin: BuiltInPlugin = {
         const shim = join(localBin, "maestro");
         const sensorShim = join(localBin, "maestro-team-sensor");
         const watchShim = join(localBin, "maestro-slp-watch");
+        const observeShim = join(localBin, "maestro-slp-observe");
         const legacy = join(localBin, "maestro-legacy");
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
@@ -741,6 +742,11 @@ export const installPlugin: BuiltInPlugin = {
           `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-watch.ts")).href)});\n`,
         );
         await chmod(watchShim, 0o755);
+        await writeFile(
+          observeShim,
+          `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-observe.ts")).href)});\n`,
+        );
+        await chmod(observeShim, 0o755);
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
         await writeHarnessWiring(room);

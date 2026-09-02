@@ -1,8 +1,11 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CliError } from "../kernel/cli.ts";
 import { slpWatchRuntimeDirectory } from "./slp-watch.ts";
+
+const sentinelEntry = fileURLToPath(new URL("../../bin/maestro-slp-observe.ts", import.meta.url));
 
 // d755: the acknowledgement is polled inside a fixed window with non-scrolling
 // reads; d756: a blocked pane is classified from its own text.
@@ -73,6 +76,7 @@ export interface SlpRuntimePeer {
 export interface SlpRuntimeInspection {
   missingPanes: string[];
   runtime: "available";
+  sentinel: boolean;
   watch: boolean;
   workspace: boolean;
 }
@@ -788,12 +792,72 @@ export class HerdrSlpRuntime {
         this.note(`${role.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
 
+      await this.launchSentinel(plan, workspaceId, createdTabIds);
       const roles = await this.inspectRequired(plan, workspaceId, contracts, reused);
       return { createdTabIds, createdWorkspace, roles, startedPaneIds, workspaceId };
     } catch (error) {
       await this.rollback(plan, { createdTabIds, createdWorkspace, startedPaneIds, workspaceId });
       throw error;
     }
+  }
+
+  // d767: the sentinel runs as a plain foreground process in its own tab so
+  // team start owns it like the roles and team stop closes it with the tabs.
+  private async launchSentinel(
+    plan: SlpTeamPlan,
+    workspaceId: string,
+    createdTabIds: string[],
+  ): Promise<void> {
+    const label = `slp:${plan.teamId}:g${plan.generation}:sentinel`;
+    const existing = (await this.tabs(plan, workspaceId)).filter((tab) => tab.label === label);
+    if (existing.length > 1) {
+      throw new SlpRuntimeError(`sentinel tab is duplicated: ${label}`, ["tab", "list"]);
+    }
+    let paneId = existing[0]?.root_pane_id ?? null;
+    if (paneId && foreground(await this.processInfo(plan, paneId))) {
+      this.note(`sentinel: already running in ${paneId}; left alone`);
+      return;
+    }
+    if (!paneId) {
+      const created = resultOf(
+        await this.command([
+          "tab",
+          "create",
+          "--workspace",
+          workspaceId,
+          "--cwd",
+          plan.projectPath,
+          "--label",
+          label,
+          "--no-focus",
+        ], plan.projectPath),
+      );
+      const tabId = stringAt(objectAt(created, "tab"), "tab_id");
+      paneId = stringAt(objectAt(created, "root_pane"), "pane_id");
+      if (tabId) createdTabIds.push(tabId);
+    }
+    if (!paneId) {
+      throw new SlpRuntimeError("sentinel pane was not created", ["tab", "create"]);
+    }
+    const launched = resultOf(
+      await this.command([
+        "pane",
+        "run",
+        paneId,
+        "/usr/bin/env",
+        `HERDR_WORKSPACE_ID=${workspaceId}`,
+        process.execPath,
+        sentinelEntry,
+        "--team",
+        plan.teamId,
+        "--generation",
+        String(plan.generation),
+      ], plan.projectPath),
+    );
+    if (!accepted(launched)) {
+      throw new SlpRuntimeError("sentinel command was not accepted", ["pane", "run"]);
+    }
+    this.note(`sentinel: running in ${paneId}`);
   }
 
   private async inspectRequired(
@@ -1164,6 +1228,7 @@ export class HerdrSlpRuntime {
       return {
         missingPanes: expectedRoles.map((role) => role.name).sort(),
         runtime: "available",
+        sentinel: false,
         watch: false,
         workspace: false,
       };
@@ -1191,22 +1256,28 @@ export class HerdrSlpRuntime {
       }
       if (!foreground(await this.processInfo(plan, paneId))) missingPanes.push(expected.name);
     }
+    let sentinel = false;
     let watch = false;
     for (const pane of panes) {
       if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;
+      if (sentinel && watch) break;
       const info = await this.processInfo(plan, pane.pane_id);
       const text = JSON.stringify(info).toLowerCase();
       if (
-        foreground(info) &&
-        text.includes("maestro-slp-watch") &&
-        text.includes(plan.teamId.toLowerCase()) &&
-        text.includes(String(plan.generation))
-      ) {
-        watch = true;
-        break;
-      }
+        !foreground(info) ||
+        !text.includes(plan.teamId.toLowerCase()) ||
+        !text.includes(String(plan.generation))
+      ) continue;
+      if (text.includes("maestro-slp-watch")) watch = true;
+      if (text.includes("maestro-slp-observe")) sentinel = true;
     }
-    return { missingPanes: missingPanes.sort(), runtime: "available", watch, workspace: true };
+    return {
+      missingPanes: missingPanes.sort(),
+      runtime: "available",
+      sentinel,
+      watch,
+      workspace: true,
+    };
   }
 
   async stop(

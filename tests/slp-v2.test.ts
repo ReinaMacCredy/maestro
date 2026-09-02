@@ -31,7 +31,7 @@ function envelope<T>(stdout: string): T {
 }
 
 const runtimePhaseLine =
-  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|already acknowledged in \S+; left alone)$/;
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|running in \S+|already (?:acknowledged|running) in \S+; left alone)$/;
 
 // Runtime phase lines (d757) are progress, not failures.
 function phaseFree(stderr: string): string {
@@ -4941,6 +4941,8 @@ test("SLP v2 install removes only the old managed block and leaves clean file en
       .toBe("custom-one\n");
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists())
       .toBe(true);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-observe")).exists())
+      .toBe(true);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists())
       .toBe(false);
   });
@@ -5097,6 +5099,242 @@ test("SLP v2 Watch is one foreground non-agent reader whose death never blocks w
       .toBe(false);
   });
 }, 20_000);
+
+test("SLP v2 team start launches the sentinel beside the roles and stop closes it (d767)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Sentinel beside the roles", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+        workspaceId: string;
+      };
+    }>(started.stdout);
+    const label = `slp:${data.team.teamId}:g${data.team.generation}:sentinel`;
+    const commands = await fakeHerdrCommands(fake);
+    const created = commands.findIndex(
+      (command) => command[0] === "tab" && command[1] === "create" && command.includes(label),
+    );
+    const lastContract = commands.findLastIndex(
+      (command) => command[0] === "agent" && command[1] === "prompt",
+    );
+    expect(created).toBeGreaterThan(lastContract);
+    const state = await readFakeHerdrState(fake);
+    const sentinelTab = (state.tabs as Array<{ label: string; root_pane_id: string; tab_id: string }>)
+      .find((tab) => tab.label === label)!;
+    expect(sentinelTab).toBeDefined();
+    const launch = commands.find(
+      (command) =>
+        command[0] === "pane" && command[1] === "run" &&
+        command.includes(`HERDR_WORKSPACE_ID=${data.team.workspaceId}`),
+    )!;
+    expect(launch.slice(2, 6)).toEqual([
+      sentinelTab.root_pane_id,
+      "/usr/bin/env",
+      `HERDR_WORKSPACE_ID=${data.team.workspaceId}`,
+      process.execPath,
+    ]);
+    expect(launch[6]?.endsWith("/bin/maestro-slp-observe.ts")).toBe(true);
+    expect(launch.slice(7)).toEqual([
+      "--team",
+      data.team.teamId,
+      "--generation",
+      String(data.team.generation),
+    ]);
+    expect(data.team.roles.some((role) => role.paneId === sentinelTab.root_pane_id)).toBe(false);
+
+    const hub = envelope<{ teams: Array<{ sentinel: string; watch: string }> }>(
+      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
+    );
+    expect(hub.teams[0]).toMatchObject({ sentinel: "on", watch: "off" });
+    expect((await runCliAt(fixture, room, ["status"], fake.env)).stdout)
+      .toContain("RUNNING; watch off; sentinel on; missing none");
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const team = envelope<{ sentinel: string }>(
+      (await runCliAt(fixture, fixture.repo, ["status", "--json"], {
+        ...fake.env,
+        HERDR_PANE_ID: lead.paneId,
+      })).stdout,
+    );
+    expect(team.sentinel).toBe("on");
+
+    const stopped = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--emergency", "--reason", "sentinel test", "--json"],
+      fake.env,
+    );
+    expect(stopped.exitCode).toBe(0);
+    const closed = (await fakeHerdrCommands(fake)).some(
+      (command) => command[0] === "tab" && command[1] === "close" && command[2] === sentinelTab.tab_id,
+    );
+    expect(closed).toBe(true);
+  });
+}, 30_000);
+
+test("SLP v2 sentinel sends the Observer a packet each tick and at once when a role blocks (d762, d765)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Packets for the Observer", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+        workspaceId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const observer = data.team.roles.find((role) => role.role === "observer")!;
+    const taken = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "take", data.work.id, "--json"],
+      { ...fake.env, HERDR_PANE_ID: lead.paneId },
+    );
+    expect(taken.exitCode).toBe(0);
+
+    const runtimeDirectory = watchRuntimeDirectory(
+      fixture.repo,
+      data.team.teamId,
+      data.team.generation,
+    );
+    const observeCommand = [
+      process.execPath,
+      join(import.meta.dir, "..", "bin", "maestro-slp-observe.ts"),
+      "--team",
+      data.team.teamId,
+      "--generation",
+      String(data.team.generation),
+      "--tick-ms",
+      "60000",
+      "--poll-ms",
+      "50",
+    ];
+    const environment = {
+      ...process.env,
+      ...fake.env,
+      HERDR_WORKSPACE_ID: data.team.workspaceId,
+    };
+    const packets = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name &&
+          command[3]?.startsWith("[SLP sentinel") === true,
+      );
+    const until = async (count: number) => {
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const found = await packets();
+        if (found.length >= count) return found;
+        await Bun.sleep(25);
+      }
+      throw new Error(`timed out waiting for sentinel packet ${count}`);
+    };
+    const sentinel = Bun.spawn(observeCommand, {
+      cwd: fixture.repo,
+      env: environment,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [first] = await until(1);
+    const packet = first![3]!;
+    const header = `[SLP sentinel ${data.team.teamId} g${data.team.generation}]`;
+    expect(packet.startsWith(`${header} tick at `)).toBe(true);
+    expect(packet).toContain("thresholds: silence 15m, repeat 3x");
+    expect(packet).toContain(
+      `${data.work.id} ACTIVE hub-supervisor -> ${lead.name}; held by ${lead.name}; unchanged 0m; revision 0; last entry: none; stall notes: 0`,
+    );
+    expect(packet).toContain(`${supervisor.name} [team-supervisor] idle; unchanged 0m; repeats: none`);
+    expect(packet).toContain(`${lead.name} [lead] idle; unchanged 0m; repeats: none`);
+    expect(packet).not.toContain(`${observer.name} [observer]`);
+    expect(packet).toContain(`--- ${lead.name} tail ---\nSLP_ROLE_READY`);
+    expect(packet.endsWith("or: observed: nothing stalled")).toBe(true);
+    expect(first).not.toContain("--wait");
+
+    const duplicate = Bun.spawn(observeCommand, {
+      cwd: fixture.repo,
+      env: environment,
+      stderr: "pipe",
+      stdout: "ignore",
+    });
+    const duplicateError = await new Response(duplicate.stderr).text();
+    expect(await duplicate.exited).toBe(1);
+    expect(duplicateError).toContain("already running");
+
+    // team start launches the shim before finalization writes the team row.
+    const pending = Bun.spawn(
+      observeCommand.map((part, index) =>
+        observeCommand[index - 1] === "--generation" ? String(data.team.generation + 1) : part
+      ),
+      { cwd: fixture.repo, env: environment, stderr: "pipe", stdout: "ignore" },
+    );
+    await Bun.sleep(300);
+    expect(pending.exitCode).toBeNull();
+    pending.kill("SIGTERM");
+    expect(await pending.exited).toBe(0);
+    expect(await new Response(pending.stderr).text()).toBe("");
+
+    await Bun.sleep(250);
+    expect(await packets()).toHaveLength(1);
+
+    await editFakeHerdrState(fake, (state) => {
+      const agent = (state.agents as Array<{ agent_status: string; name: string }>)
+        .find((candidate) => candidate.name === lead.name)!;
+      agent.agent_status = "blocked";
+    });
+    const [, second] = await until(2);
+    expect(second![3]!.startsWith(`${header} blocked: ${lead.name} at `)).toBe(true);
+    expect(second![3]).toContain(`${lead.name} [lead] blocked; unchanged 0m; repeats: none`);
+    await Bun.sleep(250);
+    expect(await packets()).toHaveLength(2);
+
+    const stopped = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--emergency", "--reason", "sentinel test", "--json"],
+      fake.env,
+    );
+    expect(stopped.exitCode).toBe(0);
+    expect(await sentinel.exited).toBe(0);
+    expect(existsSync(join(runtimeDirectory, "observe.lock"))).toBe(false);
+  });
+}, 30_000);
 
 function failureEnvelope(stderr: string): { error: Record<string, unknown> } {
   const line = phaseFree(stderr).split("\n").findLast((candidate) => candidate.startsWith("{"));
@@ -5815,6 +6053,7 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
       "role",
       "roles",
       "runtime",
+      "sentinel",
       "teamId",
       "watch",
       "work",

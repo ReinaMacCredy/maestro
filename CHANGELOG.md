@@ -28,6 +28,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
   observer marker fails `team start` with `INVALID_SLP_PACK` naming the
   marker; generations started before it treat the observer model as
   `default` (d762, d767).
+- `team start` also launches a sentinel beside the roles: a tab labelled
+  `slp:<team>:g<n>:sentinel` running the new `maestro-slp-observe` shim
+  (`~/.local/bin`) with `--team <id> --generation <n>`. It polls
+  `herdr agent list` every 5 s and prompts the Observer with a packet every
+  5 min, or at once when a role pane turns `blocked`: the open work items
+  (holder, age, revision, last entry, stall notes), each role pane's status,
+  time since its tail last changed, any line repeated three times, and a
+  30-line tail. It judges nothing and writes nothing; it exits on its own
+  once the generation stops RUNNING, and `team stop` closes its tab
+  (d762, d765, d767).
 
 ### Changed
 
@@ -38,6 +48,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
 - `status --json` for a team lists the observer among `roles`, and team start
   JSON carries three roles, so consumers pinned to two role entries must
   widen (d762).
+- Hub `status` and in-team `status --json` carry `sentinel: on|off` beside
+  `watch`; the Hub text line reads `watch off; sentinel on` (d765).
 
 ### Fixed
 
