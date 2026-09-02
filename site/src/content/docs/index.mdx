@@ -3,7 +3,7 @@ title: Maestro
 description: Durable coordination for direct, supervised AI teams.
 template: splash
 hero:
-  tagline: One Workspace Pack, four roles, nine operations, and project-owned work.
+  tagline: One Workspace Pack, five roles, nine operations, and project-owned work.
   actions:
     - text: Install Maestro
       link: /getting-started/install/
@@ -19,13 +19,15 @@ Herdr provides the running workspace and panes.
 
 ## SLP v2 at a glance
 
-- Four roles: Hub Supervisor, Team Supervisor, Lead and Peer.
+- Five roles: Hub Supervisor, Team Supervisor, Lead, Peer and Observer.
 - Direct Team Supervisor, Lead and Peer conversation; the supported Hub flow
   speaks only through Team Supervisor.
 - Nine public SLP operations.
 - One work lifecycle: `OPEN → ACTIVE → RETURNED → DONE`.
 - One canonical `~/maestro/SLP.md`, pinned into each project generation.
 - Optional foreground Watch Pane with runtime-only transcript.
+- One sentinel per generation that prompts the Observer every five minutes;
+  the Observer's only note is `work note --stall`.
 
 Start with [SLP setup and storage](/getting-started/slp-setup/), then read
 [Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), and the

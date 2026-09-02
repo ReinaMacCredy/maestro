@@ -27,7 +27,9 @@ Every displayed edge is a direct bidirectional conversation channel. In the
 supported SLP flow, the Hub Supervisor reaches the team only through its Team
 Supervisor; it never manages the Lead or Peers directly.
 
-There is no Observer, Advisor, sensor, scheduler or background agent role.
+The Observer is the only seat outside the work lifecycle and the sentinel the
+only background process; there is no Advisor, scheduler, health or reconcile
+layer.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -172,6 +174,14 @@ Hub `supervisor` agent when the Team Supervisor is that seat). The same stall
 on an unchanged item is stored but not pushed (`nudge suppressed`). Status
 exposes `sentinel: on|off` beside `watch`; thresholds are fixed and the seat
 has no opt-out.
+
+Three limits seen in the lab. A command Codex runs in a background terminal
+shows in the packet as a working pane with no repeats until it ends, so the
+item's unchanged age carries the stall. A Team Supervisor's `--blocked` needs
+a Hub agent pane named `supervisor`; without one the line becomes a warning on
+the caller's terminal and the store remains the truth. A sentinel that has
+exited (`sentinel off` while the generation is RUNNING) is relaunched by
+repeating the identical `team start`.
 
 ## Stop
 

@@ -94,13 +94,24 @@ with a different objective or model configuration. Stop it before starting the
 changed configuration. An identical start is safe: it verifies the generation
 and restores a missing required role without creating duplicates.
 
+`INVALID_SLP_PACK` naming a model marker means the canonical pack predates that
+role. Install and update preserve owner edits to `~/maestro/SLP.md`, so a pack
+seeded before the Observer seat lacks its marker. Add the line the error names
+next to the other model markers, for the Observer
+`<!-- slp:model:observer=codex:gpt-5.6-luna -->`, then start again.
+
 See [SLP setup and storage](/getting-started/slp-setup/) for every managed path.
 
 ## SLP role and work errors
 
 - `NO_ACTIVE_TEAM`: this project store has no running team binding.
 - `ROLE_UNPROVEN`: the command did not run from a Herdr pane registered to the
-  current generation.
+  current generation. Maestro reads `HERDR_PANE_ID` from the command's
+  environment or, when the agent's shell dropped it, from the nearest ancestor
+  process that still carries it; a command run outside Herdr, or from a pane
+  that is not a role, stays unproven.
+- `sentinel off` in `status` while the generation is RUNNING: the sentinel tab
+  exited or was closed. Repeat the identical `team start` to relaunch it.
 - `ROLE_FORBIDDEN`: the proven role does not own that operation. Check the
   [role authority table](/concepts/roles/#authority).
 - `INVALID_STATE`: the requested transition does not follow `OPEN → ACTIVE →

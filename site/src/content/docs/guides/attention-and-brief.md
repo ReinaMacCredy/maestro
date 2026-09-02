@@ -1,11 +1,11 @@
 ---
 title: Attention and brief
-description: Read administrative project summaries at the Hub without adding a background team watcher.
+description: Read administrative project summaries at the Hub; a running team is watched by its sentinel and Observer instead.
 ---
 
 `attention` and `brief` are Hub and development administration tools. They are
 not part of the nine-operation SLP role toolbelt and do not monitor a running
-team's transcript.
+team's transcript; that is the sentinel's job.
 
 ## Attention
 
@@ -42,9 +42,15 @@ starting a team or recording an owner decision.
 Brief is not a team control plane. Hub communicates with a running team through
 Team Supervisor, and team work remains in that project's store.
 
-## Watch Pane is separate
+## Watch Pane, sentinel and Observer are separate
 
 An optional Watch Pane is foreground runtime support owned by Team Supervisor.
 It displays rolling labelled pane output and has no store authority. Attention
 reads durable administrative records; Watch reads temporary runtime output.
 Neither silently changes the other.
+
+Each team generation also runs a sentinel that prompts the Observer seat every
+five minutes with the open items and every role pane's recent tail; the
+Observer records `work note --stall` and Maestro pushes the nudge. That is the
+runtime watcher. Attention stays an on-call administrative read and never sees
+a pane. See [Observer and sentinel](/guides/supervised-teams/#observer-and-sentinel).

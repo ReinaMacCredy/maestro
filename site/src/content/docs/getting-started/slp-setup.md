@@ -83,11 +83,27 @@ maestro work take <work-id>
 | `~/maestro/.maestro/maestro.db` | Hub | Team ID, project path, generation, pack version/digest, runtime role identities, owner/cross-team decisions, lifecycle and minimal activity | Durable |
 | `<project>/.maestro/SLP.md` | Project | Exact managed snapshot used by the active generation | Remains after stop; replaced at the next start |
 | `<git-common-root>/.maestro/maestro.db` | Project | Checkout-scoped team bindings and roles, work, notes, returns, acceptances, team/technical decisions and minimal activity | Durable and shared by linked worktrees; every read is filtered to the current checkout |
-| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and optional Watch Pane | Exists only while the generation runs |
+| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Observer, Peers, the sentinel tab and optional Watch Pane | Exists only while the generation runs |
 | `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | Rolling labelled Watch output and generation temporary data | Temporary; deleted at team stop |
 
 Never edit either SQLite store by hand. Use Maestro operations so current state
 and minimal activity remain in the same transaction.
+
+### Model markers
+
+`~/maestro/SLP.md` opens with one marker per role, `<harness>:<model>`:
+
+```
+<!-- slp:model:team-supervisor=claude:default -->
+<!-- slp:model:lead=codex:default -->
+<!-- slp:model:peer=codex:default -->
+<!-- slp:model:observer=codex:gpt-5.6-luna -->
+```
+
+`team start` reads them for the next generation; `--supervisor-model`,
+`--lead-model`, `--peer-model` and `--observer-model` override one start. A
+pack seeded before a role existed lacks its marker, and `team start` answers
+`INVALID_SLP_PACK` naming the line to add.
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it
