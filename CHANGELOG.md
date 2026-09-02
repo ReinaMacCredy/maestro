@@ -11,6 +11,14 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- `maestro work note <id> "<what you need>" --blocked` stores the note with a
+  `blocked` flag (`maestro status <id>` shows `note [blocked] by ...`, JSON
+  notes carry `flag`) and pushes `[from <role>][<id> BLOCKED] <summary>` one
+  seat up: Peer to Lead, Lead to Team Supervisor, Team Supervisor to the Hub
+  `supervisor` agent. The Workspace Pack names the operation (d761).
+
 ### Fixed
 
 - `maestro decision draft <draft-id> --rationale <why>` (also `--dissent`,

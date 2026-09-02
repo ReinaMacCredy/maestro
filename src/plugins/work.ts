@@ -629,6 +629,9 @@ export const workPlugin: BuiltInPlugin = {
         if (invocation.options.rework === true) {
           throw new CliError("INVALID_OPTION", "--rework is available only for SLP RETURNED work");
         }
+        if (invocation.options.blocked === true) {
+          throw new CliError("INVALID_OPTION", "--blocked is available only for SLP work");
+        }
         const id = requiredPosition(invocation, 0, "work id");
         const text = requiredPosition(invocation, 1, "note text");
         requireWork(context, id);
@@ -647,6 +650,9 @@ export const workPlugin: BuiltInPlugin = {
       }, {
         description: "Append a note to a work item.",
         flags: {
+          "--blocked": {
+            description: "Flag the note as blocked and push it one SLP seat up.",
+          },
           "--rework": {
             description: "Grant the current SLP return revision one reviewer-authorized retake.",
           },

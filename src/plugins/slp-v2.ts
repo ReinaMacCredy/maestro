@@ -461,6 +461,11 @@ function migrateProject(store: Store): void {
     "ready_challenge",
     "ALTER TABLE slp_local_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
   );
+  store.ensureColumn(
+    "slp_work_entries",
+    "flag",
+    "ALTER TABLE slp_work_entries ADD COLUMN flag TEXT",
+  );
 }
 
 function slug(value: string): string {
@@ -2110,6 +2115,10 @@ export async function maybeHandleSlpWorkNote(
   const body = requiredPosition(invocation, 1, "note body");
   const work = requireSlpWork(context, actor, id);
   const rework = invocation.options.rework === true;
+  const blocked = invocation.options.blocked === true;
+  if (rework && blocked) {
+    throw new CliError("INVALID_OPTION", "--blocked and --rework are separate notes");
+  }
   if (actor.role === "peer" && work.assigned_to !== actor.name) {
     throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
   }
@@ -2157,10 +2166,10 @@ export async function maybeHandleSlpWorkNote(
     }
     context.store.database
       .query(
-        `INSERT INTO slp_work_entries (work_id, kind, actor, body, created_at)
-         VALUES (?, 'NOTE', ?, ?, ?)`,
+        `INSERT INTO slp_work_entries (work_id, kind, actor, body, flag, created_at)
+         VALUES (?, 'NOTE', ?, ?, ?, ?)`,
       )
-      .run(id, actor.name, body, now);
+      .run(id, actor.name, body, blocked ? "blocked" : null, now);
     recordProjectActivity(context, actor, "work.note", id, now);
     context.store.database.exec("COMMIT");
   } catch (error) {
@@ -2180,12 +2189,34 @@ export async function maybeHandleSlpWorkNote(
       `maestro status ${id}`,
     );
   }
+  // d761: the blocked note wakes the seat above the actor, never the reviewer
+  // of the item, because the one who is stuck is the one escalating.
+  if (blocked && actor.role === "team-supervisor") {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      "supervisor",
+      `${id} BLOCKED`,
+      `${body} in ${actor.team.team_id} g${actor.team.generation}`,
+      "maestro status",
+    );
+  } else if (blocked) {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      rolePaneName(context, actor, actor.role === "lead" ? "team-supervisor" : "lead"),
+      `${id} BLOCKED`,
+      body,
+      `maestro status ${id}`,
+    );
+  }
+  const kind = rework ? "rework grant" : blocked ? "blocked note" : "note";
   return {
     data: {
-      note: { actor: actor.name, body, createdAt: now, rework },
+      note: { actor: actor.name, body, createdAt: now, flag: blocked ? "blocked" : null, rework },
       work: workData(readSlpWork(context, actor, id)),
     },
-    text: `${id} ${rework ? "rework grant" : "note"} by ${actor.name}: ${body}`,
+    text: `${id} ${kind} by ${actor.name}: ${body}`,
   };
 }
 
@@ -3672,9 +3703,10 @@ export async function maybeHandleSlpStatus(
         actor: string;
         body: string;
         created_at: string;
+        flag: string | null;
         kind: "NOTE" | "RETURN" | "ACCEPTANCE";
       }, [string]>(
-        `SELECT kind, actor, body, created_at FROM slp_work_entries
+        `SELECT kind, actor, body, flag, created_at FROM slp_work_entries
          WHERE work_id = ? ORDER BY id`,
       )
       .all(requestedWork);
@@ -3746,7 +3778,12 @@ export async function maybeHandleSlpStatus(
         decisions,
         notes: entries
           .filter((entry) => entry.kind === "NOTE")
-          .map((entry) => ({ actor: entry.actor, body: entry.body, createdAt: entry.created_at })),
+          .map((entry) => ({
+            actor: entry.actor,
+            body: entry.body,
+            createdAt: entry.created_at,
+            flag: entry.flag,
+          })),
         returns: entries
           .filter((entry) => entry.kind === "RETURN")
           .map((entry) => ({ actor: entry.actor, body: entry.body, createdAt: entry.created_at })),
@@ -3757,7 +3794,9 @@ export async function maybeHandleSlpStatus(
         `revision: ${work.return_revision}`,
         `objective: ${clipLine(work.objective, 160)}`,
         latest
-          ? `${latest.kind.toLowerCase()} by ${latest.actor}: ${clipLine(latest.body, 160)}`
+          ? `${latest.kind.toLowerCase()}${latest.flag ? ` [${latest.flag}]` : ""} by ${latest.actor}: ${
+            clipLine(latest.body, 160)
+          }`
           : "entries: none",
         decisionLine(decisions.map((decision) => ({ id: decision.id, workId: null }))),
         nextLine(work, nextStep(actor, roles, work, reworkGrantOpen(context, work))),

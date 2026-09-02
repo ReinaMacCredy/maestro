@@ -5248,6 +5248,101 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
   });
 }, 20_000);
 
+
+test("SLP v2 work note --blocked flags the note and pushes one line to the seat above (d761)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Blocked notes", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const notices = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
+      );
+    const id = data.work.id;
+    const noteFlag = (stdout: string) => envelope<{ note: { flag: string | null } }>(stdout).note.flag;
+
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
+    ).toBe(0);
+    const both = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", id, "x", "--blocked", "--rework", "--json"],
+      leadEnvironment,
+    );
+    expect(both.exitCode).toBe(1);
+    expect(failureEnvelope(both.stderr).error.code).toBe("INVALID_OPTION");
+
+    const blocked = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", id, "need the API key name\nsecond line", "--blocked", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(blocked.stderr)).toBe("");
+    expect(blocked.exitCode).toBe(0);
+    expect(noteFlag(blocked.stdout)).toBe("blocked");
+    expect(await notices()).toEqual([
+      ["agent", "prompt", supervisor.name, `[from lead][${id} BLOCKED] need the API key name; read: maestro status ${id}`],
+    ]);
+
+    const shown = await runCliAt(fixture, fixture.repo, ["status", id], supervisorEnvironment);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`note [blocked] by ${lead.name}: need the API key name`);
+    const shownJson = envelope<{ notes: Array<{ flag: string | null }> }>(
+      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], supervisorEnvironment)).stdout,
+    );
+    expect(shownJson.notes.map((note) => note.flag)).toEqual(["blocked"]);
+
+    const escalated = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "note", id, "owner must pick the vendor", "--blocked", "--json"],
+      supervisorEnvironment,
+    );
+    expect(phaseFree(escalated.stderr)).toBe("");
+    expect(escalated.exitCode).toBe(0);
+    expect((await notices()).at(-1)).toEqual([
+      "agent",
+      "prompt",
+      "supervisor",
+      `[from team-supervisor][${id} BLOCKED] owner must pick the vendor in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
+    ]);
+
+    const plain = await runCliAt(fixture, fixture.repo, ["work", "note", id, "still going", "--json"], leadEnvironment);
+    expect(plain.exitCode).toBe(0);
+    expect(noteFlag(plain.stdout)).toBeNull();
+    expect((await notices()).length).toBe(2);
+  });
+}, 30_000);
+
 test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status, and named Hub agent", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
