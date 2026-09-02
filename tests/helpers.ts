@@ -77,11 +77,38 @@ export async function runInstalledCliAt(
   );
 }
 
+// Runs the CLI under a parent process that keeps `env` but strips
+// HERDR_PANE_ID from the child; see tests/stripped-parent.ts (d770).
+export async function runCliBehindStrippedParentAt(
+  fixture: Fixture,
+  cwd: string,
+  args: string[],
+  env: Record<string, string | undefined> = {},
+): Promise<CliResult> {
+  return spawnCli(
+    fixture,
+    [process.execPath, join(import.meta.dir, "stripped-parent.ts"), cli, ...args],
+    cwd,
+    env,
+  );
+}
+
 async function runCliBinary(
   fixture: Fixture,
   binary: string,
   cwd: string,
   args: string[],
+  env: Record<string, string | undefined>,
+  stdin?: string,
+): Promise<CliResult> {
+  const command = binary === cli ? [process.execPath, binary, ...args] : [binary, ...args];
+  return spawnCli(fixture, command, cwd, env, stdin);
+}
+
+async function spawnCli(
+  fixture: Fixture,
+  command: string[],
+  cwd: string,
   env: Record<string, string | undefined>,
   stdin?: string,
 ): Promise<CliResult> {
@@ -98,7 +125,6 @@ async function runCliBinary(
       childEnvironment[name] = value;
     }
   }
-  const command = binary === cli ? [process.execPath, binary, ...args] : [binary, ...args];
   const child = Bun.spawn(command, {
     cwd,
     env: childEnvironment,

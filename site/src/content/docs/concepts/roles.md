@@ -14,7 +14,9 @@ administrative Maestro commands, or direct Herdr calls; topology and
 external-effect limits remain obligations enforced by the Human and host
 policy. Within those operations, `MAESTRO_SESSION_ID` and
 `MAESTRO_SESSION_PID` do not grant an SLP role; a missing, mismatched, or
-prior-generation pane binding fails closed.
+prior-generation pane binding fails closed. The pane identity is
+`HERDR_PANE_ID`, or, when an agent's shell dropped the variable, the value the
+nearest ancestor process still carries.
 
 ## Topology
 

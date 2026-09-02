@@ -69,6 +69,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Fixed
 
+- A role command whose shell dropped `HERDR_PANE_ID` (Codex ran the Observer's
+  `work note --stall` with no HERDR variables in lab g9 while its own process
+  carried them) failed with ROLE_UNPROVEN. The pane identity now also comes
+  from the nearest ancestor process that still carries the variable, read
+  through `ps`; `herdr pane current` is not used because without the variable
+  it names the focused pane (d770).
 - A `team start` that failed before its panes existed left a RESERVED
   lifecycle row that refused any retry with another objective or model
   (`TEAM_START_PENDING` with nobody starting). An ownerless RESERVED

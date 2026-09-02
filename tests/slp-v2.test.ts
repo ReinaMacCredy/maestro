@@ -23,6 +23,7 @@ import {
   initializeGitRepository,
   runCli,
   runCliAt,
+  runCliBehindStrippedParentAt,
   withFixture,
 } from "./helpers.ts";
 
@@ -281,6 +282,56 @@ test("SLP v2 accepts presentation-only markers before exact role acknowledgement
     expect(runtime.outputs[supervisor?.name ?? ""]).toMatch(/^⏺ SLP_ROLE_READY /);
     expect(runtime.outputs[lead?.name ?? ""]).toMatch(/^• SLP_ROLE_READY /);
     expect(runtime.outputs[delegatedData.role.name]).toMatch(/^› SLP_ROLE_READY /);
+  });
+}, 15_000);
+
+test("SLP v2 reads the pane identity from an ancestor process when the shell dropped HERDR_PANE_ID", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Resolve the pane from a parent process", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const lead = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+    }>(started.stdout).team.roles.find((role) => role.role === "lead");
+    expect(lead).toBeDefined();
+
+    const delegated = await runCliBehindStrippedParentAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Claim through the parent process", "--to", "peer-parent", "--json"],
+      { ...fake.env, HERDR_PANE_ID: lead?.paneId },
+    );
+    expect(phaseFree(delegated.stderr)).toBe("");
+    expect(delegated.exitCode).toBe(0);
+    const projectDatabase = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
+      readonly: true,
+    });
+    try {
+      expect(
+        projectDatabase
+          .query<{ created_by: string }, [string]>(
+            "SELECT created_by FROM slp_work WHERE objective = ?",
+          )
+          .get("Claim through the parent process")?.created_by,
+      ).toBe(lead?.name ?? "");
+    } finally {
+      projectDatabase.close();
+    }
   });
 }, 15_000);
 
