@@ -31,6 +31,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Changed
 
+- The role acknowledgement now accepts exactly one whitespace between the two
+  challenge halves (`challenge=<left> <right>`); every other byte stays
+  exact. Small models and a line wrap inside the value produced that form
+  while proving both halves were read (d768).
 - `status --json` for a team lists the observer among `roles`, and team start
   JSON carries three roles, so consumers pinned to two role entries must
   widen (d762).

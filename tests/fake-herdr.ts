@@ -15,6 +15,7 @@ export interface FakeHerdrBehavior {
   codexNotReadyAttempts?: number;
   failWorkspaceId?: string;
   invalidAcknowledgementField?: "challenge" | "pack";
+  spacedChallenge?: boolean;
   paneRunEmptyOutput?: boolean;
   processInfo?: boolean;
   processInfoDelayMs?: number;
@@ -409,6 +410,9 @@ if (command === "workspace list") {
       }
       if (state.behavior.invalidAcknowledgementField === "challenge") {
         acknowledgement[7] = "challenge=" + "0".repeat(32);
+      }
+      if (state.behavior.spacedChallenge) {
+        acknowledgement[7] = "challenge=" + challengeLeft + " " + challengeRight;
       }
       const acknowledgementLines = state.behavior.wrapAcknowledgements
         ? [

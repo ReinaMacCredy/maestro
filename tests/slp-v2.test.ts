@@ -356,6 +356,32 @@ test("SLP v2 rejects stale digest or challenge acknowledgements before granting 
   }
 }, 30_000);
 
+test("SLP v2 accepts one space between the challenge halves and nothing else (d768)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { spacedChallenge: true, wrapAcknowledgements: true });
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Accept the spaced challenge", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    expect(
+      envelope<{ team: { roles: Array<{ role: string }> } }>(started.stdout).team.roles,
+    ).toHaveLength(3);
+  });
+}, 30_000);
+
 test("SLP v2 waits for newly created panes to become available shells", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
