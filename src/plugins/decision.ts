@@ -215,7 +215,15 @@ export const decisionPlugin: BuiltInPlugin = {
           const needsOwner = invocation.options["needs-owner"] === true;
           const suppliedDissent = option(invocation, "dissent");
           const suppliedReviewAt = reviewAtOption(invocation);
-          if (second !== undefined) {
+          const suppliedRationale = option(invocation, "rationale");
+          // One positional naming an existing decision plus an edit field is an
+          // edit that keeps the text; the same shape with no field is the
+          // forgotten-replacement case below (w562, w587).
+          const fieldEdit = second === undefined &&
+            (suppliedRationale !== null || suppliedDissent !== null ||
+              suppliedReviewAt !== null || needsOwner) &&
+            getDecision(context, first) !== null;
+          if (second !== undefined || fieldEdit) {
             // The edit UPDATE sets text, rationale, dissent, review_at and
             // needs_owner; these three were parsed and dropped in silence, so
             // a supersession could be typed, accepted and lost (w562).
@@ -233,11 +241,16 @@ export const decisionPlugin: BuiltInPlugin = {
             const edit = context.store.database.transaction(() => {
               const existing = getDecision(context, first);
               if (!existing) {
+                if (second === undefined) {
+                  throw new CliError("NOT_FOUND", `decision not found: ${first}`, { id: first });
+                }
                 throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${second}`, {
                   argument: second,
                 });
               }
-              const text = required(invocation, 1, "replacement text");
+              const text = second === undefined
+                ? existing.text
+                : required(invocation, 1, "replacement text");
               if (existing.state === "withdrawn") {
                 throw new CliError("INVALID_STATE", `${existing.id} is withdrawn`, {
                   id: existing.id,
@@ -251,7 +264,7 @@ export const decisionPlugin: BuiltInPlugin = {
                   { id: existing.id, state: existing.state },
                 );
               }
-              const rationale = option(invocation, "rationale") ?? existing.rationale;
+              const rationale = suppliedRationale ?? existing.rationale;
               const dissent = suppliedDissent ?? existing.dissent;
               const reviewAt = suppliedReviewAt ?? existing.reviewAt;
               const council = existing.workId
@@ -323,7 +336,7 @@ export const decisionPlugin: BuiltInPlugin = {
               : `maestro decision draft "<text>" --supersedes ${named.id} to retire it`;
             throw new CliError(
               "MISSING_ARGUMENT",
-              `${named.id} already exists, so this reads as an edit with no replacement text; run: maestro decision draft ${named.id} "<replacement text>" to edit it, or ${retire}`,
+              `${named.id} already exists, so this reads as an edit with no replacement text; run: maestro decision draft ${named.id} "<replacement text>" to edit its text, maestro decision draft ${named.id} --rationale "<why>" to edit a field alone, or ${retire}`,
               { field: "replacement text", id: named.id, state: named.state },
             );
           }

@@ -581,7 +581,7 @@ test("21 --json list output is one compact single-line envelope", async () => {
   });
 });
 
-test("567 decision draft refuses an existing id with no replacement text (w562)", async () => {
+test("567 decision draft edits a field on an existing draft id and refuses a bare id (w562, w587)", async () => {
   await withFixture(async (fixture) => {
     const locked = idFrom(await runCli(fixture, ["decision", "draft", "the ruling being edited"]));
     expect((await runCli(fixture, ["decision", "lock", locked])).exitCode).toBe(0);
@@ -589,7 +589,9 @@ test("567 decision draft refuses an existing id with no replacement text (w562)"
 
     // What this cost: a draft whose text was the literal string d727, minted
     // beside the decision it was meant to edit, because one positional never
-    // reaches the edit branch and the create path cannot tell them apart.
+    // reached the edit branch and the create path cannot tell them apart.
+    // Then three rationale edits typed as "draft <id> --rationale" were
+    // refused and the ids locked in the same command (w587).
     const onLocked = await runCli(fixture, [
       "decision",
       "draft",
@@ -599,14 +601,23 @@ test("567 decision draft refuses an existing id with no replacement text (w562)"
     ]);
     expect(onLocked.exitCode).not.toBe(0);
     expect(onLocked.stderr).toContain(locked);
-    expect(onLocked.stderr).toContain("replacement text");
-    expect(onLocked.stderr).toContain(`--supersedes ${locked}`);
+    expect(onLocked.stderr).toContain("LOCKED_DECISION");
+    expect(onLocked.stderr).toContain("--supersedes");
+
+    const bare = await runCli(fixture, ["decision", "draft", open]);
+    expect(bare.exitCode).not.toBe(0);
+    expect(bare.stderr).toContain("replacement text");
+    expect(bare.stderr).toContain(`--rationale`);
 
     const onDraft = await runCli(fixture, ["decision", "draft", open, "--rationale", "a reason"]);
-    expect(onDraft.exitCode).not.toBe(0);
-    expect(onDraft.stderr).toContain("replacement text");
+    expect(onDraft.exitCode).toBe(0);
+    expect(onDraft.stdout).toContain(`${open} [draft] the draft still open`);
+    expect(onDraft.stdout).toContain("rationale: a reason");
+    const shown = await runCli(fixture, ["decision", "show", open]);
+    expect(shown.stdout).toContain("the draft still open");
+    expect(shown.stdout).toContain("rationale: a reason");
 
-    // Neither refusal wrote anything: two decisions exist, not four.
+    // Neither refusal nor the field edit wrote a new decision: two exist, not four.
     expect((await runCli(fixture, ["decision", "show", "d3"])).exitCode).not.toBe(0);
     const listed = await runCli(fixture, ["decision", "list"]);
     expect(listed.stdout).not.toContain(`${locked}\n`);

@@ -11,6 +11,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Fixed
+
+- `maestro decision draft <draft-id> --rationale <why>` (also `--dissent`,
+  `--review-at`, `--needs-owner`) now edits that field on the existing draft
+  and keeps its text; a locked target answers `LOCKED_DECISION`, and a bare id
+  with no field still answers `MISSING_ARGUMENT` (w587).
+
 ## [0.116.0] - 2026-09-02
 
 ### Added
