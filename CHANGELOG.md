@@ -11,6 +11,67 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.116.0] - 2026-09-02
+
+### Added
+
+- After `work return`, `work accept`, and `work note --rework` commit, the
+  binary prompts the counterpart's pane with one line,
+  `[from <role>][<id> <STATE>] <summary>; read: maestro status <id>`, so a
+  Team Supervisor or Lead waiting on a hand-off no longer polls the store for
+  it. The reviewer is derived from the assignee's role, never from
+  `created_by`; accepting Hub-created work and a normal stop also notify the
+  Herdr agent named `supervisor`. A refused prompt only warns and the store
+  stays the truth (d753).
+- The Team Supervisor may pass `team stop --reason <text>`. The reason rides
+  the stop grant into the STOP lifecycle row, Hub status prints
+  `<team> g<n> STOPPED (supervisor): <reason>`, and JSON exposes `stop`. Hub
+  `--reason` still requires `--emergency` (d760).
+- `maestro search --limit <n>` bounds the result count; the default is five,
+  and a truncated listing says how many more there are (d754).
+- `team start` and `work add --to` print their phases on stderr, and the pack
+  states that both block until the role pane acknowledges (d757).
+
+### Changed
+
+- `maestro status` hides dead sessions at read time: the text lists live
+  sessions and only those dead sessions that still hold work, closes with a
+  count of the hidden ones, and `--all` lists everything; JSON carries
+  `hiddenDead`. `maestro status <work-id>` outside an active SLP v2 role pane
+  refuses and points at `work show`. In this repo the default text went from
+  143 lines to 7 (d754).
+- In-team `maestro status` text is structured: a header naming team,
+  generation, role, name, pane, and missing panes; one line per non-DONE item
+  sorted OPEN, ACTIVE, RETURNED with `*` on the items the caller may act on;
+  DONE collapsed into a count that `--all` expands; and the generation's
+  decision ids. `maestro status <work-id>` prints six lines ending in a
+  `next:` line that names what the caller may run or whom it waits on. A Peer
+  sees only its own items. `--json` output is unchanged (d758).
+- `team start` against a RUNNING generation repairs only the missing roles. A
+  role whose recorded pane is still attached under the same instance id with a
+  recorded acknowledgement gets no contract prompt and no second
+  `SLP_ROLE_READY`, and the START lifecycle row in both stores is rewritten to
+  the current pane ids with the revision advanced so the audit snapshot
+  matches the role table. The same rule covers `work add --to` against a live
+  Peer (d759).
+
+### Fixed
+
+- `team start` and `work add --to` poll the role pane with non-scrolling
+  visible reads inside a 30 s window instead of reading once right after the
+  prompt returns; a pane that never answers ends on one unwrapped read and the
+  failure carries the pane tail. Runtime errors are typed (`SLP_RUNTIME`,
+  `ROLE_ACKNOWLEDGEMENT_MISMATCH`, `TRUST_DIALOG`, `AGENT_BLOCKED`) with Herdr
+  evidence, and an agent blocked on the claude or codex directory trust dialog
+  is named as such with the directory to trust (d755, d756).
+- Acknowledgement matching strips display markers in front of
+  `SLP_ROLE_READY`, reassembles an acknowledgement the pane wrapped across
+  lines, and waits for an agent Herdr reports as not ready instead of failing
+  the start on the first prompt.
+- `maestro install` removing a retired SLP mirror block that ends a file now
+  collapses the trailing newlines to one and leaves an otherwise empty file
+  empty.
+
 ## [0.115.0] - 2026-09-01
 
 ### Added
