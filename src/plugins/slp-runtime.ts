@@ -852,7 +852,7 @@ export class HerdrSlpRuntime {
         plan.teamId,
         "--generation",
         String(plan.generation),
-      ], plan.projectPath),
+      ], plan.projectPath, this.commandTimeoutMs, true),
     );
     if (!accepted(launched)) {
       throw new SlpRuntimeError("sentinel command was not accepted", ["pane", "run"]);

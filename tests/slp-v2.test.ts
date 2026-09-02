@@ -5108,7 +5108,7 @@ test("SLP v2 team start launches the sentinel beside the roles and stop closes i
         })
       ).exitCode,
     ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
+    const fake = await installFakeHerdr(fixture, { paneRunEmptyOutput: true });
     const started = await runCliAt(
       fixture,
       room,
