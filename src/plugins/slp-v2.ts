@@ -33,8 +33,14 @@ type LifecyclePhase = "RESERVED" | "RUNTIME_READY" | "COMMITTED";
 
 interface PackModels {
   lead: string;
+  observer: string;
   peer: string;
   teamSupervisor: string;
+}
+
+// Generations started before the Observer seat (d762) carry no observer model.
+function packModels(json: string): PackModels {
+  return { observer: "default", ...(JSON.parse(json) as Partial<PackModels>) } as PackModels;
 }
 
 interface SlpWorkRecord {
@@ -194,7 +200,7 @@ function migrateRoom(store: Store): void {
     CREATE TABLE IF NOT EXISTS slp_team_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer')),
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -278,6 +284,49 @@ function migrateRoom(store: Store): void {
     "ready_challenge",
     "ALTER TABLE slp_team_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
   );
+  widenRoleCheck(store, "slp_team_roles");
+}
+
+const ROLE_TABLE_COLUMNS = [
+  "team_id", "generation", "role", "name", "pane_id", "workspace_id", "instance_id",
+  "pack_digest", "brief_digest", "ready_challenge", "created_at",
+].join(", ");
+
+// d762: role tables created before the Observer seat carry a three-value
+// CHECK that SQLite cannot alter in place; rebuild once, after ensureColumn
+// has brought the old table up to the full column set.
+function widenRoleCheck(store: Store, table: "slp_team_roles" | "slp_local_roles"): void {
+  const sql = store.database
+    .query<{ sql: string }, [string]>(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .get(table)?.sql ?? "";
+  if (sql === "" || sql.includes("'observer'")) return;
+  const foreignKey = table === "slp_team_roles"
+    ? ",\n      FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation)"
+    : "";
+  store.migrate(`
+    BEGIN IMMEDIATE;
+    ALTER TABLE ${table} RENAME TO ${table}_legacy;
+    CREATE TABLE ${table} (
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
+      name TEXT NOT NULL,
+      pane_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      instance_id TEXT NOT NULL,
+      pack_digest TEXT NOT NULL,
+      brief_digest TEXT NOT NULL,
+      ready_challenge TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(team_id, generation, name)${foreignKey}
+    );
+    INSERT INTO ${table} (${ROLE_TABLE_COLUMNS})
+      SELECT ${ROLE_TABLE_COLUMNS} FROM ${table}_legacy;
+    DROP TABLE ${table}_legacy;
+    COMMIT;
+  `);
 }
 
 function migrateProject(store: Store): void {
@@ -298,7 +347,7 @@ function migrateProject(store: Store): void {
     CREATE TABLE IF NOT EXISTS slp_local_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer')),
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -466,6 +515,7 @@ function migrateProject(store: Store): void {
     "flag",
     "ALTER TABLE slp_work_entries ADD COLUMN flag TEXT",
   );
+  widenRoleCheck(store, "slp_local_roles");
 }
 
 function slug(value: string): string {
@@ -498,10 +548,15 @@ function packVersion(pack: string): string {
   return version;
 }
 
-function packModel(pack: string, role: "team-supervisor" | "lead" | "peer"): string {
+function packModel(pack: string, role: SlpRole): string {
   const escaped = role.replace("-", "\\-");
   const value = new RegExp(`<!-- slp:model:${escaped}=[^:>]+:([^\\s>]+) -->`).exec(pack)?.[1];
-  if (!value) throw new CliError("INVALID_SLP_PACK", `SLP.md is missing the ${role} model`);
+  if (!value) {
+    throw new CliError(
+      "INVALID_SLP_PACK",
+      `SLP.md is missing the ${role} model marker <!-- slp:model:${role}=<harness>:<model> -->`,
+    );
+  }
   return value;
 }
 
@@ -564,6 +619,7 @@ function roleContracts(
     ["team-supervisor", contract("team-supervisor", section(pack, "role:team-supervisor"))],
     ["lead", contract("lead", section(pack, "role:lead"))],
     ["peer", contract("peer", section(pack, "role:peer"))],
+    ["observer", contract("observer", section(pack, "role:observer"))],
   ]);
 }
 
@@ -852,6 +908,7 @@ type StartReservation =
 
 function changedPackModels(overrides: Partial<PackModels>, models: PackModels): boolean {
   return (overrides.lead !== undefined && overrides.lead !== models.lead) ||
+    (overrides.observer !== undefined && overrides.observer !== models.observer) ||
     (overrides.peer !== undefined && overrides.peer !== models.peer) ||
     (overrides.teamSupervisor !== undefined &&
       overrides.teamSupervisor !== models.teamSupervisor);
@@ -895,7 +952,7 @@ function reserveStart(
       )
       .get(input.projectPath);
     if (running) {
-      const models = JSON.parse(running.configuration_json) as PackModels;
+      const models = packModels(running.configuration_json);
       if (running.objective !== input.objective || changedPackModels(input.overrides, models)) {
         throw new CliError(
           "TEAM_RUNNING",
@@ -964,7 +1021,7 @@ function reserveStart(
       )
       .get(input.projectPath);
     if (pending) {
-      const models = JSON.parse(pending.configuration_json) as PackModels;
+      const models = packModels(pending.configuration_json);
       if (pending.objective !== input.objective || changedPackModels(input.overrides, models)) {
         throw new CliError(
           "TEAM_START_PENDING",
@@ -1308,6 +1365,7 @@ async function startTeam(
     const hubDigest = createHash("sha256").update(hubPackBytes).digest("hex");
     const hubModels = {
       lead: overrides.lead ?? packModel(hubPack, "lead"),
+      observer: overrides.observer ?? packModel(hubPack, "observer"),
       peer: overrides.peer ?? packModel(hubPack, "peer"),
       teamSupervisor: overrides.teamSupervisor ?? packModel(hubPack, "team-supervisor"),
     };
@@ -1342,7 +1400,7 @@ async function startTeam(
     if (reservation.kind === "running") {
       const running = reservation.row;
       try {
-        const models = JSON.parse(running.configuration_json) as PackModels;
+        const models = packModels(running.configuration_json);
         if (!existsSync(snapshotPath)) {
           throw new CliError(
             "SLP_SNAPSHOT_MISSING",
@@ -1363,6 +1421,7 @@ async function startTeam(
         const plan = buildSlpTeamPlan({
           generation: running.generation,
           leadModel: models.lead,
+          observerModel: models.observer,
           projectPath,
           supervisorModel: models.teamSupervisor,
           teamId: running.team_id,
@@ -1379,7 +1438,7 @@ async function startTeam(
             `SELECT role, pane_id, instance_id, pack_digest, brief_digest, ready_challenge
              FROM slp_local_roles
              WHERE team_id = ? AND generation = ? AND instance_id <> ''
-               AND role IN ('team-supervisor', 'lead')`,
+               AND role IN ('team-supervisor', 'lead', 'observer')`,
           )
           .all(running.team_id, running.generation);
         const existingInstances = Object.fromEntries(
@@ -1497,10 +1556,11 @@ async function startTeam(
         );
       }
       const pack = new TextDecoder().decode(packBytes);
-      const models = JSON.parse(operation.configuration_json) as PackModels;
+      const models = packModels(operation.configuration_json);
       const plan = buildSlpTeamPlan({
         generation: operation.generation,
         leadModel: models.lead,
+        observerModel: models.observer,
         projectPath,
         supervisorModel: models.teamSupervisor,
         teamId: operation.team_id,
@@ -1919,7 +1979,7 @@ export async function maybeHandleSlpWorkAdd(
       requestedTarget,
       roles.filter((role) => role.role === "peer").map((role) => role.name),
     );
-    const configuration = JSON.parse(actor.team.configuration_json) as PackModels;
+    const configuration = packModels(actor.team.configuration_json);
     const snapshotPath = join(actor.team.project_path, ".maestro", "SLP.md");
     const snapshot = new Uint8Array(await readFile(snapshotPath));
     const digest = createHash("sha256").update(snapshot).digest("hex");
@@ -1933,6 +1993,7 @@ export async function maybeHandleSlpWorkAdd(
     plan = buildSlpTeamPlan({
       generation: actor.team.generation,
       leadModel: configuration.lead,
+      observerModel: configuration.observer,
       projectPath: actor.team.project_path,
       supervisorModel: configuration.teamSupervisor,
       teamId: actor.team.team_id,
@@ -2686,10 +2747,11 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
 }
 
 function stopPlan(team: ActiveLocalTeam): SlpTeamPlan {
-  const models = JSON.parse(team.configuration_json) as PackModels;
+  const models = packModels(team.configuration_json);
   return buildSlpTeamPlan({
     generation: team.generation,
     leadModel: models.lead,
+    observerModel: models.observer,
     projectPath: team.project_path,
     supervisorModel: models.teamSupervisor,
     teamId: team.team_id,
@@ -3419,7 +3481,7 @@ function roleRows(store: Store, teamId: string, generation: number, local: boole
       `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
               brief_digest, ready_challenge FROM ${table}
        WHERE team_id = ? AND generation = ?
-       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
+       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 WHEN 'observer' THEN 3 ELSE 2 END, name`,
     )
     .all(teamId, generation);
 }
@@ -3577,10 +3639,11 @@ export async function maybeHandleSlpStatus(
       let missingPanes: string[] = [];
       let runtimeState: "available" | "unavailable" | "not-running" = "not-running";
       let watch = false;
-      const models = JSON.parse(row.configuration_json) as PackModels;
+      const models = packModels(row.configuration_json);
       const plan = buildSlpTeamPlan({
         generation: row.generation,
         leadModel: models.lead,
+        observerModel: models.observer,
         projectPath: row.project_path,
         supervisorModel: models.teamSupervisor,
         teamId: row.team_id,
@@ -3684,7 +3747,7 @@ export async function maybeHandleSlpStatus(
   }
 
   if (!requireActiveOrLegacy(context)) return null;
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer", "observer"]);
   const roles = roleRows(context.store, actor.team.team_id, actor.team.generation, true);
   if (requestedWork) {
     const work = requireSlpWork(context, actor, requestedWork);
@@ -3811,6 +3874,7 @@ export async function maybeHandleSlpStatus(
     .all(actor.team.team_id, actor.team.generation);
   const scoped = allWork.filter((work) => {
     if (actor.role === "team-supervisor") return work.state === "ACTIVE" || work.state === "RETURNED";
+    if (actor.role === "observer") return work.state !== "DONE";
     if (actor.role === "peer") return work.assigned_to === actor.name && work.state !== "DONE";
     return (
       work.assigned_to === actor.name || work.created_by === actor.name
@@ -3819,10 +3883,11 @@ export async function maybeHandleSlpStatus(
   let missingPanes: string[] = [];
   let runtimeState: "available" | "unavailable" = "available";
   let watch = false;
-  const models = JSON.parse(actor.team.configuration_json) as PackModels;
+  const models = packModels(actor.team.configuration_json);
   const plan = buildSlpTeamPlan({
     generation: actor.team.generation,
     leadModel: models.lead,
+    observerModel: models.observer,
     projectPath: actor.team.project_path,
     supervisorModel: models.teamSupervisor,
     teamId: actor.team.team_id,
@@ -3918,6 +3983,7 @@ export const slpV2Plugin: BuiltInPlugin = {
             requiredPosition(invocation, 1, "objective"),
             {
               lead: stringOption(invocation, "lead-model"),
+              observer: stringOption(invocation, "observer-model"),
               peer: stringOption(invocation, "peer-model"),
               teamSupervisor: stringOption(invocation, "supervisor-model"),
             },
@@ -3927,6 +3993,10 @@ export const slpV2Plugin: BuiltInPlugin = {
           json: true,
           flags: {
             "--lead-model": { description: "Override the Workspace Pack Lead model.", value: true },
+            "--observer-model": {
+              description: "Override the Workspace Pack Observer model.",
+              value: true,
+            },
             "--peer-model": { description: "Override the Workspace Pack Peer model.", value: true },
             "--supervisor-model": {
               description: "Override the Workspace Pack Team Supervisor model.",

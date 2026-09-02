@@ -18,6 +18,22 @@ TypeScript-on-Bun line and continues the existing version sequence.
   notes carry `flag`) and pushes `[from <role>][<id> BLOCKED] <summary>` one
   seat up: Peer to Lead, Lead to Team Supervisor, Team Supervisor to the Hub
   `supervisor` agent. The Workspace Pack names the operation (d761).
+- Every team generation now starts a fourth seat, the Observer: a Codex pane
+  named `observer-<team>` launched after the Lead with the model from the new
+  pack marker `<!-- slp:model:observer=codex:gpt-5.6-luna -->`
+  (`team start --observer-model` overrides it). It may run `maestro status`
+  and nothing else yet; `team stop` closes it before the Supervisor and repair
+  reuses an acknowledged one. Role tables created before this release are
+  rebuilt once to admit the role. A canonical Workspace Pack without the
+  observer marker fails `team start` with `INVALID_SLP_PACK` naming the
+  marker; generations started before it treat the observer model as
+  `default` (d762, d767).
+
+### Changed
+
+- `status --json` for a team lists the observer among `roles`, and team start
+  JSON carries three roles, so consumers pinned to two role entries must
+  widen (d762).
 
 ### Fixed
 

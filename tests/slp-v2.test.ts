@@ -164,6 +164,13 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
         readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
         role: "lead",
       }),
+      expect.objectContaining({
+        briefDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        instanceId: expect.stringMatching(/^[a-f0-9-]{36}$/),
+        packDigest: expectedDigest,
+        readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
+        role: "observer",
+      }),
     ]);
     expect(startData.work).toMatchObject({
       assignedTo: expect.stringMatching(/^lead-/),
@@ -206,6 +213,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     expect(runtime.agents.map((agent: { name: string }) => agent.name).sort()).toEqual(
       [
         startData.team.roles.find((role) => role.role === "lead")?.name,
+        startData.team.roles.find((role) => role.role === "observer")?.name,
         startData.team.roles.find((role) => role.role === "team-supervisor")?.name,
       ].sort(),
     );
@@ -213,7 +221,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     const prompts = commands.filter(
       (command) => command[0] === "agent" && command[1] === "prompt",
     );
-    expect(prompts).toHaveLength(2);
+    expect(prompts).toHaveLength(3);
     expect(prompts.every((command) => command.includes("--wait") && command.includes("--timeout")))
       .toBe(true);
     expect(
@@ -221,7 +229,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     ).toBe(true);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "read"),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 });
 
@@ -374,8 +382,8 @@ test("SLP v2 waits for newly created panes to become available shells", async ()
       (await fakeHerdrCommands(fake)).filter(
         (command) => command[0] === "agent" && command[1] === "start",
       ),
-    ).toHaveLength(4);
-    expect((await readFakeHerdrState(fake)).agents).toHaveLength(2);
+    ).toHaveLength(5);
+    expect((await readFakeHerdrState(fake)).agents).toHaveLength(3);
   });
 });
 
@@ -404,11 +412,11 @@ test("SLP v2 retries a transient contract prompt stall without restarting roles"
     const commands = await fakeHerdrCommands(fake);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "start"),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "prompt"),
-    ).toHaveLength(4);
-    expect((await readFakeHerdrState(fake)).agents).toHaveLength(2);
+    ).toHaveLength(5);
+    expect((await readFakeHerdrState(fake)).agents).toHaveLength(3);
   });
 });
 
@@ -448,7 +456,7 @@ test("SLP v2 waits for an agent_not_ready launch without restarting the agent", 
         (command) =>
           command[0] === "agent" && command[1] === "start" && command.includes("codex"),
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(
       commands.slice(startIndex + 1, promptIndex).some(
         (command) => command[0] === "agent" && command[1] === "list",
@@ -463,6 +471,7 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
     const plan = buildSlpTeamPlan({
       generation: 1,
       leadModel: "default",
+      observerModel: "gpt-5.6-luna",
       projectPath: fixture.repo,
       supervisorModel: "default",
       teamId: "startup-window",
@@ -486,6 +495,7 @@ test("SLP v2 waits for workspace-close visibility before declaring runtime absen
     const plan = buildSlpTeamPlan({
       generation: 1,
       leadModel: "default",
+      observerModel: "gpt-5.6-luna",
       projectPath: fixture.repo,
       supervisorModel: "default",
       teamId: "close-visibility",
@@ -822,7 +832,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
       projectDatabase
         .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_roles")
         .get()?.count,
-    ).toBe(4);
+    ).toBe(6);
     expect(
       projectDatabase
         .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_decisions")
@@ -843,7 +853,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
         expect.objectContaining({ cwd: second.team.projectPath }),
       ]),
     );
-    expect(runtimeBeforeStop.agents).toHaveLength(4);
+    expect(runtimeBeforeStop.agents).toHaveLength(6);
 
     const stoppedFirst = await runCliAt(
       fixture,
@@ -870,7 +880,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
     expect(envelope<{ runtime: string; teamId: string }>(secondStillRunning.stdout))
       .toMatchObject({ runtime: "available", teamId: second.team.teamId });
     expect(await readFakeHerdrState(fake)).toMatchObject({
-      agents: [expect.any(Object), expect.any(Object)],
+      agents: [expect.any(Object), expect.any(Object), expect.any(Object)],
       workspaces: [expect.objectContaining({ cwd: second.team.projectPath })],
     });
 
@@ -968,10 +978,10 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
       (await fakeHerdrCommands(fake)).filter(
         (command) => command[0] === "agent" && command[1] === "prompt",
       );
-    expect(await prompts()).toHaveLength(2);
+    expect(await prompts()).toHaveLength(3);
     let runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
 
     const lead = runtime.agents.find((agent: { name: string }) => agent.name.startsWith("lead-"));
     expect(lead).toBeDefined();
@@ -998,11 +1008,11 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     });
     runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
     expect(runtime.agents.filter((agent: { name: string }) => agent.name.startsWith("lead-"))).toHaveLength(1);
     const repairPrompts = await prompts();
-    expect(repairPrompts).toHaveLength(3);
-    expect(repairPrompts[2]?.[2]).toBe(lead.name);
+    expect(repairPrompts).toHaveLength(4);
+    expect(repairPrompts[3]?.[2]).toBe(lead.name);
     const repairedData = envelope<{
       team: { roles: Array<{ paneId: string; readyChallenge: string; role: string }>; teamId: string };
     }>(repaired.stdout);
@@ -1076,7 +1086,7 @@ test("SLP v2 serializes ten concurrent starts into one generation and rejects co
     }
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
     const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
     expect(roomDatabase.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_teams").get()?.count)
       .toBe(1);
@@ -1397,7 +1407,7 @@ test("SLP v2 resolves symlink aliases to one canonical running project", async (
     });
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
   });
 }, 20_000);
 
@@ -1521,7 +1531,7 @@ test("SLP v2 gives same-basename projects distinct Herdr-safe team and role iden
       team: { roles: Array<{ name: string }>; teamId: string };
     }>(second.stdout).team;
     expect(firstTeam.teamId).not.toBe(secondTeam.teamId);
-    expect(new Set([...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)).size).toBe(4);
+    expect(new Set([...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)).size).toBe(6);
     for (const name of [...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)) {
       expect(name).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
     }
@@ -1572,7 +1582,7 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
     expect(envelope<{ team: { generation: number } }>(retried.stdout).team.generation).toBe(1);
     runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
   });
 });
 
@@ -3056,7 +3066,7 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
       watch: string;
       work: Array<{ id: string; state: string }>;
     }>(teamStatus.stdout);
-    expect(teamData.roles.map((role) => role.role).sort()).toEqual(["lead", "team-supervisor"]);
+    expect(teamData.roles.map((role) => role.role).sort()).toEqual(["lead", "observer", "team-supervisor"]);
     expect(teamData.work).toContainEqual(
       expect.objectContaining({ id: startData.work.id, state: "RETURNED" }),
     );
@@ -3169,6 +3179,7 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
     const plan = buildSlpTeamPlan({
       generation: started.team.generation,
       leadModel: "default",
+      observerModel: "gpt-5.6-luna",
       projectPath: started.team.projectPath,
       supervisorModel: "default",
       teamId: started.team.teamId,
@@ -4998,7 +5009,7 @@ test("SLP v2 Watch is one foreground non-agent reader whose death never blocks w
     ).toBe((activityBefore ?? 0) + 1);
     after.close();
     const runtime = await readFakeHerdrState(fake);
-    expect(runtime.agents).toHaveLength(2);
+    expect(runtime.agents).toHaveLength(3);
     const commands = await fakeHerdrCommands(fake);
     expect(commands.some((command) => command[0] === "agent" && command[1] === "prompt" && command[2]?.includes("watch")))
       .toBe(false);
@@ -5340,6 +5351,158 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
     expect(plain.exitCode).toBe(0);
     expect(noteFlag(plain.stdout)).toBeNull();
     expect((await notices()).length).toBe(2);
+  });
+}, 30_000);
+
+
+test("SLP v2 team start launches a Codex observer after the Lead, status admits it, and stop closes it (d762)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Observer seat", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead", "observer"]);
+    const observer = data.team.roles.find((role) => role.role === "observer")!;
+    expect(observer.name).toBe(`observer-${data.team.teamId}`);
+    const starts = (await fakeHerdrCommands(fake)).filter(
+      (command) => command[0] === "agent" && command[1] === "start",
+    );
+    expect(starts.map((command) => command[2])).toEqual([
+      `supervisor-${data.team.teamId}`,
+      `lead-${data.team.teamId}`,
+      observer.name,
+    ]);
+    expect(starts.at(-1)).toEqual([
+      "agent",
+      "start",
+      observer.name,
+      "--kind",
+      "codex",
+      "--pane",
+      observer.paneId,
+      "--timeout",
+      "60000",
+      "--",
+      "--model",
+      "gpt-5.6-luna",
+    ]);
+
+    const observerEnvironment = { ...fake.env, HERDR_PANE_ID: observer.paneId };
+    const status = envelope<{ role: { role: string }; work: Array<{ id: string }> }>(
+      (await runCliAt(fixture, fixture.repo, ["status", "--json"], observerEnvironment)).stdout,
+    );
+    expect(status.role.role).toBe("observer");
+    expect(status.work.map((work) => work.id)).toEqual([data.work.id]);
+    const shown = await runCliAt(fixture, fixture.repo, ["status", data.work.id], observerEnvironment);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(`next: waiting on lead-${data.team.teamId}`);
+    for (const args of [["work", "take", data.work.id], ["work", "note", data.work.id, "x"]]) {
+      const refused = await runCliAt(fixture, fixture.repo, [...args, "--json"], observerEnvironment);
+      expect(refused.exitCode).toBe(1);
+      expect(failureEnvelope(refused.stderr).error.code).toBe("ROLE_FORBIDDEN");
+    }
+
+    const stopped = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--emergency", "--reason", "observer test done", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(stopped.stderr)).toBe("");
+    expect(stopped.exitCode).toBe(0);
+    const runtime = await readFakeHerdrState(fake);
+    expect(runtime.agents).toEqual([]);
+    expect(runtime.workspaces).toEqual([]);
+  });
+}, 30_000);
+
+test("SLP v2 team start widens the role CHECK on stores created before the Observer seat (d762)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const legacyColumns = `
+      team_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer')),
+      name TEXT NOT NULL,
+      pane_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(team_id, generation, name)`;
+    const roomPath = join(room, ".maestro", "maestro.db");
+    const roomDatabase = new Database(roomPath);
+    roomDatabase.exec(
+      `DROP TABLE IF EXISTS slp_team_roles;
+       CREATE TABLE slp_team_roles (${legacyColumns},
+         FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation));`,
+    );
+    roomDatabase.close();
+    expect((await runCliAt(fixture, fixture.repo, ["status", "--json"])).exitCode).toBe(0);
+    const projectPath = join(fixture.repo, ".maestro", "maestro.db");
+    const projectDatabase = new Database(projectPath);
+    projectDatabase.exec(`CREATE TABLE slp_local_roles (${legacyColumns});`);
+    projectDatabase.close();
+
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Legacy CHECK", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{ team: { roles: Array<{ role: string }> } }>(started.stdout);
+    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead", "observer"]);
+    for (const [path, table] of [[roomPath, "slp_team_roles"], [projectPath, "slp_local_roles"]] as const) {
+      const database = new Database(path, { readonly: true });
+      expect(
+        database
+          .query<{ sql: string }, [string]>(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+          )
+          .get(table)?.sql,
+      ).toContain("'observer'");
+      expect(
+        database
+          .query<{ count: number }, []>(`SELECT COUNT(*) AS count FROM ${table} WHERE role = 'observer'`)
+          .get()?.count,
+      ).toBe(1);
+      expect(
+        database
+          .query<{ present: number }, [string]>("SELECT 1 AS present FROM sqlite_master WHERE name = ?")
+          .get(`${table}_legacy`),
+      ).toBeNull();
+      database.close();
+    }
   });
 }, 30_000);
 

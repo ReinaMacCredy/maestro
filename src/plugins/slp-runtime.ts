@@ -13,7 +13,7 @@ const paneTailLines = 15;
 const trustDialogPattern =
   /Do you trust the contents of this directory|Quick safety check: Is this a project you created or one you trust|Yes, I trust this folder/;
 
-export type SlpRole = "team-supervisor" | "lead" | "peer";
+export type SlpRole = "team-supervisor" | "lead" | "peer" | "observer";
 
 export interface SlpRolePlan {
   kind: "claude" | "codex";
@@ -222,6 +222,7 @@ function herdrErrorCode(error: unknown): string | null {
 export function buildSlpTeamPlan(input: {
   generation: number;
   leadModel: string;
+  observerModel: string;
   projectPath: string;
   supervisorModel: string;
   teamId: string;
@@ -245,6 +246,14 @@ export function buildSlpTeamPlan(input: {
         model: input.leadModel,
         name: `lead-${input.teamId}`,
         role: "lead",
+      },
+      // d762/d767: the Observer is always Codex; only its model comes from the pack.
+      {
+        kind: "codex",
+        label: `${prefix}:observer`,
+        model: input.observerModel,
+        name: `observer-${input.teamId}`,
+        role: "observer",
       },
     ],
     teamId: input.teamId,
@@ -1264,6 +1273,7 @@ export class HerdrSlpRuntime {
 
     await closeRole("peer");
     await closeRole("lead");
+    await closeRole("observer");
 
     for (const pane of panes) {
       if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;
