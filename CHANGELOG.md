@@ -22,8 +22,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
   named `observer-<team>` launched after the Lead with the model from the new
   pack marker `<!-- slp:model:observer=codex:gpt-5.6-luna -->`
   (`team start --observer-model` overrides it). It may run `maestro status`
-  and nothing else yet; `team stop` closes it before the Supervisor and repair
-  reuses an acknowledged one. Role tables created before this release are
+  and record stall notes (below), nothing else; `team stop` closes it before
+  the Supervisor and repair reuses an acknowledged one. Role tables created before this release are
   rebuilt once to admit the role. A canonical Workspace Pack without the
   observer marker fails `team start` with `INVALID_SLP_PACK` naming the
   marker; generations started before it treat the observer model as
