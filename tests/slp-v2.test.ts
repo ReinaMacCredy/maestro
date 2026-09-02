@@ -5675,6 +5675,112 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
 }, 30_000);
 
 
+test("SLP v2 observer work note --stall nudges the stuck seat and the Team Supervisor once per unchanged stall (d763)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Stall notes", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const observer = data.team.roles.find((role) => role.role === "observer")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const observerEnvironment = { ...fake.env, HERDR_PANE_ID: observer.paneId };
+    const notices = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
+      );
+    const id = data.work.id;
+    const note = (args: string[], environment: Record<string, string>) =>
+      runCliAt(fixture, fixture.repo, ["work", "note", id, ...args, "--json"], environment);
+    const code = (result: { stderr: string }) => failureEnvelope(result.stderr).error.code;
+    const nudge = (kind: string, evidence: string) =>
+      `[from observer][${id}] ${kind} ${evidence}; stop and run: maestro work note ${id} "<what you need>" --blocked`;
+
+    const open = await note(["SLP_ROLE_READY printed 3x, nothing since", "--stall", "repeat"], observerEnvironment);
+    expect(phaseFree(open.stderr)).toBe("");
+    expect(open.exitCode).toBe(0);
+    expect(envelope<{ note: { flag: string | null } }>(open.stdout).note.flag).toBe("stall:repeat");
+    expect(await notices()).toEqual([
+      ["agent", "prompt", lead.name, nudge("repeat", "SLP_ROLE_READY printed 3x, nothing since")],
+      ["agent", "prompt", supervisor.name, nudge("repeat", "SLP_ROLE_READY printed 3x, nothing since")],
+    ]);
+
+    const plain = await note(["looks fine"], observerEnvironment);
+    expect(plain.exitCode).toBe(1);
+    expect(code(plain)).toBe("ROLE_FORBIDDEN");
+    const blockedByObserver = await note(["x", "--blocked"], observerEnvironment);
+    expect(code(blockedByObserver)).toBe("ROLE_FORBIDDEN");
+    const stallByLead = await note(["x", "--stall", "repeat"], leadEnvironment);
+    expect(code(stallByLead)).toBe("ROLE_FORBIDDEN");
+    const badKind = await note(["x", "--stall", "loop"], observerEnvironment);
+    expect(code(badKind)).toBe("INVALID_OPTION");
+    const mixed = await note(["x", "--stall", "repeat", "--blocked"], observerEnvironment);
+    expect(code(mixed)).toBe("INVALID_OPTION");
+    expect((await notices()).length).toBe(2);
+
+    const again = await note(["still the same three lines", "--stall", "repeat"], observerEnvironment);
+    expect(again.exitCode).toBe(0);
+    expect(phaseFree(again.stderr)).toBe(
+      `nudge suppressed: ${id} stall:repeat was already noted and the store has not changed since`,
+    );
+    expect((await notices()).length).toBe(2);
+
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
+    ).toBe(0);
+    const held = await note(["same failing test three times", "--stall", "repeat"], observerEnvironment);
+    expect(phaseFree(held.stderr)).toBe("");
+    expect(held.exitCode).toBe(0);
+    expect((await notices()).slice(2)).toEqual([
+      ["agent", "prompt", lead.name, nudge("repeat", "same failing test three times")],
+      ["agent", "prompt", supervisor.name, nudge("repeat", "same failing test three times")],
+    ]);
+
+    const silence = await note(["no output for 20m on held work", "--stall", "silence"], observerEnvironment);
+    expect(phaseFree(silence.stderr)).toBe("");
+    expect(silence.exitCode).toBe(0);
+    expect((await notices()).length).toBe(6);
+
+    const shown = await runCliAt(fixture, fixture.repo, ["status", id], observerEnvironment);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain(
+      `note [stall:silence] by ${observer.name}: no output for 20m on held work`,
+    );
+    const shownJson = envelope<{ notes: Array<{ flag: string | null }> }>(
+      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], observerEnvironment)).stdout,
+    );
+    expect(shownJson.notes.map((entry) => entry.flag)).toEqual([
+      "stall:repeat",
+      "stall:repeat",
+      "stall:repeat",
+      "stall:silence",
+    ]);
+  });
+}, 30_000);
+
 test("SLP v2 team start launches a Codex observer after the Lead, status admits it, and stop closes it (d762)", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

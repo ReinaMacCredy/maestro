@@ -38,6 +38,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
   30-line tail. It judges nothing and writes nothing; it exits on its own
   once the generation stops RUNNING, and `team stop` closes its tab
   (d762, d765, d767).
+- The Observer may record `maestro work note <id> "<evidence>" --stall
+  repeat|silence|dialog`, and may note nothing else. The note is stored with
+  flag `stall:<kind>` (`maestro status <id>` shows `note [stall:<kind>] by
+  ...`) and Maestro pushes `[from observer][<id>] <kind> <evidence>; stop and
+  run: maestro work note <id> "<what you need>" --blocked` to the seat the
+  item waits on (holder, assignee, or reviewer of a RETURNED item) with a
+  copy to the Team Supervisor, or to the Hub `supervisor` agent when that
+  seat is the Team Supervisor. The same stall on an item whose store has not
+  changed since is stored but not pushed again (`nudge suppressed` on
+  stderr). Other seats get `ROLE_FORBIDDEN` for `--stall` (d763).
 
 ### Changed
 

@@ -632,6 +632,9 @@ export const workPlugin: BuiltInPlugin = {
         if (invocation.options.blocked === true) {
           throw new CliError("INVALID_OPTION", "--blocked is available only for SLP work");
         }
+        if (invocation.options.stall !== undefined) {
+          throw new CliError("INVALID_OPTION", "--stall is available only for SLP work");
+        }
         const id = requiredPosition(invocation, 0, "work id");
         const text = requiredPosition(invocation, 1, "note text");
         requireWork(context, id);
@@ -655,6 +658,10 @@ export const workPlugin: BuiltInPlugin = {
           },
           "--rework": {
             description: "Grant the current SLP return revision one reviewer-authorized retake.",
+          },
+          "--stall": {
+            description: "Observer only: record a stall (repeat|silence|dialog) and nudge the stuck seat.",
+            value: true,
           },
         },
         json: true,

@@ -1895,7 +1895,20 @@ async function pushNotice(
   summary: string,
   read: string,
 ): Promise<void> {
-  const line = `[from ${fromRole}][${subject}] ${noticeSummary(summary)}; read: ${read}`;
+  await pushLine(
+    projectPath,
+    target,
+    subject,
+    `[from ${fromRole}][${subject}] ${noticeSummary(summary)}; read: ${read}`,
+  );
+}
+
+async function pushLine(
+  projectPath: string,
+  target: string | null,
+  subject: string,
+  line: string,
+): Promise<void> {
   if (!target) {
     process.stderr.write(`warning: no pane to notify about ${subject}; the store remains the truth\n`);
     return;
@@ -2202,21 +2215,63 @@ export async function maybeHandleSlpWorkAdd(
   };
 }
 
+const stallKinds = ["repeat", "silence", "dialog"] as const;
+type StallKind = (typeof stallKinds)[number];
+
+function stallOption(invocation: CliInvocation): StallKind | null {
+  const value = invocation.options.stall;
+  if (value === undefined) return null;
+  if (typeof value !== "string" || !stallKinds.includes(value as StallKind)) {
+    throw new CliError("INVALID_OPTION", "--stall takes one of repeat, silence, dialog");
+  }
+  return value as StallKind;
+}
+
+// d763: the nudge goes to the seat the item waits on.
+function stallSeat(context: PluginContext, actor: SlpActor, work: SlpWorkRow): string | null {
+  if (work.state === "ACTIVE") return work.owner ?? work.assigned_to;
+  if (work.state === "RETURNED") {
+    return rolePaneName(context, actor, expectedReviewerRole(context, actor, work));
+  }
+  return work.assigned_to;
+}
+
 export async function maybeHandleSlpWorkNote(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
   if (!requireActiveOrLegacy(context)) return null;
   migrateProject(context.store);
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer", "observer"]);
   requireRunningGeneration(context.store, actor.team);
   const id = requiredPosition(invocation, 0, "work id");
   const body = requiredPosition(invocation, 1, "note body");
   const work = requireSlpWork(context, actor, id);
   const rework = invocation.options.rework === true;
   const blocked = invocation.options.blocked === true;
+  const stall = stallOption(invocation);
   if (rework && blocked) {
     throw new CliError("INVALID_OPTION", "--blocked and --rework are separate notes");
+  }
+  // d763: the Observer records stalls and nothing else; no other seat records them.
+  if (actor.role === "observer" && !stall) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${actor.name} may note only with --stall repeat|silence|dialog`,
+      { actor: actor.name, role: actor.role },
+    );
+  }
+  if (stall && actor.role !== "observer") {
+    throw new CliError("ROLE_FORBIDDEN", "--stall is the Observer's note", {
+      actor: actor.name,
+      role: actor.role,
+    });
+  }
+  if (stall && (rework || blocked)) {
+    throw new CliError("INVALID_OPTION", "--stall is a separate note");
+  }
+  if (stall && work.state === "DONE") {
+    throw new CliError("INVALID_STATE", `${id} is DONE and cannot stall`);
   }
   if (actor.role === "peer" && work.assigned_to !== actor.name) {
     throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
@@ -2231,10 +2286,22 @@ export async function maybeHandleSlpWorkNote(
     }
   }
   const now = new Date().toISOString();
+  const flag = stall ? `stall:${stall}` : blocked ? "blocked" : null;
+  let suppressed = false;
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     requireRunningGeneration(context.store, actor.team);
     const current = requireSlpWork(context, actor, id);
+    if (stall) {
+      // d763: the same stall on an unchanged item is stored, not pushed again.
+      const latest = context.store.database
+        .query<{ created_at: string; flag: string | null }, [string]>(
+          `SELECT flag, created_at FROM slp_work_entries
+           WHERE work_id = ? ORDER BY id DESC LIMIT 1`,
+        )
+        .get(id);
+      suppressed = latest?.flag === flag && current.updated_at <= latest.created_at;
+    }
     if (rework) {
       requireWorkReviewer(context, actor, current, "grant rework");
       if (current.state !== "RETURNED" || current.return_revision <= 0) {
@@ -2268,7 +2335,7 @@ export async function maybeHandleSlpWorkNote(
         `INSERT INTO slp_work_entries (work_id, kind, actor, body, flag, created_at)
          VALUES (?, 'NOTE', ?, ?, ?, ?)`,
       )
-      .run(id, actor.name, body, blocked ? "blocked" : null, now);
+      .run(id, actor.name, body, flag, now);
     recordProjectActivity(context, actor, "work.note", id, now);
     context.store.database.exec("COMMIT");
   } catch (error) {
@@ -2309,10 +2376,32 @@ export async function maybeHandleSlpWorkNote(
       `maestro status ${id}`,
     );
   }
-  const kind = rework ? "rework grant" : blocked ? "blocked note" : "note";
+  if (stall && suppressed) {
+    process.stderr.write(
+      `nudge suppressed: ${id} ${flag} was already noted and the store has not changed since\n`,
+    );
+  } else if (stall) {
+    const seat = stallSeat(context, actor, work);
+    const supervisorName = rolePaneName(context, actor, "team-supervisor");
+    const line = `[from observer][${id}] ${stall} ${noticeSummary(body)}; stop and run: maestro work note ${id} "<what you need>" --blocked`;
+    await pushLine(actor.team.project_path, seat, `${id} ${flag}`, line);
+    if (seat === supervisorName) {
+      await pushNotice(
+        actor.team.project_path,
+        actor.role,
+        "supervisor",
+        `${id} ${flag}`,
+        `${stall} ${body} in ${actor.team.team_id} g${actor.team.generation}`,
+        "maestro status",
+      );
+    } else {
+      await pushLine(actor.team.project_path, supervisorName, `${id} ${flag}`, line);
+    }
+  }
+  const kind = stall ? "stall note" : rework ? "rework grant" : blocked ? "blocked note" : "note";
   return {
     data: {
-      note: { actor: actor.name, body, createdAt: now, flag: blocked ? "blocked" : null, rework },
+      note: { actor: actor.name, body, createdAt: now, flag, rework },
       work: workData(readSlpWork(context, actor, id)),
     },
     text: `${id} ${kind} by ${actor.name}: ${body}`,
