@@ -78,12 +78,17 @@ flowchart TB
   Lead <--> PeerA
   Lead <--> PeerB
   PeerA <--> PeerB
+  Observer["Observer"] -. nudge .-> Lead
+  Observer -. copy .-> Team
 ```
 
 In the supported SLP flow, the Hub Supervisor reaches the team only through
 its Team Supervisor. Inside the team, the Team Supervisor, Lead, and Peers
-communicate directly. There is no Observer, Advisor, sensor, scheduler, or
-background agent role.
+communicate directly. The Observer is a fourth seat with no work: a sentinel
+tab in the team workspace hands it one packet every five minutes, and at once
+when a role pane blocks, and its only mutation is `work note --stall`, which
+Maestro turns into one fixed nudge to the stuck seat plus a copy to the Team
+Supervisor. There is no Advisor, scheduler, or background agent role.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -122,6 +127,8 @@ The Team Supervisor may open one optional foreground Watch Pane with existing
 Herdr pane control. Watch labels currently available raw output, but is not an
 agent and has no prompt, store write, gate, intervention, or decision
 authority. Its rolling transcript is runtime-only and is deleted at stop.
+A seat that needs a fact from above records `work note --blocked`; Maestro
+pushes the `BLOCKED` line one seat up without changing the work state.
 
 Normal stop uses one transient foreground non-agent helper pane in the Hub so
 the Team Supervisor can close itself safely. This is internal, not another SLP
@@ -196,8 +203,8 @@ and prints this brief; it does not start an agent.
 
 ## Observer mode
 
-This is the read-only store mode for administrative inspection. It is not an
-SLP role and does not create a background observer.
+This is the read-only store mode for administrative inspection. It is not the
+SLP Observer seat and does not create a background observer.
 
 Set `MAESTRO_READ_ONLY=1` to run Maestro as an observer. Pure commands such as
 status, search, recipes, and read-only list/show operations remain available.

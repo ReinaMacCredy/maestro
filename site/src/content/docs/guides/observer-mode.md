@@ -3,8 +3,8 @@ title: Read-only mode
 description: Read Maestro state without persisting session, lease, liveness, or application records.
 ---
 
-Read-only mode is a store access setting. It is not an SLP role: SLP v2 has no
-Observer agent.
+Read-only mode is a store access setting. It is not the SLP Observer seat,
+which is a role pane that `team start` opens; see [Roles](/concepts/roles/).
 
 Set `MAESTRO_READ_ONLY=1` for a process that must fail closed on mutation:
 

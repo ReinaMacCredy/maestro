@@ -22,12 +22,13 @@ maestro team start <project> "<objective>" \
   [--supervisor-model <model>] \
   [--lead-model <model>] \
   [--peer-model <model>] \
+  [--observer-model <model>] \
   [--json]
 ```
 
 Hub Supervisor authority. It runs from `~/maestro`, pins the canonical
-Workspace Pack into the project, opens Team Supervisor and Lead, and creates
-initial `OPEN` work for Lead. Repeating an identical running start verifies
+Workspace Pack into the project, opens Team Supervisor, Lead and Observer,
+launches the sentinel tab, and creates initial `OPEN` work for Lead. Repeating an identical running start verifies
 and restores required roles without duplicates.
 
 ### `team stop`
@@ -65,8 +66,8 @@ maestro status
 maestro status <work-id>
 ```
 
-Hub status includes `abandonedWorkCount` per generation. Team work readback
-includes abandonment fields when present.
+Hub status includes `abandonedWorkCount` per generation and `sentinel: on|off`
+beside `watch`. Team work readback includes abandonment fields when present.
 
 Read-only and role-scoped. Hub sees team generations and counts; team roles see
 their team's non-DONE items (a Peer sees only its own) with `*` marking the ones
@@ -104,13 +105,19 @@ requires an unused reviewer grant for its current return revision.
 ```sh
 maestro work note <work-id> "<material note>"
 maestro work note <work-id> "<specific gap>" --rework
+maestro work note <work-id> "<what I need>" --blocked
+maestro work note <work-id> "<evidence>" --stall repeat|silence|dialog
 ```
 
 Appends context without changing state. `--rework` is restricted to the
 reviewer responsible for that return. It grants the same assignee one retake
-of the current return revision; an ordinary note never grants a retake. Neither
-form can change the work objective or acceptance contract. Changed scope is
-new work.
+of the current return revision; an ordinary note never grants a retake.
+`--blocked` flags the note and pushes a `BLOCKED` line to the seat above the
+caller. `--stall` is the Observer's only note: it flags `stall:<kind>`, pushes
+the fixed nudge to the seat the item waits on plus a copy to the Team
+Supervisor, and stays silent (`nudge suppressed`) for a repeat on an unchanged
+item; other seats get `ROLE_FORBIDDEN`. No form can change the work objective
+or acceptance contract. Changed scope is new work.
 
 ### `work return`
 
@@ -155,7 +162,9 @@ OPEN -> ACTIVE -> RETURNED -> DONE
 
 `work note` changes no state. Rework is `work note --rework` by the correct
 reviewer followed by one assignee retake of that exact return revision. A
-blocker is written in the return body; there is no separate blocked state.
+blocker is written in the return body, or flagged on a note with
+`work note --blocked` while the holder keeps the item; there is no separate
+blocked state.
 
 ## Hard-cut mapping
 

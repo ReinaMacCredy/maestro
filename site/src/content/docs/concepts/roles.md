@@ -1,9 +1,9 @@
 ---
 title: Roles
-description: The Hub Supervisor, Team Supervisor, Lead, and Peer authority model used by SLP v2.
+description: The Hub Supervisor, Team Supervisor, Lead, Peer, and Observer authority model used by SLP v2.
 ---
 
-SLP v2 has four roles. The Human remains the owner above the system, but is not
+SLP v2 has five roles. The Human remains the owner above the system, but is not
 an additional team seat.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
@@ -28,11 +28,14 @@ flowchart TB
   Lead <--> PeerA
   Lead <--> PeerB
   PeerA <--> PeerB
+  Observer["Observer"] -. nudge .-> Lead
+  Observer -. copy .-> Team
 ```
 
 Every double arrow is a direct conversation channel in the SLP protocol. The
-supported Hub flow has no Hub-to-Lead or Hub-to-Peer channel; unrestricted
-Herdr itself is outside that guarantee.
+dotted arrows are one-way nudges pushed by Maestro when the Observer records a
+stall. The supported Hub flow has no Hub-to-Lead or Hub-to-Peer channel;
+unrestricted Herdr itself is outside that guarantee.
 
 ## Authority
 
@@ -42,6 +45,7 @@ Herdr itself is outside that guarantee.
 | Team Supervisor | team coordination and acceptance | `team stop`, `status`, `work add`, `work note`, `work accept`, `decide` |
 | Lead | technical coordination and Peer acceptance | `status`, `work add`, `work take`, `work note`, `work return`, `work accept`, `decide` |
 | Peer | bounded execution and independent judgment | `status`, `work take`, `work note`, `work return` |
+| Observer | stall detection | `status`, `work note --stall` |
 
 ## Hub Supervisor
 
@@ -73,6 +77,25 @@ A Peer takes work assigned to its identity, records material notes and returns
 results. It may speak directly to Team Supervisor, Lead and other Peers. It
 does not accept its own work and does not settle team decisions.
 
+## Observer
+
+The Observer is a fourth team seat that `team start` opens after the Lead, on
+a small model by default (`gpt-5.6-luna`; `--observer-model` overrides it). It
+holds no work. A sentinel process in the team workspace sends it one bounded
+packet every five minutes, and at once when a role pane turns blocked: the
+open work with its latest entry, the recent tail of every role pane, and the
+stall facts Maestro can compute (unchanged age, silence per pane, a repeated
+tail line, the Herdr state). The Observer's only mutation is
+
+```sh
+maestro work note <work-id> "<evidence>" --stall repeat|silence|dialog
+```
+
+Maestro pushes a fixed line to the seat the item waits on and a copy to the
+Team Supervisor, and stores without pushing a repeat of the same stall while
+the store is unchanged. A nudge carries no code advice; the Observer never
+takes, returns, or accepts work.
+
 ## Conversation and records
 
 Natural conversation needs no record ID. Chat alone does not mutate work,
@@ -81,6 +104,7 @@ authority or accepted decisions. Record these changes before they govern:
 - changed objective or acceptance: create new work; the existing contract is immutable;
 - material context on the same contract: `maestro work note`;
 - settled technical, team or owner choice: `maestro decide`;
+- a fact only the seat above can settle, while keeping the item: `maestro work note --blocked`;
 - completed or blocked execution: `maestro work return`;
 - reviewer acceptance: `maestro work accept`.
 

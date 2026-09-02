@@ -1,6 +1,6 @@
 ---
 title: SLP scenarios
-description: Seven end-to-end SLP v2 journeys from team start through work, decisions, rework, and stop.
+description: Eight end-to-end SLP v2 journeys from team start through work, decisions, rework, stalls, and stop.
 ---
 
 These scenarios show what each role records. Team conversation itself remains
@@ -167,6 +167,36 @@ maestro team stop example --emergency --reason "owner cancelled this generation"
 
 Each unfinished record gains abandonment actor, reason, generation, and time;
 the next generation cannot inherit or mutate it.
+
+## 8. The Lead loops on a failing command
+
+The owner started the team, gave the Lead an objective whose first step fails,
+and walked away. Nobody typed anything since. The sentinel tab still prompts
+the Observer every five minutes, and the packet shows the Lead pane repeating
+one line:
+
+```text
+  lead-example [lead] working; unchanged 6m; repeats: "flaky: upstream mirror not ready yet, retry" x4
+```
+
+The Observer records the stall; Maestro does the pushing:
+
+```sh
+maestro work note w1 "lead pane ran sh ./flaky.sh four times with the same output" --stall repeat
+```
+
+The Lead pane receives
+`[from observer][w1] repeat lead pane ran sh ./flaky.sh four times with the same output; stop and run: maestro work note w1 "<what you need>" --blocked`
+and the Team Supervisor a copy. The Lead stops and declares what it needs:
+
+```sh
+maestro work note w1 "flaky.sh never exits 0 here; need: a reachable mirror or permission to stop retrying" --blocked
+```
+
+The Team Supervisor receives `[from lead][w1 BLOCKED] ...; read: maestro status w1`
+and either settles the fact through conversation and a note, or escalates to
+the Hub with its own `--blocked` note. A second `--stall repeat` on the same
+item while nothing changed is stored but not pushed.
 
 ## What not to do
 

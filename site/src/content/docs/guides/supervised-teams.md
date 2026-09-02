@@ -4,7 +4,7 @@ description: Start, operate, inspect, and stop a direct SLP v2 team with nine pu
 ---
 
 An SLP team is one generation with exactly one Team Supervisor, exactly one
-Lead, and zero or more Peers. Maestro stores material state; Herdr provides the
+Lead, one Observer, and zero or more Peers. Maestro stores material state; Herdr provides the
 live workspace and direct conversations.
 
 For installation paths and data ownership, start with
@@ -66,7 +66,8 @@ maestro team start /absolute/path/to/project "<observable objective>"
 ```
 
 One call pins the Workspace Pack, creates or reuses one Herdr workspace, opens
-Team Supervisor and Lead, and creates initial `OPEN` work for the Lead. Peers
+Team Supervisor, Lead and Observer, launches the sentinel tab, and creates
+initial `OPEN` work for the Lead. Peers
 have no lifecycle command: a Lead creates assigned work and Maestro reuses or
 opens the named Peer in the same operation.
 
@@ -88,13 +89,17 @@ flowchart LR
 - `work take` lets the assignee take `OPEN` work, or `RETURNED` work with the
   unused reviewer grant for its current return revision.
 - `work note` records material context without changing state.
+- `work note --blocked` keeps the state and pushes
+  `[from <role>][<id> BLOCKED] <summary>; read: maestro status <id>` to the
+  seat above the caller. `work note --stall` is the Observer's nudge.
 - `work return` carries the result, proof, blocker and residual risk when they
   apply.
 - `work accept` is performed by the reviewer: Lead accepts Peer work and Team
   Supervisor accepts Lead work.
 
-A Peer never accepts its own work. Blocked work is returned with the blocker;
-there is no `BLOCKED` state. Rework is `work note --rework` by the correct
+A Peer never accepts its own work. A holder that needs a fact from above
+records `work note --blocked` and keeps the item; a holder that cannot
+continue returns it with the blocker. There is no `BLOCKED` state. Rework is `work note --rework` by the correct
 reviewer followed by one retake by the same assignee.
 
 A reviewer may close `OPEN` or `RETURNED` work as cancelled:
@@ -130,13 +135,13 @@ maestro status <work-id>
 ```
 
 Status is read-only and role-scoped. Hub sees teams, projects, generations,
-pack identity, roles, Watch state and work counts. Team roles see their team
+pack identity, roles, Watch and sentinel state and work counts. Team roles see their team
 and the work that requires return or acceptance. Work status includes its
 objective, owner, state, notes, current return, acceptance and linked
 decisions.
 
-There is no separate team health, attention, review, packet or reconcile
-layer.
+There is no separate team health, review or reconcile layer; the sentinel
+packet goes only to the Observer.
 
 ## Watch Pane
 
@@ -148,6 +153,26 @@ gates work or intervenes.
 Watch failure does not block work. Status exposes only `watch: on|off`. Raw
 transcript is runtime-only and is deleted at stop.
 
+## Observer and sentinel
+
+`team start` opens the Observer seat after the Lead and runs
+`maestro-slp-observe` in a fresh tab of the team workspace. Every five
+minutes, and at once when a role pane turns blocked, the sentinel reads the
+project store and the recent tail of every role pane and prompts the Observer
+with one packet. The Observer answers a stall with
+
+```sh
+maestro work note <work-id> "<evidence>" --stall repeat|silence|dialog
+```
+
+Maestro stores the note with flag `stall:<kind>`, pushes
+`[from observer][<id>] <kind> <evidence>; stop and run: maestro work note <id> "<what you need>" --blocked`
+to the seat the item waits on, and copies it to the Team Supervisor (to the
+Hub `supervisor` agent when the Team Supervisor is that seat). The same stall
+on an unchanged item is stored but not pushed (`nudge suppressed`). Status
+exposes `sentinel: on|off` beside `watch`; thresholds are fixed and the seat
+has no opt-out.
+
 ## Stop
 
 ```sh
@@ -155,8 +180,8 @@ maestro team stop <team-id>
 ```
 
 Normal stop changes nothing while unfinished work remains and lists those work
-items. Once all work is `DONE`, shutdown closes Peers, Lead, Watch and runtime
-transcript, then Team Supervisor. A transient foreground non-agent pane in the
+items. Once all work is `DONE`, shutdown closes Peers, Lead, Observer, the
+sentinel tab, Watch and runtime transcript, then Team Supervisor. A transient foreground non-agent pane in the
 Hub performs the self-closing sequence; it is internal and adds no public
 operation. Maestro records `STOPPED` only after the team workspace is absent.
 A partial close stays `RUNNING`, so repeating the same command continues
