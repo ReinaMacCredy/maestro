@@ -591,9 +591,6 @@ function roleContracts(
       `team=${teamId}`,
       `generation=${generation}`,
       `role=${role}`,
-      `instance=${instanceId}`,
-      `pack=${packDigest}`,
-      `brief=${briefDigest}`,
       `challenge=${readyChallenge}`,
     ].join(" ");
     return {
@@ -605,7 +602,7 @@ function roleContracts(
           `Challenge left: ${challengeLeft}`,
           `Challenge right: ${challengeRight}`,
           `This message only initializes the ${role} role. Do not run tools, inspect or claim work, or ask a question.`,
-          "Reply on one line using SLP_ROLE_READY followed by team, generation, role, instance, pack, brief, and challenge fields.",
+          "Reply on one line using SLP_ROLE_READY followed by team, generation, role, and challenge fields.",
           "For challenge, concatenate the left and right values with no separator. Then wait.",
         ].join("\n"),
       ].join("\n\n"),

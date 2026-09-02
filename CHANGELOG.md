@@ -55,6 +55,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
   challenge halves (`challenge=<left> <right>`); every other byte stays
   exact. Small models and a line wrap inside the value produced that form
   while proving both halves were read (d768).
+- The role acknowledgement is now `SLP_ROLE_READY team=<id> generation=<n>
+  role=<role> challenge=<32 hex>`. The role instance and the pack and brief
+  digests stay in the contract message but are no longer echoed: three lab
+  starts on gpt-5.6-luna failed only on transcribing the 64-hex digests while
+  the per-attempt challenge was exact every time, and nothing read those
+  fields back out of the reply (d769).
 - `status --json` for a team lists the observer among `roles`, and team start
   JSON carries three roles, so consumers pinned to two role entries must
   widen (d762).

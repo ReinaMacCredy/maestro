@@ -14,7 +14,7 @@ export interface FakeHerdrBehavior {
   closeWorkspace?: boolean;
   codexNotReadyAttempts?: number;
   failWorkspaceId?: string;
-  invalidAcknowledgementField?: "challenge" | "pack";
+  invalidAcknowledgementField?: "challenge" | "generation";
   spacedChallenge?: boolean;
   paneRunEmptyOutput?: boolean;
   processInfo?: boolean;
@@ -400,25 +400,22 @@ if (command === "workspace list") {
         "team=" + team,
         "generation=" + generation,
         "role=" + role,
-        "instance=" + instance,
-        "pack=" + pack,
-        "brief=" + brief,
         "challenge=" + challengeLeft + challengeRight,
       ];
-      if (state.behavior.invalidAcknowledgementField === "pack") {
-        acknowledgement[5] = "pack=" + "0".repeat(64);
+      if (state.behavior.invalidAcknowledgementField === "generation") {
+        acknowledgement[2] = "generation=0";
       }
       if (state.behavior.invalidAcknowledgementField === "challenge") {
-        acknowledgement[7] = "challenge=" + "0".repeat(32);
+        acknowledgement[4] = "challenge=" + "0".repeat(32);
       }
       if (state.behavior.spacedChallenge) {
-        acknowledgement[7] = "challenge=" + challengeLeft + " " + challengeRight;
+        acknowledgement[4] = "challenge=" + challengeLeft + " " + challengeRight;
       }
       const acknowledgementLines = state.behavior.wrapAcknowledgements
         ? [
-          acknowledgement.slice(0, 5).join(" "),
-          acknowledgement.slice(5, 7).join(" "),
-          acknowledgement.slice(7).join(" "),
+          acknowledgement.slice(0, 3).join(" "),
+          acknowledgement.slice(3, 4).join(" "),
+          acknowledgement.slice(4).join(" "),
         ]
         : [acknowledgement.join(" ")];
       state.outputs[name] =

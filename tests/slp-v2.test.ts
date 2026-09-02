@@ -60,9 +60,6 @@ function testRoleContract(teamId: string, generation: number): SlpRoleContract {
     `team=${teamId}`,
     `generation=${generation}`,
     "role=team-supervisor",
-    `instance=${instanceId}`,
-    `pack=${packDigest}`,
-    `brief=${briefDigest}`,
     `challenge=${readyChallenge}`,
   ].join(" ");
   return {
@@ -316,8 +313,8 @@ test("SLP v2 rejects content before an otherwise exact role acknowledgement", as
   });
 }, 20_000);
 
-test("SLP v2 rejects stale digest or challenge acknowledgements before granting authority", async () => {
-  for (const invalidAcknowledgementField of ["pack", "challenge"] as const) {
+test("SLP v2 rejects stale generation or challenge acknowledgements before granting authority", async () => {
+  for (const invalidAcknowledgementField of ["generation", "challenge"] as const) {
     await withFixture(async (fixture) => {
       const room = await scaffoldRoom(fixture.home);
       expect(
