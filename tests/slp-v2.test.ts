@@ -1586,6 +1586,62 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
   });
 });
 
+test("SLP v2 lets a retry after a failed start change the objective and models", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { agents: false });
+    const failed = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "First objective", "--json"],
+      fake.env,
+    );
+    expect(failed.exitCode).toBe(1);
+
+    await setFakeHerdrBehavior(fake, { agents: true });
+    const retried = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Second objective", "--lead-model", "retried-lead", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(retried.stderr)).toBe("");
+    expect(retried.exitCode).toBe(0);
+    const data = envelope<{ team: { generation: number; teamId: string } }>(retried.stdout);
+    expect(data.team.generation).toBe(1);
+    const leadStart = (await fakeHerdrCommands(fake)).find(
+      (command) => command[0] === "agent" && command[1] === "start" && command[2] === `lead-${data.team.teamId}`,
+    );
+    expect(leadStart?.slice(-2)).toEqual(["--model", "retried-lead"]);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    expect(
+      JSON.parse(
+        database
+          .query<{ configuration_json: string }, []>(
+            "SELECT configuration_json FROM slp_local_teams WHERE generation = 1",
+          )
+          .get()?.configuration_json ?? "{}",
+      ),
+    ).toMatchObject({ lead: "retried-lead" });
+    expect(
+      database
+        .query<{ objective: string; phase: string }, []>(
+          "SELECT objective, phase FROM slp_lifecycle_operations WHERE operation = 'START'",
+        )
+        .get(),
+    ).toEqual({ objective: "Second objective", phase: "COMMITTED" });
+    database.close();
+  });
+});
+
 test("SLP v2 rejects a changed objective or configuration without mutating the running team", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

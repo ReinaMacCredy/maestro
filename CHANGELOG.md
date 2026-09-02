@@ -37,6 +37,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Fixed
 
+- A `team start` that failed before its panes existed left a RESERVED
+  lifecycle row that refused any retry with another objective or model
+  (`TEAM_START_PENDING` with nobody starting). An ownerless RESERVED
+  reservation now yields to the retry, which rewrites its objective, models,
+  and pack; a live owner or a RUNTIME_READY row still refuses a changed
+  configuration.
 - `maestro decision draft <draft-id> --rationale <why>` (also `--dissent`,
   `--review-at`, `--needs-owner`) now edits that field on the existing draft
   and keeps its text; a locked target answers `LOCKED_DECISION`, and a bare id

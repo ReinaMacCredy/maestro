@@ -788,17 +788,42 @@ function updateLifecycleOwner(
   row: Pick<SlpLifecycleRow, "generation" | "operation" | "team_id">,
   ownerToken: string,
   ownerPid: number,
+  replacement: Pick<
+    SlpLifecycleRow,
+    "configuration_json" | "objective" | "pack_digest" | "pack_version"
+  > | null = null,
 ): SlpLifecycleRow {
   const now = new Date().toISOString();
   const update = (table: string) =>
-    store.database
-      .query(
-        `UPDATE ${table}
-         SET owner_token = ?, owner_pid = ?, revision = revision + 1, updated_at = ?
-         WHERE team_id = ? AND generation = ? AND operation = ?
-           AND phase <> 'COMMITTED'`,
-      )
-      .run(ownerToken, ownerPid, now, row.team_id, row.generation, row.operation);
+    replacement
+      ? store.database
+        .query(
+          `UPDATE ${table}
+           SET owner_token = ?, owner_pid = ?, revision = revision + 1, updated_at = ?,
+               objective = ?, configuration_json = ?, pack_digest = ?, pack_version = ?
+           WHERE team_id = ? AND generation = ? AND operation = ?
+             AND phase = 'RESERVED'`,
+        )
+        .run(
+          ownerToken,
+          ownerPid,
+          now,
+          replacement.objective,
+          replacement.configuration_json,
+          replacement.pack_digest,
+          replacement.pack_version,
+          row.team_id,
+          row.generation,
+          row.operation,
+        )
+      : store.database
+        .query(
+          `UPDATE ${table}
+           SET owner_token = ?, owner_pid = ?, revision = revision + 1, updated_at = ?
+           WHERE team_id = ? AND generation = ? AND operation = ?
+             AND phase <> 'COMMITTED'`,
+        )
+        .run(ownerToken, ownerPid, now, row.team_id, row.generation, row.operation);
   const local = update("slp_lifecycle_operations");
   const room = update("slp_room.slp_lifecycle_operations");
   if (local.changes !== 1 || room.changes !== 1) {
@@ -1022,22 +1047,35 @@ function reserveStart(
       .get(input.projectPath);
     if (pending) {
       const models = packModels(pending.configuration_json);
-      if (pending.objective !== input.objective || changedPackModels(input.overrides, models)) {
+      const changed = pending.objective !== input.objective ||
+        changedPackModels(input.overrides, models);
+      const owned = Boolean(pending.owner_token) && lifecycleOwnerIsAlive(pending.owner_pid);
+      // A reservation whose owner died pins nothing before RUNTIME_READY: the
+      // retry may bring another objective or model set.
+      if (changed && (owned || pending.phase !== "RESERVED")) {
         throw new CliError(
           "TEAM_START_PENDING",
           `${pending.team_id}:g${pending.generation} is already starting with another objective or configuration`,
           { generation: pending.generation, objective: pending.objective },
         );
       }
-      if (
-        pending.owner_token &&
-        lifecycleOwnerIsAlive(pending.owner_pid)
-      ) {
-        return { kind: "wait" };
-      }
+      if (owned) return { kind: "wait" };
       return {
         kind: "claimed",
-        row: updateLifecycleOwner(store, pending, ownerToken, process.pid),
+        row: updateLifecycleOwner(
+          store,
+          pending,
+          ownerToken,
+          process.pid,
+          changed
+            ? {
+              configuration_json: JSON.stringify(input.configuration),
+              objective: input.objective,
+              pack_digest: input.digest,
+              pack_version: input.version,
+            }
+            : null,
+        ),
       };
     }
 
