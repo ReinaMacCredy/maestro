@@ -161,7 +161,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             "  tier: quickfix, a one-sentence diff with no Full trigger -> do it, verify inline, no record; grows past a sentence -> work add",
             "        one session, one branch, acceptance in a sentence -> maestro work add|start|done",
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
-            '  forks: settle before tests - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
+            '  forks: settle before editing - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
             '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
             `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken`,
           ].join("\n"),
