@@ -16,6 +16,17 @@ dispatches, and handbacks that make the lane understandable.
 5. Use `herdr pane send-text <pane-id> "<coordination note>"` for immediate
    coordination; keep durable scope and outcomes in the dispatch and handback.
 
+## Commands that work here
+
+```
+git worktree add -b <branch> .maestro/worktree/<slug> <base>
+ln -s "$(git rev-parse --show-toplevel)/node_modules" .maestro/worktree/<slug>/node_modules   # bun/npm repos only
+# ... edit, test, commit on <branch> ...
+git -C "$(git rev-parse --show-toplevel)" merge --no-ff <branch>
+git worktree remove --force .maestro/worktree/<slug>   # --force: the node_modules link makes the tree look dirty
+git branch -d <branch>
+```
+
 ## Work and verify
 
 - Keep edits inside the declared path boundary and commit one logical change

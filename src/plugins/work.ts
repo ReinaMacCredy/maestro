@@ -784,10 +784,10 @@ export const workPlugin: BuiltInPlugin = {
             const completed = context.store.database
               .query(
                 `UPDATE work
-                 SET state = 'done', evidence = ?, candidate = ?, held_by = NULL, updated_at = ?
+                 SET state = 'done', evidence = ?, candidate = ?, atomic_reason = COALESCE(?, atomic_reason), held_by = NULL, updated_at = ?
                  WHERE id = ? AND state = 'active' AND cancelled_at IS NULL AND held_by = ?`,
               )
-              .run(recordedEvidence, candidate, now, id, sessionId);
+              .run(recordedEvidence, candidate, declaredAtomic, now, id, sessionId);
             if (completed.changes === 0) {
               throw new CliError("INVALID_STATE", `${id} changed while completion was pending`);
             }
@@ -797,9 +797,14 @@ export const workPlugin: BuiltInPlugin = {
               entityType: "work",
               entityId: id,
               sessionId,
-              payload: claimsLease
-                ? { candidate, claimedOnDone: true, evidence: recordedEvidence, claims, proofs }
-                : { candidate, evidence: recordedEvidence, claims, proofs },
+              payload: {
+                candidate,
+                ...(claimsLease ? { claimedOnDone: true } : {}),
+                ...(declaredAtomic ? { atomicReason: declaredAtomic } : {}),
+                evidence: recordedEvidence,
+                claims,
+                proofs,
+              },
             });
             return service.get(id);
           });

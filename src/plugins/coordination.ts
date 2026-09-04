@@ -264,8 +264,11 @@ export const coordinationPlugin: BuiltInPlugin = {
           .filter((record) => record.status === "active" && record.name.startsWith("policy-"))
           .map((record) => record.name)
           .sort();
-        return `enabled policies: ${policies.join(", ") || "none"}; see or change: maestro plugin list|enable|disable <name>`;
+        return `enabled policies: ${policies.join(", ") || "none"}`;
       }),
+    );
+    context.effect(() =>
+      brief.register(() => "  see or change: maestro plugin list|enable|disable <name>", { events: ["SessionStart"] }),
     );
     context.effect(() => brief.register(() => "next: maestro ready"));
     context.effect(() =>

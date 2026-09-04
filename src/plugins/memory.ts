@@ -560,6 +560,7 @@ export function formatFact(fact: MemoryFact): string {
 
 export const memoryPlugin: BuiltInPlugin = {
   name: "memory",
+  inject: ["brief"],
   requires:
     "memory ingest/list/show/retract/render: the Hub store holds global memory; per-tool buffers promote through supersession, dedup and evidence gates; the injected index is a render (d775, d776)",
   apply(context) {

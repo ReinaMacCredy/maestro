@@ -112,6 +112,9 @@ test("606 brief --session prints the SessionStart brief the hook delivers", asyn
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toBe(hook.stdout);
     expect(brief.stdout).toContain("method: quickfix and Light load no skill");
+    expect(brief.stdout).toContain("enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof\n  see or change: maestro plugin list|enable|disable <name>\n");
+    const prompt = await runCli(fixture, ["hook", "record", "--event", "UserPromptSubmit"], session);
+    expect(prompt.stdout).not.toContain("see or change");
   });
 });
 
@@ -150,6 +153,10 @@ test("609 work done closes an unheld parentless item in one command when it decl
     expect(done.exitCode).toBe(0);
     const shown = await runCli(fixture, ["work", "show", id]);
     expect(shown.stdout).toContain("atomic reason: one edit");
+    const held = idFrom(await runCli(fixture, ["work", "add", "Held", "--atomic-reason", "first", "--json"], session));
+    expect((await runCli(fixture, ["work", "start", held], session)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", held, "--evidence", "checked", "--atomic-reason", "revised"], session)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "show", held])).stdout).toContain("atomic reason: revised");
   });
 });
 
