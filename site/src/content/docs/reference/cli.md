@@ -247,6 +247,29 @@ See [Self-improvement](/guides/self-improvement/).
 - `open <id> [--work <value>]` scaffolds `SPEC.md`, `NOTES.md`, and `VERIFY.md`.
 - `close <id>` snapshots and archives the bundle.
 - `show`, `list`, and `save` read or ingest bundle state.
+- `import <dir> [--dry-run]` copies a waymark or spec-workflow tree into the
+  store and `.maestro/bundle/`; a failed import removes the directories it
+  copied.
+
+### `term`
+
+- `add <name> <definition> [--work <id>]` records or redefines one glossary
+  term (a single word, no spaces).
+- `show <name-or-id>` and `list` read terms; `maestro search` finds them.
+
+### `memory`
+
+Global memory lives in the Hub store at `~/maestro`; every `memory` verb,
+reads included, fails with `NOT_HUB_STORE` from any other cwd.
+
+- `ingest [--dry-run] [--from <dir>]` promotes buffer facts (Claude
+  auto-memory, Codex memories) through supersession, dedup and evidence gates.
+- `list [--all]` and `show <id-or-slug>` read facts; `--all` includes
+  superseded and retracted ones.
+- `retract <id-or-slug> --reason <why>` retires a fact so the buffers can never
+  promote it again.
+- `render [--check] [--force] [--out <path>]` writes `~/maestro/MEMORY.md`
+  from the store and refuses to overwrite a hand edit.
 
 ### `handoff` and `trace`
 
@@ -288,8 +311,12 @@ See [Self-improvement](/guides/self-improvement/).
 
 ## Search and legacy data
 
-- `maestro search <query> [--limit <n>] [--json]` searches native work, decisions, notes,
-  bundles and imported legacy records.
+- `maestro search <query> [--limit <n>] [--local] [--json]` searches native work,
+  decisions, notes, terms, bundles, memory facts and imported legacy records in
+  the project store, then the Hub room at `~/maestro`; Hub hits carry
+  `store: hub` (`[hub]` in text). `--limit` bounds the combined list, project
+  hits first. A Hub room that exists but cannot be read fails the search with
+  `HUB_UNAVAILABLE`; `--local` skips the Hub and searches this store only.
 - `maestro import rust --path <value> [--promote]` imports a preserved Rust
   store read-only.
 - `maestro legacy show <id> [--file <value>]` reads imported legacy content.

@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import type { PluginContext } from "../kernel/loader.ts";
 import { tableExists } from "../kernel/store.ts";
@@ -188,6 +188,15 @@ export function importWaymarkTree(
   const database = context.store.database;
   const bundleExists = (id: string) =>
     database.query<{ id: string }, [string]>("SELECT id FROM bundles WHERE id = ?").get(id) !== null;
+  // The transaction rolls back rows, not files: every directory copied by this
+  // run is recorded so a failure can remove it. The existsSync check below
+  // guarantees each recorded directory was absent before this run, so the
+  // cleanup never deletes something the import did not create.
+  const copied: string[] = [];
+  const copy = (path: string, directory: string) => {
+    copied.push(directory);
+    cpSync(path, directory, { recursive: true });
+  };
 
   const run = () => {
     for (const state of bundleStates) {
@@ -217,7 +226,7 @@ export function importWaymarkTree(
           // The store snapshot is the record; the directory copy keeps the
           // files beside the trio (live-test logs, prompts) from being lost.
           if (!dryRun) {
-            cpSync(path, directory, { recursive: true });
+            copy(path, directory);
             database
               .query(
                 `INSERT INTO bundles (id, state, directory, spec, notes, verify, created_at, updated_at)
@@ -233,7 +242,7 @@ export function importWaymarkTree(
           continue;
         }
         if (!dryRun) {
-          cpSync(path, directory, { recursive: true });
+          copy(path, directory);
           database
             .query(
               `INSERT INTO bundles (id, state, directory, paused_at, created_at, updated_at)
@@ -333,7 +342,14 @@ export function importWaymarkTree(
   };
 
   if (dryRun) run();
-  else database.transaction(run)();
+  else {
+    try {
+      database.transaction(run)();
+    } catch (error) {
+      for (const directory of copied) rmSync(directory, { force: true, recursive: true });
+      throw error;
+    }
+  }
 
   const counts = emptyCounts();
   for (const entry of entries) counts[entry.kind][entry.action] += 1;

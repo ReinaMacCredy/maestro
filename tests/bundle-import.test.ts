@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runCli, withFixture, type Fixture } from "./helpers.ts";
 
@@ -157,5 +157,29 @@ test("575 bundle pause and resume stamp an active bundle without leaving the sta
     expect(missing.stderr).toContain("INVALID_STATE");
     const archivedRefused = await runCli(fixture, ["bundle", "pause", "nope"]);
     expect(archivedRefused.stderr).toContain("NOT_FOUND");
+  });
+});
+
+test("582 a failed bundle import leaves no copied directory and no row behind, and the retry imports everything", async () => {
+  await withFixture(async (fixture) => {
+    const source = await waymarkFixture(fixture);
+    // plugin-engine-slp copies first (sorted order); an unreadable file in
+    // upstream-sync makes the second copy throw inside the transaction.
+    const unreadable = join(source, "active", "upstream-sync", "secret.md");
+    await writeFile(unreadable, "x\n");
+    await chmod(unreadable, 0o000);
+    try {
+      const failed = await runCli(fixture, ["bundle", "import", ".waymark", "--json"]);
+      expect(failed.exitCode).not.toBe(0);
+      expect(existsSync(join(fixture.repo, ".maestro", "bundle", "plugin-engine-slp"))).toBe(false);
+      expect(existsSync(join(fixture.repo, ".maestro", "bundle", "upstream-sync"))).toBe(false);
+      expect(rows(fixture, "SELECT count(*) AS n FROM bundles")).toBe(0);
+    } finally {
+      await chmod(unreadable, 0o644);
+    }
+    const retried = await runCli(fixture, ["bundle", "import", ".waymark", "--json"]);
+    expect(retried.exitCode).toBe(0);
+    expect(rows(fixture, "SELECT count(*) AS n FROM bundles")).toBe(5);
+    expect(existsSync(join(fixture.repo, ".maestro", "bundle", "upstream-sync", "secret.md"))).toBe(true);
   });
 });

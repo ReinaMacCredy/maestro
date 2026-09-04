@@ -26,7 +26,11 @@ session bookkeeping would be an unwanted side effect.
 - It does not create a monitoring role or background process.
 - It does not read raw Herdr pane transcript.
 - It does not make stale state current.
-- It does not grant access to another project store.
+- It does not grant access to another project store. `maestro search` still
+  reads the Hub room at `~/maestro` by default (pass `--local` to skip it);
+  that read is itself read-only.
+- It admits `term list|show` and `memory list|show` but refuses
+  `memory render --check`, which is registered as a writing command.
 - It does not replace role-scoped `maestro status` inside an SLP team.
 
 If a read depends on an index normally refreshed by a write-capable command,
