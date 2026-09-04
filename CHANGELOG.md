@@ -11,6 +11,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- `work block <id> --by <work-id>` and `work unblock <id> --by <work-id>` add
+  or remove a blocker after creation, with the checks `work add --blocked-by`
+  applies plus a refusal of self-blocks, duplicates, cycles, and edits to done
+  or cancelled work; both are logged as `work.block` and `work.unblock`.
+
 ### Changed
 
 - `--json` is honored by every verb, write verbs included: `decision draft`

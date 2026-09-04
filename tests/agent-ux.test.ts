@@ -395,3 +395,65 @@ test("636 --json is honored by every verb, decision draft and lock included", as
     expect((JSON.parse(cancel.stdout) as { ok: boolean }).ok).toBe(true);
   });
 });
+
+test("637 work block and unblock edit blockers after creation with work add's checks", async () => {
+  await withFixture(async (fixture) => {
+    const first = idFrom(await runCli(fixture, ["work", "add", "first", "--kind", "idea"]));
+    const second = idFrom(await runCli(fixture, ["work", "add", "second", "--kind", "idea"]));
+
+    const missing = await runCli(fixture, ["work", "block", second, "--by", "w99"]);
+    expect(missing.exitCode).not.toBe(0);
+    expect((JSON.parse(missing.stderr) as { error: { code: string } }).error.code).toBe("NOT_FOUND");
+    const self = await runCli(fixture, ["work", "block", second, "--by", second]);
+    expect(self.exitCode).not.toBe(0);
+    expect((JSON.parse(self.stderr) as { error: { code: string } }).error.code).toBe(
+      "INVALID_ARGUMENT",
+    );
+
+    const blocked = await runCli(fixture, ["work", "block", second, "--by", first, "--json"]);
+    expect(blocked.exitCode).toBe(0);
+    expect(
+      (JSON.parse(blocked.stdout) as { data: { blockers: Array<{ id: string }> } }).data.blockers
+        .map((blocker) => blocker.id),
+    ).toEqual([first]);
+    const again = await runCli(fixture, ["work", "block", second, "--by", first]);
+    expect(again.exitCode).not.toBe(0);
+    expect((JSON.parse(again.stderr) as { error: { code: string } }).error.code).toBe(
+      "INVALID_STATE",
+    );
+    const cycle = await runCli(fixture, ["work", "block", first, "--by", second]);
+    expect(cycle.exitCode).not.toBe(0);
+    expect((JSON.parse(cycle.stderr) as { error: { code: string } }).error.code).toBe(
+      "INVALID_ARGUMENT",
+    );
+
+    const start = await runCli(fixture, ["work", "start", second]);
+    expect(start.exitCode).not.toBe(0);
+    const startError = (JSON.parse(start.stderr) as { error: { blockers: string[]; code: string } })
+      .error;
+    expect(startError.code).toBe("BLOCKED");
+    expect(startError.blockers).toEqual([first]);
+    expect((await runCli(fixture, ["work", "show", second])).stdout).toContain(
+      `blocker: ${first} [open] first`,
+    );
+    const trace = await runCli(fixture, ["trace", second]);
+    expect(trace.stdout).toContain("work.block");
+
+    const notBlocked = await runCli(fixture, ["work", "unblock", first, "--by", second]);
+    expect(notBlocked.exitCode).not.toBe(0);
+    expect((JSON.parse(notBlocked.stderr) as { error: { code: string } }).error.code).toBe(
+      "NOT_FOUND",
+    );
+    const unblocked = await runCli(fixture, ["work", "unblock", second, "--by", first]);
+    expect(unblocked.exitCode).toBe(0);
+    expect(unblocked.stdout).toContain(`${second} unblocked; no blockers left`);
+    expect((await runCli(fixture, ["work", "start", second])).exitCode).toBe(0);
+
+    expect((await runCli(fixture, ["work", "done", second, "--evidence", "ok"])).exitCode).toBe(0);
+    const closed = await runCli(fixture, ["work", "block", second, "--by", first]);
+    expect(closed.exitCode).not.toBe(0);
+    expect((JSON.parse(closed.stderr) as { error: { code: string } }).error.code).toBe(
+      "INVALID_STATE",
+    );
+  });
+});

@@ -25,7 +25,7 @@ in the map's notes, produce decisions, not deliverables.
 |---|---|
 | the map | a parent work item, `maestro work add "<destination>" --kind idea --acceptance "<what reaching the end looks like>"` |
 | a ticket | a child, `maestro work add "<question>" --parent <mapId> --kind research\|idea\|task` |
-| blocking | `--blocked-by <ticketId>` on the child (repeatable) |
+| blocking | `--blocked-by <ticketId>` on the child (repeatable), or `maestro work block <ticketId> --by <ticketId>` once both exist |
 | the frontier | `maestro ready`: open, unblocked children |
 | claim | `maestro work start <ticketId>`; the lease is the claim |
 | resolve | `maestro decision draft ... --work <ticketId>`, `decision lock`, then `maestro work done <ticketId> --claim "<answer>" --proof "<evidence>"` |
@@ -82,7 +82,8 @@ Never resolve more than one ticket per session, except research tickets.
    this surfaces no fog and the whole journey fits one session, you do not
    need a map: stop and ask the user how they would like to proceed.
 3. **Create the parent**, then the tickets you can specify now as children;
-   wire `--blocked-by` edges once the ids exist. Fog goes into parent notes.
+   wire the edges with `maestro work block` once the ids exist. Fog goes into
+   parent notes.
 4. **Fire the research agents** for each research ticket, in parallel.
 5. Stop. Charting is one session's work; it resolves nothing by hand.
 

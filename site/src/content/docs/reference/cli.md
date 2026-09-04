@@ -226,7 +226,9 @@ without uninstalling it. `room mark` is installer-owned.
 
 Outside an active SLP team, the existing Maestro development workflow remains
 available. Its work commands include `work start`, `work show`, `work list`,
-`work done`, `work cancel`, `work release`, and `work reclaim`. These lease and
+`work done`, `work cancel`, `work release`, `work reclaim`, and
+`work block|unblock <id> --by <work-id>`, which add or remove a blocker after
+creation under the same checks as `work add --blocked-by`. These lease and
 policy operations are not part of the SLP role toolbelt.
 
 ### `decision`
