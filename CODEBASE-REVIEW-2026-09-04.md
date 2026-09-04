@@ -195,3 +195,9 @@ A reviewer raised the writable SQLite fallback that can recreate `-wal` or `-shm
 ### `plugin add` grants trust in one command
 
 A reviewer characterized immediate trust after `plugin add <url>` as accidental. The implementation explicitly states that naming the Git URL is the trust act, and tests enforce that behavior. This is a documentation/product-policy choice rather than an implementation regression. The separate plugin dependency-closure finding remains valid because it breaks the bytes-bound guarantee even after that intentional trust act.
+
+## Disposition (2026-09-05)
+
+- Finding 1 fixed (w602, a48f5941): a Bun resolver hook refuses any relative or absolute import that leaves the canonical artifact root; `plugin list` shows the plugin as `error` with the file and specifier; test 516.
+- Finding 7 fixed (w603, 9a98ec97): `t<number>` and `m<number>` reserved at the write seam; `bundle import` reports such a CONTEXT.md term as skipped in dry run and real run; tests 610-612; live stores audited, no existing collisions, no migration.
+- Findings 2-6 fixed earlier (w599); finding 8 docs fixed in the same pass. Released as v0.118.0.
