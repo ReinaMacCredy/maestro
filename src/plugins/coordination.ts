@@ -154,13 +154,13 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: design -> work -> verify; skills: ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
+            "method: quickfix and Light load no skill (work add|start|done, verify inline); Full: design -> work -> verify with ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  tier: quickfix, a one-sentence diff with no Full trigger -> do it, verify inline, no record; grows past a sentence -> work add",
             "        one session, one branch, acceptance in a sentence -> maestro work add|start|done",
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
             '  forks: settle before editing - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
             '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
-            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken`,
+            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
         { events: ["SessionStart"] },
       ),
@@ -224,7 +224,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           .filter((record) => record.status === "active" && record.name.startsWith("policy-"))
           .map((record) => record.name)
           .sort();
-        return `enabled policies: ${policies.join(", ") || "none"}`;
+        return `enabled policies: ${policies.join(", ") || "none"}; see or change: maestro plugin list|enable|disable <name>`;
       }),
     );
     context.effect(() => brief.register(() => "next: maestro ready"));

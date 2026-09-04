@@ -766,8 +766,9 @@ export const installPlugin: BuiltInPlugin = {
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +
-            `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward` +
-            (roomCodexHookTrustRecorded ? " (Codex has recorded trust for both hooks; the hash is not verifiable here)" : "") +
+            (roomCodexHookTrustRecorded
+              ? "\nroom Codex hooks: Codex has recorded trust for both hooks (the hash is not verifiable here); re-check with /hooks if they stop firing"
+              : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),

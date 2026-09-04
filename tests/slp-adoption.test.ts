@@ -278,7 +278,7 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain(
       '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"\n' +
-        "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); ROI 0-10 -> tier; say the route and the one not taken\n",
+        "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); ROI 0-10 -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built\n",
     );
 
     const prompt = await runCli(
@@ -289,7 +289,7 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
     expect(prompt.exitCode).toBe(0);
     expect(prompt.stdout).toBe(
       "held work: none\n" +
-        "enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof\n" +
+        "enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof; see or change: maestro plugin list|enable|disable <name>\n" +
         "next: maestro ready\n" +
         "recipes: maestro recipe list; maestro recipe show <name>\n",
     );
