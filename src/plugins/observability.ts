@@ -310,8 +310,10 @@ async function searchHub(context: PluginContext, term: string, limit: number): P
   if (exitCode !== 0) {
     let detail = `exit ${exitCode}`;
     try {
-      const envelope = JSON.parse(stderr) as { error?: { code?: string } };
-      if (envelope.error?.code) detail = envelope.error.code;
+      const envelope = JSON.parse(stderr) as { error?: { code?: string; message?: string } };
+      if (envelope.error?.message?.includes("stale search index")) {
+        detail = "its search index is behind the runtime; run maestro update, or any writing command inside the Hub room";
+      } else if (envelope.error?.code) detail = envelope.error.code;
     } catch {
       // stderr was not an envelope; keep the exit code
     }

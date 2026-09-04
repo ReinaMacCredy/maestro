@@ -77,8 +77,10 @@ objective, the latest entry, linked decisions, and a `next:` line naming what
 the caller may run. `--json` output is unchanged.
 
 Outside a running team, bare status shows live sessions plus dead sessions that
-still hold work or an open dispatch. `--all` lists every recorded session;
-`--live` lists only live sessions.
+still hold work or an open dispatch; each line carries the age of the session's
+last hook event. `--all` lists every recorded session; `--live` lists only live
+sessions. A SessionStart hook prunes dead sessions older than 30 days that hold
+no work and appear in no dispatch.
 
 ### `work add`
 
@@ -202,7 +204,8 @@ and does not replace SLP `status`.
 ### `brief`
 
 `maestro brief` summarizes registered repositories without changing their
-stores.
+stores. `maestro brief --session` prints this session's SessionStart brief, the
+text the hooks and the MCP instructions deliver.
 
 ### `prompt`
 
@@ -259,8 +262,10 @@ See [Self-improvement](/guides/self-improvement/).
 
 ### `memory`
 
-Global memory lives in the Hub store at `~/maestro`; every `memory` verb,
-reads included, fails with `NOT_HUB_STORE` from any other cwd.
+Global memory lives in the Hub store at `~/maestro`. `list` and `show` read it
+from any cwd; `ingest`, `retract` and `render` write it and fail with
+`NOT_HUB_STORE` from any other cwd. The SessionStart brief counts buffer facts
+the next ingest would promote.
 
 - `ingest [--dry-run] [--from <dir>]` promotes buffer facts (Claude
   auto-memory, Codex memories) through supersession, dedup and evidence gates.
@@ -324,4 +329,6 @@ reads included, fails with `NOT_HUB_STORE` from any other cwd.
 ## Help
 
 `maestro help`, `maestro help <verb>`, and `maestro <verb> --help` print the
-inventory registered by the running binary.
+inventory registered by the running binary. A trailing `*` marks a verb that
+runs under `MAESTRO_READ_ONLY=1`; on a root verb it means at least one subverb
+does.

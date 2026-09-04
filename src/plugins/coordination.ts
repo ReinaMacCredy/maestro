@@ -121,6 +121,46 @@ function livePeers(
     }));
 }
 
+function formatAge(iso: string, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86_400)}d ago`;
+}
+
+const deadSessionRetentionMs = 30 * 86_400_000;
+
+// A dead session that holds nothing and appears in no dispatch is history the
+// event log already keeps; the sessions table only needs it for 30 days.
+function pruneDeadSessions(context: PluginContext): void {
+  if (context.store.readOnly) return;
+  const cutoff = new Date(Date.now() - deadSessionRetentionMs).toISOString();
+  const referenced = new Set<string>();
+  for (const item of (context.work as WorkService).snapshot()) {
+    if (item.heldBy) referenced.add(item.heldBy);
+  }
+  for (const dispatch of (context.dispatch as DispatchService).list()) {
+    for (const id of [dispatch.targetSession, dispatch.openedBy, dispatch.claimedBy, dispatch.heldBy]) {
+      if (id) referenced.add(id);
+    }
+  }
+  const stale = context.sessions
+    .list()
+    .filter((session) => !session.live && session.lastSeen < cutoff && !referenced.has(session.id))
+    .map((session) => session.id);
+  if (stale.length === 0) return;
+  context.sessions.prune(stale);
+  context.log.append({
+    type: "session.prune",
+    entityType: "session",
+    entityId: context.sessions.current().id,
+    sessionId: context.sessions.current().id,
+    payload: { cutoff, sessions: stale },
+  });
+}
+
 function formatLivePeers(peers: LivePeer[]): string {
   if (peers.length === 0) return "";
   return `live peers:\n${peers
@@ -154,13 +194,13 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: design -> work -> verify; skills: ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
+            "method: quickfix and Light load no skill (work add|start|done, verify inline); Full: design -> work -> verify with ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  tier: quickfix, a one-sentence diff with no Full trigger -> do it, verify inline, no record; grows past a sentence -> work add",
             "        one session, one branch, acceptance in a sentence -> maestro work add|start|done",
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
             '  forks: settle before editing - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
             '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
-            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken`,
+            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
         { events: ["SessionStart"] },
       ),
@@ -226,6 +266,9 @@ export const coordinationPlugin: BuiltInPlugin = {
           .sort();
         return `enabled policies: ${policies.join(", ") || "none"}`;
       }),
+    );
+    context.effect(() =>
+      brief.register(() => "  see or change: maestro plugin list|enable|disable <name>", { events: ["SessionStart"] }),
     );
     context.effect(() => brief.register(() => "next: maestro ready"));
     context.effect(() =>
@@ -334,6 +377,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
+          if (event === "SessionStart") pruneDeadSessions(context);
           if (event === "UserPromptSubmit" && !process.stdin.isTTY) {
             const raw = (await Bun.stdin.text()).trim();
             let payload: unknown;
@@ -434,7 +478,7 @@ export const coordinationPlugin: BuiltInPlugin = {
               ? sessions
                   .map(
                     (session) =>
-                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}${session.id === currentSession ? " (this session)" : ""}`,
+                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} ${formatAge(session.lastSeen)} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}${session.id === currentSession ? " (this session)" : ""}`,
                   )
                   .join("\n")
               : "no sessions";

@@ -21,6 +21,7 @@ export interface CliOptions {
   beforeInvoke?: (command: string, mutates: boolean) => Promise<void> | void;
   beforeUnknown?: (args: readonly string[]) => Promise<void> | void;
   helpFooter?: string;
+  readOnlyAdmits?: (owner: string | null, mutates: boolean) => boolean;
 }
 
 export interface PositionalDefinition {
@@ -78,6 +79,7 @@ interface CommandDefinition {
   json: boolean;
   maxPositionals: number;
   mutates: boolean;
+  owner: string | null;
   positionals: PositionalDefinition[];
   rootDescription?: string;
 }
@@ -171,6 +173,10 @@ export class Cli {
 
   constructor(private readonly options: CliOptions = {}) {}
 
+  // The loader names the plugin being applied so help can say which verbs
+  // observer mode admits; the answer depends on the owning plugin, not the verb.
+  owner: string | null = null;
+
   register(command: string, handler: CliHandler, options?: CommandOptions): Disposer;
   register(
     command: string,
@@ -207,6 +213,7 @@ export class Cli {
       json: options.json ?? false,
       maxPositionals: options.maxPositionals ?? options.positionals?.length ?? 0,
       mutates: options.mutates ?? true,
+      owner: this.owner,
       positionals: options.positionals ?? [],
       rootDescription: options.rootDescription
         ? this.oneLine(options.rootDescription, options.rootDescription)
@@ -410,10 +417,13 @@ export class Cli {
     if (!target) {
       const rows = this.rootVerbs().map((verb): HelpRow => ({
         label: verb,
-        description: this.rootDescription(verb),
+        description: `${this.rootDescription(verb)}${this.rootAdmittedReadOnly(verb) ? " *" : ""}`,
       }));
       const footer = this.options.helpFooter?.trim();
-      return `verbs:\n${this.formatRows(rows, "  ")}\n${footer ? `\n${footer}\n` : ""}`;
+      const legend = this.options.readOnlyAdmits
+        ? "\n  *  a verb it admits (on a root verb: at least one of its subverbs)"
+        : "";
+      return `verbs:\n${this.formatRows(rows, "  ")}\n${footer ? `\n${footer}${legend}\n` : ""}`;
     }
 
     const entries = [...this.commands.entries()]
@@ -434,7 +444,7 @@ export class Cli {
       entries.find(([, definition]) => definition.rootDescription)?.[1].rootDescription ??
       entries[0]?.[1].description ??
       `Run ${target}.`;
-    const lines = [`${target}  ${description}`];
+    const lines = [`${target}  ${description}${direct && this.admittedReadOnly(direct) ? " *" : ""}`];
     if (direct) {
       lines.push(`usage: maestro ${this.usage(target, direct)}`);
       lines.push(...this.flagHelp(target, direct));
@@ -445,7 +455,7 @@ export class Cli {
       lines.push("subverbs:");
       const rows = nested.map(([command, definition]): HelpRow => ({
         label: command.slice(target.length + 1),
-        description: definition.description,
+        description: `${definition.description}${this.admittedReadOnly(definition) ? " *" : ""}`,
       }));
       const width = Math.max(...rows.map((row) => row.label.length));
       for (const [index, [command, definition]] of nested.entries()) {
@@ -457,7 +467,22 @@ export class Cli {
         if (flags.length > 0) lines.push(...flags);
       }
     }
+    if (entries.some(([, definition]) => this.admittedReadOnly(definition))) {
+      lines.push("* runs under MAESTRO_READ_ONLY=1");
+    }
     return `${lines.join("\n")}\n`;
+  }
+
+  private admittedReadOnly(definition: CommandDefinition): boolean {
+    return this.options.readOnlyAdmits?.(definition.owner, definition.mutates) ?? false;
+  }
+
+  private rootAdmittedReadOnly(root: string): boolean {
+    if (root === "help") return this.options.readOnlyAdmits !== undefined;
+    return [...this.commands.entries()].some(
+      ([command, definition]) =>
+        (command === root || command.startsWith(`${root} `)) && this.admittedReadOnly(definition),
+    );
   }
 
   private flagHelp(command: string, definition: CommandDefinition): string[] {

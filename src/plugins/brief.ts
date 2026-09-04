@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
+import type { BriefService } from "./coordination.ts";
 
 interface AttentionEnvelope {
   data?: {
@@ -62,11 +63,21 @@ async function scanRepo(repo: string): Promise<RepoBrief> {
 
 export const briefPlugin: BuiltInPlugin = {
   name: "brief",
+  inject: ["brief"],
   apply(context) {
     context.effect(() =>
       context.cli.register(
         "brief",
-        async (): Promise<CliResult> => {
+        async (invocation): Promise<CliResult> => {
+          if (invocation.options.session === true) {
+            // The SessionStart text otherwise reaches an agent only through a
+            // hook or MCP instructions; this prints it so a shell can check it.
+            const text = await (context.brief as BriefService).render(
+              context.sessions.current().id,
+              "SessionStart",
+            );
+            return { data: { brief: text }, text };
+          }
           const repos = await registeredRepos(process.env.HOME ?? process.cwd());
           const results = await Promise.all(repos.map(scanRepo));
           const findingLines = results.flatMap((result) =>
@@ -94,6 +105,9 @@ export const briefPlugin: BuiltInPlugin = {
         },
         {
           description: "Summarize registered repository work without changing project stores.",
+          flags: {
+            "--session": { description: "Print this session's SessionStart brief instead (the hook and MCP text)." },
+          },
           mutates: false,
         },
       ),

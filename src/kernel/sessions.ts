@@ -178,6 +178,12 @@ export class Sessions {
       .map((row) => this.fromRow(this.normalizeRow(row)));
   }
 
+  prune(ids: readonly string[]): void {
+    if (this.disabled() || ids.length === 0) return;
+    const remove = this.store.database.query("DELETE FROM sessions WHERE id = ?");
+    for (const id of ids) remove.run(id);
+  }
+
   private resolveCurrent(harness?: Harness | null): CurrentSession {
     if (this.resolved) {
       if (harness) this.resolved.harness = harness;

@@ -227,6 +227,7 @@ export class Loader {
 
   private async load(candidate: Candidate): Promise<void> {
     this.currentPlugin = candidate.plugin.name;
+    this.context.cli.owner = candidate.plugin.name;
     try {
       await candidate.plugin.apply(this.context, this.config.get(candidate.plugin.name)?.config);
       this.records.push({
@@ -252,6 +253,7 @@ export class Loader {
       });
     } finally {
       this.currentPlugin = null;
+      this.context.cli.owner = null;
     }
   }
 

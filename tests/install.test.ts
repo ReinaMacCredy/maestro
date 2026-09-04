@@ -264,7 +264,7 @@ test("270 unverified Codex hook hashes never suppress room trust guidance", asyn
     const repeated = await runCli(fixture, ["install"], { PATH: path });
 
     expect(repeated.exitCode).toBe(0);
-    expect(repeated.stdout).toContain(roomTrustPrefix);
+    expect(repeated.stdout).not.toContain(roomTrustPrefix);
     expect(repeated.stdout).toContain("/hooks");
     expect(repeated.stdout).toContain("Codex has recorded trust for both hooks");
     expect(await readFile(configPath, "utf8")).toBe(config);

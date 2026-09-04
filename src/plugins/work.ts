@@ -8,6 +8,7 @@ import {
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
+import { modifiedTrackedFiles, namesCommit } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { maybeHandleSlpWorkAdd, maybeHandleSlpWorkNote } from "./slp-v2.ts";
 
@@ -693,6 +694,7 @@ export const workPlugin: BuiltInPlugin = {
           // itself. The start gates and blockers run first, so the implicit
           // claim is not a way around anything work start would refuse.
           const claimsLease = work.heldBy !== sessionId;
+          const declaredAtomic = stringOption(invocation, "atomic-reason") ?? null;
           const expired = claimsLease ? latestLeaseExpiration(context, id) : null;
           if (claimsLease) {
             if (work.heldBy) {
@@ -710,7 +712,11 @@ export const workPlugin: BuiltInPlugin = {
             }
             const start = await context.events.waterfall<WorkGateInput, GateResult>(
               "work.start",
-              { work: { ...work, heldBy: null }, children: service.children(id), sessionId },
+              {
+                work: { ...work, heldBy: null, atomicReason: declaredAtomic ?? work.atomicReason },
+                children: service.children(id),
+                sessionId,
+              },
               async () => ({ blocked: false }),
             );
             blockIfNeeded(start);
@@ -731,7 +737,14 @@ export const workPlugin: BuiltInPlugin = {
             GateResult
           >(
             "work.done",
-            { work, children: service.children(id), evidence, claims, proofs, sessionId },
+            {
+              work: { ...work, atomicReason: declaredAtomic ?? work.atomicReason },
+              children: service.children(id),
+              evidence,
+              claims,
+              proofs,
+              sessionId,
+            },
             async (completion) => ({ blocked: false, evidence: completion.evidence }),
           );
           blockIfNeeded(result);
@@ -757,10 +770,10 @@ export const workPlugin: BuiltInPlugin = {
               const claimed = context.store.database
                 .query(
                   `UPDATE work
-                   SET state = 'active', held_by = ?, updated_at = ?
+                   SET state = 'active', held_by = ?, atomic_reason = COALESCE(?, atomic_reason), updated_at = ?
                    WHERE id = ? AND state != 'done' AND cancelled_at IS NULL AND held_by IS NULL`,
                 )
-                .run(sessionId, now, id);
+                .run(sessionId, declaredAtomic, now, id);
               if (claimed.changes === 0) {
                 const refreshed = requireWork(context, id);
                 throw new CliError("LEASE_HELD", `${id} is held by ${refreshed.heldBy}`, {
@@ -771,10 +784,10 @@ export const workPlugin: BuiltInPlugin = {
             const completed = context.store.database
               .query(
                 `UPDATE work
-                 SET state = 'done', evidence = ?, candidate = ?, held_by = NULL, updated_at = ?
+                 SET state = 'done', evidence = ?, candidate = ?, atomic_reason = COALESCE(?, atomic_reason), held_by = NULL, updated_at = ?
                  WHERE id = ? AND state = 'active' AND cancelled_at IS NULL AND held_by = ?`,
               )
-              .run(recordedEvidence, candidate, now, id, sessionId);
+              .run(recordedEvidence, candidate, declaredAtomic, now, id, sessionId);
             if (completed.changes === 0) {
               throw new CliError("INVALID_STATE", `${id} changed while completion was pending`);
             }
@@ -784,9 +797,14 @@ export const workPlugin: BuiltInPlugin = {
               entityType: "work",
               entityId: id,
               sessionId,
-              payload: claimsLease
-                ? { candidate, claimedOnDone: true, evidence: recordedEvidence, claims, proofs }
-                : { candidate, evidence: recordedEvidence, claims, proofs },
+              payload: {
+                candidate,
+                ...(claimsLease ? { claimedOnDone: true } : {}),
+                ...(declaredAtomic ? { atomicReason: declaredAtomic } : {}),
+                evidence: recordedEvidence,
+                claims,
+                proofs,
+              },
             });
             return service.get(id);
           });
@@ -794,7 +812,13 @@ export const workPlugin: BuiltInPlugin = {
           const lostLease = expired
             ? `; previous lease held by ${expired.holder} expired because ${expired.reason}`
             : "";
-          return { data: { work: completed }, text: `${id} done${lostLease}` };
+          const modified = candidate || namesCommit([recordedEvidence, ...claims, ...proofs].join(" "))
+            ? 0
+            : await modifiedTrackedFiles(process.cwd());
+          const unlanded = modified > 0
+            ? `\nwarning: ${modified} tracked files are modified and the evidence names no commit; a deliverable that only lives in the working tree is not landed`
+            : "";
+          return { data: { work: completed }, text: `${id} done${lostLease}${unlanded}` };
         },
         {
           description: "Complete work with policy-checked evidence, taking an unheld lease.",
@@ -805,6 +829,10 @@ export const workPlugin: BuiltInPlugin = {
             },
             "--candidate": {
               description: "Record an opaque commit or digest.",
+              value: true,
+            },
+            "--atomic-reason": {
+              description: "Declare an unheld parentless item atomic while done takes its lease.",
               value: true,
             },
           },
@@ -959,10 +987,23 @@ export const workPlugin: BuiltInPlugin = {
         const dispatches = (context.dispatch as DispatchService | undefined)?.list(work.id) ?? [];
         const decisions = ((context.decision as DecisionService | undefined)?.list() ?? [])
           .filter((decision) => decision.workId === work.id);
+        // What done will demand is only discoverable on rejection otherwise:
+        // each active policy that gates work done states its requirement here.
+        const gates = work.state === "done" || work.state === "cancelled"
+          ? []
+          : context.loader.records
+              .filter(
+                (record) =>
+                  record.status === "active" &&
+                  record.name.startsWith("policy-") &&
+                  /^gates [^:]*\bdone\b/.test(record.requires ?? ""),
+              )
+              .map((record) => ({ policy: record.name, requires: record.requires ?? "" }));
         return {
-          data: { work, children, blockers, notes, dispatches, decisions },
+          data: { work, children, blockers, notes, dispatches, decisions, gates },
           text: [
             formatWork(work),
+            ...gates.map((gate) => `gate: ${gate.policy} ${gate.requires}`),
             ...blockerLines,
             ...childLines,
             ...notes.map((note) => `note: ${note.text}`),
@@ -977,7 +1018,7 @@ export const workPlugin: BuiltInPlugin = {
           ].join("\n"),
         };
       }, {
-        description: "Show one work item with its blockers, evidence, children, and notes.",
+        description: "Show one work item with its done gates, blockers, evidence, children, and notes.",
         mutates: false,
         positionals: [{ name: "id", required: true }],
       }),

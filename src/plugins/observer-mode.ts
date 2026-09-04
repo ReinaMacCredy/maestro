@@ -47,6 +47,7 @@ export function observerMode(): ObserverMode {
     loadExternalPlugins: !enabled,
     cli: {
       helpFooter,
+      readOnlyAdmits: (owner, mutates) => !mutates && owner !== null && observerPlugins.has(owner),
       beforeInvoke(command, mutates) {
         if (!enabled || !mutates) return;
         throw new CliError(
@@ -60,7 +61,7 @@ export function observerMode(): ObserverMode {
         const command = args.join(" ");
         throw new CliError(
           "READ_ONLY",
-          `MAESTRO_READ_ONLY=1 blocks ${command}; remove MAESTRO_READ_ONLY and retry`,
+          `MAESTRO_READ_ONLY=1 admits observer verbs only; ${command} is not one of them (it may not be a verb at all); remove MAESTRO_READ_ONLY and retry, or run maestro --help to see which verbs read-only mode admits`,
           { command },
         );
       },

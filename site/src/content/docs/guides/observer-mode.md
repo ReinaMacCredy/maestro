@@ -31,6 +31,9 @@ session bookkeeping would be an unwanted side effect.
   that read is itself read-only.
 - It admits `term list|show` and `memory list|show` but refuses
   `memory render --check`, which is registered as a writing command.
+  `maestro help <verb>` marks the admitted verbs with a trailing `*`.
+- An unknown verb under `MAESTRO_READ_ONLY=1` is reported as not admitted,
+  which does not mean the verb exists.
 - It does not replace role-scoped `maestro status` inside an SLP team.
 
 If a read depends on an index normally refreshed by a write-capable command,
