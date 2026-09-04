@@ -46,10 +46,12 @@ older executable, it preserves that executable as `maestro-legacy` if no
 rollback executable already exists.
 
 Install also scaffolds `~/maestro`, the Supervisor room, and registers the
-current repository there. It materializes four managed skills under
-`~/maestro/skills`: `maestro-bundle`, `maestro-design`, `maestro-work`, and
-`maestro-verify`. The installer links those skills for Claude without
-overwriting unmanaged skills.
+current repository there, and writes the shared method to
+`~/maestro/WORKFLOW.md`. It materializes nine managed skills under
+`~/maestro/skills`: `maestro-bundle`, `maestro-design`, `maestro-work`,
+`maestro-verify`, `maestro-improve`, and the read-only `maestro-explore`,
+`maestro-diagnose`, `maestro-coach`, and `maestro-questionnaire`. The
+installer links those skills for Claude without overwriting unmanaged skills.
 
 Use `maestro update` to fetch the recorded source checkout, accept only a
 fast-forward, and resync the runtime. It refuses dirty, diverged, missing, or
@@ -235,8 +237,9 @@ mail, pushes a dispatch into another session, or delivers PostToolUse packets.
 ## Recipes, skills, and plugins
 
 `maestro recipe list` and `maestro recipe show <name>` serve the shipped
-Markdown methods. The four installed skills drive bundle, design, work, and
-verification lifecycles. `maestro plugin` lists and manages built-in, global,
+Markdown methods. The installed skills drive bundle, design, work, and
+verification lifecycles, plus read-only explore, diagnose, coach, and
+questionnaire engagements. `maestro plugin` lists and manages built-in, global,
 and repository plugins; policy plugins remain removable instead of being
 baked into the kernel.
 

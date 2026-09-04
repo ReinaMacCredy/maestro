@@ -4,8 +4,12 @@ import { dirname, join, resolve } from "node:path";
 
 export const skillNames = [
   "maestro-bundle",
+  "maestro-coach",
   "maestro-design",
+  "maestro-diagnose",
+  "maestro-explore",
   "maestro-improve",
+  "maestro-questionnaire",
   "maestro-work",
   "maestro-verify",
 ] as const;

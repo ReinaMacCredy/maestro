@@ -27,7 +27,8 @@ start.
 
 ## Skills
 
-Install materializes five managed method skills under `~/maestro/skills/`:
+Install materializes nine managed method skills under `~/maestro/skills/`
+and the shared method at `~/maestro/WORKFLOW.md`:
 
 - `maestro-bundle` chooses direct work or a durable SPEC/NOTES/VERIFY bundle.
 - `maestro-design` settles one fork at a time and records locked decisions.
@@ -35,6 +36,13 @@ Install materializes five managed method skills under `~/maestro/skills/`:
 - `maestro-verify` checks evidence layers and controls close and delivery gates.
 - `maestro-improve` turns filed lessons into the smallest doctrine edit; the
   loop around it is in [Self-improvement](/guides/self-improvement/).
+- `maestro-explore` answers an evidence question read-only: research,
+  disposable prototype, or behavior baseline.
+- `maestro-diagnose` finds a failure's cause without changing anything.
+- `maestro-coach` re-pitches a fork the user did not follow, or teaches the
+  concept behind a recorded decision.
+- `maestro-questionnaire` turns a decision someone else owns into a Markdown
+  questionnaire for that person.
 
 The installer links these skills for Claude without overwriting an unmanaged
 skill. Team coordination comes from the pinned Workspace Pack and direct role

@@ -157,7 +157,7 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: design -> work -> verify; skills: ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md",
+            "method: design -> work -> verify; skills: ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  tier: quickfix, a one-sentence diff with no Full trigger -> do it, verify inline, no record; grows past a sentence -> work add",
             "        one session, one branch, acceptance in a sentence -> maestro work add|start|done",
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",

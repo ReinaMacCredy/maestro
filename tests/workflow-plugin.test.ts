@@ -196,19 +196,36 @@ test("128 bundle save ingests a foreign trio dir straight to archived", async ()
   });
 });
 
-test("129 [lint] install materializes the 4 maestro skills with a version stamp and refs", async () => {
+test("129 [lint] install materializes the 9 maestro skills with a version stamp and refs", async () => {
   await withFixture(async (fixture) => {
     // Proves installed artifact shape, not harness discovery or loading of those skills.
     const { path } = await prepareInstallFixture(fixture);
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
     const skillsRoot = join(fixture.home, "maestro", "skills");
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
+    for (const name of [
+      "maestro-bundle",
+      "maestro-coach",
+      "maestro-design",
+      "maestro-diagnose",
+      "maestro-explore",
+      "maestro-improve",
+      "maestro-questionnaire",
+      "maestro-work",
+      "maestro-verify",
+    ]) {
       const skill = await Bun.file(join(skillsRoot, name, "SKILL.md")).text();
       expect(skill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
     }
     for (const reference of [
       join("maestro-design", "references", "unattended.md"),
+      join("maestro-design", "references", "grilling.md"),
+      join("maestro-design", "references", "domain-modeling.md"),
+      join("maestro-design", "references", "wayfinder.md"),
+      join("maestro-explore", "references", "research.md"),
+      join("maestro-explore", "references", "prototype.md"),
+      join("maestro-explore", "references", "prototype-logic.md"),
+      join("maestro-explore", "references", "prototype-ui.md"),
       join("maestro-work", "references", "worktree.md"),
       join("maestro-work", "references", "conflict-handoff.md"),
       join("maestro-work", "references", "tdd-antipatterns.md"),

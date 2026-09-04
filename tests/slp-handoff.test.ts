@@ -287,8 +287,12 @@ test("172 [lint] the method-skill roster points handoffs at maestro handoff", as
     .sort();
   expect(roster).toEqual([
     "maestro-bundle",
+    "maestro-coach",
     "maestro-design",
+    "maestro-diagnose",
+    "maestro-explore",
     "maestro-improve",
+    "maestro-questionnaire",
     "maestro-verify",
     "maestro-work",
   ]);
