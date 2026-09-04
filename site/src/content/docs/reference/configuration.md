@@ -26,6 +26,13 @@ The default policy state is:
 | `policy-witness` | disabled |
 | `policy-lifecycle` | disabled |
 
+Policy also has a machine layer, `~/.maestro/config`, with the same shape.
+The loader reads it before the repository file, and a repository entry wins
+for the same plugin name. `maestro install` never writes the machine layer.
+The Hub room (`~/maestro`) carries no `.maestro/config`, so it runs the
+built-in defaults; those match the table above except `policy-lifecycle`,
+which is enabled there and defines no gates.
+
 ## Environment variables read by `src/`
 
 The source inventory was generated with the repository's required exhaustive
