@@ -320,3 +320,47 @@ test("580 --limit bounds the combined project-plus-Hub list, project hits first,
     expect(JSON.parse(all.stdout).data.matches).toHaveLength(6);
   });
 });
+
+test("581 a term name shaped like a generated term id is refused and the id row it would have shadowed is untouched", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
+    const hijack = await runCli(fixture, ["term", "add", "t1", "Not a lane"]);
+    expect(hijack.exitCode).not.toBe(0);
+    expect(hijack.stderr).toContain("INVALID_ARGUMENT");
+    expect(hijack.stderr).toContain("t<number>");
+    const byId = await runCli(fixture, ["term", "show", "t1", "--json"]);
+    expect(JSON.parse(byId.stdout).data.term).toMatchObject({ id: "t1", name: "Lane", definition: "A dispatch shape" });
+    expect(JSON.parse((await runCli(fixture, ["term", "list", "--json"])).stdout).data.terms).toHaveLength(1);
+  });
+});
+
+test("582 a buffer fact whose slug takes the generated fact id shape is refused with a reason and memory show still resolves the id row", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    await writeClaudeFact(
+      fixture,
+      "feedback_prose-over-question-cards.md",
+      { name: "prose-over-question-cards", description: "Ask forks in prose, not cards", modified: "2026-06-01T10:00:00.000Z" },
+      "Reina asked for prose questions.",
+    );
+    const first = await runCliAt(fixture, room, ["memory", "ingest", "--json"]);
+    expect(JSON.parse(first.stdout).data.actions[0]).toMatchObject({ action: "promoted", id: "m1" });
+
+    await writeClaudeFact(
+      fixture,
+      "feedback_m1.md",
+      { name: "m1", description: "A slug that would shadow m1", modified: "2026-06-02T10:00:00.000Z" },
+      "Body.",
+    );
+    const second = await runCliAt(fixture, room, ["memory", "ingest", "--json"]);
+    expect(second.exitCode).toBe(0);
+    const secondData = JSON.parse(second.stdout).data;
+    expect(secondData.counts).toEqual({ promoted: 0, updated: 0, skipped: 1, refused: 1 });
+    const refused = secondData.actions.find((action: { slug: string }) => action.slug === "m1");
+    expect(refused).toMatchObject({ action: "refused", id: null });
+    expect(refused.reason).toContain("m<number>");
+
+    const shown = await runCliAt(fixture, room, ["memory", "show", "m1", "--json"]);
+    expect(JSON.parse(shown.stdout).data.fact).toMatchObject({ id: "m1", slug: "prose-over-question-cards" });
+  });
+});

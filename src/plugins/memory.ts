@@ -68,6 +68,9 @@ export interface IngestAction {
 }
 
 const kindOrder = ["user", "feedback", "project", "reference"];
+// Reads take an id or a slug, so a slug shaped like a minted fact id
+// (nextPrefixedId: "m" + integer) would shadow that row on show and retract.
+const generatedFactId = /^m\d+$/;
 const renderHeader = /^<!-- rendered by maestro memory render; content-hash: ([0-9a-f]{64}); .* -->\n/;
 
 function fromRow(row: FactRow): MemoryFact {
@@ -165,7 +168,7 @@ function listFacts(database: Database, all: boolean): MemoryFact[] {
 function pendingBufferFacts(hubFacts: MemoryFact[], buffer: BufferFact[]): number {
   const bySlug = new Map(hubFacts.map((fact) => [fact.slug, fact]));
   return buffer.filter((fact) => {
-    if (fact.problems.length > 0) return false;
+    if (fact.problems.length > 0 || generatedFactId.test(fact.slug)) return false;
     const known = bySlug.get(fact.slug);
     if (!known) return true;
     return known.state === "active" &&
@@ -429,6 +432,10 @@ function ingest(
     for (const fact of facts) {
       if (fact.problems.length > 0) {
         record("refused", fact, null, `no evidence: ${fact.problems.join(", ")}`);
+        continue;
+      }
+      if (generatedFactId.test(fact.slug)) {
+        record("refused", fact, null, `slug takes the generated fact id shape m<number>: ${fact.slug}; rename the file`);
         continue;
       }
       const existing = view.get(fact.slug) ?? null;

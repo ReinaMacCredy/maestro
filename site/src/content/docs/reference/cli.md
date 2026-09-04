@@ -257,7 +257,8 @@ See [Self-improvement](/guides/self-improvement/).
 ### `term`
 
 - `add <name> <definition> [--work <id>]` records or redefines one glossary
-  term (a single word, no spaces).
+  term (a single word, no spaces). Names shaped like a generated term id
+  (`t1`, `t12`) are reserved, so a name never shadows another term's id.
 - `show <name-or-id>` and `list` read terms; `maestro search` finds them.
 
 ### `memory`
@@ -269,6 +270,8 @@ the next ingest would promote.
 
 - `ingest [--dry-run] [--from <dir>]` promotes buffer facts (Claude
   auto-memory, Codex memories) through supersession, dedup and evidence gates.
+  A fact whose slug is shaped like a generated fact id (`m1`, `m12`) is refused,
+  so a slug never shadows another fact's id.
 - `list [--all]` and `show <id-or-slug>` read facts; `--all` includes
   superseded and retracted ones.
 - `retract <id-or-slug> --reason <why>` retires a fact so the buffers can never
