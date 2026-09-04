@@ -159,7 +159,7 @@ function termHit(context: PluginContext, id: string, snippet: string): SearchHit
 function memoryHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
   const fact = context.store.database
     .query<{ id: string; slug: string; state: string; description: string }, [string]>(
-      "SELECT id, slug, state, description FROM memory_facts WHERE id = ?",
+      "SELECT id, slug, state, description FROM memory_facts WHERE id = ? AND state = 'active'",
     )
     .get(id);
   return fact

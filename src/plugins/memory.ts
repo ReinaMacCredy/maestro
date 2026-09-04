@@ -153,6 +153,7 @@ function indexFact(context: PluginContext, fact: MemoryFact): void {
   context.store.database
     .query("DELETE FROM search_index WHERE surface = 'memory' AND entity_id = ?")
     .run(fact.id);
+  if (fact.state !== "active") return;
   context.store.database
     .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('memory', ?, ?)")
     .run(fact.id, `${fact.slug} ${fact.description} ${fact.body}`);
@@ -392,6 +393,7 @@ function ingest(
       database
         .query("UPDATE memory_facts SET state = 'superseded', superseded_by_id = ?, updated_at = ? WHERE id = ?")
         .run(byId_, now, target.id);
+      indexFact(context, getFact(context, target.id) as MemoryFact);
     }
     target.state = "superseded";
     target.supersededById = byId_;

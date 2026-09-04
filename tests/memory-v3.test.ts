@@ -239,3 +239,37 @@ test("573 term add redefines in place, term show resolves name or id, and terms 
     expect(JSON.parse(found.stdout).data.matches).toContainEqual(expect.objectContaining({ id: "t1", kind: "term" }));
   });
 });
+
+test("578 superseded and retracted memory facts leave the search index at once, in the room and through a project's Hub read", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    await writeClaudeFact(
+      fixture,
+      "feedback_prose.md",
+      { name: "prose-over-cards", description: "Ask forks in prose zebra", modified: "2026-06-01T10:00:00.000Z" },
+      "Reina asked for prose questions.",
+    );
+    expect((await runCliAt(fixture, room, ["memory", "ingest"])).exitCode).toBe(0);
+    const ids = (result: { stdout: string }) =>
+      (JSON.parse(result.stdout).data.matches as Array<{ id: string }>).map((match) => match.id);
+    expect(ids(await runCliAt(fixture, room, ["search", "zebra", "--json"]))).toEqual(["m1"]);
+    expect(ids(await runCli(fixture, ["search", "zebra", "--json"]))).toEqual(["m1"]);
+
+    await writeClaudeFact(
+      fixture,
+      "feedback_cards.md",
+      { name: "ask-with-cards", description: "Ask forks with cards zebra", modified: "2026-06-08T10:00:00.000Z", supersedes: "prose-over-cards" },
+      "Reina retracted the prose rule.",
+    );
+    expect((await runCliAt(fixture, room, ["memory", "ingest"])).exitCode).toBe(0);
+    // The project's Hub read runs read-only, so it sees only what ingest de-indexed itself.
+    expect(ids(await runCli(fixture, ["search", "zebra", "--json"]))).toEqual(["m2"]);
+    const text = await runCliAt(fixture, room, ["search", "zebra"]);
+    expect(text.stdout).toContain("m2");
+    expect(text.stdout).not.toContain("m1");
+
+    expect((await runCliAt(fixture, room, ["memory", "retract", "m2", "--reason", "settled"])).exitCode).toBe(0);
+    expect(ids(await runCli(fixture, ["search", "zebra", "--json"]))).toEqual([]);
+    expect(ids(await runCliAt(fixture, room, ["search", "zebra", "--json"]))).toEqual([]);
+  });
+});
