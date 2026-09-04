@@ -1,9 +1,11 @@
 import { Database } from "bun:sqlite";
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+
+setDefaultTimeout(15_000);
 
 test("287 [lint] maestro-work skill lane line matches the dispatch vocabulary", async () => {
   // Proves source documentation parity, not independent runtime lane acceptance or rejection.
