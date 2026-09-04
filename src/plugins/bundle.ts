@@ -13,12 +13,14 @@ import type {
   HandbackRecord,
   HandbackService,
 } from "./dispatch.ts";
+import { formatImportReport, importWaymarkTree } from "./bundle-import.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
 export interface BundleRecord {
   id: string;
   state: "active" | "archived";
+  pausedAt: string | null;
   directory: string;
   spec: string | null;
   notes: string | null;
@@ -30,6 +32,7 @@ export interface BundleRecord {
 interface BundleRow {
   id: string;
   state: "active" | "archived";
+  paused_at: string | null;
   directory: string;
   spec: string | null;
   notes: string | null;
@@ -120,6 +123,7 @@ function fromRow(row: BundleRow): BundleRecord {
   return {
     id: row.id,
     state: row.state,
+    pausedAt: row.paused_at ?? null,
     directory: row.directory,
     spec: row.spec,
     notes: row.notes,
@@ -401,7 +405,8 @@ function handoffContent(
 }
 
 function headline(bundle: BundleRecord): string {
-  return `${bundle.id} [${bundle.state}] ${bundle.directory}`;
+  const state = bundle.state === "active" && bundle.pausedAt ? "paused" : bundle.state;
+  return `${bundle.id} [${state}] ${bundle.directory}`;
 }
 
 export const bundlePlugin: BuiltInPlugin = {
@@ -427,6 +432,9 @@ export const bundlePlugin: BuiltInPlugin = {
         PRIMARY KEY(bundle_id, work_id)
       );
     `);
+    // A paused bundle stays active in the state machine and only carries the
+    // pause stamp (d778: waymark paused -> paused); the CHECK is left alone.
+    context.store.ensureColumn("bundles", "paused_at", "ALTER TABLE bundles ADD COLUMN paused_at TEXT");
     // Observability rebuilds search_index from scratch each startup and only
     // knows its own tables; re-insert archived snapshots (import-rust precedent).
     if (!context.store.readOnly) {
@@ -717,6 +725,81 @@ export const bundlePlugin: BuiltInPlugin = {
         },
       ),
     );
+
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "bundle import",
+        (invocation): CliResult => {
+          const source = resolve(requiredPosition(invocation, 0, "source directory"));
+          if (!existsSync(source)) {
+            throw new CliError("NOT_FOUND", `directory not found: ${source}`, { directory: source });
+          }
+          const dryRun = invocation.options["dry-run"] === true;
+          const target = resolveStoreLocation(process.cwd()).root;
+          const report = importWaymarkTree(context, source, target, dryRun);
+          if (!dryRun) {
+            context.log.append({
+              type: "bundle.import",
+              entityType: "bundle",
+              entityId: basename(source),
+              sessionId: context.sessions.current().id,
+              payload: { counts: report.counts, source, target },
+            });
+          }
+          return { data: report, text: formatImportReport(report) };
+        },
+        {
+          description: "Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.",
+          flags: { "--dry-run": { description: "Report the mapping without writing." } },
+          json: true,
+          positionals: [{ name: "directory", required: true }],
+        },
+      ),
+    );
+
+    for (const verb of ["pause", "resume"] as const) {
+      context.effect(() =>
+        registerSessionCommand(
+          context,
+          `bundle ${verb}`,
+          (invocation): CliResult => {
+            const id = requiredPosition(invocation, 0, "bundle id");
+            const bundle = requireBundle(context, id);
+            if (bundle.state !== "active") {
+              throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`, { id, state: bundle.state });
+            }
+            if (verb === "pause" && bundle.pausedAt) {
+              throw new CliError("INVALID_STATE", `${id} is already paused`, { id });
+            }
+            if (verb === "resume" && !bundle.pausedAt) {
+              throw new CliError("INVALID_STATE", `${id} is not paused`, { id });
+            }
+            const now = new Date().toISOString();
+            context.store.database
+              .query("UPDATE bundles SET paused_at = ?, updated_at = ? WHERE id = ?")
+              .run(verb === "pause" ? now : null, now, id);
+            const reason = invocation.options.reason;
+            context.log.append({
+              type: `bundle.${verb}`,
+              entityType: "bundle",
+              entityId: id,
+              sessionId: context.sessions.current().id,
+              payload: { reason: typeof reason === "string" ? reason : null },
+            });
+            const updated = getBundle(context, id) as BundleRecord;
+            return { data: { bundle: updated }, text: headline(updated) };
+          },
+          {
+            description: verb === "pause"
+              ? "Pause an active bundle: it stays open but out of the way."
+              : "Resume a paused bundle.",
+            flags: verb === "pause" ? { "--reason": { description: "Why the bundle pauses.", value: true } } : {},
+            positionals: [{ name: "id", required: true }],
+          },
+        ),
+      );
+    }
 
     context.effect(() =>
       context.cli.register(

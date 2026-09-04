@@ -189,6 +189,9 @@ missing identities or targets.
   summarizes every registered repository.
 - `maestro term add|list|show` keeps the glossary; `maestro memory
   ingest|list|show|retract|render` runs the Hub memory.
+- `maestro bundle open|close|pause|resume|list|show|save|import` runs design
+  bundles; `import` brings a `.waymark/` tree in with an item-by-item report
+  and a dry run.
 - `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
   manages the configured extension set.
 - `maestro import rust` imports preserved Rust data; `maestro legacy show`

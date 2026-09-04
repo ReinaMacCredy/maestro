@@ -71,6 +71,34 @@ function indexTerm(context: PluginContext, term: TermRecord): void {
     .run(term.id, `${term.name} ${term.definition}`);
 }
 
+export function upsertTerm(
+  context: PluginContext,
+  name: string,
+  definition: string,
+  workId: string | null = null,
+): { term: TermRecord; updated: boolean } {
+  const now = new Date().toISOString();
+  const existing = getTerm(context, name);
+  if (existing) {
+    context.store.database
+      .query("UPDATE terms SET definition = ?, work_id = COALESCE(?, work_id), updated_at = ? WHERE id = ?")
+      .run(definition, workId, now, existing.id);
+  } else {
+    context.store.database
+      .query(
+        "INSERT INTO terms(id, name, definition, work_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(context.store.nextPrefixedId("terms", "t"), name, definition, workId, now, now);
+  }
+  const term = getTerm(context, name) as TermRecord;
+  indexTerm(context, term);
+  return { term, updated: existing !== null };
+}
+
+export function getTermByName(context: PluginContext, name: string): TermRecord | null {
+  return getTerm(context, name);
+}
+
 export function formatTerm(term: TermRecord): string {
   return `${term.id} ${term.name}: ${term.definition}` + (term.workId ? ` (work ${term.workId})` : "");
 }
@@ -114,34 +142,20 @@ export const termPlugin: BuiltInPlugin = {
             .get(workId)) {
             throw new CliError("NOT_FOUND", `work not found: ${workId}`, { id: workId });
           }
-          const now = new Date().toISOString();
-          const existing = getTerm(context, name);
-          const saved = context.store.database.transaction(() => {
-            if (existing) {
-              context.store.database
-                .query("UPDATE terms SET definition = ?, work_id = COALESCE(?, work_id), updated_at = ? WHERE id = ?")
-                .run(definition, workId, now, existing.id);
-            } else {
-              context.store.database
-                .query(
-                  "INSERT INTO terms(id, name, definition, work_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                )
-                .run(context.store.nextPrefixedId("terms", "t"), name, definition, workId, now, now);
-            }
-            const term = getTerm(context, name) as TermRecord;
-            indexTerm(context, term);
+          const { term: saved, updated } = context.store.database.transaction(() => {
+            const result = upsertTerm(context, name, definition, workId);
             context.log.append({
-              type: existing ? "term.update" : "term.add",
+              type: result.updated ? "term.update" : "term.add",
               entityType: "term",
-              entityId: term.id,
+              entityId: result.term.id,
               sessionId: context.sessions.current().id,
               payload: { name, workId },
             });
-            return term;
+            return result;
           })();
           return {
-            data: { term: saved, updated: existing !== null },
-            text: `${formatTerm(saved)}${existing ? " (definition replaced)" : ""}`,
+            data: { term: saved, updated },
+            text: `${formatTerm(saved)}${updated ? " (definition replaced)" : ""}`,
           };
         },
         {
