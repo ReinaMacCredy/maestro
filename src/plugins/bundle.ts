@@ -63,7 +63,15 @@ function specTemplate(id: string): string {
 
 ## Anti-goals
 
-Mid-flight decisions: record via \`maestro decision draft "<text>" --rationale "<why>"\` and link the ids here instead of restating them.
+Each anti-goal gets a matching VERIFY.md check.
+
+## Decisions
+
+Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lock, and list the ids here; \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
+
+## Red tests
+
+Full tier only, and only for the risks this SPEC names; leave empty when it names none. Quickfix and Light work never carries this section.
 `;
 }
 

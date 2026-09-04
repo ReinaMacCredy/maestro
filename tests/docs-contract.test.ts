@@ -155,3 +155,71 @@ test("311 [lint] SLP v2 is the only registered team architecture and states its 
     expect(surface).toContain("direct Herdr");
   }
 });
+
+test("576 [lint] no doctrine, template, or skill demands a test or SPEC from quickfix or Light work", async () => {
+  // Anti-goal A6 / d784: ceremony scales with tier. Proves the shipped text and
+  // the scaffolded SPEC, not how a harness reads them.
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  // A sentence that denies the demand ("no SPEC", "never demand a test") is
+  // the rule itself, not a demand; strip those clauses before matching.
+  const denial = /\b(no|never|without|nor)\b[^.;]*?\b(SPEC|red[- ]tests?( list)?|red list|tests?|VERIFY\.md)\b[^.;]*/gi;
+  const demand = /\b(red[- ]tests?|red list|SPEC|VERIFY\.md|failing test|write (a|the) test)\b/i;
+  const demands = (text: string): boolean => demand.test(text.replace(denial, ""));
+  const section = (text: string, heading: string): string => {
+    const start = text.indexOf(heading);
+    expect({ heading, found: start >= 0 }).toEqual({ heading, found: true });
+    const rest = text.slice(start + heading.length);
+    const next = rest.search(/\n## /);
+    return next >= 0 ? rest.slice(0, next) : rest;
+  };
+  const bullets = (text: string, prefix: string): string[] => {
+    const lines = text.split("\n");
+    const out: string[] = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!lines[index]?.startsWith(prefix)) continue;
+      const item = [lines[index]];
+      while (lines[index + 1]?.startsWith("  ")) item.push(lines[++index] ?? "");
+      out.push(item.join("\n"));
+    }
+    return out;
+  };
+  const lowTierBullets = (text: string, prefixes: string[]): string[] =>
+    prefixes.flatMap((prefix) => bullets(text, prefix));
+
+  const bundle = await Bun.file(join(root, "skills", "maestro-bundle", "SKILL.md")).text();
+  const tierRule = section(bundle, "## Tier rule");
+  const work = await Bun.file(join(root, "skills", "maestro-work", "SKILL.md")).text();
+  const tierFirst = section(work, "## Tier first, recon second");
+  const workflow = await Bun.file(join(root, "resources", "WORKFLOW.md")).text();
+  const tiers = section(workflow, "## Tiers");
+  const surfaces: Array<[string, string[]]> = [
+    [tierRule, lowTierBullets(tierRule, ["- quickfix:", "- Light:"])],
+    [tierFirst, lowTierBullets(tierFirst, ["- quickfix:", "- Light:"])],
+    [tiers, lowTierBullets(tiers, ["- **quickfix**", "- **Light"])],
+  ];
+  for (const [, low] of surfaces) {
+    expect(low).toHaveLength(2);
+    for (const bullet of low) {
+      expect({ bullet, demands: demands(bullet) }).toEqual({ bullet, demands: false });
+      expect(bullet).toMatch(/inline|no record|no bundle/i);
+    }
+  }
+  expect(tierRule).toContain("Quickfix and Light never demand a SPEC or a test");
+  expect(tiers).toContain("Red tests are a Full-tier instrument");
+
+  const design = await Bun.file(join(root, "skills", "maestro-design", "SKILL.md")).text();
+  const exit = section(design, "## Readiness gate and exit");
+  const lightExit = bullets(exit, "- quickfix or Light:")[0] ?? "";
+  expect({ lightExit, demands: demands(lightExit) }).toEqual({ lightExit, demands: false });
+
+  await withFixture(async (fixture) => {
+    const opened = await runCli(fixture, ["bundle", "open", "tier-lint"]);
+    expect(opened.exitCode).toBe(0);
+    const spec = await Bun.file(join(fixture.repo, ".maestro", "bundle", "tier-lint", "SPEC.md")).text();
+    const redTests = section(spec, "## Red tests");
+    expect(redTests).toContain("Full tier only");
+    expect(redTests).toContain("Quickfix and Light work never carries this section");
+    expect(section(spec, "## Decisions")).toContain("maestro bundle show tier-lint");
+    expect(section(spec, "## Anti-goals")).toContain("matching VERIFY.md check");
+  });
+});
