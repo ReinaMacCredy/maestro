@@ -183,3 +183,28 @@ test("582 a failed bundle import leaves no copied directory and no row behind, a
     expect(existsSync(join(fixture.repo, ".maestro", "bundle", "upstream-sync", "secret.md"))).toBe(true);
   });
 });
+
+test("612 a CONTEXT.md term whose name takes the generated term id shape is skipped by both the dry run and the real import", async () => {
+  await withFixture(async (fixture) => {
+    const source = await waymarkFixture(fixture);
+    await writeFile(
+      join(source, "CONTEXT.md"),
+      "# Vocabulary\n\n## Language\n\n**Kernel**:\nThe mechanism-only core.\n\n**t1**:\nA name that would shadow the first term's id.\n",
+    );
+    const dry = await runCli(fixture, ["bundle", "import", ".waymark", "--dry-run", "--json"]);
+    expect(dry.exitCode).toBe(0);
+    const dryRow = JSON.parse(dry.stdout).data.entries
+      .find((entry: { name: string }) => entry.name === "CONTEXT.md t1");
+    expect(dryRow).toMatchObject({ action: "skipped", id: null, kind: "term" });
+    expect(dryRow.detail).toContain("t<number>");
+
+    const real = await runCli(fixture, ["bundle", "import", ".waymark", "--json"]);
+    expect(real.exitCode).toBe(0);
+    const realData = JSON.parse(real.stdout).data;
+    expect(realData.entries.find((entry: { name: string }) => entry.name === "CONTEXT.md t1"))
+      .toMatchObject({ action: "skipped", id: null, kind: "term" });
+    expect(realData.counts.term).toMatchObject({ imported: 1, skipped: 1 });
+    const terms = JSON.parse((await runCli(fixture, ["term", "list", "--json"])).stdout).data.terms;
+    expect(terms.map((term: { name: string }) => term.name)).toEqual(["Kernel"]);
+  });
+});

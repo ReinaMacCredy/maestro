@@ -321,7 +321,7 @@ test("580 --limit bounds the combined project-plus-Hub list, project hits first,
   });
 });
 
-test("581 a term name shaped like a generated term id is refused and the id row it would have shadowed is untouched", async () => {
+test("610 a term name shaped like a generated term id is refused and the id row it would have shadowed is untouched", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
     const hijack = await runCli(fixture, ["term", "add", "t1", "Not a lane"]);
@@ -334,7 +334,7 @@ test("581 a term name shaped like a generated term id is refused and the id row 
   });
 });
 
-test("582 a buffer fact whose slug takes the generated fact id shape is refused with a reason and memory show still resolves the id row", async () => {
+test("611 a buffer fact whose slug takes the generated fact id shape is refused with a reason and memory show still resolves the id row", async () => {
   await withFixture(async (fixture) => {
     const room = await hub(fixture);
     await writeClaudeFact(

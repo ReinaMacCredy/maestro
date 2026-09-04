@@ -43,6 +43,10 @@ function required(invocation: CliInvocation, index: number, label: string): stri
 // redefine it on every write. Reserving the shape keeps the two apart.
 const generatedTermId = /^t\d+$/;
 
+export function isGeneratedTermName(name: string): boolean {
+  return generatedTermId.test(name);
+}
+
 function getTerm(context: PluginContext, key: string): TermRecord | null {
   const row = context.store.database
     .query<TermRow, [string, string]>("SELECT * FROM terms WHERE id = ? OR name = ?")
