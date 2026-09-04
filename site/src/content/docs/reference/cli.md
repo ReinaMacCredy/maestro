@@ -259,8 +259,8 @@ See [Self-improvement](/guides/self-improvement/).
 
 ### `memory`
 
-Global memory lives in the Hub store at `~/maestro`; every `memory` verb
-except a read from another cwd fails with `NOT_HUB_STORE`.
+Global memory lives in the Hub store at `~/maestro`; every `memory` verb,
+reads included, fails with `NOT_HUB_STORE` from any other cwd.
 
 - `ingest [--dry-run] [--from <dir>]` promotes buffer facts (Claude
   auto-memory, Codex memories) through supersession, dedup and evidence gates.
