@@ -20,6 +20,7 @@ import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
+import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
 
@@ -646,6 +647,7 @@ export const installPlugin: BuiltInPlugin = {
         const runtimeRoot = join(home, ".maestro", "runtime");
         const sourceRoot = await resolveSourceRoot(repo);
         const installedRuntime = await samePath(sourceRoot, runtimeRoot);
+        const dirtySource = installedRuntime ? 0 : await modifiedTrackedFiles(sourceRoot);
         if (!installedRuntime) {
           const existingLegacy = await executable("maestro-legacy");
           const existingMaestro = await executable("maestro");
@@ -769,7 +771,10 @@ export const installPlugin: BuiltInPlugin = {
             (roomCodexHookTrustRecorded
               ? "\nroom Codex hooks: Codex has recorded trust for both hooks (the hash is not verifiable here); re-check with /hooks if they stop firing"
               : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
-            (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : ""),
+            (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : "") +
+            (dirtySource > 0
+              ? `\nwarning: ${sourceRoot} has ${dirtySource} modified tracked files; the installed runtime carries uncommitted changes`
+              : ""),
         };
       }, { description: "Install Maestro runtime and repository hook wiring." }),
     );

@@ -121,6 +121,46 @@ function livePeers(
     }));
 }
 
+function formatAge(iso: string, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86_400)}d ago`;
+}
+
+const deadSessionRetentionMs = 30 * 86_400_000;
+
+// A dead session that holds nothing and appears in no dispatch is history the
+// event log already keeps; the sessions table only needs it for 30 days.
+function pruneDeadSessions(context: PluginContext): void {
+  if (context.store.readOnly) return;
+  const cutoff = new Date(Date.now() - deadSessionRetentionMs).toISOString();
+  const referenced = new Set<string>();
+  for (const item of (context.work as WorkService).snapshot()) {
+    if (item.heldBy) referenced.add(item.heldBy);
+  }
+  for (const dispatch of (context.dispatch as DispatchService).list()) {
+    for (const id of [dispatch.targetSession, dispatch.openedBy, dispatch.claimedBy, dispatch.heldBy]) {
+      if (id) referenced.add(id);
+    }
+  }
+  const stale = context.sessions
+    .list()
+    .filter((session) => !session.live && session.lastSeen < cutoff && !referenced.has(session.id))
+    .map((session) => session.id);
+  if (stale.length === 0) return;
+  context.sessions.prune(stale);
+  context.log.append({
+    type: "session.prune",
+    entityType: "session",
+    entityId: context.sessions.current().id,
+    sessionId: context.sessions.current().id,
+    payload: { cutoff, sessions: stale },
+  });
+}
+
 function formatLivePeers(peers: LivePeer[]): string {
   if (peers.length === 0) return "";
   return `live peers:\n${peers
@@ -334,6 +374,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
+          if (event === "SessionStart") pruneDeadSessions(context);
           if (event === "UserPromptSubmit" && !process.stdin.isTTY) {
             const raw = (await Bun.stdin.text()).trim();
             let payload: unknown;
@@ -434,7 +475,7 @@ export const coordinationPlugin: BuiltInPlugin = {
               ? sessions
                   .map(
                     (session) =>
-                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}${session.id === currentSession ? " (this session)" : ""}`,
+                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} ${formatAge(session.lastSeen)} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}${session.id === currentSession ? " (this session)" : ""}`,
                   )
                   .join("\n")
               : "no sessions";

@@ -47,6 +47,7 @@ export function observerMode(): ObserverMode {
     loadExternalPlugins: !enabled,
     cli: {
       helpFooter,
+      readOnlyAdmits: (owner, mutates) => !mutates && owner !== null && observerPlugins.has(owner),
       beforeInvoke(command, mutates) {
         if (!enabled || !mutates) return;
         throw new CliError(

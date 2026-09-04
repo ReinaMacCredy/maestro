@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -5,6 +6,7 @@ import { CliError, stringOptions, type CliInvocation, type CliResult } from "../
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory, resolveHubRoom, samePath } from "./home.ts";
+import type { BriefService } from "./coordination.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
 export interface MemoryFact {
@@ -104,28 +106,50 @@ function stringOption(invocation: CliInvocation, name: string): string | null {
 }
 
 // Memory verbs write the Hub store only (d775). A project store never holds
-// global facts, so the verb refuses there instead of writing through a child.
+// global facts, so a writing verb refuses there instead of writing through a child.
 function requireHub(context: PluginContext): { room: string; storePath: string } {
   const hub = resolveHubRoom();
   if (!samePath(context.store.path, hub.storePath)) {
     throw new CliError(
       "NOT_HUB_STORE",
-      `maestro memory reads and writes the Hub store; run it from ${hub.room}`,
+      `maestro memory writes the Hub store; run it from ${hub.room}`,
       { room: hub.room },
     );
   }
   return hub;
 }
 
-function getFact(context: PluginContext, key: string): MemoryFact | null {
-  const row = context.store.database
+// Reads resolve the Hub from any cwd the way search does: the project store's
+// own memory_facts table is always empty and must never answer a read.
+function readHub<T>(context: PluginContext, read: (database: Database) => T): T {
+  const hub = resolveHubRoom();
+  if (samePath(context.store.path, hub.storePath)) return read(context.store.database);
+  if (!existsSync(hub.storePath)) {
+    throw new CliError(
+      "HUB_UNAVAILABLE",
+      `the Hub store ${hub.storePath} does not exist; run maestro install once`,
+      { room: hub.room },
+    );
+  }
+  const database = new Database(hub.storePath, { readonly: true });
+  try {
+    return read(database);
+  } finally {
+    database.close();
+  }
+}
+
+function getFact(database: Database, key: string): MemoryFact | null {
+  if (!tableExists(database, "memory_facts")) return null;
+  const row = database
     .query<FactRow, [string, string]>("SELECT * FROM memory_facts WHERE id = ? OR slug = ?")
     .get(key, key);
   return row ? fromRow(row) : null;
 }
 
-function listFacts(context: PluginContext, all: boolean): MemoryFact[] {
-  return context.store.database
+function listFacts(database: Database, all: boolean): MemoryFact[] {
+  if (!tableExists(database, "memory_facts")) return [];
+  return database
     .query<FactRow, []>(
       all
         ? "SELECT * FROM memory_facts ORDER BY slug"
@@ -133,6 +157,21 @@ function listFacts(context: PluginContext, all: boolean): MemoryFact[] {
     )
     .all()
     .map(fromRow);
+}
+
+// The buffers grow silently between ingests; this counts what the next
+// ingest would promote or update, mirroring its gates (problems and
+// superseded slugs are refused, so they never count).
+function pendingBufferFacts(hubFacts: MemoryFact[], buffer: BufferFact[]): number {
+  const bySlug = new Map(hubFacts.map((fact) => [fact.slug, fact]));
+  return buffer.filter((fact) => {
+    if (fact.problems.length > 0) return false;
+    const known = bySlug.get(fact.slug);
+    if (!known) return true;
+    return known.state === "active" &&
+      known.contentHash !== fact.contentHash &&
+      known.sourcePath === fact.sourcePath;
+  }).length;
 }
 
 function indexFact(context: PluginContext, fact: MemoryFact): void {
@@ -289,7 +328,7 @@ function ingest(
 ): IngestAction[] {
   const view = new Map<string, ViewEntry>();
   const byId = new Map<string, ViewEntry>();
-  for (const fact of listFacts(context, true)) {
+  for (const fact of listFacts(context.store.database, true)) {
     const entry: ViewEntry = {
       hash: fact.contentHash,
       id: fact.id,
@@ -331,7 +370,7 @@ function ingest(
           now,
           now,
         );
-      indexFact(context, getFact(context, id) as MemoryFact);
+      indexFact(context, getFact(context.store.database, id) as MemoryFact);
     }
     const entry: ViewEntry = {
       hash: fact.contentHash,
@@ -366,7 +405,7 @@ function ingest(
           now,
           entry.id,
         );
-      indexFact(context, getFact(context, entry.id) as MemoryFact);
+      indexFact(context, getFact(context.store.database, entry.id) as MemoryFact);
     }
     entry.hash = fact.contentHash;
     entry.sourcePath = fact.sourcePath;
@@ -380,7 +419,7 @@ function ingest(
       database
         .query("UPDATE memory_facts SET state = 'superseded', superseded_by_id = ?, updated_at = ? WHERE id = ?")
         .run(byId_, now, target.id);
-      indexFact(context, getFact(context, target.id) as MemoryFact);
+      indexFact(context, getFact(context.store.database, target.id) as MemoryFact);
     }
     target.state = "superseded";
     target.supersededById = byId_;
@@ -544,8 +583,26 @@ export const memoryPlugin: BuiltInPlugin = {
       );
     `);
     if (!context.store.readOnly) {
-      for (const fact of listFacts(context, true)) indexFact(context, fact);
+      for (const fact of listFacts(context.store.database, true)) indexFact(context, fact);
     }
+
+    context.effect(() =>
+      (context.brief as BriefService).register(() => {
+        const hub = resolveHubRoom();
+        if (!existsSync(hub.storePath)) return "";
+        try {
+          const pending = pendingBufferFacts(
+            readHub(context, (database) => listFacts(database, true)),
+            collectBufferFacts(defaultBufferDirectories(resolveHomeDirectory())),
+          );
+          return pending > 0
+            ? `memory: ${pending} buffer facts not yet in the Hub; run: maestro memory ingest --dry-run (from ${hub.room})`
+            : "";
+        } catch {
+          return "";
+        }
+      }, { events: ["SessionStart"] }),
+    );
 
     context.effect(() =>
       registerSessionCommand(
@@ -596,7 +653,7 @@ export const memoryPlugin: BuiltInPlugin = {
           const key = required(invocation, 0, "fact id or slug");
           const reason = stringOption(invocation, "reason");
           if (!reason) throw new CliError("MISSING_ARGUMENT", "missing --reason");
-          const fact = getFact(context, key);
+          const fact = getFact(context.store.database, key);
           if (!fact) throw new CliError("NOT_FOUND", `memory fact not found: ${key}`, { key });
           if (fact.state === "superseded") {
             throw new CliError("INVALID_STATE", `${fact.id} is already superseded`, { id: fact.id });
@@ -605,7 +662,7 @@ export const memoryPlugin: BuiltInPlugin = {
           context.store.database
             .query("UPDATE memory_facts SET state = 'superseded', retired_reason = ?, updated_at = ? WHERE id = ?")
             .run(reason, now, fact.id);
-          const updated = getFact(context, fact.id) as MemoryFact;
+          const updated = getFact(context.store.database, fact.id) as MemoryFact;
           indexFact(context, updated);
           context.log.append({
             type: "memory.retract",
@@ -629,8 +686,7 @@ export const memoryPlugin: BuiltInPlugin = {
       context.cli.register(
         "memory list",
         (invocation): CliResult => {
-          requireHub(context);
-          const facts = listFacts(context, invocation.options.all === true);
+          const facts = readHub(context, (database) => listFacts(database, invocation.options.all === true));
           return {
             data: { facts },
             text: facts.length > 0
@@ -639,9 +695,10 @@ export const memoryPlugin: BuiltInPlugin = {
           };
         },
         {
-          description: "List Hub memory facts.",
+          description: "List Hub memory facts from any cwd.",
           flags: { "--all": { description: "Include superseded and retracted facts." } },
           mutates: false,
+          rootDescription: "Global memory facts in the Hub store: read from any cwd, promote and retract from the Hub.",
         },
       ),
     );
@@ -650,14 +707,13 @@ export const memoryPlugin: BuiltInPlugin = {
       context.cli.register(
         "memory show",
         (invocation): CliResult => {
-          requireHub(context);
           const key = required(invocation, 0, "fact id or slug");
-          const fact = getFact(context, key);
+          const fact = readHub(context, (database) => getFact(database, key));
           if (!fact) throw new CliError("NOT_FOUND", `memory fact not found: ${key}; run: maestro memory list`, { key });
           return { data: { fact }, text: formatFact(fact) };
         },
         {
-          description: "Show one Hub memory fact with its body and links.",
+          description: "Show one Hub memory fact with its body and links, from any cwd.",
           json: true,
           mutates: false,
           positionals: [{ name: "fact", required: true }],
@@ -673,7 +729,7 @@ export const memoryPlugin: BuiltInPlugin = {
           const check = invocation.options.check === true;
           const force = invocation.options.force === true;
           const path = resolve(stringOption(invocation, "out") ?? join(hub.room, "MEMORY.md"));
-          const facts = listFacts(context, false);
+          const facts = listFacts(context.store.database, false);
           const rendered = renderIndex(facts);
           const existing = readRendered(path);
           const drifted = existing !== null && (existing.hash === null || sha256(existing.body) !== existing.hash);
