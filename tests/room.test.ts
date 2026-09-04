@@ -206,7 +206,7 @@ test("269 install wires both room harnesses without overwriting OWNER.md", async
   });
 });
 
-test("303 reinstall repairs private room and machine-record permissions", async () => {
+test("627 reinstall repairs private room and machine-record permissions", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);

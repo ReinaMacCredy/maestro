@@ -55,7 +55,7 @@ function errorMessage(result: { stderr: string }): string {
   return parsed.error.message;
 }
 
-test("1 recipe list prints the shipped catalog with one-line descriptions", async () => {
+test("621 recipe list prints the shipped catalog with one-line descriptions", async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(fixture, ["recipe", "list"]);
     const lines = result.stdout.trim().split("\n");
@@ -66,7 +66,7 @@ test("1 recipe list prints the shipped catalog with one-line descriptions", asyn
   });
 });
 
-test("2 recipe show serves design markdown byte-identically across repos", async () => {
+test("622 recipe show serves design markdown byte-identically across repos", async () => {
   await withFixture(async (first) => {
     await withFixture(async (second) => {
       const firstResult = await runCli(first, ["recipe", "show", "design"]);
@@ -83,7 +83,7 @@ test("2 recipe show serves design markdown byte-identically across repos", async
   });
 });
 
-test("3 unknown recipe errors list every valid recipe name", async () => {
+test("623 unknown recipe errors list every valid recipe name", async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(fixture, ["recipe", "show", "nosuch"]);
 
@@ -92,7 +92,7 @@ test("3 unknown recipe errors list every valid recipe name", async () => {
   });
 });
 
-test("4 recipe show leaves the repository tree unchanged", async () => {
+test("624 recipe show leaves the repository tree unchanged", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
     const before = await snapshotTree(fixture.repo);
@@ -104,7 +104,7 @@ test("4 recipe show leaves the repository tree unchanged", async () => {
   });
 });
 
-test("5 the recipe plugin contributes and removes its brief pointer with enablement", async () => {
+test("625 the recipe plugin contributes and removes its brief pointer with enablement", async () => {
   await withFixture(async (fixture) => {
     const enabled = await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
     expect((await runCli(fixture, ["plugin", "disable", "recipe"])).exitCode).toBe(0);
@@ -117,7 +117,7 @@ test("5 the recipe plugin contributes and removes its brief pointer with enablem
   });
 });
 
-test("6 policy-tdd blocks untagged write completion and passes a test-tagged pair", async () => {
+test("626 policy-tdd blocks untagged write completion and passes a test-tagged pair", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["plugin", "enable", "policy-tdd"])).exitCode).toBe(0);
     const id = idFrom(

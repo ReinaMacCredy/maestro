@@ -240,7 +240,7 @@ writeFileSync(${JSON.stringify(sentinel)}, "ran");
   });
 });
 
-test("517 a trusted plugin still imports a sibling inside its artifact", async () => {
+test("618 a trusted plugin still imports a sibling inside its artifact", async () => {
   await withFixture(async (fixture) => {
     const directory = join(fixture.repo, ".maestro", "plugins", "kit");
     await mkdir(directory, { recursive: true });

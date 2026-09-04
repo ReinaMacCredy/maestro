@@ -60,7 +60,7 @@ test("506 the desktop data layer spawns every maestro verb under MAESTRO_READ_ON
   expect(spawn).toContain('.env("MAESTRO_READ_ONLY", "1")');
 });
 
-test("516 [lint] PR CI builds every tree the repository ships, not only the root", async () => {
+test("620 [lint] PR CI builds every tree the repository ships, not only the root", async () => {
   const ci = await repoFile(".github/workflows/ci.yml");
   const jobs = [...ci.slice(ci.indexOf("\njobs:")).matchAll(/^ {2}([a-z][a-z-]*):$/gm)]
     .map((match) => match[1] as string);

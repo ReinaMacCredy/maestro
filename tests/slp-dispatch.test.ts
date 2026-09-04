@@ -197,7 +197,7 @@ test("173 dispatch open refuses every missing or blank envelope field", async ()
   });
 });
 
-test("300 dispatch open rejects blank target sessions without writing a contract or event", async () => {
+test("629 dispatch open rejects blank target sessions without writing a contract or event", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "target session validation", "--atomic-reason", "fixture"]),

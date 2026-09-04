@@ -288,7 +288,7 @@ test("132 policy-lifecycle ships dark: disabled by default with an honest requir
   });
 });
 
-test("311 the brief and the bundle skill state three tiers: quickfix without a record, Light as a work item, Full as a bundle", async () => {
+test("634 the brief and the bundle skill state three tiers: quickfix without a record, Light as a work item, Full as a bundle", async () => {
   const skill = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-bundle", "SKILL.md"),
     "utf8",
