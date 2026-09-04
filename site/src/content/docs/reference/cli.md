@@ -263,9 +263,11 @@ See [Self-improvement](/guides/self-improvement/).
 
 ### `memory`
 
-Global memory lives in the Hub store at `~/maestro`. `list` and `show` read it
-from any cwd; `ingest`, `retract` and `render` write it and fail with
-`NOT_HUB_STORE` from any other cwd. The SessionStart brief counts buffer facts
+Global memory lives in the Hub store at `~/maestro`. Every memory verb works
+from any cwd: `list` and `show` read the Hub store directly, and `ingest`,
+`retract` and `render` run through the Hub's own CLI when the current store is
+not the Hub (`--from` and `--out` paths resolve against your cwd). A missing Hub
+store fails with `HUB_UNAVAILABLE`. The SessionStart brief counts buffer facts
 the next ingest would promote.
 
 - `ingest [--dry-run] [--from <dir>]` promotes buffer facts (Claude

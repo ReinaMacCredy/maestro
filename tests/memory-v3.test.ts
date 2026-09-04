@@ -125,10 +125,9 @@ test("570 memory ingest gates: dry-run writes nothing, a fact with no evidence i
     expect(refused.reason).toContain("retracted");
     expect(refused.reason).toContain("icon decided");
 
-    const project = await runCli(fixture, ["memory", "ingest", "--dry-run"]);
-    expect(project.exitCode).not.toBe(0);
-    expect(project.stderr).toContain("NOT_HUB_STORE");
-    expect(project.stderr).toContain(room);
+    const project = await runCli(fixture, ["memory", "ingest", "--dry-run", "--json"]);
+    expect(project.exitCode).toBe(0);
+    expect(JSON.parse(project.stdout).data.actions.find((action: { slug: string }) => action.slug === "astra-brand-icon").action).toBe("refused");
   });
 });
 

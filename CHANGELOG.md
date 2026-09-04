@@ -11,6 +11,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Changed
+
+- `memory ingest|retract|render` work from any cwd: outside the Hub room they
+  run through the Hub's own CLI, so `NOT_HUB_STORE` is gone; `--from` and
+  `--out` resolve against the caller's cwd. A missing Hub store still fails
+  with `HUB_UNAVAILABLE`.
+
 ## [0.118.0] - 2026-09-05
 
 Maestro v3: the waymark plugin and the multi-store memory layer fold into

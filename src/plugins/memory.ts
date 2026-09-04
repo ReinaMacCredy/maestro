@@ -108,25 +108,13 @@ function stringOption(invocation: CliInvocation, name: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-// Memory verbs write the Hub store only (d775). A project store never holds
-// global facts, so a writing verb refuses there instead of writing through a child.
-function requireHub(context: PluginContext): { room: string; storePath: string } {
+// Memory verbs write the Hub store only (d775). From any other cwd a writing
+// verb runs through the Hub's own CLI (lesson.ts precedent): the project store
+// never holds global facts, and the child keeps a Hub store this binary cannot
+// read honest. Path options travel as absolute paths because the child's cwd
+// is the Hub room.
+function hubStore(): { room: string; storePath: string } {
   const hub = resolveHubRoom();
-  if (!samePath(context.store.path, hub.storePath)) {
-    throw new CliError(
-      "NOT_HUB_STORE",
-      `maestro memory writes the Hub store; run it from ${hub.room}`,
-      { room: hub.room },
-    );
-  }
-  return hub;
-}
-
-// Reads resolve the Hub from any cwd the way search does: the project store's
-// own memory_facts table is always empty and must never answer a read.
-function readHub<T>(context: PluginContext, read: (database: Database) => T): T {
-  const hub = resolveHubRoom();
-  if (samePath(context.store.path, hub.storePath)) return read(context.store.database);
   if (!existsSync(hub.storePath)) {
     throw new CliError(
       "HUB_UNAVAILABLE",
@@ -134,7 +122,56 @@ function readHub<T>(context: PluginContext, read: (database: Database) => T): T 
       { room: hub.room },
     );
   }
-  const database = new Database(hub.storePath, { readonly: true });
+  return hub;
+}
+
+function writesHubDirectly(context: PluginContext): boolean {
+  return samePath(context.store.path, resolveHubRoom().storePath);
+}
+
+async function forwardToHub<T>(invocation: CliInvocation, verb: string): Promise<T> {
+  const hub = hubStore();
+  const args = ["memory", verb, ...invocation.positionals];
+  for (const [key, value] of Object.entries(invocation.options)) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === false) continue;
+      args.push(`--${key}`);
+      if (typeof item === "string") args.push(key === "from" || key === "out" ? resolve(item) : item);
+    }
+  }
+  const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
+  const child = Bun.spawn([process.execPath, cli, ...args, "--json"], {
+    cwd: hub.room,
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    let failure: { code?: string; message?: string; details?: Record<string, unknown> } = {};
+    try {
+      failure = (JSON.parse(stderr) as { error?: typeof failure }).error ?? {};
+    } catch {
+      // stderr was not an envelope; report the exit code
+    }
+    throw new CliError(
+      failure.code ?? "HUB_UNAVAILABLE",
+      failure.message ?? `maestro memory ${verb} in ${hub.room} exited ${exitCode}`,
+      { room: hub.room, ...(failure.details ?? {}) },
+    );
+  }
+  return (JSON.parse(stdout) as { data: T }).data;
+}
+
+// Reads resolve the Hub from any cwd the way search does: the project store's
+// own memory_facts table is always empty and must never answer a read.
+function readHub<T>(context: PluginContext, read: (database: Database) => T): T {
+  if (writesHubDirectly(context)) return read(context.store.database);
+  const database = new Database(hubStore().storePath, { readonly: true });
   try {
     return read(database);
   } finally {
@@ -515,6 +552,37 @@ function countActions(actions: IngestAction[]): Record<IngestAction["action"], n
   return counts;
 }
 
+interface IngestData {
+  actions: IngestAction[];
+  counts: Record<IngestAction["action"], number>;
+  directories: string[];
+  dryRun: boolean;
+}
+
+function ingestText(data: IngestData): string {
+  const { counts } = data;
+  const summary = `${data.dryRun ? "dry-run: " : ""}promoted ${counts.promoted}, updated ${counts.updated}, skipped ${counts.skipped}, refused ${counts.refused} (${data.actions.length} facts from ${data.directories.length} directories)`;
+  return [...data.actions.map(formatAction), summary].join("\n");
+}
+
+function retractText(data: { fact: MemoryFact }): string {
+  return `${data.fact.id} ${data.fact.slug} retracted: ${data.fact.retiredReason}`;
+}
+
+interface RenderData {
+  facts: number;
+  hash: string;
+  path: string;
+  previous?: string;
+  status?: string;
+}
+
+function renderText(data: RenderData): string {
+  return data.previous === undefined
+    ? `${data.path} current (${data.facts} facts, ${data.hash.slice(0, 12)})`
+    : `rendered ${data.path} (${data.facts} facts, ${data.hash.slice(0, 12)}; was ${data.previous})`;
+}
+
 function formatAction(action: IngestAction): string {
   const id = action.id ? ` ${action.id}` : "";
   const reason = action.reason ? ` — ${action.reason}` : "";
@@ -604,7 +672,7 @@ export const memoryPlugin: BuiltInPlugin = {
             collectBufferFacts(defaultBufferDirectories(resolveHomeDirectory())),
           );
           return pending > 0
-            ? `memory: ${pending} buffer facts not yet in the Hub; run: maestro memory ingest --dry-run (from ${hub.room})`
+            ? `memory: ${pending} buffer facts not yet in the Hub; run: maestro memory ingest --dry-run`
             : "";
         } catch {
           return "";
@@ -616,8 +684,11 @@ export const memoryPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "memory ingest",
-        (invocation): CliResult => {
-          requireHub(context);
+        async (invocation): Promise<CliResult> => {
+          if (!writesHubDirectly(context)) {
+            const data = await forwardToHub<IngestData>(invocation, "ingest");
+            return { data, text: ingestText(data) };
+          }
           const dryRun = invocation.options["dry-run"] === true;
           const from = stringOptions(invocation, "from");
           const directories = from.length > 0
@@ -635,11 +706,8 @@ export const memoryPlugin: BuiltInPlugin = {
               payload: { counts, directories: directories.map((entry) => entry.directory) },
             });
           }
-          const summary = `${dryRun ? "dry-run: " : ""}promoted ${counts.promoted}, updated ${counts.updated}, skipped ${counts.skipped}, refused ${counts.refused} (${facts.length} facts from ${directories.length} directories)`;
-          return {
-            data: { actions, counts, directories: directories.map((entry) => entry.directory), dryRun },
-            text: [...actions.map(formatAction), summary].join("\n"),
-          };
+          const data: IngestData = { actions, counts, directories: directories.map((entry) => entry.directory), dryRun };
+          return { data, text: ingestText(data) };
         },
         {
           description: "Promote buffer facts into the Hub through supersession, dedup and evidence gates.",
@@ -656,8 +724,11 @@ export const memoryPlugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "memory retract",
-        (invocation): CliResult => {
-          requireHub(context);
+        async (invocation): Promise<CliResult> => {
+          if (!writesHubDirectly(context)) {
+            const data = await forwardToHub<{ fact: MemoryFact }>(invocation, "retract");
+            return { data, text: retractText(data) };
+          }
           const key = required(invocation, 0, "fact id or slug");
           const reason = stringOption(invocation, "reason");
           if (!reason) throw new CliError("MISSING_ARGUMENT", "missing --reason");
@@ -679,7 +750,7 @@ export const memoryPlugin: BuiltInPlugin = {
             sessionId: context.sessions.current().id,
             payload: { reason, slug: fact.slug },
           });
-          return { data: { fact: updated }, text: `${fact.id} ${fact.slug} retracted: ${reason}` };
+          return { data: { fact: updated }, text: retractText({ fact: updated }) };
         },
         {
           description: "Retire one fact so the buffers can never promote it again.",
@@ -732,8 +803,12 @@ export const memoryPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "memory render",
-        (invocation): CliResult => {
-          const hub = requireHub(context);
+        async (invocation): Promise<CliResult> => {
+          if (!writesHubDirectly(context)) {
+            const data = await forwardToHub<RenderData>(invocation, "render");
+            return { data, text: renderText(data) };
+          }
+          const hub = resolveHubRoom();
           const check = invocation.options.check === true;
           const force = invocation.options.force === true;
           const path = resolve(stringOption(invocation, "out") ?? join(hub.room, "MEMORY.md"));
@@ -757,7 +832,8 @@ export const memoryPlugin: BuiltInPlugin = {
                 { path, status },
               );
             }
-            return { data: { facts: facts.length, hash: rendered.hash, path, status }, text: `${path} current (${facts.length} facts, ${rendered.hash.slice(0, 12)})` };
+            const data: RenderData = { facts: facts.length, hash: rendered.hash, path, status };
+            return { data, text: renderText(data) };
           }
           if (context.store.readOnly) {
             throw new CliError("READ_ONLY", "MAESTRO_READ_ONLY=1 cannot write the rendered index", { path });
@@ -774,10 +850,8 @@ export const memoryPlugin: BuiltInPlugin = {
             sessionId: context.sessions.current().id,
             payload: { facts: facts.length, hash: rendered.hash, path, previous: status },
           });
-          return {
-            data: { facts: facts.length, hash: rendered.hash, path, previous: status },
-            text: `rendered ${path} (${facts.length} facts, ${rendered.hash.slice(0, 12)}; was ${status})`,
-          };
+          const data: RenderData = { facts: facts.length, hash: rendered.hash, path, previous: status };
+          return { data, text: renderText(data) };
         },
         {
           description: "Render the injected global index from the Hub store; refuse to overwrite a hand edit.",
