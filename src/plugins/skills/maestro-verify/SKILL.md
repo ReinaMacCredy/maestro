@@ -11,6 +11,11 @@ Use for close, commit, install, push, publish, release, or archive gates.
 Local implementation authority does not imply authority for remote or external
 state changes.
 
+Precondition: an open bundle with a drafted VERIFY.md. No bundle means the
+change is quickfix or Light: verify the changed surface inline and close with
+`maestro work done`; this skill's table pass is a Full-tier instrument. The
+evidence-layer vocabulary below still applies to any claim at any tier.
+
 ## Evidence layers
 
 Proof follows five links. Claim only as far as the last proven link.
@@ -40,10 +45,16 @@ Residual risks: None
   silently proceed past it.
 - Run every VERIFY.md scenario against its work item's acceptance/claims and
   fill the Result column; run each anti-goal check (grep, diff, readback).
-  The scenario list is frozen once the pass starts: scenarios gain results
-  here, never rewrites or removals. A scenario that cannot run as written goes
-  back to `maestro-design` for a checkable rewrite - do not invent a
-  substitute measurement.
+  Stamp the pass with its date and commit. Results hold this run only: a
+  re-run replaces prior results wholesale, and a failed pass leaves its
+  one-line `failed:` note on the work item, never accumulated rounds in
+  VERIFY.md. The scenario list is frozen once the pass starts: scenarios gain
+  results here, never rewrites or removals. A scenario that cannot run as
+  written goes back to `maestro-design` for a checkable rewrite - do not
+  invent a substitute measurement.
+- Run the repo's checks for the touched surface (tests, lint, types, build),
+  then freeze and review the task-owned diff: every changed line traces to
+  the SPEC's scope or a linked work item; nothing unrelated is staged.
 - For risky seams, spot-check assertion strength before filling PASS.
   First check the tests assert the decided contract itself: the decided
   error class, and the message when one was decided - a bare `toThrow()`
@@ -70,7 +81,8 @@ reads only the bundle and the diff - the implementer verifying their own work
 invites confirmation bias. The subagent never fixes anything: mutants it flips
 are reverted before reporting, and on FAIL it records the verdict and stops;
 routing back to implementation belongs to the parent turn that holds the
-user's ask.
+user's ask. A subagent that fails to start or report is a dispatch failure,
+not evidence: run the checklist in this session instead of polling for it.
 
 On FAIL, route back to `maestro-work` and leave the exact one-line failed-pass
 trace `maestro work note <id> "failed: <one line>"`. The prefix is the literal
@@ -98,12 +110,31 @@ Before closing, harvest what outlives the bundle
 ([references/learning.md](references/learning.md)): a verified correction or
 durable constraint becomes a locked decision or a work note - never only chat.
 
-```
-maestro bundle close <id>    # snapshots the trio into the store, archives it
-```
+Close order, on PASS with durable ship or handoff proof:
+
+1. Overwrite NOTES.md one last time with a dated close-out line citing the
+   ship evidence (commit hashes or the handoff target).
+2. Harvest: any mid-flight choice that is hard to reverse, surprising without
+   context, and a real trade-off is a locked decision with its rejected
+   alternative; a new domain term is `maestro term add`.
+3. `maestro bundle close <id>`: snapshots the trio into the store and archives
+   the directory.
 
 The snapshot is the durable memory; after close the directory is disposable
 and `maestro search` still recalls the text.
+
+When the verdict passes but the ship commit has not landed yet, do not leave
+the close implicit: set NOTES.md Next Action to "commit, then close bundle".
+The turn that lands the commit performs the close in that same turn; a PASS
+bundle never stays active across sessions. Never close on a FAIL, and never
+stage or commit bundle contents as part of the ship commit.
+
+Quality review is separate from verify: verify owns "does it meet the
+contract", review owns "is the code good". Light gets a simplification pass
+after green; Full gets one correctness review after verify passes, chosen by
+risk (a security review when the diff touches auth, secrets, or input
+handling). A code change after the verdict re-runs the affected VERIFY.md
+scenarios before close.
 
 ## Definition of done
 

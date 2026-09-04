@@ -22,7 +22,9 @@ const agents = `# Maestro Hub
 Read \`OWNER.md\`, then read \`SLP.md\`. This workspace is the Hub Supervisor.
 Use only the shared section and Hub Supervisor section of \`SLP.md\` for SLP
 teams. The project snapshot copied by \`maestro team start\` is the pinned team
-contract; do not maintain separate role or skill files.
+contract; do not maintain separate role or skill files. The method every
+repository follows is \`WORKFLOW.md\` here; the procedures are the skills
+under \`skills/\`.
 `;
 
 const identity = `# IDENTITY — Hub Supervisor
@@ -76,6 +78,7 @@ export async function scaffoldRoom(home: string): Promise<string> {
     ["AGENTS.md", agents],
     ["CLAUDE.md", agents],
     ["shellrc", shellrc],
+    ["WORKFLOW.md", await readFile(join(import.meta.dir, "resources", "WORKFLOW.md"), "utf8")],
   ] as const) {
     await writeFile(join(room, name), content);
   }

@@ -14,8 +14,9 @@ published by `.github/workflows/pages.yml`; `tests/` is `bun:test`.
 Method: `maestro recipe show work` for depth, `~/maestro/skills/maestro-bundle`
 for the tier rule (quickfix: a one-sentence diff with no Full trigger, done
 directly with inline verification and no record; Light: a work item; Full: a
-bundle). Bundles live in `.spec-workflow/` (`MEMORY.md` index, `active/`,
-`archive/`, `adr/`); append to a bundle's NOTES.md, never rewrite its history.
+bundle). Bundles live in `.maestro/bundle/<id>/` (SPEC/NOTES/VERIFY); NOTES.md
+is an overwrite-only handoff, and history lives in the store (`maestro work
+note`, `maestro trace`, decisions), never in the file.
 
 Rules:
 

@@ -23,7 +23,7 @@ a real diff is a slogan and gets cut; the catalog stays at or under 20 entries.
 | Flake tolerance (law 4) | Retries or sleeps added until the test passes | Remove the race at the seam or test a deterministic surface |
 | Coverage chasing (law 1) | Tests added purely to raise a coverage number, asserting nothing decided | Delete or replace with a falsifiable behavior test |
 | Fixture drift (law 2) | Test setup re-implements production logic and diverges from it | Build fixtures through the public seam the user would use |
-| Assertion-free run (law 4) | Test executes code and asserts only that no exception was thrown | Assert the observable result the decision names |
+| Never-red or assertion-free (law 4) | Test added after the code already passed, or executes code and asserts only that no exception was thrown | Watch the test fail first; assert the observable result the decision names |
 | Test-driven API invention (law 1) | Red test names a production symbol that does not exist; the "fix" mints it to clear the compile error | Stabilize the minimum contract first (spec, existing code, or a decision — stable enough for this slice); red must fail on an assertion, not a missing symbol |
 | Contract drift (law 1) | Spec says A, existing code does B, the test asserts a third shape C and implementation follows C | Reconcile with a recorded decision before writing the test; the test transcribes, never arbitrates |
 

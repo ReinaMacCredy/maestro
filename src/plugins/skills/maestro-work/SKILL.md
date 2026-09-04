@@ -11,6 +11,28 @@ Use for one accepted implementation unit. Keep the change inside the work
 item's acceptance and authority. If the scope is unclear or must expand, stop
 and return to `maestro-design`.
 
+## Tier first, recon second
+
+Decide the tier from the request alone, before reading bundle files, the
+store, or the rest of this skill (`maestro-bundle` tier rule):
+
+- quickfix: a one-sentence diff with no Full trigger. Do it directly, verify
+  inline with the smallest check that can falsify it, no work item, no test
+  demanded, none of the machinery below.
+- Light: one session, one branch, acceptance in a sentence. `maestro work
+  add|start|done` is the whole record. Verify the changed surface inline; a
+  regression test is written only for a real bug being fixed, never as
+  ceremony. No SPEC, no red list.
+- Full: an open bundle. Preconditions before any edit: the user's explicit
+  request to implement or fix this scope, and a SPEC whose Red tests section
+  covers exactly this scope. A SPEC that predates the requested scope
+  (post-ship review findings, hardening follow-ups) counts as missing: return
+  to `maestro-design` first. A throwaway prototype not yet approved to port is
+  `maestro-explore`'s scope: fix it there without opening production work.
+
+Before writing code, read any language-convention notes the user's setup
+provides for the language being edited. Repository conventions override them.
+
 ## Dispatch
 
 When work is handed to a lane (a Herdr pane in the room, or a sub-agent where no room exists), send this envelope:
@@ -82,9 +104,11 @@ Smallest new information needed: <next fact that would change the approach>
 1. **Perceive** - `maestro work show <id>`, `maestro ready`, relevant source,
    tests, and repository instructions. Name the task-owned dirty paths before
    editing.
-2. **Choose** - the smallest behavior falsifiable at the accepted seam. Write
-   the agreed failing test before production code. New child work gets
-   `--acceptance "<observable result>"`.
+2. **Choose** - the smallest behavior falsifiable at the accepted seam. In a
+   Full bundle, write the failing test the SPEC's red list names before
+   production code and watch it fail for the expected reason; under Light,
+   name the inline check that will falsify the change instead. New child work
+   gets `--acceptance "<observable result>"`.
 3. **Act** - `maestro work start <id>`, then the minimum source and test edits
    for that behavior. No speculative abstractions or dependencies.
 4. **Observe** - run the focused test, then type/lint/build checks. Review the
@@ -113,6 +137,58 @@ Smallest new information needed: <next fact that would change the approach>
 5. No silent test edits. Every shift or deletion of a test records its reason.
 
 Concrete smells and fixes: [references/tdd-antipatterns.md](references/tdd-antipatterns.md).
+
+## Hard rules
+
+- No tests beyond the SPEC's red list (Full) or the real bug's regression
+  (Light). After-the-fact confirmatory tests are bloat; add none.
+- Never delete, skip, or weaken a failing test to make the suite pass. A
+  failing test is information: fix the code or surface the conflict.
+- Red must fail on an assertion at the agreed seam, not on a missing symbol.
+  A test may name code that does not exist yet only when a locked decision
+  already settles that contract's shape; a compile error over an undecided
+  call shape is the test inventing the API. Never create the symbol to bridge
+  it: treat the unsettled contract as a fork, ask one question, record the
+  answer, then write the red test against the decided shape.
+- Functionality outside the acceptance, or a fork no decision settled: pause
+  the slice, ask the user exactly one question, record the answer with
+  `maestro decision draft ... --work <id>` and `lock`, then continue. A fork
+  needing more than one question is a `maestro-design` grill pass, not a
+  mid-work detour.
+- Scope the user cuts mid-loop leaves in the same turn: drop it from the red
+  list and VERIFY.md, remove the tests and dead code written for it, and
+  record the cut as a decision.
+- When the failure's cause is unknown, diagnosis (`maestro-diagnose` steps)
+  is the first phase of this authorized fix, done here, not as a separate
+  engagement.
+- A missing external fact (API behavior, library semantics, version
+  differences) is not scope expansion: look it up against primary sources,
+  record the finding and its link with `maestro work note <id>`, and
+  continue. If the answer contradicts a locked decision, stop and supersede
+  the decision first.
+- A behavior-preserving change (dependency upgrade, refactor): red is the
+  baseline captured via `maestro-explore` before the change; green is the
+  baseline reproducing after. Add no new tests for behavior that is not
+  changing. A request to change baselined behavior is new scope: re-capture
+  that baseline and record which lines changed and why; editing it silently
+  to match is weakening a test.
+- Generated or vendored files are never the target: fix the generator or pin
+  and regenerate.
+
+## Red flags
+
+| The thought | The reality |
+|---|---|
+| "The test is basically right - I'll adjust the assertion to match the output" | That documents the current bug as expected behavior. Assert from the decision's promise and fix the code. |
+| "This one is hard to write red-first; I'll add the test after" | A never-red test proves nothing. Find the seam, or renegotiate it as a decision. |
+| "The test doesn't compile - I'll create the missing symbol so it can run" | That lets the test mint the API. If a decision settles the shape, implement toward it in Act; if not, it is a fork to settle first. |
+| "While I'm here, this nearby code could use a cleanup" | Not in the acceptance means not in scope. Mention it; do not touch it. |
+| "Skipping this failing test unblocks the suite" | A failing test is information. Fix the code or surface the conflict. |
+| "I'll batch all five open forks into one message" | One question per unsettled fork mid-loop; more than one is a `maestro-design` grill pass. |
+| "It's a small task, but the method says write a test first" | Ceremony scales with tier. Quickfix and Light verify inline; only a Full bundle's named risks get red tests. |
+
+When the scope is done and the checks are green: Light closes with
+`maestro work done`; a Full bundle routes to `maestro-verify`.
 
 ## Coordination
 
