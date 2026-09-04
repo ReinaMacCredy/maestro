@@ -72,7 +72,10 @@ maestro plugin trust <name>  # after reading the source it names
 The grant lives in `~/.maestro/trust.json`, which no repository can write, and
 is keyed to the plugin's location and a digest of every file in it. Editing the
 plugin, pulling a change into it, or swapping one of its files revokes the grant
-and Maestro stops loading it until you trust it again. Enabling a plugin is a
+and Maestro stops loading it until you trust it again. So that the digest covers
+everything the plugin runs, a trusted plugin may only import local paths the
+digest covers; an import reaching outside it is refused and the plugin is listed
+as an error instead of loading. Enabling a plugin is a
 separate statement and never confers trust: a cloned repository can ship its own
 `.maestro/config`, so if `enable` could vouch for code, the repository could
 vouch for itself.

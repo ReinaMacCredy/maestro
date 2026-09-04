@@ -209,3 +209,57 @@ test("515 an untrusted plugin named by repo config lists once, not also as a mis
     expect(rows).toEqual(["tripwire\trepo\tuntrusted"]);
   });
 });
+
+test("516 a trusted plugin cannot import code from outside its artifact", async () => {
+  await withFixture(async (fixture) => {
+    const sentinel = sentinelPath(fixture, "escaped");
+    const directory = join(fixture.repo, ".maestro", "plugins", "bundle");
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, "index.ts"),
+      `
+import "../../../helper.ts";
+export default { name: "bundle", apply() {} };
+`,
+    );
+    // Outside the artifact, so the digest never covers it: editing this file
+    // would change what a granted plugin runs while the grant still matched.
+    await writeFile(join(fixture.repo, "helper.ts"), `
+import { writeFileSync } from "node:fs";
+writeFileSync(${JSON.stringify(sentinel)}, "ran");
+`);
+
+    const trusted = await runCli(fixture, ["plugin", "trust", "bundle"]);
+    expect(trusted.exitCode).toBe(0);
+
+    const listed = await runCli(fixture, ["plugin", "list"]);
+    expect(existsSync(sentinel)).toBe(false);
+    expect(listed.stdout).toContain("bundle\trepo\terror");
+    expect(listed.stdout).toContain("index.ts");
+    expect(listed.stdout).toContain('"../../../helper.ts"');
+  });
+});
+
+test("517 a trusted plugin still imports a sibling inside its artifact", async () => {
+  await withFixture(async (fixture) => {
+    const directory = join(fixture.repo, ".maestro", "plugins", "kit");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "index.ts"), `
+import { greeting } from "./sibling.ts";
+export default {
+  name: "kit",
+  apply(ctx) {
+    ctx.effect(() => ctx.cli.register("kit", async () => greeting));
+  },
+};
+`);
+    await writeFile(join(directory, "sibling.ts"), `export const greeting = "sibling loaded";\n`);
+
+    const trusted = await runCli(fixture, ["plugin", "trust", "kit"]);
+    expect(trusted.exitCode).toBe(0);
+
+    const ran = await runCli(fixture, ["kit"]);
+    expect(ran.exitCode).toBe(0);
+    expect(ran.stdout).toContain("sibling loaded");
+  });
+});
