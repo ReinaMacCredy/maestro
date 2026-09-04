@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
@@ -20,21 +21,13 @@ test("287 [lint] maestro-work skill lane line matches the dispatch vocabulary", 
   );
 });
 
-test("288 repo memory names every archived spec-workflow bundle", async () => {
-  const workflowRoot = join(import.meta.dir, "..", ".spec-workflow");
-  // archive/ is gitignored, so a clean checkout has nothing to name.
-  const archived = (await readdir(join(workflowRoot, "archive"), { withFileTypes: true }).catch(
-    (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return [];
-      throw error;
-    },
-  ))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-  const memory = await readFile(join(workflowRoot, "MEMORY.md"), "utf8");
-
-  expect(archived.filter((name) => !memory.includes(`archive/${name}/`))).toEqual([]);
+test("288 no legacy .spec-workflow or .waymark tree remains in the repo", async () => {
+  // Both lifecycles were imported into the store on 2026-09-04 (maestro-v3, A2/A4);
+  // a returning tree would restart the second lifecycle.
+  const repo = join(import.meta.dir, "..");
+  for (const legacy of [".spec-workflow", ".waymark"]) {
+    expect(existsSync(join(repo, legacy))).toBe(false);
+  }
 });
 
 test("122 decision draft stores a rationale body and show renders it", async () => {
