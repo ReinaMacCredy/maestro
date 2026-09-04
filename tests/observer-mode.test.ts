@@ -3,7 +3,8 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { Cli } from "../src/kernel/cli.ts";
 import { observerMode } from "../src/plugins/observer-mode.ts";
-import { idFrom, runCli, withFixture, writeConfig, writePlugin } from "./helpers.ts";
+import { mkdir } from "node:fs/promises";
+import { idFrom, runCli, runCliAt, withFixture, writeConfig, writePlugin } from "./helpers.ts";
 
 const withoutSession = { MAESTRO_SESSION_NONE: "1" };
 const readOnly = { MAESTRO_READ_ONLY: "1" };
@@ -407,5 +408,28 @@ test("455 read-only attention and brief tolerate pre-decision-lifecycle schemas"
     } finally {
       stored.close();
     }
+  });
+});
+
+test("581 read-only mode admits term and memory reads and still refuses their writes", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
+    const terms = await runCli(fixture, ["term", "list", "--json"], readOnly);
+    expect(terms.exitCode).toBe(0);
+    expect(JSON.parse(terms.stdout).data.terms).toHaveLength(1);
+    expect((await runCli(fixture, ["term", "show", "Lane"], readOnly)).exitCode).toBe(0);
+    const write = await runCli(fixture, ["term", "add", "Seat", "A pane"], readOnly);
+    expect(write.exitCode).toBe(1);
+    expect(write.stderr).toContain("READ_ONLY");
+
+    const room = join(fixture.home, "maestro");
+    await mkdir(room, { recursive: true });
+    expect((await runCliAt(fixture, room, ["memory", "list"])).exitCode).toBe(0);
+    const facts = await runCliAt(fixture, room, ["memory", "list", "--json"], readOnly);
+    expect(facts.exitCode).toBe(0);
+    expect(JSON.parse(facts.stdout).data.facts).toEqual([]);
+    const check = await runCliAt(fixture, room, ["memory", "render", "--check"], readOnly);
+    expect(check.exitCode).toBe(1);
+    expect(check.stderr).toContain("READ_ONLY");
   });
 });
