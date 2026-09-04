@@ -170,7 +170,6 @@ export const termPlugin: BuiltInPlugin = {
         {
           description: "Record or redefine one glossary term.",
           flags: { "--work": { description: "Link the term to a work item.", value: true } },
-          json: true,
           positionals: [
             { name: "name", required: true },
             { name: "definition", required: true },
@@ -211,7 +210,6 @@ export const termPlugin: BuiltInPlugin = {
         },
         {
           description: "Show one glossary term.",
-          json: true,
           mutates: false,
           positionals: [{ name: "name", required: true }],
         },

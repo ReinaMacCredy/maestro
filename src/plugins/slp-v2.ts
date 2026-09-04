@@ -4143,7 +4143,6 @@ export const slpV2Plugin: BuiltInPlugin = {
           ),
         {
           description: "Start or restore one supervised SLP team generation.",
-          json: true,
           flags: {
             "--lead-model": { description: "Override the Workspace Pack Lead model.", value: true },
             "--observer-model": {
@@ -4179,7 +4178,6 @@ export const slpV2Plugin: BuiltInPlugin = {
               value: true,
             },
           },
-          json: true,
           positionals: [{ name: "team-id", required: true }],
           rootDescription: "Run the simplified supervised-team lifecycle.",
         },
@@ -4193,7 +4191,6 @@ export const slpV2Plugin: BuiltInPlugin = {
           takeWork(context, requiredPosition(invocation, 0, "work id")),
         {
           description: "Take assigned OPEN work or reviewer-granted RETURNED SLP work.",
-          json: true,
           positionals: [{ name: "work-id", required: true }],
           rootDescription: "Move supervised work through its four-state lifecycle.",
         },
@@ -4211,7 +4208,6 @@ export const slpV2Plugin: BuiltInPlugin = {
           ),
         {
           description: "Return ACTIVE SLP work with its bounded result body.",
-          json: true,
           positionals: [
             { name: "work-id", required: true },
             { name: "body", required: true },
@@ -4238,7 +4234,6 @@ export const slpV2Plugin: BuiltInPlugin = {
               value: true,
             },
           },
-          json: true,
           positionals: [{ name: "work-id", required: true }],
           rootDescription: "Move supervised work through its four-state lifecycle.",
         },
@@ -4256,7 +4251,6 @@ export const slpV2Plugin: BuiltInPlugin = {
           "--why": { description: "Record why this choice is settled.", value: true },
           "--work": { description: "Link the decision to SLP work.", value: true },
         },
-        json: true,
         positionals: [{ name: "choice", required: true }],
         rootDescription: "Record a settled SLP decision in one operation.",
       }),

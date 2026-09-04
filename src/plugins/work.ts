@@ -391,7 +391,6 @@ export const workPlugin: BuiltInPlugin = {
         },
         {
           description: "Add a tracked work item.",
-          json: true,
           flags: {
             "--kind": {
               description:
@@ -665,7 +664,6 @@ export const workPlugin: BuiltInPlugin = {
             value: true,
           },
         },
-        json: true,
         positionals: [
           { name: "id", required: true },
           { name: "text", required: true },

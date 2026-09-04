@@ -715,7 +715,6 @@ export const memoryPlugin: BuiltInPlugin = {
             "--dry-run": { description: "Report the gates' verdicts without writing." },
             "--from": { description: "Read this directory of markdown facts instead of the default buffers.", multiple: true, value: true },
           },
-          json: true,
         },
       ),
     );
@@ -755,7 +754,6 @@ export const memoryPlugin: BuiltInPlugin = {
         {
           description: "Retire one fact so the buffers can never promote it again.",
           flags: { "--reason": { description: "Why the fact no longer holds.", value: true } },
-          json: true,
           positionals: [{ name: "fact", required: true }],
         },
       ),
@@ -793,7 +791,6 @@ export const memoryPlugin: BuiltInPlugin = {
         },
         {
           description: "Show one Hub memory fact with its body and links, from any cwd.",
-          json: true,
           mutates: false,
           positionals: [{ name: "fact", required: true }],
         },
@@ -860,7 +857,6 @@ export const memoryPlugin: BuiltInPlugin = {
             "--force": { description: "Overwrite a hand-edited render." },
             "--out": { description: "Write the render here instead of $HOME/maestro/MEMORY.md.", value: true },
           },
-          json: true,
         },
       ),
     );

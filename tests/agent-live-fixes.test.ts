@@ -448,9 +448,11 @@ test("111 work show renders recorded notes", async () => {
   });
 });
 
-test("112 help documents --json only for commands that accept it", async () => {
+test("112 help documents --json on every command, read and write alike", async () => {
   await withFixture(async (fixture) => {
     const supported = [
+      ["trace"],
+      ["decision", "lock"],
       ["status"],
       ["ready"],
       ["search"],
@@ -464,12 +466,6 @@ test("112 help documents --json only for commands that accept it", async () => {
       const help = await runCli(fixture, ["help", ...command]);
       expect(help.exitCode).toBe(0);
       expect(help.stdout).toContain("--json");
-    }
-
-    for (const command of [["trace"]]) {
-      const help = await runCli(fixture, ["help", ...command]);
-      expect(help.exitCode).toBe(0);
-      expect(help.stdout).not.toContain("--json");
     }
   });
 });

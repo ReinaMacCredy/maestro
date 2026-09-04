@@ -13,6 +13,9 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Changed
 
+- `--json` is honored by every verb, write verbs included: `decision draft`
+  and `decision lock` no longer fail with `UNKNOWN_FLAG`, and every verb's
+  help lists the flag.
 - `memory ingest|retract|render` work from any cwd: outside the Hub room they
   run through the Hub's own CLI, so `NOT_HUB_STORE` is gone; `--from` and
   `--out` resolve against the caller's cwd. A missing Hub store still fails

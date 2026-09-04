@@ -752,7 +752,6 @@ export const bundlePlugin: BuiltInPlugin = {
         {
           description: "Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.",
           flags: { "--dry-run": { description: "Report the mapping without writing." } },
-          json: true,
           positionals: [{ name: "directory", required: true }],
         },
       ),

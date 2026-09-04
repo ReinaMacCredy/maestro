@@ -10,7 +10,6 @@ export interface FlagDefinition {
 export interface CommandOptions {
   description?: string;
   flags?: Record<string, FlagDefinition>;
-  json?: boolean;
   maxPositionals?: number;
   mutates?: boolean;
   positionals?: PositionalDefinition[];
@@ -76,7 +75,6 @@ interface CommandDefinition {
   description: string;
   flags: Map<string, FlagDefinition>;
   handler: CliHandler;
-  json: boolean;
   maxPositionals: number;
   mutates: boolean;
   owner: string | null;
@@ -210,7 +208,6 @@ export class Cli {
       description: this.oneLine(options.description, `Run ${command}.`),
       handler,
       flags: new Map(Object.entries(options.flags ?? {})),
-      json: options.json ?? false,
       maxPositionals: options.maxPositionals ?? options.positionals?.length ?? 0,
       mutates: options.mutates ?? true,
       owner: this.owner,
@@ -329,16 +326,7 @@ export class Cli {
     const remaining = args.slice(consumed);
     const jsonIndex = remaining.indexOf("--json");
     const wantsJson = jsonIndex >= 0;
-    if (wantsJson) {
-      if (!this.supportsJson(command)) {
-        const helpCommand = `maestro help ${command.split(" ")[0]}`;
-        throw new CliError("UNKNOWN_FLAG", `unknown flag: --json; run: ${helpCommand}`, {
-          command: helpCommand,
-          flag: "--json",
-        });
-      }
-      remaining.splice(jsonIndex, 1);
-    }
+    if (wantsJson) remaining.splice(jsonIndex, 1);
     const invocation = this.parse(
       command,
       remaining,
@@ -487,9 +475,7 @@ export class Cli {
 
   private flagHelp(command: string, definition: CommandDefinition): string[] {
     const flags = this.effectiveFlags(command, definition);
-    if (this.supportsJson(command)) {
-      flags.set("--json", { description: "Emit one compact JSON success envelope." });
-    }
+    flags.set("--json", { description: "Emit one compact JSON success envelope." });
     if (flags.size === 0) return [];
     const rows = [...flags.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -556,17 +542,6 @@ export class Cli {
     const value = description?.trim() || fallback;
     if (/\r|\n/.test(value)) throw new Error("CLI descriptions must fit on one line");
     return value;
-  }
-
-  private supportsJson(command: string): boolean {
-    return this.commands.get(command)?.json === true ||
-      command === "status" ||
-      command === "ready" ||
-      command === "handoff" ||
-      command === "bundle show" ||
-      command === "work show" ||
-      command === "search" ||
-      command.endsWith(" list");
   }
 
   private nearestCommands(args: string[]): { attempted: string; suggestions: string[] } {

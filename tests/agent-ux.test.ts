@@ -369,3 +369,29 @@ test("60 every shipped recipe command example carries the maestro prefix", async
     }
   });
 });
+
+test("636 --json is honored by every verb, decision draft and lock included", async () => {
+  await withFixture(async (fixture) => {
+    const draft = await runCli(fixture, ["decision", "draft", "use bun", "--json"]);
+    expect(draft.exitCode).toBe(0);
+    const drafted = JSON.parse(draft.stdout) as {
+      data: { decision: { id: string; state: string } };
+      ok: boolean;
+    };
+    expect(drafted.ok).toBe(true);
+    expect(drafted.data.decision.state).toBe("draft");
+
+    const lock = await runCli(fixture, ["decision", "lock", drafted.data.decision.id, "--json"]);
+    expect(lock.exitCode).toBe(0);
+    const locked = JSON.parse(lock.stdout) as { data: { decision: { state: string } } };
+    expect(locked.data.decision.state).toBe("locked");
+
+    const help = await runCli(fixture, ["help", "decision", "lock"]);
+    expect(help.stdout).toContain("--json");
+
+    const work = idFrom(await runCli(fixture, ["work", "add", "cancel me", "--kind", "idea"]));
+    const cancel = await runCli(fixture, ["work", "cancel", work, "--reason", "no", "--json"]);
+    expect(cancel.exitCode).toBe(0);
+    expect((JSON.parse(cancel.stdout) as { ok: boolean }).ok).toBe(true);
+  });
+});
