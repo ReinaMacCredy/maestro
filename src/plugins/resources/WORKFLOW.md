@@ -138,20 +138,21 @@ are the user's gates.
 
 ## Per-tool adapters
 
+Review routing is the same in every tool, using whatever the tool ships:
+Light runs a simplification pass after green, before the final commit; Full
+runs one correctness review of the frozen task-owned diff after verify
+passes, a broader multi-reviewer pass when the diff touches trust boundaries,
+schemas or migrations, or several subsystems, plus a security review when it
+touches auth, secrets, or input handling. Any simplification pass on Full
+runs after green and before verify, so the reviewed diff is final.
+
 - **Claude Code**: skills load from `~/.claude/skills/maestro-*` symlinks
-  that `maestro install` maintains. Review routing: Light runs `/simplify`
-  after green, before the final commit; Full runs one correctness review
-  after verify passes, `/code-review` (medium) for ordinary bundles,
-  `review-swarm` when the diff touches trust boundaries, schemas or
-  migrations, or several subsystems, plus `security-review` when it touches
-  auth, secrets, or input handling. Any `/simplify` on Full runs after green
-  and before verify, so the reviewed diff is final. Forks go to the user as
+  that `maestro install` maintains; `/simplify` and `/code-review` are the
+  built-in simplification and correctness passes. Forks go to the user as
   question cards: one decision per card, "what this does" first, a `my rec:`
   line.
 - **Codex**: skills load from `~/.codex/skills/maestro-*` symlinks that
-  `maestro install` maintains (restart Codex after a new link). Review
-  routing: Light runs `simplify-code` after green; Full reviews the frozen
-  task-owned diff in a fresh context, `review-swarm` for trust boundaries,
-  schemas, or several subsystems, plus `codebase-security-scan` for auth,
-  secrets, or input handling. In project work Codex reads `~/.codex/AGENTS.md`,
-  which must point here; inside the Hub it reads `~/maestro/AGENTS.md`.
+  `maestro install` maintains (restart Codex after a new link); the Full
+  review runs in a fresh context. In project work Codex reads
+  `~/.codex/AGENTS.md`, which must point here; inside the Hub it reads
+  `~/maestro/AGENTS.md`.
