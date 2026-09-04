@@ -148,10 +148,10 @@ are the user's gates.
   and before verify, so the reviewed diff is final. Forks go to the user as
   question cards: one decision per card, "what this does" first, a `my rec:`
   line.
-- **Codex**: skills are linked by hand under `~/.codex/skills/maestro-*`
-  until `maestro install` maintains them. Review routing: Light runs
-  `simplify-code` after green; Full reviews the frozen task-owned diff in a
-  fresh context, `review-swarm` for trust boundaries,
+- **Codex**: skills load from `~/.codex/skills/maestro-*` symlinks that
+  `maestro install` maintains (restart Codex after a new link). Review
+  routing: Light runs `simplify-code` after green; Full reviews the frozen
+  task-owned diff in a fresh context, `review-swarm` for trust boundaries,
   schemas, or several subsystems, plus `codebase-security-scan` for auth,
   secrets, or input handling. In project work Codex reads `~/.codex/AGENTS.md`,
   which must point here; inside the Hub it reads `~/maestro/AGENTS.md`.

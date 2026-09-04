@@ -22,6 +22,8 @@ export interface SkillSync {
   legacySkipped: string[];
   linked: string[];
   linkSkipped: string[];
+  linkedCodex: string[];
+  linkSkippedCodex: string[];
   skipped: string[];
   written: string[];
 }
@@ -35,7 +37,7 @@ async function managedSkill(directory: string): Promise<boolean> {
 async function linkSkill(
   link: string,
   target: string,
-  sync: SkillSync,
+  out: { linked: string[]; skipped: string[] },
   name: string,
 ): Promise<void> {
   try {
@@ -47,7 +49,7 @@ async function linkSkill(
     } else if (await managedSkill(link)) {
       await rm(link, { recursive: true, force: true });
     } else {
-      sync.linkSkipped.push(name);
+      out.skipped.push(name);
       return;
     }
   } catch (error) {
@@ -55,7 +57,7 @@ async function linkSkill(
   }
   await mkdir(dirname(link), { recursive: true });
   await symlink(target, link);
-  sync.linked.push(name);
+  out.linked.push(name);
 }
 
 // The shared agents layer is dotfiles-versioned and holds user-owned skills;
@@ -69,6 +71,8 @@ export async function materializeSkills(home: string, commit: string): Promise<S
     legacySkipped: [],
     linked: [],
     linkSkipped: [],
+    linkedCodex: [],
+    linkSkippedCodex: [],
     skipped: [],
     written: [],
   };
@@ -96,7 +100,18 @@ export async function materializeSkills(home: string, commit: string): Promise<S
   }
   for (const name of skillNames) {
     const target = join(targetRoot, name);
-    await linkSkill(join(home, ".claude", "skills", name), target, sync, name);
+    await linkSkill(
+      join(home, ".claude", "skills", name),
+      target,
+      { linked: sync.linked, skipped: sync.linkSkipped },
+      name,
+    );
+    await linkSkill(
+      join(home, ".codex", "skills", name),
+      target,
+      { linked: sync.linkedCodex, skipped: sync.linkSkippedCodex },
+      name,
+    );
     const legacy = join(home, ".agents", "skills", name);
     if (!existsSync(legacy)) continue;
     if (await managedSkill(legacy)) {
@@ -114,6 +129,7 @@ export function formatSkillSync(sync: SkillSync): string {
   if (sync.written.length > 0) parts.push(`skills wrote: ${sync.written.join(", ")}`);
   if (sync.current.length > 0) parts.push(`skills current: ${sync.current.join(", ")}`);
   if (sync.linked.length > 0) parts.push(`skills linked for Claude: ${sync.linked.join(", ")}`);
+  if (sync.linkedCodex.length > 0) parts.push(`skills linked for Codex: ${sync.linkedCodex.join(", ")}`);
   if (sync.legacyRemoved.length > 0) {
     parts.push(`legacy skills removed from ~/.agents: ${sync.legacyRemoved.join(", ")}`);
   }
@@ -122,6 +138,9 @@ export function formatSkillSync(sync: SkillSync): string {
   }
   for (const name of sync.linkSkipped) {
     parts.push(`skill link skipped: ${name} (unmanaged Claude skill; remove it or manage it yourself)`);
+  }
+  for (const name of sync.linkSkippedCodex) {
+    parts.push(`skill link skipped: ${name} (unmanaged Codex skill; remove it or manage it yourself)`);
   }
   for (const name of sync.legacySkipped) {
     parts.push(`legacy skill preserved: ${name} (unmanaged ~/.agents skill)`);

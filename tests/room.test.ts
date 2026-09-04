@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { formatSkillSync, materializeSkills, skillNames } from "../src/plugins/skills.ts";
 import {
   idFrom,
   prepareInstallFixture,
@@ -841,6 +842,31 @@ test("241 install moves the four method skills into the room and links only thos
         join(fixture.home, "maestro", "skills", "maestro-verify", "references", "audit.md"),
       ).exists(),
     ).toBe(true);
+  });
+});
+
+test("577 materializeSkills links every skill for Codex, relinks a dangling link, keeps an unmanaged dir", async () => {
+  await withFixture(async (fixture) => {
+    const codexSkills = join(fixture.home, ".codex", "skills");
+    await mkdir(join(codexSkills, "maestro-work"), { recursive: true });
+    await writeFile(join(codexSkills, "maestro-work", "SKILL.md"), "---\nname: maestro-work\n---\nowner's own\n");
+    await symlink(join(fixture.home, ".maestro", "skills", "maestro-design"), join(codexSkills, "maestro-design"));
+
+    const sync = await materializeSkills(fixture.home, "abc1234");
+
+    const others = skillNames.filter((name) => name !== "maestro-work");
+    expect(sync.linked).toEqual([...skillNames]);
+    expect(sync.linkedCodex).toEqual(others);
+    expect(sync.linkSkippedCodex).toEqual(["maestro-work"]);
+    for (const name of others) {
+      expect(await realpath(join(codexSkills, name))).toBe(
+        await realpath(join(fixture.home, "maestro", "skills", name)),
+      );
+    }
+    expect((await stat(join(codexSkills, "maestro-work"))).isDirectory()).toBe(true);
+    expect(await readFile(join(codexSkills, "maestro-work", "SKILL.md"), "utf8")).toContain("owner's own");
+    expect(formatSkillSync(sync)).toContain(`skills linked for Codex: ${others.join(", ")}`);
+    expect(formatSkillSync(sync)).toContain("skill link skipped: maestro-work (unmanaged Codex skill");
   });
 });
 
