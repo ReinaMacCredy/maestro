@@ -1,6 +1,6 @@
 ---
 name: maestro-work
-description: Drive one accepted implementation unit test-first - smallest falsifiable behavior, minimum edits, evidence that names the real falsifier.
+description: Drive one accepted implementation unit - smallest falsifiable behavior, minimum edits, evidence that names the real falsifier; red tests only inside a Full bundle.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
@@ -22,7 +22,9 @@ store, or the rest of this skill (`maestro-bundle` tier rule):
 - Light: one session, one branch, acceptance in a sentence. `maestro work
   add|start|done` is the whole record. Verify the changed surface inline; a
   regression test is written only for a real bug being fixed, never as
-  ceremony. No SPEC, no red list.
+  ceremony: it reproduces the bug where it shows and lands with the fix,
+  in the ordinary bugfix order, not through a red-green loop, and no TDD
+  skill is loaded for it. No SPEC, no red list.
 - Full: an open bundle. Preconditions before any edit: the user's explicit
   request to implement or fix this scope, and a SPEC whose Scope names this
   work; its Red tests, when present, are the only tests written. A SPEC that predates the requested scope
