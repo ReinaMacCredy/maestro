@@ -101,7 +101,8 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   const combined = [setup, guide, roles, lanes, observerMode, scenarios, reference].join("\n");
 
   for (const command of slpOperations) expect(combined).toContain(command);
-  expect(guide).toContain("There is no Observer, Advisor, sensor, scheduler or background agent role.");
+  expect(guide).toContain("The Observer is the only seat outside the work lifecycle");
+  expect(guide).toContain("there is no Advisor, scheduler, health or reconcile");
   expect(guide).toContain("foreground Watch Pane");
   expect(guide).toContain("not an agent");
   expect(guide).toContain("transcript is runtime-only and is deleted at stop.");

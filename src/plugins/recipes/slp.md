@@ -22,8 +22,10 @@ Every displayed edge is a direct conversation channel. In the supported SLP
 flow, the Hub Supervisor reaches a team only through its Team Supervisor. The
 Team Supervisor, Lead, and Peers may talk directly within the team workspace.
 
-There is no Observer, Advisor, sensor, scheduler, daemon, packet, review, or
-reconcile role in SLP.
+The Observer is the only seat outside the work lifecycle: it reads sentinel
+packets, may run `maestro status` and record `work note --stall`, and never
+holds work. There is no Advisor, sensor, scheduler, review, or reconcile role
+in SLP.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
