@@ -38,6 +38,15 @@ function required(invocation: CliInvocation, index: number, label: string): stri
   return value;
 }
 
+// Lookup takes a name or an id, so a name shaped like a minted term id
+// (nextPrefixedId: "t" + integer) would shadow that row on every read and
+// redefine it on every write. Reserving the shape keeps the two apart.
+const generatedTermId = /^t\d+$/;
+
+export function isGeneratedTermName(name: string): boolean {
+  return generatedTermId.test(name);
+}
+
 function getTerm(context: PluginContext, key: string): TermRecord | null {
   const row = context.store.database
     .query<TermRow, [string, string]>("SELECT * FROM terms WHERE id = ? OR name = ?")
@@ -70,6 +79,13 @@ export function upsertTerm(
   definition: string,
   workId: string | null = null,
 ): { term: TermRecord; updated: boolean } {
+  if (generatedTermId.test(name)) {
+    throw new CliError(
+      "INVALID_ARGUMENT",
+      `term names cannot take the generated term id shape t<number>: ${name}`,
+      { name },
+    );
+  }
   const now = new Date().toISOString();
   const existing = getTerm(context, name);
   if (existing) {

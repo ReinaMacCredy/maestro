@@ -2,7 +2,7 @@ import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 
 import { basename, join, relative } from "node:path";
 import type { PluginContext } from "../kernel/loader.ts";
 import { tableExists } from "../kernel/store.ts";
-import { getTermByName, upsertTerm } from "./term.ts";
+import { getTermByName, isGeneratedTermName, upsertTerm } from "./term.ts";
 
 // One line of the import report per source item, so a .waymark/ tree can be
 // reconciled item by item before it is removed (A2 of bundle maestro-v3).
@@ -319,6 +319,18 @@ export function importWaymarkTree(
     const contextPath = join(source, "CONTEXT.md");
     if (existsSync(contextPath)) {
       for (const term of scanContextTerms(readFileSync(contextPath, "utf8"))) {
+        // Reserved names never reach the store, and getTermByName would resolve
+        // one against the id row it shadows, so both runs report it the same way.
+        if (isGeneratedTermName(term.name)) {
+          add({
+            action: "skipped",
+            detail: "reserved term id shape t<number>; rename it in CONTEXT.md",
+            id: null,
+            kind: "term",
+            name: `CONTEXT.md ${term.name}`,
+          });
+          continue;
+        }
         const existing = getTermByName(context, term.name);
         if (existing && existing.definition === term.definition) {
           add({ action: "exists", detail: null, id: existing.id, kind: "term", name: `CONTEXT.md ${term.name}` });
