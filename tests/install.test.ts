@@ -368,8 +368,10 @@ test("310 scripts/install.sh clones the source checkout, installs from it, and f
     for (const entry of ["package.json", "tsconfig.json", "bin", "src", "scripts", ".gitignore"]) {
       await cp(join(projectRoot, entry), join(upstream, entry), { recursive: true });
     }
+    // commit spawns a detached auto-maintenance that repacks loose objects
+    // while install.sh is still cloning them; keep the fixture's objects still.
     const git = (args: string[]) =>
-      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", ...args], {
+      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", "-c", "gc.auto=0", "-c", "maintenance.auto=false", ...args], {
         cwd: upstream,
         stdout: "pipe",
         stderr: "pipe",
@@ -426,7 +428,7 @@ test("517 scripts/install.sh pins the newest release tag by version, not main's 
       await cp(join(projectRoot, entry), join(upstream, entry), { recursive: true });
     }
     const git = (args: string[]) =>
-      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", ...args], {
+      Bun.spawn(["git", "-c", "user.name=Maestro Tests", "-c", "user.email=maestro-tests@example.invalid", "-c", "gc.auto=0", "-c", "maintenance.auto=false", ...args], {
         cwd: upstream,
         stdout: "pipe",
         stderr: "pipe",
