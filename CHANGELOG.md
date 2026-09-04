@@ -11,6 +11,81 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.118.0] - 2026-09-05
+
+Maestro v3: the waymark plugin and the multi-store memory layer fold into
+maestro. One lifecycle, one Hub store for global memory, nine skills.
+
+### Added
+
+- `maestro memory ingest|list|show|retract|render`: the Hub room store
+  (`~/maestro/.maestro/maestro.db`) holds global memory; Claude auto-memory and
+  `~/.codex/memories` stay write buffers that `ingest` promotes through
+  supersession, dedup and evidence gates; the injected index is rendered from
+  the Hub, never hand-edited (d775, d776). `list|show` read the Hub from any
+  cwd; the three writing verbs run inside the Hub room.
+- `maestro term add|show|list`: a glossary in the store, searchable next to
+  decisions and work.
+- `maestro search` reads the Hub room as well as the project store and labels
+  every hit by store; `--local` keeps it to the project; an unreadable Hub
+  fails closed with `HUB_UNAVAILABLE` and a stale Hub index names the remedy.
+- `maestro bundle import <dir>`: imports a `.waymark` tree with an item-by-item
+  dry-run report; bundles gain `pause` and `resume`.
+- Four read-only skills ported from waymark: `maestro-explore`,
+  `maestro-diagnose`, `maestro-coach`, `maestro-questionnaire`; waymark's
+  doctrine folded into `maestro-bundle|design|work|verify`; the shared
+  `WORKFLOW.md` is installed as a managed room file; `install` links the nine
+  skills under `~/.codex/skills` as well as `~/.claude/skills`.
+- SPEC template gains Decisions and Red tests sections; a lint keeps quickfix
+  and Light tiers from demanding a test or a SPEC.
+- `maestro brief --session` prints the SessionStart brief the hooks deliver.
+- `maestro --help` marks with `*` every verb observer mode
+  (`MAESTRO_READ_ONLY=1`) admits.
+- `work show` prints a `gate:` line per active policy that gates `done`, so the
+  evidence grammar is known before the gate refuses.
+- `work done --atomic-reason "<why>"` closes an unheld parentless item in one
+  command under policy-breakdown.
+- `status` shows the age of each session's last hook event.
+- The SessionStart brief counts buffer facts the Hub lacks and names the ingest
+  command.
+
+### Changed
+
+- SessionStart prunes dead sessions idle for more than 30 days that hold no
+  work and sit in no dispatch (logged as `session.prune`).
+- The brief's method line states that quickfix and Light load no skill before
+  it lists the Full-tier skills; its intake line names where a finding goes
+  when it is not work; the policies line points at
+  `maestro plugin list|enable|disable`.
+- `work done` and `install` warn when tracked files are modified and nothing
+  names a commit.
+- `install` prints the Codex trust instruction only while trust is unrecorded.
+- Observer mode reports an unknown verb as not admitted instead of implying it
+  exists.
+- `.spec-workflow/` is retired after import into the store.
+
+### Security
+
+- A trusted plugin can no longer execute local code outside its digested
+  artifact: a relative or absolute import that resolves outside the artifact
+  root is refused at resolution time, and `plugin list` shows the offending
+  file and specifier as an `error` record.
+
+### Fixed
+
+- Term names cannot take the generated id shape `t<number>` and memory slugs
+  cannot take `m<number>`, so a name can no longer shadow or redefine an id
+  row; `bundle import` reports such a CONTEXT.md term as skipped in both the
+  dry run and the real run.
+- The SLP sentinel ends its packet cycle as soon as the project store is gone
+  instead of finishing the cycle first (d765).
+- Superseded and retracted memory facts stay out of search.
+- A failed `bundle import` removes the directories it copied.
+- Observer mode admits `term` and `memory` reads.
+- The brief's forks line no longer presupposes tests on every tier; the
+  maestro-work skill keeps Light bug fixes out of the red-first loop.
+- Behavior-preserving simplification across the codebase (w598).
+
 ## [0.117.0] - 2026-09-03
 
 ### Added

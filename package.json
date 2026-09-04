@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.117.0",
+  "version": "0.118.0",
   "private": true,
   "type": "module",
   "bin": {
