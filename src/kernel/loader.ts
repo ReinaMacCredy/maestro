@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Cli } from "./cli.ts";
 import type { Disposer, Events } from "./events.ts";
@@ -79,6 +79,61 @@ export function resolvePluginEntrypoint(directory: string): string | null {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
     .map((entry) => join(directory, entry.name));
   return rootTypeScriptFiles.length === 1 ? (rootTypeScriptFiles[0] ?? null) : null;
+}
+
+// The trust digest covers the artifact's own files, so an import that resolves
+// outside the root would run code no grant ever vouched for. Bun's resolver is
+// process-global and cannot be unregistered, so a single registration reads a
+// set that grows as artifacts are imported, and nothing is registered at all
+// until the first external plugin is about to load. Every path is canonicalised
+// because the roots are built from $HOME and the repo, either of which can be
+// reached through a symlink (/var vs /private/var on macOS).
+const artifactRoots = new Set<string>();
+let boundaryRegistered = false;
+
+function canonical(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function within(root: string, file: string): boolean {
+  const rel = relative(root, file);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function containingRoot(file: string): string | undefined {
+  for (const root of artifactRoots) {
+    if (within(root, file)) return root;
+  }
+  return undefined;
+}
+
+export function guardArtifactBoundary(root: string): void {
+  artifactRoots.add(canonical(root));
+  if (boundaryRegistered) return;
+  boundaryRegistered = true;
+  Bun.plugin({
+    name: "maestro-artifact-boundary",
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, (args) => {
+        // A bare specifier (node:fs, bun:sqlite, an npm package) is not the
+        // artifact's own code; only a path leaving the root is refused.
+        if (!args.importer) return undefined;
+        if (!args.path.startsWith(".") && !isAbsolute(args.path)) return undefined;
+        const importer = canonical(args.importer);
+        const root = containingRoot(importer);
+        if (!root) return undefined;
+        if (within(root, canonical(resolve(dirname(importer), args.path)))) return undefined;
+        throw new Error(
+          `import leaves the trusted artifact: ${args.importer} imports "${args.path}"; ` +
+            `trust covers only ${root}`,
+        );
+      });
+    },
+  });
 }
 
 export async function importPluginEntrypoint(path: string): Promise<Plugin> {
@@ -315,6 +370,7 @@ export class Loader {
         continue;
       }
       try {
+        guardArtifactBoundary(root);
         const plugin = await importPluginEntrypoint(path);
         candidates.push({
           artifact: entry.isDirectory() ? "directory" : "file",
