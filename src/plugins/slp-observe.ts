@@ -75,8 +75,7 @@ interface StoreSnapshot {
 // "pending" while the local team row does not exist yet; null once it exists
 // but is not RUNNING for this workspace, or once the store itself is gone
 // (a removed repo or test fixture), which ends the loop.
-function readStore(config: SlpObserveConfig): StoreSnapshot | "pending" | null {
-  const storePath = resolveStoreLocation(config.projectPath).path;
+function readStore(config: SlpObserveConfig, storePath: string): StoreSnapshot | "pending" | null {
   if (!existsSync(storePath)) return null;
   const store = new Store(storePath, { readonly: true });
   try {
@@ -154,6 +153,7 @@ export async function renderPacket(
   memory: Map<string, PaneMemory>,
   reason: string,
   now: number,
+  storeGone: () => boolean,
 ): Promise<string> {
   const status = new Map(
     agents
@@ -179,6 +179,9 @@ export async function renderPacket(
   lines.push("panes:");
   const tails: string[] = [];
   for (const role of snapshot.roles) {
+    // d765: one reader per pane, so a store removed mid-cycle ends the run
+    // after the current reader instead of after the whole cycle.
+    if (storeGone()) break;
     const state = status.get(role.name) ?? "absent";
     let tail: string[] = [];
     try {
@@ -232,7 +235,7 @@ export async function runSlpObserve(config: SlpObserveConfig): Promise<number> {
   let seen = false;
   let lastTick = 0;
   let blocked = new Set<string>();
-  const poll = async (snapshot: StoreSnapshot) => {
+  const poll = async (snapshot: StoreSnapshot, storeGone: () => boolean) => {
     const now = Date.now();
     const raw = JSON.parse(
       await runSlpProcess(["herdr", "agent", "list"], config.projectPath, config.env ?? {}),
@@ -257,7 +260,8 @@ export async function runSlpObserve(config: SlpObserveConfig): Promise<number> {
       ? "tick"
       : null;
     if (reason) {
-      const packet = await renderPacket(config, snapshot, agents, memory, reason, now);
+      const packet = await renderPacket(config, snapshot, agents, memory, reason, now, storeGone);
+      if (storeGone()) return;
       lastTick = now;
       if (snapshot.observer === "") {
         process.stderr.write("maestro-slp-observe: no observer role in this generation\n");
@@ -274,14 +278,15 @@ export async function runSlpObserve(config: SlpObserveConfig): Promise<number> {
   try {
     while (!stopping) {
       try {
-        const snapshot = readStore(config);
+        const storePath = resolveStoreLocation(config.projectPath).path;
+        const snapshot = readStore(config, storePath);
         if (snapshot === "pending") {
           if (seen || Date.now() - startedAt >= sentinelStartGraceMs) return 0;
         } else if (snapshot === null) {
           return 0;
         } else {
           seen = true;
-          await poll(snapshot);
+          await poll(snapshot, () => !existsSync(storePath));
         }
       } catch (error) {
         process.stderr.write(
