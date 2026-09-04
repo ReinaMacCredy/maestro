@@ -271,7 +271,7 @@ test("270 unverified Codex hook hashes never suppress room trust guidance", asyn
   });
 });
 
-test("301 machine-scoped paths use an absolute home or fail before writing", async () => {
+test("613 machine-scoped paths use an absolute home or fail before writing", async () => {
   expect(
     resolveHomeDirectory({ environmentHome: undefined, fallbackHome: "/os/home" }),
   ).toBe("/os/home");
@@ -360,7 +360,7 @@ test("436 install preserves the repository Workspace Protocol byte for byte", as
   });
 });
 
-test("310 scripts/install.sh clones the source checkout, installs from it, and fast-forwards on rerun", async () => {
+test("614 scripts/install.sh clones the source checkout, installs from it, and fast-forwards on rerun", async () => {
   await withFixture(async (fixture) => {
     const projectRoot = join(import.meta.dir, "..");
     const upstream = join(fixture.root, "upstream");

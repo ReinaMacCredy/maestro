@@ -45,7 +45,7 @@ test("284 orphan worktree store is silent on ordinary commands and reported heal
   });
 });
 
-test("517 commands refuse a cwd inside the repository store in normal and observer modes", async () => {
+test("616 commands refuse a cwd inside the repository store in normal and observer modes", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     const storeDirectory = join(fixture.repo, ".maestro");
@@ -427,7 +427,7 @@ test("440 update treats an unreadable registered repository as unsafe and contin
   });
 });
 
-test("302 update reports a failed rollback with commits and an exact recovery command", async () => {
+test("615 update reports a failed rollback with commits and an exact recovery command", async () => {
   await withFixture(async (fixture) => {
     const { publisher, source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);

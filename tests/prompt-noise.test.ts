@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { runCli, withFixture } from "./helpers.ts";
 
-test("518 UserPromptSubmit ignores task-notification harness envelopes", async () => {
+test("619 UserPromptSubmit ignores task-notification harness envelopes", async () => {
   await withFixture(async (fixture) => {
     const marker = "harnesspromptmarker";
     const submitted = await runCli(

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture } from "./helpers.ts";
 
-test("7 policy-proof blocks a claim without matching proof", async () => {
+test("630 policy-proof blocks a claim without matching proof", async () => {
   await withFixture(async (fixture) => {
     const added = await runCli(fixture, ["work", "add", "inspect", "--kind", "idea"]);
     const id = idFrom(added);
@@ -23,7 +23,7 @@ test("7 policy-proof blocks a claim without matching proof", async () => {
   });
 });
 
-test("8 disabling policy-proof removes its flags while core evidence still completes verbatim", async () => {
+test("631 disabling policy-proof removes its flags while core evidence still completes verbatim", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["plugin", "disable", "policy-proof"])).exitCode).toBe(0);
     const added = await runCli(fixture, ["work", "add", "inspect", "--kind", "idea"]);
@@ -87,7 +87,7 @@ test("427 work done and show round-trip an optional candidate into the completio
   });
 });
 
-test("9 policy-breakdown blocks only parentless childless write-like work", async () => {
+test("632 policy-breakdown blocks only parentless childless write-like work", async () => {
   await withFixture(async (fixture) => {
     const root = idFrom(
       await runCli(fixture, ["work", "add", "root implementation", "--kind", "feature"]),
@@ -114,7 +114,7 @@ test("9 policy-breakdown blocks only parentless childless write-like work", asyn
   });
 });
 
-test("10 ready excludes blocked work and promotes it after its blocker completes", async () => {
+test("633 ready excludes blocked work and promotes it after its blocker completes", async () => {
   await withFixture(async (fixture) => {
     const first = idFrom(await runCli(fixture, ["work", "add", "first", "--kind", "idea"]));
     const second = idFrom(

@@ -25,7 +25,7 @@ function setUserVersion(path: string, value: number): void {
   }
 }
 
-test("519 a store records the schema generation that wrote it", async () => {
+test("628 a store records the schema generation that wrote it", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["work", "list"])).exitCode).toBe(0);
     expect(userVersion(storePath(fixture))).toBeGreaterThan(0);

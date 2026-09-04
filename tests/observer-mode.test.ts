@@ -310,7 +310,7 @@ test("218 read-only mode guards lifecycle commands before their special dispatch
   });
 });
 
-test("304 read-only search fails closed on a stale index and serves a fresh index", async () => {
+test("617 read-only search fails closed on a stale index and serves a fresh index", async () => {
   await withFixture(async (fixture) => {
     await runCli(fixture, ["work", "add", "observer search needle"]);
     const path = join(fixture.repo, ".maestro", "maestro.db");
