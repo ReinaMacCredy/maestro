@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CliError, editDistance, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import { CliError, editDistance, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 
 interface SourceCard {
   card_yaml: string;
@@ -91,12 +92,6 @@ interface LegacyFileRow {
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
-function required(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
-}
-
 function bytes(value: Uint8Array | string): Uint8Array {
   return typeof value === "string" ? new TextEncoder().encode(value) : value;
 }
@@ -160,14 +155,6 @@ function decisionEntries(cardId: string, path: string, contents: string): Import
       yaml: entry,
     };
   });
-}
-
-function hasTable(database: Database, name: string): boolean {
-  return database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get(name) !== null;
 }
 
 function initializeLegacyTables(context: PluginContext): void {
@@ -239,7 +226,7 @@ function initializePromotionTables(context: PluginContext): void {
 }
 
 function rebuildLegacySearch(context: PluginContext): void {
-  if (!hasTable(context.store.database, "search_index")) return;
+  if (!tableExists(context.store.database, "search_index")) return;
   context.store.database.run("DELETE FROM search_index WHERE surface = '[legacy]'");
   context.store.database.run(`
     INSERT INTO search_index(surface, entity_id, text)
@@ -257,7 +244,7 @@ function rebuildLegacySearch(context: PluginContext): void {
 }
 
 function legacySearchNeedsRebuild(context: PluginContext): boolean {
-  if (!hasTable(context.store.database, "search_index")) return false;
+  if (!tableExists(context.store.database, "search_index")) return false;
   const hasLegacyCards = context.store.database
     .query<{ present: number }, []>("SELECT 1 AS present FROM legacy_cards LIMIT 1")
     .get() !== null;
@@ -392,9 +379,9 @@ function sourceData(path: string): SourceData {
     );
   }
   try {
-    const hasCards = hasTable(source, "cards");
-    const hasCardFiles = hasTable(source, "card_files");
-    if (!hasCards && !hasCardFiles && hasTable(source, "archived_snapshots")) {
+    const hasCards = tableExists(source, "cards");
+    const hasCardFiles = tableExists(source, "card_files");
+    if (!hasCards && !hasCardFiles && tableExists(source, "archived_snapshots")) {
       return archiveSourceData(source);
     }
     if (!hasCards || !hasCardFiles) {
@@ -444,7 +431,7 @@ function sourceData(path: string): SourceData {
         text: decoded,
       };
     });
-    const receipts = hasTable(source, "receipt_artifacts")
+    const receipts = tableExists(source, "receipt_artifacts")
       ? source
         .query<SourceReceipt, []>(
           `SELECT artifact_type, id, card_id, created_at, payload_json
@@ -481,7 +468,7 @@ function replaceLegacyRows(
   const source = data.sourceKind === "archive" ? "archive" : "store";
   database.exec("BEGIN IMMEDIATE");
   try {
-    if (hasTable(database, "search_index")) {
+    if (tableExists(database, "search_index")) {
       database.run("DELETE FROM search_index WHERE surface = '[legacy]'");
     }
     database.query("DELETE FROM legacy_decisions WHERE source = ?").run(source);
@@ -928,7 +915,7 @@ function formatFile(file: LegacyFileRow): string {
 }
 
 function showLegacy(context: PluginContext, invocation: CliInvocation): CliResult {
-  const id = required(invocation, 0, "legacy card id");
+  const id = requiredPosition(invocation, 0, "legacy card id");
   const card = context.store.database
     .query<LegacyCardRow, [string]>(
       "SELECT id, title, card_yaml FROM legacy_cards WHERE id = ?",

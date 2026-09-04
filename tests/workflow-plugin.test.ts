@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";

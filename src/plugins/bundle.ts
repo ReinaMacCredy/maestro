@@ -7,7 +7,7 @@ import {
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import { resolveStoreLocation } from "../kernel/store.ts";
+import { resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import type {
   DispatchService,
   HandbackRecord,
@@ -191,16 +191,8 @@ function snapshotText(bundle: {
     .join("\n");
 }
 
-function hasSearchIndex(context: PluginContext): boolean {
-  return context.store.database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get("search_index") !== null;
-}
-
 function indexSnapshot(context: PluginContext, bundle: BundleRecord): void {
-  if (!hasSearchIndex(context)) return;
+  if (!tableExists(context.store.database, "search_index")) return;
   context.store.database
     .query("DELETE FROM search_index WHERE surface = 'bundle' AND entity_id = ?")
     .run(bundle.id);

@@ -940,22 +940,9 @@ export const attentionPlugin: BuiltInPlugin = {
         {
           description: "Scan store state for attention packets without mutating work.",
           flags: attentionFlags,
+          json: true,
           mutates: false,
           rootDescription: "Raise one-shot attention packets from store evidence.",
-        },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "attention --json",
-        (invocation): CliResult => {
-          const data = { detections: scanFromInvocation(service, invocation) };
-          return { data, text: JSON.stringify({ ok: true, data }) };
-        },
-        {
-          description: "Scan store state and emit one compact JSON success envelope.",
-          flags: attentionFlags,
-          mutates: false,
         },
       ),
     );

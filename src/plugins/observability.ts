@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 
@@ -55,12 +55,6 @@ const SEARCH_INDEX_VERSION = 1;
 function oneLine(value: string, limit: number): string {
   const compact = value.replaceAll(/\s+/g, " ").trim();
   return compact.length <= limit ? compact : `${compact.slice(0, limit - 1).trimEnd()}…`;
-}
-
-function required(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
 }
 
 function resultLimit(invocation: CliInvocation): number {
@@ -435,7 +429,7 @@ export const observabilityPlugin: BuiltInPlugin = {
               { command: "maestro search" },
             );
           }
-          const term = required(invocation, 0, "search term");
+          const term = requiredPosition(invocation, 0, "search term");
           const limit = resultLimit(invocation);
           const query = `"${term.replaceAll('"', '""')}"`;
           const matches = context.store.database
@@ -496,7 +490,7 @@ export const observabilityPlugin: BuiltInPlugin = {
       context.cli.register(
         "trace",
         (invocation): CliResult => {
-          const id = required(invocation, 0, "work id");
+          const id = requiredPosition(invocation, 0, "work id");
           const exists = context.store.database
             .query<{ id: string }, [string]>("SELECT id FROM work WHERE id = ?")
             .get(id);

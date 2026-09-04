@@ -75,6 +75,15 @@ export function resolveStoreLocation(cwd: string): StoreLocation {
 // Raise it when a change makes a store unreadable to the previous release.
 export const schemaGeneration = 1;
 
+export function tableExists(source: Database | Store, name: string): boolean {
+  const database = source instanceof Store ? source.database : source;
+  return database
+    .query<{ present: number }, [string]>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .get(name) !== null;
+}
+
 function assertSqliteIdentifier(identifier: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`invalid SQLite identifier: ${identifier}`);

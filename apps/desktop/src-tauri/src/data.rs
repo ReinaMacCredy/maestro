@@ -16,14 +16,6 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const MTIME_POLL: Duration = Duration::from_millis(1000);
 const FULL_REFRESH: Duration = Duration::from_secs(30);
-const VERBS: [&[&str]; 5] = [
-    &["status", "--json"],
-    &["ready", "--json"],
-    &["attention", "--json"],
-    &["work", "list", "--json"],
-    &["decision", "list", "--json"],
-];
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -177,25 +169,44 @@ fn snapshot_repo(bin: &Path, repo: &Path) -> RepoSnapshot {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| repo.display().to_string());
     let mut snap = RepoSnapshot { repo: name, path: repo.display().to_string(), at: now_iso(), ..Default::default() };
-    let results: Vec<Result<Value, String>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = VERBS.iter().map(|args| scope.spawn(move || run_verb(bin, repo, args))).collect();
-        handles.into_iter().map(|h| h.join().unwrap_or_else(|_| Err("verb thread panicked".into()))).collect()
+    let (status, ready, attention, work, decision) = std::thread::scope(|scope| {
+        let status = scope.spawn(|| run_verb(bin, repo, &["status", "--json"]));
+        let ready = scope.spawn(|| run_verb(bin, repo, &["ready", "--json"]));
+        let attention = scope.spawn(|| run_verb(bin, repo, &["attention", "--json"]));
+        let work = scope.spawn(|| run_verb(bin, repo, &["work", "list", "--json"]));
+        let decision = scope.spawn(|| run_verb(bin, repo, &["decision", "list", "--json"]));
+        (
+            status
+                .join()
+                .unwrap_or_else(|_| Err("verb thread panicked".into())),
+            ready
+                .join()
+                .unwrap_or_else(|_| Err("verb thread panicked".into())),
+            attention
+                .join()
+                .unwrap_or_else(|_| Err("verb thread panicked".into())),
+            work.join()
+                .unwrap_or_else(|_| Err("verb thread panicked".into())),
+            decision
+                .join()
+                .unwrap_or_else(|_| Err("verb thread panicked".into())),
+        )
     });
     let mut errors = Vec::new();
-    let mut take = |i: usize| -> Value {
-        match &results[i] {
-            Ok(v) => v.clone(),
+    let mut take = |result: Result<Value, String>| -> Value {
+        match result {
+            Ok(value) => value,
             Err(e) => {
-                errors.push(e.clone());
+                errors.push(e);
                 Value::Null
             }
         }
     };
-    let status = take(0);
-    let ready = take(1);
-    let attention = take(2);
-    let work = take(3);
-    let decision = take(4);
+    let status = take(status);
+    let ready = take(ready);
+    let attention = take(attention);
+    let work = take(work);
+    let decision = take(decision);
     snap.sessions = arr(&status, "sessions");
     snap.ready = arr(&ready, "works")
         .iter()

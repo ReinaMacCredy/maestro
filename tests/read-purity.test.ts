@@ -114,8 +114,7 @@ test("472 a declared-pure verb answers the same whether or not the WAL sidecars 
     // Guard the guard: if the discovery walk silently found nothing, the sweep
     // below would pass vacuously.
     expect(pure.size).toBeGreaterThan(8);
-    // The first five are the verbs the desktop polls per repository (w526,
-    // apps/desktop/src-tauri/src/data.rs VERBS); making any of them mutating
+    // These are the verbs the desktop polls per repository (w526); making any of them mutating
     // would make watching a store change it.
     for (
       const name of ["status", "ready", "attention", "work list", "decision list", "search"]

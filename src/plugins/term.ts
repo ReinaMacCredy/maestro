@@ -1,5 +1,6 @@
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
 export interface TermRecord {
@@ -51,18 +52,10 @@ function listTerms(context: PluginContext): TermRecord[] {
     .map(fromRow);
 }
 
-function hasSearchIndex(context: PluginContext): boolean {
-  return context.store.database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get("search_index") !== null;
-}
-
 // Observability rebuilds search_index from its own tables only, so terms
 // re-index themselves on apply and on every write (bundle precedent).
 function indexTerm(context: PluginContext, term: TermRecord): void {
-  if (!hasSearchIndex(context)) return;
+  if (!tableExists(context.store.database, "search_index")) return;
   context.store.database
     .query("DELETE FROM search_index WHERE surface = 'term' AND entity_id = ?")
     .run(term.id);

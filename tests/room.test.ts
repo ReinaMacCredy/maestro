@@ -1091,7 +1091,3 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
     expect(second.stdout).not.toContain("retired:");
   });
 });
-
-function flat(text: string): string {
-  return text.replace(/\s+/g, " ");
-}

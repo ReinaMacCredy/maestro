@@ -11,7 +11,7 @@ import {
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import { Store, resolveStoreLocation } from "../kernel/store.ts";
+import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { isRoom } from "./room.ts";
 import {
   buildSlpTeamPlan,
@@ -644,14 +644,6 @@ async function archivePack(roomRoot: string, bytes: Uint8Array, digest: string):
     );
   }
   return path;
-}
-
-function tableExists(store: Store, name: string): boolean {
-  return store.database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get(name)?.present === 1;
 }
 
 function nextWorkId(store: Store): string {

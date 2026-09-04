@@ -1,4 +1,4 @@
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DispatchService } from "./dispatch.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -115,12 +115,6 @@ function reviewAtOption(invocation: CliInvocation): string | null {
   return value;
 }
 
-function required(invocation: CliInvocation, index: number, label: string): string {
-  const value = invocation.positionals[index];
-  if (!value) throw new CliError("MISSING_ARGUMENT", `missing ${label}`);
-  return value;
-}
-
 function format(decision: DecisionRecord): string {
   return [
     `${decision.id} [${decision.state}] ${decision.text}`,
@@ -210,7 +204,7 @@ export const decisionPlugin: BuiltInPlugin = {
         context,
         "decision draft",
         (invocation): CliResult => {
-          const first = required(invocation, 0, "decision text");
+          const first = requiredPosition(invocation, 0, "decision text");
           const second = invocation.positionals[1];
           const needsOwner = invocation.options["needs-owner"] === true;
           const suppliedDissent = option(invocation, "dissent");
@@ -250,7 +244,7 @@ export const decisionPlugin: BuiltInPlugin = {
               }
               const text = second === undefined
                 ? existing.text
-                : required(invocation, 1, "replacement text");
+                : requiredPosition(invocation, 1, "replacement text");
               if (existing.state === "withdrawn") {
                 throw new CliError("INVALID_STATE", `${existing.id} is withdrawn`, {
                   id: existing.id,
@@ -433,7 +427,7 @@ export const decisionPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "decision withdraw", (invocation): CliResult => {
-        const id = required(invocation, 0, "decision id");
+        const id = requiredPosition(invocation, 0, "decision id");
         const reason = option(invocation, "reason");
         if (!reason?.trim()) {
           throw new CliError(
@@ -504,7 +498,7 @@ export const decisionPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "decision lock", (invocation): CliResult => {
-        const id = required(invocation, 0, "decision id");
+        const id = requiredPosition(invocation, 0, "decision id");
         const suppliedDissent = option(invocation, "dissent");
         const suppliedReviewAt = reviewAtOption(invocation);
         const lock = context.store.database.transaction(() => {
@@ -589,7 +583,7 @@ export const decisionPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       context.cli.register("decision show", (invocation): CliResult => {
-        const decision = requireDecision(context, required(invocation, 0, "decision id"));
+        const decision = requireDecision(context, requiredPosition(invocation, 0, "decision id"));
         return { data: { decision }, text: format(decision) };
       }, {
         description: "Show one decision and its links.",

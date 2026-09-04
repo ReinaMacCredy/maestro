@@ -2391,7 +2391,6 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
       team: { roles: Array<{ name: string; paneId: string; role: string }> };
     }>(started.stdout);
     const lead = startData.team.roles.find((role) => role.role === "lead");
-    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor");
     expect(lead).toBeDefined();
     const environment = { ...fake.env, HERDR_PANE_ID: lead?.paneId };
 

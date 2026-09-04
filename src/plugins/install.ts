@@ -16,7 +16,7 @@ import { CliError, requiredPosition, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin } from "../kernel/loader.ts";
 import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
-import { resolveHomeDirectory } from "./home.ts";
+import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
@@ -495,15 +495,6 @@ export async function codexHookTrustRecorded(root: string, home: string): Promis
     if (await samePath(path, hooks)) missing.delete(event);
   }
   return missing.size === 0;
-}
-
-async function samePath(left: string, right: string): Promise<boolean> {
-  if (resolve(left) === resolve(right)) return true;
-  try {
-    return (await realpath(left)) === (await realpath(right));
-  } catch {
-    return false;
-  }
 }
 
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {

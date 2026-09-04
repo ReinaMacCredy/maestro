@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import { CliError, stringOptions, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory, resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
@@ -102,12 +103,6 @@ function stringOption(invocation: CliInvocation, name: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function listOption(invocation: CliInvocation, name: string): string[] {
-  const value = invocation.options[name];
-  if (typeof value === "string") return [value];
-  return Array.isArray(value) ? value : [];
-}
-
 // Memory verbs write the Hub store only (d775). A project store never holds
 // global facts, so the verb refuses there instead of writing through a child.
 function requireHub(context: PluginContext): { room: string; storePath: string } {
@@ -140,16 +135,8 @@ function listFacts(context: PluginContext, all: boolean): MemoryFact[] {
     .map(fromRow);
 }
 
-function hasSearchIndex(context: PluginContext): boolean {
-  return context.store.database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get("search_index") !== null;
-}
-
 function indexFact(context: PluginContext, fact: MemoryFact): void {
-  if (!hasSearchIndex(context)) return;
+  if (!tableExists(context.store.database, "search_index")) return;
   context.store.database
     .query("DELETE FROM search_index WHERE surface = 'memory' AND entity_id = ?")
     .run(fact.id);
@@ -565,7 +552,7 @@ export const memoryPlugin: BuiltInPlugin = {
         (invocation): CliResult => {
           requireHub(context);
           const dryRun = invocation.options["dry-run"] === true;
-          const from = listOption(invocation, "from");
+          const from = stringOptions(invocation, "from");
           const directories = from.length > 0
             ? from.map((directory) => ({ directory: resolve(directory), source: sourceFor(resolve(directory)) }))
             : defaultBufferDirectories(resolveHomeDirectory());

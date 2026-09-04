@@ -3,6 +3,7 @@ import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
+import { tableExists } from "../kernel/store.ts";
 import type { WorkRecord, WorkService } from "./work.ts";
 import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
@@ -52,11 +53,7 @@ function dropHarnessPromptNoise(context: PluginContext): void {
       )
       .get(`${harnessPromptPrefix}%`)?.count ?? 0;
     if (count === 0) return;
-    const hasSearchIndex = context.store.database
-      .query<{ present: number }, []>(
-        "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'search_index'",
-      )
-      .get()?.present === 1;
+    const hasSearchIndex = tableExists(context.store.database, "search_index");
     if (hasSearchIndex) {
       context.store.database
         .query(

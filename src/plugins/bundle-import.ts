@@ -1,6 +1,7 @@
 import { cpSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import type { PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 import { getTermByName, upsertTerm } from "./term.ts";
 
 // One line of the import report per source item, so a .waymark/ tree can be
@@ -140,16 +141,8 @@ function countFiles(directory: string): number {
   return count;
 }
 
-function hasSearchIndex(context: PluginContext): boolean {
-  return context.store.database
-    .query<{ present: number }, [string]>(
-      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get("search_index") !== null;
-}
-
 function indexArchived(context: PluginContext, id: string, text: string): void {
-  if (!hasSearchIndex(context)) return;
+  if (!tableExists(context.store.database, "search_index")) return;
   context.store.database
     .query("DELETE FROM search_index WHERE surface = 'bundle' AND entity_id = ?")
     .run(id);

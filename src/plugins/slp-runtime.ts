@@ -280,65 +280,7 @@ export class HerdrSlpRuntime {
     private readonly promptReadyTimeoutMs = 30_000,
   ) {}
 
-  private async command(
-    args: string[],
-    cwd: string,
-    timeoutMs = this.commandTimeoutMs,
-    allowEmpty = false,
-  ): Promise<Record<string, unknown>> {
-    let child: ReturnType<typeof Bun.spawn>;
-    try {
-      child = Bun.spawn(["herdr", ...args], {
-        cwd,
-        env: this.environment,
-        stderr: "pipe",
-        stdout: "pipe",
-      });
-    } catch (error) {
-      throw new SlpRuntimeError(
-        `cannot start Herdr: ${error instanceof Error ? error.message : String(error)}`,
-        args,
-      );
-    }
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill(9);
-    }, timeoutMs);
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout as ReadableStream<Uint8Array>).text(),
-      new Response(child.stderr as ReadableStream<Uint8Array>).text(),
-      child.exited,
-    ]).finally(() => clearTimeout(timer));
-    const commandName = args.slice(0, 3).join(" ");
-    if (timedOut) {
-      throw new SlpRuntimeError(
-        `Herdr command timed out after ${timeoutMs}ms: ${commandName}`,
-        args,
-        stderr.trim(),
-      );
-    }
-    if (exitCode !== 0) {
-      const diagnostic = stderr.trim();
-      throw new SlpRuntimeError(
-        `Herdr command failed (${exitCode}): ${commandName}${diagnostic ? `; ${diagnostic}` : ""}`,
-        args,
-        diagnostic,
-      );
-    }
-    if (allowEmpty && stdout.trim() === "") return {};
-    try {
-      return JSON.parse(stdout) as Record<string, unknown>;
-    } catch {
-      throw new SlpRuntimeError(
-        `Herdr returned invalid JSON for: ${commandName}`,
-        args,
-        stdout.trim(),
-      );
-    }
-  }
-
-  private async textCommand(
+  private async rawCommand(
     args: string[],
     cwd: string,
     timeoutMs = this.commandTimeoutMs,
@@ -384,6 +326,34 @@ export class HerdrSlpRuntime {
       );
     }
     return stdout;
+  }
+
+  private async command(
+    args: string[],
+    cwd: string,
+    timeoutMs = this.commandTimeoutMs,
+    allowEmpty = false,
+  ): Promise<Record<string, unknown>> {
+    const stdout = await this.rawCommand(args, cwd, timeoutMs);
+    if (allowEmpty && stdout.trim() === "") return {};
+    const commandName = args.slice(0, 3).join(" ");
+    try {
+      return JSON.parse(stdout) as Record<string, unknown>;
+    } catch {
+      throw new SlpRuntimeError(
+        `Herdr returned invalid JSON for: ${commandName}`,
+        args,
+        stdout.trim(),
+      );
+    }
+  }
+
+  private async textCommand(
+    args: string[],
+    cwd: string,
+    timeoutMs = this.commandTimeoutMs,
+  ): Promise<string> {
+    return this.rawCommand(args, cwd, timeoutMs);
   }
 
   private note(line: string): void {
