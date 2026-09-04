@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { resolveHubRoom, samePath } from "./home.ts";
 
 interface SearchRow {
   surface: string;
@@ -132,10 +135,54 @@ function bundleHit(context: PluginContext, id: string, snippet: string): SearchH
     : null;
 }
 
+function termHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
+  const term = context.store.database
+    .query<{ id: string; name: string; definition: string }, [string]>(
+      "SELECT id, name, definition FROM terms WHERE id = ?",
+    )
+    .get(id);
+  return term
+    ? {
+        key: `native:term:${term.id}`,
+        snippets: snippet ? [snippet] : [],
+        summary: {
+          id: term.id,
+          kind: "term",
+          source: "native",
+          state: term.name,
+          title: term.definition,
+        },
+      }
+    : null;
+}
+
+function memoryHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
+  const fact = context.store.database
+    .query<{ id: string; slug: string; state: string; description: string }, [string]>(
+      "SELECT id, slug, state, description FROM memory_facts WHERE id = ?",
+    )
+    .get(id);
+  return fact
+    ? {
+        key: `native:memory:${fact.id}`,
+        snippets: snippet ? [snippet] : [],
+        summary: {
+          id: fact.id,
+          kind: "memory",
+          source: "native",
+          state: fact.state,
+          title: `${fact.slug}: ${fact.description}`,
+        },
+      }
+    : null;
+}
+
 function nativeHit(context: PluginContext, match: SearchRow): SearchHit | null {
   if (match.surface === "work") return workHit(context, match.entity_id, match.text);
   if (match.surface === "decision") return decisionHit(context, match.entity_id, match.text);
   if (match.surface === "bundle") return bundleHit(context, match.entity_id, match.text);
+  if (match.surface === "term") return termHit(context, match.entity_id, match.text);
+  if (match.surface === "memory") return memoryHit(context, match.entity_id, match.text);
   if (match.surface === "note") {
     const owner = context.store.database
       .query<{ work_id: string }, [number]>("SELECT work_id FROM work_notes WHERE id = ?")
@@ -174,6 +221,12 @@ function nativeHit(context: PluginContext, match: SearchRow): SearchHit | null {
   }
   if (event.entity_type === "decision" && event.entity_id) {
     return decisionHit(context, event.entity_id, "");
+  }
+  if (event.entity_type === "term" && event.entity_id) {
+    return termHit(context, event.entity_id, "");
+  }
+  if (event.entity_type === "memory" && event.entity_id) {
+    return memoryHit(context, event.entity_id, "");
   }
   const id = event.entity_id ?? `event-${match.entity_id}`;
   const kind = event.entity_type ?? "event";
@@ -214,6 +267,12 @@ function mergeHit(hits: Map<string, SearchHit>, incoming: SearchHit): void {
   }
 }
 
+function formatSummary(summary: Record<string, unknown>): string {
+  const text = (key: string, limit: number) => oneLine(String(summary[key] ?? ""), limit);
+  const prefix = summary.source === "legacy" ? "[legacy] " : "";
+  return `${prefix}${text("id", 120)} (${text("kind", 40)}, ${text("state", 40)}): ${text("title", 120)} — ${text("title", 200)}`;
+}
+
 function formatHit(hit: SearchHit): string {
   const prefix = hit.summary.source === "legacy" ? "[legacy] " : "";
   const id = oneLine(hit.summary.id, 120);
@@ -222,6 +281,52 @@ function formatHit(hit: SearchHit): string {
   const title = oneLine(hit.summary.title, 120);
   const snippet = oneLine(hit.snippets.join(" | ") || hit.summary.title, 200);
   return `${prefix}${id} (${kind}, ${state}): ${title} — ${snippet}`;
+}
+
+interface HubSearch {
+  detail: string | null;
+  matches: Array<Record<string, unknown>>;
+  status: "absent" | "error" | "ok" | "self";
+}
+
+// The Hub store is read through its own CLI, never opened here (lesson.ts
+// precedent): the child keeps a store this binary cannot read honest, and
+// --local on the child stops the recursion.
+async function searchHub(context: PluginContext, term: string, limit: number): Promise<HubSearch> {
+  const hub = resolveHubRoom();
+  if (!existsSync(hub.storePath)) return { detail: null, matches: [], status: "absent" };
+  if (samePath(context.store.path, hub.storePath)) return { detail: null, matches: [], status: "self" };
+  const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
+  const child = Bun.spawn(
+    [process.execPath, cli, "search", term, "--json", "--local", "--limit", String(limit)],
+    {
+      cwd: hub.room,
+      env: { ...process.env, MAESTRO_READ_ONLY: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    let detail = `exit ${exitCode}`;
+    try {
+      const envelope = JSON.parse(stderr) as { error?: { code?: string } };
+      if (envelope.error?.code) detail = envelope.error.code;
+    } catch {
+      // stderr was not an envelope; keep the exit code
+    }
+    return { detail, matches: [], status: "error" };
+  }
+  try {
+    const envelope = JSON.parse(stdout) as { data?: { matches?: Array<Record<string, unknown>> } };
+    return { detail: null, matches: envelope.data?.matches ?? [], status: "ok" };
+  } catch {
+    return { detail: "unparseable output", matches: [], status: "error" };
+  }
 }
 
 export const observabilityPlugin: BuiltInPlugin = {
@@ -318,7 +423,7 @@ export const observabilityPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "search",
-        (invocation): CliResult => {
+        async (invocation): Promise<CliResult> => {
           if (
             context.store.readOnly &&
             !context.store.ephemeral &&
@@ -356,15 +461,30 @@ export const observabilityPlugin: BuiltInPlugin = {
           const lines = bounded.map(formatHit);
           const more = hits.size - limit;
           if (more > 0) lines.push(`${more} more; raise --limit to see them`);
+          // JSON summaries stay dense (test 59): no snippet, one store label.
+          const results: Array<Record<string, unknown>> = bounded.map((hit) => ({
+            ...hit.summary,
+            store: "project",
+          }));
+          if (invocation.options.local !== true) {
+            const hub = await searchHub(context, term, limit);
+            if (hub.status === "error") lines.push(`hub: unavailable (${hub.detail})`);
+            for (const match of hub.matches) {
+              const labelled = { ...match, store: "hub" };
+              results.push(labelled);
+              lines.push(`[hub] ${formatSummary(labelled)}`);
+            }
+          }
           return {
-            data: { matches: bounded.map((hit) => hit.summary) },
+            data: { matches: results },
             text: lines.join("\n"),
           };
         },
         {
-          description: "Search work, decisions, notes, and event history.",
+          description: "Search work, decisions, notes, terms and event history, here and in the Hub.",
           flags: {
             "--limit": { description: "Set the maximum number of results.", value: true },
+            "--local": { description: "Search this store only; skip the Hub room." },
           },
           mutates: false,
           positionals: [{ name: "query", required: true }],
