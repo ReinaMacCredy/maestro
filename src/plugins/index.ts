@@ -26,6 +26,8 @@ import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
 import { workPlugin } from "./work.ts";
 import { slpV2Plugin } from "./slp-v2.ts";
+import { termPlugin } from "./term.ts";
+import { memoryPlugin } from "./memory.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginManagerPlugin,
@@ -48,6 +50,8 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyLifecyclePlugin,
   recipePlugin,
   observabilityPlugin,
+  termPlugin,
+  memoryPlugin,
   bundlePlugin,
   importRustPlugin,
   mcpPlugin,

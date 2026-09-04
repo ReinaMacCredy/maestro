@@ -157,8 +157,15 @@ setup at [SLP setup and storage](https://maestro.maccredyreina.me/getting-starte
 - `maestro dispatch` stores lane contracts and council state;
   `maestro handback` stores shape-checked return packets, including explicit
   dependency, council, challenge, reopen, unknown, and failure outcomes.
-- `maestro search` searches native work, decisions, notes, events, bundles, and
-  imported Rust records.
+- `maestro search` searches native work, decisions, notes, terms, memory facts,
+  events, bundles, and imported Rust records, in this store and in the Hub room
+  at `~/maestro`; `--local` stays in this store.
+- `maestro term` keeps the glossary in the store so a term answers the same
+  search as the work and decisions that use it.
+- `maestro memory` runs in the Hub room: `ingest` promotes facts from the Claude
+  auto-memory and Codex ad-hoc buffers through supersession, dedup and evidence
+  gates, `retract` retires one for good, and `render` writes the injected global
+  index from the store and refuses to overwrite a hand edit.
 
 Proof is layered as `source`, `artifact`, `installed`, `live`, and `journey`.
 Claims stop at the last proven layer and name untested links rather than
@@ -180,6 +187,8 @@ missing identities or targets.
   `maestro handback file|show` stores and reads return packets.
 - `maestro attention` scans the current repository and `maestro brief`
   summarizes every registered repository.
+- `maestro term add|list|show` keeps the glossary; `maestro memory
+  ingest|list|show|retract|render` runs the Hub memory.
 - `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
   manages the configured extension set.
 - `maestro import rust` imports preserved Rust data; `maestro legacy show`
