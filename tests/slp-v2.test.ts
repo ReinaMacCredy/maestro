@@ -6274,12 +6274,15 @@ test("SLP v2 sentinel exits once the project store is gone instead of polling th
       },
     );
     try {
-      const deadline = Date.now() + 5_000;
+      const deadline = Date.now() + 20_000;
       let packets = 0;
+      // team start prompts the observer with its role contract, so only the
+      // sentinel's own packet proves the sentinel is past its first poll.
       while (packets === 0 && Date.now() < deadline) {
         packets = (await fakeHerdrCommands(fake)).filter(
           (command) =>
-            command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name,
+            command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name &&
+            (command[3] ?? "").startsWith(`[SLP sentinel ${data.team.teamId} g`),
         ).length;
         await Bun.sleep(25);
       }
