@@ -1194,7 +1194,8 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "ready",
-        async (): Promise<CliResult> => {
+        async (invocation): Promise<CliResult> => {
+          const showBlocked = invocation.options.all === true;
           const allWorks = service.list();
           const childrenByParent = new Map<string, WorkRecord[]>();
           for (const work of allWorks) {
@@ -1264,9 +1265,13 @@ export const workPlugin: BuiltInPlugin = {
               command: details.command,
             });
           }
+          const listed = showBlocked
+            ? gated
+            : gated.filter((work) => work.origin !== "work-blockers");
+          const hiddenBlocked = gated.length - listed.length;
           const lines = [
             ...works.map((work) => `${work.id} ${work.title}`),
-            ...gated.map(
+            ...listed.map(
               (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
             ),
           ];
@@ -1283,6 +1288,9 @@ export const workPlugin: BuiltInPlugin = {
                 `dispatch: ${dispatch.id} [takeable] ${dispatch.lane} for ${dispatch.workId}: ${dispatch.objective}`,
             ),
           );
+          if (hiddenBlocked > 0) {
+            lines.push(`${hiddenBlocked} blocked by open work hidden; --all to list`);
+          }
           const held = allWorks.filter(
             (work) => work.state === "active" && work.heldBy === sessionId,
           );
@@ -1303,7 +1311,13 @@ export const workPlugin: BuiltInPlugin = {
               : "no ready work; inspect tracked work: maestro work list",
           };
         },
-        { description: "List ready work and gated items with their blockers.", mutates: false },
+        {
+          description: "List ready work and gated items with their blockers.",
+          flags: {
+            "--all": { description: "List blocked work too; --json always carries it under gated." },
+          },
+          mutates: false,
+        },
       ),
     );
   },

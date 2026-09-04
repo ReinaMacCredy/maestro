@@ -594,7 +594,7 @@ test("117 ready distinguishes terminal and blocked ledgers from an empty ledger"
   });
 });
 
-test("118 explicit blockers prevent start and stay visible in ready", async () => {
+test("118 explicit blockers prevent start and stay visible in ready --all", async () => {
   await withFixture(async (fixture) => {
     const parent = idFrom(
       await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
@@ -662,7 +662,7 @@ test("118 explicit blockers prevent start and stay visible in ready", async () =
     expect(gatedVerification?.blockers).toEqual([{ id: implementation, state: "open" }]);
     expect(gatedVerification?.command).toBe("maestro ready");
 
-    const human = await runCli(fixture, ["ready"]);
+    const human = await runCli(fixture, ["ready", "--all"]);
     expect(human.stdout).toContain(`${implementation} implementation [gated by work-blockers:`);
     expect(human.stdout).toContain(`${verification} verification [gated by work-blockers:`);
     const trace = await runCli(fixture, ["trace", implementation]);

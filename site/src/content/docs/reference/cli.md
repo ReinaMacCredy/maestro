@@ -214,7 +214,9 @@ prompts.
 
 ### `ready`
 
-`maestro ready [--json]` lists ready development work and its gates. It is not
+`maestro ready [--all] [--json]` lists ready development work and its policy
+gates. Work blocked by open work is counted, not listed, unless `--all`; the
+JSON `gated` array always carries it with origin `work-blockers`. It is not
 an SLP team-readiness operation.
 
 ### `room`

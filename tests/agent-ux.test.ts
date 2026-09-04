@@ -457,3 +457,47 @@ test("637 work block and unblock edit blockers after creation with work add's ch
     );
   });
 });
+
+test("638 ready hides blocked work by default and --all lists it with its gate", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(
+      await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
+    );
+    const tests = idFrom(
+      await runCli(fixture, ["work", "add", "red tests", "--kind", "task", "--parent", parent]),
+    );
+    const implementation = idFrom(
+      await runCli(fixture, [
+        "work", "add", "implementation", "--kind", "implement", "--parent", parent,
+        "--blocked-by", tests,
+      ]),
+    );
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    expect(ready.stdout).toContain(`${tests} red tests`);
+    expect(ready.stdout).toContain(`${parent} parent feature [gated by policy-breakdown`);
+    expect(ready.stdout).not.toContain(`${implementation} implementation`);
+    expect(ready.stdout).toContain("1 blocked by open work hidden; --all to list");
+
+    const all = await runCli(fixture, ["ready", "--all"]);
+    expect(all.exitCode).toBe(0);
+    expect(all.stdout).toContain(
+      `${implementation} implementation [gated by work-blockers: ${implementation} is blocked by unresolved work: ${tests} [open]`,
+    );
+    expect(all.stdout).not.toContain("hidden");
+
+    const json = JSON.parse((await runCli(fixture, ["ready", "--json"])).stdout) as {
+      data: { gated: Array<{ id: string; origin: string }> };
+    };
+    expect(json.data.gated.find((work) => work.id === implementation)?.origin).toBe(
+      "work-blockers",
+    );
+
+    expect((await runCli(fixture, ["work", "start", tests])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "done", tests, "--evidence", "red"])).exitCode).toBe(0);
+    const after = await runCli(fixture, ["ready"]);
+    expect(after.stdout).toContain(`${implementation} implementation`);
+    expect(after.stdout).not.toContain("hidden");
+  });
+});

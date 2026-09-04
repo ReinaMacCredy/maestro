@@ -20,6 +20,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Changed
 
+- `ready` no longer lists work blocked by open work on the same footing as
+  ready work: the default output counts it (`N blocked by open work hidden;
+  --all to list`), `ready --all` lists it with its `[gated by work-blockers
+  ...]` suffix, and `--json` is unchanged.
 - `--json` is honored by every verb, write verbs included: `decision draft`
   and `decision lock` no longer fail with `UNKNOWN_FLAG`, and every verb's
   help lists the flag.
