@@ -41,8 +41,8 @@ test("601 memory list|show read the Hub from a project cwd; the SessionStart bri
     local.close();
 
     const write = await runCli(fixture, ["memory", "ingest", "--dry-run"]);
-    expect(write.exitCode).not.toBe(0);
-    expect(write.stderr).toContain("NOT_HUB_STORE");
+    expect(write.exitCode).toBe(0);
+    expect(write.stdout).toContain("dry-run: promoted 0, updated 0, skipped 1, refused 0");
 
     const quiet = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
     expect(quiet.stdout).not.toContain("buffer facts not yet in the Hub");
@@ -171,5 +171,36 @@ test("608 a stale Hub search index names the cause and the remedy", async () => 
     expect(stale.exitCode).not.toBe(0);
     expect(stale.stderr).toContain("HUB_UNAVAILABLE");
     expect(stale.stderr).toContain("its search index is behind the runtime; run maestro update");
+  });
+});
+
+test("613 memory ingest|retract|render write the Hub from a project cwd through the Hub's own CLI", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    expect((await runCliAt(fixture, room, ["memory", "list"])).exitCode).toBe(0);
+    await writeClaudeFact(fixture, "feedback_three.md", "three", "Third fact");
+    const ingested = await runCli(fixture, ["memory", "ingest", "--json"], session);
+    expect(ingested.exitCode).toBe(0);
+    expect(JSON.parse(ingested.stdout).data.counts).toEqual({ promoted: 1, updated: 0, skipped: 0, refused: 0 });
+    const plain = await runCli(fixture, ["memory", "ingest"], session);
+    expect(plain.stdout).toContain("promoted 0, updated 0, skipped 1, refused 0 (1 facts from");
+    const local = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    expect(local.query("SELECT COUNT(*) AS n FROM memory_facts").get()).toEqual({ n: 0 });
+    local.close();
+    expect((await runCliAt(fixture, room, ["memory", "show", "three"])).stdout).toContain("Third fact");
+
+    const rendered = await runCli(fixture, ["memory", "render"], session);
+    expect(rendered.exitCode).toBe(0);
+    expect(rendered.stdout).toMatch(/^rendered .*\/maestro\/MEMORY\.md \(1 facts, [0-9a-f]{12}; was missing\)\n$/);
+    const check = await runCli(fixture, ["memory", "render", "--check"]);
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toMatch(/ current \(1 facts, [0-9a-f]{12}\)\n$/);
+
+    const retracted = await runCli(fixture, ["memory", "retract", "three", "--reason", "no longer true"], session);
+    expect(retracted.exitCode).toBe(0);
+    expect(retracted.stdout).toMatch(/^m\d+ three retracted: no longer true\n$/);
+    const missing = await runCli(fixture, ["memory", "retract", "nope", "--reason", "x"], session);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toContain("NOT_FOUND");
   });
 });
