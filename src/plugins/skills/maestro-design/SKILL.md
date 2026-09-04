@@ -114,10 +114,10 @@ primary sources, never from memory.
 
 Then exit by tier (`maestro-bundle` tier rule):
 
-- quickfix or Light: design ends with a work item whose acceptance fits in one
-  sentence, `maestro work add "<title>" --acceptance "<observable result>"`,
-  plus the locked decisions. No SPEC, no red-test list; the work is verified
-  inline by `maestro-work`.
+- Light: design ends with a work item whose acceptance fits in one sentence,
+  `maestro work add "<title>" --acceptance "<observable result>"`, plus the
+  locked decisions. No SPEC, no red-test list; the work is verified
+  inline by `maestro-work`. A quickfix never reaches design.
 - Full: `maestro bundle open <id> --work <workId>`, then fill SPEC.md as a
   pure contract: Problem, Solution, Scope, Anti-goals (each traces to a real
   risk in this repo and gets a matching VERIFY.md check; an anti-goal that

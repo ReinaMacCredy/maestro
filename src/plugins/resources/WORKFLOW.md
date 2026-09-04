@@ -106,8 +106,9 @@ are never staged or committed.
 ## Memory
 
 - Recall: `maestro search "<term>"` hits work, decisions, notes, terms, and
-  archived bundles in the repo store; `maestro brief` carries the Hub's
-  rendered index into the session. Cite what you use; re-verify fast-drifting
+  archived bundles in the repo store; the Hub index is `~/maestro/MEMORY.md`,
+  written by `maestro memory render` and imported by each tool's global
+  instruction file. Cite what you use; re-verify fast-drifting
   facts (branches, ports, dirty state, test counts) live.
 - Record: a settled fork is a locked decision with its rejected alternative;
   a domain term is `maestro term add`; a failed pass is one
@@ -147,9 +148,10 @@ are the user's gates.
   and before verify, so the reviewed diff is final. Forks go to the user as
   question cards: one decision per card, "what this does" first, a `my rec:`
   line.
-- **Codex**: skills load from `~/.codex/skills/maestro-*` symlinks. Review
-  routing: Light runs `simplify-code` after green; Full reviews the frozen
-  task-owned diff in a fresh context, `review-swarm` for trust boundaries,
+- **Codex**: skills are linked by hand under `~/.codex/skills/maestro-*`
+  until `maestro install` maintains them. Review routing: Light runs
+  `simplify-code` after green; Full reviews the frozen task-owned diff in a
+  fresh context, `review-swarm` for trust boundaries,
   schemas, or several subsystems, plus `codebase-security-scan` for auth,
-  secrets, or input handling. Codex reads `~/maestro/AGENTS.md`, which points
-  here.
+  secrets, or input handling. In project work Codex reads `~/.codex/AGENTS.md`,
+  which must point here; inside the Hub it reads `~/maestro/AGENTS.md`.

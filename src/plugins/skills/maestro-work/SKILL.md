@@ -24,8 +24,8 @@ store, or the rest of this skill (`maestro-bundle` tier rule):
   regression test is written only for a real bug being fixed, never as
   ceremony. No SPEC, no red list.
 - Full: an open bundle. Preconditions before any edit: the user's explicit
-  request to implement or fix this scope, and a SPEC whose Red tests section
-  covers exactly this scope. A SPEC that predates the requested scope
+  request to implement or fix this scope, and a SPEC whose Scope names this
+  work; its Red tests, when present, are the only tests written. A SPEC that predates the requested scope
   (post-ship review findings, hardening follow-ups) counts as missing: return
   to `maestro-design` first. A throwaway prototype not yet approved to port is
   `maestro-explore`'s scope: fix it there without opening production work.

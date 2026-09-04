@@ -209,7 +209,7 @@ test("576 [lint] no doctrine, template, or skill demands a test or SPEC from qui
 
   const design = await Bun.file(join(root, "skills", "maestro-design", "SKILL.md")).text();
   const exit = section(design, "## Readiness gate and exit");
-  const lightExit = bullets(exit, "- quickfix or Light:")[0] ?? "";
+  const lightExit = bullets(exit, "- Light:")[0] ?? "";
   expect({ lightExit, demands: demands(lightExit) }).toEqual({ lightExit, demands: false });
 
   await withFixture(async (fixture) => {

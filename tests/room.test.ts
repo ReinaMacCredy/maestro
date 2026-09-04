@@ -123,6 +123,7 @@ test("267 reinstall preserves OWNER.md and the Hub SLP pack while refreshing man
       "AGENTS.md",
       "CLAUDE.md",
       "shellrc",
+      "WORKFLOW.md",
       ".claude/settings.json",
     ];
     const firstInstall = new Map(

@@ -31,6 +31,7 @@ maestro recipe list
 maestro recipe show work
 ```
 
-The four installed skills cover bundle routing, design, implementation, and
-verification. They add working depth without moving policy vocabulary into the
+The nine installed skills cover bundle routing, design, implementation,
+verification, improvement, and the read-only explore, diagnose, coach, and
+questionnaire engagements. They add working depth without moving policy vocabulary into the
 kernel.
