@@ -200,7 +200,7 @@ export const coordinationPlugin: BuiltInPlugin = {
             "        multi-session, shared scope, high risk, or repeat fix -> maestro bundle open <id> --work <id>",
             '  forks: settle before editing - maestro decision draft "<choice>" --rationale "<why + rejected alternative>", then decision lock',
             '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"',
-            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI 0-10 -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
+            `intake: problem in one sentence; uncertainty -> lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); ROI of independent judgment -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
         { events: ["SessionStart"] },
       ),

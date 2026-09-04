@@ -1,9 +1,10 @@
 ---
 name: maestro-questionnaire
-description: Turn a decision the user cannot fully answer into a Markdown questionnaire for the one person who can - filled in async, or together over a meeting. Adapted from Matt Pocock's to-questionnaire.
+description: Turn a decision the user cannot fully answer into a Markdown questionnaire for the one person who can - filled in async, or together over a meeting.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
+<!-- adapted from Matt Pocock's to-questionnaire -->
 
 # maestro-questionnaire
 

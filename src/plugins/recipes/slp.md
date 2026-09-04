@@ -142,8 +142,8 @@ The project pack snapshot and durable stores remain after stop. Chat and raw
 transcript do not become authority. Record context with `maestro work note`,
 settled choices with `maestro decide`, and changed contracts as new work.
 
-## Hard cut
+## Retired verbs and legacy rows
 
-SLP v2 does not wrap or dual-write the previous lifecycle. Removed SLP verbs
-fail with the corresponding new operation. Previous rows remain readable as
-legacy history and never enter the four-state work model.
+Retired SLP verbs fail with `SLP_V2_CUTOVER` naming the replacement
+operation. Rows written before SLP v2 stay readable as legacy history and
+never enter the four-state work model.

@@ -1,9 +1,9 @@
 # maestro
 
-TypeScript on Bun, released as v0.108.0 (the first TypeScript release; 0.107.x
-was the Rust line, whose stores are preserved under `legacy/rust/`). Work
-happens on `main`; the `rewrite-maestro-in-typescript` branch and the
-`.maestro/worktree/rewrite-ts` worktree are retired.
+TypeScript on Bun since v0.108.0 (0.107.x was the Rust line, whose stores are
+preserved under `legacy/rust/`). Work happens on `main`; the
+`rewrite-maestro-in-typescript` branch and the `.maestro/worktree/rewrite-ts`
+worktree are retired.
 
 Layout: `src/kernel/` is mechanism only (store, event log, sessions, cli,
 loader); `src/plugins/` holds verbs and policies; `src/plugins/recipes/` and

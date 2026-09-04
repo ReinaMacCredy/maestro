@@ -22,8 +22,9 @@ Observe has a target to review against.
 ### Act
 
 Start the item with `maestro work start <id>`. Make the minimum source and test edits
-needed for that behavior. Preserve unrelated files and avoid speculative
-abstractions or dependencies.
+needed for that behavior, reusing what the repo already has before adding new
+code. Minimum means the fewest concepts at the seam, not the fewest lines.
+Preserve unrelated files and avoid speculative abstractions or dependencies.
 
 ### Observe
 

@@ -54,7 +54,7 @@ Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
 shows the flag. An Observer seat (Codex) reads sentinel packets for stalls
 the stuck seat cannot see and may only inspect status and record stall notes;
 it never holds work. Hand-typed asks
-stay allowed: record first (a decision with `--work`, a note), then prompt the
+are allowed: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record. `maestro status` lists the team's non-DONE
 items with `*` on those waiting on you (a Peer sees only its own) and collapses
 DONE into a count that `--all` expands; `maestro status <work-id>` ends with a

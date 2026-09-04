@@ -50,7 +50,7 @@ Route uncertainty to a lane:
 | candidate needs breaking | challenge |
 | hard-to-reverse fork | council |
 
-Score the ROI of independent judgment from 0 to 2 for each question:
+Weigh the ROI of independent judgment on five questions:
 
 1. Would wrong framing be costly?
 2. Is the decision hard to reverse?
@@ -58,9 +58,10 @@ Score the ROI of independent judgment from 0 to 2 for each question:
 4. Can independent judgment produce a materially different option?
 5. Is human attention fragmented?
 
-Route totals of 0-2 to the direct session, 3-5 to a Lead plus one peer, 6-8 to
-several lanes, and 9-10 to a council. Before launching any lane, pin the
-branch and commit, active writers, and dirty paths.
+Mostly no: the direct session. Mixed: a Lead plus one peer. Mostly yes:
+several lanes. Yes on every question including hard to reverse: a council.
+Before launching any lane, pin the branch and commit, active writers, and
+dirty paths.
 
 ## Recall pass first
 

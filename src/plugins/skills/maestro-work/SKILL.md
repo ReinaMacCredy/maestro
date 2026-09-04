@@ -112,7 +112,15 @@ Smallest new information needed: <next fact that would change the approach>
    name the inline check that will falsify the change instead. New child work
    gets `--acceptance "<observable result>"`.
 3. **Act** - `maestro work start <id>`, then the minimum source and test edits
-   for that behavior. No speculative abstractions or dependencies.
+   for that behavior. Reach for what the repo already uses first: a helper,
+   type, component, or installed dependency beats new code, and beats a
+   native platform feature the repo has an established equivalent for.
+   Minimum means the fewest concepts a maintainer meets at the seam, not the
+   fewest lines; a wrapper that hides behavior to shorten a diff is a new
+   concept, and the smallest change in the wrong layer is a second bug. A
+   bug fix lands once where every caller routes through. Lazy about the
+   solution, not about trust-boundary validation, error handling that
+   prevents data loss, security, or anything explicitly requested.
 4. **Observe** - run the focused test, then type/lint/build checks. Review the
    diff against acceptance; confirm the test could expose the defect.
 5. **Learn** - a pass that failed gets exactly one line,
