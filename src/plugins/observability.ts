@@ -286,6 +286,7 @@ function formatHit(hit: SearchHit): string {
 interface HubSearch {
   detail: string | null;
   matches: Array<Record<string, unknown>>;
+  room: string;
   status: "absent" | "error" | "ok" | "self";
 }
 
@@ -294,8 +295,9 @@ interface HubSearch {
 // --local on the child stops the recursion.
 async function searchHub(context: PluginContext, term: string, limit: number): Promise<HubSearch> {
   const hub = resolveHubRoom();
-  if (!existsSync(hub.storePath)) return { detail: null, matches: [], status: "absent" };
-  if (samePath(context.store.path, hub.storePath)) return { detail: null, matches: [], status: "self" };
+  const room = hub.room;
+  if (!existsSync(hub.storePath)) return { detail: null, matches: [], room, status: "absent" };
+  if (samePath(context.store.path, hub.storePath)) return { detail: null, matches: [], room, status: "self" };
   const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
   const child = Bun.spawn(
     [process.execPath, cli, "search", term, "--json", "--local", "--limit", String(limit)],
@@ -319,13 +321,13 @@ async function searchHub(context: PluginContext, term: string, limit: number): P
     } catch {
       // stderr was not an envelope; keep the exit code
     }
-    return { detail, matches: [], status: "error" };
+    return { detail, matches: [], room, status: "error" };
   }
   try {
     const envelope = JSON.parse(stdout) as { data?: { matches?: Array<Record<string, unknown>> } };
-    return { detail: null, matches: envelope.data?.matches ?? [], status: "ok" };
+    return { detail: null, matches: envelope.data?.matches ?? [], room, status: "ok" };
   } catch {
-    return { detail: "unparseable output", matches: [], status: "error" };
+    return { detail: "unparseable output", matches: [], room, status: "error" };
   }
 }
 
@@ -457,26 +459,33 @@ export const observabilityPlugin: BuiltInPlugin = {
               : nativeHit(context, match);
             if (hit) mergeHit(hits, hit);
           }
-          const bounded = [...hits.values()].slice(0, limit);
-          const lines = bounded.map(formatHit);
-          const more = hits.size - limit;
-          if (more > 0) lines.push(`${more} more; raise --limit to see them`);
-          // JSON summaries stay dense (test 59): no snippet, one store label.
-          const results: Array<Record<string, unknown>> = bounded.map((hit) => ({
-            ...hit.summary,
-            store: "project",
+          // One list, project hits first, then the Hub's; --limit bounds the
+          // whole list. JSON summaries stay dense (test 59): no snippet, one
+          // store label.
+          const combined: Array<{ line: string; summary: Record<string, unknown> }> = [...hits.values()].map((hit) => ({
+            line: formatHit(hit),
+            summary: { ...hit.summary, store: "project" },
           }));
           if (invocation.options.local !== true) {
             const hub = await searchHub(context, term, limit);
-            if (hub.status === "error") lines.push(`hub: unavailable (${hub.detail})`);
+            if (hub.status === "error") {
+              throw new CliError(
+                "HUB_UNAVAILABLE",
+                `the Hub room at ${hub.room} could not be searched (${hub.detail}); pass --local to search this store only`,
+                { detail: hub.detail, room: hub.room },
+              );
+            }
             for (const match of hub.matches) {
               const labelled = { ...match, store: "hub" };
-              results.push(labelled);
-              lines.push(`[hub] ${formatSummary(labelled)}`);
+              combined.push({ line: `[hub] ${formatSummary(labelled)}`, summary: labelled });
             }
           }
+          const bounded = combined.slice(0, limit);
+          const lines = bounded.map((entry) => entry.line);
+          const more = combined.length - limit;
+          if (more > 0) lines.push(`${more} more; raise --limit to see them`);
           return {
-            data: { matches: results },
+            data: { matches: bounded.map((entry) => entry.summary) },
             text: lines.join("\n"),
           };
         },

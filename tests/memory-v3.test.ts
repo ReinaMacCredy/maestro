@@ -1,7 +1,7 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 setDefaultTimeout(15_000);
 
@@ -271,5 +271,52 @@ test("578 superseded and retracted memory facts leave the search index at once, 
     expect((await runCliAt(fixture, room, ["memory", "retract", "m2", "--reason", "settled"])).exitCode).toBe(0);
     expect(ids(await runCli(fixture, ["search", "zebra", "--json"]))).toEqual([]);
     expect(ids(await runCliAt(fixture, room, ["search", "zebra", "--json"]))).toEqual([]);
+  });
+});
+
+test("579 search fails closed when the Hub room cannot be read, --local still answers, and a fresh install searches cleanly", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    expect((await runCliAt(fixture, room, ["decision", "draft", "Seat leases expire", "--rationale", "hub"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["term", "add", "Seat", "One role in one pane"])).exitCode).toBe(0);
+    expect(JSON.parse((await runCli(fixture, ["search", "Seat", "--json"])).stdout).data.matches).toHaveLength(2);
+
+    await writeFile(join(room, ".maestro", "maestro.db"), "not a sqlite database");
+    const broken = await runCli(fixture, ["search", "Seat", "--json"]);
+    expect(broken.exitCode).toBe(1);
+    expect(broken.stderr).toContain("HUB_UNAVAILABLE");
+    expect(broken.stderr).toContain("--local");
+    const local = await runCli(fixture, ["search", "Seat", "--json", "--local"]);
+    expect(local.exitCode).toBe(0);
+    expect(JSON.parse(local.stdout).data.matches.map((match: { id: string }) => match.id)).toEqual(["t1"]);
+  });
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path, SHELL: "/bin/zsh" })).exitCode).toBe(0);
+    const searched = await runCli(fixture, ["search", "anything", "--json"]);
+    expect(searched.exitCode).toBe(0);
+    expect(JSON.parse(searched.stdout).data.matches).toEqual([]);
+  });
+});
+
+test("580 --limit bounds the combined project-plus-Hub list, project hits first, with one remainder count", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    for (const text of ["Seat lease one", "Seat lease two", "Seat lease three"]) {
+      expect((await runCliAt(fixture, room, ["decision", "draft", text, "--rationale", "hub"])).exitCode).toBe(0);
+    }
+    for (const name of ["Seat", "SeatLease", "SeatPane"]) {
+      expect((await runCli(fixture, ["term", "add", name, "A Seat thing"])).exitCode).toBe(0);
+    }
+    const limited = await runCli(fixture, ["search", "Seat", "--limit", "4", "--json"]);
+    expect(limited.exitCode).toBe(0);
+    const matches = JSON.parse(limited.stdout).data.matches as Array<{ id: string; store: string }>;
+    expect(matches).toHaveLength(4);
+    expect(matches.map((match) => match.store)).toEqual(["project", "project", "project", "hub"]);
+    const text = await runCli(fixture, ["search", "Seat", "--limit", "4"]);
+    expect(text.stdout).toContain("2 more; raise --limit to see them");
+    expect(text.stdout.split("\n").filter((line) => line.startsWith("[hub]"))).toHaveLength(1);
+    const all = await runCli(fixture, ["search", "Seat", "--limit", "10", "--json"]);
+    expect(JSON.parse(all.stdout).data.matches).toHaveLength(6);
   });
 });
