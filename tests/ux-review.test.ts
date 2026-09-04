@@ -174,7 +174,7 @@ test("608 a stale Hub search index names the cause and the remedy", async () => 
   });
 });
 
-test("613 memory ingest|retract|render write the Hub from a project cwd through the Hub's own CLI", async () => {
+test("635 memory ingest|retract|render write the Hub from a project cwd through the Hub's own CLI", async () => {
   await withFixture(async (fixture) => {
     const room = await hub(fixture);
     expect((await runCliAt(fixture, room, ["memory", "list"])).exitCode).toBe(0);
