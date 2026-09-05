@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { CliError } from "../kernel/cli.ts";
+import { resolveHomeDirectory } from "./home.ts";
+import { renderedProfilePath } from "./profiles.ts";
 import { slpWatchRuntimeDirectory } from "./slp-watch.ts";
-
-const sentinelEntry = fileURLToPath(new URL("../../bin/maestro-slp-observe.ts", import.meta.url));
 
 // d755: the acknowledgement is polled inside a fixed window with non-scrolling
 // reads; d756: a blocked pane is classified from its own text.
@@ -16,13 +15,22 @@ const paneTailLines = 15;
 const trustDialogPattern =
   /Do you trust the contents of this directory|Quick safety check: Is this a project you created or one you trust|Yes, I trust this folder/;
 
-export type SlpRole = "team-supervisor" | "lead" | "peer" | "observer";
+export type SlpRole = "team-supervisor" | "lead" | "peer";
+
+// Hub d90/d98: a seat is launched as a rendered native profile; the harness
+// and every launch flag come from the profile, never from the plan.
+export interface SeatLaunch {
+  autocompact?: number | null;
+  harness: "claude" | "codex";
+  profile: string;
+}
 
 export interface SlpRolePlan {
+  autocompact?: number | null;
   kind: "claude" | "codex";
   label: string;
-  model: string;
   name: string;
+  profile: string;
   role: SlpRole;
 }
 
@@ -49,6 +57,7 @@ export interface SlpRuntimeRole {
   name: string;
   packDigest: string;
   paneId: string;
+  profile: string;
   readyChallenge: string;
   role: SlpRole;
   workspaceId: string;
@@ -76,7 +85,6 @@ export interface SlpRuntimePeer {
 export interface SlpRuntimeInspection {
   missingPanes: string[];
   runtime: "available";
-  sentinel: boolean;
   watch: boolean;
   workspace: boolean;
 }
@@ -232,11 +240,10 @@ function herdrErrorCode(error: unknown): string | null {
 
 export function buildSlpTeamPlan(input: {
   generation: number;
-  leadModel: string;
-  observerModel: string;
+  lead: SeatLaunch;
   projectPath: string;
-  supervisorModel: string;
   teamId: string;
+  teamSupervisor: SeatLaunch;
 }): SlpTeamPlan {
   const projectPath = resolve(input.projectPath);
   const prefix = `slp:${input.teamId}:g${input.generation}`;
@@ -245,31 +252,34 @@ export function buildSlpTeamPlan(input: {
     projectPath,
     roles: [
       {
-        kind: "claude",
+        autocompact: input.teamSupervisor.autocompact ?? null,
+        kind: input.teamSupervisor.harness,
         label: `${prefix}:team-supervisor`,
-        model: input.supervisorModel,
         name: `supervisor-${input.teamId}`,
+        profile: input.teamSupervisor.profile,
         role: "team-supervisor",
       },
       {
-        kind: "codex",
+        autocompact: input.lead.autocompact ?? null,
+        kind: input.lead.harness,
         label: `${prefix}:lead`,
-        model: input.leadModel,
         name: `lead-${input.teamId}`,
+        profile: input.lead.profile,
         role: "lead",
-      },
-      // d762/d767: the Observer is always Codex; only its model comes from the pack.
-      {
-        kind: "codex",
-        label: `${prefix}:observer`,
-        model: input.observerModel,
-        name: `observer-${input.teamId}`,
-        role: "observer",
       },
     ],
     teamId: input.teamId,
     workspaceLabel: `slp-${input.teamId}-g${input.generation}`,
   };
+}
+
+// d90: the harness flag names the rendered profile and nothing else; the
+// agent file has no carrier for autocompact, so it rides the launch line (F10).
+export function launchArguments(role: Pick<SlpRolePlan, "autocompact" | "kind" | "profile">): string[] {
+  if (role.kind === "codex") return ["--profile", `maestro-${role.profile}`];
+  const args = ["--agent", `maestro-${role.profile}`];
+  if (role.autocompact) args.push("--autocompact", String(role.autocompact));
+  return args;
 }
 
 export class HerdrSlpRuntime {
@@ -447,6 +457,20 @@ export class HerdrSlpRuntime {
       }
       await Bun.sleep(Math.min(acknowledgementPollMs, remaining));
     }
+  }
+
+  // A2: a missing render fails before any Herdr call, never as a pane with a
+  // harness error dialog (d98: work add renders nothing on demand).
+  private requireRenderedProfile(role: Pick<SlpRolePlan, "kind" | "name" | "profile">): void {
+    const home = resolveHomeDirectory({ environmentHome: this.environment.HOME });
+    const path = renderedProfilePath(home, role.kind, role.profile);
+    if (existsSync(path)) return;
+    throw new SlpRuntimeError(
+      `${role.name} launches with profile maestro-${role.profile} but ${path} is not rendered; run maestro install`,
+      ["agent", "start", role.name],
+      undefined,
+      { code: "PROFILE_NOT_INSTALLED", harness: role.kind },
+    );
   }
 
   private async workspaces(plan: SlpTeamPlan): Promise<WorkspaceRecord[]> {
@@ -628,6 +652,7 @@ export class HerdrSlpRuntime {
     const reused = new Map<SlpRole, SlpAcknowledgedRole>();
     let createdWorkspace = false;
     let workspaceId: string | null = null;
+    for (const role of plan.roles) this.requireRenderedProfile(role);
     try {
       let matching = (await this.workspaces(plan)).filter(
         (workspace) => workspace.label === plan.workspaceLabel,
@@ -731,7 +756,7 @@ export class HerdrSlpRuntime {
             "--timeout",
             "60000",
           ];
-          if (role.model !== "default") args.push("--", "--model", role.model);
+          args.push("--", ...launchArguments(role));
           const started = resultOf(await this.startAgent(plan, args));
           if (!accepted(started)) {
             throw new SlpRuntimeError(`role did not start: ${role.name}`, args);
@@ -762,72 +787,12 @@ export class HerdrSlpRuntime {
         this.note(`${role.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
 
-      await this.launchSentinel(plan, workspaceId, createdTabIds);
       const roles = await this.inspectRequired(plan, workspaceId, contracts, reused);
       return { createdTabIds, createdWorkspace, roles, startedPaneIds, workspaceId };
     } catch (error) {
       await this.rollback(plan, { createdTabIds, createdWorkspace, startedPaneIds, workspaceId });
       throw error;
     }
-  }
-
-  // d767: the sentinel runs as a plain foreground process in its own tab so
-  // team start owns it like the roles and team stop closes it with the tabs.
-  private async launchSentinel(
-    plan: SlpTeamPlan,
-    workspaceId: string,
-    createdTabIds: string[],
-  ): Promise<void> {
-    const label = `slp:${plan.teamId}:g${plan.generation}:sentinel`;
-    const existing = (await this.tabs(plan, workspaceId)).filter((tab) => tab.label === label);
-    if (existing.length > 1) {
-      throw new SlpRuntimeError(`sentinel tab is duplicated: ${label}`, ["tab", "list"]);
-    }
-    let paneId = existing[0]?.root_pane_id ?? null;
-    if (paneId && foreground(await this.processInfo(plan, paneId))) {
-      this.note(`sentinel: already running in ${paneId}; left alone`);
-      return;
-    }
-    if (!paneId) {
-      const created = resultOf(
-        await this.command([
-          "tab",
-          "create",
-          "--workspace",
-          workspaceId,
-          "--cwd",
-          plan.projectPath,
-          "--label",
-          label,
-          "--no-focus",
-        ], plan.projectPath),
-      );
-      const tabId = stringAt(objectAt(created, "tab"), "tab_id");
-      paneId = stringAt(objectAt(created, "root_pane"), "pane_id");
-      if (tabId) createdTabIds.push(tabId);
-    }
-    if (!paneId) {
-      throw new SlpRuntimeError("sentinel pane was not created", ["tab", "create"]);
-    }
-    const launched = resultOf(
-      await this.command([
-        "pane",
-        "run",
-        paneId,
-        "/usr/bin/env",
-        `HERDR_WORKSPACE_ID=${workspaceId}`,
-        process.execPath,
-        sentinelEntry,
-        "--team",
-        plan.teamId,
-        "--generation",
-        String(plan.generation),
-      ], plan.projectPath, this.commandTimeoutMs, true),
-    );
-    if (!accepted(launched)) {
-      throw new SlpRuntimeError("sentinel command was not accepted", ["pane", "run"]);
-    }
-    this.note(`sentinel: running in ${paneId}`);
   }
 
   private async inspectRequired(
@@ -871,6 +836,7 @@ export class HerdrSlpRuntime {
         name: role.name,
         packDigest: source.packDigest,
         paneId,
+        profile: role.profile,
         readyChallenge: source.readyChallenge,
         role: role.role,
         workspaceId,
@@ -886,6 +852,7 @@ export class HerdrSlpRuntime {
     acknowledged: SlpAcknowledgedRole | null = null,
   ): Promise<SlpRuntimePeer> {
     const startedAt = Date.now();
+    this.requireRenderedProfile(peer);
     const matchingWorkspaces = (await this.workspaces(plan)).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
     );
@@ -917,6 +884,7 @@ export class HerdrSlpRuntime {
           name: peer.name,
           packDigest: acknowledged.packDigest,
           paneId,
+          profile: peer.profile,
           readyChallenge: acknowledged.readyChallenge,
           role: "peer",
           workspaceId,
@@ -967,7 +935,7 @@ export class HerdrSlpRuntime {
           "--timeout",
           "60000",
         ];
-        if (peer.model !== "default") args.push("--", "--model", peer.model);
+        args.push("--", ...launchArguments(peer));
         const started = resultOf(await this.startAgent(plan, args));
         if (!accepted(started)) {
           throw new SlpRuntimeError(`peer did not start: ${peer.name}`, args);
@@ -1022,6 +990,7 @@ export class HerdrSlpRuntime {
           name: peer.name,
           packDigest: contract.packDigest,
           paneId,
+          profile: peer.profile,
           readyChallenge: contract.readyChallenge,
           role: "peer",
           workspaceId,
@@ -1198,7 +1167,6 @@ export class HerdrSlpRuntime {
       return {
         missingPanes: expectedRoles.map((role) => role.name).sort(),
         runtime: "available",
-        sentinel: false,
         watch: false,
         workspace: false,
       };
@@ -1226,11 +1194,9 @@ export class HerdrSlpRuntime {
       }
       if (!foreground(await this.processInfo(plan, paneId))) missingPanes.push(expected.name);
     }
-    let sentinel = false;
     let watch = false;
     for (const pane of panes) {
       if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;
-      if (sentinel && watch) break;
       const info = await this.processInfo(plan, pane.pane_id);
       const text = JSON.stringify(info).toLowerCase();
       if (
@@ -1238,13 +1204,14 @@ export class HerdrSlpRuntime {
         !text.includes(plan.teamId.toLowerCase()) ||
         !text.includes(String(plan.generation))
       ) continue;
-      if (text.includes("maestro-slp-watch")) watch = true;
-      if (text.includes("maestro-slp-observe")) sentinel = true;
+      if (text.includes("maestro-slp-watch")) {
+        watch = true;
+        break;
+      }
     }
     return {
       missingPanes: missingPanes.sort(),
       runtime: "available",
-      sentinel,
       watch,
       workspace: true,
     };
@@ -1321,7 +1288,6 @@ export class HerdrSlpRuntime {
 
     await closeRole("peer");
     await closeRole("lead");
-    await closeRole("observer");
 
     for (const pane of panes) {
       if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;

@@ -334,8 +334,11 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work add",
         async (invocation): Promise<CliResult> => {
-          const slp = await maybeHandleSlpWorkAdd(context, invocation);
+  const slp = await maybeHandleSlpWorkAdd(context, invocation);
           if (slp) return slp;
+          if (invocation.options.profile !== undefined) {
+            throw new CliError("INVALID_OPTION", "--profile is available only for SLP work add --to <peer>");
+          }
           const title = requiredPosition(invocation, 0, "work title");
           const parentId = stringOption(invocation, "parent") ?? null;
           const blockers = stringOptions(invocation, "blocked-by");
@@ -412,6 +415,10 @@ export const workPlugin: BuiltInPlugin = {
             },
             "--to": {
               description: "Assign SLP work to a Peer; Team Supervisor work defaults to Lead.",
+              value: true,
+            },
+            "--profile": {
+              description: "Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).",
               value: true,
             },
           },
@@ -636,6 +643,14 @@ export const workPlugin: BuiltInPlugin = {
           if (!existsSync(file)) throw new CliError("NOT_FOUND", `note file not found: ${file}`, { file });
           invocation.positionals[1] = readFileSync(file, "utf8").trimEnd();
         }
+        // Hub d97/d98: the Observer's --stall is refused for every pane until
+        // the team runtime records stalls itself.
+        if (invocation.options.stall !== undefined) {
+          throw new CliError(
+            "STALL_RETIRED",
+            "--stall was retired with the Observer seat (Hub d97, d98); attention is the self-declared work note --blocked until the team runtime records stalls",
+          );
+        }
         const slp = await maybeHandleSlpWorkNote(context, invocation);
         if (slp) return slp;
         if (invocation.options.rework === true) {
@@ -643,9 +658,6 @@ export const workPlugin: BuiltInPlugin = {
         }
         if (invocation.options.blocked === true) {
           throw new CliError("INVALID_OPTION", "--blocked is available only for SLP work");
-        }
-        if (invocation.options.stall !== undefined) {
-          throw new CliError("INVALID_OPTION", "--stall is available only for SLP work");
         }
         const id = requiredPosition(invocation, 0, "work id");
         const text = requiredPosition(invocation, 1, "note text");
@@ -675,10 +687,7 @@ export const workPlugin: BuiltInPlugin = {
           "--rework": {
             description: "Grant the current SLP return revision one reviewer-authorized retake.",
           },
-          "--stall": {
-            description: "Observer only: record a stall (repeat|silence|dialog) and nudge the stuck seat.",
-            value: true,
-          },
+          "--stall": { hidden: true, value: true },
         },
         positionals: [
           { name: "id", required: true },

@@ -12,11 +12,20 @@ import {
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
+import { resolveHomeDirectory } from "./home.ts";
+import {
+  composedPeerName,
+  profileDigest,
+  profileDirectories,
+  resolveProfile,
+  type Profile,
+} from "./profiles.ts";
 import { isRoom } from "./room.ts";
 import {
   buildSlpTeamPlan,
   HerdrSlpRuntime,
   slpStopEnvironment,
+  type SeatLaunch,
   type SlpAcknowledgedRole,
   type SlpRole,
   type SlpRoleContract,
@@ -31,16 +40,118 @@ type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
 type LifecycleOperation = "START" | "STOP";
 type LifecyclePhase = "RESERVED" | "RUNTIME_READY" | "COMMITTED";
 
-interface PackModels {
+interface PackProfiles {
   lead: string;
-  observer: string;
   peer: string;
   teamSupervisor: string;
 }
 
-// Generations started before the Observer seat (d762) carry no observer model.
-function packModels(json: string): PackModels {
-  return { observer: "default", ...(JSON.parse(json) as Partial<PackModels>) } as PackModels;
+// d91: a generation pins the pack plus the source bytes of every profile it
+// referenced; a profile first used by a later work add is appended here.
+interface PackConfiguration {
+  profileDigests: Record<string, string>;
+  profiles: PackProfiles;
+}
+
+// Generations started before pack version 3 stored models, not profiles; they
+// resolve to the shipped seat names so status and stop can still build a plan.
+function packConfiguration(json: string): PackConfiguration {
+  const parsed = JSON.parse(json) as Partial<PackConfiguration>;
+  const profiles = parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : null;
+  return {
+    profileDigests: parsed.profileDigests ?? {},
+    profiles: {
+      lead: profiles?.lead ?? "lead",
+      peer: profiles?.peer ?? "peer",
+      teamSupervisor: profiles?.teamSupervisor ?? "team-supervisor",
+    },
+  };
+}
+
+function seatLaunch(profile: Profile): SeatLaunch {
+  return {
+    autocompact: profile.frontmatter.autocompact ?? null,
+    harness: profile.frontmatter.harness,
+    profile: profile.name,
+  };
+}
+
+function seatDirectories(projectPath: string): string[] {
+  return profileDirectories(projectPath, resolveHomeDirectory());
+}
+
+async function requireProfile(name: string, projectPath: string, marker: string): Promise<Profile> {
+  const directories = seatDirectories(projectPath);
+  const profile = await resolveProfile(name, directories);
+  if (!profile) {
+    throw new CliError(
+      "PROFILE_NOT_FOUND",
+      `${marker} names profile ${name}, which is not in ${directories.join(", ")}`,
+      { directories, profile: name },
+    );
+  }
+  return profile;
+}
+
+interface ResolvedSeats {
+  lead: SeatLaunch;
+  profileDigests: Record<string, string>;
+  teamSupervisor: SeatLaunch;
+}
+
+async function resolveSeats(profiles: PackProfiles, projectPath: string): Promise<ResolvedSeats> {
+  const teamSupervisor = await requireProfile(
+    profiles.teamSupervisor,
+    projectPath,
+    "the team-supervisor marker",
+  );
+  const lead = await requireProfile(profiles.lead, projectPath, "the lead marker");
+  const peer = await requireProfile(profiles.peer, projectPath, "the peer marker or --peer-profile");
+  const profileDigests: Record<string, string> = {};
+  for (const profile of [teamSupervisor, lead, peer]) profileDigests[profile.name] = profileDigest(profile);
+  return { lead: seatLaunch(lead), profileDigests, teamSupervisor: seatLaunch(teamSupervisor) };
+}
+
+// Status and stop need only names and labels; a profile deleted since the
+// generation started must not stop the team from being inspected or closed.
+async function seatLaunchOrDefault(name: string, projectPath: string): Promise<SeatLaunch> {
+  const profile = await resolveProfile(name, seatDirectories(projectPath));
+  return profile ? seatLaunch(profile) : { autocompact: null, harness: "codex", profile: name };
+}
+
+async function planForTeam(team: {
+  configuration_json: string;
+  generation: number;
+  project_path: string;
+  team_id: string;
+}): Promise<SlpTeamPlan> {
+  const { profiles } = packConfiguration(team.configuration_json);
+  return buildSlpTeamPlan({
+    generation: team.generation,
+    lead: await seatLaunchOrDefault(profiles.lead, team.project_path),
+    projectPath: team.project_path,
+    teamId: team.team_id,
+    teamSupervisor: await seatLaunchOrDefault(profiles.teamSupervisor, team.project_path),
+  });
+}
+
+// A4: a referenced profile edited mid-generation is refused on the next op
+// with the same error shape as a pack edit, naming the profile.
+async function requireProfilesUnchanged(
+  configuration: PackConfiguration,
+  team: { generation: number; project_path: string; team_id: string },
+): Promise<void> {
+  const directories = seatDirectories(team.project_path);
+  for (const [name, digest] of Object.entries(configuration.profileDigests)) {
+    const profile = await resolveProfile(name, directories);
+    const actual = profile ? profileDigest(profile) : null;
+    if (actual === digest) continue;
+    throw new CliError(
+      "SLP_SNAPSHOT_CHANGED",
+      `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name}${actual ? "" : " (now missing)"}`,
+      { actual, expected: digest, profile: name },
+    );
+  }
 }
 
 interface SlpWorkRecord {
@@ -209,6 +320,7 @@ function migrateRoom(store: Store): void {
       pack_digest TEXT NOT NULL,
       brief_digest TEXT NOT NULL,
       ready_challenge TEXT NOT NULL,
+      profile TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       PRIMARY KEY(team_id, generation, name),
       FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation)
@@ -285,17 +397,23 @@ function migrateRoom(store: Store): void {
     "ready_challenge",
     "ALTER TABLE slp_team_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
   );
+  store.ensureColumn(
+    "slp_team_roles",
+    "profile",
+    "ALTER TABLE slp_team_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
+  );
   widenRoleCheck(store, "slp_team_roles");
 }
 
 const ROLE_TABLE_COLUMNS = [
   "team_id", "generation", "role", "name", "pane_id", "workspace_id", "instance_id",
-  "pack_digest", "brief_digest", "ready_challenge", "created_at",
+  "pack_digest", "brief_digest", "ready_challenge", "profile", "created_at",
 ].join(", ");
 
-// d762: role tables created before the Observer seat carry a three-value
-// CHECK that SQLite cannot alter in place; rebuild once, after ensureColumn
-// has brought the old table up to the full column set.
+// d762 widened the role CHECK to admit 'observer'; the seat is gone (Hub d97,
+// d98) but the constraint stays so rows from those generations still load.
+// Tables created before the widening are rebuilt once, after ensureColumn has
+// brought the old table up to the full column set.
 function widenRoleCheck(store: Store, table: "slp_team_roles" | "slp_local_roles"): void {
   const sql = store.database
     .query<{ sql: string }, [string]>(
@@ -320,6 +438,7 @@ function widenRoleCheck(store: Store, table: "slp_team_roles" | "slp_local_roles
       pack_digest TEXT NOT NULL,
       brief_digest TEXT NOT NULL,
       ready_challenge TEXT NOT NULL,
+      profile TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       PRIMARY KEY(team_id, generation, name)${foreignKey}
     );
@@ -356,6 +475,7 @@ function migrateProject(store: Store): void {
       pack_digest TEXT NOT NULL,
       brief_digest TEXT NOT NULL,
       ready_challenge TEXT NOT NULL,
+      profile TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       PRIMARY KEY(team_id, generation, name)
     );
@@ -516,6 +636,11 @@ function migrateProject(store: Store): void {
     "flag",
     "ALTER TABLE slp_work_entries ADD COLUMN flag TEXT",
   );
+  store.ensureColumn(
+    "slp_local_roles",
+    "profile",
+    "ALTER TABLE slp_local_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
+  );
   widenRoleCheck(store, "slp_local_roles");
 }
 
@@ -532,61 +657,57 @@ function teamIdForProject(projectPath: string): string {
   return `${readable}-${identity}`;
 }
 
-function section(pack: string, name: string): string {
-  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(
-    `<!-- slp:${escaped}:begin -->([\\s\\S]*?)<!-- slp:${escaped}:end -->`,
-  ).exec(pack);
-  if (!match?.[1]?.trim()) {
-    throw new CliError("INVALID_SLP_PACK", `SLP.md is missing section: ${name}`);
-  }
-  return match[1].trim();
-}
-
 function packVersion(pack: string): string {
   const version = /<!-- slp:version=([^\s]+) -->/.exec(pack)?.[1];
   if (!version) throw new CliError("INVALID_SLP_PACK", "SLP.md is missing its version marker");
   return version;
 }
 
-function packModel(pack: string, role: SlpRole): string {
-  const escaped = role.replace("-", "\\-");
-  const value = new RegExp(`<!-- slp:model:${escaped}=[^:>]+:([^\\s>]+) -->`).exec(pack)?.[1];
+// d91/d98: pack version 3 names one profile per seat; the version-2 model
+// markers and the Observer are refused by name so a migration is one message.
+function requirePackV3(pack: string): string {
+  const version = packVersion(pack);
+  if (version !== "3" || /<!-- slp:model:/.test(pack)) {
+    throw new CliError(
+      "INVALID_SLP_PACK",
+      `SLP.md is version ${version}; version 3 replaces every <!-- slp:model:<seat>=<harness>:<model> --> marker with <!-- slp:profile:<seat>=<name> --> for team-supervisor, lead and peer and moves the seat sections into profile files; maestro install rewrites the shipped copy under ~/.maestro/runtime, then migrate the Hub copy by hand`,
+      { version },
+    );
+  }
+  if (/<!-- slp:(?:profile|model):observer=|<!-- slp:role:observer:begin -->/.test(pack)) {
+    throw new CliError(
+      "INVALID_SLP_PACK",
+      "SLP.md still carries an Observer marker or section; the Observer seat was removed (Hub d97, d98), delete it",
+    );
+  }
+  return version;
+}
+
+function packProfile(pack: string, role: SlpRole): string {
+  const value = new RegExp(`<!-- slp:profile:${role}=([a-z0-9-]+) -->`).exec(pack)?.[1];
   if (!value) {
     throw new CliError(
       "INVALID_SLP_PACK",
-      `SLP.md is missing the ${role} model marker <!-- slp:model:${role}=<harness>:<model> -->`,
+      `SLP.md is missing the ${role} profile marker <!-- slp:profile:${role}=<name> -->`,
     );
   }
   return value;
 }
 
+// d90: the mandate is the seat's rendered profile, so the post-open prompt
+// carries only team, generation, instance and the ready challenge; the shared
+// contract in every profile tells the seat how to answer it.
 function roleContracts(
-  pack: string,
   teamId: string,
   generation: number,
   packDigest: string,
   existingInstances: Partial<Record<SlpRole, string>> = {},
 ): Map<SlpRole, SlpRoleContract> {
-  const shared = section(pack, "shared");
-  const contract = (role: SlpRole, body: string): SlpRoleContract => {
+  const contract = (role: SlpRole): SlpRoleContract => {
     const instanceId = existingInstances[role] || randomUUID();
-    const brief = [
-      `[SLP ${teamId} generation ${generation}]`,
-      shared,
-      body,
-      [
-        `Team: ${teamId}`,
-        `Generation: ${generation}`,
-        `Role: ${role}`,
-        `Role instance: ${instanceId}`,
-        `Pack SHA-256: ${packDigest}`,
-      ].join("\n"),
-    ].join("\n\n");
-    const briefDigest = createHash("sha256").update(brief).digest("hex");
     const readyChallenge = randomUUID().replaceAll("-", "");
-    const challengeLeft = readyChallenge.slice(0, 16);
-    const challengeRight = readyChallenge.slice(16);
+    const body = `slp team ${teamId} generation ${generation} instance ${instanceId}; reply ${readyChallenge}`;
+    const briefDigest = createHash("sha256").update(body).digest("hex");
     const acknowledgement = [
       "SLP_ROLE_READY",
       `team=${teamId}`,
@@ -594,30 +715,12 @@ function roleContracts(
       `role=${role}`,
       `challenge=${readyChallenge}`,
     ].join(" ");
-    return {
-      acknowledgement,
-      body: [
-        brief,
-        [
-          `Brief SHA-256: ${briefDigest}`,
-          `Challenge left: ${challengeLeft}`,
-          `Challenge right: ${challengeRight}`,
-          `This message only initializes the ${role} role. Do not run tools, inspect or claim work, or ask a question.`,
-          "Reply on one line using SLP_ROLE_READY followed by team, generation, role, and challenge fields.",
-          "For challenge, concatenate the left and right values with no separator. Then wait.",
-        ].join("\n"),
-      ].join("\n\n"),
-      briefDigest,
-      instanceId,
-      packDigest,
-      readyChallenge,
-    };
+    return { acknowledgement, body, briefDigest, instanceId, packDigest, readyChallenge };
   };
   return new Map<SlpRole, SlpRoleContract>([
-    ["team-supervisor", contract("team-supervisor", section(pack, "role:team-supervisor"))],
-    ["lead", contract("lead", section(pack, "role:lead"))],
-    ["peer", contract("peer", section(pack, "role:peer"))],
-    ["observer", contract("observer", section(pack, "role:observer"))],
+    ["team-supervisor", contract("team-supervisor")],
+    ["lead", contract("lead")],
+    ["peer", contract("peer")],
   ]);
 }
 
@@ -921,21 +1024,18 @@ type StartReservation =
   | { kind: "running"; operation: SlpLifecycleRow; row: RunningTeamRow }
   | { kind: "wait" };
 
-function changedPackModels(overrides: Partial<PackModels>, models: PackModels): boolean {
-  return (overrides.lead !== undefined && overrides.lead !== models.lead) ||
-    (overrides.observer !== undefined && overrides.observer !== models.observer) ||
-    (overrides.peer !== undefined && overrides.peer !== models.peer) ||
-    (overrides.teamSupervisor !== undefined &&
-      overrides.teamSupervisor !== models.teamSupervisor);
+// d98: the only per-generation seat override is --peer-profile.
+function changedPeerProfile(override: string | undefined, profiles: PackProfiles): boolean {
+  return override !== undefined && override !== profiles.peer;
 }
 
 function reserveStart(
   store: Store,
   input: {
-    configuration: PackModels;
+    configuration: PackConfiguration;
     digest: string;
     objective: string;
-    overrides: Partial<PackModels>;
+    peerProfile: string | undefined;
     projectPath: string;
     teamId: string;
     version: string;
@@ -967,8 +1067,8 @@ function reserveStart(
       )
       .get(input.projectPath);
     if (running) {
-      const models = packModels(running.configuration_json);
-      if (running.objective !== input.objective || changedPackModels(input.overrides, models)) {
+      const { profiles } = packConfiguration(running.configuration_json);
+      if (running.objective !== input.objective || changedPeerProfile(input.peerProfile, profiles)) {
         throw new CliError(
           "TEAM_RUNNING",
           `${running.team_id} is already running; run maestro team stop before changing its objective or configuration`,
@@ -1036,9 +1136,9 @@ function reserveStart(
       )
       .get(input.projectPath);
     if (pending) {
-      const models = packModels(pending.configuration_json);
+      const { profiles } = packConfiguration(pending.configuration_json);
       const changed = pending.objective !== input.objective ||
-        changedPackModels(input.overrides, models);
+        changedPeerProfile(input.peerProfile, profiles);
       const owned = Boolean(pending.owner_token) && lifecycleOwnerIsAlive(pending.owner_pid);
       // A reservation whose owner died pins nothing before RUNTIME_READY: the
       // retry may bring another objective or model set.
@@ -1196,8 +1296,8 @@ function upsertStartedRoles(
   const statement = store.database.query(
     `INSERT INTO ${table}
       (team_id, generation, role, name, pane_id, workspace_id, instance_id,
-       pack_digest, brief_digest, ready_challenge, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       pack_digest, brief_digest, ready_challenge, profile, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(team_id, generation, name) DO UPDATE SET
        role = excluded.role,
        pane_id = excluded.pane_id,
@@ -1205,7 +1305,8 @@ function upsertStartedRoles(
        instance_id = excluded.instance_id,
        pack_digest = excluded.pack_digest,
        brief_digest = excluded.brief_digest,
-       ready_challenge = excluded.ready_challenge`,
+       ready_challenge = excluded.ready_challenge,
+       profile = excluded.profile`,
   );
   for (const role of roles) {
     statement.run(
@@ -1219,6 +1320,7 @@ function upsertStartedRoles(
       role.packDigest,
       role.briefDigest,
       role.readyChallenge,
+      role.profile,
       now,
     );
   }
@@ -1360,7 +1462,7 @@ async function startTeam(
   runtime: HerdrSlpRuntime,
   projectInput: string,
   objective: string,
-  overrides: Partial<PackModels>,
+  peerProfileOverride: string | undefined,
 ): Promise<CliResult> {
   if (!isRoom(context.store.database)) {
     throw new CliError("ROLE_FORBIDDEN", "team start is Hub Supervisor authority and must run from ~/maestro");
@@ -1389,13 +1491,17 @@ async function startTeam(
     attachedRoom = true;
     projectStore.database.exec("PRAGMA busy_timeout = 300000");
     const hubPack = new TextDecoder().decode(hubPackBytes);
-    const hubVersion = packVersion(hubPack);
+    const hubVersion = requirePackV3(hubPack);
     const hubDigest = createHash("sha256").update(hubPackBytes).digest("hex");
-    const hubModels = {
-      lead: overrides.lead ?? packModel(hubPack, "lead"),
-      observer: overrides.observer ?? packModel(hubPack, "observer"),
-      peer: overrides.peer ?? packModel(hubPack, "peer"),
-      teamSupervisor: overrides.teamSupervisor ?? packModel(hubPack, "team-supervisor"),
+    const hubProfiles: PackProfiles = {
+      lead: packProfile(hubPack, "lead"),
+      peer: peerProfileOverride ?? packProfile(hubPack, "peer"),
+      teamSupervisor: packProfile(hubPack, "team-supervisor"),
+    };
+    const hubSeats = await resolveSeats(hubProfiles, projectPath);
+    const hubConfiguration: PackConfiguration = {
+      profileDigests: hubSeats.profileDigests,
+      profiles: hubProfiles,
     };
     await archivePack(roomRoot, hubPackBytes, hubDigest);
     const ownerToken = randomUUID();
@@ -1405,10 +1511,10 @@ async function startTeam(
       reservation = reserveStart(
         projectStore,
         {
-          configuration: hubModels,
+          configuration: hubConfiguration,
           digest: hubDigest,
           objective,
-          overrides,
+          peerProfile: peerProfileOverride,
           projectPath,
           teamId,
           version: hubVersion,
@@ -1428,7 +1534,7 @@ async function startTeam(
     if (reservation.kind === "running") {
       const running = reservation.row;
       try {
-        const models = packModels(running.configuration_json);
+        const configuration = packConfiguration(running.configuration_json);
         if (!existsSync(snapshotPath)) {
           throw new CliError(
             "SLP_SNAPSHOT_MISSING",
@@ -1444,15 +1550,15 @@ async function startTeam(
             { actual: snapshotDigest, expected: running.pack_digest },
           );
         }
-        const pack = new TextDecoder().decode(snapshotBytes);
+        await requireProfilesUnchanged(configuration, running);
         await archivePack(roomRoot, snapshotBytes, running.pack_digest);
+        const seats = await resolveSeats(configuration.profiles, projectPath);
         const plan = buildSlpTeamPlan({
           generation: running.generation,
-          leadModel: models.lead,
-          observerModel: models.observer,
+          lead: seats.lead,
           projectPath,
-          supervisorModel: models.teamSupervisor,
           teamId: running.team_id,
+          teamSupervisor: seats.teamSupervisor,
         });
         const recorded = projectStore.database
           .query<{
@@ -1466,7 +1572,7 @@ async function startTeam(
             `SELECT role, pane_id, instance_id, pack_digest, brief_digest, ready_challenge
              FROM slp_local_roles
              WHERE team_id = ? AND generation = ? AND instance_id <> ''
-               AND role IN ('team-supervisor', 'lead', 'observer')`,
+               AND role IN ('team-supervisor', 'lead')`,
           )
           .all(running.team_id, running.generation);
         const existingInstances = Object.fromEntries(
@@ -1486,7 +1592,6 @@ async function startTeam(
         const started = await runtime.start(
           plan,
           roleContracts(
-            pack,
             running.team_id,
             running.generation,
             running.pack_digest,
@@ -1583,15 +1688,14 @@ async function startTeam(
           { actual: actualDigest, expected: operation.pack_digest, path: archivedPath },
         );
       }
-      const pack = new TextDecoder().decode(packBytes);
-      const models = packModels(operation.configuration_json);
+      const configuration = packConfiguration(operation.configuration_json);
+      const seats = await resolveSeats(configuration.profiles, projectPath);
       const plan = buildSlpTeamPlan({
         generation: operation.generation,
-        leadModel: models.lead,
-        observerModel: models.observer,
+        lead: seats.lead,
         projectPath,
-        supervisorModel: models.teamSupervisor,
         teamId: operation.team_id,
+        teamSupervisor: seats.teamSupervisor,
       });
       await mkdir(join(projectPath, ".maestro"), { recursive: true });
       await writeFile(snapshotPath, packBytes);
@@ -1609,7 +1713,6 @@ async function startTeam(
         started = await runtime.start(
           plan,
           roleContracts(
-            pack,
             operation.team_id,
             operation.generation,
             operation.pack_digest,
@@ -2000,6 +2103,28 @@ function normalizedPeerName(teamId: string, raw: string, existing: readonly stri
   return `peer-${readable}-${identity}`;
 }
 
+// d91: a profile first used by work add joins the generation's pin in both
+// stores, inside the same transaction as the Peer row.
+function appendPinnedProfile(
+  store: Store,
+  team: { generation: number; team_id: string },
+  pinned: { digest: string; name: string },
+): void {
+  for (const table of ["slp_local_teams", "slp_room.slp_teams"]) {
+    const current = store.database
+      .query<{ configuration_json: string }, [string, number]>(
+        `SELECT configuration_json FROM ${table} WHERE team_id = ? AND generation = ?`,
+      )
+      .get(team.team_id, team.generation);
+    if (!current) throw new CliError("NO_ACTIVE_TEAM", `no running SLP team row in ${table}`);
+    const configuration = packConfiguration(current.configuration_json);
+    configuration.profileDigests[pinned.name] = pinned.digest;
+    store.database
+      .query(`UPDATE ${table} SET configuration_json = ? WHERE team_id = ? AND generation = ?`)
+      .run(JSON.stringify(configuration), team.team_id, team.generation);
+  }
+}
+
 export async function maybeHandleSlpWorkAdd(
   context: PluginContext,
   invocation: CliInvocation,
@@ -2015,6 +2140,7 @@ export async function maybeHandleSlpWorkAdd(
   requireRunningGeneration(context.store, actor.team);
   const objective = requiredPosition(invocation, 0, "work objective");
   const requestedTarget = stringOption(invocation, "to");
+  const profileOption = stringOption(invocation, "profile");
   const roles = context.store.database
     .query<{
       brief_digest: string;
@@ -2022,12 +2148,13 @@ export async function maybeHandleSlpWorkAdd(
       name: string;
       pack_digest: string;
       pane_id: string;
+      profile: string;
       ready_challenge: string;
       role: SlpRole;
       workspace_id: string;
     }, [string, number]>(
       `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
-              brief_digest, ready_challenge FROM slp_local_roles
+              brief_digest, ready_challenge, profile FROM slp_local_roles
        WHERE team_id = ? AND generation = ?`,
     )
     .all(actor.team.team_id, actor.team.generation);
@@ -2035,11 +2162,15 @@ export async function maybeHandleSlpWorkAdd(
   let createdPeerTab: string | null = null;
   let startedPeerPane: string | null = null;
   let plan: SlpTeamPlan | null = null;
+  let pinnedProfile: { digest: string; name: string } | null = null;
   const runtime = new HerdrSlpRuntime();
   if (actor.role === "team-supervisor") {
     if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
     if (requestedTarget && requestedTarget !== "lead" && requestedTarget !== assignee.name) {
       throw new CliError("ROLE_FORBIDDEN", "Team Supervisor work is assigned to the Lead");
+    }
+    if (profileOption !== undefined) {
+      throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
     }
   } else {
     if (!requestedTarget) {
@@ -2050,7 +2181,7 @@ export async function maybeHandleSlpWorkAdd(
       requestedTarget,
       roles.filter((role) => role.role === "peer").map((role) => role.name),
     );
-    const configuration = packModels(actor.team.configuration_json);
+    const configuration = packConfiguration(actor.team.configuration_json);
     const snapshotPath = join(actor.team.project_path, ".maestro", "SLP.md");
     const snapshot = new Uint8Array(await readFile(snapshotPath));
     const digest = createHash("sha256").update(snapshot).digest("hex");
@@ -2060,28 +2191,46 @@ export async function maybeHandleSlpWorkAdd(
         `running generation ${actor.team.team_id}:g${actor.team.generation} must keep its pinned Workspace Pack`,
       );
     }
-    const pack = new TextDecoder().decode(snapshot);
-    plan = buildSlpTeamPlan({
-      generation: actor.team.generation,
-      leadModel: configuration.lead,
-      observerModel: configuration.observer,
-      projectPath: actor.team.project_path,
-      supervisorModel: configuration.teamSupervisor,
-      teamId: actor.team.team_id,
-    });
+    await requireProfilesUnchanged(configuration, actor.team);
+    // d91/d98: --profile wins; a --to of the form peer-<name> naming a profile
+    // uses it; otherwise the generation's peer profile applies.
+    const directories = seatDirectories(actor.team.project_path);
+    let peerProfileName = profileOption ?? configuration.profiles.peer;
+    if (profileOption === undefined && requestedTarget.startsWith("peer-")) {
+      const node = requestedTarget.slice("peer-".length);
+      if (await resolveProfile(node, directories)) peerProfileName = node;
+      else if (await resolveProfile(requestedTarget, directories)) peerProfileName = requestedTarget;
+    }
+    const peerProfile = await requireProfile(
+      peerProfileName,
+      actor.team.project_path,
+      profileOption === undefined ? "the peer profile" : "--profile",
+    );
+    const renderedProfile = peerProfileName === "peer" ? "peer" : composedPeerName(peerProfileName);
+    const knownPeer = roles.find((role) => role.name === peerName) ?? null;
+    if (knownPeer && knownPeer.profile !== "" && knownPeer.profile !== renderedProfile) {
+      throw new CliError(
+        "PEER_PROFILE_MISMATCH",
+        `${peerName} already runs profile maestro-${knownPeer.profile}; ${requestedTarget} cannot switch to maestro-${renderedProfile}, pick another Peer name`,
+        { peer: peerName, profile: knownPeer.profile, requested: renderedProfile },
+      );
+    }
+    if (configuration.profileDigests[peerProfileName] === undefined) {
+      pinnedProfile = { digest: profileDigest(peerProfile), name: peerProfileName };
+    }
+    plan = await planForTeam(actor.team);
     const peerPlan: SlpRolePlan = {
-      kind: "codex",
+      autocompact: peerProfile.frontmatter.autocompact ?? null,
+      kind: peerProfile.frontmatter.harness,
       label: `slp:${actor.team.team_id}:g${actor.team.generation}:peer:${peerName}`,
-      model: configuration.peer,
       name: peerName,
+      profile: renderedProfile,
       role: "peer",
     };
-    const knownPeer = roles.find((role) => role.name === peerName) ?? null;
     const ensured = await runtime.ensurePeer(
       plan,
       peerPlan,
       roleContracts(
-        pack,
         actor.team.team_id,
         actor.team.generation,
         digest,
@@ -2101,6 +2250,7 @@ export async function maybeHandleSlpWorkAdd(
     assignee = {
       name: ensured.role.name,
       pane_id: ensured.role.paneId,
+      profile: ensured.role.profile,
       role: ensured.role.role,
       workspace_id: ensured.role.workspaceId,
       instance_id: ensured.role.instanceId,
@@ -2128,58 +2278,37 @@ export async function maybeHandleSlpWorkAdd(
     context.store.database.exec("BEGIN IMMEDIATE");
     requireRunningGeneration(context.store, actor.team);
     if (actor.role === "lead") {
-      context.store.database
-        .query(
-          `INSERT INTO slp_local_roles
-            (team_id, generation, role, name, pane_id, workspace_id, instance_id,
-             pack_digest, brief_digest, ready_challenge, created_at)
-           VALUES (?, ?, 'peer', ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(team_id, generation, name) DO UPDATE SET
-             pane_id = excluded.pane_id,
-             workspace_id = excluded.workspace_id,
-             instance_id = excluded.instance_id,
-             pack_digest = excluded.pack_digest,
-             brief_digest = excluded.brief_digest,
-             ready_challenge = excluded.ready_challenge`,
-        )
-        .run(
-          actor.team.team_id,
-          actor.team.generation,
-          assignee.name,
-          assignee.pane_id,
-          assignee.workspace_id,
-          assignee.instance_id,
-          assignee.pack_digest,
-          assignee.brief_digest,
-          assignee.ready_challenge,
-          now,
-        );
-      context.store.database
-        .query(
-          `INSERT INTO slp_room.slp_team_roles
-            (team_id, generation, role, name, pane_id, workspace_id, instance_id,
-             pack_digest, brief_digest, ready_challenge, created_at)
-           VALUES (?, ?, 'peer', ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(team_id, generation, name) DO UPDATE SET
-             pane_id = excluded.pane_id,
-             workspace_id = excluded.workspace_id,
-             instance_id = excluded.instance_id,
-             pack_digest = excluded.pack_digest,
-             brief_digest = excluded.brief_digest,
-             ready_challenge = excluded.ready_challenge`,
-        )
-        .run(
-          actor.team.team_id,
-          actor.team.generation,
-          assignee.name,
-          assignee.pane_id,
-          assignee.workspace_id,
-          assignee.instance_id,
-          assignee.pack_digest,
-          assignee.brief_digest,
-          assignee.ready_challenge,
-          now,
-        );
+      for (const table of ["slp_local_roles", "slp_room.slp_team_roles"]) {
+        context.store.database
+          .query(
+            `INSERT INTO ${table}
+              (team_id, generation, role, name, pane_id, workspace_id, instance_id,
+               pack_digest, brief_digest, ready_challenge, profile, created_at)
+             VALUES (?, ?, 'peer', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(team_id, generation, name) DO UPDATE SET
+               pane_id = excluded.pane_id,
+               workspace_id = excluded.workspace_id,
+               instance_id = excluded.instance_id,
+               pack_digest = excluded.pack_digest,
+               brief_digest = excluded.brief_digest,
+               ready_challenge = excluded.ready_challenge,
+               profile = excluded.profile`,
+          )
+          .run(
+            actor.team.team_id,
+            actor.team.generation,
+            assignee.name,
+            assignee.pane_id,
+            assignee.workspace_id,
+            assignee.instance_id,
+            assignee.pack_digest,
+            assignee.brief_digest,
+            assignee.ready_challenge,
+            assignee.profile,
+            now,
+          );
+      }
+      if (pinnedProfile) appendPinnedProfile(context.store, actor.team, pinnedProfile);
     }
     id = nextWorkId(context.store);
     context.store.database
@@ -2226,6 +2355,7 @@ export async function maybeHandleSlpWorkAdd(
       role: {
         name: assignee.name,
         paneId: assignee.pane_id,
+        profile: assignee.profile,
         role: assignee.role,
         workspaceId: assignee.workspace_id,
       },
@@ -2235,63 +2365,21 @@ export async function maybeHandleSlpWorkAdd(
   };
 }
 
-const stallKinds = ["repeat", "silence", "dialog"] as const;
-type StallKind = (typeof stallKinds)[number];
-
-function stallOption(invocation: CliInvocation): StallKind | null {
-  const value = invocation.options.stall;
-  if (value === undefined) return null;
-  if (typeof value !== "string" || !stallKinds.includes(value as StallKind)) {
-    throw new CliError("INVALID_OPTION", "--stall takes one of repeat, silence, dialog");
-  }
-  return value as StallKind;
-}
-
-// d763: the nudge goes to the seat the item waits on.
-function stallSeat(context: PluginContext, actor: SlpActor, work: SlpWorkRow): string | null {
-  if (work.state === "ACTIVE") return work.owner ?? work.assigned_to;
-  if (work.state === "RETURNED") {
-    return rolePaneName(context, actor, expectedReviewerRole(context, actor, work));
-  }
-  return work.assigned_to;
-}
-
 export async function maybeHandleSlpWorkNote(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
   if (!requireActiveOrLegacy(context)) return null;
   migrateProject(context.store);
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer", "observer"]);
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
   requireRunningGeneration(context.store, actor.team);
   const id = requiredPosition(invocation, 0, "work id");
   const body = requiredPosition(invocation, 1, "note body");
   const work = requireSlpWork(context, actor, id);
   const rework = invocation.options.rework === true;
   const blocked = invocation.options.blocked === true;
-  const stall = stallOption(invocation);
   if (rework && blocked) {
     throw new CliError("INVALID_OPTION", "--blocked and --rework are separate notes");
-  }
-  // d763: the Observer records stalls and nothing else; no other seat records them.
-  if (actor.role === "observer" && !stall) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      `${actor.name} may note only with --stall repeat|silence|dialog`,
-      { actor: actor.name, role: actor.role },
-    );
-  }
-  if (stall && actor.role !== "observer") {
-    throw new CliError("ROLE_FORBIDDEN", "--stall is the Observer's note", {
-      actor: actor.name,
-      role: actor.role,
-    });
-  }
-  if (stall && (rework || blocked)) {
-    throw new CliError("INVALID_OPTION", "--stall is a separate note");
-  }
-  if (stall && work.state === "DONE") {
-    throw new CliError("INVALID_STATE", `${id} is DONE and cannot stall`);
   }
   if (actor.role === "peer" && work.assigned_to !== actor.name) {
     throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
@@ -2306,22 +2394,11 @@ export async function maybeHandleSlpWorkNote(
     }
   }
   const now = new Date().toISOString();
-  const flag = stall ? `stall:${stall}` : blocked ? "blocked" : null;
-  let suppressed = false;
+  const flag = blocked ? "blocked" : null;
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     requireRunningGeneration(context.store, actor.team);
     const current = requireSlpWork(context, actor, id);
-    if (stall) {
-      // d763: the same stall on an unchanged item is stored, not pushed again.
-      const latest = context.store.database
-        .query<{ created_at: string; flag: string | null }, [string]>(
-          `SELECT flag, created_at FROM slp_work_entries
-           WHERE work_id = ? ORDER BY id DESC LIMIT 1`,
-        )
-        .get(id);
-      suppressed = latest?.flag === flag && current.updated_at <= latest.created_at;
-    }
     if (rework) {
       requireWorkReviewer(context, actor, current, "grant rework");
       if (current.state !== "RETURNED" || current.return_revision <= 0) {
@@ -2396,29 +2473,7 @@ export async function maybeHandleSlpWorkNote(
       `maestro status ${id}`,
     );
   }
-  if (stall && suppressed) {
-    process.stderr.write(
-      `nudge suppressed: ${id} ${flag} was already noted and the store has not changed since\n`,
-    );
-  } else if (stall) {
-    const seat = stallSeat(context, actor, work);
-    const supervisorName = rolePaneName(context, actor, "team-supervisor");
-    const line = `[from observer][${id}] ${stall} ${noticeSummary(body)}; stop and run: maestro work note ${id} "<what you need>" --blocked`;
-    await pushLine(actor.team.project_path, seat, `${id} ${flag}`, line);
-    if (seat === supervisorName) {
-      await pushNotice(
-        actor.team.project_path,
-        actor.role,
-        "supervisor",
-        `${id} ${flag}`,
-        `${stall} ${body} in ${actor.team.team_id} g${actor.team.generation}`,
-        "maestro status",
-      );
-    } else {
-      await pushLine(actor.team.project_path, supervisorName, `${id} ${flag}`, line);
-    }
-  }
-  const kind = stall ? "stall note" : rework ? "rework grant" : blocked ? "blocked note" : "note";
+  const kind = rework ? "rework grant" : blocked ? "blocked note" : "note";
   return {
     data: {
       note: { actor: actor.name, body, createdAt: now, flag, rework },
@@ -2893,16 +2948,8 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
   return { data: { decision }, text: `${id} [${scope}] ${choice}` };
 }
 
-function stopPlan(team: ActiveLocalTeam): SlpTeamPlan {
-  const models = packModels(team.configuration_json);
-  return buildSlpTeamPlan({
-    generation: team.generation,
-    leadModel: models.lead,
-    observerModel: models.observer,
-    projectPath: team.project_path,
-    supervisorModel: models.teamSupervisor,
-    teamId: team.team_id,
-  });
+function stopPlan(team: ActiveLocalTeam): Promise<SlpTeamPlan> {
+  return planForTeam(team);
 }
 
 function stopRoles(store: Store, team: ActiveLocalTeam): SlpRuntimeRole[] {
@@ -2912,6 +2959,7 @@ function stopRoles(store: Store, team: ActiveLocalTeam): SlpRuntimeRole[] {
     name: role.name,
     packDigest: role.pack_digest,
     paneId: role.pane_id,
+    profile: role.profile,
     readyChallenge: role.ready_challenge,
     role: role.role,
     workspaceId: role.workspace_id,
@@ -3093,7 +3141,7 @@ async function requestNormalStop(
   }
   try {
     await runtime.delegateStop(
-      stopPlan(team),
+      await stopPlan(team),
       dirname(dirname(team.room_store_path)),
       token,
       resolve(cliEntry),
@@ -3534,7 +3582,7 @@ async function stopTeam(
   try {
     if (roomTeam.state === "STOPPED") {
       if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
-      await runtime.stop(stopPlan(team), stopRoles(projectStore, team));
+      await runtime.stop(await stopPlan(team), stopRoles(projectStore, team));
       context.sessions.record("team.stop.emergency");
       return {
         data: {
@@ -3573,13 +3621,13 @@ async function stopTeam(
     }
     if (reservation.kind === "stopped") {
       if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
-      await runtime.stop(stopPlan(team), stopRoles(projectStore, team));
+      await runtime.stop(await stopPlan(team), stopRoles(projectStore, team));
       return stopResult(team, emergency);
     }
     let operation = reservation.row;
     try {
       const roles = stopRoles(projectStore, team);
-      await runtime.stop(stopPlan(team), roles);
+      await runtime.stop(await stopPlan(team), roles);
       operation = recordStopRuntimeReady(projectStore, operation, ownerToken);
       operation = finalizeStop(projectStore, operation, ownerToken);
     } catch (error) {
@@ -3621,14 +3669,15 @@ function roleRows(store: Store, teamId: string, generation: number, local: boole
       name: string;
       pack_digest: string;
       pane_id: string;
+      profile: string;
       ready_challenge: string;
       role: SlpRole;
       workspace_id: string;
     }, [string, number]>(
       `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
-              brief_digest, ready_challenge FROM ${table}
+              brief_digest, ready_challenge, profile FROM ${table}
        WHERE team_id = ? AND generation = ?
-       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 WHEN 'observer' THEN 3 ELSE 2 END, name`,
+       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
     )
     .all(teamId, generation);
 }
@@ -3785,17 +3834,8 @@ export async function maybeHandleSlpStatus(
       const roles = roleRows(context.store, row.team_id, row.generation, false);
       let missingPanes: string[] = [];
       let runtimeState: "available" | "unavailable" | "not-running" = "not-running";
-      let sentinel = false;
       let watch = false;
-      const models = packModels(row.configuration_json);
-      const plan = buildSlpTeamPlan({
-        generation: row.generation,
-        leadModel: models.lead,
-        observerModel: models.observer,
-        projectPath: row.project_path,
-        supervisorModel: models.teamSupervisor,
-        teamId: row.team_id,
-      });
+      const plan = await planForTeam(row);
       try {
         const inspection = await runtime.inspect(
           plan,
@@ -3805,6 +3845,7 @@ export async function maybeHandleSlpStatus(
             name: role.name,
             packDigest: role.pack_digest,
             paneId: role.pane_id,
+            profile: role.profile,
             readyChallenge: role.ready_challenge,
             role: role.role,
             workspaceId: role.workspace_id,
@@ -3813,7 +3854,6 @@ export async function maybeHandleSlpStatus(
         if (row.state === "RUNNING" || inspection.workspace) {
           missingPanes = inspection.missingPanes;
           runtimeState = inspection.runtime;
-          sentinel = inspection.sentinel;
           watch = inspection.watch;
         }
       } catch {
@@ -3871,11 +3911,11 @@ export async function maybeHandleSlpStatus(
           name: role.name,
           packDigest: role.pack_digest,
           paneId: role.pane_id,
+          profile: role.profile,
           readyChallenge: role.ready_challenge,
           role: role.role,
         })),
         runtime: runtimeState,
-        sentinel: sentinel ? "on" : "off",
         state: row.state,
         stop: stopRecord
           ? { actor: stopRecord.actor, emergency: stopRecord.emergency === 1, reason: stopRecord.reason }
@@ -3891,13 +3931,13 @@ export async function maybeHandleSlpStatus(
       text: teams.length === 0
         ? "no SLP teams"
         : teams.map((team) =>
-          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; sentinel ${team.sentinel}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
+          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
         ).join("\n"),
     };
   }
 
   if (!requireActiveOrLegacy(context)) return null;
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer", "observer"]);
+  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
   const roles = roleRows(context.store, actor.team.team_id, actor.team.generation, true);
   if (requestedWork) {
     const work = requireSlpWork(context, actor, requestedWork);
@@ -4024,7 +4064,6 @@ export async function maybeHandleSlpStatus(
     .all(actor.team.team_id, actor.team.generation);
   const scoped = allWork.filter((work) => {
     if (actor.role === "team-supervisor") return work.state === "ACTIVE" || work.state === "RETURNED";
-    if (actor.role === "observer") return work.state !== "DONE";
     if (actor.role === "peer") return work.assigned_to === actor.name && work.state !== "DONE";
     return (
       work.assigned_to === actor.name || work.created_by === actor.name
@@ -4032,17 +4071,8 @@ export async function maybeHandleSlpStatus(
   });
   let missingPanes: string[] = [];
   let runtimeState: "available" | "unavailable" = "available";
-  let sentinel = false;
   let watch = false;
-  const models = packModels(actor.team.configuration_json);
-  const plan = buildSlpTeamPlan({
-    generation: actor.team.generation,
-    leadModel: models.lead,
-    observerModel: models.observer,
-    projectPath: actor.team.project_path,
-    supervisorModel: models.teamSupervisor,
-    teamId: actor.team.team_id,
-  });
+  const plan = await planForTeam(actor.team);
   try {
     const inspection = await new HerdrSlpRuntime().inspect(
       plan,
@@ -4052,13 +4082,13 @@ export async function maybeHandleSlpStatus(
         name: role.name,
         packDigest: role.pack_digest,
         paneId: role.pane_id,
+        profile: role.profile,
         readyChallenge: role.ready_challenge,
         role: role.role,
         workspaceId: role.workspace_id,
       })),
     );
     missingPanes = inspection.missingPanes;
-    sentinel = inspection.sentinel;
     watch = inspection.watch;
   } catch {
     runtimeState = "unavailable";
@@ -4074,11 +4104,11 @@ export async function maybeHandleSlpStatus(
         name: role.name,
         packDigest: role.pack_digest,
         paneId: role.pane_id,
+        profile: role.profile,
         readyChallenge: role.ready_challenge,
         role: role.role,
       })),
       runtime: runtimeState,
-      sentinel: sentinel ? "on" : "off",
       teamId: actor.team.team_id,
       watch: watch ? "on" : "off",
       work: scoped.map(workData),
@@ -4128,32 +4158,40 @@ export const slpV2Plugin: BuiltInPlugin = {
       registerSessionCommand(
         context,
         "team start",
-        (invocation): Promise<CliResult> =>
-          startTeam(
+        (invocation): Promise<CliResult> => {
+          // d98: the retired model flags are refused by name so the caller
+          // learns the replacement instead of an unknown-flag error.
+          for (const [flag, seat] of [
+            ["peer-model", "peer"],
+            ["lead-model", "lead"],
+            ["supervisor-model", "team-supervisor"],
+          ] as const) {
+            if (invocation.options[flag] !== undefined) {
+              throw new CliError(
+                "RETIRED_FLAG",
+                `--${flag} was retired by pack version 3 (Hub d98): a Peer variant is team start --peer-profile <name>; the Team Supervisor and Lead change through a shadowing profile file at ~/maestro/profiles/${seat}.md`,
+                { flag: `--${flag}` },
+              );
+            }
+          }
+          return startTeam(
             context,
             runtime,
             requiredPosition(invocation, 0, "project"),
             requiredPosition(invocation, 1, "objective"),
-            {
-              lead: stringOption(invocation, "lead-model"),
-              observer: stringOption(invocation, "observer-model"),
-              peer: stringOption(invocation, "peer-model"),
-              teamSupervisor: stringOption(invocation, "supervisor-model"),
-            },
-          ),
+            stringOption(invocation, "peer-profile"),
+          );
+        },
         {
           description: "Start or restore one supervised SLP team generation.",
           flags: {
-            "--lead-model": { description: "Override the Workspace Pack Lead model.", value: true },
-            "--observer-model": {
-              description: "Override the Workspace Pack Observer model.",
+            "--peer-profile": {
+              description: "Override the Workspace Pack peer profile for this generation (recorded on the team row).",
               value: true,
             },
-            "--peer-model": { description: "Override the Workspace Pack Peer model.", value: true },
-            "--supervisor-model": {
-              description: "Override the Workspace Pack Team Supervisor model.",
-              value: true,
-            },
+            "--lead-model": { hidden: true, value: true },
+            "--peer-model": { hidden: true, value: true },
+            "--supervisor-model": { hidden: true, value: true },
           },
           positionals: [
             { name: "project", required: true },

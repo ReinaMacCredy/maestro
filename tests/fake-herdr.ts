@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { materializeProfiles } from "../src/plugins/profiles.ts";
 import type { Fixture } from "./helpers.ts";
 
 export interface FakeHerdrBehavior {
@@ -379,22 +380,15 @@ if (command === "workspace list") {
   if (accepted) {
     const body = args[3] ?? "";
     state.prompts.push({ name, body });
-    const field = (label) => {
-      const match = new RegExp("^" + label + ": (.+)$", "m").exec(body);
-      return match?.[1]?.trim();
-    };
-    const team = field("Team");
-    const generation = field("Generation");
-    const role = field("Role");
-    const instance = field("Role instance");
-    const pack = field("Pack SHA-256");
-    const brief = field("Brief SHA-256");
-    const challengeLeft = field("Challenge left");
-    const challengeRight = field("Challenge right");
-    if (
-      team && generation && role && instance && pack && brief &&
-      challengeLeft && challengeRight
-    ) {
+    // d90: the post-open prompt is one line; the seat knows its role from its
+    // rendered profile, which the fake reads off the agent name prefix.
+    const opened = /^slp team (\\S+) generation (\\d+) instance \\S+; reply ([0-9a-f]{32})$/.exec(body);
+    const team = opened?.[1];
+    const generation = opened?.[2];
+    const role = name.startsWith("supervisor-") ? "team-supervisor" : name.startsWith("lead-") ? "lead" : "peer";
+    const challengeLeft = opened?.[3]?.slice(0, 16);
+    const challengeRight = opened?.[3]?.slice(16);
+    if (team && generation && challengeLeft && challengeRight) {
       const acknowledgement = [
         "SLP_ROLE_READY",
         "team=" + team,
@@ -477,6 +471,9 @@ export async function installFakeHerdr(
   const bin = join(fixture.root, "fake-herdr-bin");
   const state = join(fixture.root, "fake-herdr-state.json");
   const log = join(fixture.root, "fake-herdr-log.jsonl");
+  // A seat launches only through its rendered profile (A2), so the fake
+  // machine carries what maestro install would have rendered into this home.
+  await materializeProfiles(fixture.home, fixture.repo);
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "herdr"), fakeHerdrSource);
   await chmod(join(bin, "herdr"), 0o755);

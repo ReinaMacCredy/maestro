@@ -3,6 +3,9 @@ import type { Disposer } from "./events.ts";
 
 export interface FlagDefinition {
   description?: string;
+  // A retired flag stays parseable so its handler can name the replacement,
+  // but help and describeCommands never list it.
+  hidden?: boolean;
   multiple?: boolean;
   value?: boolean;
 }
@@ -247,6 +250,7 @@ export class Cli {
           ? { positionals: definition.positionals.map((positional) => ({ ...positional })) }
           : {}),
         flags: [...this.effectiveFlags(name, definition).entries()]
+          .filter(([, metadata]) => !metadata.hidden)
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([flag, metadata]) => ({
             name: flag,
@@ -474,7 +478,9 @@ export class Cli {
   }
 
   private flagHelp(command: string, definition: CommandDefinition): string[] {
-    const flags = this.effectiveFlags(command, definition);
+    const flags = new Map(
+      [...this.effectiveFlags(command, definition)].filter(([, metadata]) => !metadata.hidden),
+    );
     flags.set("--json", { description: "Emit one compact JSON success envelope." });
     if (flags.size === 0) return [];
     const rows = [...flags.entries()]

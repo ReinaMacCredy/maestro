@@ -243,7 +243,13 @@ test("289 [lint] recipe and installed Hub expose the same simplified SLP roles",
     const pack = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
     expect(room).toContain("This workspace is the Hub Supervisor.");
     expect(room).toContain("read `SLP.md`");
-    expect(pack).toContain("<!-- slp:version=2 -->");
-    expect(pack).toContain("## Team Supervisor");
+    // Hub d91/d98: pack version 3 names profiles; the seat mandate lives in
+    // the rendered profile, not in the pack.
+    expect(pack).toContain("<!-- slp:version=3 -->");
+    expect(pack).toContain("<!-- slp:profile:team-supervisor=team-supervisor -->");
+    expect(pack).not.toContain("## Team Supervisor");
+    expect(
+      await readFile(join(fixture.home, ".claude", "agents", "maestro-team-supervisor.md"), "utf8"),
+    ).toContain("Role: Team Supervisor.");
   });
 });

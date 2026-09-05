@@ -42,6 +42,11 @@ function phaseFree(stderr: string): string {
     .join("\n");
 }
 
+function failureEnvelope(stderr: string): { error: Record<string, unknown> } {
+  const line = phaseFree(stderr).split("\n").findLast((candidate) => candidate.startsWith("{"));
+  return JSON.parse(line ?? "{}") as { error: Record<string, unknown> };
+}
+
 function watchRuntimeDirectory(projectPath: string, teamId: string, generation: number): string {
   const projectKey = createHash("sha256")
     .update(realpathSync.native(resolve(projectPath)))
@@ -65,16 +70,7 @@ function testRoleContract(teamId: string, generation: number): SlpRoleContract {
   ].join(" ");
   return {
     acknowledgement,
-    body: [
-      `Team: ${teamId}`,
-      `Generation: ${generation}`,
-      "Role: team-supervisor",
-      `Role instance: ${instanceId}`,
-      `Pack SHA-256: ${packDigest}`,
-      `Brief SHA-256: ${briefDigest}`,
-      `Challenge left: ${readyChallenge.slice(0, 16)}`,
-      `Challenge right: ${readyChallenge.slice(16)}`,
-    ].join("\n"),
+    body: `slp team ${teamId} generation ${generation} instance ${instanceId}; reply ${readyChallenge}`,
     briefDigest,
     instanceId,
     packDigest,
@@ -131,6 +127,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
           role: string;
         }>;
         state: string;
+        teamId: string;
       };
       work: { assignedTo: string; state: string };
     }>(started.stdout);
@@ -161,13 +158,6 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
         packDigest: expectedDigest,
         readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
         role: "lead",
-      }),
-      expect.objectContaining({
-        briefDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
-        instanceId: expect.stringMatching(/^[a-f0-9-]{36}$/),
-        packDigest: expectedDigest,
-        readyChallenge: expect.stringMatching(/^[a-f0-9]{32}$/),
-        role: "observer",
       }),
     ]);
     expect(startData.work).toMatchObject({
@@ -211,7 +201,6 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     expect(runtime.agents.map((agent: { name: string }) => agent.name).sort()).toEqual(
       [
         startData.team.roles.find((role) => role.role === "lead")?.name,
-        startData.team.roles.find((role) => role.role === "observer")?.name,
         startData.team.roles.find((role) => role.role === "team-supervisor")?.name,
       ].sort(),
     );
@@ -219,15 +208,19 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     const prompts = commands.filter(
       (command) => command[0] === "agent" && command[1] === "prompt",
     );
-    expect(prompts).toHaveLength(3);
+    expect(prompts).toHaveLength(2);
     expect(prompts.every((command) => command.includes("--wait") && command.includes("--timeout")))
       .toBe(true);
-    expect(
-      prompts.every((command) => command[3]?.includes("SLP_ROLE_READY") === true),
-    ).toBe(true);
+    // d90: the post-open prompt is one line naming team, generation, instance
+    // and the challenge; the mandate lives in the rendered profile.
+    for (const command of prompts) {
+      expect(command[3]).toMatch(
+        new RegExp(`^slp team ${startData.team.teamId} generation 1 instance [0-9a-f-]{36}; reply [0-9a-f]{32}$`),
+      );
+    }
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "read"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
   });
 });
 
@@ -426,7 +419,7 @@ test("SLP v2 accepts one space between the challenge halves and nothing else (d7
     expect(started.exitCode).toBe(0);
     expect(
       envelope<{ team: { roles: Array<{ role: string }> } }>(started.stdout).team.roles,
-    ).toHaveLength(3);
+    ).toHaveLength(2);
   });
 }, 30_000);
 
@@ -456,8 +449,8 @@ test("SLP v2 waits for newly created panes to become available shells", async ()
       (await fakeHerdrCommands(fake)).filter(
         (command) => command[0] === "agent" && command[1] === "start",
       ),
-    ).toHaveLength(5);
-    expect((await readFakeHerdrState(fake)).agents).toHaveLength(3);
+    ).toHaveLength(4);
+    expect((await readFakeHerdrState(fake)).agents).toHaveLength(2);
   });
 });
 
@@ -486,11 +479,11 @@ test("SLP v2 retries a transient contract prompt stall without restarting roles"
     const commands = await fakeHerdrCommands(fake);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "start"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "prompt"),
-    ).toHaveLength(5);
-    expect((await readFakeHerdrState(fake)).agents).toHaveLength(3);
+    ).toHaveLength(4);
+    expect((await readFakeHerdrState(fake)).agents).toHaveLength(2);
   });
 });
 
@@ -530,7 +523,7 @@ test("SLP v2 waits for an agent_not_ready launch without restarting the agent", 
         (command) =>
           command[0] === "agent" && command[1] === "start" && command.includes("codex"),
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(
       commands.slice(startIndex + 1, promptIndex).some(
         (command) => command[0] === "agent" && command[1] === "list",
@@ -544,10 +537,9 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
     const fake = await installFakeHerdr(fixture, { agentStartDelayMs: 1_500 });
     const plan = buildSlpTeamPlan({
       generation: 1,
-      leadModel: "default",
-      observerModel: "gpt-5.6-luna",
+      lead: { harness: "codex", profile: "lead" },
       projectPath: fixture.repo,
-      supervisorModel: "default",
+      teamSupervisor: { harness: "claude", profile: "team-supervisor" },
       teamId: "startup-window",
     });
     plan.roles = plan.roles.slice(0, 1);
@@ -568,10 +560,9 @@ test("SLP v2 waits for workspace-close visibility before declaring runtime absen
     const fake = await installFakeHerdr(fixture);
     const plan = buildSlpTeamPlan({
       generation: 1,
-      leadModel: "default",
-      observerModel: "gpt-5.6-luna",
+      lead: { harness: "codex", profile: "lead" },
       projectPath: fixture.repo,
-      supervisorModel: "default",
+      teamSupervisor: { harness: "claude", profile: "team-supervisor" },
       teamId: "close-visibility",
     });
     plan.roles = plan.roles.slice(0, 1);
@@ -906,7 +897,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
       projectDatabase
         .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_local_roles")
         .get()?.count,
-    ).toBe(6);
+    ).toBe(4);
     expect(
       projectDatabase
         .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_decisions")
@@ -927,7 +918,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
         expect.objectContaining({ cwd: second.team.projectPath }),
       ]),
     );
-    expect(runtimeBeforeStop.agents).toHaveLength(6);
+    expect(runtimeBeforeStop.agents).toHaveLength(4);
 
     const stoppedFirst = await runCliAt(
       fixture,
@@ -954,7 +945,7 @@ test("SLP v2 concurrently isolates linked-worktree teams and stopping one leaves
     expect(envelope<{ runtime: string; teamId: string }>(secondStillRunning.stdout))
       .toMatchObject({ runtime: "available", teamId: second.team.teamId });
     expect(await readFakeHerdrState(fake)).toMatchObject({
-      agents: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      agents: [expect.any(Object), expect.any(Object)],
       workspaces: [expect.objectContaining({ cwd: second.team.projectPath })],
     });
 
@@ -1052,10 +1043,10 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
       (await fakeHerdrCommands(fake)).filter(
         (command) => command[0] === "agent" && command[1] === "prompt",
       );
-    expect(await prompts()).toHaveLength(3);
+    expect(await prompts()).toHaveLength(2);
     let runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
 
     const lead = runtime.agents.find((agent: { name: string }) => agent.name.startsWith("lead-"));
     expect(lead).toBeDefined();
@@ -1082,11 +1073,11 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     });
     runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
     expect(runtime.agents.filter((agent: { name: string }) => agent.name.startsWith("lead-"))).toHaveLength(1);
     const repairPrompts = await prompts();
-    expect(repairPrompts).toHaveLength(4);
-    expect(repairPrompts[3]?.[2]).toBe(lead.name);
+    expect(repairPrompts).toHaveLength(3);
+    expect(repairPrompts[2]?.[2]).toBe(lead.name);
     const repairedData = envelope<{
       team: { roles: Array<{ paneId: string; readyChallenge: string; role: string }>; teamId: string };
     }>(repaired.stdout);
@@ -1136,7 +1127,7 @@ test("SLP v2 serializes ten concurrent starts into one generation and rejects co
       runCliAt(
         fixture,
         room,
-        [...args.slice(0, -1), "--lead-model", "different-model", "--json"],
+        [...args.slice(0, -1), "--peer-profile", "peer-opus", "--json"],
         fake.env,
       ),
     ]);
@@ -1160,7 +1151,7 @@ test("SLP v2 serializes ten concurrent starts into one generation and rejects co
     }
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
     const roomDatabase = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
     expect(roomDatabase.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_teams").get()?.count)
       .toBe(1);
@@ -1481,7 +1472,7 @@ test("SLP v2 resolves symlink aliases to one canonical running project", async (
     });
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
   });
 }, 20_000);
 
@@ -1605,7 +1596,7 @@ test("SLP v2 gives same-basename projects distinct Herdr-safe team and role iden
       team: { roles: Array<{ name: string }>; teamId: string };
     }>(second.stdout).team;
     expect(firstTeam.teamId).not.toBe(secondTeam.teamId);
-    expect(new Set([...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)).size).toBe(6);
+    expect(new Set([...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)).size).toBe(4);
     for (const name of [...firstTeam.roles, ...secondTeam.roles].map((role) => role.name)) {
       expect(name).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
     }
@@ -1656,11 +1647,11 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
     expect(envelope<{ team: { generation: number } }>(retried.stdout).team.generation).toBe(1);
     runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
   });
 });
 
-test("SLP v2 lets a retry after a failed start change the objective and models", async () => {
+test("SLP v2 lets a retry after a failed start change the objective and peer profile", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -1684,7 +1675,7 @@ test("SLP v2 lets a retry after a failed start change the objective and models",
     const retried = await runCliAt(
       fixture,
       room,
-      ["team", "start", fixture.repo, "Second objective", "--lead-model", "retried-lead", "--json"],
+      ["team", "start", fixture.repo, "Second objective", "--peer-profile", "peer-opus", "--json"],
       fake.env,
     );
     expect(phaseFree(retried.stderr)).toBe("");
@@ -1694,7 +1685,7 @@ test("SLP v2 lets a retry after a failed start change the objective and models",
     const leadStart = (await fakeHerdrCommands(fake)).find(
       (command) => command[0] === "agent" && command[1] === "start" && command[2] === `lead-${data.team.teamId}`,
     );
-    expect(leadStart?.slice(-2)).toEqual(["--model", "retried-lead"]);
+    expect(leadStart?.slice(-3)).toEqual(["--", "--profile", "maestro-lead"]);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
     expect(
       JSON.parse(
@@ -1704,7 +1695,7 @@ test("SLP v2 lets a retry after a failed start change the objective and models",
           )
           .get()?.configuration_json ?? "{}",
       ),
-    ).toMatchObject({ lead: "retried-lead" });
+    ).toMatchObject({ profiles: { lead: "lead", peer: "peer-opus", teamSupervisor: "team-supervisor" } });
     expect(
       database
         .query<{ objective: string; phase: string }, []>(
@@ -1737,7 +1728,7 @@ test("SLP v2 rejects a changed objective or configuration without mutating the r
 
     for (const changedArgs of [
       ["team", "start", fixture.repo, "Changed objective", "--json"],
-      [...originalArgs.slice(0, -1), "--lead-model", "different-model", "--json"],
+      [...originalArgs.slice(0, -1), "--peer-profile", "peer-opus", "--json"],
     ]) {
       const rejected = await runCliAt(fixture, room, changedArgs, fake.env);
       expect(rejected.exitCode).toBe(1);
@@ -3195,7 +3186,7 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
       watch: string;
       work: Array<{ id: string; state: string }>;
     }>(teamStatus.stdout);
-    expect(teamData.roles.map((role) => role.role).sort()).toEqual(["lead", "observer", "team-supervisor"]);
+    expect(teamData.roles.map((role) => role.role).sort()).toEqual(["lead", "team-supervisor"]);
     expect(teamData.work).toContainEqual(
       expect.objectContaining({ id: startData.work.id, state: "RETURNED" }),
     );
@@ -3293,6 +3284,7 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
           name: string;
           packDigest: string;
           paneId: string;
+          profile: string;
           readyChallenge: string;
           role: "lead" | "team-supervisor";
         }>;
@@ -3307,10 +3299,9 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
     await setFakeHerdrBehavior(fake, { processInfoDelayMs: 500 });
     const plan = buildSlpTeamPlan({
       generation: started.team.generation,
-      leadModel: "default",
-      observerModel: "gpt-5.6-luna",
+      lead: { harness: "codex", profile: "lead" },
       projectPath: started.team.projectPath,
-      supervisorModel: "default",
+      teamSupervisor: { harness: "claude", profile: "team-supervisor" },
       teamId: started.team.teamId,
     });
     const runtime = new HerdrSlpRuntime(50, { ...process.env, ...fake.env });
@@ -3324,6 +3315,7 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
         name: role.name,
         packDigest: role.packDigest,
         paneId: role.paneId,
+        profile: role.profile,
         readyChallenge: role.readyChallenge,
         role: role.role,
         workspaceId: "unused-by-inspect",
@@ -5140,253 +5132,12 @@ test("SLP v2 Watch is one foreground non-agent reader whose death never blocks w
     ).toBe((activityBefore ?? 0) + 1);
     after.close();
     const runtime = await readFakeHerdrState(fake);
-    expect(runtime.agents).toHaveLength(3);
+    expect(runtime.agents).toHaveLength(2);
     const commands = await fakeHerdrCommands(fake);
     expect(commands.some((command) => command[0] === "agent" && command[1] === "prompt" && command[2]?.includes("watch")))
       .toBe(false);
   });
 }, 20_000);
-
-test("SLP v2 team start launches the sentinel beside the roles and stop closes it (d767)", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture, { paneRunEmptyOutput: true });
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Sentinel beside the roles", "--json"],
-      fake.env,
-    );
-    expect(phaseFree(started.stderr)).toBe("");
-    expect(started.exitCode).toBe(0);
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; paneId: string; role: string }>;
-        teamId: string;
-        workspaceId: string;
-      };
-    }>(started.stdout);
-    const label = `slp:${data.team.teamId}:g${data.team.generation}:sentinel`;
-    const commands = await fakeHerdrCommands(fake);
-    const created = commands.findIndex(
-      (command) => command[0] === "tab" && command[1] === "create" && command.includes(label),
-    );
-    const lastContract = commands.findLastIndex(
-      (command) => command[0] === "agent" && command[1] === "prompt",
-    );
-    expect(created).toBeGreaterThan(lastContract);
-    const state = await readFakeHerdrState(fake);
-    const sentinelTab = (state.tabs as Array<{ label: string; root_pane_id: string; tab_id: string }>)
-      .find((tab) => tab.label === label)!;
-    expect(sentinelTab).toBeDefined();
-    const launch = commands.find(
-      (command) =>
-        command[0] === "pane" && command[1] === "run" &&
-        command.includes(`HERDR_WORKSPACE_ID=${data.team.workspaceId}`),
-    )!;
-    expect(launch.slice(2, 6)).toEqual([
-      sentinelTab.root_pane_id,
-      "/usr/bin/env",
-      `HERDR_WORKSPACE_ID=${data.team.workspaceId}`,
-      process.execPath,
-    ]);
-    expect(launch[6]?.endsWith("/bin/maestro-slp-observe.ts")).toBe(true);
-    expect(launch.slice(7)).toEqual([
-      "--team",
-      data.team.teamId,
-      "--generation",
-      String(data.team.generation),
-    ]);
-    expect(data.team.roles.some((role) => role.paneId === sentinelTab.root_pane_id)).toBe(false);
-
-    const hub = envelope<{ teams: Array<{ sentinel: string; watch: string }> }>(
-      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
-    );
-    expect(hub.teams[0]).toMatchObject({ sentinel: "on", watch: "off" });
-    expect((await runCliAt(fixture, room, ["status"], fake.env)).stdout)
-      .toContain("RUNNING; watch off; sentinel on; missing none");
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const team = envelope<{ sentinel: string }>(
-      (await runCliAt(fixture, fixture.repo, ["status", "--json"], {
-        ...fake.env,
-        HERDR_PANE_ID: lead.paneId,
-      })).stdout,
-    );
-    expect(team.sentinel).toBe("on");
-
-    const stopped = await runCliAt(
-      fixture,
-      room,
-      ["team", "stop", data.team.teamId, "--emergency", "--reason", "sentinel test", "--json"],
-      fake.env,
-    );
-    expect(stopped.exitCode).toBe(0);
-    const closed = (await fakeHerdrCommands(fake)).some(
-      (command) => command[0] === "tab" && command[1] === "close" && command[2] === sentinelTab.tab_id,
-    );
-    expect(closed).toBe(true);
-  });
-}, 30_000);
-
-test("SLP v2 sentinel sends the Observer a packet each tick and at once when a role blocks (d762, d765)", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Packets for the Observer", "--json"],
-      fake.env,
-    );
-    expect(started.exitCode).toBe(0);
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; paneId: string; role: string }>;
-        teamId: string;
-        workspaceId: string;
-      };
-      work: { id: string };
-    }>(started.stdout);
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const observer = data.team.roles.find((role) => role.role === "observer")!;
-    const taken = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "take", data.work.id, "--json"],
-      { ...fake.env, HERDR_PANE_ID: lead.paneId },
-    );
-    expect(taken.exitCode).toBe(0);
-
-    const runtimeDirectory = watchRuntimeDirectory(
-      fixture.repo,
-      data.team.teamId,
-      data.team.generation,
-    );
-    const observeCommand = [
-      process.execPath,
-      join(import.meta.dir, "..", "bin", "maestro-slp-observe.ts"),
-      "--team",
-      data.team.teamId,
-      "--generation",
-      String(data.team.generation),
-      "--tick-ms",
-      "60000",
-      "--poll-ms",
-      "50",
-    ];
-    const environment = {
-      ...process.env,
-      ...fake.env,
-      HERDR_WORKSPACE_ID: data.team.workspaceId,
-    };
-    const packets = async () =>
-      (await fakeHerdrCommands(fake)).filter(
-        (command) =>
-          command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name &&
-          command[3]?.startsWith("[SLP sentinel") === true,
-      );
-    const until = async (count: number) => {
-      const deadline = Date.now() + 5_000;
-      while (Date.now() < deadline) {
-        const found = await packets();
-        if (found.length >= count) return found;
-        await Bun.sleep(25);
-      }
-      throw new Error(`timed out waiting for sentinel packet ${count}`);
-    };
-    const sentinel = Bun.spawn(observeCommand, {
-      cwd: fixture.repo,
-      env: environment,
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-    const [first] = await until(1);
-    const packet = first![3]!;
-    const header = `[SLP sentinel ${data.team.teamId} g${data.team.generation}]`;
-    expect(packet.startsWith(`${header} tick at `)).toBe(true);
-    expect(packet).toContain("thresholds: silence 15m, repeat 3x");
-    expect(packet).toContain(
-      `${data.work.id} ACTIVE hub-supervisor -> ${lead.name}; held by ${lead.name}; unchanged 0m; revision 0; last entry: none; stall notes: 0`,
-    );
-    expect(packet).toContain(`${supervisor.name} [team-supervisor] idle; unchanged 0m; repeats: none`);
-    expect(packet).toContain(`${lead.name} [lead] idle; unchanged 0m; repeats: none`);
-    expect(packet).not.toContain(`${observer.name} [observer]`);
-    expect(packet).toContain(`--- ${lead.name} tail ---\nSLP_ROLE_READY`);
-    expect(packet.endsWith("or: observed: nothing stalled")).toBe(true);
-    expect(first).not.toContain("--wait");
-
-    const duplicate = Bun.spawn(observeCommand, {
-      cwd: fixture.repo,
-      env: environment,
-      stderr: "pipe",
-      stdout: "ignore",
-    });
-    const duplicateError = await new Response(duplicate.stderr).text();
-    expect(await duplicate.exited).toBe(1);
-    expect(duplicateError).toContain("already running");
-
-    // team start launches the shim before finalization writes the team row.
-    const pending = Bun.spawn(
-      observeCommand.map((part, index) =>
-        observeCommand[index - 1] === "--generation" ? String(data.team.generation + 1) : part
-      ),
-      { cwd: fixture.repo, env: environment, stderr: "pipe", stdout: "ignore" },
-    );
-    await Bun.sleep(300);
-    expect(pending.exitCode).toBeNull();
-    pending.kill("SIGTERM");
-    expect(await pending.exited).toBe(0);
-    expect(await new Response(pending.stderr).text()).toBe("");
-
-    await Bun.sleep(250);
-    expect(await packets()).toHaveLength(1);
-
-    await editFakeHerdrState(fake, (state) => {
-      const agent = (state.agents as Array<{ agent_status: string; name: string }>)
-        .find((candidate) => candidate.name === lead.name)!;
-      agent.agent_status = "blocked";
-    });
-    const [, second] = await until(2);
-    expect(second![3]!.startsWith(`${header} blocked: ${lead.name} at `)).toBe(true);
-    expect(second![3]).toContain(`${lead.name} [lead] blocked; unchanged 0m; repeats: none`);
-    await Bun.sleep(250);
-    expect(await packets()).toHaveLength(2);
-
-    const stopped = await runCliAt(
-      fixture,
-      room,
-      ["team", "stop", data.team.teamId, "--emergency", "--reason", "sentinel test", "--json"],
-      fake.env,
-    );
-    expect(stopped.exitCode).toBe(0);
-    expect(await sentinel.exited).toBe(0);
-    expect(existsSync(join(runtimeDirectory, "observe.lock"))).toBe(false);
-  });
-}, 30_000);
-
-function failureEnvelope(stderr: string): { error: Record<string, unknown> } {
-  const line = phaseFree(stderr).split("\n").findLast((candidate) => candidate.startsWith("{"));
-  return JSON.parse(line ?? "{}") as { error: Record<string, unknown> };
-}
 
 test("SLP v2 polls for a late acknowledgement instead of failing on the first read", async () => {
   await withFixture(async (fixture) => {
@@ -5722,195 +5473,7 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
 }, 30_000);
 
 
-test("SLP v2 observer work note --stall nudges the stuck seat and the Team Supervisor once per unchanged stall (d763)", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Stall notes", "--json"],
-      fake.env,
-    );
-    expect(started.exitCode).toBe(0);
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; paneId: string; role: string }>;
-        teamId: string;
-      };
-      work: { id: string };
-    }>(started.stdout);
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const observer = data.team.roles.find((role) => role.role === "observer")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const observerEnvironment = { ...fake.env, HERDR_PANE_ID: observer.paneId };
-    const notices = async () =>
-      (await fakeHerdrCommands(fake)).filter(
-        (command) =>
-          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
-      );
-    const id = data.work.id;
-    const note = (args: string[], environment: Record<string, string>) =>
-      runCliAt(fixture, fixture.repo, ["work", "note", id, ...args, "--json"], environment);
-    const code = (result: { stderr: string }) => failureEnvelope(result.stderr).error.code;
-    const nudge = (kind: string, evidence: string) =>
-      `[from observer][${id}] ${kind} ${evidence}; stop and run: maestro work note ${id} "<what you need>" --blocked`;
-
-    const open = await note(["SLP_ROLE_READY printed 3x, nothing since", "--stall", "repeat"], observerEnvironment);
-    expect(phaseFree(open.stderr)).toBe("");
-    expect(open.exitCode).toBe(0);
-    expect(envelope<{ note: { flag: string | null } }>(open.stdout).note.flag).toBe("stall:repeat");
-    expect(await notices()).toEqual([
-      ["agent", "prompt", lead.name, nudge("repeat", "SLP_ROLE_READY printed 3x, nothing since")],
-      ["agent", "prompt", supervisor.name, nudge("repeat", "SLP_ROLE_READY printed 3x, nothing since")],
-    ]);
-
-    const plain = await note(["looks fine"], observerEnvironment);
-    expect(plain.exitCode).toBe(1);
-    expect(code(plain)).toBe("ROLE_FORBIDDEN");
-    const blockedByObserver = await note(["x", "--blocked"], observerEnvironment);
-    expect(code(blockedByObserver)).toBe("ROLE_FORBIDDEN");
-    const stallByLead = await note(["x", "--stall", "repeat"], leadEnvironment);
-    expect(code(stallByLead)).toBe("ROLE_FORBIDDEN");
-    const badKind = await note(["x", "--stall", "loop"], observerEnvironment);
-    expect(code(badKind)).toBe("INVALID_OPTION");
-    const mixed = await note(["x", "--stall", "repeat", "--blocked"], observerEnvironment);
-    expect(code(mixed)).toBe("INVALID_OPTION");
-    expect((await notices()).length).toBe(2);
-
-    const again = await note(["still the same three lines", "--stall", "repeat"], observerEnvironment);
-    expect(again.exitCode).toBe(0);
-    expect(phaseFree(again.stderr)).toBe(
-      `nudge suppressed: ${id} stall:repeat was already noted and the store has not changed since`,
-    );
-    expect((await notices()).length).toBe(2);
-
-    expect(
-      (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
-    ).toBe(0);
-    const held = await note(["same failing test three times", "--stall", "repeat"], observerEnvironment);
-    expect(phaseFree(held.stderr)).toBe("");
-    expect(held.exitCode).toBe(0);
-    expect((await notices()).slice(2)).toEqual([
-      ["agent", "prompt", lead.name, nudge("repeat", "same failing test three times")],
-      ["agent", "prompt", supervisor.name, nudge("repeat", "same failing test three times")],
-    ]);
-
-    const silence = await note(["no output for 20m on held work", "--stall", "silence"], observerEnvironment);
-    expect(phaseFree(silence.stderr)).toBe("");
-    expect(silence.exitCode).toBe(0);
-    expect((await notices()).length).toBe(6);
-
-    const shown = await runCliAt(fixture, fixture.repo, ["status", id], observerEnvironment);
-    expect(shown.exitCode).toBe(0);
-    expect(shown.stdout).toContain(
-      `note [stall:silence] by ${observer.name}: no output for 20m on held work`,
-    );
-    const shownJson = envelope<{ notes: Array<{ flag: string | null }> }>(
-      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], observerEnvironment)).stdout,
-    );
-    expect(shownJson.notes.map((entry) => entry.flag)).toEqual([
-      "stall:repeat",
-      "stall:repeat",
-      "stall:repeat",
-      "stall:silence",
-    ]);
-  });
-}, 30_000);
-
-test("SLP v2 team start launches a Codex observer after the Lead, status admits it, and stop closes it (d762)", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Observer seat", "--json"],
-      fake.env,
-    );
-    expect(started.exitCode).toBe(0);
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; paneId: string; role: string }>;
-        teamId: string;
-      };
-      work: { id: string };
-    }>(started.stdout);
-    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead", "observer"]);
-    const observer = data.team.roles.find((role) => role.role === "observer")!;
-    expect(observer.name).toBe(`observer-${data.team.teamId}`);
-    const starts = (await fakeHerdrCommands(fake)).filter(
-      (command) => command[0] === "agent" && command[1] === "start",
-    );
-    expect(starts.map((command) => command[2])).toEqual([
-      `supervisor-${data.team.teamId}`,
-      `lead-${data.team.teamId}`,
-      observer.name,
-    ]);
-    expect(starts.at(-1)).toEqual([
-      "agent",
-      "start",
-      observer.name,
-      "--kind",
-      "codex",
-      "--pane",
-      observer.paneId,
-      "--timeout",
-      "60000",
-      "--",
-      "--model",
-      "gpt-5.6-luna",
-    ]);
-
-    const observerEnvironment = { ...fake.env, HERDR_PANE_ID: observer.paneId };
-    const status = envelope<{ role: { role: string }; work: Array<{ id: string }> }>(
-      (await runCliAt(fixture, fixture.repo, ["status", "--json"], observerEnvironment)).stdout,
-    );
-    expect(status.role.role).toBe("observer");
-    expect(status.work.map((work) => work.id)).toEqual([data.work.id]);
-    const shown = await runCliAt(fixture, fixture.repo, ["status", data.work.id], observerEnvironment);
-    expect(shown.exitCode).toBe(0);
-    expect(shown.stdout).toContain(`next: waiting on lead-${data.team.teamId}`);
-    for (const args of [["work", "take", data.work.id], ["work", "note", data.work.id, "x"]]) {
-      const refused = await runCliAt(fixture, fixture.repo, [...args, "--json"], observerEnvironment);
-      expect(refused.exitCode).toBe(1);
-      expect(failureEnvelope(refused.stderr).error.code).toBe("ROLE_FORBIDDEN");
-    }
-
-    const stopped = await runCliAt(
-      fixture,
-      room,
-      ["team", "stop", data.team.teamId, "--emergency", "--reason", "observer test done", "--json"],
-      fake.env,
-    );
-    expect(phaseFree(stopped.stderr)).toBe("");
-    expect(stopped.exitCode).toBe(0);
-    const runtime = await readFakeHerdrState(fake);
-    expect(runtime.agents).toEqual([]);
-    expect(runtime.workspaces).toEqual([]);
-  });
-}, 30_000);
-
-test("SLP v2 team start widens the role CHECK on stores created before the Observer seat (d762)", async () => {
+test("SLP v2 team start widens the role CHECK on stores created before d762 so Observer-era rows still load (Hub d98)", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -5954,7 +5517,7 @@ test("SLP v2 team start widens the role CHECK on stores created before the Obser
     expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const data = envelope<{ team: { roles: Array<{ role: string }> } }>(started.stdout);
-    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead", "observer"]);
+    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead"]);
     for (const [path, table] of [[roomPath, "slp_team_roles"], [projectPath, "slp_local_roles"]] as const) {
       const database = new Database(path, { readonly: true });
       expect(
@@ -5968,7 +5531,7 @@ test("SLP v2 team start widens the role CHECK on stores created before the Obser
         database
           .query<{ count: number }, []>(`SELECT COUNT(*) AS count FROM ${table} WHERE role = 'observer'`)
           .get()?.count,
-      ).toBe(1);
+      ).toBe(0);
       expect(
         database
           .query<{ present: number }, [string]>("SELECT 1 AS present FROM sqlite_master WHERE name = ?")
@@ -6206,7 +5769,6 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
       "role",
       "roles",
       "runtime",
-      "sentinel",
       "teamId",
       "watch",
       "work",
@@ -6225,77 +5787,3 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
   });
 }, 30_000);
 
-test("SLP v2 sentinel exits once the project store is gone instead of polling the error forever (d765)", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Sentinel without a store", "--json"],
-      fake.env,
-    );
-    expect(started.exitCode).toBe(0);
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; role: string }>;
-        teamId: string;
-        workspaceId: string;
-      };
-    }>(started.stdout);
-    const observer = data.team.roles.find((role) => role.role === "observer")!;
-    const sentinel = Bun.spawn(
-      [
-        process.execPath,
-        join(import.meta.dir, "..", "bin", "maestro-slp-observe.ts"),
-        "--team",
-        data.team.teamId,
-        "--generation",
-        String(data.team.generation),
-        "--tick-ms",
-        "60000",
-        "--poll-ms",
-        "50",
-      ],
-      {
-        cwd: fixture.repo,
-        env: { ...process.env, ...fake.env, HERDR_WORKSPACE_ID: data.team.workspaceId },
-        stderr: "pipe",
-        stdout: "ignore",
-      },
-    );
-    try {
-      const deadline = Date.now() + 20_000;
-      let packets = 0;
-      // team start prompts the observer with its role contract, so only the
-      // sentinel's own packet proves the sentinel is past its first poll.
-      while (packets === 0 && Date.now() < deadline) {
-        packets = (await fakeHerdrCommands(fake)).filter(
-          (command) =>
-            command[0] === "agent" && command[1] === "prompt" && command[2] === observer.name &&
-            (command[3] ?? "").startsWith(`[SLP sentinel ${data.team.teamId} g`),
-        ).length;
-        await Bun.sleep(25);
-      }
-      expect(packets).toBe(1);
-
-      await rm(join(fixture.repo, ".maestro", "maestro.db"));
-      const exit = await Promise.race([
-        sentinel.exited,
-        Bun.sleep(5_000).then(() => "still running"),
-      ]);
-      expect(exit).toBe(0);
-    } finally {
-      sentinel.kill();
-    }
-  });
-}, 30_000);

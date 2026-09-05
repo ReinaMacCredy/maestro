@@ -25,9 +25,11 @@ test("308 [lint] the canonical Workspace Pack exposes only the locked SLP v2 con
   expect(publicSurface).toEqual([...slpOperations]);
   expect(pack).toContain("OPEN -> ACTIVE -> RETURNED -> DONE");
 
-  const peer = pack.match(
-    /<!-- slp:role:peer:begin -->([\s\S]*?)<!-- slp:role:peer:end -->/,
-  )?.[1] ?? "";
+  // Hub d91/d98: the seat mandates live in the shipped profiles, not the pack.
+  const peer = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "profiles", "peer.md"),
+  ).text();
+  expect(pack).not.toContain("slp:role:peer:begin");
   for (const allowed of ["status", "take assigned work", "notes", "return results"]) {
     expect(peer).toContain(allowed);
   }
