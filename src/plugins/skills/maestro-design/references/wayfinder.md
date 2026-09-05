@@ -61,9 +61,15 @@ human's side of it.
 The map is deliberately incomplete: do not chart what you cannot yet see. The
 test between fog and ticket is whether you can state the question precisely
 now, not whether you can answer it now. Ticket when the question is sharp,
-even if blocked; fog note when you cannot phrase it that sharply. Resolving a
-ticket clears the fog ahead of it; graduate whatever is now specifiable into
-fresh tickets and drop the fog note.
+even if blocked; fog note when you cannot phrase it that sharply. A fog note
+names the tool result or store id it rests on, or carries the word
+`unverified`; a note written from summarized memory has survived whole maps
+after the fact it described had already changed. Before a fog note graduates
+into a ticket or is restated in a later note, re-check it against the store or
+the repository. Resolving a ticket clears the fog ahead of it; graduate
+whatever is now specifiable into fresh tickets and append a note
+`fog cleared by <id>: <what replaced it>`. Work notes are append-only, so the
+latest note wins; nothing is removed.
 
 Work beyond the destination is out of scope, not fog: cancel it with the
 reason and leave it out of the decisions list. It returns only if the
@@ -71,12 +77,18 @@ destination is redrawn, and then as a fresh effort.
 
 ## Invocation
 
-Never resolve more than one ticket per session, except research tickets.
+Unattended, resolve at most one ticket per session (research tickets
+excepted): the rule keeps an AFK agent from deciding a whole map alone.
+With the owner present, continue on the owner's word and stop only at fog,
+a research ticket, or the end of the frontier.
 
 ### Chart the map
 
 1. **Name the destination.** Grill with the domain model in hand until the
    destination is one or two sentences; it becomes the parent's acceptance.
+   When the owner brings an example, ask whether the example is the
+   destination or one instance of it; when the owner names a reference tool,
+   read how that tool answers the question before presenting options.
 2. **Map the frontier.** Grill again, breadth-first: fan out across the whole
    space, surfacing the open decisions and the first steps takeable now. If
    this surfaces no fog and the whole journey fits one session, you do not

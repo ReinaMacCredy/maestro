@@ -264,3 +264,30 @@ test("645 [lint] memory help and WORKFLOW.md state the any-cwd rule; uninstall h
     }
   });
 });
+
+const skillsRoot = join(import.meta.dir, "..", "src", "plugins", "skills");
+
+function sectionOf(text: string, heading: string): string {
+  const start = text.indexOf(heading);
+  expect({ heading, found: start >= 0 }).toEqual({ heading, found: true });
+  const rest = text.slice(start + heading.length);
+  const next = rest.search(/\n##+ /);
+  return next >= 0 ? rest.slice(0, next) : rest;
+}
+
+test("648 [lint] wayfinder: fog notes carry evidence and are cleared by note, an example is one instance, the owner sets the pace (doctrine review 1-4)", async () => {
+  const wayfinder = await Bun.file(join(skillsRoot, "maestro-design", "references", "wayfinder.md")).text();
+  const fog = sectionOf(wayfinder, "## Fog of war");
+  expect(fog).toContain("unverified");
+  expect(fog).toMatch(/re-check/);
+  expect(wayfinder).not.toContain("drop the fog note");
+  expect(fog).toContain("fog cleared by <id>");
+  const chart = sectionOf(wayfinder, "### Chart the map");
+  const stepOne = chart.split(/\n2\. /)[0] ?? "";
+  expect(stepOne).toContain("one instance of it");
+  expect(stepOne).toContain("reference tool");
+  const invocation = sectionOf(wayfinder, "## Invocation");
+  expect(invocation).toContain("Unattended, resolve at most one ticket per session");
+  expect(invocation).toContain("With the owner present");
+  expect(wayfinder).not.toContain("Never resolve more than one ticket per session");
+});
