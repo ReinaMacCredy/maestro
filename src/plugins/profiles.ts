@@ -442,9 +442,13 @@ export function readSeatToken(home: string): string | null {
 
 // d849: the kit's seat-settings.base.json minus cleanupPeriodDays (projects is
 // shared, A4) and language; the token is omitted, never empty, when absent.
+// d852: <home> is an ancestor of every project under it, so the owner's
+// ~/.claude/CLAUDE.md matches the project-scope pattern and would load into
+// the seat regardless of CLAUDE_CONFIG_DIR; excluded by absolute path.
 function seatSettingsBase(home: string, token: string | null): Record<string, unknown> {
   return {
     permissions: { defaultMode: "bypassPermissions" },
+    claudeMdExcludes: [join(home, ".claude", "CLAUDE.md"), join(home, ".claude", "rules", "**")],
     skipDangerousModePermissionPrompt: true,
     hooks: { SessionStart: [herdrSessionHook(home)] },
     env: {

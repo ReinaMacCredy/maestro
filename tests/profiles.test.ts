@@ -280,6 +280,8 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
       workflowKeywordTriggerEnabled: false,
       attribution: { commit: "", pr: "", sessionUrl: false },
       enabledPlugins: {},
+      // d852: the base grew claudeMdExcludes after R3 was written (R9).
+      claudeMdExcludes: [join(fixture.home, ".claude", "CLAUDE.md"), join(fixture.home, ".claude", "rules", "**")],
       outputStyle: "Concise",
     });
     expect((await stat(leadSettings)).mode & 0o777).toBe(0o600);
@@ -315,5 +317,25 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
     expect(await denyLine("team-supervisor")).not.toContain("Bash(herdr:*)");
     expect(await denyLine("refuter")).not.toContain("Bash(herdr:*)");
     expect(await denyLine("lead")).toBe("disallowedTools: Agent, LSP, Bash(claude:*)");
+  });
+});
+
+// seat-config-dirs R9 (d852): the home dir is an ancestor of every project
+// under it, so the owner's ~/.claude/CLAUDE.md matches the project-scope
+// pattern for <home> and loads into a seat regardless of CLAUDE_CONFIG_DIR;
+// the base excludes it and ~/.claude/rules/** by absolute path.
+test("seat-dirs-claudemd-excludes: every rendered seat settings.json carries claudeMdExcludes naming the owner's <home>/.claude/CLAUDE.md and <home>/.claude/rules/** as absolute paths (R9, d852)", async () => {
+  await withFixture(async (fixture) => {
+    await materializeSkills(fixture.home, "dev");
+    await materializeProfiles(fixture.home, fixture.repo);
+    for (const seat of ["lead", "peer", "team-supervisor"] as const) {
+      const text = await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8");
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      expect({ seat, claudeMdExcludes: parsed.claudeMdExcludes }).toEqual({
+        seat,
+        claudeMdExcludes: [join(fixture.home, ".claude", "CLAUDE.md"), join(fixture.home, ".claude", "rules", "**")],
+      });
+      expect({ seat, text }).toEqual({ seat, text: expect.not.stringContaining("~") });
+    }
   });
 });
