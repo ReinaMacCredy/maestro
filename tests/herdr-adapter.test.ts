@@ -109,12 +109,13 @@ test("plugin-manifest: install renders the manifest with the binary path and lin
     await editFakeHerdrState(fake, (state) => {
       state.plugins.push({ plugin_id: "local.attention-broker", name: "Attention Broker", plugin_root: "/elsewhere" });
       // A stale maestro link from another home moves to this one.
-      state.plugins.push({ plugin_id: "maestro", name: "Maestro", plugin_root: join(fixture.root, "stale-home", ".maestro", "herdr-plugin") });
+      state.plugins.push({ plugin_id: "maestro", name: "Maestro", plugin_root: join(fixture.root, "stale-home", "maestro") });
     });
     const environment = { ...fake.env, PATH: [join(fixture.home, ".local", "bin"), ...(fake.env.PATH ?? "").split(":")].join(":"), SHELL: "/bin/zsh" };
     const installed = await runCli(fixture, ["install"], environment);
     expect(installed.exitCode).toBe(0);
-    const directory = join(fixture.home, ".maestro", "herdr-plugin");
+    // d833: the room is the plugin root so Herdr's hooks run from the Hub.
+    const directory = join(fixture.home, "maestro");
     expect(installed.stdout).toContain(`herdr plugin: linked at ${directory}`);
     const manifest = Bun.TOML.parse(await readFile(join(directory, "herdr-plugin.toml"), "utf8")) as Record<string, any>;
     const binary = join(fixture.home, ".local", "bin", "maestro");
@@ -141,7 +142,8 @@ test("plugin-manifest: install renders the manifest with the binary path and lin
     const uninstalled = await runCli(fixture, ["uninstall"], environment);
     expect(uninstalled.exitCode).toBe(0);
     expect(await links()).toEqual([["plugin", "unlink", "maestro"], ["plugin", "link", directory], ["plugin", "unlink", "maestro"]]);
-    expect(existsSync(directory)).toBe(false);
+    expect(existsSync(join(directory, "herdr-plugin.toml"))).toBe(false);
+    expect(existsSync(join(directory, "SLP.md"))).toBe(true);
     expect((await readFakeHerdrState(fake)).plugins.map((plugin: { plugin_id: string }) => plugin.plugin_id))
       .toEqual(["local.attention-broker"]);
     expect(await tripwireInvocations(fake)).toEqual([]);
@@ -158,7 +160,7 @@ test("install without Herdr renders the manifest, warns, and completes", async (
     expect(installed.exitCode).toBe(0);
     expect(installed.stdout).toContain("herdr plugin: not linked (cannot reach Herdr at ");
     expect(installed.stdout).toContain("rerun maestro install with Herdr running");
-    expect(existsSync(join(fixture.home, ".maestro", "herdr-plugin", "herdr-plugin.toml"))).toBe(true);
+    expect(existsSync(join(fixture.home, "maestro", "herdr-plugin.toml"))).toBe(true);
   });
 }, 30_000);
 
@@ -512,7 +514,7 @@ test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the 
     const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
-    const hooked = await runCliAt(fixture, fixture.root, ["slp", "event", "--json"], {
+    const hooked = await runCliAt(fixture, room, ["slp", "event", "--json"], {
       ...fake.env,
       HERDR_PLUGIN_EVENT: "pane.closed",
       HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "pane_closed", data: { pane_id: lead.paneId, workspace_id: data.team.workspaceId } }),
@@ -521,7 +523,7 @@ test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the 
     expect(envelope<{ handled: boolean; seat: string }>(hooked.stdout)).toEqual({ handled: true, seat: lead.name });
     expect(runtimeEntries(fixture)).toEqual([expect.objectContaining({ flag: "pane:closed", work_id: data.work.id })]);
     expect(await attentionPrompts(fake)).toEqual([["agent", "prompt", supervisor.name, `[attention] ${lead.name} pane closed`]]);
-    const unknown = await runCliAt(fixture, fixture.root, ["slp", "event", "--json"], {
+    const unknown = await runCliAt(fixture, room, ["slp", "event", "--json"], {
       ...fake.env,
       HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "pane_closed", data: { pane_id: "w9:p9", workspace_id: "w9" } }),
     });
@@ -546,7 +548,7 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
       delete state.processes[data.team.runtimePaneId];
       state.behavior.runtimePane = "spawn";
     });
-    const restored = await runCliAt(fixture, fixture.root, ["slp", "restore", "--json"], fake.env);
+    const restored = await runCliAt(fixture, room, ["slp", "restore", "--json"], fake.env);
     expect(restored.exitCode).toBe(0);
     const outcome = envelope<{ generations: Array<{ generation: string; outcome: string; paneId?: string }> }>(restored.stdout).generations;
     expect(outcome).toEqual([{ generation: `${data.team.teamId}:g${data.team.generation}`, outcome: "reopened", paneId: expect.any(String) }]);
@@ -556,7 +558,7 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     expect(database.query<{ runtime_pane_id: string }, []>("SELECT runtime_pane_id FROM slp_local_teams").get()?.runtime_pane_id).toBe(outcome[0]?.paneId);
     database.close();
     // A second restore sees the live runtime lock and opens nothing.
-    const again = await runCliAt(fixture, fixture.root, ["slp", "restore", "--json"], fake.env);
+    const again = await runCliAt(fixture, room, ["slp", "restore", "--json"], fake.env);
     expect(envelope<{ generations: Array<{ outcome: string }> }>(again.stdout).generations[0]?.outcome).toBe("running");
     expect((await fakeHerdrCommands(fake)).filter((command) => command[0] === "plugin" && command[2] === "open")).toHaveLength(2);
     expect(await tripwireInvocations(fake)).toEqual([]);
@@ -576,7 +578,7 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     });
     const opens = async () => (await fakeHerdrCommands(fake)).filter((command) => command[0] === "plugin" && command[2] === "open");
     const before = (await opens()).length;
-    const restored = await runCliAt(fixture, fixture.root, ["slp", "restore", "--json"], fake.env);
+    const restored = await runCliAt(fixture, room, ["slp", "restore", "--json"], fake.env);
     expect(restored.exitCode).toBe(0);
     expect(envelope<{ generations: Array<{ generation: string; outcome: string }> }>(restored.stdout).generations).toEqual([
       { generation: `${data.team.teamId}:g${data.team.generation}`, outcome: "lost" },
@@ -585,7 +587,7 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     expect(runtimeEntries(fixture)).toEqual([expect.objectContaining({ flag: "pane:lost", work_id: data.work.id })]);
     expect(runtimeEntries(fixture)[0]?.body).toContain("survived the Herdr restart");
     // Restore again: the loss is noted once.
-    await runCliAt(fixture, fixture.root, ["slp", "restore", "--json"], fake.env);
+    await runCliAt(fixture, room, ["slp", "restore", "--json"], fake.env);
     expect(runtimeEntries(fixture)).toHaveLength(1);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });

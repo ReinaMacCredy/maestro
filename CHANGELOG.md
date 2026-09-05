@@ -21,9 +21,11 @@ TypeScript-on-Bun line and continues the existing version sequence.
   `pane.send_input` (d830), and an unreachable socket fails with
   `HERDR_UNAVAILABLE` naming the path. The kernel never imports the client.
 - Maestro ships a Herdr plugin. `maestro install` renders
-  `~/.maestro/herdr-plugin/herdr-plugin.toml` (id `maestro`, min Herdr
-  0.8.2, macOS and Linux) with the installed binary and links it over the
-  socket, once; `maestro uninstall` removes the link. The manifest declares
+  `~/maestro/herdr-plugin.toml` (id `maestro`, min Herdr 0.8.2, macOS and
+  Linux) with the installed binary and links the Hub room as the plugin over
+  the socket, once, so Herdr runs its hooks from the room (d833: the kernel
+  refuses a cwd under `.maestro`); `maestro uninstall` removes the link and
+  the file. The manifest declares
   the `runtime` pane, the `slp restore` startup hook and the `pane.exited`
   and `pane.closed` event hooks, and no actions.
 - The team runtime pane: `team start` opens the plugin's `runtime` pane

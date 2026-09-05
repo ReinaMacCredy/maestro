@@ -1,6 +1,7 @@
 # Maestro's Herdr plugin (Hub d96). `maestro install` renders this file into
-# ~/.maestro/herdr-plugin/ with every "maestro" argv head replaced by the
-# installed binary, then links that directory over the socket.
+# the Hub room (~/maestro/herdr-plugin.toml, d833) with every "maestro" argv
+# head replaced by the installed binary, then links the room over the socket;
+# Herdr runs the hooks with the room as their working directory.
 id = "maestro"
 name = "Maestro"
 version = "0.0.0"

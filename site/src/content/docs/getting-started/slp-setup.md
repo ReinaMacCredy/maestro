@@ -87,7 +87,7 @@ maestro work take <work-id>
 | `~/.claude/agents/maestro-*.md`, `~/.codex/maestro-*.config.toml`, `~/.codex/agents/maestro-*.toml` | `maestro install` | Rendered launch bundles for every resolvable profile; only `maestro-*` files are written or removed | Rewritten by every install, removed by uninstall |
 | Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and the runtime pane | Exists only while the generation runs |
 | `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | The runtime pane's lock and its pending-wake state | Temporary; deleted at team stop |
-| `~/.maestro/herdr-plugin/` | `maestro install` | The rendered Herdr plugin manifest that Herdr links as `maestro` | Rewritten by every install, removed by uninstall |
+| `~/maestro/herdr-plugin.toml` | `maestro install` | The rendered Herdr plugin manifest; the room is linked as the plugin `maestro` so its hooks run from the Hub | Rewritten by every install, removed by uninstall |
 
 Never edit either SQLite store by hand. Use Maestro operations so current state
 and minimal activity remain in the same transaction.

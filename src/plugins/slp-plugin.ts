@@ -5,13 +5,19 @@ import { HerdrClient, SlpRuntimeError } from "./herdr-client.ts";
 
 // Hub d96: maestro ships a Herdr plugin manifest; install renders it with the
 // installed binary and links it over the socket, uninstall unlinks it. Every
-// step touches only the `maestro` plugin (A4).
+// step touches only the `maestro` plugin (A4). The plugin root is the Hub
+// room (d833): Herdr runs hooks with the plugin directory as cwd, and the
+// kernel refuses a cwd under .maestro, so the room is where the hooks run.
 
 export const herdrPluginId = "maestro";
 const manifestSource = join(import.meta.dir, "resources", "herdr-plugin", "herdr-plugin.toml");
 
 export function herdrPluginDirectory(home: string): string {
-  return join(home, ".maestro", "herdr-plugin");
+  return join(home, "maestro");
+}
+
+export function herdrPluginManifestPath(home: string): string {
+  return join(herdrPluginDirectory(home), "herdr-plugin.toml");
 }
 
 export async function renderHerdrPluginManifest(binary: string, version: string): Promise<string> {
@@ -44,7 +50,7 @@ export async function linkHerdrPlugin(
 ): Promise<HerdrPluginLink> {
   const directory = herdrPluginDirectory(home);
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, "herdr-plugin.toml"), await renderHerdrPluginManifest(binary, version));
+  await writeFile(herdrPluginManifestPath(home), await renderHerdrPluginManifest(binary, version));
   const client = new HerdrClient(environment);
   try {
     const present = (await client.pluginList()).find((plugin) => plugin.plugin_id === herdrPluginId);
@@ -71,16 +77,16 @@ export async function unlinkHerdrPlugin(
   environment: Record<string, string | undefined> = process.env,
 ): Promise<string[]> {
   const removed: string[] = [];
-  const directory = herdrPluginDirectory(home);
+  const manifest = herdrPluginManifestPath(home);
   try {
     if (await new HerdrClient(environment).pluginUnlink(herdrPluginId)) removed.push(`herdr plugin ${herdrPluginId}`);
   } catch (error) {
     if (!(error instanceof SlpRuntimeError)) throw error;
     process.stderr.write(`warning: herdr plugin ${herdrPluginId} was not unlinked (${error.message})\n`);
   }
-  if (existsSync(directory)) {
-    await rm(directory, { force: true, recursive: true });
-    removed.push(directory);
+  if (existsSync(manifest)) {
+    await rm(manifest, { force: true });
+    removed.push(manifest);
   }
   return removed;
 }

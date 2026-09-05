@@ -342,8 +342,9 @@ the next ingest would promote.
 
 ### `slp runtime`, `slp restore`, `slp event`, and `slp status`
 
-`maestro install` renders `~/.maestro/herdr-plugin/herdr-plugin.toml` and
-links it as the Herdr plugin `maestro`; `maestro uninstall` removes the link.
+`maestro install` renders `~/maestro/herdr-plugin.toml` and links the Hub
+room as the Herdr plugin `maestro` (its hooks run from the room, d833);
+`maestro uninstall` removes the link and the file.
 Herdr launches the first three from that manifest and they are not SLP
 operations: `slp runtime` is the `runtime` pane entrypoint (`team start`
 opens it with `MAESTRO_SLP_TEAM` and `MAESTRO_SLP_GENERATION` in its env;
