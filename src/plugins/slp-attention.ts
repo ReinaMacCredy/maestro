@@ -171,14 +171,20 @@ function teamCard(store: Store, teamId: string, generation: number): WorkRow | n
     .get(teamId, generation) ?? null;
 }
 
-function heldActive(store: Store, teamId: string, generation: number, name: string): WorkRow | null {
+function heldActive(
+  store: Store,
+  teamId: string,
+  generation: number,
+  name: string,
+  excludeId: string | null = null,
+): WorkRow | null {
   return store.database
-    .query<WorkRow, [string, number, string]>(
+    .query<WorkRow, [string, number, string, string]>(
       `SELECT id, state, owner, assigned_to, created_by, return_revision FROM slp_work
-       WHERE team_id = ? AND generation = ? AND state = 'ACTIVE' AND owner = ?
+       WHERE team_id = ? AND generation = ? AND state = 'ACTIVE' AND owner = ? AND id <> ?
        ORDER BY updated_at DESC, id LIMIT 1`,
     )
-    .get(teamId, generation, name) ?? null;
+    .get(teamId, generation, name, excludeId ?? "") ?? null;
 }
 
 function latestEntry(store: Store, workId: string): EntryRow | null {
@@ -542,7 +548,10 @@ export class AttentionRuntime {
         await this.persist();
         return changed;
       }
-      const held = heldActive(store, team.team_id, team.generation, seat.name);
+      // d834: the silence stall is for delivery items only; the Lead holding
+      // the team card ACTIVE while it waits on its Peers is not silent.
+      const card = teamCard(store, team.team_id, team.generation);
+      const held = heldActive(store, team.team_id, team.generation, seat.name, card?.id ?? null);
       if (held) {
         const latest = latestEntry(store, held.id);
         // d761 layer one: a seat that declared --blocked is legitimately waiting.

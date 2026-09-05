@@ -711,3 +711,35 @@ test("live-event-names: a live pane.agent_status_changed with the dotted wire na
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
+
+test("team-card-silence: a Lead idle while holding only the team card records no stall, a Peer idle holding a delivery item still does (d834, live g15 2026-09-05)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, subscribed } = await startLiveTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", data.work.id, "--json"], leadEnvironment)).exitCode).toBe(0);
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Delivery item", "--to", "peer-card", "--json"], leadEnvironment);
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    await subscribed();
+    // The Lead's ordinary wait on its Peer: idle, then done, holding w1 only.
+    for (const status of ["working", "idle", "working", "done"]) {
+      await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: status } });
+      await Bun.sleep(150);
+    }
+    await Bun.sleep(400);
+    expect(runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence")).toEqual([]);
+    // The team card keeps the dialog stall.
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "blocked" } });
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:dialog" && entry.work_id === data.work.id), 8_000, "the dialog stall on the team card");
+    // A Peer idle while holding its delivery item is still silent.
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "working" } });
+    await Bun.sleep(150);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:silence" && entry.work_id === peer.work.id), 8_000, "the silence stall on the delivery item");
+    expect(runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence").map((entry) => entry.work_id)).toEqual([peer.work.id]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);
