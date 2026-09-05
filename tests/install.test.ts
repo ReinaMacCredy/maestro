@@ -768,3 +768,36 @@ test("seat-dirs-token: install --seat-token from stdin writes the 0600 token fil
     expect(await readFile(userClaudeJson, "utf8")).toBe(userClaudeJsonText);
   });
 }, 60_000);
+
+// seat-config-dirs R15 (d855 rule 4): under umask 022 a default write lands
+// 0644 and a default mkdir 0755 before any chmod (SEC-3), and the seat
+// .claude.json had no chmod at all (SEC-5); every seat secret file is created
+// 0600 and every seat dir 0700, and a pre-existing file is brought to 0600.
+test("seat-dirs-modes: under umask 022 install --seat-token leaves the token file, every seat settings.json and every seat .claude.json at 0600 and the seat root and dirs at 0700, a pre-existing 0644 .claude.json and settings.json included (R15, d855)", async () => {
+  const previous = process.umask(0o022);
+  try {
+    await withFixture(async (fixture) => {
+      const { path } = await prepareInstallFixture(fixture);
+      const leadDir = join(seatConfigRoot(fixture.home), "lead");
+      await mkdir(leadDir, { recursive: true });
+      await writeFile(join(leadDir, ".claude.json"), '{"hasCompletedOnboarding":true,"mcpServers":{},"numStartups":1}\n');
+      await writeFile(join(leadDir, "settings.json"), "{}\n");
+      for (const file of [".claude.json", "settings.json"]) await chmod(join(leadDir, file), 0o644);
+      const mode = async (target: string) => (await stat(target)).mode & 0o777;
+
+      const installed = await runCli(fixture, ["install", "--seat-token"], { PATH: path }, "sk-ant-oat01-R15-fixture\n");
+      expect(installed.exitCode).toBe(0);
+      expect(await mode(seatTokenPath(fixture.home))).toBe(0o600);
+      expect(await mode(seatConfigRoot(fixture.home))).toBe(0o700);
+      for (const seat of ["lead", "peer", "team-supervisor"]) {
+        const directory = join(seatConfigRoot(fixture.home), seat);
+        expect({ seat, mode: await mode(directory) }).toEqual({ seat, mode: 0o700 });
+        expect({ seat, file: "settings.json", mode: await mode(join(directory, "settings.json")) }).toEqual({ seat, file: "settings.json", mode: 0o600 });
+        expect({ seat, file: ".claude.json", mode: await mode(join(directory, ".claude.json")) }).toEqual({ seat, file: ".claude.json", mode: 0o600 });
+      }
+      expect(JSON.parse(await readFile(join(leadDir, ".claude.json"), "utf8"))).toEqual({ hasCompletedOnboarding: true, mcpServers: {}, numStartups: 1 });
+    });
+  } finally {
+    process.umask(previous);
+  }
+}, 60_000);

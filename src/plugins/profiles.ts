@@ -533,9 +533,10 @@ export function mergeSettings(base: Record<string, unknown>, overlay: Record<str
   return merged;
 }
 
+// d855: created 0600 so no umask window leaves the token-bearing file readable.
 async function writeIfChanged(path: string, content: string): Promise<void> {
   const existing = existsSync(path) ? await readFile(path, "utf8") : null;
-  if (existing !== content) await writeFile(path, content);
+  if (existing !== content) await writeFile(path, content, { mode: 0o600 });
 }
 
 async function ensureLink(link: string, target: string): Promise<void> {
@@ -552,7 +553,8 @@ async function ensureLink(link: string, target: string): Promise<void> {
 
 async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, token: string | null): Promise<string> {
   const directory = seatDirectory(home, plan.seat);
-  await mkdir(join(directory, "skills"), { recursive: true });
+  // d855: 0700 at creation; the chmods keep a pre-existing dir and file private.
+  await mkdir(join(directory, "skills"), { mode: 0o700, recursive: true });
   await chmod(seatConfigRoot(home), 0o700);
   await chmod(directory, 0o700);
   const settingsPath = join(directory, "settings.json");
@@ -576,8 +578,9 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
   for (const shared of ["projects", "plugins"]) await ensureLink(join(directory, shared), join(home, ".claude", shared));
   const claudeJson = join(directory, ".claude.json");
   if (!existsSync(claudeJson)) {
-    await writeFile(claudeJson, `${JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {} }, null, 2)}\n`);
+    await writeFile(claudeJson, `${JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {} }, null, 2)}\n`, { mode: 0o600 });
   }
+  await chmod(claudeJson, 0o600);
   return directory;
 }
 

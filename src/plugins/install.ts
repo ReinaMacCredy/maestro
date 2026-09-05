@@ -511,9 +511,10 @@ export async function writeSeatToken(home: string, raw: string): Promise<void> {
       "maestro install --seat-token reads the token from stdin and it was empty; run: claude setup-token | maestro install --seat-token",
     );
   }
-  await mkdir(seatConfigRoot(home), { recursive: true });
+  // d855: private at creation, the chmods cover a pre-existing dir and file.
+  await mkdir(seatConfigRoot(home), { mode: 0o700, recursive: true });
   await chmod(seatConfigRoot(home), 0o700);
-  await writeFile(seatTokenPath(home), token);
+  await writeFile(seatTokenPath(home), token, { mode: 0o600 });
   await chmod(seatTokenPath(home), 0o600);
 }
 
