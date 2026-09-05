@@ -189,7 +189,7 @@ test("128 bundle save ingests a foreign trio dir straight to archived", async ()
   });
 });
 
-test("129 [lint] install materializes the 9 maestro skills with a version stamp and refs", async () => {
+test("129 [lint] install materializes the 11 maestro skills with a version stamp and refs", async () => {
   await withFixture(async (fixture) => {
     // Proves installed artifact shape, not harness discovery or loading of those skills.
     const { path } = await prepareInstallFixture(fixture);
@@ -203,6 +203,7 @@ test("129 [lint] install materializes the 9 maestro skills with a version stamp 
       "maestro-design",
       "maestro-diagnose",
       "maestro-explore",
+      "maestro-graph",
       "maestro-improve",
       "maestro-questionnaire",
       "maestro-work",
@@ -220,6 +221,7 @@ test("129 [lint] install materializes the 9 maestro skills with a version stamp 
       join("maestro-explore", "references", "prototype.md"),
       join("maestro-explore", "references", "prototype-logic.md"),
       join("maestro-explore", "references", "prototype-ui.md"),
+      join("maestro-graph", "references", "authoring.md"),
       join("maestro-work", "references", "worktree.md"),
       join("maestro-work", "references", "conflict-handoff.md"),
       join("maestro-work", "references", "tdd-antipatterns.md"),
