@@ -406,3 +406,31 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the 
     expect(owner).not.toContain("| rung |");
   });
 });
+
+// seat-config-dirs R8 (d847): a Peer reaches the Lead and other Peers only
+// through recorded notes and returns; the shipped shared contract and peer
+// mandate no longer tell it to prompt panes by hand, while the Lead and the
+// Team Supervisor keep the hand-typed ask.
+test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop the Peer's direct hand-prompt wording; the Lead and Team Supervisor keep theirs (R8, d847)", async () => {
+  const root = join(import.meta.dir, "..");
+  const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
+  expect(shared).not.toContain("Communicate directly along the team topology");
+  expect(shared).not.toContain("When you prompt a pane by hand");
+  expect(shared).not.toContain("Hand-typed asks are allowed");
+  expect(shared).toContain("A Peer reaches the Lead and other Peers only through recorded work notes and returns");
+  expect(shared).toContain("The Lead and the Team Supervisor may add a hand-typed ask");
+  expect(shared).toContain("herdr agent prompt");
+
+  const profiles = join(root, "src", "plugins", "resources", "profiles");
+  const peer = unwrap(await Bun.file(join(profiles, "peer.md")).text());
+  expect(peer).not.toContain("Communicate directly");
+  expect(peer).toContain("only through recorded work notes and returns");
+  expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
+  expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
+
+  const recipe = unwrap(await Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text());
+  expect(recipe).not.toContain("The Team Supervisor, Lead, and Peers may talk directly");
+  expect(recipe).toContain("recorded work notes and returns");
+});

@@ -37,7 +37,10 @@ profile for this generation and is recorded on the team row; the Team
 Supervisor and Lead change through a shadowing file in `~/maestro/profiles/`.
 The retired `--lead-model`, `--peer-model` and `--supervisor-model` flags are
 refused with `RETIRED_FLAG` naming the replacement; a missing render fails with
-`PROFILE_NOT_INSTALLED` before any pane opens.
+`PROFILE_NOT_INSTALLED` before any pane opens. Each Claude seat pane is
+created with `CLAUDE_CONFIG_DIR=~/.maestro/claude/<seat>` (d850); a Claude
+seat with no seat token fails with `SEAT_TOKEN_MISSING`, naming
+`maestro install --seat-token`, before any pane opens.
 
 ### `team stop`
 
@@ -105,7 +108,9 @@ Maestro reuses that Peer or opens it through a rendered profile: `--profile
 shared contract + Peer mandate + that body (`maestro-peer-<name>`), and
 otherwise the generation's `peer` profile applies. A Peer that already runs
 another profile is refused with `PEER_PROFILE_MISMATCH`; a missing render
-fails with `PROFILE_NOT_INSTALLED` and nothing is rendered on demand. The new
+fails with `PROFILE_NOT_INSTALLED` and nothing is rendered on demand; a Claude
+Peer is opened with `CLAUDE_CONFIG_DIR=~/.maestro/claude/peer` and refused
+with `SEAT_TOKEN_MISSING` when the seat token is absent. The new
 work state is `OPEN`, and the assignee's pane is woken with `[from
 <role>][<id> OPEN] <objective>; read: maestro status <id>` whether it was
 just opened or already acknowledged (d840). `--fresh` resets a reused Peer
@@ -386,8 +391,12 @@ Limits: `nodes` counts issued agent nodes, `loops` counts loop-back firings,
 
 ### `install`, `update`, and `uninstall`
 
-- `maestro install` installs the runtime, wires the current repository and
-  scaffolds the Hub room including `~/maestro/SLP.md`.
+- `maestro install` installs the runtime, wires the current repository,
+  scaffolds the Hub room including `~/maestro/SLP.md`, and renders one
+  Claude seat config dir per seat under `~/.maestro/claude/`.
+- `maestro install --seat-token` also reads one `claude setup-token` token
+  from stdin and stores it at `~/.maestro/claude/oauth-token` (0600) for every
+  Claude seat; run it as `claude setup-token | maestro install --seat-token`.
 - `maestro update` fast-forwards the recorded source and resynchronizes the
   runtime.
 - `maestro uninstall` removes managed repository wiring without deleting its

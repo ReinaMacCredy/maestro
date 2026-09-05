@@ -18,10 +18,12 @@ Hub Supervisor <-> Team Supervisor
                 Peer 1  <-> Peer 2
 ```
 
-Every displayed edge is a direct conversation channel. In the supported SLP
-flow, the Hub Supervisor reaches a team only through its Team Supervisor. The
-Team Supervisor, Lead, and Peers may talk directly within the team workspace.
-When you prompt a pane by hand (`herdr agent prompt`), open every prompt with a
+Every displayed edge is a conversation channel. In the supported SLP flow, the
+Hub Supervisor reaches a team only through its Team Supervisor. The Team
+Supervisor and the Lead may talk directly within the team workspace; a Peer
+reaches the Lead and other Peers through recorded work notes and returns, which
+Maestro pushes for it, and its seat denies `herdr` (d847). When you prompt a
+pane by hand (`herdr agent prompt`), open every prompt with a
 plain lowercase sentence, never a word a harness could read as a slash command,
 and confirm `agent_status=working` before leaving: a dropped brief looks
 identical to a slow start.

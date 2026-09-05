@@ -11,6 +11,57 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+Every Claude seat now launches under its own `CLAUDE_CONFIG_DIR` rendered by
+`maestro install`, with its own settings, skill allowlist and deny list, the
+way seatworks-starter isolates its seats; auth is one `claude setup-token`
+token handed to `maestro install --seat-token`.
+
+### Added
+
+- Seat config dirs (d845, d849, w677): `maestro install` renders
+  `~/.maestro/claude/<seat>/` for `lead`, `peer` and `team-supervisor`, each
+  with `agents/` (the seat's Claude render; every `peer-<name>` render in the
+  peer dir), `settings.json` (the Maestro base merged with the profile's
+  `settings:` overlay, 0600, the Herdr SessionStart hook carried from the
+  user settings, no `cleanupPeriodDays`), `skills/` symlinks, `projects` and
+  `plugins` symlinks to `~/.claude`, and a `.claude.json` written once. Bare
+  node and council profiles keep rendering into `~/.claude/agents` for the
+  subagent executor. `team start` and `work add --to` create a Claude seat
+  pane with `CLAUDE_CONFIG_DIR=<dir>` through `tab.create env`, close and
+  recreate a matching-label tab found at a shell prompt, and leave Codex
+  panes unchanged (d850). `maestro uninstall` removes `~/.maestro/claude/`.
+- `maestro install --seat-token` (d846): reads one `claude setup-token` token
+  from stdin, stores it at `~/.maestro/claude/oauth-token` (0600) and renders
+  it into every seat settings `env` as `CLAUDE_CODE_OAUTH_TOKEN`; the token
+  never appears in install output. Without it install warns, `maestro doctor`
+  reports `seat token: missing`, and `team start` or `work add --to` refuse
+  `SEAT_TOKEN_MISSING` for a Claude seat before any pane opens.
+- Profile keys `skills:` (d848) and `settings:` (d849): a seat dir's `skills/`
+  is the union of `skills:` across every profile rendered into it, resolved
+  in `~/maestro/skills` then `~/.claude/skills`, an unknown name refused
+  naming the profile; `settings:` is a Claude seat overlay where `null`
+  removes a key. Shipped defaults: lead `maestro-work, maestro-design,
+  maestro-council, maestro-graph, maestro-explore, maestro-diagnose`; peer
+  `maestro-work, maestro-explore, maestro-diagnose, maestro-verify`;
+  team-supervisor `maestro-work`.
+
+### Changed
+
+- Seat deny lists (d847): the shipped seats disallow `Agent`, `Task`,
+  `Workflow`, `SlashCommand`, `WebSearch`, `TodoWrite`, `EnterPlanMode`,
+  `ExitPlanMode`, `AskUserQuestion`, `Bash(claude:*)` and
+  `Bash(npx claude:*)`; the Lead adds `LSP`; the Peer adds `Bash(herdr:*)`.
+  Every composed `peer-<name>` render carries the Peer list as well (d851).
+- Peer hand prompts (d847): the shipped SLP.md shared contract, the shipped
+  `peer.md` and the `slp` recipe no longer tell a Peer to prompt other panes
+  by hand; a Peer reaches the Lead and other Peers through recorded work
+  notes and returns, which Maestro pushes for it. The Lead and the Team
+  Supervisor keep the hand-typed ask.
+
+### Fixed
+
+- None.
+
 ## [0.120.0] - 2026-09-05
 
 `maestro work add --to <peer> --fresh` reuses a Peer pane with a fresh harness

@@ -47,10 +47,12 @@ Herdr itself is outside that guarantee.
 
 The three team seats (Team Supervisor, Lead, Peer) run as native harness
 profiles (`claude --agent maestro-<name>` or `codex --profile
-maestro-<name>`) rendered by `maestro install` into
-`~/.claude/agents/maestro-<name>.md` and the Codex profile files from the
-profile file the Workspace Pack names; the mandate is the seat's system
-prompt, so it survives `/clear` and compaction. A seat is changed by a
+maestro-<name>`) rendered by `maestro install` into the seat config dir
+`~/.maestro/claude/<seat>/agents/maestro-<name>.md` (each Claude seat runs
+under its own `CLAUDE_CONFIG_DIR`, with its own settings, skill allowlist and
+deny list; d845) and the Codex profile files, from the profile file the
+Workspace Pack names; the mandate is the seat's system prompt, so it survives
+`/clear` and compaction. A seat is changed by a
 shadowing file, `~/maestro/profiles/<seat>.md` or
 `<project>/.maestro/profiles/<seat>.md`, not by a flag; the one flag is
 `team start --peer-profile <name>` for one generation's Peers. The Hub
@@ -89,8 +91,10 @@ conversation dependent on a stored envelope.
 ## Peer
 
 A Peer takes work assigned to its identity, records material notes and returns
-results. It may speak directly to Team Supervisor, Lead and other Peers. It
-does not accept its own work and does not settle team decisions.
+results. It reaches the Team Supervisor, the Lead and other Peers only through
+recorded work notes and returns, which Maestro pushes to the seat they
+concern; its seat denies `herdr` (d847). It does not accept its own work and
+does not settle team decisions.
 
 ## Conversation and records
 

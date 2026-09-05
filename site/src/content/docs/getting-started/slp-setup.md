@@ -29,6 +29,17 @@ maestro version
 maestro doctor
 ```
 
+Claude seats log in with one long-lived token. Create it once with
+`claude setup-token` (a browser flow) and hand it to Maestro on stdin:
+
+```sh
+claude setup-token | maestro install --seat-token
+```
+
+`maestro doctor` then reports `seat token: present`; until it does, `team
+start` refuses `SEAT_TOKEN_MISSING` for any Claude seat. See
+[Seat config dirs](#seat-config-dirs-and-the-token).
+
 ## Start a team
 
 The Hub Supervisor starts a team from `~/maestro`:
@@ -89,7 +100,9 @@ maestro work take <work-id>
 | `<project>/.maestro/SLP.md` | Project | Exact managed snapshot used by the active generation | Remains after stop; replaced at the next start |
 | `<git-common-root>/.maestro/maestro.db` | Project | Checkout-scoped team bindings and roles, work, notes, returns, acceptances, team/technical decisions and minimal activity | Durable and shared by linked worktrees; every read is filtered to the current checkout |
 | `<project>/.maestro/profiles/`, `~/maestro/profiles/` | Project, Hub owner | Profile files (frontmatter + mandate) that shadow the shipped seat, council and node profiles by name | Durable; a running generation pins the ones it references |
-| `~/.claude/agents/maestro-*.md`, `~/.codex/maestro-*.config.toml`, `~/.codex/agents/maestro-*.toml` | `maestro install` | Rendered launch bundles for every resolvable profile; only `maestro-*` files are written or removed | Rewritten by every install, removed by uninstall |
+| `~/.maestro/claude/<seat>/` (`lead`, `peer`, `team-supervisor`) | `maestro install` | One `CLAUDE_CONFIG_DIR` per Claude seat kind: `agents/maestro-*.md` (the seat and, in `peer`, every `peer-*` render), `settings.json` (0600), `skills/` symlinks, `projects` and `plugins` symlinks to `~/.claude`, `.claude.json` | Rewritten by every install (the `.claude.json` only when absent), removed by uninstall |
+| `~/.maestro/claude/oauth-token` | `maestro install --seat-token` | The `claude setup-token` token every seat settings `env` carries (0600) | Kept by install, removed by uninstall |
+| `~/.claude/agents/maestro-*.md`, `~/.codex/maestro-*.config.toml`, `~/.codex/agents/maestro-*.toml` | `maestro install` | Rendered launch bundles: bare node and council profiles for Claude (the subagent executor), every profile for Codex; only `maestro-*` files are written or removed | Rewritten by every install, removed by uninstall |
 | Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and the runtime pane | Exists only while the generation runs |
 | `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | The runtime pane's lock and its pending-wake state | Temporary; deleted at team stop |
 | `~/maestro/herdr-plugin.toml` | `maestro install` | The rendered Herdr plugin manifest; the room is linked as the plugin `maestro` so its hooks run from the Hub | Rewritten by every install, removed by uninstall |
@@ -111,16 +124,20 @@ seat:
 
 A profile is one markdown file: YAML frontmatter (`harness: claude|codex`,
 `model`, `effort: low|medium|high|xhigh`, `permission` or `sandbox`,
-`autocompact`, `disallowed_tools`, `description`) and a body that is the
-seat's mandate. Lookup is `<project>/.maestro/profiles/<name>.md`, then
-`~/maestro/profiles/<name>.md`, then the shipped copy; the first hit wins, so
-a Lead on Claude Opus is a `~/maestro/profiles/lead.md` shadow, not a flag.
-`maestro install` renders every resolvable profile into
-`~/.claude/agents/maestro-<name>.md` (`claude --agent maestro-<name>`),
-`~/.codex/maestro-<name>.config.toml` (`codex --profile maestro-<name>`) and
-the Codex sub-agent file `~/.codex/agents/maestro-<name>.toml`; a seat profile
-renders shared contract + mandate, any other profile also renders as
-`maestro-peer-<name>` (shared contract + Peer mandate + its body) for
+`autocompact`, `disallowed_tools`, `skills`, `settings` (Claude seat profiles
+only), `description`) and a body that is the seat's mandate. Lookup is
+`<project>/.maestro/profiles/<name>.md`, then `~/maestro/profiles/<name>.md`,
+then the shipped copy; the first hit wins, so a Lead on Claude Opus is a
+`~/maestro/profiles/lead.md` shadow, not a flag. `maestro install` renders
+every resolvable profile for Codex into `~/.codex/maestro-<name>.config.toml`
+(`codex --profile maestro-<name>`) and the Codex sub-agent file
+`~/.codex/agents/maestro-<name>.toml`, and for Claude into one agent file: the
+three seats and every `peer-<name>` under the seat config dir
+`~/.maestro/claude/<seat>/agents/maestro-<name>.md`, bare node and council
+profiles under `~/.claude/agents/maestro-<name>.md` for the subagent executor
+(`claude --agent maestro-<name>` in both cases). A seat profile renders shared
+contract + mandate; any other profile also renders as `maestro-peer-<name>`
+(shared contract + Peer mandate + its body, carrying the Peer deny list) for
 `work add --to peer-<name>`. `team start --peer-profile <name>` picks the Peer
 profile for one generation; `work add --to <peer> --profile <name>` picks it
 for one Peer. `work add --to <peer> --fresh` reuses an acknowledged Peer pane
@@ -133,6 +150,63 @@ does not exist fails with `PROFILE_NOT_FOUND`; a profile whose render is
 missing fails with `PROFILE_NOT_INSTALLED` naming `maestro install`. The
 three seats are the only profiles the pack names; the Hub Supervisor is the
 owner's own agent in `~/maestro`, and there is no Observer seat or marker.
+
+### Seat config dirs and the token
+
+Every Claude seat runs under its own `CLAUDE_CONFIG_DIR`, rendered by
+`maestro install` at `~/.maestro/claude/<seat>/` for `lead`, `peer` and
+`team-supervisor` (d845). A seat therefore sees none of the owner's
+`~/.claude`: no `CLAUDE.md`, no personal skills, no user settings or MCP
+servers. The dir holds:
+
+- `agents/`: the seat's rendered profile files; the `peer` dir also holds
+  every `peer-<name>` render.
+- `settings.json` (0600): the Maestro base merged with the profile's
+  `settings:` overlay (a `null` value removes a key). The base is
+  `permissions.defaultMode: bypassPermissions`,
+  `skipDangerousModePermissionPrompt`, the Herdr `SessionStart` hook copied
+  from your user settings (so `--fresh` still proves a new session), an `env`
+  block with the seat token and the `CLAUDE_CODE_DISABLE_*` switches for
+  workflows, cron, fast mode, bundled skills and git instructions,
+  `autoMemoryEnabled: false`, `disableWorkflows`, empty `attribution` and
+  `enabledPlugins: {}`. There is no `cleanupPeriodDays`: `projects` is shared
+  and a seat start must never delete your transcripts (d849).
+- `skills/`: one symlink per name in the union of `skills:` across every
+  profile rendered into the dir, resolved in `~/maestro/skills` then
+  `~/.claude/skills`; an unknown name fails install naming the profile (d848).
+  Shipped defaults: lead `maestro-work, maestro-design, maestro-council,
+  maestro-graph, maestro-explore, maestro-diagnose`; peer `maestro-work,
+  maestro-explore, maestro-diagnose, maestro-verify`; team-supervisor
+  `maestro-work`.
+- `projects` and `plugins`: symlinks to `~/.claude/projects` and
+  `~/.claude/plugins`, so transcripts and plugins stay shared.
+- `.claude.json`: written once with onboarding marked done and
+  `mcpServers: {}`; Claude Code owns it afterwards.
+
+Auth is one token from `claude setup-token`, handed to
+`maestro install --seat-token` on stdin (d846). It lives in
+`~/.maestro/claude/oauth-token` (0600) and in each seat settings `env` as
+`CLAUDE_CODE_OAUTH_TOKEN`; it never appears in install output. Without it
+install still renders and prints one warning, `maestro doctor` reports
+`seat token: missing`, and `team start` or `work add --to` refuse
+`SEAT_TOKEN_MISSING` for a Claude seat before any pane opens. The token lasts
+a year; doctor prints the date it was written.
+
+`team start` and `work add --to` create a Claude seat pane with
+`CLAUDE_CONFIG_DIR=<dir>` in its environment (d850). A tab that already
+carries the seat's label but sits at a shell prompt is closed and recreated
+with the env rather than reused, since a shell's environment cannot be read or
+set afterwards. A pane launched by hand without the env fails at
+`herdr agent start` because the agent file exists only in the seat dir: it
+never runs silently on your `~/.claude`. Codex seats are unchanged.
+
+The shipped seat deny lists (d847, carried as `disallowed_tools`, shadowable)
+take the seatworks set: every seat disallows `Agent`, `Task`, `Workflow`,
+`SlashCommand`, `WebSearch`, `TodoWrite`, `EnterPlanMode`, `ExitPlanMode`,
+`AskUserQuestion`, `Bash(claude:*)` and `Bash(npx claude:*)`; the Lead adds
+`LSP`; the Peer adds `Bash(herdr:*)`, so a Peer reaches the Lead and other
+Peers only through recorded work notes and returns. Every composed
+`peer-<name>` render carries the Peer list as well (d851).
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it

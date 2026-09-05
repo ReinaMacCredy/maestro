@@ -43,8 +43,9 @@ maestro doctor
 ```
 
 `maestro doctor` checks the shim, runtime stamp, recorded source, repository
-wiring, permissions, and store access. It exits zero when the report is
-healthy and names the repair command when the fix is mechanical.
+wiring, permissions, the Claude seat token, and store access. It exits zero
+when the report is healthy and names the repair command when the fix is
+mechanical.
 
 ## Update
 
@@ -63,8 +64,9 @@ maestro uninstall
 ```
 
 Uninstall removes Maestro-managed hooks, settings keys, and mirror blocks from
-the current repository. It does not delete repository data, the machine
-runtime, the shim, or the Supervisor room.
+the current repository, the rendered `maestro-*` profile files and the Claude
+seat config dirs under `~/.maestro/claude/`. It does not delete repository
+data, the machine runtime, the shim, or the Supervisor room.
 
 ## Install Herdr for SLP
 

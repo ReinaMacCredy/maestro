@@ -147,8 +147,12 @@ delete the Observer marker and section, and move the seat sections into
 profile files (the shipped copy under `~/.maestro/runtime/src/plugins/resources/SLP.md`
 after `maestro install` is the reference). `PROFILE_NOT_FOUND` names a marker
 or flag whose profile is in none of the profile directories;
-`PROFILE_NOT_INSTALLED` names a rendered file that is missing, so run
-`maestro install`; `PEER_PROFILE_MISMATCH` means the named Peer already runs
+`PROFILE_NOT_INSTALLED` names a rendered file that is missing (for a Claude
+seat, under `~/.maestro/claude/<seat>/agents/`), so run `maestro install`;
+`SEAT_TOKEN_MISSING` means a Claude seat was about to open without the
+`claude setup-token` token at `~/.maestro/claude/oauth-token`, so run
+`claude setup-token | maestro install --seat-token` and check `maestro doctor`
+for `seat token: present`; `PEER_PROFILE_MISMATCH` means the named Peer already runs
 another profile, so pick another Peer name; `RETIRED_FLAG` names the
 replacement for `--lead-model`, `--peer-model` or `--supervisor-model`;
 `STALL_RETIRED` means `work note --stall` left with the retired Observer seat;
