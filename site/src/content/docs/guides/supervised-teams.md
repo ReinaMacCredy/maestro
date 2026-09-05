@@ -27,11 +27,11 @@ Every displayed edge is a direct bidirectional conversation channel. In the
 supported SLP flow, the Hub Supervisor reaches the team only through its Team
 Supervisor; it never manages the Lead or Peers directly.
 
-Every seat is inside the work lifecycle: there is no Observer, Advisor,
-scheduler, health or reconcile layer, and the only non-seat pane is the
-generation's runtime pane, a foreground process with no model. Each seat
-launches as a native harness profile rendered by `maestro install` (see
-[Seat profiles](/getting-started/slp-setup/#seat-profiles)).
+Every seat is inside the work lifecycle and no model watches the team:
+there is no Observer, Advisor, scheduler, health or reconcile layer, and the
+only non-seat pane is the generation's runtime pane, a foreground process
+with no model. Each seat launches as a native harness profile rendered by
+`maestro install` (see [Seat profiles](/getting-started/slp-setup/#seat-profiles)).
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -164,8 +164,8 @@ decides. Status exposes `runtimePane: on|off`; a repeated `team start` reopens
 a missing one, a generation whose pane did not open fails with
 `RUNTIME_PANE_FAILED` naming `maestro install`, and `maestro slp restore`,
 the plugin's startup hook, brings it back after a Herdr restart. Its lock and
-queue state are runtime-only and are deleted at stop; `maestro slp status`
-from a team pane reads them.
+queue state are runtime-only and are deleted at stop. `maestro slp status`
+from a team pane reads them while the generation runs.
 
 ## Attention
 
@@ -177,7 +177,7 @@ maestro work note <work-id> "<what you need>" --blocked
 
 Maestro flags the note and pushes `[from <role>][<id> BLOCKED] <summary>;
 read: maestro status <id>` one seat up: Peer to Lead, Lead to Team
-Supervisor, Team Supervisor to the Hub agent named `supervisor`.
+Supervisor, Team Supervisor to the Hub Supervisor pane `team start` recorded.
 
 The second layer is the runtime pane (Hub d97), which needs no model: Herdr
 already classifies a dialog wait as `blocked` and the store already knows who

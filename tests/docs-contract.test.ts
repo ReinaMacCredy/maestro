@@ -106,10 +106,10 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   const guide = await Bun.file(join(docsRoot, "guides", "supervised-teams.md")).text();
   const roles = await Bun.file(join(docsRoot, "concepts", "roles.md")).text();
   const lanes = await Bun.file(join(docsRoot, "concepts", "lanes.md")).text();
-  const observerMode = await Bun.file(join(docsRoot, "guides", "observer-mode.md")).text();
+  const readOnlyMode = await Bun.file(join(docsRoot, "guides", "read-only-mode.md")).text();
   const scenarios = await Bun.file(join(docsRoot, "guides", "slp-scenarios.md")).text();
   const reference = await Bun.file(join(docsRoot, "reference", "cli.md")).text();
-  const combined = [setup, guide, roles, lanes, observerMode, scenarios, reference].join("\n");
+  const combined = [setup, guide, roles, lanes, readOnlyMode, scenarios, reference].join("\n");
 
   for (const command of slpOperations) expect(combined).toContain(command);
   expect(guide).toContain("there is no Observer, Advisor, scheduler, health or reconcile");
@@ -122,7 +122,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   for (const documented of ["### `term`", "### `memory`", "--local", "HUB_UNAVAILABLE", "`import <dir> [--dry-run]`"]) {
     expect(reference).toContain(documented);
   }
-  expect(observerMode).toContain("--local");
+  expect(readOnlyMode).toContain("--local");
 
   await withFixture(async (fixture) => {
     for (const command of [
