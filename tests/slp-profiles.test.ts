@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseProfile } from "../src/plugins/profiles.ts";
+import { parseProfile, renderedProfilePath } from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
@@ -38,7 +38,7 @@ function sharedContract(pack: string): string {
 }
 
 async function claudeRender(fixture: Fixture, name: string): Promise<{ body: string; frontmatter: string }> {
-  const text = await readFile(join(fixture.home, ".claude", "agents", `maestro-${name}.md`), "utf8");
+  const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
   const close = text.indexOf("\n---\n");
   return { body: text.slice(close + "\n---\n".length), frontmatter: text.slice(0, close) };
 }
@@ -200,7 +200,7 @@ test("launch-refuses-uninstalled: a missing render fails team start with PROFILE
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     const fake = await installFakeHerdr(fixture);
-    await rm(join(fixture.home, ".claude", "agents", "maestro-team-supervisor.md"));
+    await rm(renderedProfilePath(fixture.home, "claude", "team-supervisor"));
 
     const refused = await runCliAt(fixture, room, ["team", "start", fixture.repo, "No render", "--json"], fake.env);
     expect(refused.exitCode).toBe(1);
@@ -279,7 +279,7 @@ test("work-add-profile: peer-<node> and --profile pick the render, a profile swi
     expect(failure(mismatch.stderr).code).toBe("PEER_PROFILE_MISMATCH");
     expect((await add(["--to", "alpha", "--profile", "peer-opus"])).exitCode).toBe(0);
 
-    const render = join(fixture.home, ".claude", "agents", "maestro-peer-refuter.md");
+    const render = renderedProfilePath(fixture.home, "claude", "peer-refuter");
     await rm(render);
     const uninstalled = await add(["--to", "peer-refuter"]);
     expect(uninstalled.exitCode).toBe(1);

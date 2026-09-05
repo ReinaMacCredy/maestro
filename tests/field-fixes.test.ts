@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { renderedProfilePath } from "../src/plugins/profiles.ts";
 import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const OWNER = { MAESTRO_SESSION_ID: "eperm-owner", MAESTRO_SESSION_PID: "1" };
@@ -249,7 +250,7 @@ test("289 [lint] recipe and installed Hub expose the same simplified SLP roles",
     expect(pack).toContain("<!-- slp:profile:team-supervisor=team-supervisor -->");
     expect(pack).not.toContain("## Team Supervisor");
     expect(
-      await readFile(join(fixture.home, ".claude", "agents", "maestro-team-supervisor.md"), "utf8"),
+      await readFile(renderedProfilePath(fixture.home, "claude", "team-supervisor"), "utf8"),
     ).toContain("Role: Team Supervisor.");
   });
 });

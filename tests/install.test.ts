@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
+import { renderedProfilePath, seatConfigRoot } from "../src/plugins/profiles.ts";
 import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
@@ -566,7 +567,8 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
     expect(installed.exitCode).toBe(0);
     expect(installed.stdout).toContain("profiles rendered:");
 
-    const leadClaude = await readFile(join(claudeAgents, "maestro-lead.md"), "utf8");
+    // d845: seat and peer-* renders live in the seat dirs, bare nodes stay here.
+    const leadClaude = await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8");
     expect(leadClaude.startsWith("---\nname: maestro-lead\ndescription: \"fixture lead\"\nmodel: sonnet\neffort: high\npermissionMode: acceptEdits\n---\n\n")).toBe(true);
     expect(leadClaude).toContain("## Shared contract");
     expect(leadClaude.trimEnd().endsWith("Role: fixture lead.")).toBe(true);
@@ -607,21 +609,23 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
       expect({ node, starts: body.startsWith("Role: ") }).toEqual({ node, starts: true });
       expect({ node, codexHasBody: codex.includes(body) }).toEqual({ node, codexHasBody: true });
       expect(codex).toContain(`name = "maestro-${node}"\n`);
-      expect(await Bun.file(join(claudeAgents, `maestro-peer-${node}.md`)).exists()).toBe(true);
+      expect(await Bun.file(renderedProfilePath(fixture.home, "claude", `peer-${node}`)).exists()).toBe(true);
     }
 
     // model: default omits the model line on all three carriers.
     for (const file of [
-      join(claudeAgents, "maestro-peer.md"),
+      renderedProfilePath(fixture.home, "claude", "peer"),
       join(codexHome, "maestro-peer.config.toml"),
       join(codexAgents, "maestro-peer.toml"),
     ]) {
       expect(await readFile(file, "utf8")).not.toMatch(/^model[ :]/m);
     }
 
+    const seatAgents = ["lead", "peer", "team-supervisor"].map((seat) => join(seatConfigRoot(fixture.home), seat, "agents"));
     const snapshot = async () => {
       const files = new Map<string, string>();
-      for (const directory of [claudeAgents, codexHome, codexAgents]) {
+      for (const directory of [claudeAgents, ...seatAgents, codexHome, codexAgents]) {
+        if (!existsSync(directory)) continue;
         for (const entry of (await readdir(directory)).sort()) {
           const file = join(directory, entry);
           if ((await stat(file)).isFile()) files.set(file, await readFile(file, "utf8"));

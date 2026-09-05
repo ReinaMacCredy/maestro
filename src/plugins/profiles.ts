@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 
 // Hub d83/d91/d98: one profile shape for SLP seats, council seats and graph
@@ -18,6 +18,9 @@ export interface ProfileFrontmatter {
   model: string;
   permission?: string;
   sandbox?: string;
+  // d849: the seat settings overlay; d848: the seat dir skill allowlist.
+  settings?: Record<string, unknown>;
+  skills?: string[];
 }
 
 export interface Profile {
@@ -38,6 +41,26 @@ export interface ProfileSync {
 export const seatProfileNames = ["team-supervisor", "lead", "peer"] as const;
 export type SeatProfileName = (typeof seatProfileNames)[number];
 
+// d845: one CLAUDE_CONFIG_DIR per seat kind; a seat name renders into its own
+// dir, every peer-<x> render into the peer dir, anything else stays a bare
+// node in ~/.claude/agents for the subagent executor (A5).
+export function seatConfigRoot(home: string): string {
+  return join(home, ".maestro", "claude");
+}
+
+export function seatDirectory(home: string, seat: SeatProfileName): string {
+  return join(seatConfigRoot(home), seat);
+}
+
+export function seatTokenPath(home: string): string {
+  return join(seatConfigRoot(home), "oauth-token");
+}
+
+export function seatForRenderedName(renderedName: string): SeatProfileName | null {
+  if ((seatProfileNames as readonly string[]).includes(renderedName)) return renderedName as SeatProfileName;
+  return renderedName.startsWith("peer-") ? "peer" : null;
+}
+
 const shippedProfiles = join(import.meta.dir, "resources", "profiles");
 const shippedPack = join(import.meta.dir, "resources", "SLP.md");
 const efforts: readonly string[] = ["low", "medium", "high", "xhigh"];
@@ -54,6 +77,8 @@ const knownKeys = new Set([
   "autocompact",
   "disallowed_tools",
   "description",
+  "skills",
+  "settings",
 ]);
 
 export function profileDirectories(repo: string, home: string): string[] {
@@ -131,6 +156,22 @@ export function parseProfile(path: string, text: string): { body: string; frontm
     }
     frontmatter.disallowed_tools = raw.disallowed_tools as string[];
   }
+  if (raw.skills !== undefined) {
+    if (!Array.isArray(raw.skills) || raw.skills.some((skill) => typeof skill !== "string" || skill.trim() === "")) {
+      throw invalid(path, "skills must be a list of skill directory names");
+    }
+    frontmatter.skills = raw.skills as string[];
+  }
+  if (raw.settings !== undefined) {
+    const name = basename(path, ".md");
+    if (harness !== "claude" || !(seatProfileNames as readonly string[]).includes(name)) {
+      throw invalid(path, `settings applies to the Claude seat profiles (${seatProfileNames.join(", ")}) only`);
+    }
+    if (!raw.settings || typeof raw.settings !== "object" || Array.isArray(raw.settings)) {
+      throw invalid(path, "settings must be a mapping of Claude settings keys");
+    }
+    frontmatter.settings = raw.settings as Record<string, unknown>;
+  }
   const body = (match[2] ?? "").trim();
   if (body === "") throw invalid(path, "missing body: the mandate below the frontmatter is empty");
   return { body, frontmatter };
@@ -169,9 +210,15 @@ export function composedPeerName(name: string): string {
   return name.startsWith("peer-") ? name : `peer-${name}`;
 }
 
+function claudeRenderPath(home: string, renderedName: string): string {
+  const seat = seatForRenderedName(renderedName);
+  const agents = seat ? join(seatDirectory(home, seat), "agents") : join(home, ".claude", "agents");
+  return join(agents, `maestro-${renderedName}.md`);
+}
+
 export function renderedProfilePath(home: string, harness: ProfileHarness, renderedName: string): string {
   return harness === "claude"
-    ? join(home, ".claude", "agents", `maestro-${renderedName}.md`)
+    ? claudeRenderPath(home, renderedName)
     : join(home, ".codex", `maestro-${renderedName}.config.toml`);
 }
 
@@ -239,50 +286,95 @@ interface RenderTarget {
   path: string;
 }
 
-// Every resolvable profile renders into ~/.claude/agents, ~/.codex/agents and
-// ~/.codex/maestro-<name>.config.toml; only maestro-* files are written or
-// removed there (anti-goal A1).
-export async function planProfileRenders(home: string, repo: string): Promise<RenderTarget[]> {
+export interface SeatSkillLink {
+  name: string;
+  target: string;
+}
+
+// d848/d849: what one seat dir carries besides its agent files.
+export interface SeatDirectoryPlan {
+  overlay: Record<string, unknown>;
+  seat: SeatProfileName;
+  skills: SeatSkillLink[];
+}
+
+export interface ProfilePlan {
+  seats: SeatDirectoryPlan[];
+  targets: RenderTarget[];
+}
+
+// d848: a skill name resolves in the Hub skills dir first, then the owner's
+// Claude skills; an unknown name is refused naming the profile that asked.
+function resolveSkill(home: string, profile: Profile, name: string): SeatSkillLink {
+  const candidates = [join(home, "maestro", "skills", name), join(home, ".claude", "skills", name)];
+  for (const target of candidates) {
+    if (existsSync(join(target, "SKILL.md"))) return { name, target };
+  }
+  throw invalid(profile.path, `unknown skill ${name}: not in ${candidates.join(" or ")}`);
+}
+
+// Every resolvable profile renders into ~/.codex/agents and
+// ~/.codex/maestro-<name>.config.toml, plus one Claude agent file in the seat
+// dir (seats, peer-*) or ~/.claude/agents (bare nodes); only maestro-* files
+// are written or removed there (anti-goal A1).
+export async function planProfiles(home: string, repo: string): Promise<ProfilePlan> {
   const directories = profileDirectories(repo, home);
   const shared = await sharedContractFor(home);
   const peer = await resolveProfile("peer", directories);
   if (!peer) throw new CliError("PROFILE_NOT_FOUND", "the peer profile is missing from every profile directory");
   const targets: RenderTarget[] = [];
-  const push = (renderedName: string, frontmatter: ProfileFrontmatter, mandate: string) => {
+  const seats = new Map<SeatProfileName, SeatDirectoryPlan>(
+    seatProfileNames.map((seat) => [seat, { overlay: {}, seat, skills: [] }]),
+  );
+  const push = (renderedName: string, profile: Profile, frontmatter: ProfileFrontmatter, mandate: string) => {
     const rendered = renderProfile(renderedName, frontmatter, mandate);
     targets.push(
-      { content: rendered.claude, path: join(home, ".claude", "agents", `maestro-${renderedName}.md`) },
+      { content: rendered.claude, path: claudeRenderPath(home, renderedName) },
       { content: rendered.codexSession, path: join(home, ".codex", `maestro-${renderedName}.config.toml`) },
       { content: rendered.codexAgent, path: join(home, ".codex", "agents", `maestro-${renderedName}.toml`) },
     );
+    const seat = seatForRenderedName(renderedName);
+    if (!seat) return;
+    const plan = seats.get(seat) as SeatDirectoryPlan;
+    for (const name of profile.frontmatter.skills ?? []) {
+      if (!plan.skills.some((link) => link.name === name)) plan.skills.push(resolveSkill(home, profile, name));
+    }
   };
   for (const name of await listProfileNames(directories)) {
     const profile = await resolveProfile(name, directories);
     if (!profile) continue;
     if ((seatProfileNames as readonly string[]).includes(name)) {
-      push(name, profile.frontmatter, `${shared}\n\n${profile.body}`);
+      push(name, profile, profile.frontmatter, `${shared}\n\n${profile.body}`);
+      (seats.get(name as SeatProfileName) as SeatDirectoryPlan).overlay = profile.frontmatter.settings ?? {};
       continue;
     }
     const composed = composedPeerName(name);
-    if (composed !== name) push(name, profile.frontmatter, profile.body);
-    push(composed, profile.frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
+    if (composed !== name) push(name, profile, profile.frontmatter, profile.body);
+    push(composed, profile, profile.frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
   }
-  return targets;
+  for (const plan of seats.values()) plan.skills.sort((left, right) => left.name.localeCompare(right.name));
+  return { seats: [...seats.values()], targets };
 }
 
-const renderedPatterns: Array<{ directory: (home: string) => string; pattern: RegExp }> = [
-  { directory: (home) => join(home, ".claude", "agents"), pattern: /^maestro-.+\.md$/ },
-  { directory: (home) => join(home, ".codex"), pattern: /^maestro-.+\.config\.toml$/ },
-  { directory: (home) => join(home, ".codex", "agents"), pattern: /^maestro-.+\.toml$/ },
-];
+export async function planProfileRenders(home: string, repo: string): Promise<RenderTarget[]> {
+  return (await planProfiles(home, repo)).targets;
+}
+
+function renderedPatterns(home: string): Array<{ directory: string; pattern: RegExp }> {
+  return [
+    { directory: join(home, ".claude", "agents"), pattern: /^maestro-.+\.md$/ },
+    ...seatProfileNames.map((seat) => ({ directory: join(seatDirectory(home, seat), "agents"), pattern: /^maestro-.+\.md$/ })),
+    { directory: join(home, ".codex"), pattern: /^maestro-.+\.config\.toml$/ },
+    { directory: join(home, ".codex", "agents"), pattern: /^maestro-.+\.toml$/ },
+  ];
+}
 
 async function renderedFiles(home: string): Promise<string[]> {
   const files: string[] = [];
-  for (const { directory, pattern } of renderedPatterns) {
-    const path = directory(home);
-    if (!existsSync(path)) continue;
-    for (const entry of await readdir(path)) {
-      if (pattern.test(entry)) files.push(join(path, entry));
+  for (const { directory, pattern } of renderedPatterns(home)) {
+    if (!existsSync(directory)) continue;
+    for (const entry of await readdir(directory)) {
+      if (pattern.test(entry)) files.push(join(directory, entry));
     }
   }
   return files;
@@ -290,8 +382,7 @@ async function renderedFiles(home: string): Promise<string[]> {
 
 async function resolvedTargets(home: string): Promise<Array<{ real: string; target: string }>> {
   const out: Array<{ real: string; target: string }> = [];
-  for (const { directory } of renderedPatterns) {
-    const target = directory(home);
+  for (const { directory: target } of renderedPatterns(home)) {
     try {
       if (!(await lstat(target)).isSymbolicLink()) continue;
     } catch {
@@ -338,6 +429,11 @@ export async function removeRenderedProfiles(home: string): Promise<string[]> {
   for (const file of await renderedFiles(home)) {
     await rm(file, { force: true });
     removed.push(file);
+  }
+  const seatRoot = seatConfigRoot(home);
+  if (existsSync(seatRoot)) {
+    await rm(seatRoot, { recursive: true, force: true });
+    removed.push(seatRoot);
   }
   return removed;
 }
