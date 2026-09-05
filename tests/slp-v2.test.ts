@@ -4315,6 +4315,10 @@ test("SLP v2 stop fences every competing mutation and repeated stop before commi
     const project = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
     });
+    // The stop helper pane's own team stop process outlives the awaited stop
+    // and checkpoints the WAL as it closes; a reader without the store's busy
+    // timeout would fail at once with SQLITE_BUSY.
+    project.exec("PRAGMA busy_timeout = 5000");
     expect(
       project
         .query<{ count: number }, []>(

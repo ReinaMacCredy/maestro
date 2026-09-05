@@ -133,9 +133,14 @@ export class Store {
   private openDatabase(path: string): Database {
     if (this.ephemeral) return new Database(":memory:", { create: true, strict: true });
     if (!this.readOnly) return new Database(path, { create: true, strict: true });
+    // The probe runs before the constructor's busy timeout, so it carries its
+    // own: a reader opening while the last writer checkpoints the WAL on
+    // close (a stop helper exiting after team stop returned) would otherwise
+    // fail at once with SQLITE_BUSY.
     try {
       const readonly = new Database(path, { create: false, readonly: true, strict: true });
       try {
+        readonly.exec("PRAGMA busy_timeout = 5000");
         readonly.query("SELECT count(*) FROM sqlite_master").get();
         return readonly;
       } catch (error) {
@@ -151,6 +156,7 @@ export class Store {
       // original diagnosis.
       try {
         const observer = new Database(path, { create: false, strict: true });
+        observer.exec("PRAGMA busy_timeout = 5000");
         observer.exec("PRAGMA query_only = 1");
         observer.query("SELECT count(*) FROM sqlite_master").get();
         return observer;
