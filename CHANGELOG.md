@@ -60,7 +60,17 @@ token handed to `maestro install --seat-token`.
 
 ### Fixed
 
-- None.
+- A seat no longer loads the owner's `~/.claude/CLAUDE.md` (d852): the home
+  directory is an ancestor of every project under it, so that file matched
+  the project-scope pattern and loaded regardless of `CLAUDE_CONFIG_DIR`,
+  raising the external-imports dialog for its `@` imports. The seat settings
+  base now carries `claudeMdExcludes` for `<home>/.claude/CLAUDE.md` and
+  `<home>/.claude/rules/**` as absolute paths.
+- A fresh seat no longer blocks on the workspace trust dialog (d853): before
+  a Claude seat pane opens, `team start` and `work add --to` record the
+  project as trusted (`projects[<project>].hasTrustDialogAccepted`) in that
+  seat's `.claude.json` when it is not already there, keeping every other key
+  and seeding nothing else; a Codex seat is unchanged.
 
 ## [0.120.0] - 2026-09-05
 

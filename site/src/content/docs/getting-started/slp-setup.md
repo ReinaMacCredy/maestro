@@ -64,10 +64,12 @@ That single operation:
 Both `team start` and `work add --to` block while a pane opens and acknowledges
 its contract, normally under a minute, and print their phases on stderr
 (`starting`, `waiting for acknowledgement (up to 30s)`, `ready in`); do not
-re-run either while it is still running. Every pane must already trust the
-project directory: the first start in a fresh directory fails with
-`TRUST_DIALOG` naming the harness and directory. Open that directory once with
-that harness, accept its trust dialog, and rerun. Repeating the same
+re-run either while it is still running. A Claude seat trusts the project
+directory because you started the team there: before its pane opens, Maestro
+records the project as trusted in that seat's `.claude.json` (d853). A Codex
+pane must already trust the directory: the first start in a fresh directory
+fails with `TRUST_DIALOG` naming the harness and directory. Open that
+directory once with that harness, accept its trust dialog, and rerun. Repeating the same
 `team start` against a running generation touches only what is missing: roles
 whose pane is still alive are left alone (`already acknowledged in <pane>; left
 alone`), closed panes are reopened and acknowledged again, and the START record
@@ -170,7 +172,12 @@ servers. The dir holds:
   workflows, cron, fast mode, bundled skills and git instructions,
   `autoMemoryEnabled: false`, `disableWorkflows`, empty `attribution` and
   `enabledPlugins: {}`. There is no `cleanupPeriodDays`: `projects` is shared
-  and a seat start must never delete your transcripts (d849).
+  and a seat start must never delete your transcripts (d849). The base also
+  carries `claudeMdExcludes` for your `~/.claude/CLAUDE.md` and
+  `~/.claude/rules/**` as absolute paths (d852): your home directory is an
+  ancestor of every project under it, so that file would otherwise load into
+  the seat as project instructions regardless of `CLAUDE_CONFIG_DIR`, and
+  its `@` imports would raise the external-imports dialog in the pane.
 - `skills/`: one symlink per name in the union of `skills:` across every
   profile rendered into the dir, resolved in `~/maestro/skills` then
   `~/.claude/skills`; an unknown name fails install naming the profile (d848).
@@ -181,7 +188,12 @@ servers. The dir holds:
 - `projects` and `plugins`: symlinks to `~/.claude/projects` and
   `~/.claude/plugins`, so transcripts and plugins stay shared.
 - `.claude.json`: written once with onboarding marked done and
-  `mcpServers: {}`; Claude Code owns it afterwards.
+  `mcpServers: {}`; Claude Code owns it afterwards. `team start` and
+  `work add --to` add one key before a seat pane opens: the project is marked
+  trusted (`projects[<project>].hasTrustDialogAccepted`) when it is not
+  already, every other key kept, so a fresh seat never blocks on the
+  workspace trust dialog (d853). A project's own external `CLAUDE.md`
+  imports are still a question the owner answers in the pane.
 
 Auth is one token from `claude setup-token`, handed to
 `maestro install --seat-token` on stdin (d846). It lives in
