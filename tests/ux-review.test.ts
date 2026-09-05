@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { formatDecision, type DecisionRecord } from "../src/plugins/decision.ts";
 import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, writeUntrustedPlugin, type Fixture } from "./helpers.ts";
 
 setDefaultTimeout(20_000);
@@ -377,5 +378,30 @@ test("646 bundle show renders Hub decisions the SPEC lists as hub:<id>; the scaf
       { id: hubDecision, state: "locked", text: "graph nodes run in-process" },
       { id: "d99", state: null, text: null },
     ]);
+  });
+});
+
+test("647 decision show wraps long fields only for a terminal; piped output and --wide stay raw (UX F11, d823)", async () => {
+  const long = `${"word ".repeat(40)}end`;
+  const record: DecisionRecord = {
+    id: "d1", text: long, rationale: "short", dissent: null, reviewAt: null, needsOwner: false, state: "draft",
+    withdrawnAt: null, withdrawReason: null, parentId: null, workId: "w7", supersedesId: null, supersededById: null,
+    createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z",
+  };
+  const wrapped = formatDecision(record, 40).split("\n");
+  expect(wrapped[0]).toMatch(/^d1 \[draft\] word/);
+  for (const line of wrapped) expect(line.length).toBeLessThanOrEqual(40);
+  expect(wrapped.filter((line) => line.startsWith("  "))).not.toHaveLength(0);
+  expect(wrapped.join(" ").replaceAll(/\s+/g, " ")).toBe(`d1 [draft] ${long} rationale: short work: w7`);
+  expect(formatDecision(record, null)).toBe(`d1 [draft] ${long}\nrationale: short\nwork: w7`);
+
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["decision", "draft", long, "--rationale", long]));
+    // The test harness pipes stdout, so nothing wraps and every field is one line.
+    const piped = await runCli(fixture, ["decision", "show", id]);
+    expect(piped.stdout).toBe(`${id} [draft] ${long}\nrationale: ${long}\n`);
+    const wide = await runCli(fixture, ["decision", "show", id, "--wide"]);
+    expect(wide.stdout).toBe(piped.stdout);
+    expect((await runCli(fixture, ["help", "decision", "show"])).stdout).toContain("--wide");
   });
 });

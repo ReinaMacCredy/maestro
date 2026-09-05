@@ -115,14 +115,38 @@ function reviewAtOption(invocation: CliInvocation): string | null {
   return value;
 }
 
+// A ruling can run to a thousand characters; in a pane that is a wall (d823).
+// Wrapping is a terminal courtesy only: piped output stays one line per field
+// so rg and head keep finding whole phrases.
+function wrap(line: string, width: number | null): string {
+  if (width === null || line.length <= width) return line;
+  const lines: string[] = [];
+  let current = "";
+  for (const word of line.split(" ")) {
+    const indent = lines.length === 0 ? "" : "  ";
+    if (current && `${indent}${current} ${word}`.length > width) {
+      lines.push(`${indent}${current}`);
+      current = word;
+    } else {
+      current = current ? `${current} ${word}` : word;
+    }
+  }
+  lines.push(`${lines.length === 0 ? "" : "  "}${current}`);
+  return lines.join("\n");
+}
+
 function format(decision: DecisionRecord): string {
+  return formatDecision(decision, null);
+}
+
+export function formatDecision(decision: DecisionRecord, width: number | null): string {
   return [
-    `${decision.id} [${decision.state}] ${decision.text}`,
-    decision.rationale ? `rationale: ${decision.rationale}` : null,
-    decision.dissent ? `dissent: ${decision.dissent}` : null,
+    wrap(`${decision.id} [${decision.state}] ${decision.text}`, width),
+    decision.rationale ? wrap(`rationale: ${decision.rationale}`, width) : null,
+    decision.dissent ? wrap(`dissent: ${decision.dissent}`, width) : null,
     decision.reviewAt ? `review at: ${decision.reviewAt}` : null,
     decision.needsOwner ? "needs owner: yes" : null,
-    decision.withdrawReason ? `withdraw reason: ${decision.withdrawReason}` : null,
+    decision.withdrawReason ? wrap(`withdraw reason: ${decision.withdrawReason}`, width) : null,
     decision.parentId ? `parent: ${decision.parentId}` : null,
     decision.workId ? `work: ${decision.workId}` : null,
     decision.supersedesId ? `supersedes: ${decision.supersedesId}` : null,
@@ -584,9 +608,13 @@ export const decisionPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register("decision show", (invocation): CliResult => {
         const decision = requireDecision(context, requiredPosition(invocation, 0, "decision id"));
-        return { data: { decision }, text: format(decision) };
+        const width = invocation.options.wide === true || !process.stdout.isTTY
+          ? null
+          : process.stdout.columns || 80;
+        return { data: { decision }, text: formatDecision(decision, width) };
       }, {
-        description: "Show one decision and its links.",
+        description: "Show one decision and its links; long fields wrap for a terminal.",
+        flags: { "--wide": { description: "Print every field on one raw line even in a terminal." } },
         mutates: false,
         positionals: [{ name: "id", required: true }],
       }),
