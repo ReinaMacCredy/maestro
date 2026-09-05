@@ -24,7 +24,10 @@ For each question:
   this does" first, the sketch per option, the `my rec:` line on every fork.
 - Record each answer the moment it lands:
   `maestro decision draft "<choice>" --rationale "<why + rejected alternative>" --work <id>`
-  then `maestro decision lock <id>`.
+  then `maestro decision lock <id>`. An answer to a fork is a decision to
+  record, never an implementation order, even when the chosen option is
+  itself an artifact (a script, a schema, a prototype); building starts only
+  on an explicit request.
 
 Each round the user answers reshapes the tree — settled decisions push the
 frontier outward and unblock questions that depended on them. Recompute the

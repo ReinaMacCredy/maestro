@@ -291,3 +291,11 @@ test("648 [lint] wayfinder: fog notes carry evidence and are cleared by note, an
   expect(invocation).toContain("With the owner present");
   expect(wayfinder).not.toContain("Never resolve more than one ticket per session");
 });
+
+test("649 [lint] grilling: a fork answer is a decision to record, never an implementation order (doctrine review 5)", async () => {
+  const grilling = await Bun.file(join(skillsRoot, "maestro-design", "references", "grilling.md")).text();
+  const record = grilling.slice(grilling.indexOf("- Record each answer the moment it lands"));
+  const bullet = record.split("\n\n")[0] ?? "";
+  expect(bullet).toContain("never an implementation order");
+  expect(bullet).toContain("explicit request");
+});
