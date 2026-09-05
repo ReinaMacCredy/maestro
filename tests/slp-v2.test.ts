@@ -17,6 +17,8 @@ import {
   installFakeHerdr,
   readFakeHerdrState,
   setFakeHerdrBehavior,
+  waitForFakeHerdr,
+  type FakeHerdrFixture,
 } from "./helpers-herdr.ts";
 import {
   addLinkedWorktree,
@@ -29,6 +31,17 @@ import {
 
 function envelope<T>(stdout: string): T {
   return (JSON.parse(stdout) as { data: T }).data;
+}
+
+// The stop helper's own team stop commits STOPPED first and closes its helper
+// workspace in a finally, while the caller's team stop returns as soon as the
+// store shows STOPPED; a slow runner reads the fake before that close lands.
+async function waitForStopHelperExit(fake: FakeHerdrFixture, exits: number): Promise<void> {
+  await waitForFakeHerdr(
+    async () => ((await readFakeHerdrState(fake)).helper_exits as unknown[]).length >= exits,
+    5_000,
+    `${exits} stop helper exit(s)`,
+  );
 }
 
 const runtimePhaseLine =
@@ -543,7 +556,8 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
       teamId: "startup-window",
     });
     plan.roles = plan.roles.slice(0, 1);
-    const runtime = new HerdrSlpRuntime(1_000, { ...process.env, ...fake.env });
+    // The fixture's HOME holds the rendered profiles, not the machine's.
+    const runtime = new HerdrSlpRuntime(1_000, { ...process.env, ...fake.env, HOME: fixture.home });
 
     const started = await runtime.start(
       plan,
@@ -566,7 +580,7 @@ test("SLP v2 waits for workspace-close visibility before declaring runtime absen
       teamId: "close-visibility",
     });
     plan.roles = plan.roles.slice(0, 1);
-    const runtime = new HerdrSlpRuntime(15_000, { ...process.env, ...fake.env });
+    const runtime = new HerdrSlpRuntime(15_000, { ...process.env, ...fake.env, HOME: fixture.home });
     const started = await runtime.start(
       plan,
       new Map([["team-supervisor", testRoleContract(plan.teamId, plan.generation)]]),
@@ -3624,6 +3638,7 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
     expect(phaseFree(stopped.stderr)).toBe("");
     expect(stopped.exitCode).toBe(0);
     expect(envelope<{ team: { state: string } }>(stopped.stdout).team.state).toBe("STOPPED");
+    await waitForStopHelperExit(fake, (before.helper_exits as unknown[]).length + 1);
     const after = await readFakeHerdrState(fake);
     expect(after.workspaces).toEqual([{
       cwd: unrelatedHubPath,
@@ -3901,6 +3916,7 @@ test("SLP v2 final workspace close failure leaves RUNNING and a restored Supervi
     const restoredSupervisor = restored.team.roles.find(
       (role) => role.role === "team-supervisor",
     )!.paneId;
+    const helperExitsBeforeRecovery = ((await readFakeHerdrState(fake)).helper_exits as unknown[]).length;
     const recovered = await runCliAt(
       fixture,
       fixture.repo,
@@ -3909,6 +3925,7 @@ test("SLP v2 final workspace close failure leaves RUNNING and a restored Supervi
     );
     expect(phaseFree(recovered.stderr)).toBe("");
     expect(recovered.exitCode).toBe(0);
+    await waitForStopHelperExit(fake, helperExitsBeforeRecovery + 1);
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
     const projectAfterRecovery = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
