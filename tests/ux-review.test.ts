@@ -266,3 +266,23 @@ test("641 work show prints the last five notes behind a count line; --notes <n|a
     expect(bad.stderr).toContain("INVALID_VALUE");
   });
 });
+
+test("642 work note --file <path> records the file body, so a long note never passes through the shell (UX F4)", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "long note"]));
+    const body = "agents dir -> dotfiles/.agents\n\nsecond paragraph with `backticks` and $HOME.\n";
+    const path = join(fixture.root, "note.md");
+    await writeFile(path, body);
+    const noted = await runCli(fixture, ["work", "note", id, "--file", path], session);
+    expect(noted.exitCode).toBe(0);
+    const shown = JSON.parse((await runCli(fixture, ["work", "show", id, "--json"])).stdout).data;
+    expect(shown.notes.map((note: { text: string }) => note.text)).toEqual([body.trimEnd()]);
+    const both = await runCli(fixture, ["work", "note", id, "inline", "--file", path], session);
+    expect(both.exitCode).toBe(1);
+    expect(both.stderr).toContain("INVALID_OPTION");
+    const missing = await runCli(fixture, ["work", "note", id, "--file", join(fixture.root, "absent.md")], session);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toContain("NOT_FOUND");
+    expect((await runCli(fixture, ["help", "work", "note"])).stdout).toContain("--file");
+  });
+});

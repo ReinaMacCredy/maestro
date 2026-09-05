@@ -6,6 +6,7 @@ import {
   type CliInvocation,
   type CliResult,
 } from "../kernel/cli.ts";
+import { existsSync, readFileSync } from "node:fs";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
@@ -625,6 +626,16 @@ export const workPlugin: BuiltInPlugin = {
 
     context.effect(() =>
       registerSessionCommand(context, "work note", async (invocation): Promise<CliResult> => {
+        // A long body travels as a file so it never meets the shell's quoting or
+        // its command guards; both paths below read the body as positional 1.
+        const file = invocation.options.file;
+        if (typeof file === "string") {
+          if (invocation.positionals[1] !== undefined) {
+            throw new CliError("INVALID_OPTION", "--file replaces the note text; give one or the other");
+          }
+          if (!existsSync(file)) throw new CliError("NOT_FOUND", `note file not found: ${file}`, { file });
+          invocation.positionals[1] = readFileSync(file, "utf8").trimEnd();
+        }
         const slp = await maybeHandleSlpWorkNote(context, invocation);
         if (slp) return slp;
         if (invocation.options.rework === true) {
@@ -656,6 +667,10 @@ export const workPlugin: BuiltInPlugin = {
         flags: {
           "--blocked": {
             description: "Flag the note as blocked and push it one SLP seat up.",
+          },
+          "--file": {
+            description: "Read the note body from this file instead of the text argument.",
+            value: true,
           },
           "--rework": {
             description: "Grant the current SLP return revision one reviewer-authorized retake.",
