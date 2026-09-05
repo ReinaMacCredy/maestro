@@ -2,11 +2,13 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
+import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, tripwireInvocations } from "./helpers-herdr.ts";
 import {
   runCliAt,
   withFixture,
@@ -388,3 +390,112 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
   },
   600_000,
 );
+
+// seat-config-dirs R6/R7 (d850, d846, A3): the socket fake records every
+// tab.create env; a Claude seat pane is created with CLAUDE_CONFIG_DIR, a
+// Codex one without; a matching-label shell tab is closed and recreated; a
+// missing token refuses before any pane opens.
+
+function failure(stderr: string): { code: string; message: string } {
+  return (JSON.parse(stderr) as { error: { code: string; message: string } }).error;
+}
+
+async function markedRoom(fixture: Fixture): Promise<string> {
+  const room = await scaffoldRoom(fixture.home);
+  const marked = await runCliAt(fixture, room, ["room", "mark"], {
+    MAESTRO_ROOM_SCAFFOLD: "1",
+    MAESTRO_SESSION_NONE: "1",
+  });
+  expect(marked.exitCode).toBe(0);
+  return room;
+}
+
+function tabCreates(commands: string[][]): Map<string, string[]> {
+  return new Map(
+    commands
+      .filter((command) => command[0] === "tab" && command[1] === "create")
+      .map((command) => [command[command.indexOf("--label") + 1] ?? "", command]),
+  );
+}
+
+test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE_CONFIG_DIR=<seat dir> and a Codex peer without env; a matching-label shell tab is closed then recreated with the env (A3); a missing token refuses SEAT_TOKEN_MISSING before any tab.create (R6, R7)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "lead.md"),
+      "---\nharness: claude\nmodel: default\ndescription: claude lead\n---\nRole: Lead (claude shadow).\n",
+    );
+    const fake = await installFakeHerdr(fixture);
+    const seatRoot = seatConfigRoot(fixture.home);
+
+    // d846: no token, no pane.
+    const parked = `${seatTokenPath(fixture.home)}.parked`;
+    await rename(seatTokenPath(fixture.home), parked);
+    const refused = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat dirs", "--json"], fake.env);
+    expect(refused.exitCode).toBe(1);
+    expect(failure(refused.stderr).code).toBe("SEAT_TOKEN_MISSING");
+    expect(failure(refused.stderr).message).toContain("maestro install --seat-token");
+    expect(failure(refused.stderr).message).toContain(seatTokenPath(fixture.home));
+    expect((await fakeHerdrCommands(fake)).filter((command) => command[1] === "create")).toEqual([]);
+    await rename(parked, seatTokenPath(fixture.home));
+
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat dirs", "--json"], fake.env);
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{ team: { roles: Array<{ name: string; paneId: string; role: string }>; teamId: string } }>(started);
+    const prefix = `slp:${data.team.teamId}:g1`;
+    let creates = tabCreates(await fakeHerdrCommands(fake));
+    expect(creates.get(`${prefix}:team-supervisor`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "team-supervisor")}`);
+    expect(creates.get(`${prefix}:lead`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "lead")}`);
+    expect(creates.get(`${prefix}:lead`)).toContain("--env");
+
+    // R7: a Claude peer gets the peer dir; the shipped codex peer gets no env.
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "peer-reviewer-security", "--json"], leadEnvironment);
+    expect(phaseFree(security.stderr)).toBe("");
+    expect(security.exitCode).toBe(0);
+    const securityRole = envelope<{ role: { name: string } }>(security).role;
+    const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], leadEnvironment);
+    expect(phaseFree(codex.stderr)).toBe("");
+    expect(codex.exitCode).toBe(0);
+    const codexRole = envelope<{ role: { name: string } }>(codex).role;
+    creates = tabCreates(await fakeHerdrCommands(fake));
+    expect(creates.get(`${prefix}:peer:${securityRole.name}`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "peer")}`);
+    expect(creates.get(`${prefix}:peer:${codexRole.name}`)).not.toContain("--env");
+    expect(creates.get(`${prefix}:peer:${codexRole.name}`)).toBeDefined();
+
+    // A3: the Lead's pane went back to a shell prompt (agent gone, tab kept);
+    // the re-run closes that tab and creates the pane with the env.
+    let leadTabId = "";
+    await editFakeHerdrState(fake, (state) => {
+      const tab = (state.tabs as Array<{ label?: string; tab_id: string }>).find((candidate) => candidate.label === `${prefix}:lead`)!;
+      leadTabId = tab.tab_id;
+      state.agents = (state.agents as Array<{ pane_id: string }>).filter((agent) => agent.pane_id !== lead.paneId);
+      delete state.processes[lead.paneId];
+    });
+    const before = (await fakeHerdrCommands(fake)).length;
+    const repaired = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat dirs", "--json"], fake.env);
+    expect(phaseFree(repaired.stderr)).toBe("");
+    expect(repaired.exitCode).toBe(0);
+    const after = (await fakeHerdrCommands(fake)).slice(before);
+    const closeIndex = after.findIndex((command) => command[0] === "tab" && command[1] === "close" && command[2] === leadTabId);
+    const createIndex = after.findIndex((command) => command[0] === "tab" && command[1] === "create" && command.includes(`${prefix}:lead`));
+    expect(closeIndex).toBeGreaterThanOrEqual(0);
+    expect(createIndex).toBeGreaterThan(closeIndex);
+    expect(after[createIndex]).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "lead")}`);
+    expect(after.filter((command) => command[0] === "pane" && command[1] === "close")).toEqual([]);
+    const repairedLead = envelope<{ team: { roles: Array<{ paneId: string; role: string }> } }>(repaired).team.roles.find((role) => role.role === "lead")!;
+    expect(repairedLead.paneId).not.toBe(lead.paneId);
+
+    // A Claude peer with the token gone is refused the same way, before tab.create.
+    await rename(seatTokenPath(fixture.home), parked);
+    const marker = (await fakeHerdrCommands(fake)).length;
+    const peerRefused = await runCliAt(fixture, fixture.repo, ["work", "add", "late", "--to", "peer-refuter", "--json"], { ...fake.env, HERDR_PANE_ID: repairedLead.paneId });
+    expect(peerRefused.exitCode).toBe(1);
+    expect(failure(peerRefused.stderr).code).toBe("SEAT_TOKEN_MISSING");
+    expect((await fakeHerdrCommands(fake)).slice(marker).filter((command) => command[1] === "create")).toEqual([]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);

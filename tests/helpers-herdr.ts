@@ -150,7 +150,9 @@ function commandShape(method: string, params: Params): string[] {
     case "tab.create":
       return [
         "tab", "create", ...flag("--workspace", params.workspace_id), ...flag("--cwd", params.cwd),
-        ...flag("--label", params.label), ...noFocus,
+        ...flag("--label", params.label),
+        ...Object.entries(params.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+        ...noFocus,
       ];
     case "tab.close":
       return ["tab", "close", params.tab_id];

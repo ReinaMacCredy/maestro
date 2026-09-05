@@ -365,7 +365,9 @@ export class HerdrClient {
     return Array.isArray(result.tabs) ? result.tabs : [];
   }
 
-  async tabCreate(params: { cwd: string; label: string; workspace_id: string }): Promise<{ root_pane?: HerdrPane; tab?: HerdrTab }> {
+  // env reaches the launched shell (d850: CLAUDE_CONFIG_DIR for a Claude
+  // seat); protocol 20 TabCreateParams.env is a string map.
+  async tabCreate(params: { cwd: string; env?: Record<string, string>; label: string; workspace_id: string }): Promise<{ root_pane?: HerdrPane; tab?: HerdrTab }> {
     return this.request("tab.create", { ...params, focus: false });
   }
 

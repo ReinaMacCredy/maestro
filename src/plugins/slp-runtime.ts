@@ -12,7 +12,7 @@ import {
   type HerdrWorkspace,
 } from "./herdr-client.ts";
 import { resolveHomeDirectory } from "./home.ts";
-import { renderedProfilePath } from "./profiles.ts";
+import { readSeatToken, renderedProfilePath, seatDirectory, seatTokenPath } from "./profiles.ts";
 import { slpRuntimeDirectory } from "./slp-process.ts";
 
 export { SlpRuntimeError };
@@ -345,6 +345,51 @@ export class HerdrSlpRuntime {
     );
   }
 
+  // d850: a Claude seat reads its own config dir; the env rides tab.create
+  // because a shell's environment cannot be read or set afterwards.
+  private seatEnvironment(role: Pick<SlpRolePlan, "kind" | "role">): Record<string, string> | undefined {
+    if (role.kind !== "claude") return undefined;
+    const home = resolveHomeDirectory({ environmentHome: this.environment.HOME });
+    return { CLAUDE_CONFIG_DIR: seatDirectory(home, role.role) };
+  }
+
+  // d846: a Claude seat cannot log in without the token, so the refusal comes
+  // before any workspace or tab exists.
+  private requireSeatToken(roles: readonly Pick<SlpRolePlan, "kind" | "name">[]): void {
+    const claude = roles.filter((role) => role.kind === "claude").map((role) => role.name);
+    if (claude.length === 0) return;
+    const home = resolveHomeDirectory({ environmentHome: this.environment.HOME });
+    if (readSeatToken(home)) return;
+    throw new SlpRuntimeError(
+      `${claude.join(", ")} launch${claude.length === 1 ? "es" : ""} as a Claude seat but the seat token ${seatTokenPath(home)} is missing; run: claude setup-token | maestro install --seat-token`,
+      ["tab", "create"],
+      undefined,
+      { code: "SEAT_TOKEN_MISSING", harness: "claude" },
+    );
+  }
+
+  // d850: a matching-label tab at a shell prompt keeps the environment of its
+  // own creation, so a Claude seat closes it and creates the pane with the env.
+  private async createSeatPane(
+    plan: SlpTeamPlan,
+    role: Pick<SlpRolePlan, "kind" | "label" | "role">,
+    workspaceId: string,
+    matchingTab: HerdrTab | undefined,
+  ): Promise<{ createdTabId: string | null; paneId: string | null; reusedPaneId: string | null }> {
+    const env = this.seatEnvironment(role);
+    if (matchingTab?.root_pane_id && !env) {
+      return { createdTabId: null, paneId: matchingTab.root_pane_id, reusedPaneId: matchingTab.root_pane_id };
+    }
+    if (matchingTab?.tab_id && env) await this.client.tabClose(matchingTab.tab_id);
+    const created = await this.client.tabCreate({
+      cwd: plan.projectPath,
+      label: role.label,
+      workspace_id: workspaceId,
+      ...(env ? { env } : {}),
+    });
+    return { createdTabId: created.tab?.tab_id ?? null, paneId: created.root_pane?.pane_id ?? null, reusedPaneId: null };
+  }
+
   private workspaces(): Promise<HerdrWorkspace[]> {
     return this.client.workspaceList();
   }
@@ -562,6 +607,7 @@ export class HerdrSlpRuntime {
     let createdWorkspace = false;
     let workspaceId: string | null = null;
     for (const role of plan.roles) this.requireRenderedProfile(role);
+    this.requireSeatToken(plan.roles);
     try {
       let matching = (await this.workspaces()).filter(
         (workspace) => workspace.label === plan.workspaceLabel,
@@ -620,19 +666,10 @@ export class HerdrSlpRuntime {
               ["tab", "list"],
             );
           }
-          const matchingTab = matchingTabs[0];
-          paneId = matchingTab?.root_pane_id ?? null;
-          if (paneId) startedPaneIds.push(paneId);
-          if (!paneId) {
-            const created = await this.client.tabCreate({
-              cwd: plan.projectPath,
-              label: role.label,
-              workspace_id: workspaceId,
-            });
-            const tabId = created.tab?.tab_id ?? null;
-            paneId = created.root_pane?.pane_id ?? null;
-            if (tabId) createdTabIds.push(tabId);
-          }
+          const pane = await this.createSeatPane(plan, role, workspaceId, matchingTabs[0]);
+          paneId = pane.paneId;
+          if (pane.reusedPaneId) startedPaneIds.push(pane.reusedPaneId);
+          if (pane.createdTabId) createdTabIds.push(pane.createdTabId);
           if (!paneId) {
             throw new SlpRuntimeError(`role pane was not created: ${role.name}`, ["tab", "create"]);
           }
@@ -713,6 +750,7 @@ export class HerdrSlpRuntime {
   ): Promise<SlpRuntimePeer> {
     const startedAt = Date.now();
     this.requireRenderedProfile(peer);
+    this.requireSeatToken([peer]);
     const workspaceId = await this.findWorkspace(plan);
     const globalMatches = (await this.agents()).filter((agent) => agent.name === peer.name);
     const workspaceMatches = globalMatches.filter((agent) => agent.workspace_id === workspaceId);
@@ -752,18 +790,10 @@ export class HerdrSlpRuntime {
         if (matchingTabs.length > 1) {
           throw new SlpRuntimeError(`peer tab is duplicated: ${peer.label}`, ["tab", "list"]);
         }
-        const matchingTab = matchingTabs[0];
-        paneId = matchingTab?.root_pane_id ?? null;
-        if (paneId) startedPaneId = paneId;
-        if (!paneId) {
-          const created = await this.client.tabCreate({
-            cwd: plan.projectPath,
-            label: peer.label,
-            workspace_id: workspaceId,
-          });
-          createdTabId = created.tab?.tab_id ?? null;
-          paneId = created.root_pane?.pane_id ?? null;
-        }
+        const pane = await this.createSeatPane(plan, peer, workspaceId, matchingTabs[0]);
+        paneId = pane.paneId;
+        startedPaneId = pane.reusedPaneId;
+        createdTabId = pane.createdTabId;
         if (!paneId) {
           throw new SlpRuntimeError(`peer pane was not created: ${peer.name}`, ["tab", "create"]);
         }
