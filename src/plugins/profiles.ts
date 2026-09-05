@@ -533,10 +533,17 @@ export function mergeSettings(base: Record<string, unknown>, overlay: Record<str
   return merged;
 }
 
-// d855: created 0600 so no umask window leaves the token-bearing file readable.
-async function writeIfChanged(path: string, content: string): Promise<void> {
-  const existing = existsSync(path) ? await readFile(path, "utf8") : null;
-  if (existing !== content) await writeFile(path, content, { mode: 0o600 });
+// d855: a fresh secret file is created 0600 so no umask window leaves it
+// readable, and nothing chmods it afterwards (a later chmod would hide a
+// missing mode option from every end-state test); an existing file is
+// brought to 0600 first, whatever its content.
+export async function writeSecretFile(path: string, content: string): Promise<void> {
+  if (!existsSync(path)) {
+    await writeFile(path, content, { mode: 0o600 });
+    return;
+  }
+  await chmod(path, 0o600);
+  if (await readFile(path, "utf8") !== content) await writeFile(path, content);
 }
 
 async function ensureLink(link: string, target: string): Promise<void> {
@@ -565,8 +572,7 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
     const overlayDeny = Array.isArray(permissions.deny) ? (permissions.deny as string[]) : [];
     settings.permissions = { ...permissions, deny: [...plan.deny, ...overlayDeny.filter((tool) => !plan.deny.includes(tool))] };
   }
-  await writeIfChanged(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-  await chmod(settingsPath, 0o600);
+  await writeSecretFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
   const skillsDirectory = join(directory, "skills");
   const wanted = new Set(plan.skills.map((link) => link.name));
   for (const entry of await readdir(skillsDirectory)) {
@@ -577,10 +583,11 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
   for (const link of plan.skills) await ensureLink(join(skillsDirectory, link.name), link.target);
   for (const shared of ["projects", "plugins"]) await ensureLink(join(directory, shared), join(home, ".claude", shared));
   const claudeJson = join(directory, ".claude.json");
-  if (!existsSync(claudeJson)) {
-    await writeFile(claudeJson, `${JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {} }, null, 2)}\n`, { mode: 0o600 });
+  if (existsSync(claudeJson)) {
+    await chmod(claudeJson, 0o600);
+  } else {
+    await writeSecretFile(claudeJson, `${JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {} }, null, 2)}\n`);
   }
-  await chmod(claudeJson, 0o600);
   return directory;
 }
 

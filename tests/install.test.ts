@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { renderedProfilePath, seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
+import { renderedProfilePath, seatConfigRoot, seatTokenPath, writeSecretFile } from "../src/plugins/profiles.ts";
 import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
@@ -801,3 +801,34 @@ test("seat-dirs-modes: under umask 022 install --seat-token leaves the token fil
     process.umask(previous);
   }
 }, 60_000);
+
+// seat-config-dirs R17 (d855 rule 4, mutant M4): R15 observes only the end
+// state, so a write without { mode: 0o600 } followed by a chmod still passed.
+// The one helper behind the token file, seat settings.json and seat
+// .claude.json creates a fresh file at 0600 and never chmods afterwards, so
+// dropping the mode option goes red here.
+test("seat-dirs-secret-file: under umask 022 writeSecretFile creates a fresh file at 0600 with no chmod after, and brings an existing 0644 file to 0600 before rewriting it (R17, d855)", async () => {
+  const previous = process.umask(0o022);
+  try {
+    await withFixture(async (fixture) => {
+      const mode = async (target: string) => (await stat(target)).mode & 0o777;
+      const fresh = join(fixture.home, "fresh-secret");
+      await writeSecretFile(fresh, "one\n");
+      expect(await mode(fresh)).toBe(0o600);
+      expect(await readFile(fresh, "utf8")).toBe("one\n");
+
+      const existing = join(fixture.home, "existing-secret");
+      await writeFile(existing, "old\n");
+      await chmod(existing, 0o644);
+      await writeSecretFile(existing, "new\n");
+      expect(await mode(existing)).toBe(0o600);
+      expect(await readFile(existing, "utf8")).toBe("new\n");
+
+      await chmod(existing, 0o644);
+      await writeSecretFile(existing, "new\n");
+      expect(await mode(existing)).toBe(0o600);
+    });
+  } finally {
+    process.umask(previous);
+  }
+});

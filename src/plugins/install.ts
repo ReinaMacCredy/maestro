@@ -20,7 +20,7 @@ import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
-import { formatProfileSync, materializeProfiles, seatConfigRoot, seatTokenPath } from "./profiles.ts";
+import { formatProfileSync, materializeProfiles, seatConfigRoot, seatTokenPath, writeSecretFile } from "./profiles.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { linkHerdrPlugin } from "./slp-plugin.ts";
@@ -511,11 +511,10 @@ export async function writeSeatToken(home: string, raw: string): Promise<void> {
       "maestro install --seat-token reads the token from stdin and it was empty; run: claude setup-token | maestro install --seat-token",
     );
   }
-  // d855: private at creation, the chmods cover a pre-existing dir and file.
+  // d855: private at creation, the chmod covers a pre-existing dir.
   await mkdir(seatConfigRoot(home), { mode: 0o700, recursive: true });
   await chmod(seatConfigRoot(home), 0o700);
-  await writeFile(seatTokenPath(home), token, { mode: 0o600 });
-  await chmod(seatTokenPath(home), 0o600);
+  await writeSecretFile(seatTokenPath(home), token);
 }
 
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
