@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import {
@@ -14,6 +15,7 @@ import type {
   HandbackService,
 } from "./dispatch.ts";
 import { formatImportReport, importWaymarkTree } from "./bundle-import.ts";
+import { resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
@@ -67,7 +69,7 @@ Each anti-goal gets a matching VERIFY.md check.
 
 ## Decisions
 
-Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lock, and list the ids here; \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
+Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lock, and list the ids here; a decision taken in the Hub store is listed as \`hub:<id>\`. \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
 
 ## Red tests
 
@@ -213,6 +215,42 @@ function decisionsForWork(
         ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
     )
     .all(...workIds);
+}
+
+// A design walk in the Hub room leaves its decisions in the Hub store while the
+// build bundle opens where the code lives (d822); the SPEC lists them as
+// hub:<id> and this read resolves them without a link table.
+function hubDecisionsInSpec(
+  context: PluginContext,
+  spec: string | null,
+): Array<{ id: string; state: string | null; text: string | null }> {
+  const ids = [...new Set([...(spec ?? "").matchAll(/\bhub:(d\d+)\b/g)].map((match) => match[1] as string))];
+  if (ids.length === 0) return [];
+  const hub = resolveHubRoom();
+  const lookup = (database: Database): Map<string, { state: string; text: string }> => {
+    if (!tableExists(database, "decisions")) return new Map();
+    const placeholders = ids.map(() => "?").join(", ");
+    return new Map(
+      database
+        .query<{ id: string; state: string; text: string }, string[]>(
+          `SELECT id, state, text FROM decisions WHERE id IN (${placeholders})`,
+        )
+        .all(...ids)
+        .map((row) => [row.id, { state: row.state, text: row.text }]),
+    );
+  };
+  let found = new Map<string, { state: string; text: string }>();
+  if (samePath(context.store.path, hub.storePath)) {
+    found = lookup(context.store.database);
+  } else if (existsSync(hub.storePath)) {
+    const database = new Database(hub.storePath, { readonly: true });
+    try {
+      found = lookup(database);
+    } finally {
+      database.close();
+    }
+  }
+  return ids.map((id) => ({ id, state: found.get(id)?.state ?? null, text: found.get(id)?.text ?? null }));
 }
 
 function failedNotesForWork(
@@ -841,12 +879,18 @@ export const bundlePlugin: BuiltInPlugin = {
             .filter((record): record is NonNullable<typeof record> => record !== null)
             .map((record) => `${record.id} [${record.state}] ${record.title}`);
           const decisions = decisionsForWork(context, workIds);
-          const decisionLines = decisions.map(
-            (decision) => `${decision.id} [${decision.state}] ${decision.text}`,
-          );
+          const hubDecisions = hubDecisionsInSpec(context, trio.spec);
+          const decisionLines = [
+            ...decisions.map((decision) => `${decision.id} [${decision.state}] ${decision.text}`),
+            ...hubDecisions.map((decision) =>
+              decision.state === null
+                ? `hub:${decision.id} not found in the Hub store`
+                : `hub:${decision.id} [${decision.state}] ${decision.text}`
+            ),
+          ];
           const sections = trioSections(trio);
           return {
-            data: { bundle, decisions, workIds },
+            data: { bundle, decisions, hubDecisions, workIds },
             text: [
               headline(bundle),
               ...sections,

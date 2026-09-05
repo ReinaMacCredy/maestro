@@ -351,3 +351,31 @@ test("644 a forwarded memory failure keeps its code and details behind stderr no
     expect(mismatch.stderr).toContain("resolves its store to");
   });
 });
+
+test("646 bundle show renders Hub decisions the SPEC lists as hub:<id>; the scaffold names the form (UX F6, d822)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    const hubDecision = idFrom(await runCliAt(fixture, room, ["decision", "draft", "graph nodes run in-process", "--rationale", "hub-side"]));
+    expect((await runCliAt(fixture, room, ["decision", "lock", hubDecision])).exitCode).toBe(0);
+    const workId = idFrom(await runCli(fixture, ["work", "add", "build the graph engine", "--atomic-reason", "test"]));
+    const local = idFrom(await runCli(fixture, ["decision", "draft", "store the graph in sqlite", "--work", workId]));
+    expect((await runCli(fixture, ["bundle", "open", "graph-engine", "--work", workId])).exitCode).toBe(0);
+    const spec = join(fixture.repo, ".maestro", "bundle", "graph-engine", "SPEC.md");
+    expect(await readFile(spec, "utf8")).toContain("hub:<id>");
+    await writeFile(spec, `# SPEC\n\n## Decisions\n\n- hub:${hubDecision}\n- hub:d99\n- ${local}\n`);
+
+    const shown = await runCli(fixture, ["bundle", "show", "graph-engine"]);
+    expect(shown.exitCode).toBe(0);
+    const decisions = shown.stdout.split("--- decisions\n")[1] ?? "";
+    expect(decisions.trimEnd().split("\n")).toEqual([
+      `${local} [draft] store the graph in sqlite`,
+      `hub:${hubDecision} [locked] graph nodes run in-process`,
+      "hub:d99 not found in the Hub store",
+    ]);
+    const json = JSON.parse((await runCli(fixture, ["bundle", "show", "graph-engine", "--json"])).stdout).data;
+    expect(json.hubDecisions).toEqual([
+      { id: hubDecision, state: "locked", text: "graph nodes run in-process" },
+      { id: "d99", state: null, text: null },
+    ]);
+  });
+});
