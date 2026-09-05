@@ -757,9 +757,9 @@ function parseLimitOverrides(definition: GraphDefinition, overrides: string[]): 
   return limits;
 }
 
-// Hub d88: the executor is a property of the run. Default team when the
-// driver is a proven role of a running SLP team (which needs a Herdr pane),
-// subagent everywhere else.
+// Hub d88: the executor is a property of the run. Default: team-executor
+// when the driver is a proven role of a running SLP generation, which needs a
+// pane identity; subagent everywhere else.
 function defaultExecutor(context: PluginContext): Executor {
   try {
     requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
@@ -934,7 +934,7 @@ export const graphPlugin: BuiltInPlugin = {
         {
           description: "Start a graph run (by name or --file) and return its first pull envelope.",
           flags: {
-            "--executor": { description: "subagent (harness spawns each agent node) or team (nodes bind to SLP work items); default by environment.", value: true },
+            "--executor": { description: "subagent: the harness spawns each agent node; team: nodes bind to SLP work items; default by environment.", value: true },
             "--file": { description: "Run an uninstalled graph markdown file (- for stdin) instead of a named one.", value: true },
             "--limit": { description: "Override a structural limit for this run: nodes=N, loops=N or fanout=N.", multiple: true, value: true },
           },
