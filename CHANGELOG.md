@@ -11,6 +11,13 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.120.0] - 2026-09-05
+
+`maestro work add --to <peer> --fresh` reuses a Peer pane with a fresh harness
+context, proven by a new harness session before the READY challenge and the
+OPEN push. The prompt audit re-baselines the seat profiles, graph briefs,
+brief lines and MCP tool descriptions for Claude Opus 5, Sonnet 5 and Fable 5.1.
+
 ### Added
 
 - `maestro work add --to <peer> --fresh` reuses an acknowledged Peer pane with
