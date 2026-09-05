@@ -119,10 +119,13 @@ Then exit by tier (`maestro-bundle` tier rule):
   `maestro work add "<title>" --acceptance "<observable result>"`, plus the
   locked decisions. No SPEC, no red-test list; the work is verified
   inline by `maestro-work`. A quickfix never reaches design.
-- Full: `maestro bundle open <id> --work <workId>`, then fill SPEC.md as a
-  pure contract: Problem, Solution, Scope, Anti-goals (each traces to a real
-  risk in this repo and gets a matching VERIFY.md check; an anti-goal that
-  cannot be checked is a wish, not a constraint), Decisions (ids only,
+- Full: `maestro bundle open <id> --work <workId>`, opened in the
+  store whose checkout will change (a walk run in the Hub room still opens
+  its bundle where the code lives; note the bundle on the Hub map and the map
+  on the bundle's work item), then fill SPEC.md as a pure contract: Problem,
+  Solution, Scope, Anti-goals (each traces to a real risk in this repo and gets a matching
+  VERIFY.md check; an anti-goal that cannot be checked is a wish, not a
+  constraint), Decisions (ids only, Hub decisions as `hub:<id>`;
   `maestro bundle show <id>` renders them), and Red tests: one failing test at
   an accepted seam per risk the SPEC names, nothing beyond that list. Work
   with no executable seam (docs, config) or behavior-preserving work

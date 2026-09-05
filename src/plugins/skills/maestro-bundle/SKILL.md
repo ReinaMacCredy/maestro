@@ -23,7 +23,11 @@ code reading, no store lookups until the tier is known.
   directly with `maestro work add|start|done` (no bundle). The work item is the
   floor because `maestro ready`, attention, and the Supervisor's brief read the
   store, not a session task list.
-- Full: any trigger below. Open a bundle.
+- Full: any trigger below. Open a bundle, in the
+  store whose checkout will change: a design walk run in the Hub room still
+  builds where the code lives. List Hub decisions in the SPEC as `hub:<id>`
+  (`maestro bundle show` renders them) and note the bundle on the Hub map and
+  the map on the bundle's work item.
 
 Open a bundle when ANY trigger holds:
 - the work spans multiple sessions or must survive a context reset

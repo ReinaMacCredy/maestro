@@ -299,3 +299,16 @@ test("649 [lint] grilling: a fork answer is a decision to record, never an imple
   expect(bullet).toContain("never an implementation order");
   expect(bullet).toContain("explicit request");
 });
+
+test("650 [lint] the design exit and the bundle tier rule open the bundle in the store whose checkout will change (doctrine review 6)", async () => {
+  const design = await Bun.file(join(skillsRoot, "maestro-design", "SKILL.md")).text();
+  const bundle = await Bun.file(join(skillsRoot, "maestro-bundle", "SKILL.md")).text();
+  const exit = sectionOf(design, "## Readiness gate and exit");
+  const full = exit.slice(exit.indexOf("- Full:")).split("\n\n")[0] ?? "";
+  const tierRule = sectionOf(bundle, "## Tier rule");
+  for (const text of [full, tierRule]) {
+    expect(text).toContain("store whose checkout will change");
+    expect(text).toContain("hub:<id>");
+    expect(text).toContain("Hub map");
+  }
+});
