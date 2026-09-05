@@ -244,15 +244,22 @@ test("102 UNKNOWN_FLAG names the help command for its verb", async () => {
 
 // d855 rule 6: a mistyped --seat-token=<value> echoed the value in the
 // unknown-flag error, so the error redacts everything after the first =.
-test("102b UNKNOWN_FLAG redacts a value glued to the flag with = on stdout and stderr", async () => {
+// The parser stops at the first unknown flag, so each flag gets its own run;
+// the value is pinned absent from the message, the flag field and both streams.
+test("102b UNKNOWN_FLAG redacts a value glued to the flag with = in the message and the flag field on stdout and stderr", async () => {
   await withFixture(async (fixture) => {
-    const glued = await runCli(fixture, ["install", "--seat-token=abc"]);
-    expect(glued.exitCode).not.toBe(0);
-    const error = (JSON.parse(glued.stderr) as { error: Record<string, unknown> }).error;
-    expect(error.code).toBe("UNKNOWN_FLAG");
-    expect(String(error.message)).toContain("--seat-token=");
-    expect(`${glued.stdout}\n${glued.stderr}`).not.toContain("abc");
-    expect(error.flag).toBe("--seat-token=");
+    for (const [flag, value] of [["--seat-token=", "abc123secret"], ["--foo=", "bar"]]) {
+      const glued = await runCli(fixture, ["install", `${flag}${value}`]);
+      expect({ flag, exitCode: glued.exitCode }).toEqual({ flag, exitCode: 2 });
+      const error = (JSON.parse(glued.stderr) as { error: Record<string, unknown> }).error;
+      expect({ flag, code: error.code }).toEqual({ flag, code: "UNKNOWN_FLAG" });
+      expect(String(error.message)).toContain(flag);
+      expect(String(error.message)).not.toContain(value);
+      expect(error.flag).toBe(flag);
+      expect(String(error.flag)).not.toContain(value);
+      expect(glued.stdout).not.toContain(value);
+      expect(glued.stderr).not.toContain(value);
+    }
   });
 });
 
