@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, readdir, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 
 // Hub d83/d91/d98: one profile shape for SLP seats, council seats and graph
@@ -91,6 +91,17 @@ function invalid(path: string, detail: string): CliError {
   return new CliError("INVALID_PROFILE", `invalid profile ${path}: ${detail}`, { path });
 }
 
+// d855: settings: reaches env and hooks in the file that carries the seat
+// token, skills: reaches the filesystem; both are owner-only, so the repo's
+// .maestro/profiles layer (the only layer under a .maestro dir) cannot set them.
+const ownerOnlyKeys = ["settings", "skills"] as const;
+const skillNamePattern = /^[a-z0-9][a-z0-9._-]*$/;
+
+function isRepoLayer(path: string): boolean {
+  const directory = dirname(path);
+  return basename(directory) === "profiles" && basename(dirname(directory)) === ".maestro";
+}
+
 export function parseProfile(path: string, text: string): { body: string; frontmatter: ProfileFrontmatter } {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text);
   if (!match) throw invalid(path, "expected YAML frontmatter between --- lines followed by the body");
@@ -106,6 +117,11 @@ export function parseProfile(path: string, text: string): { body: string; frontm
   const raw = parsed as Record<string, unknown>;
   for (const key of Object.keys(raw)) {
     if (!knownKeys.has(key)) throw invalid(path, `unknown key ${key}`);
+  }
+  for (const key of ownerOnlyKeys) {
+    if (raw[key] !== undefined && isRepoLayer(path)) {
+      throw invalid(path, `${key} is owner-only: a repo .maestro/profiles profile cannot set it; move it to ~/maestro/profiles or rely on the shipped pack`);
+    }
   }
   const harness = raw.harness;
   if (harness !== "claude" && harness !== "codex") {
@@ -161,6 +177,11 @@ export function parseProfile(path: string, text: string): { body: string; frontm
   if (raw.skills !== undefined) {
     if (!Array.isArray(raw.skills) || raw.skills.some((skill) => typeof skill !== "string" || skill.trim() === "")) {
       throw invalid(path, "skills must be a list of skill directory names");
+    }
+    for (const skill of raw.skills as string[]) {
+      if (!skillNamePattern.test(skill)) {
+        throw invalid(path, `skills entry ${JSON.stringify(skill)} is not a plain skill directory name (${skillNamePattern.source})`);
+      }
     }
     frontmatter.skills = raw.skills as string[];
   }
@@ -311,12 +332,20 @@ export interface ProfilePlan {
 
 // d848: a skill name resolves in the Hub skills dir first, then the owner's
 // Claude skills; an unknown name is refused naming the profile that asked.
+// d855: the link target's realpath must stay under the root it was found in,
+// so a symlinked entry cannot point the seat at a directory outside them.
 function resolveSkill(home: string, profile: Profile, name: string): SeatSkillLink {
-  const candidates = [join(home, "maestro", "skills", name), join(home, ".claude", "skills", name)];
-  for (const target of candidates) {
-    if (existsSync(join(target, "SKILL.md"))) return { name, target };
+  const roots = [join(home, "maestro", "skills"), join(home, ".claude", "skills")];
+  for (const root of roots) {
+    const target = join(root, name);
+    if (!existsSync(join(target, "SKILL.md"))) continue;
+    const real = realpathSync(target);
+    if (real === realpathSync(root) || !real.startsWith(`${realpathSync(root)}${sep}`)) {
+      throw invalid(profile.path, `skill ${name} resolves to ${real}, outside ${root}`);
+    }
+    return { name, target };
   }
-  throw invalid(profile.path, `unknown skill ${name}: not in ${candidates.join(" or ")}`);
+  throw invalid(profile.path, `unknown skill ${name}: not in ${roots.map((root) => join(root, name)).join(" or ")}`);
 }
 
 // Every resolvable profile renders into ~/.codex/agents and

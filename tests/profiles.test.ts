@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   materializeProfiles,
@@ -168,9 +168,10 @@ test("seat-dirs-keys: parseProfile accepts skills and settings, refuses settings
   }
 
   await withFixture(async (fixture) => {
-    const repoProfiles = join(fixture.repo, ".maestro", "profiles");
+    // d855: skills: is owner-only, so the unknown name sits in the Hub layer (R13).
+    const homeProfiles = join(fixture.home, "maestro", "profiles");
     const written = await writeProfile(
-      repoProfiles,
+      homeProfiles,
       "lead",
       "---\nharness: claude\nmodel: default\nskills: [no-such-skill]\n---\nRole: Lead.\n",
     );
@@ -409,5 +410,86 @@ test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders c
     const names = (line: string) => line.slice("disallowedTools: ".length).split(", ").sort();
     expect(await lineOf("peer-opus")).toBe(`disallowedTools: AskUserQuestion, ${nine.slice(0, nine.lastIndexOf(", AskUserQuestion"))}`);
     expect(names(await lineOf("peer-opus"))).toEqual(names(await lineOf("peer")));
+  });
+});
+
+// seat-config-dirs R13 (d855 rules 1 and 2): settings: reaches env and hooks in
+// a file that carries the seat token, skills: reaches the filesystem, so a
+// repo-supplied .maestro/profiles layer cannot carry either; a skill name is a
+// plain directory name and its target stays under the two skill roots.
+test("seat-dirs-owner-only-keys: a <repo>/.maestro/profiles profile with settings: or skills: is refused naming the file and the owner dirs while a ~/maestro/profiles copy renders; a skill name ../../victim, a/b or .. is refused naming the profile; a skill whose realpath escapes <home>/maestro/skills and <home>/.claude/skills is refused (R13, d855)", async () => {
+  const refuse = (path: string, text: string): string => {
+    try {
+      parseProfile(path, text);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    return "";
+  };
+  const repoLead = "/repo/.maestro/profiles/lead.md";
+  for (const [key, frontmatter] of [
+    ["settings", "settings: {outputStyle: Concise}\n"],
+    ["skills", "skills: [maestro-work]\n"],
+  ] as const) {
+    const message = refuse(repoLead, `---\nharness: claude\nmodel: default\n${frontmatter}---\nRole: repo lead.\n`);
+    expect({ key, message }).toEqual({ key, message: expect.stringContaining(repoLead) });
+    expect({ key, message }).toEqual({ key, message: expect.stringContaining(key) });
+    expect({ key, message }).toEqual({ key, message: expect.stringContaining("~/maestro/profiles") });
+    expect({ key, message }).toEqual({ key, message: expect.stringContaining("shipped") });
+  }
+  expect(refuse(repoLead, "---\nharness: claude\nmodel: opus\n---\nRole: repo lead.\n")).toBe("");
+  const homeLead = parseProfile(
+    "/home/maestro/profiles/lead.md",
+    "---\nharness: claude\nmodel: default\nskills: [maestro-work]\nsettings: {outputStyle: Concise}\n---\nRole: home lead.\n",
+  );
+  expect(homeLead.frontmatter.skills).toEqual(["maestro-work"]);
+  expect(homeLead.frontmatter.settings).toEqual({ outputStyle: "Concise" });
+
+  for (const name of ["../../victim", "a/b", "..", "Victim", ".hidden", ""]) {
+    const message = refuse("/home/maestro/profiles/peer.md", `---\nharness: claude\nmodel: default\nskills: [${JSON.stringify(name)}]\n---\nRole: peer.\n`);
+    expect({ name, message }).toEqual({ name, message: expect.stringContaining("/home/maestro/profiles/peer.md") });
+    expect({ name, message }).toEqual({ name, message: expect.stringContaining("skills") });
+  }
+  expect(refuse("/home/maestro/profiles/peer.md", "---\nharness: claude\nmodel: default\nskills: [maestro-work, my.skill_2-x]\n---\nRole: peer.\n")).toBe("");
+
+  await withFixture(async (fixture) => {
+    await materializeSkills(fixture.home, "dev");
+    const repoProfiles = join(fixture.repo, ".maestro", "profiles");
+    const homeProfiles = join(fixture.home, "maestro", "profiles");
+    const overlay = "settings:\n  outputStyle: Concise\n";
+    const written = await writeProfile(repoProfiles, "lead", `---\nharness: claude\nmodel: default\n${overlay}---\nRole: repo lead.\n`);
+    let message = "";
+    try {
+      await planProfileRenders(fixture.home, fixture.repo);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain(written);
+    expect(message).toContain("settings");
+    expect(message).toContain("~/maestro/profiles");
+    await rm(written, { force: true });
+
+    await writeProfile(homeProfiles, "lead", `---\nharness: claude\nmodel: default\nskills: [maestro-work]\n${overlay}---\nRole: home lead.\n`);
+    await materializeProfiles(fixture.home, fixture.repo);
+    const leadSettings = JSON.parse(await readFile(join(seatDirectory(fixture.home, "lead"), "settings.json"), "utf8")) as Record<string, unknown>;
+    expect(leadSettings.outputStyle).toBe("Concise");
+    expect(await readdir(join(seatDirectory(fixture.home, "lead"), "skills"))).toEqual(["maestro-work"]);
+
+    // A Hub skill entry that is a symlink out of the skills root is refused
+    // even though its SKILL.md resolves.
+    const victim = join(fixture.root, "victim");
+    await mkdir(victim, { recursive: true });
+    await writeFile(join(victim, "SKILL.md"), "---\nname: victim\n---\nvictim\n");
+    await symlink(victim, join(fixture.home, "maestro", "skills", "escaped"));
+    const escaping = await writeProfile(homeProfiles, "lead", "---\nharness: claude\nmodel: default\nskills: [escaped]\n---\nRole: home lead.\n");
+    message = "";
+    try {
+      await planProfileRenders(fixture.home, fixture.repo);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain(escaping);
+    expect(message).toContain("escaped");
+    expect(message).toContain(join(fixture.home, "maestro", "skills"));
   });
 });
