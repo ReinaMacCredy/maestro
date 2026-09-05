@@ -320,6 +320,35 @@ the next ingest would promote.
 
 `recipe list` lists shipped methods; `recipe show <name>` prints one.
 
+### `graph`
+
+A graph is one markdown file (YAML frontmatter for nodes, edges, inputs and
+limits; one `## <node>` section per agent or human prompt) that both harnesses
+drive identically through a pull loop; maestro never spawns a model.
+
+- `graph list` shows every graph across `<repo>/.maestro/graphs`,
+  `~/maestro/graphs` and the shipped set, with origin and shadowing; `graph
+  show <name>` prints the nearest file.
+- `graph run <name>|--file <path> [key=value ...] [--limit nodes|loops|fanout=N]
+  [--executor subagent|team]` starts a run as one work item of kind `graph`
+  held by the driving session (nodes live in `graph_nodes`, never in `ready`
+  or the card budget) and returns the first envelope; `--file -` reads stdin.
+- `graph next <run>` executes every ready function, router, join and foreach
+  node and returns `{run, graph, executor, round, state, done, nodes}` listing
+  only the agent and human nodes whose inputs are ready; `{done: true,
+  verdict}` at the end, `{done: true, stopped: "LIMIT", limit, used, partial}`
+  at a structural limit, `{done: true, failed}` after a failed node.
+- `graph result <run> <node>[@instance] --file <path>|--text <result>
+  [--files a,b]` records a node's result; a declared schema validates JSON
+  extracted from the text and `PARSE_FAILED` carries the schema for one retry.
+- `graph trust <name>|--file <path>` records a plugin-trust grant for a repo
+  graph's current file so its function nodes may run; room and shipped graphs
+  never need one. `maestro trace <run>` is the run's journal.
+
+The shipped preset is `review-gate` (`range=<git range>`, `tier=light|full`);
+the `maestro-graph` skill carries the executor loop and the authoring
+reference.
+
 ### `plugin`
 
 `plugin list`, `add`, `new`, `trust`, `untrust`, `enable`, `disable`, and

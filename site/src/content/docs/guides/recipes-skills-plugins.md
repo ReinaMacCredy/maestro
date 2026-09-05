@@ -45,6 +45,9 @@ and the shared method at `~/maestro/WORKFLOW.md`:
   questionnaire for that person.
 - `maestro-council` runs a Lead-only council on a hard-to-reverse fork and
   records one binding verdict with its dissent.
+- `maestro-graph` drives a pre-known multi-agent path (a review gate, a
+  research sweep, a judge panel) as a graph file both harnesses execute
+  identically, and carries the reference for authoring a new graph.
 
 The installer links these skills for Claude without overwriting an unmanaged
 skill. Team coordination comes from the pinned Workspace Pack and direct role

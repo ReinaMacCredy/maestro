@@ -198,6 +198,10 @@ missing identities or targets.
   and a dry run.
 - `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
   manages the configured extension set.
+- `maestro graph run|next|result|show|list|trust` drives a pre-known
+  multi-agent path from one graph markdown file; maestro executes the
+  deterministic nodes and hands the agent nodes back to whichever harness
+  is driving.
 - `maestro import rust` imports preserved Rust data; `maestro legacy show`
   reads imported cards and files.
 - `maestro install`, `maestro update`, `maestro uninstall`, and

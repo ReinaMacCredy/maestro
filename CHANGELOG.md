@@ -13,6 +13,31 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- Graph engine, first close (Hub map w16, d78-d85, d88, d89, d99, d100; repo
+  w611, d835). A pre-known multi-agent path is one markdown file
+  (`<repo>/.maestro/graphs`, `~/maestro/graphs`, or shipped, nearer shadowing
+  farther) with YAML frontmatter for `input`, `nodes` (`agent`, `function`,
+  `router`, `join`, `foreach`, `human`), `edges` (fan-out, `when:` routing,
+  loop-back with `max_rounds`) and `limits`, plus one `## <node>` section per
+  prompt with `{placeholders}` over the run state. `maestro graph run`
+  (by name, `--file`, or stdin) creates one work item of kind `graph` held by
+  the driver, with nodes in a new `graph_nodes` table that consume no `w`-id
+  and never reach `ready` or the card budget; `graph next` executes every
+  ready function, router, join and foreach node itself and returns only the
+  agent and human nodes to spawn, with the run's `executor` (`subagent`
+  outside a running SLP generation); `graph result` validates against the
+  node's schema, extracts the first JSON block from prose, and gives one
+  `PARSE_FAILED` retry; `join` dedups by key within a line window and
+  records provenance; structural limits end a run with `stopped: "LIMIT"`
+  and a partial result; a repo graph's function nodes wait for `maestro
+  graph trust`; `graph show` and `graph list` read the three locations.
+  Nine node profiles (`classifier`, five `reviewer-*` lenses, `refuter`,
+  `fixer`, `synthesizer`) ship as slp-profiles sources rendered into both
+  harness agent dirs; the `maestro-graph` skill carries the pull loop and
+  the authoring reference; `review-gate` is the first shipped graph. maestro
+  never spawns a model and never writes SLP state from graph code. The team
+  executor binding, writers, `fix-loop` and the council preset are the
+  second close.
 - SLP reaches Herdr over its socket API (Hub w33, d96, d97; repo w635,
   d830-d832). `src/plugins/herdr-client.ts` speaks newline JSON to
   `HERDR_SOCKET_PATH` (protocol 20, one request per connection,
