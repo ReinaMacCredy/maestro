@@ -1,10 +1,7 @@
-import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { Store, resolveStoreLocation } from "../kernel/store.ts";
-import { acquireProcessLock, runSlpProcess } from "./slp-process.ts";
+import { acquireProcessLock, runSlpProcess, slpRuntimeDirectory } from "./slp-process.ts";
 
 interface WatchRole {
   name: string;
@@ -25,20 +22,7 @@ export interface SlpWatchConfig {
   workspaceId: string;
 }
 
-export function slpWatchRuntimeDirectory(
-  projectPath: string,
-  teamId: string,
-  generation: number,
-): string {
-  const resolvedProject = resolve(projectPath);
-  const canonicalProject = realpathSync.native(resolvedProject);
-  const projectKey = createHash("sha256")
-    .update(canonicalProject)
-    .digest("hex")
-    .slice(0, 16);
-  const user = typeof process.getuid === "function" ? String(process.getuid()) : "user";
-  return join(tmpdir(), `maestro-slp-${user}`, projectKey, teamId, `g${generation}`);
-}
+export const slpWatchRuntimeDirectory = slpRuntimeDirectory;
 
 function resultRecord(value: Record<string, unknown>): Record<string, unknown> {
   const result = value.result;

@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseProfile } from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { fakeHerdrCommands, installFakeHerdr } from "./fake-herdr.ts";
+import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 const shippedRoot = join(import.meta.dir, "..", "src", "plugins", "resources");

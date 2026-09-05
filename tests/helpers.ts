@@ -118,6 +118,11 @@ async function spawnCli(
     MAESTRO_SESSION_ID: "test-session",
     MAESTRO_SESSION_PID: String(process.pid),
   };
+  // The suite may run inside a Herdr pane; the live socket and pane identity
+  // never reach the code under test unless a test sets them.
+  for (const name of Object.keys(childEnvironment)) {
+    if (name.startsWith("HERDR_")) delete childEnvironment[name];
+  }
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined) {
       delete childEnvironment[name];

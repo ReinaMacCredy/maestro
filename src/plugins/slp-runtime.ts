@@ -1,10 +1,21 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { CliError } from "../kernel/cli.ts";
+import {
+  HerdrClient,
+  SlpRuntimeError,
+  type HerdrAgent,
+  type HerdrPane,
+  type HerdrProcessInfo,
+  type HerdrReadSource,
+  type HerdrTab,
+  type HerdrWorkspace,
+} from "./herdr-client.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { renderedProfilePath } from "./profiles.ts";
-import { slpWatchRuntimeDirectory } from "./slp-watch.ts";
+import { slpRuntimeDirectory } from "./slp-process.ts";
+
+export { SlpRuntimeError };
 
 // d755: the acknowledgement is polled inside a fixed window with non-scrolling
 // reads; d756: a blocked pane is classified from its own text.
@@ -97,56 +108,6 @@ export const slpStopEnvironment = {
   token: "MAESTRO_SLP_STOP_GRANT",
 } as const;
 
-interface WorkspaceRecord {
-  cwd?: string;
-  label?: string;
-  workspace_id?: string;
-}
-
-interface PaneRecord {
-  pane_id?: string;
-  tab_id?: string;
-  workspace_id?: string;
-}
-
-interface TabRecord {
-  label?: string;
-  root_pane_id?: string;
-  tab_id?: string;
-  workspace_id?: string;
-}
-
-interface AgentRecord {
-  agent_status?: string;
-  name?: string;
-  pane_id?: string;
-  workspace_id?: string;
-}
-
-interface SlpRuntimeEvidence {
-  code?: string;
-  directory?: string;
-  harness?: string;
-  paneTail?: readonly string[];
-}
-
-export class SlpRuntimeError extends CliError {
-  constructor(
-    message: string,
-    readonly command: readonly string[],
-    readonly stderr?: string,
-    evidence: SlpRuntimeEvidence = {},
-  ) {
-    super(evidence.code ?? "SLP_RUNTIME", message, {
-      command: [...command],
-      ...(stderr ? { stderr } : {}),
-      ...(evidence.harness ? { harness: evidence.harness } : {}),
-      ...(evidence.directory ? { directory: evidence.directory } : {}),
-      ...(evidence.paneTail ? { paneTail: [...evidence.paneTail] } : {}),
-    });
-  }
-}
-
 function cleanPaneLines(output: string): string[] {
   return output
     .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
@@ -158,43 +119,14 @@ function paneTailOf(lines: readonly string[]): string[] {
   return lines.filter((line) => line !== "").slice(-paneTailLines);
 }
 
-function resultOf(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object") return {};
-  const result = (value as Record<string, unknown>).result;
-  return result && typeof result === "object" ? result as Record<string, unknown> : {};
+function foreground(value: HerdrProcessInfo): boolean {
+  if (typeof value.foreground_process_group_id === "number") return true;
+  const record = value as unknown as Record<string, unknown>;
+  const processes = record.foreground_processes ?? record.processes;
+  return Array.isArray(processes) && processes.length > 0;
 }
 
-function records<T>(value: unknown, key: string): T[] {
-  const result = resultOf(value);
-  const nested = result[key];
-  return Array.isArray(nested) ? nested as T[] : [];
-}
-
-function objectAt(value: Record<string, unknown>, key: string): Record<string, unknown> {
-  const nested = value[key];
-  return nested && typeof nested === "object" ? nested as Record<string, unknown> : {};
-}
-
-function stringAt(value: Record<string, unknown>, key: string): string | null {
-  const nested = value[key];
-  return typeof nested === "string" ? nested : null;
-}
-
-function accepted(value: Record<string, unknown>): boolean {
-  return value.accepted !== false && value.delivered !== false;
-}
-
-function foreground(value: Record<string, unknown>): boolean {
-  if (
-    typeof value.foreground_process_group_id === "number" ||
-    typeof value.foreground_pgid === "number"
-  ) return true;
-  return ["foreground_processes", "processes"].some(
-    (key) => Array.isArray(value[key]) && value[key].length > 0,
-  );
-}
-
-function settled(agent: AgentRecord): boolean {
+function settled(agent: HerdrAgent): boolean {
   return agent.agent_status === "idle" || agent.agent_status === "done";
 }
 
@@ -229,13 +161,7 @@ function includesExactAcknowledgement(
 }
 
 function herdrErrorCode(error: unknown): string | null {
-  if (!(error instanceof SlpRuntimeError) || !error.stderr) return null;
-  try {
-    const envelope = JSON.parse(error.stderr) as { error?: { code?: unknown } };
-    return typeof envelope.error?.code === "string" ? envelope.error.code : null;
-  } catch {
-    return null;
-  }
+  return error instanceof SlpRuntimeError ? error.herdrCode : null;
 }
 
 export function buildSlpTeamPlan(input: {
@@ -282,88 +208,20 @@ export function launchArguments(role: Pick<SlpRolePlan, "autocompact" | "kind" |
   return args;
 }
 
+function startCommand(role: Pick<SlpRolePlan, "kind" | "name">, paneId: string, launch: string[]): string[] {
+  return ["agent", "start", role.name, "--kind", role.kind, "--pane", paneId, "--timeout", "60000", "--", ...launch];
+}
+
 export class HerdrSlpRuntime {
+  private readonly client: HerdrClient;
+
   constructor(
     private readonly commandTimeoutMs = 15_000,
     private readonly environment: Record<string, string | undefined> = process.env,
     private readonly agentReadyTimeoutMs = 5_000,
     private readonly promptReadyTimeoutMs = 30_000,
-  ) {}
-
-  private async rawCommand(
-    args: string[],
-    cwd: string,
-    timeoutMs = this.commandTimeoutMs,
-  ): Promise<string> {
-    let child: ReturnType<typeof Bun.spawn>;
-    try {
-      child = Bun.spawn(["herdr", ...args], {
-        cwd,
-        env: this.environment,
-        stderr: "pipe",
-        stdout: "pipe",
-      });
-    } catch (error) {
-      throw new SlpRuntimeError(
-        `cannot start Herdr: ${error instanceof Error ? error.message : String(error)}`,
-        args,
-      );
-    }
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill(9);
-    }, timeoutMs);
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout as ReadableStream<Uint8Array>).text(),
-      new Response(child.stderr as ReadableStream<Uint8Array>).text(),
-      child.exited,
-    ]).finally(() => clearTimeout(timer));
-    const commandName = args.slice(0, 3).join(" ");
-    if (timedOut) {
-      throw new SlpRuntimeError(
-        `Herdr command timed out after ${timeoutMs}ms: ${commandName}`,
-        args,
-        stderr.trim(),
-      );
-    }
-    if (exitCode !== 0) {
-      const diagnostic = stderr.trim();
-      throw new SlpRuntimeError(
-        `Herdr command failed (${exitCode}): ${commandName}${diagnostic ? `; ${diagnostic}` : ""}`,
-        args,
-        diagnostic,
-      );
-    }
-    return stdout;
-  }
-
-  private async command(
-    args: string[],
-    cwd: string,
-    timeoutMs = this.commandTimeoutMs,
-    allowEmpty = false,
-  ): Promise<Record<string, unknown>> {
-    const stdout = await this.rawCommand(args, cwd, timeoutMs);
-    if (allowEmpty && stdout.trim() === "") return {};
-    const commandName = args.slice(0, 3).join(" ");
-    try {
-      return JSON.parse(stdout) as Record<string, unknown>;
-    } catch {
-      throw new SlpRuntimeError(
-        `Herdr returned invalid JSON for: ${commandName}`,
-        args,
-        stdout.trim(),
-      );
-    }
-  }
-
-  private async textCommand(
-    args: string[],
-    cwd: string,
-    timeoutMs = this.commandTimeoutMs,
-  ): Promise<string> {
-    return this.rawCommand(args, cwd, timeoutMs);
+  ) {
+    this.client = new HerdrClient(environment, commandTimeoutMs);
   }
 
   private note(line: string): void {
@@ -371,22 +229,16 @@ export class HerdrSlpRuntime {
   }
 
   private async readPane(
-    plan: SlpTeamPlan,
     target: string,
-    source: "visible" | "recent-unwrapped",
+    source: HerdrReadSource,
     lines: number,
   ): Promise<string[]> {
-    return cleanPaneLines(
-      await this.textCommand(
-        ["agent", "read", target, "--source", source, "--lines", String(lines), "--format", "text"],
-        plan.projectPath,
-      ),
-    );
+    return cleanPaneLines(await this.client.agentRead(target, source, lines));
   }
 
-  private async paneTail(plan: SlpTeamPlan, target: string): Promise<string[]> {
+  private async paneTail(target: string): Promise<string[]> {
     try {
-      return paneTailOf(await this.readPane(plan, target, "visible", 40));
+      return paneTailOf(await this.readPane(target, "visible", 40));
     } catch {
       return [];
     }
@@ -401,7 +253,7 @@ export class HerdrSlpRuntime {
   ): Promise<SlpRuntimeError> {
     let lines: string[] = [];
     try {
-      lines = await this.readPane(plan, name, "visible", 40);
+      lines = await this.readPane(name, "visible", 40);
     } catch {}
     const paneTail = paneTailOf(lines);
     if (lines.some((line) => trustDialogPattern.test(line))) {
@@ -420,13 +272,12 @@ export class HerdrSlpRuntime {
     );
   }
 
-  private async settledAgent(plan: SlpTeamPlan, name: string): Promise<boolean> {
-    const matches = (await this.agents(plan)).filter((agent) => agent.name === name);
-    return matches.length === 1 && settled(matches[0] as AgentRecord);
+  private async settledAgent(name: string): Promise<boolean> {
+    const matches = (await this.client.agentList()).filter((agent) => agent.name === name);
+    return matches.length === 1 && settled(matches[0] as HerdrAgent);
   }
 
   private async requireAcknowledgement(
-    plan: SlpTeamPlan,
     roleName: string,
     contract: SlpRoleContract,
   ): Promise<void> {
@@ -434,7 +285,7 @@ export class HerdrSlpRuntime {
     let previous: string | null = null;
     let quietPolls = 0;
     while (true) {
-      const visible = await this.readPane(plan, roleName, "visible", 60);
+      const visible = await this.readPane(roleName, "visible", 60);
       if (includesExactAcknowledgement(visible, contract.acknowledgement)) return;
       const snapshot = visible.join("\n");
       if (snapshot === previous) quietPolls += 1;
@@ -444,9 +295,9 @@ export class HerdrSlpRuntime {
       }
       const remaining = deadline - Date.now();
       const quiet =
-        quietPolls >= acknowledgementQuietPolls && (await this.settledAgent(plan, roleName));
+        quietPolls >= acknowledgementQuietPolls && (await this.settledAgent(roleName));
       if (remaining <= 0 || quiet) {
-        const recent = await this.readPane(plan, roleName, "recent-unwrapped", 120);
+        const recent = await this.readPane(roleName, "recent_unwrapped", 120);
         if (includesExactAcknowledgement(recent, contract.acknowledgement)) return;
         throw new SlpRuntimeError(
           `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement within ${Math.round(acknowledgementWindowMs / 1000)}s`,
@@ -473,84 +324,78 @@ export class HerdrSlpRuntime {
     );
   }
 
-  private async workspaces(plan: SlpTeamPlan): Promise<WorkspaceRecord[]> {
-    return records<WorkspaceRecord>(
-      await this.command(["workspace", "list"], plan.projectPath),
-      "workspaces",
-    );
+  private workspaces(): Promise<HerdrWorkspace[]> {
+    return this.client.workspaceList();
   }
 
-  private async tabs(plan: SlpTeamPlan, workspaceId: string): Promise<TabRecord[]> {
-    return records<TabRecord>(
-      await this.command(["tab", "list", "--workspace", workspaceId], plan.projectPath),
-      "tabs",
-    );
+  private tabs(workspaceId: string): Promise<HerdrTab[]> {
+    return this.client.tabList(workspaceId);
   }
 
-  private async panes(plan: SlpTeamPlan, workspaceId: string): Promise<PaneRecord[]> {
-    return records<PaneRecord>(
-      await this.command(["pane", "list", "--workspace", workspaceId], plan.projectPath),
-      "panes",
-    );
+  private panes(workspaceId: string): Promise<HerdrPane[]> {
+    return this.client.paneList(workspaceId);
   }
 
-  private async agents(plan: SlpTeamPlan): Promise<AgentRecord[]> {
-    return records<AgentRecord>(
-      await this.command(["agent", "list"], plan.projectPath),
-      "agents",
-    );
+  private agents(): Promise<HerdrAgent[]> {
+    return this.client.agentList();
   }
 
-  private async startAgent(plan: SlpTeamPlan, args: string[]): Promise<Record<string, unknown>> {
+  private async startAgent(
+    plan: SlpTeamPlan,
+    role: Pick<SlpRolePlan, "autocompact" | "kind" | "name" | "profile">,
+    paneId: string,
+  ): Promise<void> {
+    const launch = launchArguments(role);
+    const command = startCommand(role, paneId, launch);
     const deadline = Date.now() + this.agentReadyTimeoutMs;
     while (true) {
       try {
-        return await this.command(args, plan.projectPath, Math.max(this.commandTimeoutMs, 75_000));
+        await this.client.agentStart(
+          { args: launch, kind: role.kind, name: role.name, pane_id: paneId, timeout_ms: 60_000 },
+          Math.max(this.commandTimeoutMs, 75_000),
+        );
+        return;
       } catch (error) {
         const errorCode = herdrErrorCode(error);
+        const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
         if (errorCode === "agent_not_ready") {
-          const name = args[2];
-          const paneOption = args.indexOf("--pane");
-          const paneId = paneOption >= 0 ? args[paneOption + 1] : undefined;
-          const kindOption = args.indexOf("--kind");
-          const harness = kindOption >= 0 ? args[kindOption + 1] ?? "agent" : "agent";
-          const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
-          if (!name || !paneId) throw error;
           while (true) {
-            const matches = (await this.agents(plan)).filter((agent) => agent.name === name);
-            if (
-              matches.length === 1 &&
-              matches[0]?.pane_id === paneId &&
-              settled(matches[0])
-            ) {
-              return { result: { accepted: true, name } };
-            }
+            const matches = (await this.agents()).filter((agent) => agent.name === role.name);
+            if (matches.length === 1 && matches[0]?.pane_id === paneId && settled(matches[0])) return;
             if (
               matches.length === 1 &&
               matches[0]?.pane_id === paneId &&
               matches[0].agent_status === "blocked"
             ) {
-              throw await this.blockedFailure(plan, name, harness, args, stderr);
+              throw await this.blockedFailure(plan, role.name, role.kind, command, stderr);
             }
             const remaining = deadline - Date.now();
             if (remaining <= 0) {
               throw new SlpRuntimeError(
-                `agent ${name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
-                args,
+                `agent ${role.name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
+                command,
                 stderr,
-                { paneTail: await this.paneTail(plan, name) },
+                { paneTail: await this.paneTail(role.name) },
               );
             }
             await Bun.sleep(Math.min(100, remaining));
           }
         }
-        if (errorCode !== "agent_pane_busy") throw error;
+        if (errorCode !== "agent_pane_busy") {
+          if (error instanceof SlpRuntimeError) {
+            throw new SlpRuntimeError(`role did not start: ${role.name}; ${error.message}`, command, stderr, {
+              code: error.code === "SLP_RUNTIME" ? undefined : error.code,
+              herdrCode: error.herdrCode ?? undefined,
+            });
+          }
+          throw error;
+        }
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new SlpRuntimeError(
             `pane did not become an available shell within ${this.agentReadyTimeoutMs}ms`,
-            args,
-            error instanceof SlpRuntimeError ? error.stderr : undefined,
+            command,
+            stderr,
           );
         }
         await Bun.sleep(Math.min(100, remaining));
@@ -558,27 +403,38 @@ export class HerdrSlpRuntime {
     }
   }
 
-  private async promptAgent(plan: SlpTeamPlan, args: string[]): Promise<Record<string, unknown>> {
+  private async promptAgent(plan: SlpTeamPlan, name: string, body: string): Promise<void> {
+    const command = ["agent", "prompt", name, body, "--wait", "--timeout", "120000"];
     const deadline = Date.now() + this.promptReadyTimeoutMs;
     while (true) {
       try {
-        return await this.command(args, plan.projectPath, 130_000);
+        await this.client.agentPrompt(name, body, { timeout_ms: 120_000 }, 130_000);
+        return;
       } catch (error) {
         const code = herdrErrorCode(error);
-        const name = args[2] ?? "";
         const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
         if (code === "agent_blocked") {
           const harness = plan.roles.find((role) => role.name === name)?.kind ?? "codex";
-          throw await this.blockedFailure(plan, name, harness, args, stderr);
+          throw await this.blockedFailure(plan, name, harness, command, stderr);
         }
-        if (code !== "agent_prompt_stalled") throw error;
+        if (code !== "agent_prompt_stalled") {
+          if (error instanceof SlpRuntimeError) {
+            throw new SlpRuntimeError(
+              `role contract was not delivered: ${name}; ${error.message}`,
+              ["agent", "prompt", name],
+              stderr,
+              { code: error.code === "SLP_RUNTIME" ? undefined : error.code, herdrCode: error.herdrCode ?? undefined },
+            );
+          }
+          throw error;
+        }
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new SlpRuntimeError(
             `role contract prompt remained stalled for ${this.promptReadyTimeoutMs}ms`,
-            args,
+            command,
             stderr,
-            { paneTail: await this.paneTail(plan, name) },
+            { paneTail: await this.paneTail(name) },
           );
         }
         await Bun.sleep(Math.min(100, remaining));
@@ -587,14 +443,13 @@ export class HerdrSlpRuntime {
   }
 
   private async waitForWorkspaceAbsence(
-    plan: SlpTeamPlan,
     workspaceId: string,
     label: string,
     action: "rollback" | "shutdown",
   ): Promise<void> {
     const deadline = Date.now() + 10_000;
     while (true) {
-      const remaining = (await this.workspaces(plan)).filter(
+      const remaining = (await this.workspaces()).filter(
         (workspace) => workspace.workspace_id === workspaceId,
       );
       if (remaining.length === 0) return;
@@ -610,36 +465,42 @@ export class HerdrSlpRuntime {
   }
 
   private async closeWorkspace(
-    plan: SlpTeamPlan,
     workspaceId: string,
     label: string,
     action: "rollback" | "shutdown",
   ): Promise<void> {
-    const present = (await this.workspaces(plan)).some(
+    const present = (await this.workspaces()).some(
       (workspace) => workspace.workspace_id === workspaceId,
     );
     if (!present) return;
     let closeError: unknown = null;
     try {
-      await this.command(["workspace", "close", workspaceId], plan.projectPath);
+      await this.client.workspaceClose(workspaceId);
     } catch (error) {
       closeError = error;
     }
     try {
-      await this.waitForWorkspaceAbsence(plan, workspaceId, label, action);
+      await this.waitForWorkspaceAbsence(workspaceId, label, action);
     } catch (error) {
       throw closeError ?? error;
     }
   }
 
-  private async processInfo(plan: SlpTeamPlan, paneId: string): Promise<Record<string, unknown>> {
-    const result = resultOf(
-      await this.command(["pane", "process-info", "--pane", paneId], plan.projectPath),
+  private processInfo(paneId: string): Promise<HerdrProcessInfo> {
+    return this.client.paneProcessInfo(paneId);
+  }
+
+  private async findWorkspace(plan: SlpTeamPlan): Promise<string> {
+    const matching = (await this.workspaces()).filter(
+      (workspace) => workspace.label === plan.workspaceLabel,
     );
-    const nested = result.process_info;
-    return nested && typeof nested === "object"
-      ? nested as Record<string, unknown>
-      : result;
+    if (matching.length !== 1 || !matching[0]?.workspace_id) {
+      throw new SlpRuntimeError(
+        `expected exactly one workspace ${plan.workspaceLabel}; found ${matching.length}`,
+        ["workspace", "list"],
+      );
+    }
+    return matching[0].workspace_id;
   }
 
   async start(
@@ -654,24 +515,17 @@ export class HerdrSlpRuntime {
     let workspaceId: string | null = null;
     for (const role of plan.roles) this.requireRenderedProfile(role);
     try {
-      let matching = (await this.workspaces(plan)).filter(
+      let matching = (await this.workspaces()).filter(
         (workspace) => workspace.label === plan.workspaceLabel,
       );
       if (matching.length === 0) {
-        const created = resultOf(
-          await this.command([
-            "workspace",
-            "create",
-            "--cwd",
-            plan.projectPath,
-            "--label",
-            plan.workspaceLabel,
-            "--no-focus",
-          ], plan.projectPath),
-        );
-        workspaceId = stringAt(objectAt(created, "workspace"), "workspace_id");
+        const created = await this.client.workspaceCreate({
+          cwd: plan.projectPath,
+          label: plan.workspaceLabel,
+        });
+        workspaceId = created.workspace?.workspace_id ?? null;
         createdWorkspace = workspaceId !== null;
-        matching = (await this.workspaces(plan)).filter(
+        matching = (await this.workspaces()).filter(
           (workspace) => workspace.label === plan.workspaceLabel,
         );
       }
@@ -685,7 +539,7 @@ export class HerdrSlpRuntime {
 
       for (const role of plan.roles) {
         const startedAt = Date.now();
-        const globalMatches = (await this.agents(plan)).filter(
+        const globalMatches = (await this.agents()).filter(
           (agent) => agent.name === role.name,
         );
         const workspaceMatches = globalMatches.filter(
@@ -709,7 +563,7 @@ export class HerdrSlpRuntime {
           continue;
         }
         if (!paneId) {
-          const matchingTabs = (await this.tabs(plan, workspaceId)).filter(
+          const matchingTabs = (await this.tabs(workspaceId)).filter(
             (tab) => tab.label === role.label,
           );
           if (matchingTabs.length > 1) {
@@ -722,68 +576,26 @@ export class HerdrSlpRuntime {
           paneId = matchingTab?.root_pane_id ?? null;
           if (paneId) startedPaneIds.push(paneId);
           if (!paneId) {
-            const created = resultOf(
-              await this.command([
-                "tab",
-                "create",
-                "--workspace",
-                workspaceId,
-                "--cwd",
-                plan.projectPath,
-                "--label",
-                role.label,
-                "--no-focus",
-              ], plan.projectPath),
-            );
-            const tab = objectAt(created, "tab");
-            const rootPane = objectAt(created, "root_pane");
-            const tabId = stringAt(tab, "tab_id");
-            paneId = stringAt(rootPane, "pane_id");
+            const created = await this.client.tabCreate({
+              cwd: plan.projectPath,
+              label: role.label,
+              workspace_id: workspaceId,
+            });
+            const tabId = created.tab?.tab_id ?? null;
+            paneId = created.root_pane?.pane_id ?? null;
             if (tabId) createdTabIds.push(tabId);
           }
           if (!paneId) {
             throw new SlpRuntimeError(`role pane was not created: ${role.name}`, ["tab", "create"]);
           }
           this.note(`${role.name}: starting ${role.kind} pane in ${plan.workspaceLabel}`);
-          const args = [
-            "agent",
-            "start",
-            role.name,
-            "--kind",
-            role.kind,
-            "--pane",
-            paneId,
-            "--timeout",
-            "60000",
-          ];
-          args.push("--", ...launchArguments(role));
-          const started = resultOf(await this.startAgent(plan, args));
-          if (!accepted(started)) {
-            throw new SlpRuntimeError(`role did not start: ${role.name}`, args);
-          }
+          await this.startAgent(plan, role, paneId);
         }
         this.note(
           `${role.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
         );
-        const prompted = resultOf(
-          await this.promptAgent(plan, [
-            "agent",
-            "prompt",
-            role.name,
-            contract.body,
-            "--wait",
-            "--timeout",
-            "120000",
-          ]),
-        );
-        if (!accepted(prompted)) {
-          throw new SlpRuntimeError(`role contract was not delivered: ${role.name}`, [
-            "agent",
-            "prompt",
-            role.name,
-          ]);
-        }
-        await this.requireAcknowledgement(plan, role.name, contract);
+        await this.promptAgent(plan, role.name, contract.body);
+        await this.requireAcknowledgement(role.name, contract);
         this.note(`${role.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       }
 
@@ -801,9 +613,9 @@ export class HerdrSlpRuntime {
     contracts: ReadonlyMap<SlpRole, SlpRoleContract>,
     reused: ReadonlyMap<SlpRole, SlpAcknowledgedRole>,
   ): Promise<SlpRuntimeRole[]> {
-    const panes = await this.panes(plan, workspaceId);
+    const panes = await this.panes(workspaceId);
     const paneIds = new Set(panes.flatMap((pane) => pane.pane_id ? [pane.pane_id] : []));
-    const agents = await this.agents(plan);
+    const agents = await this.agents();
     const roles: SlpRuntimeRole[] = [];
     for (const role of plan.roles) {
       const matches = agents.filter(
@@ -817,7 +629,7 @@ export class HerdrSlpRuntime {
         throw new SlpRuntimeError(`role is not ready: ${role.name}`, ["agent", "list"]);
       }
       const paneId = matches[0].pane_id;
-      if (!foreground(await this.processInfo(plan, paneId))) {
+      if (!foreground(await this.processInfo(paneId))) {
         throw new SlpRuntimeError(`role process is not ready: ${role.name}`, [
           "pane",
           "process-info",
@@ -853,17 +665,8 @@ export class HerdrSlpRuntime {
   ): Promise<SlpRuntimePeer> {
     const startedAt = Date.now();
     this.requireRenderedProfile(peer);
-    const matchingWorkspaces = (await this.workspaces(plan)).filter(
-      (workspace) => workspace.label === plan.workspaceLabel,
-    );
-    if (matchingWorkspaces.length !== 1 || !matchingWorkspaces[0]?.workspace_id) {
-      throw new SlpRuntimeError(
-        `expected exactly one workspace ${plan.workspaceLabel}; found ${matchingWorkspaces.length}`,
-        ["workspace", "list"],
-      );
-    }
-    const workspaceId = matchingWorkspaces[0].workspace_id;
-    const globalMatches = (await this.agents(plan)).filter((agent) => agent.name === peer.name);
+    const workspaceId = await this.findWorkspace(plan);
+    const globalMatches = (await this.agents()).filter((agent) => agent.name === peer.name);
     const workspaceMatches = globalMatches.filter((agent) => agent.workspace_id === workspaceId);
     if (globalMatches.length > workspaceMatches.length || workspaceMatches.length > 1) {
       throw new SlpRuntimeError(
@@ -894,7 +697,7 @@ export class HerdrSlpRuntime {
     }
     try {
       if (!paneId) {
-        const matchingTabs = (await this.tabs(plan, workspaceId)).filter(
+        const matchingTabs = (await this.tabs(workspaceId)).filter(
           (tab) => tab.label === peer.label,
         );
         if (matchingTabs.length > 1) {
@@ -904,67 +707,27 @@ export class HerdrSlpRuntime {
         paneId = matchingTab?.root_pane_id ?? null;
         if (paneId) startedPaneId = paneId;
         if (!paneId) {
-          const created = resultOf(
-            await this.command([
-              "tab",
-              "create",
-              "--workspace",
-              workspaceId,
-              "--cwd",
-              plan.projectPath,
-              "--label",
-              peer.label,
-              "--no-focus",
-            ], plan.projectPath),
-          );
-          createdTabId = stringAt(objectAt(created, "tab"), "tab_id");
-          paneId = stringAt(objectAt(created, "root_pane"), "pane_id");
+          const created = await this.client.tabCreate({
+            cwd: plan.projectPath,
+            label: peer.label,
+            workspace_id: workspaceId,
+          });
+          createdTabId = created.tab?.tab_id ?? null;
+          paneId = created.root_pane?.pane_id ?? null;
         }
         if (!paneId) {
           throw new SlpRuntimeError(`peer pane was not created: ${peer.name}`, ["tab", "create"]);
         }
         this.note(`${peer.name}: starting ${peer.kind} pane in ${plan.workspaceLabel}`);
-        const args = [
-          "agent",
-          "start",
-          peer.name,
-          "--kind",
-          peer.kind,
-          "--pane",
-          paneId,
-          "--timeout",
-          "60000",
-        ];
-        args.push("--", ...launchArguments(peer));
-        const started = resultOf(await this.startAgent(plan, args));
-        if (!accepted(started)) {
-          throw new SlpRuntimeError(`peer did not start: ${peer.name}`, args);
-        }
+        await this.startAgent(plan, peer, paneId);
       }
       this.note(
         `${peer.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
       );
-      const prompted = resultOf(
-        await this.promptAgent(plan, [
-          "agent",
-          "prompt",
-          peer.name,
-          contract.body,
-          "--wait",
-          "--timeout",
-          "120000",
-        ]),
-      );
-      if (!accepted(prompted)) {
-        throw new SlpRuntimeError(`peer contract was not delivered: ${peer.name}`, [
-          "agent",
-          "prompt",
-          peer.name,
-        ]);
-      }
-      await this.requireAcknowledgement(plan, peer.name, contract);
+      await this.promptAgent(plan, peer.name, contract.body);
+      await this.requireAcknowledgement(peer.name, contract);
       this.note(`${peer.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
-      const matches = (await this.agents(plan)).filter(
+      const matches = (await this.agents()).filter(
         (agent) => agent.name === peer.name && agent.workspace_id === workspaceId,
       );
       if (matches.length !== 1 || !matches[0]?.pane_id) {
@@ -974,7 +737,7 @@ export class HerdrSlpRuntime {
         throw new SlpRuntimeError(`peer is not ready: ${peer.name}`, ["agent", "list"]);
       }
       paneId = matches[0].pane_id;
-      if (!foreground(await this.processInfo(plan, paneId))) {
+      if (!foreground(await this.processInfo(paneId))) {
         throw new SlpRuntimeError(`peer process is not ready: ${peer.name}`, [
           "pane",
           "process-info",
@@ -1004,22 +767,25 @@ export class HerdrSlpRuntime {
     }
   }
 
-  async closeCreatedTab(plan: SlpTeamPlan, tabId: string): Promise<void> {
-    await this.command(["tab", "close", tabId], plan.projectPath);
+  async closeCreatedTab(_plan: SlpTeamPlan, tabId: string): Promise<void> {
+    await this.client.tabClose(tabId);
   }
 
-  async closeStartedPane(plan: SlpTeamPlan, paneId: string): Promise<void> {
-    await this.command(["pane", "close", paneId], plan.projectPath);
+  async closeStartedPane(_plan: SlpTeamPlan, paneId: string): Promise<void> {
+    await this.client.paneClose(paneId);
   }
 
-  async notify(projectPath: string, target: string, line: string): Promise<void> {
-    const result = resultOf(await this.command(["agent", "prompt", target, line], projectPath));
-    if (!accepted(result)) {
-      throw new SlpRuntimeError(`agent did not accept the notice: ${target}`, [
-        "agent",
-        "prompt",
-        target,
-      ]);
+  async notify(_projectPath: string, target: string, line: string): Promise<void> {
+    try {
+      await this.client.agentPrompt(target, line);
+    } catch (error) {
+      if (!(error instanceof SlpRuntimeError)) throw error;
+      throw new SlpRuntimeError(
+        `agent did not accept the notice: ${target}; ${error.message}`,
+        ["agent", "prompt", target],
+        error.stderr,
+        { code: error.code === "SLP_RUNTIME" ? undefined : error.code, herdrCode: error.herdrCode ?? undefined },
+      );
     }
   }
 
@@ -1029,8 +795,7 @@ export class HerdrSlpRuntime {
     token: string,
     cliEntry: string,
   ): Promise<void> {
-    const helperPlan = { ...plan, projectPath: roomPath };
-    const sharedHub = (await this.workspaces(helperPlan)).filter(
+    const sharedHub = (await this.workspaces()).filter(
       (workspace) =>
         workspace.label === "maestro" &&
         typeof workspace.cwd === "string" &&
@@ -1048,7 +813,7 @@ export class HerdrSlpRuntime {
     let closeWorkspace = false;
     let workspaceId = sharedHub[0]?.workspace_id ?? null;
     if (!workspaceId) {
-      const existing = (await this.workspaces(helperPlan)).filter(
+      const existing = (await this.workspaces()).filter(
         (workspace) => workspace.label === ephemeralLabel,
       );
       if (existing.length > 1) {
@@ -1060,18 +825,8 @@ export class HerdrSlpRuntime {
       workspaceId = existing[0]?.workspace_id ?? null;
       closeWorkspace = true;
       if (!workspaceId) {
-        const created = resultOf(
-          await this.command([
-            "workspace",
-            "create",
-            "--cwd",
-            roomPath,
-            "--label",
-            ephemeralLabel,
-            "--no-focus",
-          ], roomPath),
-        );
-        workspaceId = stringAt(objectAt(created, "workspace"), "workspace_id");
+        const created = await this.client.workspaceCreate({ cwd: roomPath, label: ephemeralLabel });
+        workspaceId = created.workspace?.workspace_id ?? null;
       }
     }
     if (!workspaceId) {
@@ -1079,88 +834,66 @@ export class HerdrSlpRuntime {
     }
 
     if (!closeWorkspace) {
-      for (const stale of (await this.tabs(helperPlan, workspaceId)).filter(
+      for (const stale of (await this.tabs(workspaceId)).filter(
         (tab) => tab.label === helperLabel,
       )) {
-        if (stale.tab_id) await this.command(["tab", "close", stale.tab_id], roomPath);
+        if (stale.tab_id) await this.client.tabClose(stale.tab_id);
       }
     }
 
     let helperTabId: string | null = null;
     try {
-      const created = resultOf(
-        await this.command([
-          "tab",
-          "create",
-          "--workspace",
-          workspaceId,
-          "--cwd",
-          roomPath,
-          "--label",
-          helperLabel,
-          "--no-focus",
-        ], roomPath),
-      );
-      helperTabId = stringAt(objectAt(created, "tab"), "tab_id");
-      const helperPaneId = stringAt(objectAt(created, "root_pane"), "pane_id");
+      const created = await this.client.tabCreate({
+        cwd: roomPath,
+        label: helperLabel,
+        workspace_id: workspaceId,
+      });
+      helperTabId = created.tab?.tab_id ?? null;
+      const helperPaneId = created.root_pane?.pane_id ?? null;
       if (!helperTabId || !helperPaneId) {
         throw new SlpRuntimeError("stop helper pane was not created", ["tab", "create"]);
       }
-      const launched = resultOf(
-        await this.command(
-          [
-            "pane",
-            "run",
-            helperPaneId,
-            "/usr/bin/env",
-            `${slpStopEnvironment.token}=${token}`,
-            `${slpStopEnvironment.project}=${plan.projectPath}`,
-            `${slpStopEnvironment.helperTab}=${helperTabId}`,
-            `${slpStopEnvironment.helperWorkspace}=${workspaceId}`,
-            `${slpStopEnvironment.closeWorkspace}=${closeWorkspace ? "1" : "0"}`,
-            process.execPath,
-            cliEntry,
-            "team",
-            "stop",
-            plan.teamId,
-            "--json",
-          ],
-          roomPath,
-          this.commandTimeoutMs,
-          true,
-        ),
+      await this.client.paneSendInput(
+        helperPaneId,
+        [
+          "/usr/bin/env",
+          `${slpStopEnvironment.token}=${token}`,
+          `${slpStopEnvironment.project}=${plan.projectPath}`,
+          `${slpStopEnvironment.helperTab}=${helperTabId}`,
+          `${slpStopEnvironment.helperWorkspace}=${workspaceId}`,
+          `${slpStopEnvironment.closeWorkspace}=${closeWorkspace ? "1" : "0"}`,
+          process.execPath,
+          cliEntry,
+          "team",
+          "stop",
+          plan.teamId,
+          "--json",
+        ].join(" "),
       );
-      if (!accepted(launched)) {
-        throw new SlpRuntimeError("stop helper command was not accepted", ["pane", "run"]);
-      }
     } catch (error) {
       try {
-        if (closeWorkspace) await this.command(["workspace", "close", workspaceId], roomPath);
-        else if (helperTabId) await this.command(["tab", "close", helperTabId], roomPath);
+        if (closeWorkspace) await this.client.workspaceClose(workspaceId);
+        else if (helperTabId) await this.client.tabClose(helperTabId);
       } catch {}
       throw error;
     }
   }
 
   async closeStopHelper(
-    roomPath: string,
+    _roomPath: string,
     helperTabId: string,
     helperWorkspaceId: string,
     closeWorkspace: boolean,
   ): Promise<void> {
-    await this.command(
-      closeWorkspace
-        ? ["workspace", "close", helperWorkspaceId]
-        : ["tab", "close", helperTabId],
-      roomPath,
-    );
+    if (closeWorkspace) await this.client.workspaceClose(helperWorkspaceId);
+    else await this.client.tabClose(helperTabId);
   }
 
   async inspect(
     plan: SlpTeamPlan,
     expectedRoles: readonly SlpRuntimeRole[],
   ): Promise<SlpRuntimeInspection> {
-    const workspaces = (await this.workspaces(plan)).filter(
+    const workspaces = (await this.workspaces()).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
     );
     if (workspaces.length === 0) {
@@ -1178,8 +911,8 @@ export class HerdrSlpRuntime {
       );
     }
     const workspaceId = workspaces[0].workspace_id;
-    const agents = await this.agents(plan);
-    const panes = await this.panes(plan, workspaceId);
+    const agents = await this.agents();
+    const panes = await this.panes(workspaceId);
     const paneIds = new Set(panes.flatMap((pane) => pane.pane_id ? [pane.pane_id] : []));
     const missingPanes: string[] = [];
     for (const expected of expectedRoles) {
@@ -1192,12 +925,12 @@ export class HerdrSlpRuntime {
         missingPanes.push(expected.name);
         continue;
       }
-      if (!foreground(await this.processInfo(plan, paneId))) missingPanes.push(expected.name);
+      if (!foreground(await this.processInfo(paneId))) missingPanes.push(expected.name);
     }
     let watch = false;
     for (const pane of panes) {
       if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;
-      const info = await this.processInfo(plan, pane.pane_id);
+      const info = await this.processInfo(pane.pane_id);
       const text = JSON.stringify(info).toLowerCase();
       if (
         !foreground(info) ||
@@ -1221,10 +954,10 @@ export class HerdrSlpRuntime {
     plan: SlpTeamPlan,
     expectedRoles: readonly SlpRuntimeRole[],
   ): Promise<void> {
-    const matchingWorkspaces = (await this.workspaces(plan)).filter(
+    const matchingWorkspaces = (await this.workspaces()).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
     );
-    const runtimeDirectory = slpWatchRuntimeDirectory(
+    const runtimeDirectory = slpRuntimeDirectory(
       plan.projectPath,
       plan.teamId,
       plan.generation,
@@ -1240,8 +973,8 @@ export class HerdrSlpRuntime {
       );
     }
     const workspaceId = matchingWorkspaces[0].workspace_id;
-    const tabs = await this.tabs(plan, workspaceId);
-    const panes = await this.panes(plan, workspaceId);
+    const tabs = await this.tabs(workspaceId);
+    const panes = await this.panes(workspaceId);
     const closedTabs = new Set<string>();
     const closedPanes = new Set<string>();
     const closePane = async (paneId: string): Promise<void> => {
@@ -1260,11 +993,11 @@ export class HerdrSlpRuntime {
             !closedPanes.has(candidate.pane_id),
         );
         if (hasOpenSibling) {
-          await this.command(["pane", "close", paneId], plan.projectPath);
+          await this.client.paneClose(paneId);
           closedPanes.add(paneId);
           return;
         }
-        await this.command(["tab", "close", tab.tab_id], plan.projectPath);
+        await this.client.tabClose(tab.tab_id);
         closedTabs.add(tab.tab_id);
         for (const candidate of panes) {
           if (candidate.tab_id === tab.tab_id && candidate.pane_id) {
@@ -1274,7 +1007,7 @@ export class HerdrSlpRuntime {
         return;
       }
       if (pane) {
-        await this.command(["pane", "close", paneId], plan.projectPath);
+        await this.client.paneClose(paneId);
         closedPanes.add(paneId);
       }
     };
@@ -1307,7 +1040,7 @@ export class HerdrSlpRuntime {
         .filter((role) => role.role === "team-supervisor")
         .map((role) => role.paneId),
     );
-    const preFinalRemainder = (await this.panes(plan, workspaceId)).filter(
+    const preFinalRemainder = (await this.panes(workspaceId)).filter(
       (pane) => pane.pane_id && !supervisorPanes.has(pane.pane_id),
     );
     if (preFinalRemainder.length > 0) {
@@ -1318,7 +1051,7 @@ export class HerdrSlpRuntime {
     }
 
     await closeRole("team-supervisor");
-    await this.closeWorkspace(plan, workspaceId, plan.workspaceLabel, "shutdown");
+    await this.closeWorkspace(workspaceId, plan.workspaceLabel, "shutdown");
   }
 
   async rollback(
@@ -1328,17 +1061,17 @@ export class HerdrSlpRuntime {
     },
   ): Promise<void> {
     if (created.createdWorkspace && created.workspaceId) {
-      await this.closeWorkspace(plan, created.workspaceId, created.workspaceId, "rollback");
+      await this.closeWorkspace(created.workspaceId, created.workspaceId, "rollback");
       return;
     }
     for (const paneId of [...created.startedPaneIds].reverse()) {
-      await this.command(["pane", "close", paneId], plan.projectPath);
+      await this.client.paneClose(paneId);
     }
     for (const tabId of [...created.createdTabIds].reverse()) {
-      await this.command(["tab", "close", tabId], plan.projectPath);
+      await this.client.tabClose(tabId);
     }
     if (created.workspaceId) {
-      const remainingStartedPanes = (await this.panes(plan, created.workspaceId)).filter(
+      const remainingStartedPanes = (await this.panes(created.workspaceId)).filter(
         (pane) => pane.pane_id && created.startedPaneIds.includes(pane.pane_id),
       );
       if (remainingStartedPanes.length > 0) {
@@ -1347,7 +1080,7 @@ export class HerdrSlpRuntime {
           ["pane", "close"],
         );
       }
-      const remaining = (await this.tabs(plan, created.workspaceId)).filter(
+      const remaining = (await this.tabs(created.workspaceId)).filter(
         (tab) => tab.tab_id && created.createdTabIds.includes(tab.tab_id),
       );
       if (remaining.length > 0) {

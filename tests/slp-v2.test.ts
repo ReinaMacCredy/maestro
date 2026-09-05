@@ -17,7 +17,7 @@ import {
   installFakeHerdr,
   readFakeHerdrState,
   setFakeHerdrBehavior,
-} from "./fake-herdr.ts";
+} from "./helpers-herdr.ts";
 import {
   addLinkedWorktree,
   initializeGitRepository,
@@ -3600,7 +3600,6 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
     await writeFile(transcript, "raw runtime transcript\n");
     await setFakeHerdrBehavior(fake, {
       closeWorkspaceWithLastTab: true,
-      paneRunEmptyOutput: true,
       processInfo: false,
     });
     const unrelatedHubId = "unrelated-owner-hub";
@@ -5201,7 +5200,7 @@ test("SLP v2 reports an expired acknowledgement window with the pane tail", asyn
       (command) => command[0] === "agent" && command[1] === "read",
     );
     expect(reads.length).toBeGreaterThanOrEqual(4);
-    expect(reads.at(-1)).toContain("recent-unwrapped");
+    expect(reads.at(-1)).toContain("recent_unwrapped");
     expect((await readFakeHerdrState(fake)).workspaces).toEqual([]);
   });
 }, 30_000);

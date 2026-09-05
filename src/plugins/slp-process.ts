@@ -1,4 +1,21 @@
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+// One directory per project, team and generation for the runtime's lock and
+// state; team stop deletes it (d831).
+export function slpRuntimeDirectory(
+  projectPath: string,
+  teamId: string,
+  generation: number,
+): string {
+  const canonicalProject = realpathSync.native(resolve(projectPath));
+  const projectKey = createHash("sha256").update(canonicalProject).digest("hex").slice(0, 16);
+  const user = typeof process.getuid === "function" ? String(process.getuid()) : "user";
+  return join(tmpdir(), `maestro-slp-${user}`, projectKey, teamId, `g${generation}`);
+}
 
 function pidIsLive(pid: number): boolean {
   try {
