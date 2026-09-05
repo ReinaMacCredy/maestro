@@ -144,6 +144,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
   `INVALID_PROFILE` (install names the file and key), `RETIRED_FLAG`
   (`--lead-model`, `--peer-model`, `--supervisor-model` name their
   replacement), `STALL_RETIRED`.
+- Seats have no question tool (owner ruling 2026-09-05, lab g20): every
+  shipped profile carries `disallowed_tools: [AskUserQuestion]`, so each
+  Claude render (`~/.claude/agents/maestro-<name>.md`, the composed
+  `maestro-peer-<name>.md` included) carries `disallowedTools:
+  AskUserQuestion`; the Codex files are unchanged by the key. The shared
+  section of `SLP.md` says it: a question for the owner is `maestro work note
+  <id> "<question>" --blocked`, and the runtime's dialog stall exists for
+  harness prompts only. Owner-shadowed `~/maestro/profiles/*.md` files need
+  the key added by hand.
 
 ### Removed
 

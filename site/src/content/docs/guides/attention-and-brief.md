@@ -53,7 +53,9 @@ beside the Team Supervisor through Maestro's Herdr plugin (Hub d96, d97). It
 resolves Herdr pane events against the store with no model and writes as the
 actor `runtime`:
 
-- a role pane that Herdr reports `blocked` (a harness dialog) becomes a
+- a role pane that Herdr reports `blocked` (a harness dialog such as a trust
+  or permission prompt; seats have no question tool, so a question for you is
+  a `--blocked` note, never a dialog) becomes a
   `stall:dialog` entry on the item that seat holds, and an `idle` pane that
   still holds ACTIVE work becomes `stall:silence`; each is pushed to the stuck
   pane as `[from runtime][<id>] dialog|silence <evidence>; stop and run:

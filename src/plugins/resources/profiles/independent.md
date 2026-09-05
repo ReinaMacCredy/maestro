@@ -2,7 +2,7 @@
 harness: claude
 model: opus
 effort: high
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Council seat - Independent; reasons from first principles, analysis only
 ---
 Role: Independent council seat.

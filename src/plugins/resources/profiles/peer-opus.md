@@ -2,6 +2,7 @@
 harness: claude
 model: opus
 effort: high
+disallowed_tools: [AskUserQuestion]
 description: SLP Peer variant on Claude Opus (owner ruling 2026-09-02 while Codex is exhausted)
 ---
 Role: Peer on Claude Opus.

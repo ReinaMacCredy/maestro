@@ -41,7 +41,10 @@ export type SeatProfileName = (typeof seatProfileNames)[number];
 const shippedProfiles = join(import.meta.dir, "resources", "profiles");
 const shippedPack = join(import.meta.dir, "resources", "SLP.md");
 const efforts: readonly string[] = ["low", "medium", "high", "xhigh"];
-const claudeOnlyKeys = ["permission", "autocompact", "disallowed_tools"] as const;
+// disallowed_tools is not Claude-only: install renders a Claude agent file
+// for every profile whatever its harness, and the key governs that render
+// (owner ruling 2026-09-05: no seat has a question tool).
+const claudeOnlyKeys = ["permission", "autocompact"] as const;
 const knownKeys = new Set([
   "harness",
   "model",

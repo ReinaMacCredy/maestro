@@ -2,7 +2,7 @@
 harness: claude
 model: opus
 effort: high
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Council seat - Specialist; applies only the requested domain semantics, analysis only
 ---
 Role: Specialist council seat.

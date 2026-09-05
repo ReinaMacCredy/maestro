@@ -3,6 +3,7 @@ harness: codex
 model: gpt-5.6-sol
 effort: xhigh
 sandbox: read-only
+disallowed_tools: [AskUserQuestion]
 description: Council seat - Challenger; tests the framing and shared premises, cross-family by rule, analysis only
 ---
 Role: Challenger council seat.

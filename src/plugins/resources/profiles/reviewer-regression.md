@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Regression reviewer; finds callers and flows outside the diff that the change breaks, analysis only
 ---
 Role: Regression reviewer graph node.

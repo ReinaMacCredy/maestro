@@ -65,8 +65,10 @@ wake-up. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
-shows the flag. That self-declared `--blocked` note is the team's first
-attention layer. The second is the team runtime pane Maestro opens beside the
+shows the flag. Seats have no question tool: a question for the owner is
+`maestro work note <id> "<question>" --blocked`, never a dialog, and the
+runtime's dialog stall exists for harness prompts only. That self-declared
+`--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens beside the
 Team Supervisor (Hub d96, d97): it resolves Herdr pane events against the
 store, no model judges anything, and it may send you
 `[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro

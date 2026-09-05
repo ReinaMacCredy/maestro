@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Contract and test reviewer; names changed contracts without a matching test or doc, analysis only
 ---
 Role: Contract and test reviewer graph node.

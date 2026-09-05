@@ -1,6 +1,7 @@
 ---
 harness: codex
 model: default
+disallowed_tools: [AskUserQuestion]
 description: SLP Lead seat - technical coordination, Peer briefs, plans, and review of every Peer return
 ---
 Role: Lead.

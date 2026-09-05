@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
@@ -94,3 +94,30 @@ test("package-json: no dependencies key (red 10, A5)", async () => {
   ) as Record<string, unknown>;
   expect("dependencies" in packageJson).toBe(false);
 });
+
+test("profile-no-question-tool: every shipped profile renders disallowedTools: AskUserQuestion for Claude, its composed peer render too, and the Codex TOMLs never carry it (owner ruling 2026-09-05)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const shipped = join(import.meta.dir, "..", "src", "plugins", "resources", "profiles");
+    const names = (await readdir(shipped)).filter((entry) => entry.endsWith(".md")).map((entry) => entry.slice(0, -3));
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const renderedNames = name.startsWith("peer-") || ["team-supervisor", "lead", "peer"].includes(name)
+        ? [name]
+        : [name, `peer-${name}`];
+      for (const renderedName of renderedNames) {
+        const claude = await readFile(join(fixture.home, ".claude", "agents", `maestro-${renderedName}.md`), "utf8");
+        const frontmatter = claude.slice(0, claude.indexOf("\n---\n", 4));
+        const line = frontmatter.split("\n").find((candidate) => candidate.startsWith("disallowedTools: "));
+        expect({ renderedName, line }).toEqual({ renderedName, line: expect.stringContaining("AskUserQuestion") });
+        for (const toml of [
+          join(fixture.home, ".codex", `maestro-${renderedName}.config.toml`),
+          join(fixture.home, ".codex", "agents", `maestro-${renderedName}.toml`),
+        ]) {
+          expect({ toml, text: await readFile(toml, "utf8") }).toEqual({ toml, text: expect.not.stringContaining("AskUserQuestion") });
+        }
+      }
+    }
+  });
+}, 90_000);

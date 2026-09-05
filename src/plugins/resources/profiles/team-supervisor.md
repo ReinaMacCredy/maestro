@@ -1,6 +1,7 @@
 ---
 harness: claude
 model: default
+disallowed_tools: [AskUserQuestion]
 description: SLP Team Supervisor seat - team-level coordination and acceptance, authority through the nine SLP operations only
 ---
 Role: Team Supervisor.

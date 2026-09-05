@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Refuter; tries to knock down one finding against the actual code, analysis only
 ---
 Role: Refuter graph node.

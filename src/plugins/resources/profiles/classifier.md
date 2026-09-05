@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Classifier; reports routing facts about a diff or input as one JSON object, analysis only
 ---
 Role: Classifier graph node.

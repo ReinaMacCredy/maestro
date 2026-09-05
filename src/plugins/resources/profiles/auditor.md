@@ -3,6 +3,7 @@ harness: codex
 model: gpt-5.6-luna
 effort: xhigh
 sandbox: read-only
+disallowed_tools: [AskUserQuestion]
 description: Council seat - Auditor; audits the Lead's draft verdict against the reports and evidence, analysis only
 ---
 Role: Auditor council seat.

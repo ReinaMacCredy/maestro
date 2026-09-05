@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Synthesizer; composes the verdict from findings and refuter results, analysis only
 ---
 Role: Synthesizer graph node.

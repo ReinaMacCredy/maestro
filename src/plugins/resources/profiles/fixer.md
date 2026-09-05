@@ -1,6 +1,7 @@
 ---
 harness: claude
 model: default
+disallowed_tools: [AskUserQuestion]
 description: Graph node - Fixer; applies the smallest fix for the findings handed to it and reports the files changed
 ---
 Role: Fixer graph node.

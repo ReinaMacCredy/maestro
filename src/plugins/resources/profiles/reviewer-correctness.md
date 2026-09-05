@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Correctness reviewer; reports behavioral bugs with concrete inputs, analysis only
 ---
 Role: Correctness reviewer graph node.

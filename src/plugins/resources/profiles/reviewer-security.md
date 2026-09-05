@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Security reviewer; reports injection, missing validation, secret exposure and bypasses, analysis only
 ---
 Role: Security reviewer graph node.

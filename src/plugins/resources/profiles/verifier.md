@@ -3,6 +3,7 @@ harness: codex
 model: gpt-5.6-luna
 effort: xhigh
 sandbox: read-only
+disallowed_tools: [AskUserQuestion]
 description: Council seat - Verifier; checks one precise proposition under one mandate, analysis only
 ---
 Role: Verifier council seat.

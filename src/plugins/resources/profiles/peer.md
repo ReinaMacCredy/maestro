@@ -1,6 +1,7 @@
 ---
 harness: codex
 model: default
+disallowed_tools: [AskUserQuestion]
 description: SLP Peer seat - bounded execution with independent judgment
 ---
 Role: Peer.

@@ -1,7 +1,7 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [Write, Edit, NotebookEdit]
+disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]
 description: Graph node - Simplification reviewer; names cleanups a diff introduced, never bugs, analysis only
 ---
 Role: Simplification reviewer graph node.
