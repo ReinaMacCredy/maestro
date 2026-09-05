@@ -42,6 +42,16 @@ machine constraints, communication preferences, delegated decisions, and
 actions that always require confirmation. Record a settled SLP decision with
 \`maestro decide "<choice>" --why "<reason>"\`; use \`--replaces\` when a later
 decision supersedes it.
+
+## Seat profiles
+
+The harness, model, effort and flags of each SLP seat live in the three seat
+profiles the Workspace Pack names: \`team-supervisor\`, \`lead\` and \`peer\`.
+Change one by shadowing it in \`profiles/<name>.md\` beside this file (YAML frontmatter
+\`harness\`, \`model\`, \`effort\`, \`permission\` or \`sandbox\`, \`autocompact\`,
+\`disallowed_tools\`, \`description\`; body = the mandate), then run
+\`maestro install\` so the rendered launch bundles follow. A Peer variant is
+\`maestro team start --peer-profile <name>\`; do not keep a model table here.
 `;
 
 const shellrc = `function _maestro_home() {

@@ -359,7 +359,10 @@ async function update(): Promise<CliResult> {
     process.execPath,
     "-e",
     `const room = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "room.ts")).href)});` +
-      `await room.scaffoldRoom(${JSON.stringify(home)});`,
+      `await room.scaffoldRoom(${JSON.stringify(home)});` +
+      // The rendered seat profiles follow the runtime the same way (Hub d83).
+      `const profiles = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "profiles.ts")).href)});` +
+      `await profiles.materializeProfiles(${JSON.stringify(home)}, ${JSON.stringify(resolve(process.cwd()))});`,
   ]);
   if (scaffolded.exitCode !== 0) {
     throw new CliError(

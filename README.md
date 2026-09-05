@@ -81,17 +81,16 @@ flowchart TB
   Lead <--> PeerA
   Lead <--> PeerB
   PeerA <--> PeerB
-  Observer["Observer"] -. nudge .-> Lead
-  Observer -. copy .-> Team
 ```
 
 In the supported SLP flow, the Hub Supervisor reaches the team only through
 its Team Supervisor. Inside the team, the Team Supervisor, Lead, and Peers
-communicate directly. The Observer is a fourth seat with no work: a sentinel
-tab in the team workspace hands it one packet every five minutes, and at once
-when a role pane blocks, and its only mutation is `work note --stall`, which
-Maestro turns into one fixed nudge to the stuck seat plus a copy to the Team
-Supervisor. There is no Advisor, scheduler, or background agent role.
+communicate directly. Every seat launches as a native harness profile
+(`claude --agent maestro-<seat>` or `codex --profile maestro-<seat>`) rendered
+by `maestro install` from a maestro-owned profile file, so its mandate is its
+system prompt and survives `/clear`. Attention is the seat's own
+`work note --blocked`, pushed one seat up; there is no Observer, Advisor,
+scheduler, or background agent role.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -218,8 +217,8 @@ and prints this brief; it does not start an agent.
 
 ## Observer mode
 
-This is the read-only store mode for administrative inspection. It is not the
-SLP Observer seat and does not create a background observer.
+This is the read-only store mode for administrative inspection. It is not an
+SLP seat and does not create a background process.
 
 Set `MAESTRO_READ_ONLY=1` to run Maestro as an observer. Pure commands such as
 status, search, recipes, and read-only list/show operations remain available.

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { builtInPlugins } from "../src/plugins/index.ts";
+import { scaffoldRoom } from "../src/plugins/room.ts";
 import { skillNames } from "../src/plugins/skills.ts";
 import { runCli, withFixture } from "./helpers.ts";
 
@@ -111,8 +112,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   const combined = [setup, guide, roles, lanes, observerMode, scenarios, reference].join("\n");
 
   for (const command of slpOperations) expect(combined).toContain(command);
-  expect(guide).toContain("The Observer is the only seat outside the work lifecycle");
-  expect(guide).toContain("there is no Advisor, scheduler, health or reconcile");
+  expect(guide).toContain("there is no Observer, Advisor, scheduler, health or reconcile");
   expect(guide).toContain("foreground Watch Pane");
   expect(guide).toContain("not an agent");
   expect(guide).toContain("transcript is runtime-only and is deleted at stop.");
@@ -366,4 +366,37 @@ test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guar
   const work = await Bun.file(join(skillsRoot, "maestro-work", "SKILL.md")).text();
   expect(work).toContain("`maestro-council`");
   expect(work).toContain("COUNCIL_REQUEST");
+});
+
+test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the retired flags absent, OWNER.md template names the three seat profiles (red 11, item 9)", async () => {
+  const root = join(import.meta.dir, "..");
+  const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
+  expect(pack).toContain("<!-- slp:version=3 -->");
+  for (const seat of ["team-supervisor", "lead", "peer"]) {
+    expect(pack).toContain(`<!-- slp:profile:${seat}=${seat} -->`);
+    expect(await Bun.file(join(root, "src", "plugins", "resources", "profiles", `${seat}.md`)).exists()).toBe(true);
+  }
+  expect(pack).not.toContain("slp:model:");
+  expect(pack).not.toContain("slp:role:observer");
+  expect(pack).not.toContain("## Observer");
+  expect(pack).toContain("--blocked");
+  expect(pack).toMatch(/no seat or process watches panes for stalls/);
+
+  const recipe = await Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text();
+  const cli = await Bun.file(join(root, "site", "src", "content", "docs", "reference", "cli.md")).text();
+  for (const surface of [recipe, cli]) {
+    expect(surface).toContain("--peer-profile");
+    expect(surface).not.toContain("--lead-profile");
+    expect(surface).not.toContain("--observer-model");
+    expect(surface).not.toContain("sentinel");
+  }
+  expect(cli).not.toContain("--stall repeat");
+
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    const owner = await Bun.file(join(room, "OWNER.md")).text();
+    for (const seat of ["`team-supervisor`", "`lead`", "`peer`"]) expect(owner).toContain(seat);
+    expect(owner).toContain("profiles/<name>.md");
+    expect(owner).not.toContain("| rung |");
+  });
 });

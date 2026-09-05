@@ -79,31 +79,48 @@ maestro work take <work-id>
 
 | Location | Owner | What it stores | Lifetime |
 | --- | --- | --- | --- |
-| `~/maestro/SLP.md` | Hub owner | Canonical shared contract, role sections, model defaults, Watch rules | Seeded only when absent; install and update preserve owner edits; edits affect the next generation only |
+| `~/maestro/SLP.md` | Hub owner | Canonical shared contract, the profile marker per seat, Hub Supervisor section, Watch rules | Seeded only when absent; install and update preserve owner edits; edits affect the next generation only |
 | `~/maestro/.maestro/maestro.db` | Hub | Team ID, project path, generation, pack version/digest, runtime role identities, owner/cross-team decisions, lifecycle and minimal activity | Durable |
 | `<project>/.maestro/SLP.md` | Project | Exact managed snapshot used by the active generation | Remains after stop; replaced at the next start |
 | `<git-common-root>/.maestro/maestro.db` | Project | Checkout-scoped team bindings and roles, work, notes, returns, acceptances, team/technical decisions and minimal activity | Durable and shared by linked worktrees; every read is filtered to the current checkout |
-| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Observer, Peers, the sentinel tab and optional Watch Pane | Exists only while the generation runs |
+| `<project>/.maestro/profiles/`, `~/maestro/profiles/` | Project, Hub owner | Profile files (frontmatter + mandate) that shadow the shipped seat, council and node profiles by name | Durable; a running generation pins the ones it references |
+| `~/.claude/agents/maestro-*.md`, `~/.codex/maestro-*.config.toml`, `~/.codex/agents/maestro-*.toml` | `maestro install` | Rendered launch bundles for every resolvable profile; only `maestro-*` files are written or removed | Rewritten by every install, removed by uninstall |
+| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and the optional Watch Pane | Exists only while the generation runs |
 | `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | Rolling labelled Watch output and generation temporary data | Temporary; deleted at team stop |
 
 Never edit either SQLite store by hand. Use Maestro operations so current state
 and minimal activity remain in the same transaction.
 
-### Model markers
+### Seat profiles
 
-`~/maestro/SLP.md` opens with one marker per role, `<harness>:<model>`:
+`~/maestro/SLP.md` is pack version 3 and opens with one profile marker per
+seat:
 
 ```
-<!-- slp:model:team-supervisor=claude:default -->
-<!-- slp:model:lead=codex:default -->
-<!-- slp:model:peer=codex:default -->
-<!-- slp:model:observer=codex:gpt-5.6-luna -->
+<!-- slp:version=3 -->
+<!-- slp:profile:team-supervisor=team-supervisor -->
+<!-- slp:profile:lead=lead -->
+<!-- slp:profile:peer=peer -->
 ```
 
-`team start` reads them for the next generation; `--supervisor-model`,
-`--lead-model`, `--peer-model` and `--observer-model` override one start. A
-pack seeded before a role existed lacks its marker, and `team start` answers
-`INVALID_SLP_PACK` naming the line to add.
+A profile is one markdown file: YAML frontmatter (`harness: claude|codex`,
+`model`, `effort: low|medium|high|xhigh`, `permission` or `sandbox`,
+`autocompact`, `disallowed_tools`, `description`) and a body that is the
+seat's mandate. Lookup is `<project>/.maestro/profiles/<name>.md`, then
+`~/maestro/profiles/<name>.md`, then the shipped copy; the first hit wins, so
+a Lead on Claude Opus is a `~/maestro/profiles/lead.md` shadow, not a flag.
+`maestro install` renders every resolvable profile into
+`~/.claude/agents/maestro-<name>.md` (`claude --agent maestro-<name>`),
+`~/.codex/maestro-<name>.config.toml` (`codex --profile maestro-<name>`) and
+the Codex sub-agent file `~/.codex/agents/maestro-<name>.toml`; a seat profile
+renders shared contract + mandate, any other profile also renders as
+`maestro-peer-<name>` (shared contract + Peer mandate + its body) for
+`work add --to peer-<name>`. `team start --peer-profile <name>` picks the Peer
+profile for one generation; `work add --to <peer> --profile <name>` picks it
+for one Peer. A version-2 pack (`slp:model` markers) fails `team start` with
+`INVALID_SLP_PACK` naming the marker change; a marker naming a profile that
+does not exist fails with `PROFILE_NOT_FOUND`; a profile whose render is
+missing fails with `PROFILE_NOT_INSTALLED` naming `maestro install`.
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it
@@ -139,8 +156,9 @@ does not change a running team. Stop the current generation, then start the
 team again to materialize the new bytes as a new generation.
 
 Starting an identical running team verifies it and restores a missing required
-role without creating duplicates. A changed objective or model configuration
-is rejected until the current generation stops.
+role without creating duplicates. A changed objective or peer profile is
+rejected until the current generation stops, and so is an edit to any profile
+the generation pinned.
 
 Normal stop requires every work item to be `DONE`:
 
@@ -154,6 +172,6 @@ resources do not.
 ## Files SLP does not manage during normal work
 
 `team start` does not rewrite project `AGENTS.md` or `CLAUDE.md`, and it does
-not copy a skills tree or separate `lead.md`, `peer.md`, `observer.md`, or
-`supervisor.md` files. The one Workspace Pack is the complete generation
-contract.
+not copy a skills tree into the project. The Workspace Pack plus the profile
+files it names are the complete generation contract, and the rendered
+`maestro-*` launch bundles live under the harness directories in `$HOME`.

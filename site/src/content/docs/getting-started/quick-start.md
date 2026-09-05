@@ -58,5 +58,5 @@ Ready lists work that can start and names the gates blocking other items.
 ## Start a supervised team instead
 
 This page demonstrates Maestro's development workflow in one session. To open
-an SLP v2 team with Team Supervisor, Lead, Observer and Peers, continue with
+an SLP v2 team with Team Supervisor, Lead and Peers, continue with
 [SLP setup and storage](/getting-started/slp-setup/).

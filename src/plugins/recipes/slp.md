@@ -26,10 +26,11 @@ plain lowercase sentence, never a word a harness could read as a slash command,
 and confirm `agent_status=working` before leaving: a dropped brief looks
 identical to a slow start.
 
-The Observer is the only seat outside the work lifecycle: it reads sentinel
-packets, may run `maestro status` and record `maestro work note --stall`, and
-never holds work. There is no Advisor, sensor, scheduler, review, or
-reconcile role in SLP.
+Attention between seats is the self-declared `maestro work note <id> "<what
+you need>" --blocked`, which Maestro pushes one seat up; no seat or process
+watches panes for stalls until the team runtime takes that over (Hub d97,
+d98). There is no Observer, Advisor, sensor, scheduler, review, or reconcile
+role in SLP.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -38,6 +39,27 @@ generation's stored Herdr pane binding. It does not block native commands,
 administrative Maestro commands, or direct Herdr calls; topology and
 external-effect limits remain obligations enforced by the Human and host
 policy.
+
+## Seat profiles
+
+Every seat is launched as a native harness profile rendered from a
+maestro-owned source: `claude --agent maestro-<name>` or
+`codex --profile maestro-<name>`. The Workspace Pack names one profile per
+seat (`<!-- slp:profile:team-supervisor=team-supervisor -->`, `lead`, `peer`);
+the profile is a markdown file (YAML frontmatter `harness`, `model`, `effort`,
+`permission` or `sandbox`, `autocompact`, `disallowed_tools`, `description`;
+body = the mandate) looked up in `<project>/.maestro/profiles/`, then
+`~/maestro/profiles/`, then the shipped copies. `maestro install` renders
+every resolvable profile into `~/.claude/agents/maestro-<name>.md`,
+`~/.codex/maestro-<name>.config.toml` and `~/.codex/agents/maestro-<name>.toml`;
+a seat whose render is missing fails with `PROFILE_NOT_INSTALLED` before any
+pane opens. The Team Supervisor and Lead change through a shadowing file
+(`~/maestro/profiles/lead.md`); a Peer variant is
+`maestro team start --peer-profile <name>` for the generation or
+`maestro work add "<objective>" --to <peer> --profile <name>` for one Peer,
+and `--to peer-<name>` where `<name>` is a profile composes shared contract +
+Peer mandate + that body. A generation pins the pack and every profile it
+referenced; editing one mid-generation is refused like a pack edit.
 
 ## Roles
 
@@ -128,8 +150,8 @@ maestro team start /absolute/project/path "<observable objective>"
 Start creates one generation-scoped Herdr workspace, exactly one Team
 Supervisor, exactly one Lead, and one initial `OPEN` work item for the Lead.
 Repeating the same start verifies and repairs required runtime roles without
-creating duplicates. A changed objective or model configuration is rejected
-until stop.
+creating duplicates. A changed objective or peer profile is rejected until
+stop.
 
 Normal `maestro team stop <team-id>` changes nothing while unfinished work
 exists. After all work is `DONE`, it closes Peers, Lead, Watch and its

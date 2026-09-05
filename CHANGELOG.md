@@ -13,6 +13,55 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- SLP seat profiles (Hub w31, d83, d90, d91, d93, d98; repo w617). Every seat
+  launches as a native harness profile: `claude --agent maestro-<name>` or
+  `codex --profile maestro-<name>`. A profile is one markdown file (YAML
+  frontmatter `harness`, `model`, `effort`, `permission` or `sandbox`,
+  `autocompact`, `disallowed_tools`, `description`; body = the mandate) looked
+  up in `<project>/.maestro/profiles/`, then `~/maestro/profiles/`, then the
+  shipped copies. `maestro install` renders every resolvable profile into
+  `~/.claude/agents/maestro-<name>.md`, `~/.codex/maestro-<name>.config.toml`
+  and the Codex sub-agent file `~/.codex/agents/maestro-<name>.toml` (only
+  `maestro-*` files are written or removed there; `sandbox` renders into the
+  sub-agent file alone; a symlinked target directory is reported with its
+  resolved path), and `maestro uninstall` removes exactly those files. Shipped
+  profiles: the seats `team-supervisor`, `lead`, `peer`, the Peer variant
+  `peer-opus`, and the council seats `independent`, `challenger`,
+  `specialist`, `verifier`, `auditor` with `disallowed_tools` or
+  `sandbox: read-only`. Every non-seat profile also renders as
+  `maestro-peer-<name>` (shared contract + Peer mandate + its body) for
+  `work add --to peer-<name>`.
+- The Workspace Pack is version 3: `<!-- slp:profile:<seat>=<name> -->`
+  replaces the `slp:model` markers, the seat sections move into the profile
+  files, and the shared contract carries the working discipline and the
+  acknowledgement rule the seats need now that the profile replaces the
+  harness's default instructions. The post-open prompt is one line
+  (`slp team <id> generation <n> instance <uuid>; reply <challenge>`). A
+  generation pins the pack plus the source bytes of every profile it
+  references, appending a profile the first time a `work add` uses it; an
+  edit mid-generation is refused with `SLP_SNAPSHOT_CHANGED` naming the
+  profile.
+- `team start --peer-profile <name>` picks the Peer profile for one
+  generation; `work add --to <peer> --profile <name>` picks it for one Peer;
+  `--to peer-<name>` where `<name>` is a profile uses it. New refusals:
+  `PROFILE_NOT_INSTALLED` (a render is missing, run `maestro install`; raised
+  before any Herdr call), `PROFILE_NOT_FOUND`, `PEER_PROFILE_MISMATCH`,
+  `INVALID_PROFILE` (install names the file and key), `RETIRED_FLAG`
+  (`--lead-model`, `--peer-model`, `--supervisor-model` name their
+  replacement), `STALL_RETIRED`.
+
+### Removed
+
+- The Observer seat and its sentinel (Hub d97, d98; repo d825-d828 supersede
+  d762, d765, d767 and narrow d764): `slp-observe`, the
+  `maestro-slp-observe` shim (install removes a stale one), the sentinel tab,
+  the `sentinel: on|off` status fields, the observer pack marker and section,
+  `--observer-model`, and the observer-only `work note --stall`, which is now
+  refused for every pane. Until the team runtime of the herdr-adapter bundle
+  lands, attention is the self-declared `work note --blocked` (d761) only.
+  The role CHECK constraints still admit `'observer'` so rows from those
+  generations load.
+
 - `maestro-council` is the tenth shipped skill (Hub w32, d92-d95): the Paseo
   Council doctrine ported onto maestro's Lead-only guard, four tiers, neutral
   brief with framing lint, sealed round 1, seat audit, typed claims, the

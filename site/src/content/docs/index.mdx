@@ -19,15 +19,16 @@ Herdr provides the running workspace and panes.
 
 ## SLP v2 at a glance
 
-- Five roles: Hub Supervisor, Team Supervisor, Lead, Peer and Observer.
+- Four roles: Hub Supervisor, Team Supervisor, Lead and Peer.
 - Direct Team Supervisor, Lead and Peer conversation; the supported Hub flow
   speaks only through Team Supervisor.
 - Nine public SLP operations.
 - One work lifecycle: `OPEN → ACTIVE → RETURNED → DONE`.
 - One canonical `~/maestro/SLP.md`, pinned into each project generation.
 - Optional foreground Watch Pane with runtime-only transcript.
-- One sentinel per generation that prompts the Observer every five minutes;
-  the Observer's only note is `work note --stall`.
+- Every seat launches as a native harness profile (`claude --agent
+  maestro-<name>`, `codex --profile maestro-<name>`) rendered by
+  `maestro install`; attention is the seat's own `work note --blocked`.
 
 Start with [SLP setup and storage](/getting-started/slp-setup/), then read
 [Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), and the

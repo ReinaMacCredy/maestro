@@ -90,15 +90,25 @@ longer matches the generation digest. A running generation is immutable. Read
 then start a new generation from the canonical Hub pack.
 
 `TEAM_RUNNING` means the requested project already has a running generation
-with a different objective or model configuration. Stop it before starting the
+with a different objective or peer profile. Stop it before starting the
 changed configuration. An identical start is safe: it verifies the generation
 and restores a missing required role without creating duplicates.
 
-`INVALID_SLP_PACK` naming a model marker means the canonical pack predates that
-role. Install and update preserve owner edits to `~/maestro/SLP.md`, so a pack
-seeded before the Observer seat lacks its marker. Add the line the error names
-next to the other model markers, for the Observer
-`<!-- slp:model:observer=codex:gpt-5.6-luna -->`, then start again.
+`INVALID_SLP_PACK` naming `slp:profile` means `~/maestro/SLP.md` is still
+pack version 2. Install and update preserve owner edits to that file, so
+migrate it by hand: set `<!-- slp:version=3 -->`, replace every
+`<!-- slp:model:<seat>=<harness>:<model> -->` with
+`<!-- slp:profile:<seat>=<name> -->` for `team-supervisor`, `lead` and `peer`,
+delete the Observer marker and section, and move the seat sections into
+profile files (the shipped copy under `~/.maestro/runtime/src/plugins/resources/SLP.md`
+after `maestro install` is the reference). `PROFILE_NOT_FOUND` names a marker
+or flag whose profile is in none of the profile directories;
+`PROFILE_NOT_INSTALLED` names a rendered file that is missing, so run
+`maestro install`; `PEER_PROFILE_MISMATCH` means the named Peer already runs
+another profile, so pick another Peer name; `RETIRED_FLAG` names the
+replacement for `--lead-model`, `--peer-model` or `--supervisor-model`;
+`STALL_RETIRED` means `work note --stall` left with the Observer seat and
+`--blocked` is the attention note.
 
 See [SLP setup and storage](/getting-started/slp-setup/) for every managed path.
 
@@ -110,8 +120,6 @@ See [SLP setup and storage](/getting-started/slp-setup/) for every managed path.
   environment or, when the agent's shell dropped it, from the nearest ancestor
   process that still carries it; a command run outside Herdr, or from a pane
   that is not a role, stays unproven.
-- `sentinel off` in `status` while the generation is RUNNING: the sentinel tab
-  exited or was closed. Repeat the identical `team start` to relaunch it.
 - `ROLE_FORBIDDEN`: the proven role does not own that operation. Check the
   [role authority table](/concepts/roles/#authority).
 - `INVALID_STATE`: the requested transition does not follow `OPEN → ACTIVE →

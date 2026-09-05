@@ -18,18 +18,22 @@ development or administrative Maestro surfaces and are not extra SLP tools.
 ### `team start`
 
 ```sh
-maestro team start <project> "<objective>" \
-  [--supervisor-model <model>] \
-  [--lead-model <model>] \
-  [--peer-model <model>] \
-  [--observer-model <model>] \
-  [--json]
+maestro team start <project> "<objective>" [--peer-profile <name>] [--json]
 ```
 
 Hub Supervisor authority. It runs from `~/maestro`, pins the canonical
-Workspace Pack into the project, opens Team Supervisor, Lead and Observer,
-launches the sentinel tab, and creates initial `OPEN` work for Lead. Repeating an identical running start verifies
-and restores required roles without duplicates.
+Workspace Pack and the profiles it names into the project generation, opens
+the Team Supervisor and Lead as native harness profiles
+(`claude --agent maestro-<name>` or `codex --profile maestro-<name>`, rendered
+by `maestro install`), sends each a one-line prompt carrying team, generation,
+instance and the ready challenge, and creates initial `OPEN` work for Lead.
+Repeating an identical running start verifies and restores required roles
+without duplicates. `--peer-profile <name>` overrides the pack's `peer`
+profile for this generation and is recorded on the team row; the Team
+Supervisor and Lead change through a shadowing file in `~/maestro/profiles/`.
+The retired `--lead-model`, `--peer-model` and `--supervisor-model` flags are
+refused with `RETIRED_FLAG` naming the replacement; a missing render fails with
+`PROFILE_NOT_INSTALLED` before any pane opens.
 
 ### `team stop`
 
@@ -66,8 +70,8 @@ maestro status
 maestro status <work-id>
 ```
 
-Hub status includes `abandonedWorkCount` per generation and `sentinel: on|off`
-beside `watch`. Team work readback includes abandonment fields when present.
+Hub status includes `abandonedWorkCount` per generation and `watch: on|off`.
+Team work readback includes abandonment fields when present.
 
 Read-only and role-scoped. Hub sees team generations and counts; team roles see
 their team's non-DONE items (a Peer sees only its own) with `*` marking the ones
@@ -87,11 +91,17 @@ no work and appear in no dispatch.
 ```sh
 maestro work add "<objective>"
 maestro work add "<objective>" --to <peer-name>
+maestro work add "<objective>" --to <peer-name> --profile <name>
 ```
 
 Team Supervisor creates work for Lead. Lead must name a Peer with `--to`;
-Maestro reuses that Peer or opens it with the generation's pinned Peer model.
-The new work state is `OPEN`.
+Maestro reuses that Peer or opens it through a rendered profile: `--profile
+<name>` names it, a `--to peer-<name>` whose `<name>` is a profile composes
+shared contract + Peer mandate + that body (`maestro-peer-<name>`), and
+otherwise the generation's `peer` profile applies. A Peer that already runs
+another profile is refused with `PEER_PROFILE_MISMATCH`; a missing render
+fails with `PROFILE_NOT_INSTALLED` and nothing is rendered on demand. The new
+work state is `OPEN`.
 
 ### `work take`
 
@@ -108,18 +118,16 @@ requires an unused reviewer grant for its current return revision.
 maestro work note <work-id> "<material note>"
 maestro work note <work-id> "<specific gap>" --rework
 maestro work note <work-id> "<what I need>" --blocked
-maestro work note <work-id> "<evidence>" --stall repeat|silence|dialog
 ```
 
 Appends context without changing state. `--rework` is restricted to the
 reviewer responsible for that return. It grants the same assignee one retake
 of the current return revision; an ordinary note never grants a retake.
 `--blocked` flags the note and pushes a `BLOCKED` line to the seat above the
-caller. `--stall` is the Observer's only note: it flags `stall:<kind>`, pushes
-the fixed nudge to the seat the item waits on plus a copy to the Team
-Supervisor, and stays silent (`nudge suppressed`) for a repeat on an unchanged
-item; other seats get `ROLE_FORBIDDEN`. No form can change the work objective
-or acceptance contract. Changed scope is new work.
+caller; it is the team's attention mechanism until the team runtime records
+stalls itself (Hub d97, d98). The retired `--stall` is refused for every pane
+with `STALL_RETIRED`. No form can change the work objective or acceptance
+contract. Changed scope is new work.
 
 ### `work return`
 
