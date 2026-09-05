@@ -377,3 +377,37 @@ test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries
     expect(supervisorText.slice(0, supervisorText.indexOf("\n---\n", 4)).split("\n")).toContain("disallowedTools: Agent");
   });
 });
+
+// seat-config-dirs R12 (d847): the deny list is exact per seat, so the shipped
+// render is pinned as the whole string and the whole array, never a subset;
+// no fixture shadow, the shipped profiles alone.
+test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders carry exactly the d847 disallowedTools line and settings permissions.deny array; a composed peer-node with only AskUserQuestion of its own carries the peer set (R12, d847)", async () => {
+  await withFixture(async (fixture) => {
+    await materializeSkills(fixture.home, "dev");
+    await materializeProfiles(fixture.home, fixture.repo);
+
+    const lineOf = async (name: string) => {
+      const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
+      return text.slice(0, text.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
+    };
+    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+      const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
+      return parsed.permissions.deny;
+    };
+    const nine = "Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion";
+    const twoBash = ["Bash(claude:*)", "Bash(npx claude:*)"];
+
+    expect(await lineOf("lead")).toBe(`disallowedTools: ${nine}, LSP`);
+    expect(await denyOf("lead")).toEqual(twoBash);
+    expect(await lineOf("peer")).toBe(`disallowedTools: ${nine}`);
+    expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)"]);
+    expect(await lineOf("team-supervisor")).toBe(`disallowedTools: ${nine}`);
+    expect(await denyOf("team-supervisor")).toEqual(twoBash);
+
+    // d851 union puts the node's own names first, so the composed line is the
+    // peer set in a different order and nothing more.
+    const names = (line: string) => line.slice("disallowedTools: ".length).split(", ").sort();
+    expect(await lineOf("peer-opus")).toBe(`disallowedTools: AskUserQuestion, ${nine.slice(0, nine.lastIndexOf(", AskUserQuestion"))}`);
+    expect(names(await lineOf("peer-opus"))).toEqual(names(await lineOf("peer")));
+  });
+});
