@@ -28,6 +28,7 @@ import { grantTrust, pluginTrustPredicate } from "./plugin-trust.ts";
 import { profileDirectories, resolveProfile } from "./profiles.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { requireSlpActor } from "./slp-v2.ts";
+import type { WorkService } from "./work.ts";
 
 // Hub d78/d79/d88: a passive graph runtime. maestro holds the definition, the
 // run state and the journal, executes function, router, join and foreach
@@ -472,21 +473,46 @@ class GraphEngine {
     this.setState(row, "done", { result: { items: kept, total: items.length } });
   }
 
-  private issue(run: Run, rows: NodeRow[], row: NodeRow): Stop | null {
-    const inflight = rows.filter((candidate) => candidate.state === "issued").length;
-    if (inflight + 1 > run.limits.fanout) return { limit: "fanout", used: inflight + 1 };
+  // d85/d99: a writing node runs alone in the run checkout, and only the
+  // run's holder may issue it; a run whose holder died is taken by the
+  // caller, a run another live session holds is refused naming it.
+  private requireWriterLease(run: Run, node: GraphNode): void {
+    const work = (this.context.work as WorkService).get(run.row.run_id);
+    const session = this.context.sessions.current();
+    if (work?.heldBy === session.id) return;
+    if (work?.heldBy) {
+      throw new CliError(
+        "LEASE_HELD",
+        `writing node ${node.id} of run ${run.row.run_id} is issued only to the run's holder ${work.heldBy}; this session is ${session.id}`,
+        { holder: work.heldBy, node: node.id, run: run.row.run_id },
+      );
+    }
+    const now = new Date().toISOString();
+    this.context.sessions.record("graph.next");
+    this.database
+      .query("UPDATE work SET state = 'active', held_by = ?, updated_at = ? WHERE id = ? AND held_by IS NULL AND state != 'done'")
+      .run(session.id, now, run.row.run_id);
+    this.journal(run.row.run_id, "graph.lease.claim", { holder: session.id, node: node.id });
+  }
+
+  private issue(run: Run, rows: NodeRow[], row: NodeRow): { stop?: Stop; waited?: true } {
+    const node = this.nodeOf(run, row.node_id);
+    const inflight = rows.filter((candidate) => candidate.state === "issued");
+    if (node.writes && inflight.length > 0) return { waited: true };
+    if (inflight.some((candidate) => this.nodeOf(run, candidate.node_id).writes)) return { waited: true };
+    if (inflight.length + 1 > run.limits.fanout) return { stop: { limit: "fanout", used: inflight.length + 1 } };
+    if (node.writes) this.requireWriterLease(run, node);
     // d836: limits.nodes bounds model spend, so it counts issued agent nodes
     // (a later round counts again) and is checked before the spawn exists.
     if (row.kind === "agent") {
       const used = run.row.issued + 1;
-      if (used > run.limits.nodes) return { limit: "nodes", used };
+      if (used > run.limits.nodes) return { stop: { limit: "nodes", used } };
       run.row.issued = used;
       this.database.query("UPDATE graph_runs SET issued = ? WHERE run_id = ?").run(used, run.row.run_id);
     }
-    const node = this.nodeOf(run, row.node_id);
     const prompt = fillPlaceholders(node.prompt as string, this.stateFor(run, rows, row));
     this.setState(row, "issued", { prompt });
-    return null;
+    return {};
   }
 
   // Loop-back edges leaving a node that just finished: the target and every
@@ -569,8 +595,11 @@ class GraphEngine {
             this.executeJoin(run, rows, row);
             stop = this.fireLoops(run, rows, row);
             break;
-          default:
-            stop = this.issue(run, rows, row);
+          default: {
+            const issued = this.issue(run, rows, row);
+            if (issued.waited) continue;
+            stop = issued.stop ?? null;
+          }
         }
         changed = true;
         break;
