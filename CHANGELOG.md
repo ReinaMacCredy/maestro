@@ -78,6 +78,18 @@ token handed to `maestro install --seat-token`.
   `settings.json` `permissions.deny` (the union across the profiles rendered
   into the dir, unioned with any `settings:` overlay deny) and keeps only
   bare tool names on the agent line; the Codex render is unchanged.
+- Seat profile keys that reach env, hooks or the filesystem are owner-only
+  (d855): a `<project>/.maestro/profiles` profile with `settings:` or
+  `skills:` fails install naming the file and the owner dirs; a skill name
+  must be a plain directory name and its resolved target must stay under
+  `~/maestro/skills` or `~/.claude/skills`; the shipped seat `Bash(...)`
+  patterns are a floor a shadow can widen but never narrow.
+- Seat secret files are private from creation (d855): the token file, every
+  seat `settings.json` and `.claude.json` are written 0600 and the seat dirs
+  made 0700 whatever the umask, a pre-existing seat `.claude.json` is
+  brought to 0600 on install, the trust seed lands through a 0600 temp file
+  renamed over `.claude.json`, and an unknown-flag error such as a mistyped
+  `--seat-token=<value>` no longer echoes the value.
 
 ## [0.120.0] - 2026-09-05
 

@@ -212,8 +212,8 @@ set afterwards. A pane launched by hand without the env fails at
 `herdr agent start` because the agent file exists only in the seat dir: it
 never runs silently on your `~/.claude`. Codex seats are unchanged.
 
-The shipped seat deny lists (d847, carried as `disallowed_tools`, shadowable)
-take the seatworks set: every seat disallows `Agent`, `Task`, `Workflow`,
+The shipped seat deny lists (d847, carried as `disallowed_tools`) take the
+seatworks set: every seat disallows `Agent`, `Task`, `Workflow`,
 `SlashCommand`, `WebSearch`, `TodoWrite`, `EnterPlanMode`, `ExitPlanMode`,
 `AskUserQuestion`, `Bash(claude:*)` and `Bash(npx claude:*)`; the Lead adds
 `LSP`; the Peer adds `Bash(herdr:*)`, so a Peer reaches the Lead and other
@@ -222,7 +222,10 @@ Peers only through recorded work notes and returns. Every composed
 pattern renders into the seat `settings.json` `permissions.deny` (unioned
 across the profiles in that dir and with any `settings:` overlay deny), and
 only bare tool names stay on the agent file's `disallowedTools` line, since
-Claude Code drops the whole Bash tool when a pattern sits there (d854).
+Claude Code drops the whole Bash tool when a pattern sits there (d854). The
+shipped patterns are a floor a shadow can widen but never narrow, and a
+`<project>/.maestro/profiles` profile cannot carry `settings:` or `skills:`
+at all, since those keys reach the seat's env, hooks and filesystem (d855).
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it
