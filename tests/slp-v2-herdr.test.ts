@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
@@ -578,6 +578,43 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
     expect(codex.exitCode).toBe(0);
     expect((await creates()).length).toBe(5);
     expect(await snapshot()).toEqual(before);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);
+
+// seat-config-dirs R16 (d855 rule 5): the trust seed was a plain
+// read-modify-write shared by every peer's Claude (SEC-4) and left the file at
+// whatever mode it had (SEC-5); it now lands through a 0600 temp file in the
+// seat dir renamed over .claude.json, so a reader never sees a partial file.
+test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* remains in any seat dir and every seeded .claude.json is 0600 even when it was 0644 before, with its content intact (R16, d855)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "lead.md"),
+      "---\nharness: claude\nmodel: default\ndescription: claude lead\n---\nRole: Lead (claude shadow).\n",
+    );
+    const fake = await installFakeHerdr(fixture);
+    const seatRoot = seatConfigRoot(fixture.home);
+    const seatJson = (seat: string) => join(seatRoot, seat, ".claude.json");
+    const projectKey = await realpath(fixture.repo);
+    const leadBefore = { hasCompletedOnboarding: true, mcpServers: {}, numStartups: 3 };
+    // The fake install already created the file 0600; stage the pre-fix mode.
+    await writeFile(seatJson("lead"), `${JSON.stringify(leadBefore, null, 2)}\n`);
+    await chmod(seatJson("lead"), 0o644);
+
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust atomic", "--json"], fake.env);
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    for (const seat of ["lead", "team-supervisor"]) {
+      const entries = (await readdir(join(seatRoot, seat))).filter((entry) => entry.startsWith(".claude.json."));
+      expect({ seat, entries }).toEqual({ seat, entries: [] });
+      expect({ seat, mode: (await stat(seatJson(seat))).mode & 0o777 }).toEqual({ seat, mode: 0o600 });
+    }
+    expect(JSON.parse(await readFile(seatJson("lead"), "utf8"))).toEqual({
+      ...leadBefore,
+      projects: { [projectKey]: { hasTrustDialogAccepted: true } },
+    });
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);

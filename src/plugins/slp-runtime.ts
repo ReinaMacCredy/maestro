@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   HerdrClient,
@@ -373,7 +373,11 @@ export class HerdrSlpRuntime {
     const project = projects[projectPath] ?? {};
     if (project.hasTrustDialogAccepted === true) return;
     parsed.projects = { ...projects, [projectPath]: { ...project, hasTrustDialogAccepted: true } };
-    await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`);
+    // d855: every peer's Claude reads this file; a 0600 temp in the seat dir
+    // renamed over it means no reader sees a partial file or a looser mode.
+    const temp = `${path}.tmp-${process.pid}`;
+    await writeFile(temp, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+    await rename(temp, path);
   }
 
   // d846: a Claude seat cannot log in without the token, so the refusal comes

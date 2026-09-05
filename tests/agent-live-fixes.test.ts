@@ -242,6 +242,20 @@ test("102 UNKNOWN_FLAG names the help command for its verb", async () => {
   });
 });
 
+// d855 rule 6: a mistyped --seat-token=<value> echoed the value in the
+// unknown-flag error, so the error redacts everything after the first =.
+test("102b UNKNOWN_FLAG redacts a value glued to the flag with = on stdout and stderr", async () => {
+  await withFixture(async (fixture) => {
+    const glued = await runCli(fixture, ["install", "--seat-token=abc"]);
+    expect(glued.exitCode).not.toBe(0);
+    const error = (JSON.parse(glued.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("UNKNOWN_FLAG");
+    expect(String(error.message)).toContain("--seat-token=");
+    expect(`${glued.stdout}\n${glued.stderr}`).not.toContain("abc");
+    expect(error.flag).toBe("--seat-token=");
+  });
+});
+
 test("103 plugin list states what each policy requires", async () => {
   await withFixture(async (fixture) => {
     const list = await runCli(fixture, ["plugin", "list", "--json"]);

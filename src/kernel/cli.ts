@@ -374,9 +374,11 @@ export class Cli {
       const definition = flags.get(token);
       if (!definition) {
         const helpCommand = `maestro help ${command.split(" ")[0]}`;
-        throw new CliError("UNKNOWN_FLAG", `unknown flag: ${token}; run: ${helpCommand}`, {
+        // d855: a value glued on with = may be a secret; it never reaches the error.
+        const shown = token.includes("=") ? token.slice(0, token.indexOf("=") + 1) : token;
+        throw new CliError("UNKNOWN_FLAG", `unknown flag: ${shown}; run: ${helpCommand}`, {
           command: helpCommand,
-          flag: token,
+          flag: shown,
         });
       }
       const key = token.slice(2);
