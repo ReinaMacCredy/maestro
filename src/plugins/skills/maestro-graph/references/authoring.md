@@ -60,8 +60,9 @@ Write the synthesis.
 - `input`: `name: {required, default, description}`. Values arrive as
   strings from `key=value` on `graph run`; a name never collides with a
   node id or a reserved root.
-- `limits`: `nodes` (rows in the run, instances included), `loops`
-  (loop-back firings), `fanout` (agent and human nodes in flight at once).
+- `limits`: `nodes` (agent nodes issued over the run, a later round counts
+  again), `loops` (loop-back firings), `fanout` (agent and human nodes in
+  flight at once, bound team nodes included).
   Shipped defaults 40, 3, 12; `--limit k=v` overrides per run.
 - `verdict`: a dotted state path whose value becomes the run's verdict.
   Default: the result of the single sink node, or an object of every sink.
@@ -82,8 +83,9 @@ Write the synthesis.
   fails `GRAPH_INVALID` naming node and profile before the run exists.
 - `schema` is a JSON-schema subset: `type`, `properties`, `required`,
   `items`, `enum`. Declare one whenever a later node reads fields.
-- `writes: true` marks a node that edits the working tree (fix loops); its
-  serialization rule lands with the second close of bundle graph-engine.
+- `writes: true` marks a node that edits the working tree (fix loops): it is
+  issued alone, nothing else issues while it runs, only the run's holder may
+  issue it, and the run commits nothing; name the files in `--files`.
 - A function node's placeholders are shell-quoted; write the command as if
   each value were one argument. Repo graphs run function nodes only after
   `maestro graph trust <name>`; room and shipped graphs run them freely.
@@ -124,7 +126,8 @@ done, so item A's stage 2 starts while item B's stage 1 is still out.
 
 - `{path}` in a prompt or command reads the run state: an input, a node
   result (`{classify.summary}`), `{item}`, `{index}`, `{instance}`,
-  `{round}`, `{run}`. Objects and lists render as JSON. A placeholder whose
+  `{round}` (the run's current round), `{run}`. Objects and lists render as
+  JSON. A placeholder whose
   root is none of these fails `GRAPH_INVALID`. Literal JSON braces in a
   prompt are safe: only `{identifier.path}` is a placeholder.
 - A condition is one of: a path string (truthy: non-empty list, non-zero,
@@ -140,8 +143,8 @@ done, so item A's stage 2 starts while item B's stage 1 is still out.
   a second `join` gathers verdicts, a `synthesizer` writes the verdict.
 - **Loop until dry**: `review` then `fix` (`writes: true`) with a loop-back
   edge `fix` to `review` and `max_rounds: 3`, a `router` after `review`
-  sending an empty findings list to the exit edge. Ships as `fix-loop` with
-  the second close.
+  sending an empty findings list to the exit edge (`fix-loop`). A branch the
+  router skipped in one round is decided again when the loop re-runs.
 - **Judge panel**: three agent nodes with different profiles on the same
   prompt, one `join` with no key, one `synthesizer` that must cite the
   majority.

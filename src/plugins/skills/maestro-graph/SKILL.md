@@ -21,7 +21,11 @@ diagnosis and the SLP seat protocol stay outside graphs.
   set; a nearer file shadows a farther one by name. `maestro graph show
   <name>` prints one.
 - A shipped preset fits: run it by name. `review-gate` takes `range=<git
-  range>` and `tier=light|full`.
+  range>` and `tier=light|full`; `fix-loop` takes `scope=<what to fix>` and
+  `check=<command that must pass>` and drives a writing fixer for at most
+  three rounds; `council` takes `brief=<neutral brief>` and
+  `tier=lens|debate|debate-with-proof|high-risk` and runs the maestro-council
+  protocol with you (the Lead) answering the draft and verdict nodes.
 - Nothing fits: write a graph for the task from
   [references/authoring.md](references/authoring.md) and run it with
   `--file <path>`. Keep a good one by copying the file into a graphs

@@ -35,9 +35,26 @@ TypeScript-on-Bun line and continues the existing version sequence.
   `fixer`, `synthesizer`) ship as slp-profiles sources rendered into both
   harness agent dirs; the `maestro-graph` skill carries the pull loop and
   the authoring reference; `review-gate` is the first shipped graph. maestro
-  never spawns a model and never writes SLP state from graph code. The team
-  executor binding, writers, `fix-loop` and the council preset are the
-  second close.
+  never spawns a model and never writes SLP state from graph code.
+- Graph engine, second close (d100; repo d836, d837). The team executor:
+  from a Lead pane of a RUNNING SLP team `graph run` reports `executor:
+  team` and `graph result <run> <node> --work <id>` binds the node to the
+  work item the Lead opened for it; `next` lists it with `work` and
+  `workState` through OPEN, ACTIVE and RETURNED and resolves it from the
+  returned body once DONE (a cancelled item fails the node); bound nodes
+  count toward `limits.fanout`. Writers (d85, d99): a `writes: true` node is
+  issued alone, nothing else issues while it runs, and only the run's holder
+  may issue it (`LEASE_HELD` names another live holder; an orphaned run is
+  taken by the next driver); `--files` is stored on the node and the run
+  commits nothing. `limits.nodes` counts issued agent nodes and is checked
+  before the spawn exists (d836). Presets `fix-loop` (function, static
+  fan-out, loop-back with `max_rounds`, human, writing fixer) and `council`
+  (Hub w32, d92-d95: seats by tier through a router, sealed join, a
+  classifier decision model, premise verifier on unanimity or bounded
+  verifiers, one cross-examination round, the Lead's draft and verdict as
+  human nodes, auditor by tier; d837). A loop reset returns router-skipped
+  branches downstream of the target to pending, and `{round}` is the run's
+  round. The `maestro-graph` skill carries the team pull loop.
 - SLP reaches Herdr over its socket API (Hub w33, d96, d97; repo w635,
   d830-d832). `src/plugins/herdr-client.ts` speaks newline JSON to
   `HERDR_SOCKET_PATH` (protocol 20, one request per connection,
@@ -168,6 +185,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
   or remove a blocker after creation, with the checks `work add --blocked-by`
   applies plus a refusal of self-blocks, duplicates, cycles, and edits to done
   or cancelled work; both are logged as `work.block` and `work.unblock`.
+
+### Fixed
+
+- Graph engine, live findings (repo w655, w656): a late `graph result` on a
+  finished run is refused with `INVALID_STATE` naming the outcome and a failed
+  run journals `graph.failed`, so a sibling's late result never rewrites a
+  FAILED run as a `LIMIT` stop (row 10, run w654); `--limit nodes=N` stops
+  before the N+1th agent node instead of counting table rows after the join
+  (row 12, run w653, d836).
 
 ### Changed
 

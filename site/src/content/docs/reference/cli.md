@@ -341,13 +341,24 @@ drive identically through a pull loop; maestro never spawns a model.
 - `graph result <run> <node>[@instance] --file <path>|--text <result>
   [--files a,b]` records a node's result; a declared schema validates JSON
   extracted from the text and `PARSE_FAILED` carries the schema for one retry.
+  Under the team executor the Lead binds a node instead with `graph result
+  <run> <node> --work <slp-work-id>`; `next` lists the node with `work` and
+  `workState` until the item is DONE and then takes its returned body as the
+  result. A `writes: true` node is issued alone and only to the run's holder
+  (`LEASE_HELD` names another holder); the run itself commits nothing.
+  A finished run refuses further results.
 - `graph trust <name>|--file <path>` records a plugin-trust grant for a repo
   graph's current file so its function nodes may run; room and shipped graphs
   never need one. `maestro trace <run>` is the run's journal.
 
-The shipped preset is `review-gate` (`range=<git range>`, `tier=light|full`);
-the `maestro-graph` skill carries the executor loop and the authoring
-reference.
+Shipped presets: `review-gate` (`range=<git range>`, `tier=light|full`),
+`fix-loop` (`scope=<what to fix>`, `check=<command>`, a writing fixer in a
+loop of at most three rounds with a human close) and `council`
+(`brief=<neutral brief>`, `tier=lens|debate|debate-with-proof|high-risk`, the
+maestro-council protocol with the Lead's draft and verdict as human nodes).
+Limits: `nodes` counts issued agent nodes, `loops` counts loop-back firings,
+`fanout` counts agent and human nodes in flight (bound nodes included). The
+`maestro-graph` skill carries both executor loops and the authoring reference.
 
 ### `plugin`
 

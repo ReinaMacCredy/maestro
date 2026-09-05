@@ -237,9 +237,11 @@ architecture unless a reopen condition fires.
 
 ## Run
 
-`graph run council` runs the protocol as the third graph-engine preset,
-binding one work item per seat. Until that preset ships, map each seat by
-hand:
+`maestro graph run council brief=<brief> tier=<tier>` runs the protocol as
+the third graph-engine preset (seats by tier, sealed join, verifiers,
+cross-examination, your draft and verdict as human nodes, auditor by tier)
+through the `maestro-graph` skill; under a team it binds one work item per
+seat. Without the preset, map each seat by hand:
 
 | Executor | Open a seat | Read its report |
 |---|---|---|
@@ -249,5 +251,4 @@ hand:
 
 `<seat>` is one of independent, challenger, specialist, verifier, auditor.
 The classic `maestro dispatch open --council-members <n>` plus `--council-anchor`
-path and the `COUNCIL_REQUEST` handback status stay valid for a plain session
-until the preset ships.
+path and the `COUNCIL_REQUEST` handback status stay valid for a plain session.
