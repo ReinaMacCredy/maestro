@@ -225,6 +225,15 @@ test("135 install materializes intake, council reconcile, and handoff doctrine",
       "hard-to-reverse fork",
       "ROI",
       "## Council",
+      "`maestro-council`",
+    ]) {
+      expect(design).toContain(required);
+    }
+    // w625: the eight reconcile axes moved from maestro-design's Council
+    // section, now a pointer, into maestro-council's Lead draft.
+    const council = await Bun.file(join(skillsRoot, "maestro-council", "SKILL.md")).text();
+    const leadDraft = council.slice(council.indexOf("## Lead draft"), council.indexOf("## Audit"));
+    for (const axis of [
       "premise",
       "mechanism",
       "boundary",
@@ -234,7 +243,7 @@ test("135 install materializes intake, council reconcile, and handoff doctrine",
       "authority",
       "proof",
     ]) {
-      expect(design).toContain(required);
+      expect(leadDraft).toContain(`\`${axis}\``);
     }
 
     const bundle = await Bun.file(join(skillsRoot, "maestro-bundle", "SKILL.md")).text();

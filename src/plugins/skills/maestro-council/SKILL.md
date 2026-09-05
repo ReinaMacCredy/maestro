@@ -183,8 +183,10 @@ The Lead, not the seats, decides: the authoritative outcome and hard
 constraints; options excluded by verified constraints; verified, falsified,
 and unresolved premises; fit under realistic failure modes; robustness if an
 assumption is wrong; reversibility; whether serious dissent has stronger
-evidence or a decisive falsifier. No vote, no averaged confidence; seat count
-never creates authority. Draft before deciding whether an audit is due.
+evidence or a decisive falsifier. Reconcile the reports through eight axes:
+`premise`, `mechanism`, `boundary`, `failure`, `reversibility`, `evidence`,
+`authority`, and `proof`. No vote, no averaged confidence; seat count never
+creates authority. Draft before deciding whether an audit is due.
 
 ## Audit
 
