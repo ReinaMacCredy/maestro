@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { HerdrClient, SlpRuntimeError, herdrProtocol } from "../src/plugins/herdr-client.ts";
 import { materializeProfiles } from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
 import { runCli, runCliAt, withFixture } from "./helpers.ts";
 import {
   editFakeHerdrState,
@@ -334,14 +335,22 @@ async function startLiveTeam(
   const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Attention rules", "--json"], fake.env);
   expect(started.exitCode).toBe(0);
   const data = envelope<StartedTeam>(started.stdout);
+  // The runtime discards Herdr's replay after every subscribe; a test emits
+  // only once runtime.log shows the latest subscription, covering every role
+  // pane, drained.
+  const logPath = join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log");
   const subscribed = async () => {
     await waitForFakeHerdr(async () => {
       const state = await readFakeHerdrState(fake);
       const roles = (state.agents as Array<{ pane_id: string }>).map((agent) => agent.pane_id);
-      return (state.subscriptions as Array<Array<{ pane_id?: string }>>).some((subscription) =>
-        roles.every((pane) => subscription.some((entry) => entry.pane_id === pane))
-      );
-    }, 10_000, "the runtime subscription to every role pane");
+      if (!existsSync(logPath)) return false;
+      const lines = (await readFile(logPath, "utf8")).split("\n");
+      const subscribedLines = lines.filter((line) => line.includes(" subscribed: "));
+      const drained = lines.filter((line) => line.includes(" replay drained: ")).length;
+      const latest = subscribedLines.at(-1) ?? "";
+      return subscribedLines.length > 0 && drained === subscribedLines.length &&
+        roles.every((pane) => latest.includes(`pane.agent_status_changed:${pane}`));
+    }, 15_000, "the runtime subscription to every role pane, replay drained");
   };
   await subscribed();
   return { data, fake, room, subscribed };
@@ -610,3 +619,38 @@ test("start-before-active: a start whose agent is not yet listed as active waits
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 30_000);
+
+test("peer-after-subscribe: a Peer opened by work add --to after the runtime subscribed is watched; blocked on its pane records one stall:dialog entry and the d763 prompt, with Herdr replaying history on every subscribe (live g12, 2026-09-05)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, subscribed } = await startLiveTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Late peer item", "--to", "peer-late", "--json"], leadEnvironment);
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    await subscribed();
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "working" } });
+    await Bun.sleep(200);
+    const dialogPrompts = async () => (await attentionPrompts(fake)).filter((command) => (command[3] ?? "").includes("] dialog "));
+    expect(await dialogPrompts()).toEqual([]);
+    expect(await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "blocked" } })).toBe(1);
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:dialog"), 8_000, "the stall entry for the late Peer");
+    const entries = runtimeEntries(fixture).filter((entry) => entry.flag === "stall:dialog");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ actor: "runtime", work_id: peer.work.id });
+    expect(entries[0]?.body).toContain(`${peer.role.name} pane ${peer.role.paneId} agent_status blocked; store: ${peer.work.id} ACTIVE owned by ${peer.role.name}`);
+    await waitForFakeHerdr(async () => (await dialogPrompts()).length === 2, 8_000, "the nudge and its copy");
+    const nudges = await dialogPrompts();
+    expect(nudges.map((command) => command[2])).toEqual([peer.role.name, supervisor.name]);
+    expect(nudges[0]?.[3]).toMatch(new RegExp(`^\\[from runtime\\]\\[${peer.work.id}\\] dialog .*; stop and run: maestro work note ${peer.work.id} "<what you need>" --blocked$`));
+    // The runtime resubscribed with the late Peer's pane after discarding the replay.
+    const log = await readFile(join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log"), "utf8");
+    const latest = log.split("\n").filter((line) => line.includes(" subscribed: ")).at(-1) ?? "";
+    expect(latest).toContain(`pane.agent_status_changed:${peer.role.paneId}`);
+    expect(log.match(/replay drained: \d+ events discarded/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);

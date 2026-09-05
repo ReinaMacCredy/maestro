@@ -35,6 +35,8 @@ export interface FakeHerdrBehavior {
   promptNotReadyAttempts?: number;
   promptStalledAttempts?: number;
   prompts?: boolean;
+  // Herdr replays every past event to a new subscriber; false skips it.
+  replayOnSubscribe?: boolean;
   // spawn: plugin.pane.open runs `maestro slp runtime` as a child process;
   // record: the pane and its process entry appear in the state only.
   runtimePane?: "record" | "spawn";
@@ -54,7 +56,7 @@ export interface FakeHerdrFixture {
 
 export interface FakeHerdrEvent {
   data: Record<string, unknown>;
-  event: "pane_agent_detected" | "pane_agent_status_changed" | "pane_closed" | "pane_exited";
+  event: "pane_agent_detected" | "pane_agent_status_changed" | "pane_closed" | "pane_created" | "pane_exited";
 }
 
 type Params = Record<string, any>;
@@ -198,17 +200,23 @@ function commandShape(method: string, params: Params): string[] {
   }
 }
 
+function eventWanted(subscriber: Subscriber, event: FakeHerdrEvent): boolean {
+  return subscriber.subscriptions.some((subscription) => {
+    const type = String(subscription.type).replace(".", "_");
+    if (type !== event.event) return false;
+    const paneId = event.data.pane_id ?? (event.data.pane as { pane_id?: string } | undefined)?.pane_id;
+    if (subscription.pane_id !== undefined && subscription.pane_id !== paneId) return false;
+    if (subscription.agent_status && subscription.agent_status !== event.data.agent_status) return false;
+    return true;
+  });
+}
+
 function pushEvent(server: FakeServer, event: FakeHerdrEvent): number {
   let delivered = 0;
   const line = `${JSON.stringify(event)}\n`;
+  server.state.history.push(event);
   for (const subscriber of server.subscribers) {
-    const wanted = subscriber.subscriptions.some((subscription) => {
-      const type = String(subscription.type).replace(".", "_");
-      if (type !== event.event) return false;
-      if (subscription.pane_id !== undefined && subscription.pane_id !== event.data.pane_id) return false;
-      if (subscription.agent_status && subscription.agent_status !== event.data.agent_status) return false;
-      return true;
-    });
+    const wanted = eventWanted(subscriber, event);
     if (!wanted) continue;
     subscriber.socket.write(line);
     delivered += 1;
@@ -359,6 +367,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       const rootPane = { pane_id: paneId, workspace_id: workspaceId, tab_id: tabId, cwd: params.cwd, label: params.label };
       state.tabs.push(tab);
       state.panes.push(rootPane);
+      pushEvent(server, { event: "pane_created", data: { pane: rootPane } });
       return { type: "tab_created", tab, root_pane: rootPane };
     }
     case "tab.close": {
@@ -629,6 +638,13 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
     case "events.subscribe": {
       subscriber.subscriptions = params.subscriptions ?? [];
       server.subscribers.add(subscriber);
+      if (behavior.replayOnSubscribe !== false) {
+        // Herdr 0.8.2 replays its history to every new subscriber, after the ack.
+        const backlog = (state.history as FakeHerdrEvent[]).filter((event) => eventWanted(subscriber, event));
+        setTimeout(() => {
+          for (const event of backlog) subscriber.socket.write(`${JSON.stringify(event)}\n`);
+        }, 5);
+      }
       return { type: "subscription_started" };
     }
     case "plugin.list":
@@ -685,6 +701,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         }],
       };
       state.plugin_panes.push({ pane_id: paneId, entrypoint: params.entrypoint, env: params.env ?? {}, cwd: created.cwd });
+      pushEvent(server, { event: "pane_created", data: { pane: created } });
       if (behavior.runtimePane === "spawn") spawnRuntimePane(server, paneId, params);
       return {
         type: "plugin_pane_opened",
@@ -728,6 +745,7 @@ export async function installFakeHerdr(
       activating: {},
       agents: [],
       behavior,
+      history: [],
       helper_exits: [],
       outputs: {},
       panes: [],

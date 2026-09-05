@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { CliError, type CliResult } from "../kernel/cli.ts";
 import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
@@ -31,6 +31,8 @@ const dedupeWindowMs = 5_000;
 // well after the push; its idle inside this window is not a second wake.
 const pushWindowMs = 60_000;
 const runningWaitMs = 10_000;
+const replayQuietMs = 1_000;
+const replayMaxMs = 60_000;
 const watchLines = 40;
 
 type SlpRole = "team-supervisor" | "lead" | "peer";
@@ -315,17 +317,30 @@ export class AttentionRuntime {
   private candidates = new Set<string>();
   private readonly client: HerdrClient;
 
-  constructor(
-    private readonly config: SlpRuntimeConfig,
-    private readonly log: (line: string) => void = (line) => process.stderr.write(`${line}\n`),
-  ) {
+  private logChain: Promise<void> = Promise.resolve();
+
+  constructor(private readonly config: SlpRuntimeConfig) {
     this.directory = slpRuntimeDirectory(config.projectPath, config.teamId, config.generation);
     this.client = new HerdrClient(config.environment ?? process.env);
+  }
+
+  // runtime.log beside the lock: what the runtime saw and did, for the next
+  // live defect (the pane itself is redrawn on every event).
+  log(line: string): void {
+    const stamped = `${new Date().toISOString()} ${line}\n`;
+    process.stderr.write(stamped);
+    this.logChain = this.logChain
+      .then(() => appendFile(join(this.directory, "runtime.log"), stamped))
+      .catch(() => undefined);
   }
 
   async load(): Promise<void> {
     await mkdir(this.directory, { recursive: true });
     this.state = (await readRuntimeState(this.directory)) ?? emptyState();
+  }
+
+  rolePanes(): string[] {
+    return this.roles.map((role) => role.pane_id);
   }
 
   private async persist(): Promise<void> {
@@ -336,18 +351,21 @@ export class AttentionRuntime {
     return teamRow(store, this.config.teamId, this.config.generation);
   }
 
+  // True only when a pane not yet subscribed appears: a role row landing on a
+  // pane already watched as a candidate needs no new subscription (each one
+  // costs a replay).
   refreshRoles(store: Store): boolean {
     const next = roleRows(store, this.config.teamId, this.config.generation);
-    const changed = next.map((role) => `${role.name}:${role.pane_id}`).join(",") !==
-      this.roles.map((role) => `${role.name}:${role.pane_id}`).join(",");
+    const watched = new Set([...this.roles.map((role) => role.pane_id), ...this.candidates]);
     this.roles = next;
-    return changed;
+    return next.some((role) => !watched.has(role.pane_id));
   }
 
   subscriptions(): HerdrSubscription[] {
     const panes = new Set([...this.roles.map((role) => role.pane_id), ...this.candidates]);
     return [
       ...[...panes].map((pane_id) => ({ pane_id, type: "pane.agent_status_changed" as const })),
+      { type: "pane.created" },
       { type: "pane.agent_detected" },
       { type: "pane.exited" },
       { type: "pane.closed" },
@@ -358,10 +376,27 @@ export class AttentionRuntime {
     let agents: HerdrAgent[] = [];
     try {
       agents = await this.client.agentList();
-    } catch {
+    } catch (error) {
+      this.log(`agent.list failed while seeding statuses: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
     for (const agent of agents) this.statuses.set(agent.pane_id, agent.agent_status);
+  }
+
+  // After a (re)subscribe the replay was discarded; the live state of every
+  // role pane is evaluated once so a transition inside that window is not lost.
+  async evaluateCurrent(): Promise<boolean> {
+    await this.seedStatuses();
+    let resubscribe = false;
+    for (const role of this.roles) {
+      const status = this.statuses.get(role.pane_id);
+      if (status !== "blocked" && status !== "idle" && status !== "done") continue;
+      resubscribe = (await this.handle({
+        data: { agent_status: status, pane_id: role.pane_id, workspace_id: role.workspace_id },
+        event: "pane_agent_status_changed",
+      }, true)) || resubscribe;
+    }
+    return resubscribe;
   }
 
   private async deliver(target: string | null, subject: string, line: string): Promise<void> {
@@ -429,6 +464,7 @@ export class AttentionRuntime {
     const body = `${kind}: ${evidence}`;
     const entryId = recordEntry(store, team, work.id, body, `stall:${kind}`, "work.stall");
     this.state.stalls[key] = entryId;
+    this.log(`stall:${kind} on ${work.id} for ${seat.name}: entry ${entryId}`);
     const line = stallLine(work.id, kind, evidence);
     await this.deliver(seat.name, `${work.id} ${kind}`, line);
     const copy = supervisorTarget(seat, this.roles);
@@ -436,26 +472,38 @@ export class AttentionRuntime {
   }
 
   // Returns true when the subscription must be rebuilt (a new pane to watch).
-  async handle(event: HerdrEvent): Promise<boolean> {
+  // An evaluation replays the current state after a subscribe: stalls are
+  // derived from it, the idle wake is not (it needs a turn end seen live).
+  async handle(event: HerdrEvent, evaluation = false): Promise<boolean> {
     const store = openStore(this.config.projectPath);
     try {
       const team = this.team(store);
       if (!team || team.state !== "RUNNING") return false;
-      const paneId = typeof event.data.pane_id === "string" ? event.data.pane_id : null;
-      if (!paneId) return false;
-      if (event.event === "pane_agent_detected") {
-        const changed = this.refreshRoles(store);
-        const inTeam = typeof event.data.workspace_id !== "string" || event.data.workspace_id === team.workspace_id;
+      // A Peer opened after the subscription (work add --to) has no role row
+      // until it acknowledged; every event re-reads the rows, and a pane
+      // created or detected in the team workspace is watched right away.
+      let changed = this.refreshRoles(store);
+      if (changed) this.log(`roles now ${this.roles.map((role) => `${role.name}@${role.pane_id}`).join(", ")}`);
+      const createdPane = event.event === "pane_created" && event.data.pane && typeof event.data.pane === "object"
+        ? event.data.pane as { pane_id?: string; workspace_id?: string }
+        : null;
+      const paneId = typeof event.data.pane_id === "string"
+        ? event.data.pane_id
+        : typeof createdPane?.pane_id === "string" ? createdPane.pane_id : null;
+      if (!paneId) return changed;
+      const workspaceId = typeof event.data.workspace_id === "string"
+        ? event.data.workspace_id
+        : typeof createdPane?.workspace_id === "string" ? createdPane.workspace_id : null;
+      if (event.event === "pane_agent_detected" || event.event === "pane_created") {
+        const inTeam = workspaceId === null || workspaceId === team.workspace_id;
         const known = this.roles.some((role) => role.pane_id === paneId) || this.candidates.has(paneId);
-        if (inTeam && !known) this.candidates.add(paneId);
+        if (inTeam && !known) {
+          this.candidates.add(paneId);
+          this.log(`watching new team pane ${paneId} (${event.event})`);
+        }
         return changed || (inTeam && !known);
       }
-      let seat = this.roles.find((role) => role.pane_id === paneId);
-      let changed = false;
-      if (!seat) {
-        changed = this.refreshRoles(store);
-        seat = this.roles.find((role) => role.pane_id === paneId);
-      }
+      const seat = this.roles.find((role) => role.pane_id === paneId);
       if (seat) this.candidates.delete(paneId);
       if (!seat) return changed;
       const now = Date.now();
@@ -473,7 +521,9 @@ export class AttentionRuntime {
       if (event.event !== "pane_agent_status_changed") return changed;
       const status = typeof event.data.agent_status === "string" ? event.data.agent_status : "unknown";
       this.statuses.set(paneId, status);
-      if (this.deduplicated(paneId, status, now)) {
+      // An evaluation is state, not a transition; it leaves the dedupe window
+      // to the live events.
+      if (!evaluation && this.deduplicated(paneId, status, now)) {
         await this.persist();
         return changed;
       }
@@ -507,6 +557,7 @@ export class AttentionRuntime {
         return changed;
       }
       await this.flush(seat.name);
+      if (evaluation) return changed;
       if (seatHasStar(store, team, seat, this.roles)) return changed;
       if (pushedRecently(store, team.team_id, team.generation, seat.name, now)) return changed;
       const delivered = this.state.delivered[seat.name];
@@ -573,32 +624,66 @@ export async function runSlpRuntime(config: SlpRuntimeConfig): Promise<number> {
       }
       await Bun.sleep(100);
     }
-    await runtime.seedStatuses();
     const client = new HerdrClient(config.environment ?? process.env);
+    runtime.log(`runtime up for ${config.teamId}:g${config.generation} (pid ${process.pid})`);
+    const redraw = async () => {
+      process.stdout.write(`\u001b[2J\u001b[H${await runtime.render()}`);
+    };
     while (!stopping) {
       let resubscribe = false;
-      stream = await client.subscribe(runtime.subscriptions());
-      process.stdout.write(`\u001b[2J\u001b[H${await runtime.render()}`);
+      const subscriptions = runtime.subscriptions();
+      stream = await client.subscribe(subscriptions);
+      runtime.log(`subscribed: ${subscriptions.map((entry) => "pane_id" in entry ? `${entry.type}:${entry.pane_id}` : entry.type).join(" ")}`);
+      const iterator = stream.events[Symbol.asyncIterator]();
+      let pending: Promise<IteratorResult<HerdrEvent>> | null = null;
+      let ended = false;
       try {
-        for await (const event of stream.events) {
-          try {
-            resubscribe = await runtime.handle(event);
-          } catch (error) {
-            process.stderr.write(
-              `maestro slp runtime: ${error instanceof Error ? error.message : String(error)}\n`,
-            );
+        // Herdr replays its event history to every new subscriber (about 190
+        // events over 12 s on 2026-09-05); those are discarded until the
+        // stream has been quiet for replayQuietMs, then the live state of
+        // every role pane is evaluated once.
+        let replayed = 0;
+        const drainStarted = Date.now();
+        while (Date.now() - drainStarted < replayMaxMs) {
+          pending ??= iterator.next();
+          const outcome = await Promise.race([pending, Bun.sleep(replayQuietMs).then(() => "quiet" as const)]);
+          if (outcome === "quiet") break;
+          pending = null;
+          if (outcome.done) {
+            ended = true;
+            break;
           }
-          process.stdout.write(`\u001b[2J\u001b[H${await runtime.render()}`);
-          if (resubscribe) break;
+          replayed += 1;
+        }
+        runtime.log(`replay drained: ${replayed} events discarded`);
+        if (!ended) {
+          resubscribe = await runtime.evaluateCurrent();
+          await redraw();
+        }
+        while (!ended && !resubscribe) {
+          pending ??= iterator.next();
+          const outcome = await pending;
+          pending = null;
+          if (outcome.done) {
+            ended = true;
+            break;
+          }
+          try {
+            resubscribe = await runtime.handle(outcome.value);
+          } catch (error) {
+            runtime.log(`event ${outcome.value.event} failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          await redraw();
         }
       } finally {
         stream.close();
       }
       if (stopping) return 0;
       if (!resubscribe) {
-        process.stderr.write("maestro slp runtime: Herdr closed the subscription; the plugin startup hook reopens this pane after a restart\n");
+        runtime.log("Herdr closed the subscription; the plugin startup hook reopens this pane after a restart");
         return 1;
       }
+      runtime.log("resubscribing for a new team pane");
     }
     return 0;
   } finally {

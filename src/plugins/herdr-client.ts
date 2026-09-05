@@ -81,7 +81,7 @@ export type HerdrReadSource = "detection" | "recent" | "recent_unwrapped" | "vis
 
 export type HerdrSubscription =
   | { agent_status?: HerdrAgentStatus; pane_id: string; type: "pane.agent_status_changed" }
-  | { type: "pane.agent_detected" | "pane.closed" | "pane.exited" };
+  | { type: "pane.agent_detected" | "pane.closed" | "pane.created" | "pane.exited" };
 
 export interface HerdrEvent {
   data: Record<string, unknown> & { pane_id?: string; workspace_id?: string };
