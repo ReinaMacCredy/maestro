@@ -704,7 +704,7 @@ function registerLifecycle(cli: Cli): void {
     mutates: false,
   });
   cli.register("uninstall", uninstall, {
-    description: "Remove Maestro-managed wiring from the current repository.",
+    description: "Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.",
   });
   cli.register("update", update, {
     description: "Fast-forward the recorded source checkout and resync the runtime.",
@@ -726,7 +726,7 @@ export const lifecyclePlugin: BuiltInPlugin = {
   apply(context) {
     for (const [verb, handler, description] of [
       ["doctor", doctor, "Diagnose the machine runtime and current repository wiring read-only."],
-      ["uninstall", uninstall, "Remove Maestro-managed wiring from the current repository."],
+      ["uninstall", uninstall, "Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>."],
       ["update", update, "Fast-forward the recorded source checkout and resync the runtime."],
     ] as const) {
       context.effect(() =>

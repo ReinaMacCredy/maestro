@@ -127,9 +127,9 @@ are never staged or committed.
   `maestro work note <id> "failed: <one line>"`.
 - Per-tool stores (Claude auto-memory under `~/.claude/projects/*/memory/`,
   Codex `~/.codex/memories/`) are write buffers their tools keep writing.
-  Promotion into the Hub store runs from `~/maestro` with
-  `maestro memory ingest` (dry-run first); only the Hub render is injected.
-  No hand-edited global index.
+  Promotion into the Hub store is `maestro memory ingest` (dry-run first),
+  which like every memory verb runs from any cwd and re-renders the index;
+  only the Hub render is injected. No hand-edited global index.
 
 ## Testing discipline
 

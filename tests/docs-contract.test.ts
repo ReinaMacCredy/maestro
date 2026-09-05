@@ -248,3 +248,19 @@ test("639 [lint] WORKFLOW.md states the two-model boundary and dispatch/handback
     }
   });
 });
+
+test("645 [lint] memory help and WORKFLOW.md state the any-cwd rule; uninstall help names room forget (UX F help findings, F10)", async () => {
+  const workflow = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "resources", "WORKFLOW.md")).text();
+  const memory = workflow.match(/## Memory\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
+  expect(memory).toContain("from any cwd");
+  expect(memory).not.toContain("runs from `~/maestro`");
+  await withFixture(async (fixture) => {
+    const help = await runCli(fixture, ["help", "memory"]);
+    expect(help.stdout.split("\n")[0]).toMatch(/^memory {2,}.*from any cwd/);
+    expect(help.stdout).not.toContain("retract from the Hub");
+    for (const args of [["help", "uninstall"], ["uninstall", "--help"]]) {
+      const uninstall = await runCli(fixture, args);
+      expect(uninstall.stdout).toContain("maestro room forget <path>");
+    }
+  });
+});

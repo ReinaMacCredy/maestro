@@ -862,7 +862,7 @@ export const memoryPlugin: BuiltInPlugin = {
           description: "List Hub memory facts from any cwd.",
           flags: { "--all": { description: "Include superseded and retracted facts." } },
           mutates: false,
-          rootDescription: "Global memory facts in the Hub store: read from any cwd, promote and retract from the Hub.",
+          rootDescription: "Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI.",
         },
       ),
     );
