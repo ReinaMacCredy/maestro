@@ -2253,7 +2253,6 @@ export async function maybeHandleSlpWorkAdd(
   let startedPeerPane: string | null = null;
   let plan: SlpTeamPlan | null = null;
   let pinnedProfile: { digest: string; name: string } | null = null;
-  let resetFailure: string | null = null;
   const runtime = new HerdrSlpRuntime();
   if (actor.role === "team-supervisor") {
     if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
@@ -2360,8 +2359,9 @@ export async function maybeHandleSlpWorkAdd(
     startedPeerPane = ensured.startedPaneId;
     let identity = ensured.role;
     // Hub d101: an acknowledged pane is reset and re-challenged before the
-    // store write (d757 order: proven, then written); a failed reset keeps the
-    // stored identity, the item is still added, and no wake line goes out.
+    // store write (d757 order: proven, then written); a reset that is not
+    // proven refuses the whole add, nothing is written and no wake line goes
+    // out (live g22 2026-09-05: an unproven reset went OPEN on stale context).
     if (fresh && ensured.reused) {
       const contract = roleContracts(
         actor.team.team_id,
@@ -2371,14 +2371,18 @@ export async function maybeHandleSlpWorkAdd(
       ).get("peer") as SlpRoleContract;
       try {
         await runtime.resetPeer(plan, peerPlan, identity.paneId, contract);
-        identity = {
-          ...identity,
-          briefDigest: contract.briefDigest,
-          readyChallenge: contract.readyChallenge,
-        };
       } catch (error) {
-        resetFailure = error instanceof Error ? error.message : String(error);
+        throw new CliError(
+          "PEER_RESET_FAILED",
+          `could not reset ${peerName} in ${identity.paneId} before adding work: ${error instanceof Error ? error.message : String(error)}; nothing was added, retry --fresh or add without it`,
+          { pane: identity.paneId, peer: peerName },
+        );
       }
+      identity = {
+        ...identity,
+        briefDigest: contract.briefDigest,
+        readyChallenge: contract.readyChallenge,
+      };
     }
     assignee = {
       name: identity.name,
@@ -2482,23 +2486,17 @@ export async function maybeHandleSlpWorkAdd(
     if (attachedRoom) context.store.database.exec("DETACH DATABASE slp_room");
   }
   context.sessions.record("work.add");
-  if (resetFailure !== null) {
-    process.stderr.write(
-      `warning: could not reset ${assignee.name} before ${id} OPEN: ${resetFailure}; no wake line was pushed; the store remains the truth\n`,
-    );
-  } else {
-    // Live row 17 (g18): an acknowledged Peer pane never learned about its next
-    // item and a fresh one sat idle after READY, so the assignee is woken here
-    // in both cases, the same d753 line as return and accept.
-    await pushNotice(
-      actor.team.project_path,
-      actor.role,
-      assignee.name,
-      `${id} OPEN`,
-      objective,
-      `maestro status ${id}`,
-    );
-  }
+  // Live row 17 (g18): an acknowledged Peer pane never learned about its next
+  // item and a fresh one sat idle after READY, so the assignee is woken here
+  // in both cases, the same d753 line as return and accept.
+  await pushNotice(
+    actor.team.project_path,
+    actor.role,
+    assignee.name,
+    `${id} OPEN`,
+    objective,
+    `maestro status ${id}`,
+  );
   const work = readSlpWork(context, actor, id);
   return {
     data: {

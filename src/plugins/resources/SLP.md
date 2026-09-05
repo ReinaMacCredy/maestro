@@ -62,8 +62,10 @@ pane (`[from <role>][<work-id> <STATE>] <summary>; read: maestro status
 <work-id>`); an assignee is woken per item, whether its pane was just opened or
 already acknowledged; the store stays the truth and that line is only the
 wake-up. `maestro work add --to <peer> --fresh` resets a reused Peer pane to a
-fresh harness context (Claude Code `/clear`, Codex `/new`) and re-checks READY
-before that OPEN push; it is refused while the Peer holds ACTIVE work. When you cannot
+fresh harness context (Claude Code `/clear`, Codex `/new`), proven by a new
+harness session, and re-checks READY before that OPEN push; it is refused with
+`PEER_ACTIVE` while the Peer holds ACTIVE work and with `PEER_RESET_FAILED`,
+nothing added, when the reset does not take. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`

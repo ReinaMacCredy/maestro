@@ -5824,11 +5824,14 @@ test("observer-gone: two seats in the plan, no sentinel tab or status field, obs
 }, 30_000);
 
 // Hub d101: --fresh reuses an acknowledged Peer pane with a fresh harness
-// context. The reset is the harness's new-conversation command, the d757
-// readiness wait, then the same READY challenge a fresh pane passes; only
-// then does the d840 OPEN line go out. Refused while the Peer holds ACTIVE
-// work; a failed reset leaves the item OPEN with a warning and no push.
-test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane before the OPEN push, is a no-op on a fresh pane, is refused while the Peer holds ACTIVE work, and a timed-out idle wait leaves the item OPEN unpushed", async () => {
+// context. The reset is the harness's new-conversation command as its own
+// input, the enter key as another (live g22 2026-09-05: one input made Claude
+// Code parse "/clearslp ..."), a wait until Herdr reports a new harness
+// session for the pane, then the same READY challenge a fresh pane passes;
+// only then does the d840 OPEN line go out. Refused while the Peer holds
+// ACTIVE work; a reset that never takes refuses with PEER_RESET_FAILED and
+// writes nothing.
+test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane before the OPEN push, is a no-op on a fresh pane, is refused while the Peer holds ACTIVE work, and refuses with PEER_RESET_FAILED writing nothing when the harness session never changes", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -5839,7 +5842,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
         })
       ).exitCode,
     ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
+    const fake = await installFakeHerdr(fixture, { sessionResetDelayReads: 2 });
     const started = await runCliAt(
       fixture,
       room,
@@ -5855,9 +5858,12 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const traffic = async (from: number) =>
       (await fakeHerdrCommands(fake)).slice(from).filter(
         (command) =>
-          (command[0] === "pane" && command[1] === "run") ||
+          (command[0] === "pane" && ["run", "send-keys", "send-text"].includes(command[1] ?? "")) ||
           (command[0] === "agent" && ["list", "prompt", "read"].includes(command[1] ?? "")),
       );
+    const sessionOf = async (name: string) =>
+      ((await readFakeHerdrState(fake)).agents as Array<{ agent_session: { value: string }; name: string }>)
+        .find((agent) => agent.name === name)?.agent_session.value ?? "";
     const opens = (commands: string[][]) =>
       commands.filter((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""));
     const storedChallenge = (name: string) =>
@@ -5910,7 +5916,10 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     ]);
     expect(storedChallenge(peer)).toBe(openedChallenge);
 
-    // 1c. --fresh on the acknowledged pane: /clear, wait idle, READY, one OPEN.
+    // 1c. --fresh on the acknowledged pane: /clear, enter, agent.list until the
+    // session changes, READY, one OPEN.
+    const sessionBefore = await sessionOf(peer);
+    expect(sessionBefore).not.toBe("");
     before = (await fakeHerdrCommands(fake)).length;
     const third = await runCliAt(
       fixture,
@@ -5924,17 +5933,24 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     expect(thirdData.work.state).toBe("OPEN");
     seen = await traffic(before);
     const reset = seen.findIndex((command) => command[0] === "pane");
-    expect(seen[reset]).toEqual(["pane", "run", paneId, "/clear"]);
-    const idleWait = seen.findIndex((command, index) => index > reset && command[1] === "list");
+    expect(seen.filter((command) => command[0] === "pane")).toEqual([
+      ["pane", "send-text", paneId, "/clear"],
+      ["pane", "send-keys", paneId, "enter"],
+    ]);
     const challenge = seen.findIndex(
       (command) => command[1] === "prompt" && /^slp team \S+ generation \d+ instance \S+; reply [0-9a-f]{32}$/.test(command[3] ?? ""),
     );
     const readyRead = seen.findIndex((command) => command[1] === "read" && command[2] === peer);
     const open = seen.findIndex((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""));
-    expect([idleWait, challenge, readyRead, open].every((index) => index > 0)).toBe(true);
-    expect(idleWait).toBeLessThan(challenge);
+    expect([challenge, readyRead, open].every((index) => index > 0)).toBe(true);
+    // The fake reports the new session on its second agent.list read after the
+    // enter key, and refuses any prompt before that; two reads sit between the
+    // key press and the challenge.
+    const sessionReads = seen.filter((command, index) => index > reset + 1 && index < challenge && command[1] === "list");
+    expect(sessionReads.length).toBeGreaterThanOrEqual(2);
     expect(challenge).toBeLessThan(readyRead);
     expect(readyRead).toBeLessThan(open);
+    expect(await sessionOf(peer)).not.toBe(sessionBefore);
     expect(opens(seen).map((command) => command[3])).toEqual([
       `[from lead][${thirdData.work.id} OPEN] third task; read: maestro status ${thirdData.work.id}`,
     ]);
@@ -5962,7 +5978,9 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     expect(workRows()).toBe(rows);
     expect(await traffic(before)).toEqual([]);
 
-    // 3. A reset whose idle wait times out: item OPEN, warning, no prompt.
+    // 3. A reset that never takes (the harness session id never changes):
+    // PEER_RESET_FAILED naming the pane and the unchanged session, nothing
+    // inserted, no challenge, no prompt.
     expect(
       (
         await runCliAt(
@@ -5973,11 +5991,10 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
         )
       ).exitCode,
     ).toBe(0);
-    await editFakeHerdrState(fake, (state) => {
-      const agent = (state.agents as Array<{ agent_status: string; name: string }>).find((candidate) => candidate.name === peer);
-      if (agent) agent.agent_status = "working";
-    });
+    await setFakeHerdrBehavior(fake, { sessionResets: false });
     const challengeBefore = storedChallenge(peer);
+    const sessionStuck = await sessionOf(peer);
+    const rowsBefore = workRows();
     before = (await fakeHerdrCommands(fake)).length;
     const stuck = await runCliAt(
       fixture,
@@ -5985,14 +6002,20 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
       ["work", "add", "fifth task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
       leadEnvironment,
     );
-    expect(stuck.exitCode).toBe(0);
-    const stuckData = envelope<{ work: { id: string; state: string } }>(stuck.stdout);
-    expect(stuckData.work.state).toBe("OPEN");
-    expect(stuck.stderr).toContain(`warning: could not reset ${peer} before ${stuckData.work.id} OPEN`);
+    expect(stuck.exitCode).toBe(1);
+    const stuckFailure = failureEnvelope(stuck.stderr).error;
+    expect(stuckFailure.code).toBe("PEER_RESET_FAILED");
+    expect(stuckFailure.message).toContain(paneId);
+    expect(stuckFailure.message).toContain(sessionStuck);
+    expect(workRows()).toBe(rowsBefore);
     seen = await traffic(before);
-    expect(seen.filter((command) => command[0] === "pane")).toEqual([["pane", "run", paneId, "/clear"]]);
+    expect(seen.filter((command) => command[0] === "pane")).toEqual([
+      ["pane", "send-text", paneId, "/clear"],
+      ["pane", "send-keys", paneId, "enter"],
+    ]);
     expect(seen.filter((command) => command[1] === "prompt")).toEqual([]);
     expect(storedChallenge(peer)).toBe(challengeBefore);
+    expect(await sessionOf(peer)).toBe(sessionStuck);
   });
 }, 30_000);
 
@@ -6043,8 +6066,9 @@ test("SLP v2 work add --to --fresh sends /new to a reused Codex Peer pane (Hub d
     expect(second.exitCode).toBe(0);
     const secondData = envelope<{ work: { id: string } }>(second.stdout);
     const seen = (await fakeHerdrCommands(fake)).slice(before);
-    expect(seen.filter((command) => command[0] === "pane" && command[1] === "run")).toEqual([
-      ["pane", "run", firstData.role.paneId, "/new"],
+    expect(seen.filter((command) => command[0] === "pane")).toEqual([
+      ["pane", "send-text", firstData.role.paneId, "/new"],
+      ["pane", "send-keys", firstData.role.paneId, "enter"],
     ]);
     expect(
       seen.filter((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? "")).map((command) => command[3]),

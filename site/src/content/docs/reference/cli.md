@@ -110,9 +110,10 @@ work state is `OPEN`, and the assignee's pane is woken with `[from
 <role>][<id> OPEN] <objective>; read: maestro status <id>` whether it was
 just opened or already acknowledged (d840). `--fresh` resets a reused Peer
 pane to a fresh harness context first (Claude Code `/clear`, Codex `/new`,
-then the same READY challenge a new pane passes) and is refused with
-`PEER_ACTIVE` while that Peer holds ACTIVE work; a failed reset leaves the
-item `OPEN` with a warning and no wake line (Hub d101).
+proven by a new harness session, then the same READY challenge a new pane
+passes) and is refused with `PEER_ACTIVE` while that Peer holds ACTIVE work;
+a reset that does not take is refused with `PEER_RESET_FAILED` and nothing is
+added (Hub d101).
 
 ### `work take`
 

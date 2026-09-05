@@ -62,6 +62,9 @@ export interface HerdrPane {
 
 export interface HerdrAgent {
   agent?: string | null;
+  // The harness session the SessionStart hook reported for the pane; a new
+  // value proves a new conversation (Claude Code /clear, live 2026-09-05).
+  agent_session?: { value?: string | null } | null;
   agent_status: HerdrAgentStatus | string;
   interactive_ready?: boolean;
   launch_pending?: boolean;
@@ -406,6 +409,17 @@ export class HerdrClient {
   // d830: the socket form of `herdr pane run` on a shell pane; never an agent pane.
   async paneSendInput(paneId: string, text: string): Promise<void> {
     await this.request("pane.send_input", { keys: ["enter"], pane_id: paneId, text });
+  }
+
+  // The socket forms of `herdr pane send-text` and `herdr pane send-keys`: a
+  // harness slash command lands as its own input and the enter key as another
+  // (live g22 2026-09-05: one input reached Claude Code as "/clearslp ...").
+  async paneSendText(paneId: string, text: string): Promise<void> {
+    await this.request("pane.send_input", { pane_id: paneId, text });
+  }
+
+  async paneSendKeys(paneId: string, keys: string[]): Promise<void> {
+    await this.request("pane.send_input", { keys, pane_id: paneId });
   }
 
   async agentList(timeoutMs?: number): Promise<HerdrAgent[]> {

@@ -40,6 +40,12 @@ export interface FakeHerdrBehavior {
   // spawn: plugin.pane.open runs `maestro slp runtime` as a child process;
   // record: the pane and its process entry appear in the state only.
   runtimePane?: "record" | "spawn";
+  // A new-conversation command (/clear or /new as text, then an enter key
+  // press) re-reports the pane's harness session after this many agent.list
+  // reads, the way the SessionStart hook does live (2026-09-05); false keeps
+  // the old id forever, a reset that never took.
+  sessionResetDelayReads?: number;
+  sessionResets?: boolean;
   settleAgents?: boolean;
   trustDialog?: "claude" | "codex";
   wrapAcknowledgements?: boolean;
@@ -157,8 +163,12 @@ function commandShape(method: string, params: Params): string[] {
       return ["pane", "process-info", ...flag("--pane", params.pane_id)];
     case "pane.read":
       return ["pane", "read", params.pane_id, ...flag("--source", params.source), ...flag("--lines", params.lines)];
-    case "pane.send_input":
+    case "pane.send_input": {
+      const keys = Array.isArray(params.keys) ? params.keys.map(String) : [];
+      if (params.text === undefined) return ["pane", "send-keys", params.pane_id, ...keys];
+      if (keys.length === 0) return ["pane", "send-text", params.pane_id, String(params.text)];
       return ["pane", "run", params.pane_id, ...String(params.text ?? "").split(" ")];
+    }
     case "agent.list":
       return ["agent", "list"];
     case "agent.get":
@@ -198,6 +208,11 @@ function commandShape(method: string, params: Params): string[] {
     default:
       return [method];
   }
+}
+
+// Herdr 0.8.2 reports the harness session the SessionStart hook sent it.
+function agentSession(kind: string): Params {
+  return { agent: kind, kind: "id", source: `herdr:${kind}`, value: crypto.randomUUID() };
 }
 
 function eventWanted(subscriber: Subscriber, event: FakeHerdrEvent): boolean {
@@ -442,6 +457,18 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       const paneId = params.pane_id;
       const target = pane(paneId);
       if (!target) throw new FakeHerdrError("pane_not_found", `pane ${paneId} not found`);
+      const keys = Array.isArray(params.keys) ? params.keys.map(String) : [];
+      if (params.text === undefined) {
+        if (keys.includes("enter") && state.pending_resets[paneId]) {
+          delete state.pending_resets[paneId];
+          if (behavior.sessionResets !== false) state.resetting[paneId] = behavior.sessionResetDelayReads ?? 1;
+        }
+        return { type: "ok" };
+      }
+      if (keys.length === 0) {
+        if (params.text === "/clear" || params.text === "/new") state.pending_resets[paneId] = true;
+        return { type: "ok" };
+      }
       const words = String(params.text ?? "").split(" ");
       if (words[0] === "/usr/bin/env" && words.some((word) => word.startsWith("MAESTRO_SLP_STOP_GRANT="))) {
         const extraEnvironment: Record<string, string> = {};
@@ -485,6 +512,14 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       return { type: "ok" };
     }
     case "agent.list": {
+      const resetting = state.resetting as Record<string, number>;
+      for (const paneId of Object.keys(resetting)) {
+        resetting[paneId] = (resetting[paneId] as number) - 1;
+        if ((resetting[paneId] as number) > 0) continue;
+        delete resetting[paneId];
+        const agent = state.agents.find((candidate: Params) => candidate.pane_id === paneId);
+        if (agent) agent.agent_session = agentSession(agent.kind);
+      }
       const hidden = state.activating as Record<string, number>;
       for (const name of Object.keys(hidden)) {
         hidden[name] = (hidden[name] as number) - 1;
@@ -508,7 +543,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       let agent = state.agents.find((candidate: Params) => candidate.name === name);
       if (!agent) {
         const target = pane(paneId);
-        agent = { name, pane_id: paneId, workspace_id: target?.workspace_id, agent_status: "working", kind };
+        agent = { name, pane_id: paneId, workspace_id: target?.workspace_id, agent_status: "working", kind, agent_session: agentSession(kind) };
         state.agents.push(agent);
         state.processes[paneId] = {
           pane_id: paneId,
@@ -558,6 +593,10 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         throw new FakeHerdrError("agent_prompt_stalled", "agent prompt produced no observed state change within 5000 ms");
       }
       if (behavior.prompts === false) throw new FakeHerdrError("agent_not_found", `agent ${target} not found`);
+      const promptedPane = agentByTarget(target)?.pane_id;
+      if (promptedPane && (promptedPane in state.pending_resets || promptedPane in state.resetting)) {
+        throw new FakeHerdrError("internal", `prompt to ${target} while its ${promptedPane} reset is still pending`);
+      }
       if (target in state.activating || (behavior.promptNotReadyAttempts ?? 0) > 0) {
         if (!(target in state.activating)) behavior.promptNotReadyAttempts = (behavior.promptNotReadyAttempts as number) - 1;
         throw new FakeHerdrError("agent_not_ready", `agent ${target} is not an active named agent`);
@@ -751,12 +790,14 @@ export async function installFakeHerdr(
       helper_exits: [],
       outputs: {},
       panes: [],
+      pending_resets: {},
       pending_workspace_closes: {},
       plugin_panes: [],
       plugins: [],
       processes: {},
       prompts: [],
       protocol: 20,
+      resetting: {},
       runtime_exits: [],
       sequence: 0,
       tabs: [],

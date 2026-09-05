@@ -422,7 +422,7 @@ export const workPlugin: BuiltInPlugin = {
               value: true,
             },
             "--fresh": {
-              description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new) and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work.",
+              description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.",
             },
           },
           positionals: [{ name: "title", required: true }],

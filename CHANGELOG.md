@@ -15,12 +15,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 - `maestro work add --to <peer> --fresh` reuses an acknowledged Peer pane with
   a fresh harness context: the harness's new-conversation command goes through
-  the Herdr socket (Claude Code `/clear`; Codex `/new`, read off the installed
-  codex 0.153.3 binary and not yet exercised live), the pane is waited idle,
-  the READY challenge runs again and is stored, then the d840 OPEN line is
-  pushed. Refused with `PEER_ACTIVE` while the Peer holds ACTIVE work; a
-  failed reset leaves the item OPEN with a stderr warning and no wake line
-  (Hub d101, w672).
+  the Herdr socket as its own input with the enter key as another (Claude Code
+  `/clear`; Codex `/new`, read off the installed codex 0.153.3 binary and not
+  yet exercised live), the reset is proven by a new harness session (the
+  pane's Herdr `agent_session` id changes when Claude Code's SessionStart hook
+  re-reports it; Codex still waits for the pane to settle, unverified), the
+  READY challenge runs again and is stored, then the d840 OPEN line is pushed.
+  Refused with `PEER_ACTIVE` while the Peer holds ACTIVE work and with
+  `PEER_RESET_FAILED`, nothing written, when the session never changes or the
+  challenge is not answered (Hub d101, w672, w674).
 
 ### Changed
 

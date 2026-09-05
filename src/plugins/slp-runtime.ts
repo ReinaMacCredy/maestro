@@ -104,6 +104,16 @@ export const newConversationCommands: Record<SeatLaunch["harness"], string> = {
   codex: "/new",
 };
 
+// A Claude Code /clear fires SessionStart, whose Herdr hook re-reports the
+// pane's session, so a changed agent_session id is the proof the reset took
+// (live 2026-09-05). Codex's Herdr hook also reports only on SessionStart and
+// skips a thread id that differs from CODEX_THREAD_ID; whether /new passes
+// that gate is unverified, so Codex falls back to the settled wait.
+const sessionProvenResets: Record<SeatLaunch["harness"], boolean> = {
+  claude: true,
+  codex: false,
+};
+
 export interface SlpRuntimeInspection {
   missingPanes: string[];
   runtime: "available";
@@ -807,9 +817,42 @@ export class HerdrSlpRuntime {
     }
   }
 
+  private async agentSession(name: string, paneId: string): Promise<string | null> {
+    const match = (await this.agents()).find((agent) => agent.name === name && agent.pane_id === paneId);
+    const value = match?.agent_session?.value;
+    return typeof value === "string" && value !== "" ? value : null;
+  }
+
+  // The reset is proven only by a harness session id that differs from the
+  // one read before the command; an idle pane proves nothing, Herdr reports
+  // it idle before the command is even parsed (live g22 2026-09-05).
+  private async awaitNewSession(
+    peer: Pick<SlpRolePlan, "kind" | "name">,
+    paneId: string,
+    previous: string | null,
+    command: readonly string[],
+    deadline: number,
+  ): Promise<void> {
+    while (true) {
+      const current = await this.agentSession(peer.name, paneId);
+      if (current !== null && current !== previous) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new SlpRuntimeError(
+          `${peer.name} in ${paneId} still reports harness session ${previous ?? "none"} ${this.agentReadyTimeoutMs}ms after ${command[command.length - 1]}; the reset did not take`,
+          command,
+          undefined,
+          { code: "PEER_RESET_FAILED", harness: peer.kind, paneTail: await this.paneTail(peer.name) },
+        );
+      }
+      await Bun.sleep(Math.min(100, remaining));
+    }
+  }
+
   // Hub d101: reset an acknowledged Peer pane to a fresh harness context and
-  // prove it the way a fresh pane is proven: new-conversation command, the
-  // d757 readiness wait, then the READY challenge.
+  // prove it the way a fresh pane is proven: new-conversation command as its
+  // own input, the enter key as another, a new harness session (or, for
+  // Codex, the d757 readiness wait), then the READY challenge.
   async resetPeer(
     plan: SlpTeamPlan,
     peer: SlpRolePlan,
@@ -818,17 +861,14 @@ export class HerdrSlpRuntime {
   ): Promise<void> {
     const startedAt = Date.now();
     const command = newConversationCommands[peer.kind];
+    const sent = ["pane", "send-text", paneId, command];
+    const previous = await this.agentSession(peer.name, paneId);
     this.note(`${peer.name}: resetting ${peer.kind} context in ${paneId}`);
-    await this.client.paneSendInput(paneId, command);
-    await this.awaitActiveAgent(
-      plan,
-      peer,
-      paneId,
-      ["pane", "send-input", paneId, command],
-      Date.now() + this.agentReadyTimeoutMs,
-      undefined,
-      true,
-    );
+    await this.client.paneSendText(paneId, command);
+    await this.client.paneSendKeys(paneId, ["enter"]);
+    const deadline = Date.now() + this.agentReadyTimeoutMs;
+    if (sessionProvenResets[peer.kind]) await this.awaitNewSession(peer, paneId, previous, sent, deadline);
+    else await this.awaitActiveAgent(plan, peer, paneId, sent, deadline, undefined, true);
     this.note(
       `${peer.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
     );
