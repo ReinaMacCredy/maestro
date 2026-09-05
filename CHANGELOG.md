@@ -13,6 +13,14 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- The installed `WORKFLOW.md` states the two-model boundary (Hub d87): inside
+  a running SLP team only the nine SLP v2 operations apply; everywhere else
+  the classic surface (`work start|done`, `decision draft|lock`, `ready`,
+  `dispatch`/`handback` lane contracts, councils) is the live model.
+  `dispatch --help` and `handback --help` open by naming their scope as lane
+  contracts outside a running SLP team, and the CLI reference documents both
+  verbs instead of listing them only as hard-cut redirects.
+
 - `work block <id> --by <work-id>` and `work unblock <id> --by <work-id>` add
   or remove a blocker after creation, with the checks `work add --blocked-by`
   applies plus a refusal of self-blocks, duplicates, cycles, and edits to done

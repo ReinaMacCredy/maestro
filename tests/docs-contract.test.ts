@@ -227,3 +227,24 @@ test("576 [lint] no doctrine, template, or skill demands a test or SPEC from qui
     expect(section(spec, "## Anti-goals")).toContain("matching VERIFY.md check");
   });
 });
+
+test("639 [lint] WORKFLOW.md states the two-model boundary and dispatch/handback help names its scope (Hub d87)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const workflow = await Bun.file(join(root, "resources", "WORKFLOW.md")).text();
+  const boundary = workflow.match(/## Two coordination models\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
+  expect(boundary.split("\n\n")).toHaveLength(1);
+  expect(boundary).toContain("nine SLP v2 operations");
+  for (const classic of ["work start", "decision draft", "ready", "dispatch", "handback", "councils"]) {
+    expect(boundary).toContain(classic);
+  }
+  expect(boundary).toMatch(/not legacy/);
+
+  await withFixture(async (fixture) => {
+    for (const verb of ["dispatch", "handback"]) {
+      const help = await runCli(fixture, [verb, "--help"]);
+      expect(help.exitCode).toBe(0);
+      const opening = help.stdout.split("\n")[0] ?? "";
+      expect(opening).toMatch(new RegExp(`^${verb} {2,}.*lane contracts outside a running SLP team`, "i"));
+    }
+  });
+});

@@ -170,8 +170,10 @@ blocked state.
 
 ## Hard-cut mapping
 
-These mappings explain removed SLP commands. They perform no alias or
-compatibility action.
+These mappings explain the commands a running SLP team redirects. They
+perform no alias or compatibility action, and they retire nothing outside a
+team: `dispatch` and `handback` stay the lane contracts of the development
+workflow (see below).
 
 | Previous SLP command or layer | SLP v2 operation |
 | --- | --- |
@@ -232,6 +234,16 @@ available. Its work commands include `work start`, `work show`, `work list`,
 `work block|unblock <id> --by <work-id>`, which add or remove a blocker after
 creation under the same checks as `work add --blocked-by`. These lease and
 policy operations are not part of the SLP role toolbelt.
+
+### `dispatch` and `handback`
+
+Outside a running SLP team, `dispatch open <work-id>` stores a lane contract
+(objective, owned and excluded scope, mutation boundary, stop condition,
+evidence required, optional blind council); `dispatch accept`, `confirm`,
+`cancel`, `show`, and `list` move and read it; `handback file`, `list`,
+`review`, and `show` carry the shape-checked return packet. Inside a team both
+verbs redirect to `work add`, `work take`, `work return`, and `work accept`.
+Neither verb is legacy.
 
 ### `decision`
 

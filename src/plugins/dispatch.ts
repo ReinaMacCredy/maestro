@@ -966,7 +966,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             },
           },
           positionals: [{ name: "work-id", required: true }],
-          rootDescription: "Store lane contracts and their return packets.",
+          rootDescription: "Lane contracts outside a running SLP team: open, accept, cancel, and read them.",
         },
       ),
     );
@@ -1418,7 +1418,7 @@ export const dispatchPlugin: BuiltInPlugin = {
             },
           },
           positionals: [{ name: "dispatch-id", required: true }],
-          rootDescription: "File, list, and read durable return packets.",
+          rootDescription: "Return packets for lane contracts outside a running SLP team: file, list, review.",
         },
       ),
     );
@@ -1462,7 +1462,7 @@ export const dispatchPlugin: BuiltInPlugin = {
           description: "List handbacks for one dispatch or work item.",
           mutates: false,
           positionals: [{ name: "dispatch-or-work-id", required: true }],
-          rootDescription: "File, list, and read durable return packets.",
+          rootDescription: "Return packets for lane contracts outside a running SLP team: file, list, review.",
         },
       ),
     );

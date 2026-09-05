@@ -70,6 +70,18 @@ fix the generator or pin and regenerate.
   verify passes. Verify owns "does it meet the contract"; review owns "is the
   code good".
 
+## Two coordination models
+
+Maestro keeps two coordination models with an explicit boundary. Inside a
+running SLP team (a Lead, Peer, or Team Supervisor pane after `team start`)
+only the nine SLP v2 operations apply, and the retired verbs redirect to them.
+Everywhere else (plain sessions, the Hub room, design and wayfinding sessions)
+the classic surface is the live model: `work start|done`,
+`decision draft|lock`, `ready`, `dispatch` and `handback` lane contracts,
+councils, worktree lanes, and policy-dispatch. `dispatch` and `handback` are
+not legacy and are not scheduled for removal; they are the lane contracts
+outside a running SLP team.
+
 ## Bundle contract (tier Full)
 
 - `SPEC.md` is a pure contract: Problem, Solution, Scope, Anti-goals (each
