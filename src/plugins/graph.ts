@@ -591,6 +591,7 @@ class GraphEngine {
   }
 
   private finish(run: Run, rows: NodeRow[], outcome: { failed?: NodeRow; stopped?: Stop }): void {
+    if (run.row.stopped !== null || run.row.verdict !== null) return;
     const now = new Date().toISOString();
     const verdict = outcome.failed || outcome.stopped ? null : this.verdictOf(run, rows);
     const stopped = outcome.stopped
@@ -607,7 +608,7 @@ class GraphEngine {
     this.database
       .query("UPDATE work SET state = 'done', evidence = ?, held_by = NULL, updated_at = ? WHERE id = ?")
       .run(evidence, now, run.row.run_id);
-    this.journal(run.row.run_id, stopped ? "graph.stopped" : "graph.done", {
+    this.journal(run.row.run_id, outcome.stopped ? "graph.stopped" : outcome.failed ? "graph.failed" : "graph.done", {
       ...(outcome.stopped ? { limit: outcome.stopped.limit, used: outcome.stopped.used } : {}),
       ...(outcome.failed ? { node: refOf(outcome.failed), error: parseJson(outcome.failed.result, null) } : {}),
       ...(stopped ? {} : { verdict }),
@@ -657,6 +658,15 @@ class GraphEngine {
   // block in the text; free text stays raw. One PARSE_FAILED retry, then the
   // node is failed.
   accept(run: Run, ref: string, text: string, files: string[]): Record<string, unknown> {
+    // Live row 10 (2026-09-05): a late result on a finished run must not
+    // fire loops or limits and rewrite the recorded outcome.
+    if (run.row.stopped !== null || run.row.verdict !== null) {
+      throw new CliError(
+        "INVALID_STATE",
+        `run ${run.row.run_id} is done (${run.row.stopped ?? "verdict recorded"}) and accepts no more results; run: maestro graph next ${run.row.run_id}`,
+        { outcome: run.row.stopped ?? "verdict", ref, run: run.row.run_id },
+      );
+    }
     const { instance, node } = splitRef(ref);
     const rows = this.rows(run.row.run_id);
     const row = this.rowFor(rows, node, instance);
