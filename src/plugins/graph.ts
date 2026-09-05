@@ -538,10 +538,12 @@ class GraphEngine {
         switch (row.kind) {
           case "function": {
             if (!(await this.trusted(run))) {
+              const installed = run.row.path?.startsWith(`${resolve(this.repo, ".maestro", "graphs")}${sep}`);
+              const trustCommand = `maestro graph trust ${installed ? run.definition.name : `--file ${run.row.path}`}`;
               untrusted = new CliError(
                 "GRAPH_UNTRUSTED",
-                `function node ${row.node_id} of repo graph ${run.definition.name} runs a shell command; review ${run.row.path}, then: maestro graph trust ${run.row.origin === "repo" && run.row.path?.startsWith(resolve(this.repo, ".maestro", "graphs")) ? run.definition.name : `--file ${run.row.path}`}`,
-                { command: `maestro graph trust ${run.definition.name}`, graph: run.definition.name, node: row.node_id, path: run.row.path },
+                `function node ${row.node_id} of repo graph ${run.definition.name} runs a shell command; review ${run.row.path}, then: ${trustCommand} and maestro graph next ${run.row.run_id}`,
+                { command: trustCommand, graph: run.definition.name, node: row.node_id, path: run.row.path, run: run.row.run_id },
               );
               break;
             }
