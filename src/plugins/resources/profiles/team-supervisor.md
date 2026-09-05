@@ -1,7 +1,8 @@
 ---
 harness: claude
 model: default
-disallowed_tools: [AskUserQuestion]
+disallowed_tools: [Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)"]
+skills: [maestro-work]
 description: SLP Team Supervisor seat - team-level coordination and acceptance, authority through the nine SLP operations only
 ---
 Role: Team Supervisor.

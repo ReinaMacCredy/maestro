@@ -1,7 +1,8 @@
 ---
 harness: codex
 model: default
-disallowed_tools: [AskUserQuestion]
+disallowed_tools: [Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)"]
+skills: [maestro-work, maestro-explore, maestro-diagnose, maestro-verify]
 description: SLP Peer seat - bounded execution with independent judgment
 ---
 Role: Peer.

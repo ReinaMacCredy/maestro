@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   materializeProfiles,
@@ -8,7 +8,11 @@ import {
   planProfileRenders,
   removeRenderedProfiles,
   renderedProfilePath,
+  seatConfigRoot,
+  seatDirectory,
+  seatTokenPath,
 } from "../src/plugins/profiles.ts";
+import { materializeSkills } from "../src/plugins/skills.ts";
 import { prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const everyKey = `---
@@ -190,6 +194,8 @@ test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and
   await withFixture(async (fixture) => {
     const claudeAgents = join(fixture.home, ".claude", "agents");
     const seatRoot = join(fixture.home, ".maestro", "claude");
+    // d848: the shipped seats name Hub skills, which install writes first.
+    await materializeSkills(fixture.home, "dev");
     const claudePaths = (await planProfileRenders(fixture.home, fixture.repo))
       .map((target) => target.path)
       .filter((path) => path.endsWith(".md"));
@@ -233,5 +239,81 @@ test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and
     expect(existsSync(seatRoot)).toBe(false);
     expect(existsSync(join(claudeAgents, "maestro-refuter.md"))).toBe(false);
     expect(await readFile(custom, "utf8")).toBe("---\nname: custom\n---\nhand written\n");
+  });
+});
+
+// seat-config-dirs R3 (d847, d849, A4): the seat settings are the maestro base
+// merged with the profile overlay, null removes, 0600, the token rides env,
+// the herdr SessionStart hook is present and cleanupPeriodDays never is; the
+// seat agent file and every composed peer-<node> render carry the d847 list.
+test("seat-dirs-settings: rendered seat settings.json is base merged with the overlay (null removes) at 0600 with the token in env and the herdr hook, no cleanupPeriodDays; the Claude seat file and composed peer renders carry the d847 disallowedTools (R3, d851)", async () => {
+  await withFixture(async (fixture) => {
+    const seatRoot = seatConfigRoot(fixture.home);
+    await mkdir(seatRoot, { recursive: true });
+    await writeFile(seatTokenPath(fixture.home), "sk-ant-oat01-fixture-token\n");
+    await materializeSkills(fixture.home, "dev");
+    await writeProfile(
+      join(fixture.home, "maestro", "profiles"),
+      "lead",
+      "---\nharness: claude\nmodel: opus\nskills: [maestro-work]\ndisallowed_tools: [Agent, LSP, \"Bash(claude:*)\"]\nsettings:\n  outputStyle: Concise\n  autoMemoryEnabled: null\n  env:\n    BASH_DEFAULT_TIMEOUT_MS: \"300000\"\n    CLAUDE_CODE_DISABLE_FAST_MODE: null\n---\nRole: fixture lead.\n",
+    );
+    await materializeProfiles(fixture.home, fixture.repo);
+
+    const hook = {
+      matcher: "*",
+      hooks: [{ type: "command", command: `bash '${join(fixture.home, ".claude", "hooks", "herdr-agent-state.sh")}' session`, timeout: 10 }],
+    };
+    const leadSettings = join(seatDirectory(fixture.home, "lead"), "settings.json");
+    expect(JSON.parse(await readFile(leadSettings, "utf8"))).toEqual({
+      permissions: { defaultMode: "bypassPermissions" },
+      skipDangerousModePermissionPrompt: true,
+      hooks: { SessionStart: [hook] },
+      env: {
+        CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-fixture-token",
+        CLAUDE_CODE_DISABLE_WORKFLOWS: "1",
+        CLAUDE_CODE_DISABLE_CRON: "1",
+        CLAUDE_CODE_DISABLE_BUNDLED_SKILLS: "1",
+        CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS: "1",
+        BASH_DEFAULT_TIMEOUT_MS: "300000",
+      },
+      disableWorkflows: true,
+      workflowKeywordTriggerEnabled: false,
+      attribution: { commit: "", pr: "", sessionUrl: false },
+      enabledPlugins: {},
+      outputStyle: "Concise",
+    });
+    expect((await stat(leadSettings)).mode & 0o777).toBe(0o600);
+    expect((await stat(seatDirectory(fixture.home, "lead"))).mode & 0o777).toBe(0o700);
+    expect((await stat(seatRoot)).mode & 0o777).toBe(0o700);
+
+    // The peer and team-supervisor dirs carry the base alone.
+    for (const seat of ["peer", "team-supervisor"] as const) {
+      const text = await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8");
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      expect({ seat, text }).toEqual({ seat, text: expect.not.stringContaining("cleanupPeriodDays") });
+      expect({ seat, text }).toEqual({ seat, text: expect.not.stringContaining("language") });
+      expect(parsed.hooks).toEqual({ SessionStart: [hook] });
+      expect((parsed.env as Record<string, string>).CLAUDE_CODE_OAUTH_TOKEN).toBe("sk-ant-oat01-fixture-token");
+      expect((parsed.env as Record<string, string>).CLAUDE_CODE_DISABLE_FAST_MODE).toBe("1");
+      expect(parsed.autoMemoryEnabled).toBe(false);
+      expect((await stat(join(seatDirectory(fixture.home, seat), "settings.json"))).mode & 0o777).toBe(0o600);
+    }
+
+    // d847 on the shipped seats and, through d851, on every composed peer render.
+    const denyLine = async (name: string) => {
+      const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
+      return text.slice(0, text.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
+    };
+    const common = ["Agent", "Task", "Workflow", "SlashCommand", "WebSearch", "TodoWrite", "EnterPlanMode", "ExitPlanMode", "AskUserQuestion", "Bash(claude:*)", "Bash(npx claude:*)"];
+    for (const tool of [...common, "Bash(herdr:*)"]) {
+      for (const name of ["peer", "peer-opus", "peer-refuter", "peer-reviewer-security"]) {
+        expect({ name, tool, line: await denyLine(name) }).toEqual({ name, tool, line: expect.stringContaining(tool) });
+      }
+    }
+    expect(await denyLine("peer-reviewer-security")).toContain("Write");
+    for (const tool of common) expect(await denyLine("team-supervisor")).toContain(tool);
+    expect(await denyLine("team-supervisor")).not.toContain("Bash(herdr:*)");
+    expect(await denyLine("refuter")).not.toContain("Bash(herdr:*)");
+    expect(await denyLine("lead")).toBe("disallowedTools: Agent, LSP, Bash(claude:*)");
   });
 });

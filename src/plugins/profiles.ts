@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readdir, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 
@@ -36,6 +36,8 @@ export interface ProfileSync {
   removed: string[];
   rendered: string[];
   resolvedTargets: Array<{ real: string; target: string }>;
+  seatDirectories: string[];
+  seatToken: "missing" | "present";
 }
 
 export const seatProfileNames = ["team-supervisor", "lead", "peer"] as const;
@@ -350,7 +352,13 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
     }
     const composed = composedPeerName(name);
     if (composed !== name) push(name, profile, profile.frontmatter, profile.body);
-    push(composed, profile, profile.frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
+    // d851: a composed peer is a Peer seat, so it carries the Peer deny list.
+    const disallowed = [
+      ...(profile.frontmatter.disallowed_tools ?? []),
+      ...(peer.frontmatter.disallowed_tools ?? []).filter((tool) => !(profile.frontmatter.disallowed_tools ?? []).includes(tool)),
+    ];
+    const frontmatter = disallowed.length > 0 ? { ...profile.frontmatter, disallowed_tools: disallowed } : profile.frontmatter;
+    push(composed, profile, frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
   }
   for (const plan of seats.values()) plan.skills.sort((left, right) => left.name.localeCompare(right.name));
   return { seats: [...seats.values()], targets };
@@ -400,8 +408,124 @@ function hubPackVersion(home: string): string | null {
   return /<!-- slp:version=([^\s]+) -->/.exec(readFileSync(hubPack, "utf8"))?.[1] ?? "unknown";
 }
 
+const herdrHookScript = "herdr-agent-state.sh";
+
+// A6: the seat no longer reads the owner's user settings, so the Herdr
+// SessionStart hook (the pane's session report, what --fresh proves a reset
+// by) is carried into the seat settings: the owner's own group when present,
+// otherwise the literal line maestro expects.
+function herdrSessionHook(home: string): Record<string, unknown> {
+  const userSettings = join(home, ".claude", "settings.json");
+  if (existsSync(userSettings)) {
+    try {
+      const parsed = JSON.parse(readFileSync(userSettings, "utf8")) as {
+        hooks?: { SessionStart?: Array<{ hooks?: Array<{ command?: string }> }> };
+      };
+      const group = parsed.hooks?.SessionStart?.find((candidate) =>
+        candidate.hooks?.some((hook) => typeof hook.command === "string" && hook.command.includes(herdrHookScript))
+      );
+      if (group) return group as Record<string, unknown>;
+    } catch {}
+  }
+  return {
+    matcher: "*",
+    hooks: [{ type: "command", command: `bash '${join(home, ".claude", "hooks", herdrHookScript)}' session`, timeout: 10 }],
+  };
+}
+
+export function readSeatToken(home: string): string | null {
+  const path = seatTokenPath(home);
+  if (!existsSync(path)) return null;
+  const token = readFileSync(path, "utf8").trim();
+  return token === "" ? null : token;
+}
+
+// d849: the kit's seat-settings.base.json minus cleanupPeriodDays (projects is
+// shared, A4) and language; the token is omitted, never empty, when absent.
+function seatSettingsBase(home: string, token: string | null): Record<string, unknown> {
+  return {
+    permissions: { defaultMode: "bypassPermissions" },
+    skipDangerousModePermissionPrompt: true,
+    hooks: { SessionStart: [herdrSessionHook(home)] },
+    env: {
+      ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}),
+      CLAUDE_CODE_DISABLE_WORKFLOWS: "1",
+      CLAUDE_CODE_DISABLE_CRON: "1",
+      CLAUDE_CODE_DISABLE_FAST_MODE: "1",
+      CLAUDE_CODE_DISABLE_BUNDLED_SKILLS: "1",
+      CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS: "1",
+    },
+    autoMemoryEnabled: false,
+    disableWorkflows: true,
+    workflowKeywordTriggerEnabled: false,
+    attribution: { commit: "", pr: "", sessionUrl: false },
+    enabledPlugins: {},
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Overlay semantics: mappings merge key by key, null removes the key, any
+// other value replaces.
+export function mergeSettings(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    if (value === null) {
+      delete merged[key];
+    } else if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = mergeSettings(merged[key] as Record<string, unknown>, value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function writeIfChanged(path: string, content: string): Promise<void> {
+  const existing = existsSync(path) ? await readFile(path, "utf8") : null;
+  if (existing !== content) await writeFile(path, content);
+}
+
+async function ensureLink(link: string, target: string): Promise<void> {
+  try {
+    const entry = await lstat(link);
+    if (!entry.isSymbolicLink()) return;
+    if (await readlink(link) === target) return;
+    await rm(link, { force: true });
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+  }
+  await symlink(target, link);
+}
+
+async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, token: string | null): Promise<string> {
+  const directory = seatDirectory(home, plan.seat);
+  await mkdir(join(directory, "skills"), { recursive: true });
+  await chmod(seatConfigRoot(home), 0o700);
+  await chmod(directory, 0o700);
+  const settingsPath = join(directory, "settings.json");
+  await writeIfChanged(settingsPath, `${JSON.stringify(mergeSettings(seatSettingsBase(home, token), plan.overlay), null, 2)}\n`);
+  await chmod(settingsPath, 0o600);
+  const skillsDirectory = join(directory, "skills");
+  const wanted = new Set(plan.skills.map((link) => link.name));
+  for (const entry of await readdir(skillsDirectory)) {
+    if (wanted.has(entry)) continue;
+    const path = join(skillsDirectory, entry);
+    if ((await lstat(path)).isSymbolicLink()) await rm(path, { force: true });
+  }
+  for (const link of plan.skills) await ensureLink(join(skillsDirectory, link.name), link.target);
+  for (const shared of ["projects", "plugins"]) await ensureLink(join(directory, shared), join(home, ".claude", shared));
+  const claudeJson = join(directory, ".claude.json");
+  if (!existsSync(claudeJson)) {
+    await writeFile(claudeJson, `${JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {} }, null, 2)}\n`);
+  }
+  return directory;
+}
+
 export async function materializeProfiles(home: string, repo: string): Promise<ProfileSync> {
-  const targets = await planProfileRenders(home, repo);
+  const { seats, targets } = await planProfiles(home, repo);
   const keep = new Set(targets.map((target) => target.path));
   const rendered: string[] = [];
   for (const target of targets) {
@@ -416,11 +540,16 @@ export async function materializeProfiles(home: string, repo: string): Promise<P
     await rm(file, { force: true });
     removed.push(file);
   }
+  const token = readSeatToken(home);
+  const seatDirectories: string[] = [];
+  for (const seat of seats) seatDirectories.push(await materializeSeatDirectory(home, seat, token));
   return {
     hubPackVersion: hubPackVersion(home),
     removed,
     rendered,
     resolvedTargets: await resolvedTargets(home),
+    seatDirectories,
+    seatToken: token ? "present" : "missing",
   };
 }
 
@@ -444,6 +573,7 @@ export function formatProfileSync(sync: ProfileSync): string {
   )];
   const parts = [`profiles rendered: ${names.join(", ")}`];
   if (sync.removed.length > 0) parts.push(`profiles removed: ${sync.removed.join(", ")}`);
+  parts.push(`seat dirs: ${sync.seatDirectories.join(", ")}`);
   for (const { real, target } of sync.resolvedTargets) parts.push(`${target} resolves to ${real}`);
   // The seats were rendered from this Hub pack's shared contract; a stale
   // pack renders a stale mandate, and team start refuses it anyway (D7).

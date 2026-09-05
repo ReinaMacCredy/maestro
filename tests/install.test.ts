@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { renderedProfilePath, seatConfigRoot } from "../src/plugins/profiles.ts";
@@ -650,5 +650,52 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
       expect(afterFirst.get(file)).toBe(content);
       expect(afterUninstall.get(file)).toBe(content);
     }
+  });
+}, 30_000);
+
+// seat-config-dirs R4 (d848, d849): the peer dir's skills/ is the union across
+// every profile rendered into it, resolved in ~/maestro/skills then
+// ~/.claude/skills; a stale link goes; projects and plugins reach ~/.claude;
+// .claude.json marks onboarding done with no MCP servers.
+test("seat-dirs-links: install renders skills/ as the union across the dir's profiles, removes a stale link, links projects and plugins to ~/.claude and writes .claude.json with mcpServers {} (R4)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const ownerSkill = join(fixture.home, ".claude", "skills", "owner-skill");
+    await mkdir(ownerSkill, { recursive: true });
+    await writeFile(join(ownerSkill, "SKILL.md"), "---\nname: owner-skill\n---\nowner\n");
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "refuter.md"),
+      "---\nharness: claude\nmodel: default\nskills: [maestro-bundle, owner-skill]\n---\nRole: Refuter.\n",
+    );
+    const peerDir = join(seatConfigRoot(fixture.home), "peer");
+    await mkdir(join(peerDir, "skills"), { recursive: true });
+    await symlink(join(fixture.home, "nowhere"), join(peerDir, "skills", "stale-skill"));
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+
+    const links = (await readdir(join(peerDir, "skills"))).sort();
+    expect(links).toEqual(["maestro-bundle", "maestro-diagnose", "maestro-explore", "maestro-verify", "maestro-work", "owner-skill"]);
+    expect(await readlink(join(peerDir, "skills", "maestro-work"))).toBe(join(fixture.home, "maestro", "skills", "maestro-work"));
+    expect(await readlink(join(peerDir, "skills", "owner-skill"))).toBe(ownerSkill);
+    expect(existsSync(join(peerDir, "skills", "maestro-work", "SKILL.md"))).toBe(true);
+    const leadLinks = (await readdir(join(seatConfigRoot(fixture.home), "lead", "skills"))).sort();
+    expect(leadLinks).toEqual(["maestro-council", "maestro-design", "maestro-diagnose", "maestro-explore", "maestro-graph", "maestro-work"]);
+    expect(await readdir(join(seatConfigRoot(fixture.home), "team-supervisor", "skills"))).toEqual(["maestro-work"]);
+
+    for (const seat of ["lead", "peer", "team-supervisor"]) {
+      const directory = join(seatConfigRoot(fixture.home), seat);
+      expect(await readlink(join(directory, "projects"))).toBe(join(fixture.home, ".claude", "projects"));
+      expect(await readlink(join(directory, "plugins"))).toBe(join(fixture.home, ".claude", "plugins"));
+      expect(JSON.parse(await readFile(join(directory, ".claude.json"), "utf8"))).toEqual({
+        hasCompletedOnboarding: true,
+        mcpServers: {},
+      });
+    }
+    // Claude Code owns .claude.json once it exists: a second install leaves it alone.
+    await writeFile(join(peerDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, mcpServers: {}, projects: { x: 1 } }));
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(JSON.parse(await readFile(join(peerDir, ".claude.json"), "utf8"))).toEqual({ hasCompletedOnboarding: true, mcpServers: {}, projects: { x: 1 } });
   });
 }, 30_000);

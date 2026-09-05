@@ -1,7 +1,8 @@
 import { afterEach } from "bun:test";
 import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { materializeProfiles } from "../src/plugins/profiles.ts";
+import { materializeProfiles, seatTokenPath } from "../src/plugins/profiles.ts";
+import { materializeSkills } from "../src/plugins/skills.ts";
 import type { Fixture } from "./helpers.ts";
 
 // A socket fake of Herdr 0.8.2 (protocol 20): newline JSON over a unix
@@ -769,7 +770,12 @@ export async function installFakeHerdr(
   const tripwire = join(fixture.root, "fake-herdr-tripwire.jsonl");
   const socket = join(fixture.root, "herdr.sock");
   // A seat launches only through its rendered profile (A2), so the fake
-  // machine carries what maestro install would have rendered into this home.
+  // machine carries what maestro install would have rendered into this home:
+  // the Hub skills the shipped skills: lists name, a seat token (d846) and
+  // the seat dirs with their agent files.
+  await materializeSkills(fixture.home, "dev");
+  await mkdir(dirname(seatTokenPath(fixture.home)), { recursive: true });
+  await writeFile(seatTokenPath(fixture.home), "sk-ant-oat01-fake-herdr-fixture\n");
   await materializeProfiles(fixture.home, fixture.repo);
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "herdr"), tripwireSource(tripwire));
