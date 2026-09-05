@@ -277,7 +277,7 @@ test("136 bundle open scaffolds the NOTES handoff packet after Next Action", asy
   });
 });
 
-test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte-identical", async () => {
+test("137 SessionStart adds only the intake line and UserPromptSubmit carries session state alone", async () => {
   await withFixture(async (fixture) => {
     const session = {
       MAESTRO_SESSION_ID: "slp-brief",
@@ -296,12 +296,9 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit stays byte
       session,
     );
     expect(prompt.exitCode).toBe(0);
-    expect(prompt.stdout).toBe(
-      "held work: none\n" +
-        "enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof\n" +
-        "next: maestro ready\n" +
-        "recipes: maestro recipe list; maestro recipe show <name>\n",
-    );
+    // The policy list, the next verb and the recipe pointer are stated once on
+    // SessionStart; a prompt-time brief carries only what changes between turns.
+    expect(prompt.stdout).toBe("held work: none\n");
   });
 });
 

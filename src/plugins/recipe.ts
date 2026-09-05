@@ -123,7 +123,7 @@ export const recipePlugin: BuiltInPlugin = {
       ),
     );
     context.effect(() =>
-      brief.register(() => "recipes: maestro recipe list; maestro recipe show <name>"),
+      brief.register(() => "recipes: maestro recipe list; maestro recipe show <name>", { events: ["SessionStart"] }),
     );
   },
 };
