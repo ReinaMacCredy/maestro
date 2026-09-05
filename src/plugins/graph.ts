@@ -695,7 +695,8 @@ class GraphEngine {
         .run(JSON.stringify(files), row.run_id, row.node_id, row.instance_key);
     }
     this.setState(row, "done", { result });
-    this.fireLoops(run, rows, row);
+    const stop = this.fireLoops(run, rows, row);
+    if (stop) this.finish(run, this.rows(run.row.run_id), { stopped: stop });
     return { run: run.row.run_id, ref, state: "done", files };
   }
 }
