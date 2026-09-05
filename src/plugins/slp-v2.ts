@@ -2422,6 +2422,17 @@ export async function maybeHandleSlpWorkAdd(
     if (attachedRoom) context.store.database.exec("DETACH DATABASE slp_room");
   }
   context.sessions.record("work.add");
+  // Live row 17 (g18): an acknowledged Peer pane never learned about its next
+  // item and a fresh one sat idle after READY, so the assignee is woken here
+  // in both cases, the same d753 line as return and accept.
+  await pushNotice(
+    actor.team.project_path,
+    actor.role,
+    assignee.name,
+    `${id} OPEN`,
+    objective,
+    `maestro status ${id}`,
+  );
   const work = readSlpWork(context, actor, id);
   return {
     data: {

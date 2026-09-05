@@ -117,7 +117,8 @@ Team Supervisor: maestro work accept <item>
 ```
 
 - One pane per profile: `--to peer-<profile>` opens the Peer lazily on the
-  first item and queues later nodes of that profile on the same pane.
+  first item and sends later nodes of that profile to the same pane; each
+  `work add` wakes the pane with `[from lead][<id> OPEN]`, so no hand prompt.
 - A bound node stays in `nodes` with `work` and `workState` until its item
   is DONE; `next` then parses the item's returned body like any result
   (schema and all) and issues what depended on it. A body that fails the

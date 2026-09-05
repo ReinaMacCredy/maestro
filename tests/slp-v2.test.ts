@@ -2416,11 +2416,17 @@ test("SLP v2 Lead adds OPEN work to one lazily created and reusable Peer", async
     expect(secondData.role).toEqual(firstData.role);
     expect(secondData.work).toMatchObject({ assignedTo: firstData.role.name, state: "OPEN" });
     expect(secondData.work.id).not.toBe(firstData.work.id);
+    // One contract prompt for the pane, then one OPEN wake per item (live row
+    // 17 g18: a reused pane never learned about its second item before).
     const peerPrompts = (await fakeHerdrCommands(fake)).filter(
       (command) =>
         command[0] === "agent" && command[1] === "prompt" && command[2] === peerName,
     );
-    expect(peerPrompts).toHaveLength(1);
+    expect(peerPrompts).toHaveLength(3);
+    expect(peerPrompts.slice(1).map((command) => command[3])).toEqual([
+      `[from lead][${firstData.work.id} OPEN] Design independently; read: maestro status ${firstData.work.id}`,
+      `[from lead][${secondData.work.id} OPEN] Implement independently; read: maestro status ${secondData.work.id}`,
+    ]);
 
     const runtime = await readFakeHerdrState(fake);
     expect(runtime.workspaces).toHaveLength(1);
@@ -5208,6 +5214,100 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
   });
 }, 20_000);
 
+
+// Live row 17 (lab g18): a Peer pane that had already acknowledged never
+// learned about its second item and a fresh Peer sat idle after READY until
+// someone hand-prompted it; the Lead's herdr agent prompt was refused by the
+// harness. work add --to now pushes the wake line itself.
+test("SLP v2 work add --to pushes one [from lead][<id> OPEN] line to the assignee pane, fresh and reused alike, and a refused push leaves the item OPEN with a warning", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Wake on add", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const opens = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) => command[0] === "agent" && command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""),
+      );
+    const before = (await opens()).length;
+
+    const first = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "first task for alpha\nwith a second line", "--to", "alpha", "--json"],
+      leadEnvironment,
+    );
+    expect(first.exitCode).toBe(0);
+    const firstData = envelope<{ role: { name: string }; work: { id: string; state: string } }>(first.stdout);
+    expect(firstData.work.state).toBe("OPEN");
+    expect((await opens()).slice(before)).toEqual([
+      ["agent", "prompt", firstData.role.name, `[from lead][${firstData.work.id} OPEN] first task for alpha; read: maestro status ${firstData.work.id}`],
+    ]);
+
+    const second = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "second task for alpha", "--to", "alpha", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(second.stderr)).toBe("");
+    expect(second.exitCode).toBe(0);
+    const secondData = envelope<{ role: { name: string }; work: { id: string } }>(second.stdout);
+    expect(secondData.role.name).toBe(firstData.role.name);
+    expect((await opens()).slice(before + 1)).toEqual([
+      ["agent", "prompt", firstData.role.name, `[from lead][${secondData.work.id} OPEN] second task for alpha; read: maestro status ${secondData.work.id}`],
+    ]);
+
+    await setFakeHerdrBehavior(fake, { prompts: false });
+    const refused = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "third task for alpha", "--to", "alpha", "--json"],
+      leadEnvironment,
+    );
+    expect(refused.exitCode).toBe(0);
+    const refusedData = envelope<{ work: { id: string; state: string } }>(refused.stdout);
+    expect(refusedData.work.state).toBe("OPEN");
+    expect(refused.stderr).toContain(
+      `warning: could not notify ${firstData.role.name} about ${refusedData.work.id} OPEN`,
+    );
+    // The fake logs the attempt before refusing it: the push was tried.
+    expect((await opens()).slice(before + 2).map((command) => command[3])).toEqual([
+      `[from lead][${refusedData.work.id} OPEN] third task for alpha; read: maestro status ${refusedData.work.id}`,
+    ]);
+
+    const fromSupervisor = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "lead task", "--json"],
+      supervisorEnvironment,
+    );
+    expect(fromSupervisor.exitCode).toBe(0);
+    const leadItem = envelope<{ work: { id: string } }>(fromSupervisor.stdout);
+    expect(fromSupervisor.stderr).toContain(`warning: could not notify ${lead.name} about ${leadItem.work.id} OPEN`);
+  });
+}, 20_000);
 
 test("SLP v2 work note --blocked flags the note and pushes one line to the seat above (d761)", async () => {
   await withFixture(async (fixture) => {

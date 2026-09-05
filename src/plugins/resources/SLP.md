@@ -56,10 +56,12 @@ for that return revision. Notes add context but do not rewrite the contract.
 `maestro team start` and `maestro work add --to` return only after the
 new pane has acknowledged its contract, normally within a minute; they print
 their phases on stderr, so do not re-run either while it is still running.
-After `maestro work return`, `maestro work accept`, and `maestro work note
---rework` commit, Maestro pushes one line to the counterpart pane
-(`[from <role>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`);
-the store stays the truth and that line is only the wake-up. When you cannot
+After `maestro work add`, `maestro work return`, `maestro work accept`, and
+`maestro work note --rework` commit, Maestro pushes one line to the counterpart
+pane (`[from <role>][<work-id> <STATE>] <summary>; read: maestro status
+<work-id>`); an assignee is woken per item, whether its pane was just opened or
+already acknowledged; the store stays the truth and that line is only the
+wake-up. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
