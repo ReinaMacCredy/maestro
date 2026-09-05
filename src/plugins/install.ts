@@ -20,6 +20,7 @@ import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
+import { formatProfileSync, materializeProfiles } from "./profiles.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
@@ -742,6 +743,7 @@ export const installPlugin: BuiltInPlugin = {
         await chmod(observeShim, 0o755);
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
+        const profileSync = await materializeProfiles(home, repo);
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
         const roomCodexHookTrustRecorded = await codexHookTrustRecorded(room, home);
@@ -765,6 +767,7 @@ export const installPlugin: BuiltInPlugin = {
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
+            `\n${formatProfileSync(profileSync)}` +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +
