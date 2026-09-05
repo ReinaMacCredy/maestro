@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, writeUntrustedPlugin, type Fixture } from "./helpers.ts";
 
 setDefaultTimeout(20_000);
 
@@ -320,5 +320,34 @@ test("643 memory retract and ingest re-render the injected index, or name the re
     expect(guarded.exitCode).toBe(0);
     expect(guarded.stdout).toContain("index not re-rendered: edited by hand; run: maestro memory render --force");
     expect(await readFile(index, "utf8")).toContain("- hand edit");
+  });
+});
+
+test("644 a forwarded memory failure keeps its code and details behind stderr noise, and a Hub room that resolves elsewhere fails fast (UX F code findings)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    expect((await runCliAt(fixture, room, ["memory", "list"])).exitCode).toBe(0);
+    // An untrusted plugin makes every process print a warning line on stderr
+    // before any JSON envelope; the child's envelope must still be found.
+    await writeUntrustedPlugin(fixture, "global", "noise", "export default { name: 'noise', apply() {} };");
+    const missing = await runCli(fixture, ["memory", "retract", "nope", "--reason", "x"], session);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toContain("untrusted plugin");
+    const envelope = JSON.parse(missing.stderr.trim().split("\n").at(-1) ?? "{}");
+    expect(envelope.error).toMatchObject({ code: "NOT_FOUND", key: "nope" });
+    expect(envelope.error.room).toBe(room);
+
+    const reentered = await runCli(fixture, ["memory", "ingest"], { ...session, MAESTRO_MEMORY_FORWARDED: "1" });
+    expect(reentered.exitCode).toBe(1);
+    expect(reentered.stderr).toContain("HUB_UNAVAILABLE");
+    expect(reentered.stderr).toContain("forwarded once already");
+
+    // A git-managed home makes ~/maestro resolve its store to $HOME/.maestro:
+    // the child would forward again, unbounded, unless the parent refuses.
+    await initializeGitRepository(fixture.home);
+    const mismatch = await runCli(fixture, ["memory", "ingest"], session);
+    expect(mismatch.exitCode).toBe(1);
+    expect(mismatch.stderr).toContain("HUB_UNAVAILABLE");
+    expect(mismatch.stderr).toContain("resolves its store to");
   });
 });

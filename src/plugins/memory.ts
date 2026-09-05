@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { CliError, stringOptions, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import { tableExists } from "../kernel/store.ts";
+import { resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory, resolveHubRoom, samePath } from "./home.ts";
 import type { BriefService } from "./coordination.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -129,8 +129,28 @@ function writesHubDirectly(context: PluginContext): boolean {
   return samePath(context.store.path, resolveHubRoom().storePath);
 }
 
+// The child must land on the Hub store or it would forward again without end
+// (a git-managed $HOME makes ~/maestro resolve its store to $HOME/.maestro).
+// The parent checks the resolution first; the env mark refuses a second hop.
+const forwardedMark = "MAESTRO_MEMORY_FORWARDED";
+
 async function forwardToHub<T>(invocation: CliInvocation, verb: string): Promise<T> {
   const hub = hubStore();
+  if (process.env[forwardedMark] === "1") {
+    throw new CliError(
+      "HUB_UNAVAILABLE",
+      `maestro memory ${verb} was forwarded once already and ${process.cwd()} still is not the Hub store ${hub.storePath}`,
+      { room: hub.room },
+    );
+  }
+  const resolved = resolveStoreLocation(hub.room).path;
+  if (!samePath(resolved, hub.storePath)) {
+    throw new CliError(
+      "HUB_UNAVAILABLE",
+      `the Hub room ${hub.room} resolves its store to ${resolved}, not ${hub.storePath}; is ${hub.room} inside another git repository?`,
+      { room: hub.room, resolved },
+    );
+  }
   const args = ["memory", verb, ...invocation.positionals];
   for (const [key, value] of Object.entries(invocation.options)) {
     for (const item of Array.isArray(value) ? value : [value]) {
@@ -142,7 +162,7 @@ async function forwardToHub<T>(invocation: CliInvocation, verb: string): Promise
   const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
   const child = Bun.spawn([process.execPath, cli, ...args, "--json"], {
     cwd: hub.room,
-    env: process.env,
+    env: { ...process.env, [forwardedMark]: "1" },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -152,16 +172,20 @@ async function forwardToHub<T>(invocation: CliInvocation, verb: string): Promise
     child.exited,
   ]);
   if (exitCode !== 0) {
-    let failure: { code?: string; message?: string; details?: Record<string, unknown> } = {};
+    // Plugin-load warnings precede the envelope on stderr; the envelope is the
+    // last JSON line, and failureEnvelope spreads the details flat into error.
+    const envelopeLine = stderr.trim().split("\n").reverse().find((line) => line.startsWith("{"));
+    let failure: { code?: string; message?: string; [detail: string]: unknown } = {};
     try {
-      failure = (JSON.parse(stderr) as { error?: typeof failure }).error ?? {};
+      failure = (JSON.parse(envelopeLine ?? "") as { error?: typeof failure }).error ?? {};
     } catch {
-      // stderr was not an envelope; report the exit code
+      // stderr carried no envelope; report the exit code
     }
+    const { code, message, ...details } = failure;
     throw new CliError(
-      failure.code ?? "HUB_UNAVAILABLE",
-      failure.message ?? `maestro memory ${verb} in ${hub.room} exited ${exitCode}`,
-      { room: hub.room, ...(failure.details ?? {}) },
+      code ?? "HUB_UNAVAILABLE",
+      message ?? `maestro memory ${verb} in ${hub.room} exited ${exitCode}`,
+      { room: hub.room, ...details },
     );
   }
   return (JSON.parse(stdout) as { data: T }).data;
