@@ -218,7 +218,11 @@ take the seatworks set: every seat disallows `Agent`, `Task`, `Workflow`,
 `AskUserQuestion`, `Bash(claude:*)` and `Bash(npx claude:*)`; the Lead adds
 `LSP`; the Peer adds `Bash(herdr:*)`, so a Peer reaches the Lead and other
 Peers only through recorded work notes and returns. Every composed
-`peer-<name>` render carries the Peer list as well (d851).
+`peer-<name>` render carries the Peer list as well (d851). A `Bash(...)`
+pattern renders into the seat `settings.json` `permissions.deny` (unioned
+across the profiles in that dir and with any `settings:` overlay deny), and
+only bare tool names stay on the agent file's `disallowedTools` line, since
+Claude Code drops the whole Bash tool when a pattern sits there (d854).
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it

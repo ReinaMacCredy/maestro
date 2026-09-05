@@ -295,6 +295,10 @@ export interface SeatSkillLink {
 
 // d848/d849: what one seat dir carries besides its agent files.
 export interface SeatDirectoryPlan {
+  // d854: the Bash(...) pattern denies, unioned across the profiles rendered
+  // into this dir; Claude Code drops the whole Bash tool when a pattern sits
+  // on the agent disallowedTools line, but honours it in permissions.deny.
+  deny: string[];
   overlay: Record<string, unknown>;
   seat: SeatProfileName;
   skills: SeatSkillLink[];
@@ -326,18 +330,25 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
   if (!peer) throw new CliError("PROFILE_NOT_FOUND", "the peer profile is missing from every profile directory");
   const targets: RenderTarget[] = [];
   const seats = new Map<SeatProfileName, SeatDirectoryPlan>(
-    seatProfileNames.map((seat) => [seat, { overlay: {}, seat, skills: [] }]),
+    seatProfileNames.map((seat) => [seat, { deny: [], overlay: {}, seat, skills: [] }]),
   );
   const push = (renderedName: string, profile: Profile, frontmatter: ProfileFrontmatter, mandate: string) => {
+    const seat = seatForRenderedName(renderedName);
+    const plan = seat ? (seats.get(seat) as SeatDirectoryPlan) : null;
+    if (plan && frontmatter.disallowed_tools) {
+      const bare = frontmatter.disallowed_tools.filter((tool) => !tool.includes("("));
+      for (const tool of frontmatter.disallowed_tools) {
+        if (tool.includes("(") && !plan.deny.includes(tool)) plan.deny.push(tool);
+      }
+      frontmatter = { ...frontmatter, disallowed_tools: bare.length > 0 ? bare : undefined };
+    }
     const rendered = renderProfile(renderedName, frontmatter, mandate);
     targets.push(
       { content: rendered.claude, path: claudeRenderPath(home, renderedName) },
       { content: rendered.codexSession, path: join(home, ".codex", `maestro-${renderedName}.config.toml`) },
       { content: rendered.codexAgent, path: join(home, ".codex", "agents", `maestro-${renderedName}.toml`) },
     );
-    const seat = seatForRenderedName(renderedName);
-    if (!seat) return;
-    const plan = seats.get(seat) as SeatDirectoryPlan;
+    if (!plan) return;
     for (const name of profile.frontmatter.skills ?? []) {
       if (!plan.skills.some((link) => link.name === name)) plan.skills.push(resolveSkill(home, profile, name));
     }
@@ -510,7 +521,14 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
   await chmod(seatConfigRoot(home), 0o700);
   await chmod(directory, 0o700);
   const settingsPath = join(directory, "settings.json");
-  await writeIfChanged(settingsPath, `${JSON.stringify(mergeSettings(seatSettingsBase(home, token), plan.overlay), null, 2)}\n`);
+  const settings = mergeSettings(seatSettingsBase(home, token), plan.overlay);
+  // d854: an overlay permissions.deny is unioned with the split, never replaced.
+  if (plan.deny.length > 0) {
+    const permissions = isPlainObject(settings.permissions) ? settings.permissions : {};
+    const overlayDeny = Array.isArray(permissions.deny) ? (permissions.deny as string[]) : [];
+    settings.permissions = { ...permissions, deny: [...plan.deny, ...overlayDeny.filter((tool) => !plan.deny.includes(tool))] };
+  }
+  await writeIfChanged(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
   await chmod(settingsPath, 0o600);
   const skillsDirectory = join(directory, "skills");
   const wanted = new Set(plan.skills.map((link) => link.name));

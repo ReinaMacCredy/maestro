@@ -265,7 +265,8 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
     };
     const leadSettings = join(seatDirectory(fixture.home, "lead"), "settings.json");
     expect(JSON.parse(await readFile(leadSettings, "utf8"))).toEqual({
-      permissions: { defaultMode: "bypassPermissions" },
+      // d854: the Bash(...) pattern moved off the agent line into the seat deny (R11).
+      permissions: { defaultMode: "bypassPermissions", deny: ["Bash(claude:*)"] },
       skipDangerousModePermissionPrompt: true,
       hooks: { SessionStart: [hook] },
       env: {
@@ -306,17 +307,22 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
       const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
       return text.slice(0, text.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
     };
-    const common = ["Agent", "Task", "Workflow", "SlashCommand", "WebSearch", "TodoWrite", "EnterPlanMode", "ExitPlanMode", "AskUserQuestion", "Bash(claude:*)", "Bash(npx claude:*)"];
-    for (const tool of [...common, "Bash(herdr:*)"]) {
+    // d854: the Bash(...) patterns render into the seat settings deny (R11), so the
+    // agent line keeps the bare names alone.
+    const common = ["Agent", "Task", "Workflow", "SlashCommand", "WebSearch", "TodoWrite", "EnterPlanMode", "ExitPlanMode", "AskUserQuestion"];
+    for (const tool of common) {
       for (const name of ["peer", "peer-opus", "peer-refuter", "peer-reviewer-security"]) {
         expect({ name, tool, line: await denyLine(name) }).toEqual({ name, tool, line: expect.stringContaining(tool) });
       }
     }
     expect(await denyLine("peer-reviewer-security")).toContain("Write");
     for (const tool of common) expect(await denyLine("team-supervisor")).toContain(tool);
-    expect(await denyLine("team-supervisor")).not.toContain("Bash(herdr:*)");
+    const peerDeny = (JSON.parse(await readFile(join(seatDirectory(fixture.home, "peer"), "settings.json"), "utf8")) as { permissions: { deny: string[] } }).permissions.deny;
+    for (const tool of ["Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)"]) expect(peerDeny).toContain(tool);
+    const supervisorDeny = (JSON.parse(await readFile(join(seatDirectory(fixture.home, "team-supervisor"), "settings.json"), "utf8")) as { permissions: { deny: string[] } }).permissions.deny;
+    expect(supervisorDeny).toEqual(["Bash(claude:*)", "Bash(npx claude:*)"]);
     expect(await denyLine("refuter")).not.toContain("Bash(herdr:*)");
-    expect(await denyLine("lead")).toBe("disallowedTools: Agent, LSP, Bash(claude:*)");
+    expect(await denyLine("lead")).toBe("disallowedTools: Agent, LSP");
   });
 });
 
@@ -337,5 +343,37 @@ test("seat-dirs-claudemd-excludes: every rendered seat settings.json carries cla
       });
       expect({ seat, text }).toEqual({ seat, text: expect.not.stringContaining("~") });
     }
+  });
+});
+
+// seat-config-dirs R11 (d854): Claude Code 2.1.261 treats a Bash(...) pattern in
+// agent-frontmatter disallowedTools as removing the whole Bash tool (live g24:
+// the Lead had no Bash), while settings permissions.deny honours the pattern
+// under bypassPermissions; so a pattern renders into the seat deny and a bare
+// name stays on the agent line.
+test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries no ( entry and keeps Agent and LSP; the lead settings permissions.deny is exactly the two Bash patterns; the peer dir deny carries Bash(herdr:*); an overlay permissions.deny is unioned with the split (R11, d854)", async () => {
+  await withFixture(async (fixture) => {
+    await materializeSkills(fixture.home, "dev");
+    await writeProfile(
+      join(fixture.home, "maestro", "profiles"),
+      "team-supervisor",
+      "---\nharness: claude\nmodel: opus\nskills: [maestro-work]\ndisallowed_tools: [Agent, \"Bash(claude:*)\"]\nsettings:\n  permissions:\n    deny: [\"WebFetch\"]\n---\nRole: fixture supervisor.\n",
+    );
+    await materializeProfiles(fixture.home, fixture.repo);
+
+    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+      const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
+      return parsed.permissions.deny;
+    };
+    const leadText = await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8");
+    const leadLine = leadText.slice(0, leadText.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
+    expect(leadLine).toEqual(expect.not.stringContaining("("));
+    expect(leadLine).toEqual(expect.stringContaining("Agent"));
+    expect(leadLine).toEqual(expect.stringContaining("LSP"));
+    expect(await denyOf("lead")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)"]);
+    expect(await denyOf("peer")).toContain("Bash(herdr:*)");
+    expect(await denyOf("team-supervisor")).toEqual(["Bash(claude:*)", "WebFetch"]);
+    const supervisorText = await readFile(renderedProfilePath(fixture.home, "claude", "team-supervisor"), "utf8");
+    expect(supervisorText.slice(0, supervisorText.indexOf("\n---\n", 4)).split("\n")).toContain("disallowedTools: Agent");
   });
 });

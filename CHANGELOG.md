@@ -71,6 +71,13 @@ token handed to `maestro install --seat-token`.
   project as trusted (`projects[<project>].hasTrustDialogAccepted`) in that
   seat's `.claude.json` when it is not already there, keeping every other key
   and seeding nothing else; a Codex seat is unchanged.
+- A Claude seat keeps its Bash tool (d854): Claude Code treats a `Bash(...)`
+  pattern in agent-frontmatter `disallowedTools` as removing the whole tool,
+  so the live Lead had no Bash at all. `maestro install` now renders every
+  `Bash(...)` entry of a seat's `disallowed_tools` into that seat's
+  `settings.json` `permissions.deny` (the union across the profiles rendered
+  into the dir, unioned with any `settings:` overlay deny) and keeps only
+  bare tool names on the agent line; the Codex render is unchanged.
 
 ## [0.120.0] - 2026-09-05
 
