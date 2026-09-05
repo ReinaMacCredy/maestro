@@ -2230,6 +2230,7 @@ export async function maybeHandleSlpWorkAdd(
   const objective = requiredPosition(invocation, 0, "work objective");
   const requestedTarget = stringOption(invocation, "to");
   const profileOption = stringOption(invocation, "profile");
+  const fresh = invocation.options.fresh === true;
   const roles = context.store.database
     .query<{
       brief_digest: string;
@@ -2252,6 +2253,7 @@ export async function maybeHandleSlpWorkAdd(
   let startedPeerPane: string | null = null;
   let plan: SlpTeamPlan | null = null;
   let pinnedProfile: { digest: string; name: string } | null = null;
+  let resetFailure: string | null = null;
   const runtime = new HerdrSlpRuntime();
   if (actor.role === "team-supervisor") {
     if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
@@ -2261,6 +2263,7 @@ export async function maybeHandleSlpWorkAdd(
     if (profileOption !== undefined) {
       throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
     }
+    if (fresh) throw new CliError("INVALID_OPTION", "--fresh applies to Lead work add --to <peer>");
   } else {
     if (!requestedTarget) {
       throw new CliError("MISSING_ARGUMENT", "Lead work add requires --to <peer>");
@@ -2307,6 +2310,25 @@ export async function maybeHandleSlpWorkAdd(
     if (configuration.profileDigests[peerProfileName] === undefined) {
       pinnedProfile = { digest: profileDigest(peerProfile), name: peerProfileName };
     }
+    // Hub d101: a reset mid-item would drop the Peer's working context, so
+    // --fresh is refused before anything is written while it holds ACTIVE work.
+    if (fresh) {
+      const held = context.store.database
+        .query<{ id: string }, [string, number, string, string]>(
+          `SELECT id FROM slp_work
+           WHERE team_id = ? AND generation = ? AND state = 'ACTIVE'
+             AND (owner = ? OR assigned_to = ?)
+           ORDER BY id LIMIT 1`,
+        )
+        .get(actor.team.team_id, actor.team.generation, peerName, peerName);
+      if (held) {
+        throw new CliError(
+          "PEER_ACTIVE",
+          `${peerName} holds ${held.id} ACTIVE; --fresh resets a Peer pane only between items, wait for its return or add without --fresh`,
+          { peer: peerName, work: held.id },
+        );
+      }
+    }
     plan = await planForTeam(actor.team);
     const peerPlan: SlpRolePlan = {
       autocompact: peerProfile.frontmatter.autocompact ?? null,
@@ -2336,16 +2358,38 @@ export async function maybeHandleSlpWorkAdd(
     );
     createdPeerTab = ensured.createdTabId;
     startedPeerPane = ensured.startedPaneId;
+    let identity = ensured.role;
+    // Hub d101: an acknowledged pane is reset and re-challenged before the
+    // store write (d757 order: proven, then written); a failed reset keeps the
+    // stored identity, the item is still added, and no wake line goes out.
+    if (fresh && ensured.reused) {
+      const contract = roleContracts(
+        actor.team.team_id,
+        actor.team.generation,
+        digest,
+        { peer: identity.instanceId },
+      ).get("peer") as SlpRoleContract;
+      try {
+        await runtime.resetPeer(plan, peerPlan, identity.paneId, contract);
+        identity = {
+          ...identity,
+          briefDigest: contract.briefDigest,
+          readyChallenge: contract.readyChallenge,
+        };
+      } catch (error) {
+        resetFailure = error instanceof Error ? error.message : String(error);
+      }
+    }
     assignee = {
-      name: ensured.role.name,
-      pane_id: ensured.role.paneId,
-      profile: ensured.role.profile,
-      role: ensured.role.role,
-      workspace_id: ensured.role.workspaceId,
-      instance_id: ensured.role.instanceId,
-      pack_digest: ensured.role.packDigest,
-      brief_digest: ensured.role.briefDigest,
-      ready_challenge: ensured.role.readyChallenge,
+      name: identity.name,
+      pane_id: identity.paneId,
+      profile: identity.profile,
+      role: identity.role,
+      workspace_id: identity.workspaceId,
+      instance_id: identity.instanceId,
+      pack_digest: identity.packDigest,
+      brief_digest: identity.briefDigest,
+      ready_challenge: identity.readyChallenge,
     };
   }
   if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
@@ -2438,17 +2482,23 @@ export async function maybeHandleSlpWorkAdd(
     if (attachedRoom) context.store.database.exec("DETACH DATABASE slp_room");
   }
   context.sessions.record("work.add");
-  // Live row 17 (g18): an acknowledged Peer pane never learned about its next
-  // item and a fresh one sat idle after READY, so the assignee is woken here
-  // in both cases, the same d753 line as return and accept.
-  await pushNotice(
-    actor.team.project_path,
-    actor.role,
-    assignee.name,
-    `${id} OPEN`,
-    objective,
-    `maestro status ${id}`,
-  );
+  if (resetFailure !== null) {
+    process.stderr.write(
+      `warning: could not reset ${assignee.name} before ${id} OPEN: ${resetFailure}; no wake line was pushed; the store remains the truth\n`,
+    );
+  } else {
+    // Live row 17 (g18): an acknowledged Peer pane never learned about its next
+    // item and a fresh one sat idle after READY, so the assignee is woken here
+    // in both cases, the same d753 line as return and accept.
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      assignee.name,
+      `${id} OPEN`,
+      objective,
+      `maestro status ${id}`,
+    );
+  }
   const work = readSlpWork(context, actor, id);
   return {
     data: {

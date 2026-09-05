@@ -45,7 +45,7 @@ async function waitForStopHelperExit(fake: FakeHerdrFixture, exits: number): Pro
 }
 
 const runtimePhaseLine =
-  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|running in \S+|already (?:acknowledged|running) in \S+; left alone)$/;
+  /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|running in \S+|resetting (?:claude|codex) context in \S+|already (?:acknowledged|running) in \S+; left alone)$/;
 
 // Runtime phase lines (d757) are progress, not failures.
 function phaseFree(stderr: string): string {
@@ -5822,3 +5822,232 @@ test("observer-gone: two seats in the plan, no sentinel tab or status field, obs
     expect((await runCliAt(fixture, fixture.repo, ["help", "work"], fake.env)).stdout).not.toContain("--stall");
   });
 }, 30_000);
+
+// Hub d101: --fresh reuses an acknowledged Peer pane with a fresh harness
+// context. The reset is the harness's new-conversation command, the d757
+// readiness wait, then the same READY challenge a fresh pane passes; only
+// then does the d840 OPEN line go out. Refused while the Peer holds ACTIVE
+// work; a failed reset leaves the item OPEN with a warning and no push.
+test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane before the OPEN push, is a no-op on a fresh pane, is refused while the Peer holds ACTIVE work, and a timed-out idle wait leaves the item OPEN unpushed", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Fresh context on reuse", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const traffic = async (from: number) =>
+      (await fakeHerdrCommands(fake)).slice(from).filter(
+        (command) =>
+          (command[0] === "pane" && command[1] === "run") ||
+          (command[0] === "agent" && ["list", "prompt", "read"].includes(command[1] ?? "")),
+      );
+    const opens = (commands: string[][]) =>
+      commands.filter((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""));
+    const storedChallenge = (name: string) =>
+      new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true })
+        .query<{ ready_challenge: string }, [string]>(
+          "SELECT ready_challenge FROM slp_local_roles WHERE name = ?",
+        )
+        .get(name)?.ready_challenge ?? "";
+    const workRows = () =>
+      new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true })
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work")
+        .get()?.count ?? -1;
+
+    // 1a. --fresh on a pane that is being opened is a no-op.
+    let before = (await fakeHerdrCommands(fake)).length;
+    const first = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "first task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(first.stderr)).toBe("");
+    expect(first.exitCode).toBe(0);
+    const firstData = envelope<{ role: { name: string; paneId: string }; work: { id: string; state: string } }>(first.stdout);
+    const peer = firstData.role.name;
+    const paneId = firstData.role.paneId;
+    let seen = await traffic(before);
+    expect(seen.filter((command) => command[0] === "pane")).toEqual([]);
+    expect(opens(seen).map((command) => command[3])).toEqual([
+      `[from lead][${firstData.work.id} OPEN] first task; read: maestro status ${firstData.work.id}`,
+    ]);
+    const openedChallenge = storedChallenge(peer);
+    expect(openedChallenge).not.toBe("");
+
+    // 1b. Without --fresh the reused pane gets only the OPEN line (d840).
+    before = (await fakeHerdrCommands(fake)).length;
+    const second = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "second task", "--to", "alpha", "--profile", "peer-opus", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(second.stderr)).toBe("");
+    expect(second.exitCode).toBe(0);
+    const secondData = envelope<{ work: { id: string } }>(second.stdout);
+    // ensurePeer's own agent.list aside, the reused pane sees only the wake.
+    seen = (await traffic(before)).filter((command) => command[1] !== "list");
+    expect(seen).toEqual([
+      ["agent", "prompt", peer, `[from lead][${secondData.work.id} OPEN] second task; read: maestro status ${secondData.work.id}`],
+    ]);
+    expect(storedChallenge(peer)).toBe(openedChallenge);
+
+    // 1c. --fresh on the acknowledged pane: /clear, wait idle, READY, one OPEN.
+    before = (await fakeHerdrCommands(fake)).length;
+    const third = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "third task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(third.stderr)).toBe("");
+    expect(third.exitCode).toBe(0);
+    const thirdData = envelope<{ work: { id: string; state: string } }>(third.stdout);
+    expect(thirdData.work.state).toBe("OPEN");
+    seen = await traffic(before);
+    const reset = seen.findIndex((command) => command[0] === "pane");
+    expect(seen[reset]).toEqual(["pane", "run", paneId, "/clear"]);
+    const idleWait = seen.findIndex((command, index) => index > reset && command[1] === "list");
+    const challenge = seen.findIndex(
+      (command) => command[1] === "prompt" && /^slp team \S+ generation \d+ instance \S+; reply [0-9a-f]{32}$/.test(command[3] ?? ""),
+    );
+    const readyRead = seen.findIndex((command) => command[1] === "read" && command[2] === peer);
+    const open = seen.findIndex((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""));
+    expect([idleWait, challenge, readyRead, open].every((index) => index > 0)).toBe(true);
+    expect(idleWait).toBeLessThan(challenge);
+    expect(challenge).toBeLessThan(readyRead);
+    expect(readyRead).toBeLessThan(open);
+    expect(opens(seen).map((command) => command[3])).toEqual([
+      `[from lead][${thirdData.work.id} OPEN] third task; read: maestro status ${thirdData.work.id}`,
+    ]);
+    // The reset conversation answered a new challenge, and the store holds it.
+    expect(storedChallenge(peer)).not.toBe(openedChallenge);
+    expect(seen[challenge]?.[3]).toContain(`reply ${storedChallenge(peer)}`);
+
+    // 2. Refused while the Peer holds ACTIVE work; nothing is inserted.
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: paneId };
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", thirdData.work.id, "--json"], peerEnvironment)).exitCode,
+    ).toBe(0);
+    const rows = workRows();
+    before = (await fakeHerdrCommands(fake)).length;
+    const refused = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "fourth task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      leadEnvironment,
+    );
+    expect(refused.exitCode).toBe(1);
+    const failure = failureEnvelope(refused.stderr).error;
+    expect(failure.code).toBe("PEER_ACTIVE");
+    expect(failure.message).toContain(thirdData.work.id);
+    expect(workRows()).toBe(rows);
+    expect(await traffic(before)).toEqual([]);
+
+    // 3. A reset whose idle wait times out: item OPEN, warning, no prompt.
+    expect(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "return", thirdData.work.id, "result: done; proof: none", "--json"],
+          peerEnvironment,
+        )
+      ).exitCode,
+    ).toBe(0);
+    await editFakeHerdrState(fake, (state) => {
+      const agent = (state.agents as Array<{ agent_status: string; name: string }>).find((candidate) => candidate.name === peer);
+      if (agent) agent.agent_status = "working";
+    });
+    const challengeBefore = storedChallenge(peer);
+    before = (await fakeHerdrCommands(fake)).length;
+    const stuck = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "fifth task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      leadEnvironment,
+    );
+    expect(stuck.exitCode).toBe(0);
+    const stuckData = envelope<{ work: { id: string; state: string } }>(stuck.stdout);
+    expect(stuckData.work.state).toBe("OPEN");
+    expect(stuck.stderr).toContain(`warning: could not reset ${peer} before ${stuckData.work.id} OPEN`);
+    seen = await traffic(before);
+    expect(seen.filter((command) => command[0] === "pane")).toEqual([["pane", "run", paneId, "/clear"]]);
+    expect(seen.filter((command) => command[1] === "prompt")).toEqual([]);
+    expect(storedChallenge(peer)).toBe(challengeBefore);
+  });
+}, 30_000);
+
+test("SLP v2 work add --to --fresh sends /new to a reused Codex Peer pane (Hub d101)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Fresh Codex context", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const first = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "codex first", "--to", "beta", "--json"],
+      leadEnvironment,
+    );
+    expect(first.exitCode).toBe(0);
+    const firstData = envelope<{ role: { name: string; paneId: string } }>(first.stdout);
+    const codexStart = (await fakeHerdrCommands(fake)).find(
+      (command) => command[0] === "agent" && command[1] === "start" && command[2] === firstData.role.name,
+    );
+    expect(codexStart).toContain("codex");
+    const before = (await fakeHerdrCommands(fake)).length;
+    const second = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "codex second", "--to", "beta", "--fresh", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(second.stderr)).toBe("");
+    expect(second.exitCode).toBe(0);
+    const secondData = envelope<{ work: { id: string } }>(second.stdout);
+    const seen = (await fakeHerdrCommands(fake)).slice(before);
+    expect(seen.filter((command) => command[0] === "pane" && command[1] === "run")).toEqual([
+      ["pane", "run", firstData.role.paneId, "/new"],
+    ]);
+    expect(
+      seen.filter((command) => command[1] === "prompt" && / OPEN\] /.test(command[3] ?? "")).map((command) => command[3]),
+    ).toEqual([`[from lead][${secondData.work.id} OPEN] codex second; read: maestro status ${secondData.work.id}`]);
+  });
+}, 20_000);

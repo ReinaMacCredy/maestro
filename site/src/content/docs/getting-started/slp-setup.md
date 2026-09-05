@@ -123,7 +123,10 @@ renders shared contract + mandate, any other profile also renders as
 `maestro-peer-<name>` (shared contract + Peer mandate + its body) for
 `work add --to peer-<name>`. `team start --peer-profile <name>` picks the Peer
 profile for one generation; `work add --to <peer> --profile <name>` picks it
-for one Peer. A version-2 pack (`slp:model` markers) fails `team start` with
+for one Peer. `work add --to <peer> --fresh` reuses an acknowledged Peer pane
+with a fresh harness context (Claude Code `/clear`, Codex `/new`, then the
+READY challenge again) before the OPEN wake, and is refused while that Peer
+holds ACTIVE work. A version-2 pack (`slp:model` markers) fails `team start` with
 `INVALID_SLP_PACK` naming the marker change; a marker naming a profile that
 does not exist fails with `PROFILE_NOT_FOUND`; a profile whose render is
 missing fails with `PROFILE_NOT_INSTALLED` naming `maestro install`. The

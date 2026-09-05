@@ -89,9 +89,20 @@ export interface SlpRuntimeStart {
 
 export interface SlpRuntimePeer {
   createdTabId: string | null;
+  // true when the pane was already acknowledged and left alone (Hub d101:
+  // the only pane --fresh resets).
+  reused: boolean;
   role: SlpRuntimeRole;
   startedPaneId: string | null;
 }
+
+// Hub d101: the harness's new-conversation slash command. Claude Code /clear
+// is what the owner sends by hand; Codex /new is read off the installed codex
+// 0.153.3 binary ("start a new chat during a conversation"), not yet run live.
+export const newConversationCommands: Record<SeatLaunch["harness"], string> = {
+  claude: "/clear",
+  codex: "/new",
+};
 
 export interface SlpRuntimeInspection {
   missingPanes: string[];
@@ -708,6 +719,7 @@ export class HerdrSlpRuntime {
       this.note(`${peer.name}: already acknowledged in ${paneId}; left alone`);
       return {
         createdTabId: null,
+        reused: true,
         role: {
           briefDigest: acknowledged.briefDigest,
           instanceId: acknowledged.instanceId,
@@ -774,6 +786,7 @@ export class HerdrSlpRuntime {
       }
       return {
         createdTabId,
+        reused: false,
         role: {
           briefDigest: contract.briefDigest,
           instanceId: contract.instanceId,
@@ -792,6 +805,36 @@ export class HerdrSlpRuntime {
       else if (createdTabId) await this.closeCreatedTab(plan, createdTabId);
       throw error;
     }
+  }
+
+  // Hub d101: reset an acknowledged Peer pane to a fresh harness context and
+  // prove it the way a fresh pane is proven: new-conversation command, the
+  // d757 readiness wait, then the READY challenge.
+  async resetPeer(
+    plan: SlpTeamPlan,
+    peer: SlpRolePlan,
+    paneId: string,
+    contract: SlpRoleContract,
+  ): Promise<void> {
+    const startedAt = Date.now();
+    const command = newConversationCommands[peer.kind];
+    this.note(`${peer.name}: resetting ${peer.kind} context in ${paneId}`);
+    await this.client.paneSendInput(paneId, command);
+    await this.awaitActiveAgent(
+      plan,
+      peer,
+      paneId,
+      ["pane", "send-input", paneId, command],
+      Date.now() + this.agentReadyTimeoutMs,
+      undefined,
+      true,
+    );
+    this.note(
+      `${peer.name}: waiting for acknowledgement (up to ${Math.round(acknowledgementWindowMs / 1000)}s)`,
+    );
+    await this.promptAgent(plan, peer.name, contract.body);
+    await this.requireAcknowledgement(peer.name, contract);
+    this.note(`${peer.name}: ready in ${Math.round((Date.now() - startedAt) / 1000)}s`);
   }
 
   async closeCreatedTab(_plan: SlpTeamPlan, tabId: string): Promise<void> {

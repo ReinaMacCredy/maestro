@@ -421,6 +421,9 @@ export const workPlugin: BuiltInPlugin = {
               description: "Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).",
               value: true,
             },
+            "--fresh": {
+              description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new) and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work.",
+            },
           },
           positionals: [{ name: "title", required: true }],
           rootDescription: "Manage tracked work, leases, dependencies, and evidence.",

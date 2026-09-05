@@ -11,6 +11,17 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- `maestro work add --to <peer> --fresh` reuses an acknowledged Peer pane with
+  a fresh harness context: the harness's new-conversation command goes through
+  the Herdr socket (Claude Code `/clear`; Codex `/new`, read off the installed
+  codex 0.153.3 binary and not yet exercised live), the pane is waited idle,
+  the READY challenge runs again and is stored, then the d840 OPEN line is
+  pushed. Refused with `PEER_ACTIVE` while the Peer holds ACTIVE work; a
+  failed reset leaves the item OPEN with a stderr warning and no wake line
+  (Hub d101, w672).
+
 ## [0.119.1] - 2026-09-05
 
 ### Fixed

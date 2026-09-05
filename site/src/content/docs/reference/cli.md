@@ -96,6 +96,7 @@ no work and appear in no dispatch.
 maestro work add "<objective>"
 maestro work add "<objective>" --to <peer-name>
 maestro work add "<objective>" --to <peer-name> --profile <name>
+maestro work add "<objective>" --to <peer-name> --fresh
 ```
 
 Team Supervisor creates work for Lead. Lead must name a Peer with `--to`;
@@ -107,7 +108,11 @@ another profile is refused with `PEER_PROFILE_MISMATCH`; a missing render
 fails with `PROFILE_NOT_INSTALLED` and nothing is rendered on demand. The new
 work state is `OPEN`, and the assignee's pane is woken with `[from
 <role>][<id> OPEN] <objective>; read: maestro status <id>` whether it was
-just opened or already acknowledged (d840).
+just opened or already acknowledged (d840). `--fresh` resets a reused Peer
+pane to a fresh harness context first (Claude Code `/clear`, Codex `/new`,
+then the same READY challenge a new pane passes) and is refused with
+`PEER_ACTIVE` while that Peer holds ACTIVE work; a failed reset leaves the
+item `OPEN` with a warning and no wake line (Hub d101).
 
 ### `work take`
 
