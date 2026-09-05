@@ -1926,7 +1926,7 @@ export function currentPaneId(): string | undefined {
   return undefined;
 }
 
-function requireSlpActor(context: PluginContext, allowed: readonly SlpRole[]): SlpActor {
+export function requireSlpActor(context: PluginContext, allowed: readonly SlpRole[]): SlpActor {
   const team = activeLocalTeam(context);
   if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
   const paneId = currentPaneId();
