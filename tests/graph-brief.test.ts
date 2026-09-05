@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { withFixture } from "./helpers.ts";
 import { graphResult, graphRun, writeGraph, writeProfile } from "./graph-helpers.ts";
+import { schemaKeySentence } from "../src/plugins/graph-file.ts";
 
 // Live row 17 defect 5 (lab run w1, items w34 and w35): the Lead's work add
 // carried only the prompt, whose "matching the schema" named a schema the
@@ -69,3 +70,19 @@ test("graph-brief: every agent node in the envelope carries a brief that is the 
     void human;
   });
 }, 30_000);
+
+// A schema whose required set is a strict subset of its properties (the
+// council report, the verification) must not be announced as "exactly these
+// keys": a literal reader drops every optional field the node prompt asks for.
+test("graph-brief: the key sentence names optional keys separately when the required set is a strict subset of the properties", () => {
+  expect(
+    schemaKeySentence({
+      type: "object",
+      required: ["position", "falsifier"],
+      properties: { position: { type: "string" }, recommendation: { type: "string" }, falsifier: { type: "string" }, unknowns: { type: "array", items: { type: "string" } } },
+    }),
+  ).toBe("Return one JSON object with the required keys position, falsifier and any of the optional keys recommendation, unknowns; no prose before or after.");
+  expect(
+    schemaKeySentence({ type: "object", required: ["refuted", "reason"], properties: { refuted: { type: "boolean" }, reason: { type: "string" } } }),
+  ).toBe("Return one JSON object with exactly these keys: refuted, reason; no prose before or after.");
+});

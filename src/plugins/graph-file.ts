@@ -472,8 +472,19 @@ export function schemaKeySentence(schema: unknown): string | null {
   const spec = record(schema);
   if (!spec) return null;
   const required = Array.isArray(spec.required) ? spec.required.filter((key): key is string => typeof key === "string") : [];
-  const parts = [required.length > 0 ? `Return one JSON object with exactly these keys: ${required.join(", ")}` : "Return one JSON object"];
-  for (const [key, property] of Object.entries(record(spec.properties) ?? {})) {
+  const properties = record(spec.properties) ?? {};
+  // "exactly these keys" is right only when every property is required; a
+  // literal reader given the council report shape would otherwise drop the
+  // optional fields the node prompt asks for.
+  const optional = Object.keys(properties).filter((key) => !required.includes(key));
+  const parts = [
+    required.length === 0
+      ? "Return one JSON object"
+      : optional.length === 0
+        ? `Return one JSON object with exactly these keys: ${required.join(", ")}`
+        : `Return one JSON object with the required keys ${required.join(", ")} and any of the optional keys ${optional.join(", ")}`,
+  ];
+  for (const [key, property] of Object.entries(properties)) {
     const items = record(record(property)?.items);
     const nested = Array.isArray(items?.required) ? items.required.filter((entry): entry is string => typeof entry === "string") : [];
     if (nested.length > 0) parts.push(`nested ${key} objects need ${nested.join(", ")}`);
