@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { renderedProfilePath, seatConfigRoot } from "../src/plugins/profiles.ts";
+import { renderedProfilePath, seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
 import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
@@ -699,3 +699,72 @@ test("seat-dirs-links: install renders skills/ as the union across the dir's pro
     expect(JSON.parse(await readFile(join(peerDir, ".claude.json"), "utf8"))).toEqual({ hasCompletedOnboarding: true, mcpServers: {}, projects: { x: 1 } });
   });
 }, 30_000);
+
+// seat-config-dirs R5 (d846, A1, A2): the token arrives on stdin and lands only
+// in the 0600 token file and each seat settings env; install output never
+// carries it; doctor reports it; the owner's user settings stay byte for byte.
+test("seat-dirs-token: install --seat-token from stdin writes the 0600 token file, never prints the token, doctor reports missing then present, and ~/.claude/settings.json plus ~/.claude.json are byte-identical across install (R5)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const userSettings = join(fixture.home, ".claude", "settings.json");
+    const userClaudeJson = join(fixture.home, ".claude.json");
+    await mkdir(join(fixture.home, ".claude"), { recursive: true });
+    const userSettingsText = JSON.stringify({
+      model: "opus",
+      hooks: {
+        SessionStart: [
+          { matcher: "*", hooks: [{ type: "command", command: `bash '${join(fixture.home, ".claude", "hooks", "herdr-agent-state.sh")}' session`, timeout: 10 }] },
+          { hooks: [{ type: "command", command: "echo other" }] },
+        ],
+      },
+    }, null, 2);
+    const userClaudeJsonText = '{"hasCompletedOnboarding":true,"numStartups":42,"projects":{"/x":{"allowedTools":[]}}}';
+    await writeFile(userSettings, userSettingsText);
+    await writeFile(userClaudeJson, userClaudeJsonText);
+    const token = "sk-ant-oat01-R5-secret-token-value";
+
+    const withoutToken = await runCli(fixture, ["install"], { PATH: path });
+    expect(withoutToken.exitCode).toBe(0);
+    expect(withoutToken.stdout).toContain("--seat-token");
+    expect(withoutToken.stdout).toContain(seatTokenPath(fixture.home));
+    const missing = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(missing.exitCode).toBe(0);
+    expect(missing.stdout).toContain("seat token: missing");
+    const peerSettingsBefore = JSON.parse(await readFile(join(seatConfigRoot(fixture.home), "peer", "settings.json"), "utf8")) as { env: Record<string, string> };
+    expect("CLAUDE_CODE_OAUTH_TOKEN" in peerSettingsBefore.env).toBe(false);
+
+    const empty = await runCli(fixture, ["install", "--seat-token"], { PATH: path }, "  \n");
+    expect(empty.exitCode).toBe(1);
+    expect(JSON.parse(empty.stderr).error.code).toBe("SEAT_TOKEN_EMPTY");
+    expect(existsSync(seatTokenPath(fixture.home))).toBe(false);
+
+    const installed = await runCli(fixture, ["install", "--seat-token"], { PATH: path }, `${token}\n`);
+    expect(installed.exitCode).toBe(0);
+    expect(installed.stdout).not.toContain(token);
+    expect(installed.stderr).not.toContain(token);
+    expect(installed.stdout).not.toContain("--seat-token");
+    expect(await readFile(seatTokenPath(fixture.home), "utf8")).toBe(token);
+    expect((await stat(seatTokenPath(fixture.home))).mode & 0o777).toBe(0o600);
+    for (const seat of ["lead", "peer", "team-supervisor"]) {
+      const settings = JSON.parse(await readFile(join(seatConfigRoot(fixture.home), seat, "settings.json"), "utf8")) as { env: Record<string, string>; hooks: unknown };
+      expect({ seat, token: settings.env.CLAUDE_CODE_OAUTH_TOKEN }).toEqual({ seat, token });
+      // A6: the owner's own herdr hook group is the one carried, the other group is not.
+      expect(settings.hooks).toEqual({
+        SessionStart: [{ matcher: "*", hooks: [{ type: "command", command: `bash '${join(fixture.home, ".claude", "hooks", "herdr-agent-state.sh")}' session`, timeout: 10 }] }],
+      });
+    }
+    const present = await runCli(fixture, ["doctor"], { PATH: path });
+    expect(present.exitCode).toBe(0);
+    expect(present.stdout).toContain("seat token: present");
+    expect(present.stdout).not.toContain(token);
+
+    // A plain install keeps the token and re-renders it.
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(await readFile(seatTokenPath(fixture.home), "utf8")).toBe(token);
+    expect(await readFile(join(seatConfigRoot(fixture.home), "lead", "settings.json"), "utf8")).toContain(token);
+
+    // A1: nothing outside maestro-managed paths changed.
+    expect(await readFile(userSettings, "utf8")).toBe(userSettingsText);
+    expect(await readFile(userClaudeJson, "utf8")).toBe(userClaudeJsonText);
+  });
+}, 60_000);

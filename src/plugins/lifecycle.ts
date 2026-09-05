@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts";
@@ -20,7 +20,7 @@ import { resolveHomeDirectory } from "./home.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { installInRoomMessage, isRoom } from "./room.ts";
 import { skillNames } from "./skills.ts";
-import { removeRenderedProfiles } from "./profiles.ts";
+import { readSeatToken, removeRenderedProfiles, seatTokenPath } from "./profiles.ts";
 import { unlinkHerdrPlugin } from "./slp-plugin.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -650,6 +650,14 @@ async function doctor(): Promise<CliResult> {
   );
   if (room && !roomDenyHealthy) {
     issues.push({ component: "room", fix: roomFix, message: "room deny list is missing" });
+  }
+  // d846: the token from claude setup-token lasts a year, so its write date
+  // is the only expiry signal maestro has.
+  if (readSeatToken(home)) {
+    const written = (await stat(seatTokenPath(home))).mtime.toISOString().slice(0, 10);
+    checks.push(`seat token: present (written ${written})`);
+  } else {
+    checks.push("seat token: missing");
   }
 
   const storeLocation = resolveStoreLocation(repo);

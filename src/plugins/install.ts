@@ -20,7 +20,7 @@ import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
-import { formatProfileSync, materializeProfiles } from "./profiles.ts";
+import { formatProfileSync, materializeProfiles, seatConfigRoot, seatTokenPath } from "./profiles.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { linkHerdrPlugin } from "./slp-plugin.ts";
@@ -500,6 +500,23 @@ export async function codexHookTrustRecorded(root: string, home: string): Promis
   return missing.size === 0;
 }
 
+// d846: one claude setup-token token for every Claude seat, handed over on
+// stdin so it never rides argv or a shell history line; it lives only in the
+// 0600 token file and each seat's settings env (A2).
+export async function writeSeatToken(home: string, raw: string): Promise<void> {
+  const token = raw.trim();
+  if (token === "") {
+    throw new CliError(
+      "SEAT_TOKEN_EMPTY",
+      "maestro install --seat-token reads the token from stdin and it was empty; run: claude setup-token | maestro install --seat-token",
+    );
+  }
+  await mkdir(seatConfigRoot(home), { recursive: true });
+  await chmod(seatConfigRoot(home), 0o700);
+  await writeFile(seatTokenPath(home), token);
+  await chmod(seatTokenPath(home), 0o600);
+}
+
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
   if (await samePath(sourceRoot, runtimeRoot)) return;
   await rm(runtimeRoot, { recursive: true, force: true });
@@ -635,12 +652,13 @@ export const installPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      registerSessionCommand(context, "install", async (): Promise<CliResult> => {
+      registerSessionCommand(context, "install", async (invocation): Promise<CliResult> => {
         if (isRoom(context.store.database)) {
           throw new CliError("INSTALL_IN_ROOM", installInRoomMessage);
         }
         const repo = process.cwd();
         const home = resolveHomeDirectory();
+        if (invocation.options["seat-token"] === true) await writeSeatToken(home, await Bun.stdin.text());
         await grandfatherHomePlugins(home);
         const existingSourceRecord = sourceRecordPath(home);
         if (existsSync(existingSourceRecord)) {
@@ -694,7 +712,9 @@ export const installPlugin: BuiltInPlugin = {
             stampBefore.stamp.commit !== stampAfter.stamp.commit
           ) {
             const child = Bun.spawnSync(
-              [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2)],
+              // The token file is already written; the child must not read
+              // stdin a second time.
+              [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2).filter((argument) => argument !== "--seat-token")],
               {
                 cwd: repo,
                 env: { ...process.env, MAESTRO_INSTALL_REEXEC: "1" },
@@ -778,12 +798,22 @@ export const installPlugin: BuiltInPlugin = {
             (roomCodexHookTrustRecorded
               ? "\nroom Codex hooks: Codex has recorded trust for both hooks (the hash is not verifiable here); re-check with /hooks if they stop firing"
               : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
+            (profileSync.seatToken === "missing"
+              ? `\nwarning: no seat token at ${seatTokenPath(home)}, so Claude seats cannot log in; run: claude setup-token | maestro install --seat-token`
+              : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : "") +
             (dirtySource > 0
               ? `\nwarning: ${sourceRoot} has ${dirtySource} modified tracked files; the installed runtime carries uncommitted changes`
               : ""),
         };
-      }, { description: "Install Maestro runtime and repository hook wiring." }),
+      }, {
+        description: "Install Maestro runtime and repository hook wiring.",
+        flags: {
+          "--seat-token": {
+            description: "Read one claude setup-token token from stdin and store it for every Claude seat (d846).",
+          },
+        },
+      }),
     );
   },
 };
