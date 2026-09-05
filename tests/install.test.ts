@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
@@ -539,3 +539,87 @@ test("313 scripts/install.sh --help prints usage and exits before touching the m
     expect(existsSync(join(fixture.home, ".maestro", "source"))).toBe(false);
   });
 });
+
+test("profile-render: install renders the three carriers, is byte-stable, and uninstall removes exactly what it wrote while user files stay untouched (red 2, A1)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const claudeAgents = join(fixture.home, ".claude", "agents");
+    const codexHome = join(fixture.home, ".codex");
+    const codexAgents = join(codexHome, "agents");
+    await mkdir(claudeAgents, { recursive: true });
+    await mkdir(codexAgents, { recursive: true });
+    const userFiles = new Map([
+      [join(codexHome, "steyg.config.toml"), 'model = "claude-opus-5"\nmodel_provider = "steyg"\n'],
+      [join(codexAgents, "reviewer.toml"), 'name = "Reviewer"\ndeveloper_instructions = "review"\n'],
+      [join(claudeAgents, "custom.md"), "---\nname: custom\n---\nhand written\n"],
+    ]);
+    for (const [file, content] of userFiles) await writeFile(file, content);
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "lead.md"),
+      "---\nharness: claude\nmodel: sonnet\neffort: high\npermission: acceptEdits\ndescription: fixture lead\n---\nRole: fixture lead.\n",
+    );
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    expect(installed.stdout).toContain("profiles rendered:");
+
+    const leadClaude = await readFile(join(claudeAgents, "maestro-lead.md"), "utf8");
+    expect(leadClaude.startsWith("---\nname: maestro-lead\ndescription: \"fixture lead\"\nmodel: sonnet\neffort: high\npermissionMode: acceptEdits\n---\n\n")).toBe(true);
+    expect(leadClaude).toContain("## Shared contract");
+    expect(leadClaude.trimEnd().endsWith("Role: fixture lead.")).toBe(true);
+    const leadSession = await readFile(join(codexHome, "maestro-lead.config.toml"), "utf8");
+    expect(leadSession).toContain('model = "sonnet"\n');
+    expect(leadSession).toContain('model_reasoning_effort = "high"\n');
+    expect(leadSession).toContain('developer_instructions = """\n');
+    expect(leadSession).toContain("Role: fixture lead.");
+    expect(leadSession).not.toContain("sandbox_mode");
+    const leadAgent = await readFile(join(codexAgents, "maestro-lead.toml"), "utf8");
+    expect(leadAgent).toContain('name = "maestro-lead"\n');
+    expect(leadAgent).toContain('model = "sonnet"\n');
+    expect(leadAgent).toContain('model_reasoning_effort = "high"\n');
+    expect(leadAgent).toContain("Role: fixture lead.");
+
+    // d93: sandbox renders into the sub-agent file only.
+    const verifierAgent = await readFile(join(codexAgents, "maestro-verifier.toml"), "utf8");
+    expect(verifierAgent).toContain('sandbox_mode = "read-only"\n');
+    expect(await readFile(join(codexHome, "maestro-verifier.config.toml"), "utf8")).not.toContain("sandbox_mode");
+
+    // model: default omits the model line on all three carriers.
+    for (const file of [
+      join(claudeAgents, "maestro-peer.md"),
+      join(codexHome, "maestro-peer.config.toml"),
+      join(codexAgents, "maestro-peer.toml"),
+    ]) {
+      expect(await readFile(file, "utf8")).not.toMatch(/^model[ :]/m);
+    }
+
+    const snapshot = async () => {
+      const files = new Map<string, string>();
+      for (const directory of [claudeAgents, codexHome, codexAgents]) {
+        for (const entry of (await readdir(directory)).sort()) {
+          const file = join(directory, entry);
+          if ((await stat(file)).isFile()) files.set(file, await readFile(file, "utf8"));
+        }
+      }
+      return files;
+    };
+    const afterFirst = await snapshot();
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    expect(await snapshot()).toEqual(afterFirst);
+
+    const uninstalled = await runCli(fixture, ["uninstall"], { PATH: path });
+    expect(uninstalled.exitCode).toBe(0);
+    const afterUninstall = await snapshot();
+    const written = [...afterFirst.keys()].filter((file) => /\/maestro-[^/]+$/.test(file));
+    expect(written.length).toBeGreaterThan(0);
+    for (const file of written) expect(afterUninstall.has(file)).toBe(false);
+    for (const [file, content] of afterFirst) {
+      if (!written.includes(file)) expect(afterUninstall.get(file)).toBe(content);
+    }
+    for (const [file, content] of userFiles) {
+      expect(afterFirst.get(file)).toBe(content);
+      expect(afterUninstall.get(file)).toBe(content);
+    }
+  });
+}, 30_000);
