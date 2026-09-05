@@ -90,6 +90,10 @@ token handed to `maestro install --seat-token`.
   brought to 0600 on install, the trust seed lands through a 0600 temp file
   renamed over `.claude.json`, and an unknown-flag error such as a mistyped
   `--seat-token=<value>` no longer echoes the value.
+- `maestro install --seat-token <token>` (the space form) no longer echoes the
+  token (d855): a positional that follows a flag taking no value fails
+  `UNKNOWN_ARGUMENT` naming the flag and the help command instead of the
+  value, in both the message and the error fields.
 
 ## [0.120.0] - 2026-09-05
 

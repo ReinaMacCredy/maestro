@@ -364,10 +364,14 @@ export class Cli {
     maxPositionals: number,
   ): CliInvocation {
     const positionals: string[] = [];
+    const afterFlag = new Map<number, string>();
     const options: Record<string, boolean | string | string[]> = {};
     for (let index = 0; index < args.length; index += 1) {
       const token = args[index] ?? "";
       if (!token.startsWith("--")) {
+        const previous = index > 0 ? args[index - 1] ?? "" : "";
+        const previousFlag = flags.get(previous);
+        if (previousFlag && !previousFlag.value) afterFlag.set(positionals.length, previous);
         positionals.push(token);
         continue;
       }
@@ -400,6 +404,17 @@ export class Cli {
     }
     const unexpected = positionals[maxPositionals];
     if (unexpected !== undefined) {
+      const helpCommand = `maestro help ${command.split(" ")[0]}`;
+      // d855 (SEC-7): a value handed to a valueless flag (install --seat-token
+      // <token>) lands here; it may be a secret, so the flag is named instead.
+      const flag = afterFlag.get(maxPositionals);
+      if (flag !== undefined) {
+        throw new CliError(
+          "UNKNOWN_ARGUMENT",
+          `unknown argument after ${flag}, which takes no value; run: ${helpCommand}`,
+          { after: flag, command: helpCommand },
+        );
+      }
       throw new CliError("UNKNOWN_ARGUMENT", `unknown argument: ${unexpected}`, {
         argument: unexpected,
       });

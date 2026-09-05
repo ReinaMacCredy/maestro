@@ -248,7 +248,7 @@ test("102 UNKNOWN_FLAG names the help command for its verb", async () => {
 // the value is pinned absent from the message, the flag field and both streams.
 test("102b UNKNOWN_FLAG redacts a value glued to the flag with = in the message and the flag field on stdout and stderr", async () => {
   await withFixture(async (fixture) => {
-    for (const [flag, value] of [["--seat-token=", "abc123secret"], ["--foo=", "bar"]]) {
+    for (const [flag, value] of [["--seat-token=", "abc123secret"], ["--foo=", "bar"]] as const) {
       const glued = await runCli(fixture, ["install", `${flag}${value}`]);
       expect({ flag, exitCode: glued.exitCode }).toEqual({ flag, exitCode: 2 });
       const error = (JSON.parse(glued.stderr) as { error: Record<string, unknown> }).error;
@@ -260,6 +260,29 @@ test("102b UNKNOWN_FLAG redacts a value glued to the flag with = in the message 
       expect(glued.stdout).not.toContain(value);
       expect(glued.stderr).not.toContain(value);
     }
+  });
+});
+
+// SEC-7 (d855): --seat-token takes no value, so `maestro install --seat-token
+// <token>` made the token a positional and UNKNOWN_ARGUMENT echoed it.
+test("102c UNKNOWN_ARGUMENT never echoes a positional that follows a valueless flag, naming the flag instead", async () => {
+  await withFixture(async (fixture) => {
+    const spaced = await runCli(fixture, ["install", "--seat-token", "sk-ant-oat01-SEC7-fixture"]);
+    expect(spaced.exitCode).toBe(2);
+    const error = (JSON.parse(spaced.stderr) as { error: Record<string, unknown> }).error;
+    expect(error.code).toBe("UNKNOWN_ARGUMENT");
+    expect(String(error.message)).toContain("--seat-token");
+    expect(String(error.message)).toContain("takes no value");
+    expect(error.after).toBe("--seat-token");
+    expect("argument" in error).toBe(false);
+    expect(spaced.stdout).not.toContain("SEC7");
+    expect(spaced.stderr).not.toContain("SEC7");
+
+    const plain = await runCli(fixture, ["install", "stray"]);
+    expect(plain.exitCode).toBe(2);
+    const plainError = (JSON.parse(plain.stderr) as { error: Record<string, unknown> }).error;
+    expect(plainError.code).toBe("UNKNOWN_ARGUMENT");
+    expect(plainError.argument).toBe("stray");
   });
 });
 
