@@ -1236,7 +1236,8 @@ export const workPlugin: BuiltInPlugin = {
         "ready",
         async (invocation): Promise<CliResult> => {
           const showBlocked = invocation.options.all === true;
-          const allWorks = service.list();
+          // A graph run is driven by graph next, never picked up from ready (A4).
+          const allWorks = service.list().filter((work) => work.kind !== "graph");
           const childrenByParent = new Map<string, WorkRecord[]>();
           for (const work of allWorks) {
             if (!work.parentId) continue;
