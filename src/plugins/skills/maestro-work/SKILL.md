@@ -65,7 +65,7 @@ No-write names the file boundary only. `maestro dispatch accept` and
 excluded scope, so a scout or shadow lane can still accept and return.
 
 The canonical parallel shapes are delivery and challenge on the same scope,
-or a council of two or three decision lanes.
+or a council of decision lanes run by `maestro-council`.
 
 ## Handback
 

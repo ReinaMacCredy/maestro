@@ -45,7 +45,8 @@ the bundle immediately after stabilizing.
 
 Skills load by bare name in every tool (`maestro-design`, `maestro-work`,
 `maestro-verify`, `maestro-bundle`, `maestro-explore`, `maestro-diagnose`,
-`maestro-coach`, `maestro-questionnaire`, `maestro-improve`). Route only work
+`maestro-coach`, `maestro-questionnaire`, `maestro-improve`,
+`maestro-council`). Route only work
 that needs one: a quickfix or a Light production fix proceeds directly
 (stated assumption, root-cause fix, inline verification). Never downgrade a
 requested fix to analysis. Generated or vendored files are never the target:
@@ -54,6 +55,8 @@ fix the generator or pin and regenerate.
 - Unsettled decisions, design questions, efforts too big for one session, new
   scope on shipped work: `maestro-design` (grill, research, prototype, model,
   wayfind by unknown).
+- A hard-to-reverse fork with wide blast radius, run by the Lead:
+  `maestro-council`.
 - Research, disposable prototype, or current-behavior baseline:
   `maestro-explore`.
 - Authorized implementation or fix: `maestro-work`.

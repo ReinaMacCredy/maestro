@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 export const skillNames = [
   "maestro-bundle",
   "maestro-coach",
+  "maestro-council",
   "maestro-design",
   "maestro-diagnose",
   "maestro-explore",

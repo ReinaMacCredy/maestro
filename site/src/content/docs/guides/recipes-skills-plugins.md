@@ -27,7 +27,7 @@ start.
 
 ## Skills
 
-Install materializes nine managed method skills under `~/maestro/skills/`
+Install materializes ten managed method skills under `~/maestro/skills/`
 and the shared method at `~/maestro/WORKFLOW.md`:
 
 - `maestro-bundle` chooses direct work or a durable SPEC/NOTES/VERIFY bundle.
@@ -43,6 +43,8 @@ and the shared method at `~/maestro/WORKFLOW.md`:
   concept behind a recorded decision.
 - `maestro-questionnaire` turns a decision someone else owns into a Markdown
   questionnaire for that person.
+- `maestro-council` runs a Lead-only council on a hard-to-reverse fork and
+  records one binding verdict with its dissent.
 
 The installer links these skills for Claude without overwriting an unmanaged
 skill. Team coordination comes from the pinned Workspace Pack and direct role

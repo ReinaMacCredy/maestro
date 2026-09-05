@@ -13,6 +13,16 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- `maestro-council` is the tenth shipped skill (Hub w32, d92-d95): the Paseo
+  Council doctrine ported onto maestro's Lead-only guard, four tiers, neutral
+  brief with framing lint, sealed round 1, seat audit, typed claims, the
+  premise verifier on unanimity, bounded verifiers, one cross-examination
+  round, the auditor by tier, and a binding verdict recorded as a decision
+  draft carrying the dissent. `maestro-design`'s Council section and
+  `maestro-work`'s council line point at it. The run section names
+  `graph run council` and carries a manual seat mapping until that preset
+  ships.
+
 - The installed `WORKFLOW.md` states the two-model boundary (Hub d87): inside
   a running SLP team only the nine SLP v2 operations apply; everywhere else
   the classic surface (`work start|done`, `decision draft|lock`, `ready`,

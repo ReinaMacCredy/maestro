@@ -199,6 +199,7 @@ test("129 [lint] install materializes the 9 maestro skills with a version stamp 
     for (const name of [
       "maestro-bundle",
       "maestro-coach",
+      "maestro-council",
       "maestro-design",
       "maestro-diagnose",
       "maestro-explore",

@@ -89,20 +89,12 @@ re-deriving the argument.
 
 ## Council
 
-Use a council only for a hard-to-reverse fork with wide blast radius. Dispatch
-two or three fresh-context decision lanes with the same neutral brief and no
-hint of the Lead's preference. Seal the council: the Lead reads no view until
-all views have returned. File one dispatch per lane on the same work item; every
-envelope line stays identical across lanes except `lane:`, and the shared
-question is each dispatch's objective.
-
-Reconcile the views through eight axes: `premise`, `mechanism`, `boundary`,
-`failure`, `reversibility`, `evidence`, `authority`, and `proof`. Never count
-votes. Draft the result with `maestro decision draft --rationale`, preserving
-the losing side's dissent in the rationale.
-
-The candidate under review stays frozen. A new finding creates a new candidate
-instead of silently changing the stable candidate mid-review.
+A hard-to-reverse fork with wide blast radius runs the `maestro-council`
+protocol: neutral brief, sealed seats, one premise verifier on unanimity,
+bounded verifiers, one cross-examination round, an audit by tier, and one
+binding verdict recorded with `maestro decision draft --rationale` carrying
+the dissent. The candidate under review stays frozen; a new finding creates
+a new candidate.
 
 ## Readiness gate and exit
 

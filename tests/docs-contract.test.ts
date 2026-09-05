@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { builtInPlugins } from "../src/plugins/index.ts";
+import { skillNames } from "../src/plugins/skills.ts";
 import { runCli, withFixture } from "./helpers.ts";
 
 const slpOperations = [
@@ -318,4 +319,49 @@ test("650 [lint] the design exit and the bundle tier rule open the bundle in the
     expect(text).toContain("hub:<id>");
     expect(text).toContain("Hub map");
   }
+});
+
+test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guard and the d94 unanimity sentence; design and work point at it (w625, hub d92-d95)", async () => {
+  expect(skillNames).toContain("maestro-council");
+  const council = await Bun.file(join(skillsRoot, "maestro-council", "SKILL.md")).text();
+  expect(council).toMatch(/^---\nname: maestro-council\n/);
+  expect(council).toContain("<!-- maestro-skill-version: dev -->");
+  for (const reference of ["brief.md", "report-format.md"]) {
+    expect(await Bun.file(join(skillsRoot, "maestro-council", "references", reference)).exists()).toBe(true);
+    expect(council).toContain(`references/${reference}`);
+  }
+
+  const guard = sectionOf(council, "## Lead-only guard");
+  expect(guard).toContain("Lead of a running team");
+  expect(guard).toContain("plain session outside a team");
+  expect(guard).toMatch(/A seat never opens a\s+council/);
+  expect(guard).toContain("No Observer seat exists (Hub d98)");
+
+  // Hub d94: unanimity opens one premise verifier, never a skip.
+  expect(council).toContain(
+    "Unanimity is not a skip: above lens, when every valid seat agrees, open exactly one Verifier whose single mandate is to name the shared premise in the brief that drives the common conclusion and test it.",
+  );
+  expect(council).toContain("COMPROMISED");
+  expect(council).toContain("never form an ensemble vote");
+  expect(council).toContain("CONCEDE | MAINTAIN | NARROW | REVERSE");
+  expect(council).toContain("CLEAR | REVISE | STOP");
+  expect(council).toContain("maestro decision draft");
+  expect(council).not.toContain("model-routing.md");
+
+  const run = sectionOf(council, "## Run");
+  expect(run).toContain("graph run council");
+  expect(run).toContain("work add");
+  expect(run).toContain("--to peer-<seat>");
+  expect(run).toContain("subagent_type: maestro-<seat>");
+  expect(run).toContain("spawn_agent");
+
+  const design = await Bun.file(join(skillsRoot, "maestro-design", "SKILL.md")).text();
+  const designCouncil = sectionOf(design, "## Council");
+  expect(designCouncil).toContain("`maestro-council`");
+  expect(designCouncil.trim().split("\n\n")).toHaveLength(1);
+  expect(design).not.toContain("eight axes");
+
+  const work = await Bun.file(join(skillsRoot, "maestro-work", "SKILL.md")).text();
+  expect(work).toContain("`maestro-council`");
+  expect(work).toContain("COUNCIL_REQUEST");
 });
