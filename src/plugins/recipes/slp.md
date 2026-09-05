@@ -21,6 +21,10 @@ Hub Supervisor <-> Team Supervisor
 Every displayed edge is a direct conversation channel. In the supported SLP
 flow, the Hub Supervisor reaches a team only through its Team Supervisor. The
 Team Supervisor, Lead, and Peers may talk directly within the team workspace.
+When you prompt a pane by hand (`herdr agent prompt`), open every prompt with a
+plain lowercase sentence, never a word a harness could read as a slash command,
+and confirm `agent_status=working` before leaving: a dropped brief looks
+identical to a slow start.
 
 The Observer is the only seat outside the work lifecycle: it reads sentinel
 packets, may run `maestro status` and record `maestro work note --stall`, and

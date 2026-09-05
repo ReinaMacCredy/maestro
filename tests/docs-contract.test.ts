@@ -44,6 +44,13 @@ test("308 [lint] the canonical Workspace Pack exposes only the locked SLP v2 con
     expect(surface).not.toContain("observer-<team>");
     expect(surface).not.toContain("maestro-team-sensor");
   }
+  // Doctrine review 7: a brief that opens with a capitalised "You are ..." is
+  // read by a Claude pane as the slash command /You and dropped silently.
+  const shared = pack.match(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/)?.[1] ?? "";
+  for (const surface of [shared, recipe]) {
+    expect(surface).toContain("plain lowercase sentence");
+    expect(surface).toContain("agent_status=working");
+  }
 });
 
 function documentedCommands(readme: string): string[][] {

@@ -326,7 +326,7 @@ test("324 unaccepted dispatch attention appears after ten minutes and clears on 
       "evidence: dispatch state open; no session bound to the pane",
       "unknown: whether the brief reached the pane",
       "question: was the stored contract delivered?",
-      `smallest action: herdr agent list, then herdr agent prompt <name> with the stored contract from maestro dispatch show ${oldDispatch}`,
+      `smallest action: herdr agent list, then herdr agent prompt <name> with the stored contract from maestro dispatch show ${oldDispatch}; open the prompt with a plain lowercase sentence, never a word a harness could read as a slash command, and confirm agent_status=working before leaving`,
       "human decision needed: no",
     ]) {
       expect(attention.stdout).toContain(line);

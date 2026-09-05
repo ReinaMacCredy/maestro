@@ -55,7 +55,11 @@ shows the flag. An Observer seat (Codex) reads sentinel packets for stalls
 the stuck seat cannot see and may only inspect status and record stall notes;
 it never holds work. Hand-typed asks
 are allowed: record first (a decision with `--work`, a note), then prompt the
-counterpart about the stored record. `maestro status` lists the team's non-DONE
+counterpart about the stored record. When you prompt a pane by hand
+(`herdr agent prompt`), open every prompt with a plain lowercase sentence,
+never a word a harness could read as a slash command, and confirm
+`agent_status=working` before leaving: a dropped brief looks identical to a
+slow start. `maestro status` lists the team's non-DONE
 items with `*` on those waiting on you (a Peer sees only its own) and collapses
 DONE into a count that `--all` expands; `maestro status <work-id>` ends with a
 `next:` line naming what you may run on it.
