@@ -162,13 +162,14 @@ test("graph-executor: from a Lead pane of a RUNNING team graph run reports execu
     const plain = failure(await runCli(fixture, ["graph", "result", second.run, "d", "--work", boundC.work.id, "--json"]));
     expect(["ROLE_UNPROVEN", "NO_ACTIVE_TEAM"]).toContain(plain.code);
 
-    // Live row 17 defect 5 (d838): a bound item whose body fails the node's
-    // schema sends the node back to issued and unbound with one retry; the
-    // second failure fails the node.
+    // Live row 17 defect 5 (d838, then g18): a bound item whose body fails
+    // the node's schema sends the node back to issued and unbound; two
+    // retries, the third failure fails the node.
     const third = data<{ nodes: Array<{ brief: string; ref: string; schema?: unknown }>; run: string }>(
       await runCliAt(fixture, fixture.repo, ["graph", "run", "typed-team", "--json"], lead),
     );
     const typedA = third.nodes.find((node) => node.ref === "a")!;
+    expect(typedA.brief).toContain("Return one JSON object with exactly these keys: refuted; no prose before or after.");
     expect(typedA.brief).toContain("Answer with one JSON object matching this schema:");
     expect(typedA.brief).toContain('"refuted"');
     const badItem = data<{ role: { paneId: string }; work: { id: string } }>(
@@ -200,7 +201,26 @@ test("graph-executor: from a Lead pane of a RUNNING team graph run reports execu
     expect((await runCliAt(fixture, fixture.repo, ["work", "take", secondItem.work.id, "--json"], badPeer)).exitCode).toBe(0);
     expect((await runCliAt(fixture, fixture.repo, ["work", "return", secondItem.work.id, "still no json", "--json"], badPeer)).exitCode).toBe(0);
     expect((await runCliAt(fixture, fixture.repo, ["work", "accept", secondItem.work.id, "--json"], lead)).exitCode).toBe(0);
-    const failed = data<{ done: boolean; failed?: { node: string } }>(
+    const retryingAgain = data<{ done: boolean; nodes: Array<{ ref: string; retry?: { error: string; schema: unknown; work: string }; work?: string }> }>(
+      await runCliAt(fixture, fixture.repo, ["graph", "next", third.run, "--json"], lead),
+    );
+    expect(retryingAgain.done).toBe(false);
+    const secondRetry = retryingAgain.nodes.find((node) => node.ref === "a");
+    expect(secondRetry?.work).toBeUndefined();
+    expect(secondRetry?.retry).toEqual({ error: expect.stringContaining("no JSON found"), schema: typedA.schema, work: secondItem.work.id });
+    const retryTrace2 = data<{ events: Array<{ payload: Record<string, unknown>; type: string }> }>(
+      await runCliAt(fixture, fixture.repo, ["trace", third.run, "--json"], lead),
+    );
+    expect(retryTrace2.events.filter((event) => event.type === "graph.node.retry").map((event) => event.payload.attempt)).toEqual([1, 2]);
+
+    const thirdItem = data<{ role: { paneId: string }; work: { id: string } }>(
+      await runCliAt(fixture, fixture.repo, ["work", "add", typedA.brief, "--to", "peer-refuter", "--json"], lead),
+    );
+    expect((await runCliAt(fixture, fixture.repo, ["graph", "result", third.run, "a", "--work", thirdItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", thirdItem.work.id, "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", thirdItem.work.id, "third miss", "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "accept", thirdItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    const failed = data<{ done: boolean; failed?: { node: string; error?: string } }>(
       await runCliAt(fixture, fixture.repo, ["graph", "next", third.run, "--json"], lead),
     );
     expect(failed.done).toBe(true);

@@ -15,6 +15,7 @@ import {
   listGraphs,
   parseGraph,
   resolveGraph,
+  schemaKeySentence,
   shippedGraphs,
   validateAgainstSchema,
   type GraphDefinition,
@@ -109,11 +110,15 @@ function splitRef(ref: string): { instance: string; node: string } {
 
 // d838: the brief is what a harness sends to the node's agent under either
 // executor; the schema travels inside it, so a Peer that never sees the
-// envelope still answers in the declared shape.
+// envelope still answers in the declared shape. It leads with the required
+// keys in one sentence (g18: the block alone was missed by every sonnet node).
 function briefOf(prompt: string, schema: unknown): string {
   if (!schema) return prompt;
-  return `${prompt}\n\nAnswer with one JSON object matching this schema:\n\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``;
+  return `${prompt}\n\n${schemaKeySentence(schema)}\n\nAnswer with one JSON object matching this schema:\n\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``;
 }
+
+// Two schema retries per node under both executors; the third miss fails it.
+const SCHEMA_RETRIES = 2;
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -763,18 +768,20 @@ class GraphEngine {
       const parsed = this.parseResult(row, body);
       if ("problem" in parsed) {
         const error = `work item ${row.work_id} returned a body that does not match the schema: ${parsed.problem}`;
-        // d838: one retry, as the subagent path has (d82): the node returns
-        // to issued and unbound and the envelope names the error, the schema
-        // and the item, so the Lead opens a fresh item with the brief.
-        if (row.attempts < 1) {
+        // d838 and its successor: the same retries the subagent path has
+        // (d82): the node returns to issued and unbound and the envelope names
+        // the error, the schema and the item, so the Lead opens a fresh item
+        // with the brief.
+        if (row.attempts < SCHEMA_RETRIES) {
+          const attempt = row.attempts + 1;
           const now = new Date().toISOString();
           this.database
-            .query("UPDATE graph_nodes SET attempts = 1, work_id = NULL, last_error = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
-            .run(JSON.stringify({ error, work: row.work_id }), now, row.run_id, row.node_id, row.instance_key);
-          this.journal(run.row.run_id, "graph.node.retry", { attempt: 1, error, node: row.node_id, ref: refOf(row), round: row.round, work: row.work_id });
+            .query("UPDATE graph_nodes SET attempts = ?, work_id = NULL, last_error = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
+            .run(attempt, JSON.stringify({ error, work: row.work_id }), now, row.run_id, row.node_id, row.instance_key);
+          this.journal(run.row.run_id, "graph.node.retry", { attempt, error, node: row.node_id, ref: refOf(row), round: row.round, work: row.work_id });
           continue;
         }
-        this.setState(row, "failed", { result: { error: `${error}; the node is failed after two attempts`, work: row.work_id } });
+        this.setState(row, "failed", { result: { error: `${error}; the node is failed after ${SCHEMA_RETRIES + 1} attempts`, work: row.work_id } });
         continue;
       }
       this.setState(row, "done", { result: parsed.result });
@@ -820,7 +827,7 @@ class GraphEngine {
     return { ref, run: run.row.run_id, state: "bound", work: workId };
   }
 
-  // One PARSE_FAILED retry, then the node is failed.
+  // Two PARSE_FAILED retries, then the node is failed.
   accept(run: Run, ref: string, text: string, files: string[]): Record<string, unknown> {
     // Live row 10 (2026-09-05): a late result on a finished run must not
     // fire loops or limits and rewrite the recorded outcome.
@@ -851,13 +858,13 @@ class GraphEngine {
         this.database
           .query("UPDATE graph_nodes SET attempts = ?, last_error = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
           .run(attempts, JSON.stringify({ error: problem }), now, row.run_id, row.node_id, row.instance_key);
-        if (attempts >= 2) {
-          this.setState(row, "failed", { result: { error: `result did not match the schema twice: ${problem}` } });
-          throw new CliError("PARSE_FAILED", `node ${ref}: ${problem}; the node is failed after two attempts`, { attempt: attempts, node: ref, retry: false, schema });
+        if (attempts > SCHEMA_RETRIES) {
+          this.setState(row, "failed", { result: { error: `result did not match the schema ${attempts} times: ${problem}` } });
+          throw new CliError("PARSE_FAILED", `node ${ref}: ${problem}; the node is failed after ${attempts} attempts`, { attempt: attempts, node: ref, retry: false, schema });
         }
         throw new CliError(
           "PARSE_FAILED",
-          `node ${ref}: ${problem}; re-ask the sub-agent once for JSON matching the schema, then: maestro graph result ${run.row.run_id} ${ref} --file <path>`,
+          `node ${ref}: ${problem}; re-ask the sub-agent for JSON matching the schema (attempt ${attempts} of ${SCHEMA_RETRIES + 1}), then: maestro graph result ${run.row.run_id} ${ref} --file <path>`,
           { attempt: attempts, node: ref, retry: true, schema },
         );
       }

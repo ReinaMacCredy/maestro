@@ -465,6 +465,23 @@ export function listGraphs(directories: ReadonlyArray<{ origin: GraphOrigin; pat
   return [...listings.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+// Live row 17 (g18): a schema block alone did not hold a sonnet node to the
+// shape; the brief leads with the required keys in one plain sentence, top
+// level and inside array items, derived from the same schema the run checks.
+export function schemaKeySentence(schema: unknown): string | null {
+  const spec = record(schema);
+  if (!spec) return null;
+  const required = Array.isArray(spec.required) ? spec.required.filter((key): key is string => typeof key === "string") : [];
+  const parts = [required.length > 0 ? `Return one JSON object with exactly these keys: ${required.join(", ")}` : "Return one JSON object"];
+  for (const [key, property] of Object.entries(record(spec.properties) ?? {})) {
+    const items = record(record(property)?.items);
+    const nested = Array.isArray(items?.required) ? items.required.filter((entry): entry is string => typeof entry === "string") : [];
+    if (nested.length > 0) parts.push(`nested ${key} objects need ${nested.join(", ")}`);
+  }
+  parts.push("no prose before or after.");
+  return parts.join("; ");
+}
+
 // A small JSON-schema subset: type, properties, required, items, enum. Enough
 // to hold a sub-agent to the shape a node declares (d82); never a dependency.
 export function validateAgainstSchema(value: unknown, schema: unknown, at = "$"): string | null {

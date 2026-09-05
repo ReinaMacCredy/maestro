@@ -54,9 +54,9 @@ loop:
 - A node with a `schema` must return JSON of that shape. Write the
   sub-agent's answer to a file and pass `--file`; maestro extracts the
   first JSON block from prose or a fence. `PARSE_FAILED` with `retry:
-  true` means re-ask that sub-agent once for JSON matching the schema
-  carried in the error; the second failure marks the node failed and the
-  run ends with `failed`.
+  true` means re-ask that sub-agent for JSON matching the schema carried
+  in the error (two retries); the third failure marks the node failed and
+  the run ends with `failed`.
 - `stopped: "LIMIT"` ends the run at a structural limit (`nodes`, `loops`,
   `fanout`, Hub d84) with `partial` state; rerun with `--limit <k>=<N>`
   when the cap, not the graph, was wrong.
@@ -76,9 +76,10 @@ The profile is a definition `maestro install` rendered for both harnesses
 - Codex: `spawn_agent` with agent type `maestro-<profile>` and the node's
   `brief` verbatim.
 
-Send the `brief`, never the bare `prompt`: the brief is the prompt plus the
-node's schema as a JSON block when one is declared (Hub d838), so the agent
-answers in the declared shape instead of its harness habit. It already
+Send the `brief`, never the bare `prompt`: the brief is the prompt plus, when
+a schema is declared, one sentence naming the required keys and the schema as
+a JSON block (Hub d838 and its successor), so the agent answers in the declared
+shape instead of its harness habit. It already
 carries the run state the graph author placed in it. Add only what the harness needs to return
 the answer (for example, "write your JSON answer to <path>"). Never merge
 two nodes into one spawn and never run a function node's command yourself;
@@ -106,8 +107,8 @@ loop:
                     --acceptance "one JSON object matching the schema in the brief" --json
                   maestro graph result <run> <ref> --work <new item id>
   for each node with a retry field (its item's body failed the schema):
-    open a fresh item with node.brief and rebind exactly as above; the
-    second failure fails the node
+    open a fresh item with node.brief and rebind exactly as above; two
+    retries, the third failure fails the node
   for each node with a work field whose workState is RETURNED:
     read it (maestro status <item>), then maestro work accept <item>
     (or maestro work note <item> "<gap>" --rework for one retake)
@@ -120,8 +121,8 @@ Team Supervisor: maestro work accept <item>
 - A bound node stays in `nodes` with `work` and `workState` until its item
   is DONE; `next` then parses the item's returned body like any result
   (schema and all) and issues what depended on it. A body that fails the
-  schema unbinds the node once and lists it with `retry: {error, schema,
-  work}` (d838); a cancelled item fails the node.
+  schema unbinds the node and lists it with `retry: {error, schema, work}`,
+  twice at most (d838 and its successor); a cancelled item fails the node.
 - Bound nodes count toward `limits.fanout`; keep the fan-out under the
   number of Peers you are willing to open.
 - Prompts to a Peer must open with a lowercase plain sentence; a brief that

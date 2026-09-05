@@ -25,7 +25,7 @@ edges: []
 Classify the change.
 `;
 
-test("graph-result-parse: schema JSON accepted, JSON in a fence or inside prose extracted and validated, unparseable text returns PARSE_FAILED with the schema, a second failure marks the node failed (red 5, d82)", async () => {
+test("graph-result-parse: schema JSON accepted, JSON in a fence or inside prose extracted and validated, unparseable text returns PARSE_FAILED with the schema, two retries, the third failure marks the node failed (red 5, d82; live row 17 g18)", async () => {
   await withFixture(async (fixture) => {
     await writeProfile(fixture, "tester");
     const path = await writeGraph(join(fixture.root, "graphs"), "typed", graph);
@@ -54,8 +54,16 @@ test("graph-result-parse: schema JSON accepted, JSON in a fence or inside prose 
     expect(first.retry).toBe(true);
     const wrongShape = failure(await graphResult(fixture, bad.run, "classify", '{"risk": "medium", "files": ["a"]}'));
     expect(wrongShape.code).toBe("PARSE_FAILED");
-    expect(wrongShape.retry).toBe(false);
-    expect(wrongShape.message).toContain("failed");
+    expect(wrongShape.retry).toBe(true);
+    expect(wrongShape.attempt).toBe(2);
+    const stillOpen = await graphNext(fixture, bad.run);
+    expect(stillOpen.done).toBe(false);
+    expect((stillOpen.nodes[0] as { retry?: { error: string } }).retry?.error).toContain("expected one of");
+    const prose2 = failure(await graphResult(fixture, bad.run, "classify", "sorry, still prose"));
+    expect(prose2.code).toBe("PARSE_FAILED");
+    expect(prose2.retry).toBe(false);
+    expect(prose2.attempt).toBe(3);
+    expect(prose2.message).toContain("failed");
     const ended = await graphNext(fixture, bad.run);
     expect(ended.done).toBe(true);
     expect(ended.failed?.node).toBe("classify");

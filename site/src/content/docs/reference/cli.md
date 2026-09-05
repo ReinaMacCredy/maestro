@@ -336,18 +336,18 @@ drive identically through a pull loop; maestro never spawns a model.
 - `graph next <run>` executes every ready function, router, join and foreach
   node and returns `{run, graph, executor, round, state, done, nodes}` listing
   only the agent and human nodes whose inputs are ready (each with `prompt`,
-  `brief` = the prompt plus the schema block a typed node declares, and
-  `retry` after a first schema failure); `{done: true,
+  `brief` = the prompt plus the required-keys sentence and the schema block
+  a typed node declares, and `retry` after a schema failure); `{done: true,
   verdict}` at the end, `{done: true, stopped: "LIMIT", limit, used, partial}`
   at a structural limit, `{done: true, failed}` after a failed node.
 - `graph result <run> <node>[@instance] --file <path>|--text <result>
   [--files a,b]` records a node's result; a declared schema validates JSON
-  extracted from the text and `PARSE_FAILED` carries the schema for one retry.
+  extracted from the text and `PARSE_FAILED` carries the schema for two retries.
   Under the team executor the Lead binds a node instead with `graph result
   <run> <node> --work <slp-work-id>`; `next` lists the node with `work` and
   `workState` until the item is DONE and then takes its returned body as the
-  result; a body that fails the schema unbinds the node once with `retry`,
-  a second failure fails it. A `writes: true` node is issued alone and only to the run's holder
+  result; a body that fails the schema unbinds the node with `retry`, twice
+  at most, and the third failure fails it. A `writes: true` node is issued alone and only to the run's holder
   (`LEASE_HELD` names another holder); the run itself commits nothing.
   A finished run refuses further results.
 - `graph trust <name>|--file <path>` records a plugin-trust grant for a repo
