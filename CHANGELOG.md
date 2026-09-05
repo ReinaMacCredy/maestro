@@ -11,6 +11,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.119.1] - 2026-09-05
+
+### Fixed
+
+- Four SLP v2 tests render the shipped profiles into their own HOME instead
+  of reading the machine's install, and the two stop-order tests wait for the
+  stop helper to exit before reading the fake Herdr; CI is green again with no
+  runtime change (CI run 33967566053).
+
 ## [0.119.0] - 2026-09-05
 
 The graph engine, seat profiles and the Herdr plugin. A pre-known multi-agent
