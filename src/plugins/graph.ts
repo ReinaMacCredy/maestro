@@ -275,6 +275,22 @@ class GraphEngine {
     });
   }
 
+  private reachable(run: Run, from: string, to: string): boolean {
+    const edges = forwardEdges(run.definition);
+    const seen = new Set<string>([from]);
+    const stack = [from];
+    while (stack.length > 0) {
+      const id = stack.pop() as string;
+      for (const edge of edges) {
+        if (edge.from !== id || seen.has(edge.to)) continue;
+        if (edge.to === to) return true;
+        seen.add(edge.to);
+        stack.push(edge.to);
+      }
+    }
+    return false;
+  }
+
   private nodeOf(run: Run, id: string): GraphNode {
     return run.definition.nodes.find((node) => node.id === id) as GraphNode;
   }
@@ -297,7 +313,9 @@ class GraphEngine {
   // The state a node sees: inputs, static results, same-instance results,
   // the item under a foreach, and its round.
   stateFor(run: Run, rows: NodeRow[], row: NodeRow | null): Record<string, unknown> {
-    const state: Record<string, unknown> = { ...run.input, round: row?.round ?? 1, run: run.row.run_id };
+    // {round} is the run's round (the highest any row reached), so a node
+    // outside a loop body still reads the round the loop is on.
+    const state: Record<string, unknown> = { ...run.input, round: Math.max(1, ...rows.map((candidate) => candidate.round)), run: run.row.run_id };
     const scope = row ? run.scopes.get(row.node_id) ?? null : null;
     for (const node of run.definition.nodes) {
       const nodeScope = run.scopes.get(node.id) ?? null;
@@ -543,6 +561,16 @@ class GraphEngine {
         member.state = "pending";
         member.result = null;
         member.round = round;
+      }
+      // A branch a router skipped in the previous round (fix-loop's confirm)
+      // is decided again by the re-run, so every skipped row downstream of
+      // the target returns to pending.
+      for (const member of rows) {
+        if (member.state !== "skipped" || body.has(member.node_id) || !this.reachable(run, edge.to, member.node_id)) continue;
+        this.database
+          .query("UPDATE graph_nodes SET state = 'pending', updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
+          .run(now, member.run_id, member.node_id, member.instance_key);
+        member.state = "pending";
       }
       run.row.loops = used;
       this.database.query("UPDATE graph_runs SET loops = ?, updated_at = ? WHERE run_id = ?").run(used, now, run.row.run_id);

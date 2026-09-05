@@ -18,7 +18,12 @@ test("graph-show-list: show renders a graph from any of the three locations; lis
     const before = data<{ graphs: Array<{ name: string; origin: string; path: string; shadows: Array<{ origin: string }> }> }>(
       await runCli(fixture, ["graph", "list", "--json"]),
     );
-    expect(before.graphs).toEqual([{ name: "review-gate", origin: "shipped", path: shippedPath, shadows: [] }]);
+    expect(before.graphs.map((graph) => [graph.name, graph.origin, graph.shadows])).toEqual([
+      ["council", "shipped", []],
+      ["fix-loop", "shipped", []],
+      ["review-gate", "shipped", []],
+    ]);
+    expect(before.graphs.find((graph) => graph.name === "review-gate")?.path).toBe(shippedPath);
 
     await writeGraph(homeGraphs(fixture), "review-gate", passthroughGraph.replace("name: passthrough", "name: review-gate"));
     await writeGraph(homeGraphs(fixture), "sweep", passthroughGraph.replace("name: passthrough", "name: sweep"));
@@ -35,6 +40,8 @@ test("graph-show-list: show renders a graph from any of the three locations; lis
       await runCli(fixture, ["graph", "list", "--json"]),
     );
     expect(listed.graphs.map((graph) => [graph.name, graph.origin, graph.shadows.map((shadow) => shadow.origin)])).toEqual([
+      ["council", "shipped", []],
+      ["fix-loop", "shipped", []],
       ["review-gate", "repo", ["home", "shipped"]],
       ["sweep", "home", []],
     ]);
