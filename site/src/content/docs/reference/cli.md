@@ -397,8 +397,9 @@ reopens the runtime pane of every RUNNING generation whose role panes survived
 a Herdr restart and notes a generation whose panes are all gone as lost;
 `slp event` is the `pane.exited` and `pane.closed` hook that records a role
 pane loss when no runtime is subscribed. `maestro slp status [--json]`, from a
-team pane, prints whether the runtime is running and the wakes it still holds
-for working seats.
+team pane, prints whether the runtime is running, the Hub Supervisor pane
+`team start` recorded, the wakes it still holds for working seats, and the
+wakes it dropped as `unreachable` because no target could be resolved.
 
 ### `doctor`, `version`, and `hook`
 

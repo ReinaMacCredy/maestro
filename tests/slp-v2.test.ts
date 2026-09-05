@@ -5095,7 +5095,7 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
       fixture,
       room,
       ["team", "start", fixture.repo, "Push notices", "--json"],
-      fake.env,
+      { ...fake.env, HERDR_PANE_ID: "hub:p0" },
     );
     expect(started.exitCode).toBe(0);
     const data = envelope<{
@@ -5170,10 +5170,12 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
     expect(accepted.exitCode).toBe(0);
     expect((await notices()).slice(-2)).toEqual([
       ["agent", "prompt", lead.name, `[from team-supervisor][${id} DONE] accepted; read: maestro status ${id}`],
+      // The Hub notice goes to the pane that ran team start (row 17 g18), not
+      // to a Herdr agent named supervisor.
       [
         "agent",
         "prompt",
-        "supervisor",
+        "hub:p0",
         `[from team-supervisor][${id} DONE] accepted in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
       ],
     ]);
@@ -5325,7 +5327,7 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
       fixture,
       room,
       ["team", "start", fixture.repo, "Blocked notes", "--json"],
-      fake.env,
+      { ...fake.env, HERDR_PANE_ID: "hub:p0" },
     );
     expect(started.exitCode).toBe(0);
     const data = envelope<{
@@ -5392,7 +5394,7 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
     expect((await notices()).at(-1)).toEqual([
       "agent",
       "prompt",
-      "supervisor",
+      "hub:p0",
       `[from team-supervisor][${id} BLOCKED] owner must pick the vendor in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
     ]);
 
@@ -5489,7 +5491,7 @@ test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status
       fixture,
       room,
       ["team", "start", fixture.repo, "Stop with a report", "--json"],
-      fake.env,
+      { ...fake.env, HERDR_PANE_ID: "hub:p0" },
     );
     expect(started.exitCode).toBe(0);
     const data = envelope<{
@@ -5564,13 +5566,13 @@ test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status
 
     const hubNotice = (await fakeHerdrCommands(fake)).find(
       (command) =>
-        command[0] === "agent" && command[1] === "prompt" && command[2] === "supervisor" &&
+        command[0] === "agent" && command[1] === "prompt" && command[2] === "hub:p0" &&
         (command[3] ?? "").includes("STOPPED"),
     );
     expect(hubNotice).toEqual([
       "agent",
       "prompt",
-      "supervisor",
+      "hub:p0",
       `[from team-supervisor][${data.team.teamId} g${data.team.generation} STOPPED] ${reason}; read: maestro status`,
     ]);
   });

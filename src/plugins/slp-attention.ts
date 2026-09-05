@@ -50,9 +50,14 @@ interface TeamRow {
   generation: number;
   project_path: string;
   state: "RUNNING" | "STOPPED";
+  supervisor_pane_id: string;
   team_id: string;
   workspace_id: string;
 }
+
+// The Herdr agent name a Hub Supervisor pane falls back to when team start
+// ran outside a pane and recorded none.
+const hubAgentName = "supervisor";
 
 interface WorkRow {
   assigned_to: string;
@@ -76,6 +81,13 @@ interface PendingLine {
   subject: string;
 }
 
+interface UnreachableLine {
+  droppedAt: string;
+  line: string;
+  reason: string;
+  subject: string;
+}
+
 export interface RuntimeState {
   // Last successful delivery per target: the turn it causes is the runtime's
   // own prompt, not the seat finishing its work (same reading as F15).
@@ -84,6 +96,9 @@ export interface RuntimeState {
   pending: Record<string, PendingLine[]>;
   recent: Record<string, number>;
   stalls: Record<string, number>;
+  // Live row 17 (g18): a wake with no resolvable target is dropped once with
+  // its reason, never queued for a pane that does not exist.
+  unreachable: UnreachableLine[];
 }
 
 export interface SlpRuntimeConfig {
@@ -94,7 +109,7 @@ export interface SlpRuntimeConfig {
 }
 
 function emptyState(): RuntimeState {
-  return { delivered: {}, idleWakes: {}, pending: {}, recent: {}, stalls: {} };
+  return { delivered: {}, idleWakes: {}, pending: {}, recent: {}, stalls: {}, unreachable: [] };
 }
 
 function statePath(directory: string): string {
@@ -135,9 +150,10 @@ function openStore(projectPath: string, readonly = false): Store {
 
 function teamRow(store: Store, teamId: string, generation: number): TeamRow | null {
   if (!tableExists(store, "slp_local_teams")) return null;
+  const supervisorPane = store.hasColumn("slp_local_teams", "supervisor_pane_id") ? "supervisor_pane_id" : "'' AS supervisor_pane_id";
   return store.database
     .query<TeamRow, [string, number]>(
-      `SELECT team_id, generation, project_path, state, workspace_id
+      `SELECT team_id, generation, project_path, state, workspace_id, ${supervisorPane}
        FROM slp_local_teams WHERE team_id = ? AND generation = ?`,
     )
     .get(teamId, generation) ?? null;
@@ -296,15 +312,11 @@ function recordEntry(
   }
 }
 
-function seatAbove(seat: RoleRow, roles: RoleRow[]): string | null {
-  if (seat.role === "team-supervisor") return "supervisor";
-  const above: SlpRole = seat.role === "lead" ? "team-supervisor" : "lead";
-  return roles.find((role) => role.role === above)?.name ?? null;
-}
+type WakeTarget = { target: string } | { reason: string; target: null };
 
-function supervisorTarget(seat: RoleRow, roles: RoleRow[]): string | null {
-  if (seat.role === "team-supervisor") return "supervisor";
-  return roles.find((role) => role.role === "team-supervisor")?.name ?? null;
+function roleTarget(roles: RoleRow[], role: SlpRole): WakeTarget {
+  const name = roles.find((candidate) => candidate.role === role)?.name;
+  return name ? { target: name } : { reason: `the team has no ${role}`, target: null };
 }
 
 // d763: the fixed template, never code advice; the actor is now the runtime.
@@ -405,11 +417,40 @@ export class AttentionRuntime {
     return resubscribe;
   }
 
-  private async deliver(target: string | null, subject: string, line: string): Promise<void> {
-    if (!target) {
-      this.log(`no pane to wake about ${subject}; the store remains the truth`);
+  // The Hub Supervisor's pane is the store fact team start recorded; the
+  // Herdr agent `supervisor` is the fallback, and neither means unreachable.
+  private async hubTarget(team: TeamRow): Promise<WakeTarget> {
+    if (team.supervisor_pane_id) return { target: team.supervisor_pane_id };
+    let listing = "";
+    try {
+      if ((await this.client.agentList()).some((agent) => agent.name === hubAgentName)) return { target: hubAgentName };
+    } catch (error) {
+      listing = `; agent list failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    return {
+      reason: `no Hub Supervisor pane recorded for ${team.team_id} g${team.generation} and no Herdr agent named ${hubAgentName}${listing}`,
+      target: null,
+    };
+  }
+
+  private seatAbove(seat: RoleRow, team: TeamRow): Promise<WakeTarget> {
+    if (seat.role === "team-supervisor") return this.hubTarget(team);
+    return Promise.resolve(roleTarget(this.roles, seat.role === "lead" ? "team-supervisor" : "lead"));
+  }
+
+  private supervisorTarget(seat: RoleRow, team: TeamRow): Promise<WakeTarget> {
+    if (seat.role === "team-supervisor") return this.hubTarget(team);
+    return Promise.resolve(roleTarget(this.roles, "team-supervisor"));
+  }
+
+  private async deliver(wake: WakeTarget, subject: string, line: string): Promise<void> {
+    if (wake.target === null) {
+      this.log(`wake about ${subject} is unreachable and dropped: ${wake.reason}; the store remains the truth`);
+      this.state.unreachable.push({ droppedAt: new Date().toISOString(), line, reason: wake.reason, subject });
+      await this.persist();
       return;
     }
+    const target = wake.target;
     const queue = this.state.pending[target] ?? [];
     queue.push({ line, queuedAt: new Date().toISOString(), subject });
     this.state.pending[target] = queue;
@@ -472,9 +513,9 @@ export class AttentionRuntime {
     this.state.stalls[key] = entryId;
     this.log(`stall:${kind} on ${work.id} for ${seat.name}: entry ${entryId}`);
     const line = stallLine(work.id, kind, evidence);
-    await this.deliver(seat.name, `${work.id} ${kind}`, line);
-    const copy = supervisorTarget(seat, this.roles);
-    if (copy && copy !== seat.name) await this.deliver(copy, `${work.id} ${kind} copy`, line);
+    await this.deliver({ target: seat.name }, `${work.id} ${kind}`, line);
+    const copy = await this.supervisorTarget(seat, team);
+    if (copy.target !== seat.name) await this.deliver(copy, `${work.id} ${kind} copy`, line);
   }
 
   // Returns true when the subscription must be rebuilt (a new pane to watch).
@@ -521,7 +562,7 @@ export class AttentionRuntime {
         const card = teamCard(store, team.team_id, team.generation);
         const evidence = `${loss}: ${seat.name} pane ${paneId} (${event.event}); store: ${seat.role} of ${team.team_id} g${team.generation}`;
         if (card) recordEntry(store, team, card.id, evidence, `pane:${loss}`, "pane.lost");
-        await this.deliver(supervisorTarget(seat, this.roles), `${seat.name} pane ${loss}`, `[attention] ${seat.name} pane ${loss}`);
+        await this.deliver(await this.supervisorTarget(seat, team), `${seat.name} pane ${loss}`, `[attention] ${seat.name} pane ${loss}`);
         return changed;
       }
       if (event.event !== "pane_agent_status_changed") return changed;
@@ -575,7 +616,7 @@ export class AttentionRuntime {
       const mark = activityMark(store, team.team_id, team.generation);
       if (this.state.idleWakes[paneId] === mark) return changed;
       this.state.idleWakes[paneId] = mark;
-      await this.deliver(seatAbove(seat, this.roles), `${seat.name} idle`, `[attention] ${seat.name} idle`);
+      await this.deliver(await this.seatAbove(seat, team), `${seat.name} idle`, `[attention] ${seat.name} idle`);
       return changed;
     } finally {
       store.close();
@@ -794,6 +835,15 @@ export function recordRuntimePane(projectPath: string, teamId: string, generatio
   }
 }
 
+function recordedSupervisorPane(projectPath: string, teamId: string, generation: number): string {
+  const store = openStore(projectPath, true);
+  try {
+    return teamRow(store, teamId, generation)?.supervisor_pane_id ?? "";
+  } finally {
+    store.close();
+  }
+}
+
 function recordedRuntimePane(projectPath: string, teamId: string, generation: number): string {
   const store = openStore(projectPath, true);
   try {
@@ -929,17 +979,21 @@ export async function slpRuntimeStatus(projectPath: string, teamId: string, gene
   const pending = Object.entries(state?.pending ?? {}).flatMap(([target, lines]) =>
     lines.map((line) => ({ line: line.line, queuedAt: line.queuedAt, subject: line.subject, target }))
   );
+  const unreachable = state?.unreachable ?? [];
   return {
     data: {
       generation,
       pending,
       runtime: holder ? { pid: holder, state: "running" } : { pid: null, state: "not-running" },
       runtimePaneId: recordedRuntimePane(projectPath, teamId, generation) || null,
+      supervisorPaneId: recordedSupervisorPane(projectPath, teamId, generation) || null,
       teamId,
+      unreachable,
     },
     text: [
       `${teamId} g${generation} runtime ${holder ? `running (pid ${holder})` : "not running"}`,
       ...(pending.length === 0 ? ["pending: none"] : pending.map((line) => `pending ${line.target}: ${line.line}`)),
+      ...unreachable.map((line) => `unreachable ${line.subject}: ${line.reason}`),
     ].join("\n"),
   };
 }

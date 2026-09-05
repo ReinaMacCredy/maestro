@@ -655,6 +655,13 @@ function migrateProject(store: Store): void {
     "runtime_pane_id",
     "ALTER TABLE slp_local_teams ADD COLUMN runtime_pane_id TEXT NOT NULL DEFAULT ''",
   );
+  // Live row 17 (g18): the Hub Supervisor's pane is a recorded fact, never
+  // the literal Herdr agent name `supervisor` that nothing owned.
+  store.ensureColumn(
+    "slp_local_teams",
+    "supervisor_pane_id",
+    "ALTER TABLE slp_local_teams ADD COLUMN supervisor_pane_id TEXT NOT NULL DEFAULT ''",
+  );
   widenRoleCheck(store, "slp_local_roles");
 }
 
@@ -1392,8 +1399,8 @@ function finalizeStart(
         `INSERT INTO slp_local_teams
           (team_id, generation, room_store_path, project_path,
            configuration_json, pack_version, pack_digest, state, workspace_id,
-           bound_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?)`,
+           supervisor_pane_id, bound_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?)`,
       )
       .run(
         current.team_id,
@@ -1404,6 +1411,7 @@ function finalizeStart(
         current.pack_version,
         current.pack_digest,
         current.workspace_id,
+        currentPaneId() ?? "",
         now,
       );
     upsertStartedRoles(store, "slp_local_roles", current.team_id, current.generation, roles, now);
@@ -1836,8 +1844,15 @@ interface ActiveLocalTeam {
   project_path: string;
   room_store_path: string;
   runtime_pane_id: string;
+  supervisor_pane_id: string;
   team_id: string;
   workspace_id: string;
+}
+
+// The Hub Supervisor's pane recorded at team start; the Herdr agent name
+// `supervisor` is only the fallback for a start that ran outside a pane.
+function hubSupervisorTarget(team: Pick<ActiveLocalTeam, "supervisor_pane_id">): string {
+  return team.supervisor_pane_id || "supervisor";
 }
 
 interface SlpActor {
@@ -1871,7 +1886,8 @@ function activeLocalTeam(context: PluginContext): ActiveLocalTeam | null {
   return context.store.database
     .query<ActiveLocalTeam, [string]>(
       `SELECT team_id, generation, room_store_path, project_path,
-              configuration_json, pack_digest, workspace_id, runtime_pane_id
+              configuration_json, pack_digest, workspace_id, runtime_pane_id,
+              supervisor_pane_id
        FROM slp_local_teams
        WHERE state = 'RUNNING' AND project_path = ?
        ORDER BY generation DESC LIMIT 1`,
@@ -2542,7 +2558,7 @@ export async function maybeHandleSlpWorkNote(
     await pushNotice(
       actor.team.project_path,
       actor.role,
-      "supervisor",
+      hubSupervisorTarget(actor.team),
       `${id} BLOCKED`,
       `${body} in ${actor.team.team_id} g${actor.team.generation}`,
       "maestro status",
@@ -2759,7 +2775,7 @@ async function acceptWork(context: PluginContext, id: string, outcome: string): 
     await pushNotice(
       actor.team.project_path,
       actor.role,
-      "supervisor",
+      hubSupervisorTarget(actor.team),
       `${id} DONE`,
       `${outcome} in ${actor.team.team_id} g${actor.team.generation}`,
       "maestro status",
@@ -3234,7 +3250,7 @@ async function requestNormalStop(
     await pushNotice(
       team.project_path,
       "team-supervisor",
-      "supervisor",
+      hubSupervisorTarget(team),
       `${team.team_id} g${team.generation} STOPPED`,
       reason || "normal stop",
       "maestro status",
@@ -3646,7 +3662,8 @@ async function stopTeam(
   const team = projectStore.database
     .query<ActiveLocalTeam, [string, number]>(
       `SELECT team_id, generation, room_store_path, project_path,
-              configuration_json, pack_digest, workspace_id, runtime_pane_id
+              configuration_json, pack_digest, workspace_id, runtime_pane_id,
+              supervisor_pane_id
        FROM slp_local_teams WHERE team_id = ? AND generation = ?`,
     )
     .get(roomTeam.team_id, roomTeam.generation);
