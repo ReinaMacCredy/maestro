@@ -1108,12 +1108,26 @@ export const workPlugin: BuiltInPlugin = {
         const work = requireWork(context, requiredPosition(invocation, 0, "work id"));
         const children = service.children(work.id);
         const blockers = blockersFor(context, work.id);
-        const notes = context.store.database
+        const allNotes = context.store.database
           .query<WorkNoteRow, [string]>(
             "SELECT text, created_at FROM work_notes WHERE work_id = ? ORDER BY id",
           )
           .all(work.id)
           .map((note) => ({ text: note.text, createdAt: note.created_at }));
+        // The live slice is the last few notes (d821); a relay can leave dozens.
+        const window = invocation.options.notes;
+        let noteLimit = 5;
+        if (window === "all") noteLimit = allNotes.length;
+        else if (typeof window === "string") {
+          noteLimit = Number(window);
+          if (!Number.isInteger(noteLimit) || noteLimit < 0) {
+            throw new CliError("INVALID_VALUE", "--notes takes a non-negative integer or all", { notes: window });
+          }
+        }
+        const notes = allNotes.slice(Math.max(0, allNotes.length - noteLimit));
+        const noteCountLine = notes.length < allNotes.length
+          ? `notes: ${allNotes.length}, showing the last ${notes.length}; maestro work show ${work.id} --notes all`
+          : null;
         const childLines = children.map(
           (child) => `child: ${child.id} [${child.state}] ${child.title}`,
         );
@@ -1136,12 +1150,13 @@ export const workPlugin: BuiltInPlugin = {
               )
               .map((record) => ({ policy: record.name, requires: record.requires ?? "" }));
         return {
-          data: { work, children, blockers, notes, dispatches, decisions, gates },
+          data: { work, children, blockers, notes, noteCount: allNotes.length, dispatches, decisions, gates },
           text: [
             formatWork(work),
             ...gates.map((gate) => `gate: ${gate.policy} ${gate.requires}`),
             ...blockerLines,
             ...childLines,
+            ...(noteCountLine ? [noteCountLine] : []),
             ...notes.map((note) => `note: ${note.text}`),
             ...dispatches.map(
               (dispatch) =>
@@ -1154,7 +1169,8 @@ export const workPlugin: BuiltInPlugin = {
           ].join("\n"),
         };
       }, {
-        description: "Show one work item with its done gates, blockers, evidence, children, and notes.",
+        description: "Show one work item with its done gates, blockers, evidence, children, and the last five notes.",
+        flags: { "--notes": { description: "How many notes to print, newest last: an integer or all (default 5).", value: true } },
         mutates: false,
         positionals: [{ name: "id", required: true }],
       }),

@@ -234,3 +234,35 @@ test("640 a read verb whose stdout pipe closes early exits 0 with no EPIPE stack
     expect(exitCode).toBe(0);
   });
 });
+
+test("641 work show prints the last five notes behind a count line; --notes <n|all> widens the window (UX F8, d821)", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "noisy"]));
+    for (let index = 1; index <= 8; index += 1) {
+      expect((await runCli(fixture, ["work", "note", id, `note ${index}`], session)).exitCode).toBe(0);
+    }
+    const shown = await runCli(fixture, ["work", "show", id]);
+    expect(shown.exitCode).toBe(0);
+    const lines = shown.stdout.split("\n");
+    expect(lines).toContain("notes: 8, showing the last 5; maestro work show " + id + " --notes all");
+    expect(lines.filter((line) => line.startsWith("note: "))).toEqual(
+      ["note 4", "note 5", "note 6", "note 7", "note 8"].map((text) => `note: ${text}`),
+    );
+    const json = JSON.parse((await runCli(fixture, ["work", "show", id, "--json"])).stdout).data;
+    expect(json.noteCount).toBe(8);
+    expect(json.notes.map((note: { text: string }) => note.text)).toEqual(["note 4", "note 5", "note 6", "note 7", "note 8"]);
+
+    const two = await runCli(fixture, ["work", "show", id, "--notes", "2"]);
+    expect(two.stdout.split("\n").filter((line) => line.startsWith("note: "))).toEqual(["note: note 7", "note: note 8"]);
+    expect(two.stdout).toContain("notes: 8, showing the last 2;");
+    const all = await runCli(fixture, ["work", "show", id, "--notes", "all"]);
+    expect(all.stdout.split("\n").filter((line) => line.startsWith("note: "))).toHaveLength(8);
+    expect(all.stdout).not.toContain("notes: 8,");
+    const few = idFrom(await runCli(fixture, ["work", "add", "quiet"]));
+    expect((await runCli(fixture, ["work", "note", few, "only"], session)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "show", few])).stdout).not.toContain("notes: ");
+    const bad = await runCli(fixture, ["work", "show", id, "--notes", "many"]);
+    expect(bad.exitCode).toBe(1);
+    expect(bad.stderr).toContain("INVALID_VALUE");
+  });
+});
