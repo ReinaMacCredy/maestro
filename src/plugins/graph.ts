@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { CliError, requiredPosition, stringOption, stringOptions, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import { tableExists } from "../kernel/store.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import {
   dedupItems,
@@ -553,7 +554,7 @@ class GraphEngine {
 
   async advance(run: Run): Promise<Record<string, unknown>> {
     if (run.row.stopped || run.row.verdict !== null) return this.envelope(run, this.rows(run.row.run_id));
-    let stop: Stop | null = null;
+    let stop: Stop | null = this.resolveBound(run, this.rows(run.row.run_id));
     let untrusted: CliError | null = null;
     let changed = true;
     while (changed && !stop && !untrusted) {
@@ -686,13 +687,83 @@ class GraphEngine {
         ...(row.schema ? { schema: parseJson(row.schema, null) } : {}),
         inputs: parseJson(row.inputs, {}),
         round: row.round,
+        ...(row.work_id ? { work: row.work_id, workState: this.slpWork(row.work_id)?.state ?? "unknown" } : {}),
       }));
     return { ...base, done: false, nodes };
   }
 
   // Intake (d82): a declared schema validates JSON, otherwise the first JSON
-  // block in the text; free text stays raw. One PARSE_FAILED retry, then the
-  // node is failed.
+  // block in the text; free text stays raw.
+  private parseResult(row: NodeRow, text: string): { problem: string } | { result: unknown } {
+    const schema = parseJson<unknown>(row.schema, null);
+    const extracted = extractJson(text);
+    if (!schema) return { result: extracted === undefined ? text : extracted };
+    const problem = extracted === undefined ? "no JSON found in the result" : validateAgainstSchema(extracted, schema);
+    return problem ? { problem } : { result: extracted };
+  }
+
+  // Hub d88/d89: under the team-executor a node is bound to the SLP work
+  // item the Lead opened for it; the runtime only reads that item's state
+  // and return body (A7) and resolves the node once the item is DONE.
+  private resolveBound(run: Run, rows: NodeRow[]): Stop | null {
+    for (const row of rows) {
+      if (row.state !== "issued" || !row.work_id) continue;
+      const item = this.slpWork(row.work_id);
+      if (!item || item.state !== "DONE") continue;
+      if (item.acceptance_outcome === "cancelled") {
+        this.setState(row, "failed", { result: { error: `work item ${row.work_id} was cancelled`, work: row.work_id } });
+        continue;
+      }
+      const body = item.current_return ?? "";
+      const parsed = this.parseResult(row, body);
+      if ("problem" in parsed) {
+        this.setState(row, "failed", { result: { error: `work item ${row.work_id} returned a body that does not match the schema: ${parsed.problem}`, work: row.work_id } });
+        continue;
+      }
+      this.setState(row, "done", { result: parsed.result });
+      const stop = this.fireLoops(run, rows, row);
+      if (stop) return stop;
+    }
+    return null;
+  }
+
+  slpWork(id: string): { acceptance_outcome: string | null; current_return: string | null; state: string } | null {
+    if (!tableExists(this.context.store, "slp_work")) return null;
+    return this.database
+      .query<{ acceptance_outcome: string | null; current_return: string | null; state: string }, [string]>(
+        "SELECT state, current_return, acceptance_outcome FROM slp_work WHERE id = ?",
+      )
+      .get(id) ?? null;
+  }
+
+  bind(run: Run, ref: string, workId: string): Record<string, unknown> {
+    if (run.row.stopped !== null || run.row.verdict !== null) {
+      throw new CliError("INVALID_STATE", `run ${run.row.run_id} is done and accepts no binding`, { ref, run: run.row.run_id });
+    }
+    if (run.row.executor !== "team") {
+      throw new CliError(
+        "INVALID_STATE",
+        `run ${run.row.run_id} has executor ${run.row.executor}; --work binds nodes only under the team-executor (a Lead pane, or --executor=team)`,
+        { executor: run.row.executor, ref, run: run.row.run_id },
+      );
+    }
+    // d89: the Lead drives; binding is the driver's own write.
+    requireSlpActor(this.context, ["lead"]);
+    const { instance, node } = splitRef(ref);
+    const row = this.rowFor(this.rows(run.row.run_id), node, instance);
+    if (!row) throw new CliError("NOT_FOUND", `graph run ${run.row.run_id} has no node ${ref}`, { ref, run: run.row.run_id });
+    if (row.state !== "issued") {
+      throw new CliError("INVALID_STATE", `node ${ref} of run ${run.row.run_id} is ${row.state}, not issued`, { ref, state: row.state });
+    }
+    if (!this.slpWork(workId)) throw new CliError("NOT_FOUND", `SLP work item not found: ${workId}`, { work: workId });
+    this.database
+      .query("UPDATE graph_nodes SET work_id = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
+      .run(workId, new Date().toISOString(), row.run_id, row.node_id, row.instance_key);
+    this.journal(run.row.run_id, "graph.node.bound", { node: row.node_id, ref, round: row.round, work: workId });
+    return { ref, run: run.row.run_id, state: "bound", work: workId };
+  }
+
+  // One PARSE_FAILED retry, then the node is failed.
   accept(run: Run, ref: string, text: string, files: string[]): Record<string, unknown> {
     // Live row 10 (2026-09-05): a late result on a finished run must not
     // fire loops or limits and rewrite the recorded outcome.
@@ -713,11 +784,11 @@ class GraphEngine {
       throw new CliError("INVALID_STATE", `node ${ref} of run ${run.row.run_id} is ${row.state}, not issued; run: maestro graph next ${run.row.run_id}`, { ref, state: row.state });
     }
     const schema = parseJson<unknown>(row.schema, null);
-    const extracted = extractJson(text);
+    const parsed = this.parseResult(row, text);
     let result: unknown;
-    if (schema) {
-      const problem = extracted === undefined ? "no JSON found in the result" : validateAgainstSchema(extracted, schema);
-      if (problem) {
+    if ("problem" in parsed) {
+      const problem = parsed.problem;
+      {
         const attempts = row.attempts + 1;
         const now = new Date().toISOString();
         this.database
@@ -733,9 +804,8 @@ class GraphEngine {
           { attempt: attempts, node: ref, retry: true, schema },
         );
       }
-      result = extracted;
     } else {
-      result = extracted === undefined ? text : extracted;
+      result = parsed.result;
     }
     if (files.length > 0) {
       this.database
@@ -1019,8 +1089,13 @@ export const graphPlugin: BuiltInPlugin = {
           const ref = requiredPosition(invocation, 1, "node ref");
           const file = stringOption(invocation, "file");
           const inline = stringOption(invocation, "text");
-          if ((file === undefined) === (inline === undefined)) {
-            throw new CliError("INVALID_OPTION", "graph result takes exactly one of --file <path> or --text <result>");
+          const workId = stringOption(invocation, "work");
+          if ([file, inline, workId].filter((value) => value !== undefined).length !== 1) {
+            throw new CliError("INVALID_OPTION", "graph result takes exactly one of --file <path>, --text <result> or --work <slp-work-id>");
+          }
+          if (workId !== undefined) {
+            const bound = engine.bind(engine.loadRun(id), ref, workId);
+            return { data: bound, text: `${id} ${ref} bound to ${workId}; run: maestro graph next ${id}` };
           }
           let text: string;
           if (file !== undefined) {
@@ -1040,6 +1115,7 @@ export const graphPlugin: BuiltInPlugin = {
             "--file": { description: "Read the result from this file.", value: true },
             "--files": { description: "Files the node changed, comma separated.", multiple: true, value: true },
             "--text": { description: "The result as inline text.", value: true },
+            "--work": { description: "Team-executor (Lead only): bind the node to the SLP work item opened for it; next resolves it with the item's returned body once it is DONE.", value: true },
           },
           positionals: [
             { name: "run", required: true },

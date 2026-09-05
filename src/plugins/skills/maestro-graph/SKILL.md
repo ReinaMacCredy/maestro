@@ -83,10 +83,42 @@ maestro already did.
 `graph run` reports `executor` in every envelope (Hub d88): `subagent`
 from a plain session, `claude -p`, `codex exec` or a desktop app; `team`
 when the driver is a role pane of a running SLP team. Under `team` the
-Lead drives and each agent node becomes one Peer work item; the binding
-verb (`graph result --work`) lands with the second close of bundle
-graph-engine. Until then run graphs from a plain session, or pass
-`--executor subagent` from a role pane.
+Lead is the driver and each agent node is one Peer work item (Hub d89);
+the Lead is never a node and maestro still spawns nothing.
+
+```text
+Team Supervisor: maestro work add "run graph <name> <key=value ...>" \
+                   --acceptance "the run's verdict"
+Lead:            maestro work take <item>
+                 maestro graph run <name> [key=value ...] --json
+loop:
+  envelope = the JSON just returned (or maestro graph next <run> --json)
+  if envelope.done: maestro work return <item> "<verdict JSON>"; stop
+  for each node in envelope.nodes without a work field:
+    kind human -> answer it yourself: maestro graph result <run> <ref> --text "<answer>"
+    kind agent -> maestro work add "<node.prompt>" --to peer-<node.profile> \
+                    --acceptance "one JSON object matching the node schema" --json
+                  maestro graph result <run> <ref> --work <new item id>
+  for each node with a work field whose workState is RETURNED:
+    read it (maestro status <item>), then maestro work accept <item>
+    (or maestro work note <item> "<gap>" --rework for one retake)
+  maestro graph next <run> --json
+Team Supervisor: maestro work accept <item>
+```
+
+- One pane per profile: `--to peer-<profile>` opens the Peer lazily on the
+  first item and queues later nodes of that profile on the same pane.
+- A bound node stays in `nodes` with `work` and `workState` until its item
+  is DONE; `next` then parses the item's returned body like any result
+  (schema and all) and issues what depended on it. A cancelled item fails
+  the node.
+- Bound nodes count toward `limits.fanout`; keep the fan-out under the
+  number of Peers you are willing to open.
+- Prompts to a Peer must open with a lowercase plain sentence; a brief that
+  opens "You are ..." is swallowed as a slash command. The node prompts in
+  the shipped presets already do.
+- The graph runtime writes no SLP state: every `work add`, `accept` and
+  `return` above is yours (A7).
 
 ## Hand-off
 
