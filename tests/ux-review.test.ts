@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
@@ -198,7 +198,7 @@ test("635 memory ingest|retract|render write the Hub from a project cwd through 
 
     const retracted = await runCli(fixture, ["memory", "retract", "three", "--reason", "no longer true"], session);
     expect(retracted.exitCode).toBe(0);
-    expect(retracted.stdout).toMatch(/^m\d+ three retracted: no longer true\n$/);
+    expect(retracted.stdout).toMatch(/^m\d+ three retracted: no longer true\nindex re-rendered: .*\/maestro\/MEMORY\.md \(0 facts\)\n$/);
     const missing = await runCli(fixture, ["memory", "retract", "nope", "--reason", "x"], session);
     expect(missing.exitCode).toBe(1);
     expect(missing.stderr).toContain("NOT_FOUND");
@@ -284,5 +284,41 @@ test("642 work note --file <path> records the file body, so a long note never pa
     expect(missing.exitCode).toBe(1);
     expect(missing.stderr).toContain("NOT_FOUND");
     expect((await runCli(fixture, ["help", "work", "note"])).stdout).toContain("--file");
+  });
+});
+
+test("643 memory retract and ingest re-render the injected index, or name the render command when they cannot (UX F9)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await hub(fixture);
+    const index = join(room, "MEMORY.md");
+    await writeClaudeFact(fixture, "feedback_one.md", "one", "First fact");
+    // No render exists yet: ingest cannot refresh it and says what to run.
+    const first = await runCliAt(fixture, room, ["memory", "ingest"], session);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain("index missing; run: maestro memory render");
+    expect((await runCliAt(fixture, room, ["memory", "render"], session)).exitCode).toBe(0);
+    expect(await readFile(index, "utf8")).toContain("- one: First fact");
+
+    await writeClaudeFact(fixture, "feedback_two.md", "two", "Second fact");
+    const second = await runCli(fixture, ["memory", "ingest"], session);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toMatch(/index re-rendered: .*\/maestro\/MEMORY\.md \(2 facts\)/);
+    expect(await readFile(index, "utf8")).toContain("- two: Second fact");
+    // Nothing promoted: the index is left alone and nothing is claimed about it.
+    const idle = await runCliAt(fixture, room, ["memory", "ingest"], session);
+    expect(idle.stdout).not.toContain("index");
+
+    const retracted = await runCli(fixture, ["memory", "retract", "two", "--reason", "gone"], session);
+    expect(retracted.exitCode).toBe(0);
+    expect(retracted.stdout).toMatch(/index re-rendered: .*\/maestro\/MEMORY\.md \(1 facts\)/);
+    expect(await readFile(index, "utf8")).not.toContain("Second fact");
+    expect((await runCli(fixture, ["memory", "render", "--check"])).exitCode).toBe(0);
+
+    // A hand-edited render is never overwritten silently.
+    await appendFile(index, "\n- hand edit\n");
+    const guarded = await runCliAt(fixture, room, ["memory", "retract", "one", "--reason", "gone too"], session);
+    expect(guarded.exitCode).toBe(0);
+    expect(guarded.stdout).toContain("index not re-rendered: edited by hand; run: maestro memory render --force");
+    expect(await readFile(index, "utf8")).toContain("- hand edit");
   });
 });

@@ -557,16 +557,26 @@ interface IngestData {
   counts: Record<IngestAction["action"], number>;
   directories: string[];
   dryRun: boolean;
+  render?: RenderRefresh;
+}
+
+interface RetractData {
+  fact: MemoryFact;
+  render?: RenderRefresh;
 }
 
 function ingestText(data: IngestData): string {
   const { counts } = data;
   const summary = `${data.dryRun ? "dry-run: " : ""}promoted ${counts.promoted}, updated ${counts.updated}, skipped ${counts.skipped}, refused ${counts.refused} (${data.actions.length} facts from ${data.directories.length} directories)`;
-  return [...data.actions.map(formatAction), summary].join("\n");
+  return [...data.actions.map(formatAction), summary, refreshText(data.render)]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 }
 
-function retractText(data: { fact: MemoryFact }): string {
-  return `${data.fact.id} ${data.fact.slug} retracted: ${data.fact.retiredReason}`;
+function retractText(data: RetractData): string {
+  return [`${data.fact.id} ${data.fact.slug} retracted: ${data.fact.retiredReason}`, refreshText(data.render)]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 }
 
 interface RenderData {
@@ -575,6 +585,57 @@ interface RenderData {
   path: string;
   previous?: string;
   status?: string;
+}
+
+// The rendered index is what every session loads, so a write that leaves it
+// stale keeps injecting the old fact (UX F9). A hand edit is still never
+// overwritten: the verb says what to run instead.
+interface RenderRefresh {
+  facts: number;
+  path: string;
+  status: "drift" | "missing" | "rendered";
+}
+
+function refreshRender(context: PluginContext): RenderRefresh {
+  const path = join(resolveHubRoom().room, "MEMORY.md");
+  const existing = readRendered(path);
+  const facts = listFacts(context.store.database, false);
+  if (existing === null) return { facts: facts.length, path, status: "missing" };
+  if (existing.hash === null || sha256(existing.body) !== existing.hash) {
+    return { facts: facts.length, path, status: "drift" };
+  }
+  writeRender(context, path, facts, existing);
+  return { facts: facts.length, path, status: "rendered" };
+}
+
+function refreshText(refresh: RenderRefresh | undefined): string | null {
+  if (!refresh) return null;
+  if (refresh.status === "rendered") return `index re-rendered: ${refresh.path} (${refresh.facts} facts)`;
+  if (refresh.status === "missing") return "index missing; run: maestro memory render";
+  return "index not re-rendered: edited by hand; run: maestro memory render --force";
+}
+
+function writeRender(
+  context: PluginContext,
+  path: string,
+  facts: MemoryFact[],
+  existing: { body: string; hash: string | null } | null,
+): RenderData {
+  const rendered = renderIndex(facts);
+  const status = existing === null ? "missing" : sha256(existing.body) === rendered.hash ? "current" : "stale";
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(
+    path,
+    `<!-- rendered by maestro memory render; content-hash: ${rendered.hash}; do not hand-edit -->\n${rendered.content}`,
+  );
+  context.log.append({
+    type: "memory.render",
+    entityType: "memory",
+    entityId: "hub",
+    sessionId: context.sessions.current().id,
+    payload: { facts: facts.length, hash: rendered.hash, path, previous: status },
+  });
+  return { facts: facts.length, hash: rendered.hash, path, previous: status };
 }
 
 function renderText(data: RenderData): string {
@@ -707,6 +768,7 @@ export const memoryPlugin: BuiltInPlugin = {
             });
           }
           const data: IngestData = { actions, counts, directories: directories.map((entry) => entry.directory), dryRun };
+          if (!dryRun && counts.promoted + counts.updated > 0) data.render = refreshRender(context);
           return { data, text: ingestText(data) };
         },
         {
@@ -725,7 +787,7 @@ export const memoryPlugin: BuiltInPlugin = {
         "memory retract",
         async (invocation): Promise<CliResult> => {
           if (!writesHubDirectly(context)) {
-            const data = await forwardToHub<{ fact: MemoryFact }>(invocation, "retract");
+            const data = await forwardToHub<RetractData>(invocation, "retract");
             return { data, text: retractText(data) };
           }
           const key = required(invocation, 0, "fact id or slug");
@@ -749,7 +811,8 @@ export const memoryPlugin: BuiltInPlugin = {
             sessionId: context.sessions.current().id,
             payload: { reason, slug: fact.slug },
           });
-          return { data: { fact: updated }, text: retractText({ fact: updated }) };
+          const data: RetractData = { fact: updated, render: refreshRender(context) };
+          return { data, text: retractText(data) };
         },
         {
           description: "Retire one fact so the buffers can never promote it again.",
@@ -835,19 +898,7 @@ export const memoryPlugin: BuiltInPlugin = {
           if (context.store.readOnly) {
             throw new CliError("READ_ONLY", "MAESTRO_READ_ONLY=1 cannot write the rendered index", { path });
           }
-          mkdirSync(dirname(path), { recursive: true });
-          writeFileSync(
-            path,
-            `<!-- rendered by maestro memory render; content-hash: ${rendered.hash}; do not hand-edit -->\n${rendered.content}`,
-          );
-          context.log.append({
-            type: "memory.render",
-            entityType: "memory",
-            entityId: "hub",
-            sessionId: context.sessions.current().id,
-            payload: { facts: facts.length, hash: rendered.hash, path, previous: status },
-          });
-          const data: RenderData = { facts: facts.length, hash: rendered.hash, path, previous: status };
+          const data = writeRender(context, path, facts, existing);
           return { data, text: renderText(data) };
         },
         {

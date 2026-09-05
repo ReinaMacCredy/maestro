@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -178,7 +179,13 @@ test("571 R3 memory render: deterministic for a fixed store, differs from the st
     expect(forced.exitCode).toBe(0);
     expect(await readFile(out, "utf8")).toBe(firstText);
 
+    // A retract re-renders (UX F9), so the check stays current; only a store
+    // change that bypasses the memory verbs leaves the render stale.
     await runCliAt(fixture, room, ["memory", "retract", "hub-store", "--reason", "test"]);
+    expect((await runCliAt(fixture, room, ["memory", "render", "--check"])).exitCode).toBe(0);
+    const database = new Database(join(room, ".maestro", "maestro.db"));
+    database.query("UPDATE memory_facts SET description = 'edited behind the render' WHERE slug = 'ask-with-cards'").run();
+    database.close();
     const stale = await runCliAt(fixture, room, ["memory", "render", "--check"]);
     expect(stale.exitCode).not.toBe(0);
     expect(stale.stderr).toContain("MEMORY_INDEX_STALE");
