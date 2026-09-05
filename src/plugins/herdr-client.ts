@@ -63,6 +63,8 @@ export interface HerdrPane {
 export interface HerdrAgent {
   agent?: string | null;
   agent_status: HerdrAgentStatus | string;
+  interactive_ready?: boolean;
+  launch_pending?: boolean;
   name?: string | null;
   pane_id: string;
   workspace_id: string;

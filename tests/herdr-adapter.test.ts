@@ -592,3 +592,21 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
+
+test("start-before-active: a start whose agent is not yet listed as active waits for it, and a first prompt answered agent_not_ready is retried; the team still starts (live 2026-09-05)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    const fake = await installFakeHerdr(fixture, { agentActivationDelayReads: 3, promptNotReadyAttempts: 1, runtimePane: "record" });
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Prompt before active", "--json"], fake.env);
+    expect(started.exitCode).toBe(0);
+    const data = envelope<StartedTeam>(started.stdout);
+    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead"]);
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const contractPrompts = (await prompts(fake)).filter((command) => /^slp team /.test(command[3] ?? ""));
+    // The Supervisor's first prompt failed and was retried; the Lead's landed once.
+    expect(contractPrompts.map((command) => command[2])).toEqual([supervisor.name, supervisor.name, `lead-${data.team.teamId}`]);
+    const state = await readFakeHerdrState(fake);
+    expect(state.agents.map((agent: { agent_status: string }) => agent.agent_status)).toEqual(["idle", "idle"]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 30_000);

@@ -13,6 +13,10 @@ import type { Fixture } from "./helpers.ts";
 export interface FakeHerdrBehavior {
   acknowledgementPrefixes?: Partial<Record<"team-supervisor" | "lead" | "peer", string>>;
   acknowledgementDelayReads?: number;
+  // A started agent stays off agent.list, and prompts to it fail with
+  // agent_not_ready, for this many list reads: the socket start answered
+  // before the name was active (live 2026-09-05).
+  agentActivationDelayReads?: number;
   agentBusyAttempts?: number;
   agentStartDelayMs?: number;
   agents?: boolean;
@@ -27,6 +31,8 @@ export interface FakeHerdrBehavior {
   processInfoDelayMs?: number;
   // Every accepted prompt pushes working then idle for the target's pane.
   promptEvents?: boolean;
+  // The first prompts fail with agent_not_ready although the agent is listed.
+  promptNotReadyAttempts?: number;
   promptStalledAttempts?: number;
   prompts?: boolean;
   // spawn: plugin.pane.open runs `maestro slp runtime` as a child process;
@@ -467,8 +473,14 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       }
       return { type: "ok" };
     }
-    case "agent.list":
-      return { type: "agent_list", agents: state.agents };
+    case "agent.list": {
+      const hidden = state.activating as Record<string, number>;
+      for (const name of Object.keys(hidden)) {
+        hidden[name] = (hidden[name] as number) - 1;
+        if ((hidden[name] as number) <= 0) delete hidden[name];
+      }
+      return { type: "agent_list", agents: state.agents.filter((candidate: Params) => !(candidate.name in hidden)) };
+    }
     case "agent.get": {
       const agent = agentByTarget(params.target);
       if (!agent) throw new FakeHerdrError("agent_not_found", `agent ${params.target} not found`);
@@ -514,7 +526,19 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         agent.agent_status = "idle";
         throw new FakeHerdrError("agent_not_ready", `agent ${name} is blocked during startup and is not ready for prompts`);
       }
-      return { type: "agent_started", agent, argv: [kind, ...(params.args ?? [])] };
+      if ((behavior.agentActivationDelayReads ?? 0) > 0) {
+        state.activating[name] = behavior.agentActivationDelayReads;
+        return {
+          type: "agent_started",
+          agent: { ...agent, interactive_ready: false, launch_pending: true },
+          argv: [kind, ...(params.args ?? [])],
+        };
+      }
+      return {
+        type: "agent_started",
+        agent: { ...agent, interactive_ready: true, launch_pending: false },
+        argv: [kind, ...(params.args ?? [])],
+      };
     }
     case "agent.prompt": {
       const target = params.target;
@@ -523,6 +547,10 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         throw new FakeHerdrError("agent_prompt_stalled", "agent prompt produced no observed state change within 5000 ms");
       }
       if (behavior.prompts === false) throw new FakeHerdrError("agent_not_found", `agent ${target} not found`);
+      if (target in state.activating || (behavior.promptNotReadyAttempts ?? 0) > 0) {
+        if (!(target in state.activating)) behavior.promptNotReadyAttempts = (behavior.promptNotReadyAttempts as number) - 1;
+        throw new FakeHerdrError("agent_not_ready", `agent ${target} is not an active named agent`);
+      }
       const body = params.text ?? "";
       state.prompts.push({ name: target, body });
       // d90: the post-open prompt is one line; the seat knows its role from its
@@ -697,6 +725,7 @@ export async function installFakeHerdr(
     logChain: Promise.resolve(),
     queue: Promise.resolve(),
     state: {
+      activating: {},
       agents: [],
       behavior,
       helper_exits: [],

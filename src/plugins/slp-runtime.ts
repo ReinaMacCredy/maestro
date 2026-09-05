@@ -340,6 +340,45 @@ export class HerdrSlpRuntime {
     return this.client.agentList();
   }
 
+  // The named agent is active for prompts only once agent.list carries it
+  // settled in its pane; agent.start over the socket can answer before that
+  // (live 2026-09-05: the contract prompt hit agent_not_ready right after a
+  // successful start), so the wait is ours either way.
+  private async awaitActiveAgent(
+    plan: SlpTeamPlan,
+    role: Pick<SlpRolePlan, "kind" | "name">,
+    paneId: string,
+    command: readonly string[],
+    deadline: number,
+    stderr: string | undefined,
+    requireSettled: boolean,
+  ): Promise<void> {
+    while (true) {
+      const matches = (await this.agents()).filter((agent) => agent.name === role.name);
+      if (
+        matches.length === 1 && matches[0]?.pane_id === paneId &&
+        (requireSettled ? settled(matches[0]) : matches[0].agent_status !== "blocked")
+      ) return;
+      if (
+        matches.length === 1 &&
+        matches[0]?.pane_id === paneId &&
+        matches[0].agent_status === "blocked"
+      ) {
+        throw await this.blockedFailure(plan, role.name, role.kind, command, stderr);
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new SlpRuntimeError(
+          `agent ${role.name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
+          command,
+          stderr,
+          { paneTail: await this.paneTail(role.name) },
+        );
+      }
+      await Bun.sleep(Math.min(100, remaining));
+    }
+  }
+
   private async startAgent(
     plan: SlpTeamPlan,
     role: Pick<SlpRolePlan, "autocompact" | "kind" | "name" | "profile">,
@@ -350,36 +389,22 @@ export class HerdrSlpRuntime {
     const deadline = Date.now() + this.agentReadyTimeoutMs;
     while (true) {
       try {
-        await this.client.agentStart(
+        const started = await this.client.agentStart(
           { args: launch, kind: role.kind, name: role.name, pane_id: paneId, timeout_ms: 60_000 },
           Math.max(this.commandTimeoutMs, 75_000),
         );
+        const ready = started !== null && started.pane_id === paneId && settled(started) &&
+          started.launch_pending !== true && started.interactive_ready !== false;
+        if (!ready) {
+          await this.awaitActiveAgent(plan, role, paneId, command, Date.now() + this.agentReadyTimeoutMs, undefined, false);
+        }
         return;
       } catch (error) {
         const errorCode = herdrErrorCode(error);
         const stderr = error instanceof SlpRuntimeError ? error.stderr : undefined;
         if (errorCode === "agent_not_ready") {
-          while (true) {
-            const matches = (await this.agents()).filter((agent) => agent.name === role.name);
-            if (matches.length === 1 && matches[0]?.pane_id === paneId && settled(matches[0])) return;
-            if (
-              matches.length === 1 &&
-              matches[0]?.pane_id === paneId &&
-              matches[0].agent_status === "blocked"
-            ) {
-              throw await this.blockedFailure(plan, role.name, role.kind, command, stderr);
-            }
-            const remaining = deadline - Date.now();
-            if (remaining <= 0) {
-              throw new SlpRuntimeError(
-                `agent ${role.name} did not become ready within ${this.agentReadyTimeoutMs}ms`,
-                command,
-                stderr,
-                { paneTail: await this.paneTail(role.name) },
-              );
-            }
-            await Bun.sleep(Math.min(100, remaining));
-          }
+          await this.awaitActiveAgent(plan, role, paneId, command, deadline, stderr, true);
+          return;
         }
         if (errorCode !== "agent_pane_busy") {
           if (error instanceof SlpRuntimeError) {
@@ -417,7 +442,9 @@ export class HerdrSlpRuntime {
           const harness = plan.roles.find((role) => role.name === name)?.kind ?? "codex";
           throw await this.blockedFailure(plan, name, harness, command, stderr);
         }
-        if (code !== "agent_prompt_stalled") {
+        // agent_not_ready here is the name not yet active after a successful
+        // start (live 2026-09-05); it clears within the same window as a stall.
+        if (code !== "agent_prompt_stalled" && code !== "agent_not_ready") {
           if (error instanceof SlpRuntimeError) {
             throw new SlpRuntimeError(
               `role contract was not delivered: ${name}; ${error.message}`,
@@ -431,7 +458,7 @@ export class HerdrSlpRuntime {
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new SlpRuntimeError(
-            `role contract prompt remained stalled for ${this.promptReadyTimeoutMs}ms`,
+            `role contract prompt remained ${code === "agent_not_ready" ? "not ready" : "stalled"} for ${this.promptReadyTimeoutMs}ms`,
             command,
             stderr,
             { paneTail: await this.paneTail(name) },
