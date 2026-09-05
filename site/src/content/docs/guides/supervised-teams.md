@@ -27,8 +27,9 @@ Every displayed edge is a direct bidirectional conversation channel. In the
 supported SLP flow, the Hub Supervisor reaches the team only through its Team
 Supervisor; it never manages the Lead or Peers directly.
 
-Every seat is inside the work lifecycle and there is no background process:
-there is no Observer, Advisor, scheduler, health or reconcile layer. Each seat
+Every seat is inside the work lifecycle: there is no Observer, Advisor,
+scheduler, health or reconcile layer, and the only non-seat pane is the
+generation's runtime pane, a foreground process with no model. Each seat
 launches as a native harness profile rendered by `maestro install` (see
 [Seat profiles](/getting-started/slp-setup/#seat-profiles)).
 
@@ -71,11 +72,14 @@ maestro team start /absolute/path/to/project "<observable objective>"
 One call pins the Workspace Pack and the profiles it names, creates or reuses
 one Herdr workspace, opens the Team Supervisor and Lead with
 `claude --agent maestro-<name>` or `codex --profile maestro-<name>`, sends
-each a one-line prompt (team, generation, instance, ready challenge), and
-creates initial `OPEN` work for the Lead. `--peer-profile <name>` picks the
-Peer profile for the generation. Peers
-have no lifecycle command: a Lead creates assigned work and Maestro reuses or
-opens the named Peer in the same operation.
+each a one-line prompt (team, generation, instance, ready challenge), opens
+the runtime pane beside the Team Supervisor, records the Hub Supervisor's own
+pane as the target of the team's upward wakes (d841), and creates initial
+`OPEN` work for the Lead. `--peer-profile <name>` picks the Peer profile for
+the generation. Peers have no lifecycle command: a Lead creates assigned work
+and Maestro reuses or opens the named Peer in the same operation, then wakes
+that pane with `[from lead][<id> OPEN] <objective>; read: maestro status
+<id>` whether it was just opened or already acknowledged (d840).
 
 ```sh
 maestro work add "<bounded objective>" --to peer-api
@@ -97,8 +101,8 @@ flowchart LR
 - `work note` records material context without changing state.
 - `work note --blocked` keeps the state and pushes
   `[from <role>][<id> BLOCKED] <summary>; read: maestro status <id>` to the
-  seat above the caller; it is the team's attention mechanism until the team
-  runtime records stalls itself (Hub d97, d98).
+  seat above the caller; it is the team's first attention layer, and the
+  runtime pane's stall nudges are the second (Hub d97, d98).
 - `work return` carries the result, proof, blocker and residual risk when they
   apply.
 - `work accept` is performed by the reviewer: Lead accepts Peer work and Team
@@ -152,13 +156,16 @@ There is no separate team health, review or reconcile layer.
 ## Runtime pane
 
 `team start` opens one runtime pane per generation beside the Team Supervisor
-through Maestro's Herdr plugin (Hub d96). It is not an agent: it holds the
-generation's Herdr event subscription, renders the team's pane output, and
+through Maestro's Herdr plugin (Hub d96); the pane runs `maestro slp runtime`
+with the team and generation in its environment. It is not an agent: it holds
+the generation's Herdr event subscription, renders the team's pane output, and
 resolves every event against the store. It never takes, returns, accepts or
 decides. Status exposes `runtimePane: on|off`; a repeated `team start` reopens
-a missing one, and `maestro slp restore`, the plugin's startup hook, brings it
-back after a Herdr restart. Its lock and queue state are runtime-only and are
-deleted at stop.
+a missing one, a generation whose pane did not open fails with
+`RUNTIME_PANE_FAILED` naming `maestro install`, and `maestro slp restore`,
+the plugin's startup hook, brings it back after a Herdr restart. Its lock and
+queue state are runtime-only and are deleted at stop; `maestro slp status`
+from a team pane reads them.
 
 ## Attention
 
@@ -186,9 +193,11 @@ accept or note; a role pane that exits or closes is noted on the team card and
 wakes the Team Supervisor with `[attention] <seat> pane exited|closed`. A wake
 for a seat that is still working waits for that seat's next idle; `maestro slp
 status` lists what is held. `--stall` stays refused for every pane: only the
-runtime records a stall. A Team Supervisor's line to the Hub needs a Hub agent
-pane named `supervisor`; without one the line becomes a warning and the store
-remains the truth.
+runtime records a stall. A Team Supervisor's line to the Hub goes to the Hub
+Supervisor pane `team start` recorded (d841), or to a Hub agent named
+`supervisor`; a wake that resolves to neither is dropped as unreachable
+instead of queued forever, `maestro slp status` lists it as `unreachable`,
+and the store remains the truth.
 
 ## Stop
 

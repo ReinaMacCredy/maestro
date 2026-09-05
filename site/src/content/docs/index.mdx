@@ -3,7 +3,7 @@ title: Maestro
 description: Durable coordination for direct, supervised AI teams.
 template: splash
 hero:
-  tagline: One Workspace Pack, five roles, nine operations, and project-owned work.
+  tagline: One Workspace Pack, four roles, nine operations, and project-owned work.
   actions:
     - text: Install Maestro
       link: /getting-started/install/
@@ -28,8 +28,11 @@ Herdr provides the running workspace and panes.
 - One runtime pane per generation that turns Herdr pane events into attention, with no model judging.
 - Every seat launches as a native harness profile (`claude --agent
   maestro-<name>`, `codex --profile maestro-<name>`) rendered by
-  `maestro install`; attention is the seat's own `work note --blocked`.
+  `maestro install`; attention is the seat's own `work note --blocked` plus
+  the runtime pane's nudges.
+- A pre-known multi-agent path (a review gate, a fix loop, a council) is one
+  [graph](/guides/graphs/) file that both harnesses drive identically.
 
 Start with [SLP setup and storage](/getting-started/slp-setup/), then read
-[Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), and the
-[SLP scenarios](/guides/slp-scenarios/).
+[Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), the
+[SLP scenarios](/guides/slp-scenarios/), and [Graphs](/guides/graphs/).

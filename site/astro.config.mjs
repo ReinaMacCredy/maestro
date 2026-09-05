@@ -96,7 +96,8 @@ export default defineConfig({
             { label: 'Supervised teams', slug: 'guides/supervised-teams' },
             { label: 'Self-improvement', slug: 'guides/self-improvement' },
             { label: 'Attention and brief', slug: 'guides/attention-and-brief' },
-            { label: 'Read-only mode', slug: 'guides/observer-mode' },
+            { label: 'Graphs', slug: 'guides/graphs' },
+            { label: 'Read-only mode', slug: 'guides/read-only-mode' },
             { label: 'Harness integration', slug: 'guides/harness-integration' },
             {
               label: 'Recipes, skills, and plugins',

@@ -59,6 +59,14 @@ topology rather than a coordination skill.
 maestro plugin list
 ```
 
+Maestro is also a Herdr plugin. `maestro install` renders
+`~/maestro/herdr-plugin.toml` (plugin id `maestro`, the installed binary, the
+`runtime` pane, the `slp restore` startup hook and the `pane.exited` and
+`pane.closed` event hooks) and links the Hub room as that plugin over the
+Herdr socket, once, so Herdr runs the hooks from the room; `maestro uninstall`
+removes the link and the file. A `team start` whose runtime pane does not
+open fails with `RUNTIME_PANE_FAILED` naming `maestro install`.
+
 Plugins can be built in, global, or repository-local. The `plugin` verb can add,
 create, trust, enable, disable, or remove managed plugins. Policies remain
 plugins so their gates can be removed without changing the mechanism kernel.

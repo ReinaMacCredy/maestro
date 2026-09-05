@@ -45,9 +45,37 @@ Team Supervisor, and team work remains in that project's store.
 
 ## The runtime pane and Hub attention are separate
 
-Inside a team, attention is the seat's own `work note <id> "<what you need>"
---blocked`, which Maestro pushes one seat up, plus the generation's runtime
-pane (Hub d96, d97), which resolves Herdr pane events against the store and
-records `stall:dialog`, `stall:silence` and pane loss as the actor `runtime`.
+Inside a team, attention has two layers and the Hub `attention` verb is
+neither. The first is the seat's own `work note <id> "<what you need>"
+--blocked`, which Maestro pushes one seat up. The second is the generation's
+runtime pane, the `maestro slp runtime` process that `team start` opens
+beside the Team Supervisor through Maestro's Herdr plugin (Hub d96, d97). It
+resolves Herdr pane events against the store with no model and writes as the
+actor `runtime`:
+
+- a role pane that Herdr reports `blocked` (a harness dialog) becomes a
+  `stall:dialog` entry on the item that seat holds, and an `idle` pane that
+  still holds ACTIVE work becomes `stall:silence`; each is pushed to the stuck
+  pane as `[from runtime][<id>] dialog|silence <evidence>; stop and run:
+  maestro work note <id> "<what you need>" --blocked`, with a copy to the
+  Team Supervisor, once per item and kind until the item's latest entry
+  changes;
+- an idle seat holding nothing wakes the seat above with `[attention] <seat>
+  idle`, once per pane until the team's activity log advances; a role pane
+  that exits or closes is noted on the team card and wakes the Team
+  Supervisor with `[attention] <seat> pane exited|closed`.
+
+The wakes the nine operations push are separate from the runtime and go out
+as each operation commits: `work add --to` wakes the assignee's pane with
+`[from <role>][<id> OPEN] <objective>; read: maestro status <id>` whether the
+pane was just opened or already acknowledged (d840); `work return`, `work
+accept` and `work note --rework` wake their counterpart the same way. A wake
+for a seat that is still working waits in the runtime's queue for that seat's
+next idle. The Team Supervisor's wakes to the Hub go to the Hub Supervisor
+pane `team start` recorded (d841), or to a Hub agent named `supervisor`; a
+wake that resolves to neither is dropped rather than queued forever, and
+`maestro slp status` from a team pane lists it as `unreachable` next to the
+wakes still pending. The store stays the truth either way.
+
 The Hub `attention` verb stays an on-call administrative read and never sees
 a pane. See [Attention](/guides/supervised-teams/#attention).

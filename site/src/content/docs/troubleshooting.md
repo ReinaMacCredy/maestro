@@ -78,6 +78,50 @@ maestro work show <work-id>
 maestro status --live
 ```
 
+## `LEASE_HELD`
+
+Another live session holds the item: `work start`, `work done`, and `work
+release` refuse it and name the holder. Read `maestro status --live`; a dead
+holder is reclaimed with `maestro work reclaim <id>`, a live one keeps the
+lease until it finishes. Under a graph run the same code names the run's
+holder when a `writes: true` node is issued from another session: only the
+session holding the run may issue it, and an orphaned run passes to the next
+driver.
+
+## `GRAPH_UNTRUSTED`
+
+A repo graph (`<repo>/.maestro/graphs/`) reached a function node, which runs
+a shell command from a file the repository controls. The error names the file
+and the exact `maestro graph trust` command; review the file, run that
+command, then `maestro graph next <run>` again. The grant is keyed to the
+file's bytes, so an edit asks again. Room (`~/maestro/graphs/`) and shipped
+graphs never ask. See [Graphs](/guides/graphs/).
+
+## `HERDR_UNAVAILABLE`
+
+An SLP operation could not reach Herdr's socket; the message names the path
+(`HERDR_SOCKET_PATH`, or `~/.config/herdr/herdr.sock`) and the failing call.
+Start Herdr, or run the command from a Herdr pane so the socket path is in
+its environment, then repeat the operation. Nothing was recorded.
+
+## `RUNTIME_PANE_FAILED`
+
+The generation is RUNNING but its runtime pane did not open, usually because
+the Herdr plugin is not installed or linked. Run `maestro install` (it
+renders `~/maestro/herdr-plugin.toml` and links the Hub room as the plugin),
+then repeat the same `team start`: it reopens only what is missing.
+
+## Unreachable wakes
+
+`maestro slp status` from a team pane lists the wakes the runtime still holds
+for working seats and the ones it dropped as `unreachable <subject>:
+<reason>`. A wake is unreachable when no target resolves: a Team Supervisor's
+line to the Hub with no recorded Hub Supervisor pane and no Hub agent named
+`supervisor`, or a seat whose pane is gone. The store already holds the fact
+the wake pointed at; read `maestro status` there and, for the Hub case, start
+the next generation from the Hub Supervisor's own pane so `team start`
+records it.
+
 ## SLP setup and pack errors
 
 `SLP_PACK_MISSING` means Hub does not have its canonical `~/maestro/SLP.md`.
@@ -107,8 +151,8 @@ or flag whose profile is in none of the profile directories;
 `maestro install`; `PEER_PROFILE_MISMATCH` means the named Peer already runs
 another profile, so pick another Peer name; `RETIRED_FLAG` names the
 replacement for `--lead-model`, `--peer-model` or `--supervisor-model`;
-`STALL_RETIRED` means `work note --stall` left with the Observer seat and
-`--blocked` is the attention note.
+`STALL_RETIRED` means `work note --stall` left with the retired Observer seat;
+`--blocked` is the attention note and the runtime pane records stalls.
 
 See [SLP setup and storage](/getting-started/slp-setup/) for every managed path.
 

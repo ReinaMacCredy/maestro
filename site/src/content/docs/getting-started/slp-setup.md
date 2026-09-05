@@ -44,8 +44,11 @@ That single operation:
 2. records the pack version and SHA-256 in the Hub store;
 3. copies the pack to `<project>/.maestro/SLP.md`;
 4. creates one generation-scoped Herdr workspace;
-5. opens the Team Supervisor and Lead with only their relevant pack sections;
-6. creates the initial `OPEN` work item assigned to the Lead.
+5. opens the Team Supervisor and Lead as their rendered profiles
+   (`claude --agent maestro-<name>` or `codex --profile maestro-<name>`);
+6. opens the runtime pane beside the Team Supervisor and records the Hub
+   Supervisor's pane as the target of the team's upward wakes;
+7. creates the initial `OPEN` work item assigned to the Lead.
 
 Both `team start` and `work add --to` block while a pane opens and acknowledges
 its contract, normally under a minute, and print their phases on stderr
@@ -59,14 +62,16 @@ whose pane is still alive are left alone (`already acknowledged in <pane>; left
 alone`), closed panes are reopened and acknowledged again, and the START record
 in both stores is refreshed to the current pane ids.
 
-Hand-offs push a wake-up: after `work return`, `work accept`, and `work note
---rework` commit, Maestro sends one line to the counterpart pane through Herdr
-(`[from lead][w1 RETURNED] <summary>; read: maestro status w1`). The store
-stays the truth; a push that fails prints a warning and nothing else changes.
-The Team Supervisor closes with `maestro team stop <team-id> --reason
-"<report>"`: the Hub sees `<team> g<n> STOPPED (supervisor): <report>` in
-`maestro status`, and the same line is pushed to the Hub only when its room
-agent is named `supervisor`.
+Hand-offs push a wake-up: after `work add`, `work return`, `work accept`,
+and `work note --rework` commit, Maestro sends one line to the counterpart
+pane through Herdr (`[from lead][w1 RETURNED] <summary>; read: maestro status
+w1`; a new assignment is `[from lead][w2 OPEN] ...` whether the Peer pane was
+just opened or already acknowledged). The store stays the truth; a push that
+fails prints a warning and nothing else changes. The Team Supervisor closes
+with `maestro team stop <team-id> --reason "<report>"`: the Hub sees `<team>
+g<n> STOPPED (supervisor): <report>` in `maestro status`, and the same line
+is pushed to the Hub Supervisor pane `team start` recorded, or to a room
+agent named `supervisor`.
 
 The printed result contains the team generation and initial work ID. The Lead
 takes that work from its own pane:
@@ -121,7 +126,9 @@ profile for one generation; `work add --to <peer> --profile <name>` picks it
 for one Peer. A version-2 pack (`slp:model` markers) fails `team start` with
 `INVALID_SLP_PACK` naming the marker change; a marker naming a profile that
 does not exist fails with `PROFILE_NOT_FOUND`; a profile whose render is
-missing fails with `PROFILE_NOT_INSTALLED` naming `maestro install`.
+missing fails with `PROFILE_NOT_INSTALLED` naming `maestro install`. The
+three seats are the only profiles the pack names; the Hub Supervisor is the
+owner's own agent in `~/maestro`, and there is no Observer seat or marker.
 
 The project snapshot is managed, inspectable and not automatically committed.
 A repository may version it as project policy, but agents must not edit it

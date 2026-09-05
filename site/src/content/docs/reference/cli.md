@@ -48,9 +48,9 @@ maestro team stop <team-id> --reason "<closing report>"
 Team Supervisor authority for normal stop; Hub Supervisor authority for an
 emergency stop. The optional `--reason` is the Team Supervisor's closing
 report: it is stored on the Hub's STOP record, printed by Hub `status` as
-`<team> g<n> STOPPED (supervisor): <reason>`, and pushed to the Hub agent named
-`supervisor` when one exists. Normal stop requires every work item to be
-`DONE`. The
+`<team> g<n> STOPPED (supervisor): <reason>`, and pushed to the Hub Supervisor
+pane `team start` recorded (d841), or to a Hub agent named `supervisor`. Normal
+stop requires every work item to be `DONE`. The
 Team Supervisor delegates its own final close to a transient foreground
 non-agent Hub pane; this is internal, not a tenth operation. State changes to
 `STOPPED` only after every team pane, the workspace, and raw transcript are
@@ -105,7 +105,9 @@ shared contract + Peer mandate + that body (`maestro-peer-<name>`), and
 otherwise the generation's `peer` profile applies. A Peer that already runs
 another profile is refused with `PEER_PROFILE_MISMATCH`; a missing render
 fails with `PROFILE_NOT_INSTALLED` and nothing is rendered on demand. The new
-work state is `OPEN`.
+work state is `OPEN`, and the assignee's pane is woken with `[from
+<role>][<id> OPEN] <objective>; read: maestro status <id>` whether it was
+just opened or already acknowledged (d840).
 
 ### `work take`
 
@@ -120,17 +122,18 @@ requires an unused reviewer grant for its current return revision.
 
 ```sh
 maestro work note <work-id> "<material note>"
+maestro work note <work-id> --file <path>
 maestro work note <work-id> "<specific gap>" --rework
 maestro work note <work-id> "<what I need>" --blocked
 ```
 
-Appends context without changing state. `--rework` is restricted to the
-reviewer responsible for that return. It grants the same assignee one retake
-of the current return revision; an ordinary note never grants a retake.
-`--blocked` flags the note and pushes a `BLOCKED` line to the seat above the
-caller; it is the team's attention mechanism until the team runtime records
-stalls itself (Hub d97, d98). The retired `--stall` is refused for every pane
-with `STALL_RETIRED`. No form can change the work objective or acceptance
+Appends context without changing state; `--file` reads the body from a file.
+`--rework` is restricted to the reviewer responsible for that return. It
+grants the same assignee one retake of the current return revision; an
+ordinary note never grants a retake. `--blocked` flags the note and pushes a
+`BLOCKED` line to the seat above the caller; it is the team's first attention
+layer, and the runtime pane's stall nudges are the second (Hub d97, d98). The
+retired `--stall` is refused for every pane with `STALL_RETIRED`. No form can change the work objective or acceptance
 contract. Changed scope is new work.
 
 ### `work return`
@@ -361,7 +364,8 @@ loop of at most three rounds with a human close) and `council`
 maestro-council protocol with the Lead's draft and verdict as human nodes).
 Limits: `nodes` counts issued agent nodes, `loops` counts loop-back firings,
 `fanout` counts agent and human nodes in flight (bound nodes included). The
-`maestro-graph` skill carries both executor loops and the authoring reference.
+`maestro-graph` skill carries both executor loops and the authoring reference;
+[Graphs](/guides/graphs/) is the guide.
 
 ### `plugin`
 

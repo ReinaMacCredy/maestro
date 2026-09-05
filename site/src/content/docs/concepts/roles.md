@@ -45,14 +45,22 @@ Herdr itself is outside that guarantee.
 | Lead | technical coordination and Peer acceptance | `status`, `work add`, `work take`, `work note`, `work return`, `work accept`, `decide` |
 | Peer | bounded execution and independent judgment | `status`, `work take`, `work note`, `work return` |
 
-Each team seat runs as a native harness profile (`claude --agent
-maestro-<name>` or `codex --profile maestro-<name>`) rendered by `maestro
-install` from the profile file the Workspace Pack names; the mandate is the
-seat's system prompt, so it survives `/clear` and compaction. Attention is the
-seat's own `work note --blocked`, pushed one seat up, plus the generation's
-runtime pane, which turns a `blocked` or idle-while-holding pane into a
-`stall:dialog` or `stall:silence` entry and the d763 nudge (Hub d96, d97); no
-model judges attention.
+The three team seats (Team Supervisor, Lead, Peer) run as native harness
+profiles (`claude --agent maestro-<name>` or `codex --profile
+maestro-<name>`) rendered by `maestro install` into
+`~/.claude/agents/maestro-<name>.md` and the Codex profile files from the
+profile file the Workspace Pack names; the mandate is the seat's system
+prompt, so it survives `/clear` and compaction. A seat is changed by a
+shadowing file, `~/maestro/profiles/<seat>.md` or
+`<project>/.maestro/profiles/<seat>.md`, not by a flag; the one flag is
+`team start --peer-profile <name>` for one generation's Peers. The Hub
+Supervisor is the owner's own agent in `~/maestro` and has no profile;
+`team start` records its pane so the team's upward wakes reach it (d841).
+There is no Observer seat. Attention is the seat's own `work note --blocked`,
+pushed one seat up, plus the generation's runtime pane, which turns a
+`blocked` or idle-while-holding pane into a `stall:dialog` or `stall:silence`
+entry and the `[from runtime]` nudge (Hub d96, d97); no model judges
+attention. See [Seat profiles](/getting-started/slp-setup/#seat-profiles).
 
 ## Hub Supervisor
 
