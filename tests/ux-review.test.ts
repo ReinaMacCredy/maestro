@@ -204,3 +204,33 @@ test("635 memory ingest|retract|render write the Hub from a project cwd through 
     expect(missing.stderr).toContain("NOT_FOUND");
   });
 });
+
+test("640 a read verb whose stdout pipe closes early exits 0 with no EPIPE stack (UX F7)", async () => {
+  await withFixture(async (fixture) => {
+    const long = "x".repeat(3000);
+    for (let index = 0; index < 30; index += 1) {
+      expect((await runCli(fixture, ["decision", "draft", `${index} ${long}`])).exitCode).toBe(0);
+    }
+    const full = await runCli(fixture, ["decision", "list"]);
+    expect(full.stdout.length).toBeGreaterThan(65_536);
+
+    const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
+    const piped = Bun.spawn(
+      ["bash", "-c", `set -o pipefail; "${process.execPath}" "${cli}" decision list | head -1`],
+      {
+        cwd: fixture.repo,
+        env: { ...process.env, HOME: fixture.home, ...session },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(piped.stdout).text(),
+      new Response(piped.stderr).text(),
+      piped.exited,
+    ]);
+    expect(stdout.split("\n")[0]).toMatch(/^d1 \[draft\] 0 x/);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+  });
+});

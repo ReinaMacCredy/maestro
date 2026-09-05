@@ -8,6 +8,12 @@ import { pluginTrustPredicate } from "../src/plugins/plugin-trust.ts";
 import { slpV2CliOptions } from "../src/plugins/slp-v2.ts";
 
 const args = process.argv.slice(2);
+// A reader that stops early (head, rg -m1, a narrow pane) closes the pipe; the
+// output already reached it, so the write that failed is not an error of ours.
+process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EPIPE") process.exit(0);
+  throw error;
+});
 if (args[0] === "--version" || args[0] === "-v") args[0] = "version";
 const observer = observerMode();
 const slp = slpV2CliOptions();
