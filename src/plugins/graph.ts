@@ -62,6 +62,7 @@ interface NodeRow {
   inputs: string;
   instance_key: string;
   kind: string;
+  last_error: string | null;
   node_id: string;
   profile: string | null;
   prompt: string | null;
@@ -104,6 +105,14 @@ function refOf(row: Pick<NodeRow, "instance_key" | "node_id">): string {
 function splitRef(ref: string): { instance: string; node: string } {
   const at = ref.indexOf(instanceSeparator);
   return at < 0 ? { instance: "", node: ref } : { instance: ref.slice(at + 1), node: ref.slice(0, at) };
+}
+
+// d838: the brief is what a harness sends to the node's agent under either
+// executor; the schema travels inside it, so a Peer that never sees the
+// envelope still answers in the declared shape.
+function briefOf(prompt: string, schema: unknown): string {
+  if (!schema) return prompt;
+  return `${prompt}\n\nAnswer with one JSON object matching this schema:\n\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\``;
 }
 
 function shellQuote(value: string): string {
@@ -554,7 +563,7 @@ class GraphEngine {
         if (run.scopes.get(member.node_id) === run.scopes.get(row.node_id) && member.instance_key !== row.instance_key) continue;
         this.database
           .query(
-            `UPDATE graph_nodes SET state = 'pending', result = NULL, prompt = NULL, round = ?, attempts = 0, updated_at = ?
+            `UPDATE graph_nodes SET state = 'pending', result = NULL, prompt = NULL, round = ?, attempts = 0, last_error = NULL, updated_at = ?
              WHERE run_id = ? AND node_id = ? AND instance_key = ?`,
           )
           .run(round, now, member.run_id, member.node_id, member.instance_key);
@@ -705,18 +714,26 @@ class GraphEngine {
     if (run.row.verdict !== null) return { ...base, done: true, verdict: parseJson(run.row.verdict, null), nodes: [] };
     const nodes = rows
       .filter((row) => row.state === "issued")
-      .map((row) => ({
-        ref: refOf(row),
-        node: row.node_id,
-        ...(row.instance_key !== "" ? { instance: row.instance_key } : {}),
-        kind: row.kind,
-        ...(row.profile ? { profile: row.profile } : {}),
-        prompt: row.prompt ?? "",
-        ...(row.schema ? { schema: parseJson(row.schema, null) } : {}),
-        inputs: parseJson(row.inputs, {}),
-        round: row.round,
-        ...(row.work_id ? { work: row.work_id, workState: this.slpWork(row.work_id)?.state ?? "unknown" } : {}),
-      }));
+      .map((row) => {
+        const schema = parseJson<unknown>(row.schema, null);
+        const lastError = parseJson<{ error?: string; work?: string } | null>(row.last_error, null);
+        return {
+          ref: refOf(row),
+          node: row.node_id,
+          ...(row.instance_key !== "" ? { instance: row.instance_key } : {}),
+          kind: row.kind,
+          ...(row.profile ? { profile: row.profile } : {}),
+          prompt: row.prompt ?? "",
+          brief: row.kind === "agent" ? briefOf(row.prompt ?? "", schema) : row.prompt ?? "",
+          ...(schema ? { schema } : {}),
+          inputs: parseJson(row.inputs, {}),
+          round: row.round,
+          ...(row.work_id ? { work: row.work_id, workState: this.slpWork(row.work_id)?.state ?? "unknown" } : {}),
+          ...(row.attempts > 0 && lastError
+            ? { retry: { error: lastError.error ?? "", schema, ...(lastError.work ? { work: lastError.work } : {}) } }
+            : {}),
+        };
+      });
     return { ...base, done: false, nodes };
   }
 
@@ -745,7 +762,19 @@ class GraphEngine {
       const body = item.current_return ?? "";
       const parsed = this.parseResult(row, body);
       if ("problem" in parsed) {
-        this.setState(row, "failed", { result: { error: `work item ${row.work_id} returned a body that does not match the schema: ${parsed.problem}`, work: row.work_id } });
+        const error = `work item ${row.work_id} returned a body that does not match the schema: ${parsed.problem}`;
+        // d838: one retry, as the subagent path has (d82): the node returns
+        // to issued and unbound and the envelope names the error, the schema
+        // and the item, so the Lead opens a fresh item with the brief.
+        if (row.attempts < 1) {
+          const now = new Date().toISOString();
+          this.database
+            .query("UPDATE graph_nodes SET attempts = 1, work_id = NULL, last_error = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
+            .run(JSON.stringify({ error, work: row.work_id }), now, row.run_id, row.node_id, row.instance_key);
+          this.journal(run.row.run_id, "graph.node.retry", { attempt: 1, error, node: row.node_id, ref: refOf(row), round: row.round, work: row.work_id });
+          continue;
+        }
+        this.setState(row, "failed", { result: { error: `${error}; the node is failed after two attempts`, work: row.work_id } });
         continue;
       }
       this.setState(row, "done", { result: parsed.result });
@@ -820,8 +849,8 @@ class GraphEngine {
         const attempts = row.attempts + 1;
         const now = new Date().toISOString();
         this.database
-          .query("UPDATE graph_nodes SET attempts = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
-          .run(attempts, now, row.run_id, row.node_id, row.instance_key);
+          .query("UPDATE graph_nodes SET attempts = ?, last_error = ?, updated_at = ? WHERE run_id = ? AND node_id = ? AND instance_key = ?")
+          .run(attempts, JSON.stringify({ error: problem }), now, row.run_id, row.node_id, row.instance_key);
         if (attempts >= 2) {
           this.setState(row, "failed", { result: { error: `result did not match the schema twice: ${problem}` } });
           throw new CliError("PARSE_FAILED", `node ${ref}: ${problem}; the node is failed after two attempts`, { attempt: attempts, node: ref, retry: false, schema });
@@ -968,12 +997,14 @@ export const graphPlugin: BuiltInPlugin = {
         files TEXT,
         attempts INTEGER NOT NULL DEFAULT 0,
         work_id TEXT,
+        last_error TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (run_id, node_id, instance_key)
       );
     `);
     context.store.ensureColumn("graph_runs", "issued", "ALTER TABLE graph_runs ADD COLUMN issued INTEGER NOT NULL DEFAULT 0");
+    context.store.ensureColumn("graph_nodes", "last_error", "ALTER TABLE graph_nodes ADD COLUMN last_error TEXT");
     const engine = new GraphEngine(context, repo, home);
 
     context.effect(() =>

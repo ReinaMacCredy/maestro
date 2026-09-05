@@ -40,7 +40,7 @@ loop:
   if envelope.done: stop; the verdict, LIMIT stop or failed node is in it
   for each node in envelope.nodes (all at once, they are independent):
     kind human  -> stop and ask the user the prompt; feed the answer back
-    kind agent  -> spawn a sub-agent with the node's profile and prompt
+    kind agent  -> spawn a sub-agent with the node's profile and brief
   for each returned sub-agent:
     maestro graph result <run> <ref> --file <path>|--text "<result>"
   maestro graph next <run> --json
@@ -72,12 +72,14 @@ The profile is a definition `maestro install` rendered for both harnesses
 `~/.codex/agents/maestro-<profile>.toml`.
 
 - Claude Code: the `Agent` tool with `subagent_type: "maestro-<profile>"`,
-  `model: "opus"`, and the node's `prompt` verbatim as the task.
+  `model: "opus"`, and the node's `brief` verbatim as the task.
 - Codex: `spawn_agent` with agent type `maestro-<profile>` and the node's
-  `prompt` verbatim.
+  `brief` verbatim.
 
-Send the prompt as maestro rendered it; it already carries the run state
-the graph author placed in it. Add only what the harness needs to return
+Send the `brief`, never the bare `prompt`: the brief is the prompt plus the
+node's schema as a JSON block when one is declared (Hub d838), so the agent
+answers in the declared shape instead of its harness habit. It already
+carries the run state the graph author placed in it. Add only what the harness needs to return
 the answer (for example, "write your JSON answer to <path>"). Never merge
 two nodes into one spawn and never run a function node's command yourself;
 maestro already did.
@@ -100,9 +102,12 @@ loop:
   if envelope.done: maestro work return <item> "<verdict JSON>"; stop
   for each node in envelope.nodes without a work field:
     kind human -> answer it yourself: maestro graph result <run> <ref> --text "<answer>"
-    kind agent -> maestro work add "<node.prompt>" --to peer-<node.profile> \
-                    --acceptance "one JSON object matching the node schema" --json
+    kind agent -> maestro work add "<node.brief>" --to peer-<node.profile> \
+                    --acceptance "one JSON object matching the schema in the brief" --json
                   maestro graph result <run> <ref> --work <new item id>
+  for each node with a retry field (its item's body failed the schema):
+    open a fresh item with node.brief and rebind exactly as above; the
+    second failure fails the node
   for each node with a work field whose workState is RETURNED:
     read it (maestro status <item>), then maestro work accept <item>
     (or maestro work note <item> "<gap>" --rework for one retake)
@@ -114,8 +119,9 @@ Team Supervisor: maestro work accept <item>
   first item and queues later nodes of that profile on the same pane.
 - A bound node stays in `nodes` with `work` and `workState` until its item
   is DONE; `next` then parses the item's returned body like any result
-  (schema and all) and issues what depended on it. A cancelled item fails
-  the node.
+  (schema and all) and issues what depended on it. A body that fails the
+  schema unbinds the node once and lists it with `retry: {error, schema,
+  work}` (d838); a cancelled item fails the node.
 - Bound nodes count toward `limits.fanout`; keep the fan-out under the
   number of Peers you are willing to open.
 - Prompts to a Peer must open with a lowercase plain sentence; a brief that

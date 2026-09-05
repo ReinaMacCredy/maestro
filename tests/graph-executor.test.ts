@@ -161,5 +161,49 @@ test("graph-executor: from a Lead pane of a RUNNING team graph run reports execu
 
     const plain = failure(await runCli(fixture, ["graph", "result", second.run, "d", "--work", boundC.work.id, "--json"]));
     expect(["ROLE_UNPROVEN", "NO_ACTIVE_TEAM"]).toContain(plain.code);
+
+    // Live row 17 defect 5 (d838): a bound item whose body fails the node's
+    // schema sends the node back to issued and unbound with one retry; the
+    // second failure fails the node.
+    const third = data<{ nodes: Array<{ brief: string; ref: string; schema?: unknown }>; run: string }>(
+      await runCliAt(fixture, fixture.repo, ["graph", "run", "typed-team", "--json"], lead),
+    );
+    const typedA = third.nodes.find((node) => node.ref === "a")!;
+    expect(typedA.brief).toContain("Answer with one JSON object matching this schema:");
+    expect(typedA.brief).toContain('"refuted"');
+    const badItem = data<{ role: { paneId: string }; work: { id: string } }>(
+      await runCliAt(fixture, fixture.repo, ["work", "add", typedA.brief, "--to", "peer-refuter", "--json"], lead),
+    );
+    const badPeer = { ...fake.env, HERDR_PANE_ID: badItem.role.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["graph", "result", third.run, "a", "--work", badItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", badItem.work.id, "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", badItem.work.id, '{"category": "habit", "short_summary": "no refuted field"}', "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "accept", badItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    const retrying = data<{ done: boolean; nodes: Array<{ ref: string; retry?: { error: string; schema: unknown; work: string }; work?: string }> }>(
+      await runCliAt(fixture, fixture.repo, ["graph", "next", third.run, "--json"], lead),
+    );
+    expect(retrying.done).toBe(false);
+    const again = retrying.nodes.find((node) => node.ref === "a");
+    expect(again?.work).toBeUndefined();
+    expect(again?.retry).toEqual({ error: expect.stringContaining("missing required refuted"), schema: typedA.schema, work: badItem.work.id });
+    const retryTrace = data<{ events: Array<{ payload: Record<string, unknown>; type: string }> }>(
+      await runCliAt(fixture, fixture.repo, ["trace", third.run, "--json"], lead),
+    );
+    expect(retryTrace.events.find((event) => event.type === "graph.node.retry")?.payload).toEqual(
+      expect.objectContaining({ ref: "a", work: badItem.work.id, attempt: 1 }),
+    );
+
+    const secondItem = data<{ role: { paneId: string }; work: { id: string } }>(
+      await runCliAt(fixture, fixture.repo, ["work", "add", typedA.brief, "--to", "peer-refuter", "--json"], lead),
+    );
+    expect((await runCliAt(fixture, fixture.repo, ["graph", "result", third.run, "a", "--work", secondItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", secondItem.work.id, "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", secondItem.work.id, "still no json", "--json"], badPeer)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "accept", secondItem.work.id, "--json"], lead)).exitCode).toBe(0);
+    const failed = data<{ done: boolean; failed?: { node: string } }>(
+      await runCliAt(fixture, fixture.repo, ["graph", "next", third.run, "--json"], lead),
+    );
+    expect(failed.done).toBe(true);
+    expect(failed.failed?.node).toBe("a");
   });
 }, 60_000);
