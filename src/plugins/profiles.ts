@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CliError } from "../kernel/cli.ts";
@@ -29,6 +29,7 @@ export interface Profile {
 }
 
 export interface ProfileSync {
+  hubPackVersion: string | null;
   removed: string[];
   rendered: string[];
   resolvedTargets: Array<{ real: string; target: string }>;
@@ -299,6 +300,12 @@ async function resolvedTargets(home: string): Promise<Array<{ real: string; targ
   return out;
 }
 
+function hubPackVersion(home: string): string | null {
+  const hubPack = join(home, "maestro", "SLP.md");
+  if (!existsSync(hubPack)) return null;
+  return /<!-- slp:version=([^\s]+) -->/.exec(readFileSync(hubPack, "utf8"))?.[1] ?? "unknown";
+}
+
 export async function materializeProfiles(home: string, repo: string): Promise<ProfileSync> {
   const targets = await planProfileRenders(home, repo);
   const keep = new Set(targets.map((target) => target.path));
@@ -315,7 +322,12 @@ export async function materializeProfiles(home: string, repo: string): Promise<P
     await rm(file, { force: true });
     removed.push(file);
   }
-  return { removed, rendered, resolvedTargets: await resolvedTargets(home) };
+  return {
+    hubPackVersion: hubPackVersion(home),
+    removed,
+    rendered,
+    resolvedTargets: await resolvedTargets(home),
+  };
 }
 
 export async function removeRenderedProfiles(home: string): Promise<string[]> {
@@ -334,5 +346,12 @@ export function formatProfileSync(sync: ProfileSync): string {
   const parts = [`profiles rendered: ${names.join(", ")}`];
   if (sync.removed.length > 0) parts.push(`profiles removed: ${sync.removed.join(", ")}`);
   for (const { real, target } of sync.resolvedTargets) parts.push(`${target} resolves to ${real}`);
+  // The seats were rendered from this Hub pack's shared contract; a stale
+  // pack renders a stale mandate, and team start refuses it anyway (D7).
+  if (sync.hubPackVersion !== null && sync.hubPackVersion !== "3") {
+    parts.push(
+      `warning: the Hub SLP.md is pack version ${sync.hubPackVersion}, so the rendered seats carry its shared contract and team start will refuse it; migrate it to version 3 (slp:profile markers, no Observer section) and run maestro install again`,
+    );
+  }
   return parts.join("\n");
 }
