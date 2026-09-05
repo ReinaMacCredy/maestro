@@ -35,6 +35,15 @@ import {
   type SlpTeamPlan,
 } from "./slp-runtime.ts";
 import { registerSessionCommand } from "./session-required.ts";
+import {
+  openRuntimePane,
+  recordRuntimePane,
+  runSlpEvent,
+  runSlpRestore,
+  runSlpRuntime,
+  runtimeConfigFromEnvironment,
+  slpRuntimeStatus,
+} from "./slp-attention.ts";
 
 type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
 type LifecycleOperation = "START" | "STOP";
@@ -641,6 +650,11 @@ function migrateProject(store: Store): void {
     "profile",
     "ALTER TABLE slp_local_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
   );
+  store.ensureColumn(
+    "slp_local_teams",
+    "runtime_pane_id",
+    "ALTER TABLE slp_local_teams ADD COLUMN runtime_pane_id TEXT NOT NULL DEFAULT ''",
+  );
   widenRoleCheck(store, "slp_local_roles");
 }
 
@@ -862,6 +876,14 @@ function lifecycleRow(
        WHERE team_id = ? AND generation = ? AND operation = ?`,
     )
     .get(teamId, generation, operation) ?? null;
+}
+
+function runtimePaneIdOf(store: Store, teamId: string, generation: number): string {
+  return store.database
+    .query<{ runtime_pane_id: string }, [string, number]>(
+      "SELECT runtime_pane_id FROM slp_local_teams WHERE team_id = ? AND generation = ?",
+    )
+    .get(teamId, generation)?.runtime_pane_id ?? "";
 }
 
 function lifecycleRuntimeRoles(row: SlpLifecycleRow): SlpRuntimeRole[] | null {
@@ -1457,6 +1479,31 @@ function finalizeStart(
   });
 }
 
+// Item 3 (d96): one runtime pane per generation, opened once the generation is
+// RUNNING and reopened by repair (d759) when it is gone; a generation without
+// its runtime is refused loudly rather than left looking watched (doctrine D7).
+async function ensureRuntimePane(
+  runtime: HerdrSlpRuntime,
+  team: { generation: number; project_path: string; runtime_pane_id: string; team_id: string; workspace_id: string },
+  roles: readonly SlpRuntimeRole[],
+): Promise<string> {
+  if (team.runtime_pane_id && await runtime.paneAlive(team.runtime_pane_id)) return team.runtime_pane_id;
+  const supervisor = roles.find((role) => role.role === "team-supervisor") ?? null;
+  let paneId: string;
+  try {
+    paneId = await openRuntimePane(runtime.client, team, supervisor?.paneId ?? null);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CliError(
+      "RUNTIME_PANE_FAILED",
+      `${team.team_id} g${team.generation} is RUNNING but its attention runtime pane did not open: ${message}; run maestro install (it links the maestro Herdr plugin), then repeat team start`,
+      { generation: team.generation, teamId: team.team_id },
+    );
+  }
+  recordRuntimePane(team.project_path, team.team_id, team.generation, paneId);
+  return paneId;
+}
+
 async function startTeam(
   context: PluginContext,
   runtime: HerdrSlpRuntime,
@@ -1639,6 +1686,17 @@ async function startTeam(
             }
             return initial;
           });
+          const runtimePaneId = await ensureRuntimePane(
+            runtime,
+            {
+              generation: running.generation,
+              project_path: projectPath,
+              runtime_pane_id: runtimePaneIdOf(projectStore, running.team_id, running.generation),
+              team_id: running.team_id,
+              workspace_id: started.workspaceId,
+            },
+            started.roles,
+          );
           context.sessions.record("team.start");
           return {
             data: {
@@ -1648,6 +1706,7 @@ async function startTeam(
                 packVersion: running.pack_version,
                 projectPath,
                 roles: started.roles,
+                runtimePaneId,
                 state: "RUNNING",
                 teamId: running.team_id,
                 workspaceId: started.workspaceId,
@@ -1725,6 +1784,18 @@ async function startTeam(
       }
       if (!roles) throw new CliError("RUNTIME_INCOMPLETE", "SLP roles were not recoverable");
       const work = finalizeStart(projectStore, operation, ownerToken, roles, context.store.path);
+      const workspaceId = operation.workspace_id ?? started?.workspaceId ?? "";
+      const runtimePaneId = await ensureRuntimePane(
+        runtime,
+        {
+          generation: operation.generation,
+          project_path: projectPath,
+          runtime_pane_id: runtimePaneIdOf(projectStore, operation.team_id, operation.generation),
+          team_id: operation.team_id,
+          workspace_id: workspaceId,
+        },
+        roles,
+      );
       context.sessions.record("team.start");
       return {
         data: {
@@ -1734,9 +1805,10 @@ async function startTeam(
             packVersion: operation.pack_version,
             projectPath,
             roles,
+            runtimePaneId,
             state: "RUNNING",
             teamId: operation.team_id,
-            workspaceId: operation.workspace_id ?? started?.workspaceId,
+            workspaceId,
           },
           work: toWork(work),
         },
@@ -1763,6 +1835,7 @@ interface ActiveLocalTeam {
   pack_digest: string;
   project_path: string;
   room_store_path: string;
+  runtime_pane_id: string;
   team_id: string;
   workspace_id: string;
 }
@@ -1798,7 +1871,7 @@ function activeLocalTeam(context: PluginContext): ActiveLocalTeam | null {
   return context.store.database
     .query<ActiveLocalTeam, [string]>(
       `SELECT team_id, generation, room_store_path, project_path,
-              configuration_json, pack_digest, workspace_id
+              configuration_json, pack_digest, workspace_id, runtime_pane_id
        FROM slp_local_teams
        WHERE state = 'RUNNING' AND project_path = ?
        ORDER BY generation DESC LIMIT 1`,
@@ -3562,7 +3635,7 @@ async function stopTeam(
   const team = projectStore.database
     .query<ActiveLocalTeam, [string, number]>(
       `SELECT team_id, generation, room_store_path, project_path,
-              configuration_json, pack_digest, workspace_id
+              configuration_json, pack_digest, workspace_id, runtime_pane_id
        FROM slp_local_teams WHERE team_id = ? AND generation = ?`,
     )
     .get(roomTeam.team_id, roomTeam.generation);
@@ -3657,6 +3730,18 @@ async function stopTeam(
         );
       } catch {}
     }
+  }
+}
+
+function runtimePaneIdInProject(projectPath: string, teamId: string, generation: number): string {
+  const location = resolveStoreLocation(projectPath);
+  if (!existsSync(location.path)) return "";
+  const store = new Store(location.path, { readonly: true });
+  try {
+    if (!tableExists(store, "slp_local_teams") || !store.hasColumn("slp_local_teams", "runtime_pane_id")) return "";
+    return runtimePaneIdOf(store, teamId, generation);
+  } finally {
+    store.close();
   }
 }
 
@@ -3834,8 +3919,9 @@ export async function maybeHandleSlpStatus(
       const roles = roleRows(context.store, row.team_id, row.generation, false);
       let missingPanes: string[] = [];
       let runtimeState: "available" | "unavailable" | "not-running" = "not-running";
-      let watch = false;
+      let runtimePane = false;
       const plan = await planForTeam(row);
+      const runtimePaneId = runtimePaneIdInProject(row.project_path, row.team_id, row.generation);
       try {
         const inspection = await runtime.inspect(
           plan,
@@ -3850,11 +3936,12 @@ export async function maybeHandleSlpStatus(
             role: role.role,
             workspaceId: role.workspace_id,
           })),
+          runtimePaneId,
         );
         if (row.state === "RUNNING" || inspection.workspace) {
           missingPanes = inspection.missingPanes;
           runtimeState = inspection.runtime;
-          watch = inspection.watch;
+          runtimePane = inspection.runtimePane;
         }
       } catch {
         runtimeState = "unavailable";
@@ -3920,8 +4007,8 @@ export async function maybeHandleSlpStatus(
         stop: stopRecord
           ? { actor: stopRecord.actor, emergency: stopRecord.emergency === 1, reason: stopRecord.reason }
           : null,
+        runtimePane: runtimePane ? "on" : "off",
         teamId: row.team_id,
-        watch: watch ? "on" : "off",
         workCounts: counts,
         workspaceId: row.workspace_id,
       });
@@ -3931,7 +4018,7 @@ export async function maybeHandleSlpStatus(
       text: teams.length === 0
         ? "no SLP teams"
         : teams.map((team) =>
-          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; watch ${team.watch}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
+          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; runtime pane ${team.runtimePane}; missing ${(team.missingPanes as string[]).join(", ") || "none"}`
         ).join("\n"),
     };
   }
@@ -4071,7 +4158,7 @@ export async function maybeHandleSlpStatus(
   });
   let missingPanes: string[] = [];
   let runtimeState: "available" | "unavailable" = "available";
-  let watch = false;
+  let runtimePane = false;
   const plan = await planForTeam(actor.team);
   try {
     const inspection = await new HerdrSlpRuntime().inspect(
@@ -4087,9 +4174,10 @@ export async function maybeHandleSlpStatus(
         role: role.role,
         workspaceId: role.workspace_id,
       })),
+      actor.team.runtime_pane_id,
     );
     missingPanes = inspection.missingPanes;
-    watch = inspection.watch;
+    runtimePane = inspection.runtimePane;
   } catch {
     runtimeState = "unavailable";
   }
@@ -4109,8 +4197,8 @@ export async function maybeHandleSlpStatus(
         role: role.role,
       })),
       runtime: runtimeState,
+      runtimePane: runtimePane ? "on" : "off",
       teamId: actor.team.team_id,
-      watch: watch ? "on" : "off",
       work: scoped.map(workData),
     },
     text: teamStatusText(context, invocation, actor, roles, allWork, missingPanes),
@@ -4275,6 +4363,47 @@ export const slpV2Plugin: BuiltInPlugin = {
           positionals: [{ name: "work-id", required: true }],
           rootDescription: "Move supervised work through its four-state lifecycle.",
         },
+      ),
+    );
+    // Hub d96/d97: the plugin entrypoints and the runtime's own readout. None
+    // is an SLP operation; Herdr launches the first three from the manifest.
+    context.effect(() =>
+      context.cli.register(
+        "slp runtime",
+        async (): Promise<CliResult> => {
+          const exitCode = await runSlpRuntime(runtimeConfigFromEnvironment());
+          if (exitCode !== 0) throw new CliError("RUNTIME_EXIT", `maestro slp runtime exited with ${exitCode}`);
+          return { data: { exitCode }, text: "runtime stopped" };
+        },
+        {
+          description: "Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).",
+          rootDescription: "Maestro's Herdr plugin entrypoints and the runtime readout.",
+        },
+      ),
+    );
+    context.effect(() =>
+      context.cli.register(
+        "slp restore",
+        (): Promise<CliResult> => runSlpRestore(),
+        { description: "Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived." },
+      ),
+    );
+    context.effect(() =>
+      context.cli.register(
+        "slp event",
+        (): Promise<CliResult> => runSlpEvent(),
+        { description: "Herdr event hook: record a role pane loss when no runtime is subscribed." },
+      ),
+    );
+    context.effect(() =>
+      context.cli.register(
+        "slp status",
+        (): Promise<CliResult> => {
+          const team = activeLocalTeam(context);
+          if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
+          return slpRuntimeStatus(team.project_path, team.team_id, team.generation);
+        },
+        { description: "Read the runtime's pending wakes for the running generation.", mutates: false },
       ),
     );
     context.effect(() =>

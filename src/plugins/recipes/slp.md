@@ -26,11 +26,21 @@ plain lowercase sentence, never a word a harness could read as a slash command,
 and confirm `agent_status=working` before leaving: a dropped brief looks
 identical to a slow start.
 
-Attention between seats is the self-declared `maestro work note <id> "<what
-you need>" --blocked`, which Maestro pushes one seat up; no seat or process
-watches panes for stalls until the team runtime takes that over (Hub d97,
-d98). There is no Observer, Advisor, sensor, scheduler, review, or reconcile
-role in SLP.
+Attention has two layers. The first is the self-declared `maestro work note
+<id> "<what you need>" --blocked`, which Maestro pushes one seat up. The
+second is the team runtime pane (Hub d96, d97): `maestro team start` opens
+it beside the Team Supervisor through Maestro's Herdr plugin; it holds the
+generation's one Herdr event subscription and resolves every pane event
+against the store, with no model judging. A `blocked` pane becomes a
+`stall:dialog` entry on the item the seat holds, an idle pane holding ACTIVE
+work becomes `stall:silence`, both recorded by the actor `runtime` and pushed
+as `[from runtime][<id>] <kind> <evidence>; stop and run: maestro work note
+<id> "<what you need>" --blocked` to the stuck pane with a copy to the Team
+Supervisor, once per item and kind until the store changes. An idle seat with
+nothing to do wakes the seat above with `[attention] <seat> idle`; a role pane
+that exits or closes is noted on the team card and wakes the Team Supervisor.
+There is no Observer, Advisor, sensor, scheduler, review, or reconcile role
+in SLP.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
 checks the nine SLP operations at their supported boundaries: Hub operations
@@ -71,8 +81,7 @@ and may emergency-stop a team. It does not manage the Lead or Peers directly.
 ### Team Supervisor
 
 Owns team coordination and accepts Lead work. It communicates with the Hub,
-Lead, and every Peer. It may open the optional Watch Pane with Herdr pane
-control when continuous raw-output visibility is useful.
+Lead, and every Peer.
 
 ### Lead
 
@@ -131,13 +140,19 @@ Hub, a unique `wN` resolves directly; when several teams contain that id, use
 `--work <team-id>:wN`. A later choice replaces an earlier one explicitly with
 `--replaces`.
 
-## Watch Pane
+## Runtime pane
 
-Watch is an optional foreground, non-agent process in the team workspace. It
-labels and refreshes currently available raw output from the Team Supervisor,
-Lead, and Peers. It has no model, prompt, store write, gate, intervention, or
-decision authority. Its rolling transcript is runtime-only and is deleted
-when the team stops. Watch failure never blocks work.
+The runtime pane is a non-agent process Maestro opens per generation as the
+`runtime` entrypoint of its Herdr plugin (`maestro install` links the plugin;
+`maestro slp runtime` is its command). It renders the team's pane output on
+every event, records stalls and pane loss in-process as the actor `runtime`,
+and queues a wake for a seat that is still working until that seat turns
+idle. `maestro slp status` reads its pending wakes; a repeated `team start`
+reopens it when it is gone; `maestro slp restore`, the plugin's startup hook,
+re-attaches it after a Herdr restart; `maestro slp event`, the plugin's
+`pane.exited` and `pane.closed` hook, records a role pane loss when no runtime
+is subscribed. Its lock and state live in a temporary directory that team
+stop deletes. It never takes, returns, accepts, or decides.
 
 ## Lifecycle
 
@@ -154,8 +169,8 @@ creating duplicates. A changed objective or peer profile is rejected until
 stop.
 
 Normal `maestro team stop <team-id>` changes nothing while unfinished work
-exists. After all work is `DONE`, it closes Peers, Lead, Watch and its
-transcript, Team Supervisor, then the workspace. The Team Supervisor hands
+exists. After all work is `DONE`, it closes Peers, Lead, the runtime pane and
+its temporary directory, Team Supervisor, then the workspace. The Team Supervisor hands
 this self-closing sequence to one transient foreground non-agent helper pane
 in the Hub; this adds no role or public operation. The team becomes `STOPPED`
 only after the workspace is absent. A partial close leaves it `RUNNING`, and

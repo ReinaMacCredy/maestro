@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import { hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 test("91 empty ready points at work add", async () => {
   await withFixture(async (fixture) => {
@@ -528,7 +528,7 @@ test("116 repository install from the installed runtime avoids machine-global wr
       const child = Bun.spawn([process.execPath, runtimeCli, "install"], {
         cwd: secondRepo,
         env: {
-          ...process.env,
+          ...hostEnvironment(),
           HOME: fixture.home,
           PATH: path,
           MAESTRO_SESSION_ID: "installed-runtime-test",

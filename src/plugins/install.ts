@@ -23,6 +23,7 @@ import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { formatProfileSync, materializeProfiles } from "./profiles.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
+import { linkHerdrPlugin } from "./slp-plugin.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
@@ -551,6 +552,13 @@ export async function readGitHeadCommit(sourceRoot: string): Promise<string | nu
   return exitCode === 0 && /^[0-9a-f]{40}$/.test(commit) ? commit : null;
 }
 
+async function readSourceVersion(sourceRoot: string): Promise<string> {
+  const packageJson = JSON.parse(
+    await readFile(join(sourceRoot, "package.json"), "utf8"),
+  ) as PackageJson;
+  return packageJson.version;
+}
+
 async function readStampedCommit(sourceRoot: string): Promise<string | null> {
   const result = await readInstallStamp(sourceRoot);
   return result.status === "valid" ? result.stamp.commit : null;
@@ -731,16 +739,14 @@ export const installPlugin: BuiltInPlugin = {
           await chmod(shim, 0o755);
         }
         await mkdir(localBin, { recursive: true });
-        await writeFile(
-          watchShim,
-          `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-watch.ts")).href)});\n`,
-        );
-        await chmod(watchShim, 0o755);
-        // Hub d97/d98: the sentinel shim is retired with the Observer seat.
+        // Hub d97/d98: the sentinel shim is retired with the Observer seat;
+        // Hub d96: the Watch shim with the runtime pane.
+        await rm(watchShim, { force: true });
         await rm(observeShim, { force: true });
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
         const profileSync = await materializeProfiles(home, repo);
+        const pluginLink = await linkHerdrPlugin(home, shim, await readSourceVersion(sourceRoot));
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
         const roomCodexHookTrustRecorded = await codexHookTrustRecorded(room, home);
@@ -755,7 +761,7 @@ export const installPlugin: BuiltInPlugin = {
           payload: { runtimeRoot, shim },
         });
         return {
-          data: { repo, runtimeRoot, watchShim, shim, legacy },
+          data: { repo, runtimeRoot, shim, legacy },
           text:
             `maestro installed for ${repo}` +
             "\nwrote: .maestro/, .claude/hooks/, .codex/hooks/" +
@@ -765,6 +771,7 @@ export const installPlugin: BuiltInPlugin = {
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
             `\n${formatProfileSync(profileSync)}` +
+            `\nherdr plugin: ${pluginLink.status === "unreachable" ? pluginLink.warning : `${pluginLink.status} at ${pluginLink.directory}`}` +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +

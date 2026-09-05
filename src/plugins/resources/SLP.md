@@ -52,9 +52,8 @@ Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Raw transcript is
 runtime-only. A work item's objective and acceptance contract never change;
 changed scope requires new work. `RETURNED` work can be retaken only once after
 its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
-for that return revision. Notes add context but do not rewrite the contract. A
-Watch Pane is optional foreground support, never an agent or an authority
-holder. `maestro team start` and `maestro work add --to` return only after the
+for that return revision. Notes add context but do not rewrite the contract.
+`maestro team start` and `maestro work add --to` return only after the
 new pane has acknowledged its contract, normally within a minute; they print
 their phases on stderr, so do not re-run either while it is still running.
 After `maestro work return`, `maestro work accept`, and `maestro work note
@@ -64,9 +63,16 @@ the store stays the truth and that line is only the wake-up. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
-shows the flag. That self-declared `--blocked` note is the team's attention
-mechanism: no seat or process watches panes for stalls until the team runtime
-takes that over (Hub d97, d98). Hand-typed asks
+shows the flag. That self-declared `--blocked` note is the team's first
+attention layer. The second is the team runtime pane Maestro opens beside the
+Team Supervisor (Hub d96, d97): it resolves Herdr pane events against the
+store, no model judges anything, and it may send you
+`[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro
+work note <work-id> "<what you need>" --blocked` when your pane waits on a
+dialog or sits idle while you hold ACTIVE work (one nudge per item and kind
+until the store changes), and `[attention] <seat> idle` or `[attention]
+<seat> pane exited|closed` to the seat above. Answer a nudge by recording,
+never by replying to the runtime. Hand-typed asks
 are allowed: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record. When you prompt a pane by hand
 (`herdr agent prompt`), open every prompt with a plain lowercase sentence,
@@ -100,11 +106,3 @@ copies, and rendered by `maestro install` into `claude --agent maestro-<name>`
 and `codex --profile maestro-<name>`. Every rendered seat carries the shared
 contract above followed by its own mandate.
 
-<!-- slp:watch:begin -->
-## Watch Pane
-
-The Team Supervisor may open at most one foreground Watch Pane with Herdr pane
-control. It labels and refreshes currently available raw output from the Team
-Supervisor, Lead, and Peers. It has no model, role, prompt, store write, gate,
-or intervention authority. Closing the team deletes its runtime transcript.
-<!-- slp:watch:end -->

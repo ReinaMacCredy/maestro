@@ -4,19 +4,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import {
-  addLinkedWorktree,
-  idFrom,
-  initializeGitRepository,
-  type CliResult,
-  type Fixture,
-  prepareInstallFixture,
-  runCli,
-  runCliAt,
-  runInstalledCliAt,
-  runTool,
-  withFixture,
-} from "./helpers.ts";
+import { type CliResult, type Fixture, addLinkedWorktree, hostEnvironment, idFrom, initializeGitRepository, prepareInstallFixture, runCli, runCliAt, runInstalledCliAt, runTool, withFixture } from "./helpers.ts";
 
 setDefaultTimeout(15_000);
 
@@ -141,7 +129,7 @@ async function installSource(
   const direct = Bun.spawn([process.execPath, join(projectRoot, "bin", "maestro.ts"), "install"], {
     cwd: source,
     env: {
-      ...process.env,
+      ...hostEnvironment(),
       HOME: fixture.home,
       MAESTRO_SESSION_ID: "test-session",
       MAESTRO_SESSION_PID: String(process.pid),
@@ -173,7 +161,7 @@ async function runInstalled(
   const child = Bun.spawn([runtime.shim, ...args], {
     cwd,
     env: {
-      ...process.env,
+      ...hostEnvironment(),
       HOME: fixture.home,
       MAESTRO_SESSION_ID: "lifecycle-session",
       MAESTRO_SESSION_PID: String(process.pid),

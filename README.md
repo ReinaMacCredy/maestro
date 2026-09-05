@@ -125,12 +125,14 @@ Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Lead accepts
 Peer returns; Team Supervisor accepts Lead returns. Settled choices use one
 immutable `maestro decide` record and explicit replacement.
 
-The Team Supervisor may open one optional foreground Watch Pane with existing
-Herdr pane control. Watch labels currently available raw output, but is not an
-agent and has no prompt, store write, gate, intervention, or decision
-authority. Its rolling transcript is runtime-only and is deleted at stop.
-A seat that needs a fact from above records `work note --blocked`; Maestro
-pushes the `BLOCKED` line one seat up without changing the work state.
+`team start` opens one runtime pane per generation through Maestro's Herdr
+plugin (`maestro install` links it). The runtime pane is not an agent: it
+holds the generation's Herdr event subscription, renders the team's pane
+output, and records a `blocked` pane or an idle pane that still holds ACTIVE
+work as a `stall:dialog` or `stall:silence` entry by the actor `runtime`,
+nudging the stuck seat once per item and kind until the store changes. A seat
+that needs a fact from above records `work note --blocked`; Maestro pushes
+the `BLOCKED` line one seat up without changing the work state.
 
 Normal stop uses one transient foreground non-agent helper pane in the Hub so
 the Team Supervisor can close itself safely. This is internal, not another SLP

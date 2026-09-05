@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
+import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
 const shellSourceLine =
@@ -21,7 +21,7 @@ test("282 first install needs no rollback binary and targets the detected shell"
 
     expect(installed.exitCode).toBe(0);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro")).exists()).toBe(true);
-    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists()).toBe(true);
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists()).toBe(false);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists()).toBe(false);
     // Hub d97/d98: a stale sentinel shim from an earlier install is removed.
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-observe")).exists()).toBe(false);
@@ -192,7 +192,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     expect(claudeHooks.hooks.UserPromptSubmit).toBeArray();
     expect(existsSync(join(fixture.repo, "AGENTS.md"))).toBe(false);
     expect(existsSync(join(fixture.repo, "CLAUDE.md"))).toBe(false);
-    expect(await Bun.file(join(localBin, "maestro-slp-watch")).exists()).toBe(true);
+    expect(await Bun.file(join(localBin, "maestro-slp-watch")).exists()).toBe(false);
 
     const codexHooksBefore = await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8");
     const repeated = await runCli(fixture, ["install"], { PATH: path });
@@ -209,7 +209,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
       const sessionId = `install-${harness}-session`;
       const hook = Bun.spawn([process.execPath, adapter], {
         cwd: fixture.repo,
-        env: { ...process.env, HOME: fixture.home, PATH: path },
+        env: { ...hostEnvironment(), HOME: fixture.home, PATH: path },
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
@@ -388,7 +388,7 @@ test("614 scripts/install.sh clones the source checkout, installs from it, and f
       const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
         cwd: fixture.repo,
         env: {
-          ...process.env,
+          ...hostEnvironment(),
           HOME: fixture.home,
           PATH: path,
           SHELL: "/bin/zsh",
@@ -456,7 +456,7 @@ test("517 scripts/install.sh pins the newest release tag by version, not main's 
       const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
         cwd: fixture.repo,
         env: {
-          ...process.env,
+          ...hostEnvironment(),
           HOME: fixture.home,
           PATH: path,
           SHELL: "/bin/zsh",
@@ -502,7 +502,7 @@ test("312 scripts/install.sh refuses a bun older than the lockfile's bun floor a
     await chmod(join(shims, "bun"), 0o755);
     const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh")], {
       cwd: fixture.repo,
-      env: { ...process.env, HOME: fixture.home, PATH: `${shims}:${process.env.PATH ?? ""}` },
+      env: { ...hostEnvironment(), HOME: fixture.home, PATH: `${shims}:${process.env.PATH ?? ""}` },
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -519,7 +519,7 @@ test("313 scripts/install.sh --help prints usage and exits before touching the m
     const run = async (arg: string) => {
       const child = Bun.spawn(["sh", join(projectRoot, "scripts", "install.sh"), arg], {
         cwd: fixture.repo,
-        env: { ...process.env, HOME: fixture.home },
+        env: { ...hostEnvironment(), HOME: fixture.home },
         stdout: "pipe",
         stderr: "pipe",
       });

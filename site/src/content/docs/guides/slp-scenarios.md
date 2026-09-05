@@ -133,12 +133,11 @@ maestro decide "Use a process start-time incarnation with the PID" \
 Implementation is new work after the decision, never a silent extension of a
 design assignment.
 
-## 7. Watch, status, and stop
+## 7. The runtime pane, status, and stop
 
-When Team Supervisor needs continuous situational awareness, it may open one
-foreground Watch Pane with existing Herdr pane control. This does not add a
-Maestro command. Watch only labels currently available raw output; it never
-prompts or intervenes.
+`team start` opened one runtime pane beside the Team Supervisor; it renders
+the team's pane output on every Herdr event and records stalls and pane loss
+as the actor `runtime`. It never takes, returns, accepts or decides.
 
 Use status for authoritative current state:
 
@@ -153,7 +152,7 @@ Normal stop succeeds only after all work is `DONE`:
 maestro team stop example
 ```
 
-Maestro closes Peers, Lead, Watch and its raw transcript, then Team Supervisor.
+Maestro closes Peers, Lead, the runtime pane and its directory, then Team Supervisor.
 A transient foreground non-agent helper pane in the Hub completes the
 self-closing sequence. Only a fully absent team workspace becomes `STOPPED`;
 a partial close stays `RUNNING` and the same stop command resumes cleanup. The
@@ -180,10 +179,15 @@ maestro work note w1 "flaky.sh never exits 0 here; need: a reachable mirror or p
 
 The Team Supervisor receives `[from lead][w1 BLOCKED] ...; read: maestro status w1`
 and either settles the fact through conversation and a note, or escalates to
-the Hub with its own `--blocked` note. Between this release and the team
-runtime of the herdr-adapter bundle (Hub d97, d98) that self-declared note is
-the only attention mechanism: no seat or process watches panes for a stall the
-stuck seat does not declare, and `work note --stall` is refused for every pane.
+the Hub with its own `--blocked` note. Had the Lead looped instead of
+declaring, the runtime pane would have caught what it can see (Hub d97): a
+pane waiting on a harness dialog is `blocked` to Herdr and becomes a
+`stall:dialog` entry with the nudge `[from runtime][w1] dialog ...; stop and
+run: maestro work note w1 "<what you need>" --blocked` in the Lead pane and a
+copy in the Team Supervisor pane; a Lead that goes idle while still holding
+w1 gets `stall:silence` the same way, once until the store changes.
+`work note --stall` stays refused for every pane; only the runtime records a
+stall.
 
 ## What not to do
 

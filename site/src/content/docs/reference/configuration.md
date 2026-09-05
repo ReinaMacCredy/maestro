@@ -85,6 +85,7 @@ identity, role bindings, lifecycle and minimal activity. The project store
 records local team binding, work, notes, returns, acceptances, decisions and
 minimal activity.
 
-Herdr owns the live workspace and panes. Raw Watch transcript is temporary and
-is deleted at team stop; it has no archive or evidence location. See
+Herdr owns the live workspace and panes. The runtime pane's lock and queue
+state are temporary and are deleted at team stop; they have no archive or
+evidence location. See
 [SLP setup and storage](/getting-started/slp-setup/) for the complete map.

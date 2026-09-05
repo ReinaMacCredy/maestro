@@ -49,8 +49,10 @@ Each team seat runs as a native harness profile (`claude --agent
 maestro-<name>` or `codex --profile maestro-<name>`) rendered by `maestro
 install` from the profile file the Workspace Pack names; the mandate is the
 seat's system prompt, so it survives `/clear` and compaction. Attention is the
-seat's own `work note --blocked`, pushed one seat up; no seat or process
-watches panes for stalls until the team runtime does (Hub d97, d98).
+seat's own `work note --blocked`, pushed one seat up, plus the generation's
+runtime pane, which turns a `blocked` or idle-while-holding pane into a
+`stall:dialog` or `stall:silence` entry and the d763 nudge (Hub d96, d97); no
+model judges attention.
 
 ## Hub Supervisor
 

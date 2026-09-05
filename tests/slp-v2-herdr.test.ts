@@ -6,7 +6,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { slpWatchRuntimeDirectory } from "../src/plugins/slp-watch.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
 import {
   runCliAt,
   withFixture,
@@ -17,7 +17,6 @@ import {
 
 const maestroCli = join(import.meta.dir, "..", "bin", "maestro.ts");
 const roleCommandRunner = join(import.meta.dir, "slp-role-command.ts");
-const watchOpener = join(import.meta.dir, "slp-open-watch.ts");
 
 const runtimePhaseLine =
   /^\S+: (?:starting (?:claude|codex) pane in \S+|waiting for acknowledgement \(up to \d+s\)|ready in \d+s|already acknowledged in \S+; left alone)$/;
@@ -172,6 +171,7 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
           team: {
             generation: number;
             roles: Array<{ name: string; paneId: string; role: string }>;
+            runtimePaneId: string;
             teamId: string;
             workspaceId: string;
           };
@@ -188,25 +188,8 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         const lead = started.team.roles.find((role) => role.role === "lead")!;
         const supervisor = started.team.roles.find((role) => role.role === "team-supervisor")!;
         const projectDatabasePath = join(fixture.repo, ".maestro", "maestro.db");
-        const watchReceipt = await promptRoleCommand(fixture, supervisor.name, [
-          process.execPath,
-          watchOpener,
-          supervisor.paneId,
-          fixture.repo,
-          started.team.teamId,
-          String(started.team.generation),
-          started.team.workspaceId,
-          join(import.meta.dir, "..", "bin", "maestro-slp-watch.ts"),
-        ]);
-        expect(JSON.parse(watchReceipt!.stdout)).toEqual({ paneId: expect.any(String) });
-        const runtimeDirectory = slpWatchRuntimeDirectory(
-          fixture.repo,
-          started.team.teamId,
-          started.team.generation,
-        );
-        const transcriptPath = join(runtimeDirectory, "transcript.txt");
-        await waitFor(() => existsSync(transcriptPath), "Watch did not create its live transcript");
-
+        // Hub d96: team start opened the runtime pane beside the Supervisor.
+        expect(started.team.runtimePaneId).toMatch(/^w\d+:p\d+$/);
         await promptAgent(fixture, lead.name, ["work", "take", started.work.id, "--json"]);
         await promptAgent(fixture, lead.name, [
           "work",
@@ -269,12 +252,17 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
           ]);
           await promptAgent(fixture, lead.name, ["work", "accept", work.id, "--json"]);
         }
-        await waitFor(async () => {
-          if (!existsSync(transcriptPath)) return false;
-          const transcript = await readFile(transcriptPath, "utf8");
-          return [supervisor.name, lead.name, ...peerWork.map((work) => work.assigned_to)]
-            .every((name) => transcript.includes(name));
-        }, "Watch did not render every live SLP role");
+        // Hub d96: the runtime pane holds the subscription; the runtime lock in
+        // the generation directory proves it is up.
+        const runtimeDirectory = slpRuntimeDirectory(
+          fixture.repo,
+          started.team.teamId,
+          started.team.generation,
+        );
+        await waitFor(
+          () => existsSync(join(runtimeDirectory, "runtime.lock")),
+          "the runtime pane did not take its lock",
+        );
 
         await promptAgent(fixture, lead.name, [
           "decide",

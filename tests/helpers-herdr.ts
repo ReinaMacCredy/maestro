@@ -494,6 +494,12 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
           foreground_process_group_id: 4000 + state.sequence,
           foreground_processes: [{ pid: 4000 + state.sequence, name: kind, command: kind, args: [kind] }],
         };
+        // Herdr announces a detected agent before any status subscription can
+        // name its pane; the runtime learns new Peer panes from this.
+        pushEvent(server, {
+          event: "pane_agent_detected",
+          data: { agent: kind, final_status: null, pane_id: paneId, released: false, workspace_id: target?.workspace_id ?? "" },
+        });
       }
       if (behavior.trustDialog && kind === behavior.trustDialog) {
         agent.agent_status = "blocked";

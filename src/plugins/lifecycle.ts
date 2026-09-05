@@ -21,6 +21,7 @@ import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { installInRoomMessage, isRoom } from "./room.ts";
 import { skillNames } from "./skills.ts";
 import { removeRenderedProfiles } from "./profiles.ts";
+import { unlinkHerdrPlugin } from "./slp-plugin.ts";
 import { readSourceRecord } from "./source-record.ts";
 
 interface CommandResult {
@@ -694,6 +695,7 @@ async function uninstall(): Promise<CliResult> {
   refuseRepositoryWiringInRoom(repo);
   const removed = await uninstallRepo(repo);
   removed.push(...await removeRenderedProfiles(homeDirectory()));
+  removed.push(...await unlinkHerdrPlugin(homeDirectory()));
   if (await forgetRepository(homeDirectory(), repo)) removed.push(`${repo} registry line`);
   return {
     data: { removed },

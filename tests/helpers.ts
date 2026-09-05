@@ -23,6 +23,16 @@ export interface InstallFixture {
 
 const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
 
+// The suite may run inside a Herdr pane; a test that spawns the CLI itself
+// must not hand it the live socket or pane identity.
+export function hostEnvironment(): Record<string, string | undefined> {
+  const environment: Record<string, string | undefined> = { ...process.env };
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith("HERDR_")) delete environment[name];
+  }
+  return environment;
+}
+
 export async function withFixture<T>(run: (fixture: Fixture) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), "maestro-stage1-"));
   const fixture = {
@@ -113,16 +123,11 @@ async function spawnCli(
   stdin?: string,
 ): Promise<CliResult> {
   const childEnvironment: Record<string, string | undefined> = {
-    ...process.env,
+    ...hostEnvironment(),
     HOME: fixture.home,
     MAESTRO_SESSION_ID: "test-session",
     MAESTRO_SESSION_PID: String(process.pid),
   };
-  // The suite may run inside a Herdr pane; the live socket and pane identity
-  // never reach the code under test unless a test sets them.
-  for (const name of Object.keys(childEnvironment)) {
-    if (name.startsWith("HERDR_")) delete childEnvironment[name];
-  }
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined) {
       delete childEnvironment[name];

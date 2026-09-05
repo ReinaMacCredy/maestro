@@ -79,14 +79,15 @@ maestro work take <work-id>
 
 | Location | Owner | What it stores | Lifetime |
 | --- | --- | --- | --- |
-| `~/maestro/SLP.md` | Hub owner | Canonical shared contract, the profile marker per seat, Hub Supervisor section, Watch rules | Seeded only when absent; install and update preserve owner edits; edits affect the next generation only |
+| `~/maestro/SLP.md` | Hub owner | Canonical shared contract with the attention lines a seat may receive, the profile marker per seat, Hub Supervisor section | Seeded only when absent; install and update preserve owner edits; edits affect the next generation only |
 | `~/maestro/.maestro/maestro.db` | Hub | Team ID, project path, generation, pack version/digest, runtime role identities, owner/cross-team decisions, lifecycle and minimal activity | Durable |
 | `<project>/.maestro/SLP.md` | Project | Exact managed snapshot used by the active generation | Remains after stop; replaced at the next start |
 | `<git-common-root>/.maestro/maestro.db` | Project | Checkout-scoped team bindings and roles, work, notes, returns, acceptances, team/technical decisions and minimal activity | Durable and shared by linked worktrees; every read is filtered to the current checkout |
 | `<project>/.maestro/profiles/`, `~/maestro/profiles/` | Project, Hub owner | Profile files (frontmatter + mandate) that shadow the shipped seat, council and node profiles by name | Durable; a running generation pins the ones it references |
 | `~/.claude/agents/maestro-*.md`, `~/.codex/maestro-*.config.toml`, `~/.codex/agents/maestro-*.toml` | `maestro install` | Rendered launch bundles for every resolvable profile; only `maestro-*` files are written or removed | Rewritten by every install, removed by uninstall |
-| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and the optional Watch Pane | Exists only while the generation runs |
-| `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | Rolling labelled Watch output and generation temporary data | Temporary; deleted at team stop |
+| Herdr workspace `slp-<team>-g<n>` | Runtime | Team Supervisor, Lead, Peers and the runtime pane | Exists only while the generation runs |
+| `<OS temp>/maestro-slp-<uid>/<project-hash>/<team>/g<n>/` | Runtime | The runtime pane's lock and its pending-wake state | Temporary; deleted at team stop |
+| `~/.maestro/herdr-plugin/` | `maestro install` | The rendered Herdr plugin manifest that Herdr links as `maestro` | Rewritten by every install, removed by uninstall |
 
 Never edit either SQLite store by hand. Use Maestro operations so current state
 and minimal activity remain in the same transaction.
@@ -143,11 +144,12 @@ new work; settled choices are recorded with `decide` before they govern work.
 
 ## What is temporary
 
-Herdr owns the live workspace and panes. The optional Watch Pane is a
-foreground, non-agent multiplexer. It has no model, prompt, authority, store
-write or intervention behavior. Its directory is runtime-owned under the OS
-temporary directory, is not an archival contract, and is deleted when the team
-stops.
+Herdr owns the live workspace and panes. The runtime pane is a foreground,
+non-agent process that subscribes to Herdr events and records stalls and pane
+loss in the store as the actor `runtime`. It has no model and no authority
+to take, return, accept or decide. Its directory is runtime-owned under the
+OS temporary directory, is not an archival contract, and is deleted when the
+team stops.
 
 ## Pack changes and generations
 

@@ -26,9 +26,13 @@ Workspace Pack and the profiles it names into the project generation, opens
 the Team Supervisor and Lead as native harness profiles
 (`claude --agent maestro-<name>` or `codex --profile maestro-<name>`, rendered
 by `maestro install`), sends each a one-line prompt carrying team, generation,
-instance and the ready challenge, and creates initial `OPEN` work for Lead.
-Repeating an identical running start verifies and restores required roles
-without duplicates. `--peer-profile <name>` overrides the pack's `peer`
+instance and the ready challenge, creates initial `OPEN` work for Lead, and
+opens the generation's runtime pane through Maestro's Herdr plugin (Hub d96).
+Repeating an identical running start verifies and restores required roles and
+the runtime pane without duplicates. Every Herdr call goes over the socket at
+`HERDR_SOCKET_PATH`; an unreachable socket fails with `HERDR_UNAVAILABLE`, a
+generation whose runtime pane did not open fails with `RUNTIME_PANE_FAILED`
+naming `maestro install`. `--peer-profile <name>` overrides the pack's `peer`
 profile for this generation and is recorded on the team row; the Team
 Supervisor and Lead change through a shadowing file in `~/maestro/profiles/`.
 The retired `--lead-model`, `--peer-model` and `--supervisor-model` flags are
@@ -70,7 +74,7 @@ maestro status
 maestro status <work-id>
 ```
 
-Hub status includes `abandonedWorkCount` per generation and `watch: on|off`.
+Hub status includes `abandonedWorkCount` per generation and `runtimePane: on|off`.
 Team work readback includes abandonment fields when present.
 
 Read-only and role-scoped. Hub sees team generations and counts; team roles see
@@ -335,6 +339,22 @@ the next ingest would promote.
   runtime.
 - `maestro uninstall` removes managed repository wiring without deleting its
   data or the Hub room.
+
+### `slp runtime`, `slp restore`, `slp event`, and `slp status`
+
+`maestro install` renders `~/.maestro/herdr-plugin/herdr-plugin.toml` and
+links it as the Herdr plugin `maestro`; `maestro uninstall` removes the link.
+Herdr launches the first three from that manifest and they are not SLP
+operations: `slp runtime` is the `runtime` pane entrypoint (`team start`
+opens it with `MAESTRO_SLP_TEAM` and `MAESTRO_SLP_GENERATION` in its env;
+it holds the generation's event subscription and records stalls, idle wakes
+and pane loss as the actor `runtime`); `slp restore` is the startup hook that
+reopens the runtime pane of every RUNNING generation whose role panes survived
+a Herdr restart and notes a generation whose panes are all gone as lost;
+`slp event` is the `pane.exited` and `pane.closed` hook that records a role
+pane loss when no runtime is subscribed. `maestro slp status [--json]`, from a
+team pane, prints whether the runtime is running and the wakes it still holds
+for working seats.
 
 ### `doctor`, `version`, and `hook`
 

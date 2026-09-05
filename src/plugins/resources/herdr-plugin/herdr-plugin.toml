@@ -1,0 +1,26 @@
+# Maestro's Herdr plugin (Hub d96). `maestro install` renders this file into
+# ~/.maestro/herdr-plugin/ with every "maestro" argv head replaced by the
+# installed binary, then links that directory over the socket.
+id = "maestro"
+name = "Maestro"
+version = "0.0.0"
+min_herdr_version = "0.8.2"
+description = "SLP team runtime: attention on Herdr events, restore after a Herdr restart, pane loss recorded when no runtime is up."
+platforms = ["macos", "linux"]
+
+[[startup]]
+command = ["maestro", "slp", "restore"]
+
+[[panes]]
+id = "runtime"
+title = "SLP runtime"
+placement = "split"
+command = ["maestro", "slp", "runtime"]
+
+[[events]]
+on = "pane.exited"
+command = ["maestro", "slp", "event"]
+
+[[events]]
+on = "pane.closed"
+command = ["maestro", "slp", "event"]

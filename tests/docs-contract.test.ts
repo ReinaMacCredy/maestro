@@ -113,9 +113,9 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
 
   for (const command of slpOperations) expect(combined).toContain(command);
   expect(guide).toContain("there is no Observer, Advisor, scheduler, health or reconcile");
-  expect(guide).toContain("foreground Watch Pane");
-  expect(guide).toContain("not an agent");
-  expect(guide).toContain("transcript is runtime-only and is deleted at stop.");
+  expect(guide).toContain("## Runtime pane");
+  expect(guide).toContain("It is not an agent");
+  expect(guide).toContain("deleted at stop.");
   expect(setup).toContain("~/maestro/SLP.md");
   expect(setup).toContain("<project>/.maestro/SLP.md");
   expect(scenarios).not.toContain("herdr workspace create --cwd ~/Code/rewrite");
@@ -380,7 +380,13 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the 
   expect(pack).not.toContain("slp:role:observer");
   expect(pack).not.toContain("## Observer");
   expect(pack).toContain("--blocked");
-  expect(pack).toMatch(/no seat or process watches panes for stalls/);
+  // herdr-adapter (Hub d96, d97): the runtime pane is the second attention
+  // layer and the shared section names the lines a seat may receive.
+  expect(pack).not.toMatch(/no seat or process watches panes for stalls/);
+  expect(pack).toContain("[from runtime][<work-id>]");
+  expect(pack).toContain("[attention] <seat> idle");
+  expect(pack).not.toContain("slp:watch:begin");
+  expect(pack).not.toContain("Watch Pane");
 
   const recipe = await Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text();
   const cli = await Bun.file(join(root, "site", "src", "content", "docs", "reference", "cli.md")).text();

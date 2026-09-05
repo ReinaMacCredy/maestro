@@ -1495,7 +1495,7 @@ test("SLP v2 rolls back a restored Lead and both role stores when persistence fa
       team: { roles: Array<{ name: string; paneId: string; role: string }> };
     }>(started.stdout);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const siblingPaneId = `${lead.paneId}:watch-sibling`;
+    const siblingPaneId = `${lead.paneId}:sibling`;
     await editFakeHerdrState(fake, (state) => {
       state.agents = (state.agents as Array<{ name: string }>).filter(
         (agent) => agent.name !== lead.name,
@@ -1512,7 +1512,7 @@ test("SLP v2 rolls back a restored Lead and both role stores when persistence fa
       delete processes[lead.paneId];
       processes[siblingPaneId] = {
         foreground_pgid: 9001,
-        foreground_processes: [{ command: "maestro-slp-watch" }],
+        foreground_processes: [{ command: "sleep" }],
         pane_id: siblingPaneId,
       };
     });
@@ -3183,14 +3183,14 @@ test("SLP v2 status gives Hub, team, and work-scoped truth and reports a missing
       missingPanes: string[];
       runtime: string;
       roles: Array<{ role: string }>;
-      watch: string;
+      runtimePane: string;
       work: Array<{ id: string; state: string }>;
     }>(teamStatus.stdout);
     expect(teamData.roles.map((role) => role.role).sort()).toEqual(["lead", "team-supervisor"]);
     expect(teamData.work).toContainEqual(
       expect.objectContaining({ id: startData.work.id, state: "RETURNED" }),
     );
-    expect(teamData).toMatchObject({ missingPanes: [], runtime: "available", watch: "off" });
+    expect(teamData).toMatchObject({ missingPanes: [], runtime: "available", runtimePane: "on" });
     await editFakeHerdrState(fake, (state) => {
       for (const agent of state.agents as Array<{ agent_status: string }>) {
         agent.agent_status = "working";
@@ -3506,6 +3506,7 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
       team: {
         generation: number;
         roles: Array<{ name: string; paneId: string; role: string }>;
+        runtimePaneId: string;
         teamId: string;
         workspaceId: string;
       };
@@ -3569,35 +3570,18 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
       ).exitCode,
     ).toBe(0);
 
-    const runtimeBeforeWatch = await readFakeHerdrState(fake);
-    const supervisorTabId = (runtimeBeforeWatch.tabs as Array<{
-      root_pane_id: string;
-      tab_id: string;
-    }>).find((tab) => tab.root_pane_id === supervisor.paneId)!.tab_id;
-    const watchPaneId = `${supervisorTabId}:watch-pane`;
-    await editFakeHerdrState(fake, (state) => {
-      (state.panes as Array<Record<string, string>>).push({
-        pane_id: watchPaneId,
-        tab_id: supervisorTabId,
-        workspace_id: data.team.workspaceId,
-      });
-      (state.processes as Record<string, unknown>)[watchPaneId] = {
-        foreground_pgid: 9001,
-        foreground_processes: [{
-          args: ["maestro-slp-watch", "--team", data.team.teamId, "--generation", String(data.team.generation)],
-          command: "maestro-slp-watch",
-          pid: 9001,
-        }],
-      };
-    });
+    // The runtime pane (Hub d96) sits beside the Supervisor and closes after
+    // the Lead; its directory under the OS temp dir goes with it (d831).
+    const runtimePaneId = data.team.runtimePaneId;
+    expect(runtimePaneId).toMatch(/^w\d+:p\d+$/);
     const runtimeDirectory = watchRuntimeDirectory(
       fixture.repo,
       data.team.teamId,
       data.team.generation,
     );
-    const transcript = join(runtimeDirectory, "transcript.txt");
+    const transcript = join(runtimeDirectory, "state.json");
     await mkdir(runtimeDirectory, { recursive: true });
-    await writeFile(transcript, "raw runtime transcript\n");
+    await writeFile(transcript, "{}\n");
     await setFakeHerdrBehavior(fake, {
       closeWorkspaceWithLastTab: true,
       processInfo: false,
@@ -3675,7 +3659,7 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
     const peerClosed = closeIndex("tab", peerTab);
     const leadClosed = closeIndex("tab", leadTab);
     const watchClosed = commands.findIndex(
-      (command) => command[0] === "pane" && command[1] === "close" && command[2] === watchPaneId,
+      (command) => command[0] === "pane" && command[1] === "close" && command[2] === runtimePaneId,
     );
     const supervisorClosed = closeIndex("tab", supervisorTab);
     const workspaceClosed = closeIndex("workspace", data.team.workspaceId);
@@ -4978,162 +4962,10 @@ test("SLP v2 install removes only the old managed block and leaves clean file en
     expect(await readFile(join(fixture.repo, "CLAUDE.md"), "utf8"))
       .toBe("custom-one\n");
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists())
-      .toBe(true);
+      .toBe(false);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-observe")).exists())
       .toBe(false);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists())
-      .toBe(false);
-  });
-}, 20_000);
-
-test("SLP v2 Watch is one foreground non-agent reader whose death never blocks work", async () => {
-  await withFixture(async (fixture) => {
-    const room = await scaffoldRoom(fixture.home);
-    expect(
-      (
-        await runCliAt(fixture, room, ["room", "mark"], {
-          MAESTRO_ROOM_SCAFFOLD: "1",
-          MAESTRO_SESSION_NONE: "1",
-        })
-      ).exitCode,
-    ).toBe(0);
-    const fake = await installFakeHerdr(fixture);
-    const started = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Observe without authority", "--json"],
-      fake.env,
-    );
-    const data = envelope<{
-      team: {
-        generation: number;
-        roles: Array<{ name: string; paneId: string; role: string }>;
-        teamId: string;
-        workspaceId: string;
-      };
-      work: { id: string };
-    }>(started.stdout);
-    const runtimeDirectory = watchRuntimeDirectory(
-      fixture.repo,
-      data.team.teamId,
-      data.team.generation,
-    );
-    const transcript = join(runtimeDirectory, "transcript.txt");
-    const watchCommand = [
-      process.execPath,
-      join(import.meta.dir, "..", "bin", "maestro-slp-watch.ts"),
-      "--team",
-      data.team.teamId,
-      "--generation",
-      String(data.team.generation),
-      "--interval-ms",
-      "50",
-    ];
-    const watchEnvironment = {
-      ...process.env,
-      ...fake.env,
-      HERDR_WORKSPACE_ID: data.team.workspaceId,
-    };
-    const before = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
-      readonly: true,
-    });
-    const activityBefore = before
-      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_activity")
-      .get()?.count;
-    before.close();
-    const firstWatch = Bun.spawn(watchCommand, {
-      cwd: fixture.repo,
-      env: watchEnvironment,
-      stderr: "pipe",
-      stdout: "ignore",
-    });
-    await waitForText(transcript, data.team.roles[0]!.name);
-
-    const duplicate = Bun.spawn(watchCommand, {
-      cwd: fixture.repo,
-      env: watchEnvironment,
-      stderr: "pipe",
-      stdout: "ignore",
-    });
-    const duplicateError = await new Response(duplicate.stderr).text();
-    expect(await duplicate.exited).toBe(1);
-    expect(duplicateError).toContain("already running");
-
-    const watchTabId = `${data.team.workspaceId}:watch-live`;
-    const watchPaneId = `${watchTabId}:pane`;
-    await editFakeHerdrState(fake, (state) => {
-      (state.tabs as Array<Record<string, string>>).push({
-        label: `slp:${data.team.teamId}:g${data.team.generation}:watch`,
-        root_pane_id: watchPaneId,
-        tab_id: watchTabId,
-        workspace_id: data.team.workspaceId,
-      });
-      (state.panes as Array<Record<string, string>>).push({
-        pane_id: watchPaneId,
-        tab_id: watchTabId,
-        workspace_id: data.team.workspaceId,
-      });
-      (state.processes as Record<string, unknown>)[watchPaneId] = {
-        foreground_pgid: firstWatch.pid,
-        foreground_processes: [{
-          args: watchCommand.slice(1),
-          command: "maestro-slp-watch",
-          pid: firstWatch.pid,
-        }],
-      };
-    });
-    const on = envelope<{ teams: Array<{ watch: string }> }>(
-      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
-    );
-    expect(on.teams[0]?.watch).toBe("on");
-
-    firstWatch.kill();
-    expect(await firstWatch.exited).toBe(0);
-    await editFakeHerdrState(fake, (state) => {
-      state.tabs = (state.tabs as Array<{ tab_id: string }>).filter(
-        (tab) => tab.tab_id !== watchTabId,
-      );
-      state.panes = (state.panes as Array<{ pane_id: string }>).filter(
-        (pane) => pane.pane_id !== watchPaneId,
-      );
-      delete (state.processes as Record<string, unknown>)[watchPaneId];
-    });
-    const off = envelope<{ teams: Array<{ watch: string }> }>(
-      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
-    );
-    expect(off.teams[0]?.watch).toBe("off");
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const taken = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "take", data.work.id, "--json"],
-      { ...fake.env, HERDR_PANE_ID: lead.paneId },
-    );
-    expect(phaseFree(taken.stderr)).toBe("");
-    expect(taken.exitCode).toBe(0);
-
-    const reopened = Bun.spawn(watchCommand, {
-      cwd: fixture.repo,
-      env: watchEnvironment,
-      stderr: "pipe",
-      stdout: "ignore",
-    });
-    await waitForText(join(runtimeDirectory, "watch.lock"), String(reopened.pid));
-    await waitForText(transcript, lead.name);
-    reopened.kill();
-    expect(await reopened.exited).toBe(0);
-
-    const after = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
-      readonly: true,
-    });
-    expect(
-      after.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_activity").get()?.count,
-    ).toBe((activityBefore ?? 0) + 1);
-    after.close();
-    const runtime = await readFakeHerdrState(fake);
-    expect(runtime.agents).toHaveLength(2);
-    const commands = await fakeHerdrCommands(fake);
-    expect(commands.some((command) => command[0] === "agent" && command[1] === "prompt" && command[2]?.includes("watch")))
       .toBe(false);
   });
 }, 20_000);
@@ -5768,8 +5600,8 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
       "role",
       "roles",
       "runtime",
+      "runtimePane",
       "teamId",
-      "watch",
       "work",
     ]);
     expect(teamJson.work).toEqual([]);
@@ -5840,7 +5672,7 @@ test("observer-gone: two seats in the plan, no sentinel tab or status field, obs
     );
 
     const hubText = (await runCliAt(fixture, room, ["status"], fake.env)).stdout;
-    expect(hubText).toContain("RUNNING; watch off; missing none");
+    expect(hubText).toContain("RUNNING; runtime pane on; missing none");
     expect(hubText).not.toContain("sentinel");
     const hubJson = envelope<{ teams: Array<Record<string, unknown>> }>(
       (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,

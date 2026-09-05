@@ -96,7 +96,7 @@ export interface SlpRuntimePeer {
 export interface SlpRuntimeInspection {
   missingPanes: string[];
   runtime: "available";
-  watch: boolean;
+  runtimePane: boolean;
   workspace: boolean;
 }
 
@@ -213,7 +213,7 @@ function startCommand(role: Pick<SlpRolePlan, "kind" | "name">, paneId: string, 
 }
 
 export class HerdrSlpRuntime {
-  private readonly client: HerdrClient;
+  readonly client: HerdrClient;
 
   constructor(
     private readonly commandTimeoutMs = 15_000,
@@ -889,9 +889,18 @@ export class HerdrSlpRuntime {
     else await this.client.tabClose(helperTabId);
   }
 
+  async paneAlive(paneId: string): Promise<boolean> {
+    try {
+      return foreground(await this.processInfo(paneId));
+    } catch {
+      return false;
+    }
+  }
+
   async inspect(
     plan: SlpTeamPlan,
     expectedRoles: readonly SlpRuntimeRole[],
+    runtimePaneId = "",
   ): Promise<SlpRuntimeInspection> {
     const workspaces = (await this.workspaces()).filter(
       (workspace) => workspace.label === plan.workspaceLabel,
@@ -900,7 +909,7 @@ export class HerdrSlpRuntime {
       return {
         missingPanes: expectedRoles.map((role) => role.name).sort(),
         runtime: "available",
-        watch: false,
+        runtimePane: false,
         workspace: false,
       };
     }
@@ -927,25 +936,12 @@ export class HerdrSlpRuntime {
       }
       if (!foreground(await this.processInfo(paneId))) missingPanes.push(expected.name);
     }
-    let watch = false;
-    for (const pane of panes) {
-      if (!pane.pane_id || expectedRoles.some((role) => role.paneId === pane.pane_id)) continue;
-      const info = await this.processInfo(pane.pane_id);
-      const text = JSON.stringify(info).toLowerCase();
-      if (
-        !foreground(info) ||
-        !text.includes(plan.teamId.toLowerCase()) ||
-        !text.includes(String(plan.generation))
-      ) continue;
-      if (text.includes("maestro-slp-watch")) {
-        watch = true;
-        break;
-      }
-    }
+    const runtimePane = runtimePaneId !== "" && paneIds.has(runtimePaneId) &&
+      foreground(await this.processInfo(runtimePaneId));
     return {
       missingPanes: missingPanes.sort(),
       runtime: "available",
-      watch,
+      runtimePane,
       workspace: true,
     };
   }

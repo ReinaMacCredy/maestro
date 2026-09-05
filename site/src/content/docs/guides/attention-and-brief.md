@@ -43,15 +43,11 @@ starting a team or recording an owner decision.
 Brief is not a team control plane. Hub communicates with a running team through
 Team Supervisor, and team work remains in that project's store.
 
-## Watch Pane and team attention are separate
-
-An optional Watch Pane is foreground runtime support owned by Team Supervisor.
-It displays rolling labelled pane output and has no store authority. Attention
-reads durable administrative records; Watch reads temporary runtime output.
-Neither silently changes the other.
+## The runtime pane and Hub attention are separate
 
 Inside a team, attention is the seat's own `work note <id> "<what you need>"
---blocked`, which Maestro pushes one seat up; no process watches panes for
-stalls until the team runtime does (Hub d97, d98). The Hub `attention` verb
-stays an on-call administrative read and never sees a pane. See
-[Attention](/guides/supervised-teams/#attention).
+--blocked`, which Maestro pushes one seat up, plus the generation's runtime
+pane (Hub d96, d97), which resolves Herdr pane events against the store and
+records `stall:dialog`, `stall:silence` and pane loss as the actor `runtime`.
+The Hub `attention` verb stays an on-call administrative read and never sees
+a pane. See [Attention](/guides/supervised-teams/#attention).

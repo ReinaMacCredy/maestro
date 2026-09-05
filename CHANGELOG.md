@@ -13,6 +13,57 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- SLP reaches Herdr over its socket API (Hub w33, d96, d97; repo w635,
+  d830-d832). `src/plugins/herdr-client.ts` speaks newline JSON to
+  `HERDR_SOCKET_PATH` (protocol 20, one request per connection,
+  `events.subscribe` as a push stream); every former `herdr` CLI spawn in
+  the SLP runtime is a typed call, the stop helper is launched with
+  `pane.send_input` (d830), and an unreachable socket fails with
+  `HERDR_UNAVAILABLE` naming the path. The kernel never imports the client.
+- Maestro ships a Herdr plugin. `maestro install` renders
+  `~/.maestro/herdr-plugin/herdr-plugin.toml` (id `maestro`, min Herdr
+  0.8.2, macOS and Linux) with the installed binary and links it over the
+  socket, once; `maestro uninstall` removes the link. The manifest declares
+  the `runtime` pane, the `slp restore` startup hook and the `pane.exited`
+  and `pane.closed` event hooks, and no actions.
+- The team runtime pane: `team start` opens the plugin's `runtime` pane
+  beside the Team Supervisor with `MAESTRO_SLP_TEAM` and
+  `MAESTRO_SLP_GENERATION` in its env and records its pane id; a repeated
+  start reopens a missing one (d759) and a generation whose pane did not
+  open fails with `RUNTIME_PANE_FAILED` naming `maestro install`. The pane
+  (`maestro slp runtime`) holds the generation's one Herdr subscription
+  (`pane.agent_status_changed` per role pane, `pane.agent_detected`,
+  `pane.exited`, `pane.closed`), renders the team's pane output on every
+  event, and evaluates attention against the store with no model: a
+  `blocked` role pane records `stall:dialog` on the item the seat holds (or
+  the team card); an `idle` or `done` pane still holding ACTIVE work records
+  `stall:silence` unless its latest entry is a `--blocked` note (d761); both
+  are written in-process by the actor `runtime` and pushed as the d763 line
+  `[from runtime][<id>] <kind> <evidence>; stop and run: maestro work note
+  <id> "<what you need>" --blocked` to the stuck pane with a copy to the
+  Team Supervisor (Hub `supervisor` when the Team Supervisor is stuck), once
+  per (item, kind) until the item's latest entry changes; an idle seat with
+  no `*` item wakes the seat above with `[attention] <seat> idle`, once per
+  pane until the team's activity log advances and never inside 60 s of its
+  own return, accept or note push (d832, advisor F15); a role pane that
+  exits or closes is noted on the team card and wakes the Team Supervisor
+  with `[attention] <seat> pane exited|closed`. Identical (pane, status)
+  events within 5 s collapse; a wake for a working target waits in the
+  runtime's queue for that target's next idle and a failed prompt stays
+  queued. The lock and queue state live in the generation's temp directory
+  that `team stop` deletes (d831).
+- `maestro slp restore` (the plugin startup hook) reopens the runtime pane of
+  every RUNNING generation whose role panes survived a Herdr restart and
+  notes a generation whose panes are all gone as lost on its team card, once;
+  `maestro slp event` (the event hooks) records a role pane loss when no
+  runtime is subscribed; `maestro slp status` prints the runtime's pending
+  wakes from a team pane.
+- Status reports `runtimePane: on|off` (text: `runtime pane on|off`) in the
+  Hub and team forms, replacing `watch`.
+- The test fake of Herdr is a unix-socket server (`tests/helpers-herdr.ts`)
+  speaking the schema subset, with a `herdr` script on the fixture PATH that
+  fails and logs any CLI spawn.
+
 - SLP seat profiles (Hub w31, d83, d90, d91, d93, d98; repo w617). Every seat
   launches as a native harness profile: `claude --agent maestro-<name>` or
   `codex --profile maestro-<name>`. A profile is one markdown file (YAML
@@ -52,6 +103,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Removed
 
+- The Watch Pane (Hub d96): `src/plugins/slp-watch.ts`, `bin/maestro-slp-watch.ts`
+  and the `maestro-slp-watch` shim (install removes a stale one); the runtime
+  pane renders the team's pane output instead, and `team stop` closes it with
+  its temporary directory after Peers and Lead. The SLP.md shared section
+  names the attention lines a seat may receive and no longer describes Watch;
+  the Hub copy needs the same edit (`maestro install` warns until then).
 - The Observer seat and its sentinel (Hub d97, d98; repo d825-d828 supersede
   d762, d765, d767 and narrow d764): `slp-observe`, the
   `maestro-slp-observe` shim (install removes a stale one), the sentinel tab,

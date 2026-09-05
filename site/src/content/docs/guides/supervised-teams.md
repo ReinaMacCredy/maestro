@@ -142,26 +142,27 @@ maestro status <work-id>
 ```
 
 Status is read-only and role-scoped. Hub sees teams, projects, generations,
-pack identity, roles and their profiles, Watch state and work counts. Team roles see their team
+pack identity, roles and their profiles, runtime pane state and work counts. Team roles see their team
 and the work that requires return or acceptance. Work status includes its
 objective, owner, state, notes, current return, acceptance and linked
 decisions.
 
 There is no separate team health, review or reconcile layer.
 
-## Watch Pane
+## Runtime pane
 
-The Team Supervisor may use existing Herdr pane control to open at most one
-foreground Watch Pane. It labels and refreshes currently available raw output
-from team panes. It is not an agent and never prompts, writes to the store,
-gates work or intervenes.
-
-Watch failure does not block work. Status exposes only `watch: on|off`. Raw
-transcript is runtime-only and is deleted at stop.
+`team start` opens one runtime pane per generation beside the Team Supervisor
+through Maestro's Herdr plugin (Hub d96). It is not an agent: it holds the
+generation's Herdr event subscription, renders the team's pane output, and
+resolves every event against the store. It never takes, returns, accepts or
+decides. Status exposes `runtimePane: on|off`; a repeated `team start` reopens
+a missing one, and `maestro slp restore`, the plugin's startup hook, brings it
+back after a Herdr restart. Its lock and queue state are runtime-only and are
+deleted at stop.
 
 ## Attention
 
-Attention between seats is the self-declared blocked note:
+Attention has two layers. The first is the self-declared blocked note:
 
 ```sh
 maestro work note <work-id> "<what you need>" --blocked
@@ -169,13 +170,25 @@ maestro work note <work-id> "<what you need>" --blocked
 
 Maestro flags the note and pushes `[from <role>][<id> BLOCKED] <summary>;
 read: maestro status <id>` one seat up: Peer to Lead, Lead to Team
-Supervisor, Team Supervisor to the Hub agent named `supervisor`. That is the
-whole attention mechanism between this release and the team runtime that the
-herdr-adapter bundle brings (Hub d97, d98): no seat or process watches panes
-for stalls, the Observer seat and its sentinel are gone, and `--stall` is
-refused for every pane. A Team Supervisor's `--blocked` needs a Hub agent pane
-named `supervisor`; without one the line becomes a warning on the caller's
-terminal and the store remains the truth.
+Supervisor, Team Supervisor to the Hub agent named `supervisor`.
+
+The second layer is the runtime pane (Hub d97), which needs no model: Herdr
+already classifies a dialog wait as `blocked` and the store already knows who
+holds ACTIVE work. A `blocked` role pane becomes a `stall:dialog` entry on the
+item that seat holds; an `idle` pane that still holds ACTIVE work becomes a
+`stall:silence` entry unless its latest entry is a `--blocked` note. Each is
+recorded by the actor `runtime` and pushed as `[from runtime][<id>] <kind>
+<evidence>; stop and run: maestro work note <id> "<what you need>" --blocked`
+to the stuck pane with a copy to the Team Supervisor, once per item and kind
+until the store changes. An idle seat with nothing waiting on it wakes the
+seat above with `[attention] <seat> idle`, unless it just pushed a return,
+accept or note; a role pane that exits or closes is noted on the team card and
+wakes the Team Supervisor with `[attention] <seat> pane exited|closed`. A wake
+for a seat that is still working waits for that seat's next idle; `maestro slp
+status` lists what is held. `--stall` stays refused for every pane: only the
+runtime records a stall. A Team Supervisor's line to the Hub needs a Hub agent
+pane named `supervisor`; without one the line becomes a warning and the store
+remains the truth.
 
 ## Stop
 
@@ -184,8 +197,8 @@ maestro team stop <team-id>
 ```
 
 Normal stop changes nothing while unfinished work remains and lists those work
-items. Once all work is `DONE`, shutdown closes Peers, Lead, Watch and runtime
-transcript, then Team Supervisor. A transient foreground non-agent pane in the
+items. Once all work is `DONE`, shutdown closes Peers, Lead, the runtime pane
+and its temporary directory, then Team Supervisor. A transient foreground non-agent pane in the
 Hub performs the self-closing sequence; it is internal and adds no public
 operation. Maestro records `STOPPED` only after the team workspace is absent.
 A partial close stays `RUNNING`, so repeating the same command continues

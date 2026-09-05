@@ -68,7 +68,7 @@ runtime, the shim, or the Supervisor room.
 
 ## Install Herdr for SLP
 
-Team Supervisor, Lead, Peer, and optional Watch panes require Herdr. Install
+Team Supervisor, Lead, Peer, and the runtime pane require Herdr 0.8.2 or newer. Install
 Herdr separately:
 
 ```sh
