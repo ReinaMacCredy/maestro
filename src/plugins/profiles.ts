@@ -213,18 +213,21 @@ export function renderProfile(renderedName: string, frontmatter: ProfileFrontmat
   return { claude, codexAgent, codexSession };
 }
 
-function sharedContract(pack: string): string {
+function sharedContract(pack: string): string | null {
   const match = /<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack);
-  if (!match?.[1]?.trim()) {
-    throw new CliError("INVALID_SLP_PACK", "SLP.md is missing section: shared");
-  }
-  return match[1].trim();
+  return match?.[1]?.trim() || null;
 }
 
+// The seat mandate opens with the Hub's shared contract; a Hub pack without
+// that section (owner-edited, or not yet migrated) falls back to the shipped
+// one so install and update still complete, and team start is where the
+// broken pack is refused.
 async function sharedContractFor(home: string): Promise<string> {
   const hubPack = join(home, "maestro", "SLP.md");
-  const source = existsSync(hubPack) ? hubPack : shippedPack;
-  return sharedContract(await readFile(source, "utf8"));
+  const fromHub = existsSync(hubPack) ? sharedContract(await readFile(hubPack, "utf8")) : null;
+  const shared = fromHub ?? sharedContract(await readFile(shippedPack, "utf8"));
+  if (!shared) throw new CliError("INVALID_SLP_PACK", `${shippedPack} is missing section: shared`);
+  return shared;
 }
 
 interface RenderTarget {
