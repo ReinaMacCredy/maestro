@@ -11,6 +11,15 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.119.0] - 2026-09-05
+
+The graph engine, seat profiles and the Herdr plugin. A pre-known multi-agent
+path is one markdown graph file that both harnesses drive identically, with
+three shipped presets and a team executor; every SLP seat launches as a native
+harness profile rendered by `maestro install`; the team runtime pane replaces
+the Watch pane and the Observer seat with attention that needs no model; and
+`maestro-council` is the tenth skill.
+
 ### Added
 
 - Graph engine, first close (Hub map w16, d78-d85, d88, d89, d99, d100; repo
@@ -197,6 +206,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Fixed
 
+- A read-only store open runs its probe query under the store's busy timeout,
+  and the stop-fence test's raw reader carries the same, so a reader that
+  opens while the stop helper's own `team stop` process checkpoints the WAL
+  on exit no longer fails with `SQLITE_BUSY` (w667).
 - Graph engine, live findings (repo w655, w656): a late `graph result` on a
   finished run is refused with `INVALID_STATE` naming the outcome and a failed
   run journals `graph.failed`, so a sibling's late result never rewrites a
