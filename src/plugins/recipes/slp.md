@@ -147,7 +147,7 @@ The runtime pane is a non-agent process Maestro opens per generation as the
 `maestro slp runtime` is its command). It renders the team's pane output on
 every event, records stalls and pane loss in-process as the actor `runtime`,
 and queues a wake for a seat that is still working until that seat turns
-idle. `maestro slp status` reads its pending wakes; a repeated `team start`
+idle. `maestro slp status` reads its pending wakes; a repeated `maestro team start`
 reopens it when it is gone; `maestro slp restore`, the plugin's startup hook,
 re-attaches it after a Herdr restart; `maestro slp event`, the plugin's
 `pane.exited` and `pane.closed` hook, records a role pane loss when no runtime
