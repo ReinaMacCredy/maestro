@@ -654,3 +654,60 @@ test("peer-after-subscribe: a Peer opened by work add --to after the runtime sub
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
+
+test("live-event-names: a live pane.agent_status_changed with the dotted wire name records the stall, and the dotted pane.created, pane.agent_detected, pane.exited and pane.closed are handled (live g14, 2026-09-05)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, subscribed } = await startLiveTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    // The fake pushes every live event under its dotted name, as Herdr does.
+    const client = new HerdrClient({ ...process.env, ...fake.env, HOME: fixture.home });
+    const stream = await client.subscribe([{ pane_id: lead.paneId, type: "pane.agent_status_changed" }]);
+    const iterator = stream.events[Symbol.asyncIterator]();
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "working" } });
+    const raw = await iterator.next();
+    expect(raw.value.event).toBe("pane_agent_status_changed");
+    stream.close();
+    const wire = (await fakeHerdrCommands(fake)).length;
+    void wire;
+
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Dotted item", "--to", "peer-dot", "--json"], leadEnvironment);
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    await subscribed();
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "working" } });
+    await Bun.sleep(200);
+    expect(await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "blocked" } })).toBe(1);
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:dialog" && entry.work_id === peer.work.id), 8_000, "the stall from the live-shaped event");
+    const dialogPrompts = async () => (await attentionPrompts(fake)).filter((command) => (command[3] ?? "").includes("] dialog "));
+    await waitForFakeHerdr(async () => (await dialogPrompts()).length === 2, 8_000, "the nudge and its copy");
+    expect((await dialogPrompts()).map((command) => command[2])).toEqual([peer.role.name, supervisor.name]);
+
+    // The other four dotted kinds: exited and closed record the loss, created
+    // and detected are watched.
+    await emitFakeHerdrEvent(fake, { event: "pane_exited", data: { pane_id: peer.role.paneId, workspace_id: data.team.workspaceId } });
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "pane:exited"), 8_000, "the exited entry");
+    await emitFakeHerdrEvent(fake, { event: "pane_closed", data: { pane_id: lead.paneId, workspace_id: data.team.workspaceId } });
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "pane:closed"), 8_000, "the closed entry");
+    const logPath = join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log");
+    await emitFakeHerdrEvent(fake, { event: "pane_created", data: { pane: { pane_id: `${data.team.workspaceId}:p77`, workspace_id: data.team.workspaceId, tab_id: `${data.team.workspaceId}:t77` } } });
+    await waitForFakeHerdr(
+      async () => (await readFile(logPath, "utf8")).includes(`watching new team pane ${data.team.workspaceId}:p77 (pane_created)`),
+      8_000,
+      "the created pane watched",
+    );
+    // Each new pane costs a resubscribe and a replay drain; the next event
+    // goes in once that settled.
+    await subscribed();
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_detected", data: { agent: "claude", pane_id: `${data.team.workspaceId}:p78`, workspace_id: data.team.workspaceId, released: false } });
+    await waitForFakeHerdr(
+      async () => (await readFile(logPath, "utf8")).includes(`watching new team pane ${data.team.workspaceId}:p78 (pane_agent_detected)`),
+      8_000,
+      "the detected pane watched",
+    );
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);

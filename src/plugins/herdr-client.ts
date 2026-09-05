@@ -290,7 +290,10 @@ export class HerdrClient {
           return;
         }
         if (typeof parsed.event !== "string") return;
-        const event: HerdrEvent = { data: (parsed.data ?? {}) as HerdrEvent["data"], event: parsed.event };
+        // Herdr 0.8.2 names a live push by its subscription (pane.agent_status_changed)
+        // and a replayed one by the schema kind (pane_agent_status_changed); every
+        // consumer sees the schema kind.
+        const event: HerdrEvent = { data: (parsed.data ?? {}) as HerdrEvent["data"], event: parsed.event.replaceAll(".", "_") };
         if (waiting) {
           const resolve = waiting;
           waiting = null;

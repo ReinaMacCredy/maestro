@@ -211,9 +211,11 @@ function eventWanted(subscriber: Subscriber, event: FakeHerdrEvent): boolean {
   });
 }
 
+// A live push carries the dotted subscription name, the replay the schema
+// kind (Herdr 0.8.2, live g14 2026-09-05).
 function pushEvent(server: FakeServer, event: FakeHerdrEvent): number {
   let delivered = 0;
-  const line = `${JSON.stringify(event)}\n`;
+  const line = `${JSON.stringify({ ...event, event: event.event.replaceAll("_", ".") })}\n`;
   server.state.history.push(event);
   for (const subscriber of server.subscribers) {
     const wanted = eventWanted(subscriber, event);
