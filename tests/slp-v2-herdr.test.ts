@@ -2,13 +2,13 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
-import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, tripwireInvocations } from "./helpers-herdr.ts";
+import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, setFakeHerdrBehavior, tripwireInvocations } from "./helpers-herdr.ts";
 import {
   runCliAt,
   withFixture,
@@ -496,6 +496,88 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
     expect(peerRefused.exitCode).toBe(1);
     expect(failure(peerRefused.stderr).code).toBe("SEAT_TOKEN_MISSING");
     expect((await fakeHerdrCommands(fake)).slice(marker).filter((command) => command[1] === "create")).toEqual([]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);
+
+// seat-config-dirs R10 (d853): a fresh seat dir carries no per-project trust,
+// so the owner's team start is the trust act: the project's
+// hasTrustDialogAccepted goes into each launched Claude seat's .claude.json
+// before its pane opens, every other key kept, nothing else seeded.
+test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccepted into each launched Claude seat .claude.json before its tab.create (it survives a TRUST_DIALOG rollback), keeps every other key, a second launch leaves the file byte-identical; work add --to seeds the peer dir; a Codex seat writes nothing (R10, d853)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "lead.md"),
+      "---\nharness: claude\nmodel: default\ndescription: claude lead\n---\nRole: Lead (claude shadow).\n",
+    );
+    const fake = await installFakeHerdr(fixture, { trustDialog: "claude" });
+    const seatRoot = seatConfigRoot(fixture.home);
+    const seatJson = (seat: string) => join(seatRoot, seat, ".claude.json");
+    const readSeat = async (seat: string) => JSON.parse(await readFile(seatJson(seat), "utf8")) as Record<string, unknown>;
+    // Claude Code keys projects by the cwd it starts in: the pane's cwd.
+    const projectKey = await realpath(fixture.repo);
+    const leadBefore = {
+      hasCompletedOnboarding: true,
+      mcpServers: {},
+      numStartups: 3,
+      projects: { "/elsewhere": { allowedTools: ["Bash(ls:*)"], hasTrustDialogAccepted: true }, [projectKey]: { allowedTools: ["Bash(git:*)"] } },
+    };
+    const leadText = `${JSON.stringify(leadBefore, null, 2)}\n`;
+    await writeFile(seatJson("lead"), leadText);
+    const peerBefore = { hasCompletedOnboarding: true, mcpServers: {}, userID: "peer-fixture" };
+    const peerText = `${JSON.stringify(peerBefore, null, 2)}\n`;
+    await writeFile(seatJson("peer"), peerText);
+    const creates = async () => (await fakeHerdrCommands(fake)).filter((command) => command[0] === "tab" && command[1] === "create");
+
+    // The team-supervisor launches first and its agent.start blocks on the
+    // trust dialog: the start rolls back, its pane was the only tab.create,
+    // and its file already carries the key; the lead never reached tab.create.
+    const blocked = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust", "--json"], fake.env);
+    expect(blocked.exitCode).toBe(1);
+    expect(failure(phaseFree(blocked.stderr)).code).toBe("TRUST_DIALOG");
+    const first = await creates();
+    expect(first.length).toBe(1);
+    expect(first[0]![first[0]!.indexOf("--cwd") + 1]).toBe(projectKey);
+    expect(await readSeat("team-supervisor")).toEqual({
+      hasCompletedOnboarding: true,
+      mcpServers: {},
+      projects: { [projectKey]: { hasTrustDialogAccepted: true } },
+    });
+    const supervisorText = await readFile(seatJson("team-supervisor"), "utf8");
+    expect(await readFile(seatJson("lead"), "utf8")).toBe(leadText);
+
+    // A clean start launches the team-supervisor pane again (byte-identical
+    // file) and the lead (its project entry gains the key beside allowedTools).
+    await setFakeHerdrBehavior(fake, { trustDialog: undefined });
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust", "--json"], fake.env);
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    expect((await creates()).length).toBe(3);
+    expect(await readFile(seatJson("team-supervisor"), "utf8")).toBe(supervisorText);
+    expect(await readSeat("lead")).toEqual({
+      ...leadBefore,
+      projects: { ...leadBefore.projects, [projectKey]: { allowedTools: ["Bash(git:*)"], hasTrustDialogAccepted: true } },
+    });
+    expect(await readFile(seatJson("peer"), "utf8")).toBe(peerText);
+
+    // work add --to a Claude peer seeds the peer dir the same way.
+    const lead = envelope<{ team: { roles: Array<{ paneId: string; role: string }> } }>(started).team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "peer-reviewer-security", "--json"], leadEnvironment);
+    expect(phaseFree(security.stderr)).toBe("");
+    expect(security.exitCode).toBe(0);
+    expect(await readSeat("peer")).toEqual({ ...peerBefore, projects: { [projectKey]: { hasTrustDialogAccepted: true } } });
+
+    // A Codex peer has no Claude seat dir: no seat file changes.
+    const snapshot = async () => Promise.all(["lead", "peer", "team-supervisor"].map((seat) => readFile(seatJson(seat), "utf8")));
+    const before = await snapshot();
+    const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], leadEnvironment);
+    expect(phaseFree(codex.stderr)).toBe("");
+    expect(codex.exitCode).toBe(0);
+    expect((await creates()).length).toBe(5);
+    expect(await snapshot()).toEqual(before);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);

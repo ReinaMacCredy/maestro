@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import {
   HerdrClient,
   SlpRuntimeError,
@@ -353,6 +353,29 @@ export class HerdrSlpRuntime {
     return { CLAUDE_CONFIG_DIR: seatDirectory(home, role.role) };
   }
 
+  // d853: a fresh seat dir carries no per-project trust, so the owner's start
+  // is the trust act; only this key is seeded, every other key is kept, and a
+  // file that already carries it is left byte-identical.
+  private async seedProjectTrust(configDirectory: string, projectPath: string): Promise<void> {
+    const path = join(configDirectory, ".claude.json");
+    let parsed: Record<string, unknown> = {};
+    if (existsSync(path)) {
+      try {
+        parsed = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+      } catch (error) {
+        throw new SlpRuntimeError(
+          `${path} is not valid JSON, so the project trust for ${projectPath} cannot be recorded: ${error instanceof Error ? error.message : String(error)}`,
+          ["tab", "create"],
+        );
+      }
+    }
+    const projects = (parsed.projects ?? {}) as Record<string, Record<string, unknown>>;
+    const project = projects[projectPath] ?? {};
+    if (project.hasTrustDialogAccepted === true) return;
+    parsed.projects = { ...projects, [projectPath]: { ...project, hasTrustDialogAccepted: true } };
+    await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`);
+  }
+
   // d846: a Claude seat cannot log in without the token, so the refusal comes
   // before any workspace or tab exists.
   private requireSeatToken(roles: readonly Pick<SlpRolePlan, "kind" | "name">[]): void {
@@ -381,6 +404,8 @@ export class HerdrSlpRuntime {
       return { createdTabId: null, paneId: matchingTab.root_pane_id, reusedPaneId: matchingTab.root_pane_id };
     }
     if (matchingTab?.tab_id && env) await this.client.tabClose(matchingTab.tab_id);
+    const configDirectory = env?.CLAUDE_CONFIG_DIR;
+    if (configDirectory) await this.seedProjectTrust(configDirectory, plan.projectPath);
     const created = await this.client.tabCreate({
       cwd: plan.projectPath,
       label: role.label,
