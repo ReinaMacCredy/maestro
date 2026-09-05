@@ -39,6 +39,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
   policy list, the next verb and the recipe pointer render on SessionStart
   only; the two MCP tool descriptions carry their contracts (result shape,
   limits, error envelope, quoting rules).
+- Prompt audit follow-up (w675): the council skill's hand-path table sends
+  the three Codex seats (challenger, verifier, auditor) to a Codex pane via
+  `--profile maestro-<seat>` from a plain Claude session, since the Agent tool
+  rejects their rendered `gpt-5.6-*` model (`unrecognized_model`); the graph
+  skill says the same under its Claude bullet; the graph skill and the graphs
+  guide describe the d843 key sentence (required and optional keys).
 
 ### Fixed
 

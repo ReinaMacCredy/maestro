@@ -73,12 +73,15 @@ The profile is a definition `maestro install` rendered for both harnesses
 
 - Claude Code: the `Agent` tool with `subagent_type: "maestro-<profile>"`,
   `model: "opus"`, and the node's `brief` verbatim as the task.
+  A profile whose `harness` is codex (challenger, verifier, auditor) opens
+  as a Codex pane with `--profile maestro-<profile>` instead; the Agent tool
+  rejects its model.
 - Codex: `spawn_agent` with agent type `maestro-<profile>` and the node's
   `brief` verbatim.
 
 Send the `brief`, never the bare `prompt`: the brief is the prompt plus, when
-a schema is declared, one sentence naming the required keys and the schema as
-a JSON block (Hub d838 and its successor), so the agent answers in the declared
+a schema is declared, one sentence naming the required keys and any optional
+keys, then the schema as a JSON block (Hub d843), so the agent answers in the declared
 shape instead of its harness habit. It already
 carries the run state the graph author placed in it. Add only what the harness needs to return
 the answer (for example, "write your JSON answer to <path>"). Never merge
@@ -123,7 +126,7 @@ Team Supervisor: maestro work accept <item>
   is DONE; `next` then parses the item's returned body like any result
   (schema and all) and issues what depended on it. A body that fails the
   schema unbinds the node and lists it with `retry: {error, schema, work}`,
-  twice at most (d838 and its successor); a cancelled item fails the node.
+  twice at most (d843); a cancelled item fails the node.
 - Bound nodes count toward `limits.fanout`; keep the fan-out under the
   number of Peers you are willing to open.
 - Prompts to a Peer must open with a lowercase plain sentence; a brief that

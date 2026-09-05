@@ -116,8 +116,8 @@ maestro trace <run>
 session, and returns the first envelope; the nodes live in their own table and
 never appear in `ready` or count toward the card budget. Each envelope lists
 every node whose inputs are ready now, each with its `brief`: the prompt plus,
-when the node declares a schema, one sentence naming the required keys and the
-schema as a JSON block. `next` executes every ready function, router, join and
+when the node declares a schema, one sentence naming the required keys and any
+optional keys, then the schema as a JSON block. `next` executes every ready function, router, join and
 foreach node itself and returns only agent and human nodes. The run ends with
 `{done: true, verdict}`, with `{done: true, failed}` after a failed node, or at
 a structural limit with `{done: true, stopped: "LIMIT", limit, used, partial}`;

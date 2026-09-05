@@ -246,7 +246,7 @@ seat. Without the preset, map each seat by hand:
 | Executor | Open a seat | Read its report |
 |---|---|---|
 | Lead of a running team | `maestro work add "<case> <seat>" --to peer-<seat> --acceptance "<output contract>"` | `maestro work show <id> --notes all` after `work return` |
-| Plain session, Claude | the Agent tool with `subagent_type: maestro-<seat>` and the brief as the prompt | the agent's final report |
+| Plain session, Claude | independent and specialist: the Agent tool with `subagent_type: maestro-<seat>` and the brief as the prompt. Challenger, verifier and auditor are Codex seats; open each as a Codex pane with `--profile maestro-<seat>` (rendered by `maestro install`), the way the team runtime opens a Codex seat | the agent's final report, or the pane's |
 | Plain session, Codex | `spawn_agent` with agent type `maestro-<seat>` and the brief as the prompt | the agent's final report |
 
 `<seat>` is one of independent, challenger, specialist, verifier, auditor.
