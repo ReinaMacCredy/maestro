@@ -222,5 +222,5 @@ Refuter verdicts, one per finding (instance = the finding's index above):
 Compose the gate verdict. confirmed: every finding whose refuter answered
 refuted=false, with its lens. refuted: the rest with the refuter's reason.
 verdict: "fail" when any confirmed finding is a behavioral bug or a security
-issue, otherwise "pass". summary: two sentences at most. Answer with one JSON
-object matching the schema and nothing else.
+issue, otherwise "pass". summary: the verdict and what decided it, briefly.
+Answer with one JSON object matching the schema and nothing else.

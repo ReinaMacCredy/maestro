@@ -22,6 +22,29 @@ TypeScript-on-Bun line and continues the existing version sequence.
   failed reset leaves the item OPEN with a stderr warning and no wake line
   (Hub d101, w672).
 
+### Changed
+
+- Prompt audit of the model-facing text for the Claude Opus 5, Sonnet 5 and
+  Fable 5.1 targets (`PROMPT-AUDIT-2026-09-05.md`, w673): the verifier and
+  auditor profiles name their fields and take the shape from the brief instead
+  of pinning a text block the council graph's JSON schema contradicted; the
+  correctness reviewer reports every bug with its confidence and leaves the
+  filtering to the refuter; the gate verdict's summary loses its two-sentence
+  cap; the Lead mandate drops "Plan before you delegate"; the Peer mandate
+  delivers the brief at the scope it set, neither narrowed nor widened;
+  `peer-opus` states its mandate without migration-relative phrasing; the
+  policy list, the next verb and the recipe pointer render on SessionStart
+  only; the two MCP tool descriptions carry their contracts (result shape,
+  limits, error envelope, quoting rules).
+
+### Fixed
+
+- The agent-node brief's key sentence names required and optional keys
+  separately when a schema has optional properties; the d839 wording
+  "exactly these keys: <required>" made `claude-sonnet-5` drop the council
+  report's optional fields in three of three probe runs (d843 supersedes
+  d839).
+
 ## [0.119.1] - 2026-09-05
 
 ### Fixed

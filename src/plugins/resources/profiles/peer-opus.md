@@ -3,9 +3,8 @@ harness: claude
 model: opus
 effort: high
 disallowed_tools: [AskUserQuestion]
-description: SLP Peer variant on Claude Opus (owner ruling 2026-09-02 while Codex is exhausted)
+description: SLP Peer variant on Claude Opus
 ---
 Role: Peer on Claude Opus.
 
-Everything in the Peer mandate above applies unchanged; only the harness and
-model differ.
+The Peer mandate above is your whole mandate.

@@ -27,11 +27,16 @@ interface McpToolResult {
 const tools = [
   {
     name: "maestro_find",
-    description: "Find live Maestro verbs, flags, descriptions, and workflow recipes.",
+    description:
+      "Search the live Maestro verb registry and the recipe list by keyword. Returns up to 10 matching verbs (name, description, positionals, flags with their descriptions), ranked by keyword hits in the verb name and then in its metadata, and up to 5 matching recipes, each with the maestro recipe show command that prints it; a query with no hits returns empty lists and a hint. Use it to learn a verb's exact flags before calling maestro_run. It runs nothing and does not search the store (that is the search verb through maestro_run).",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Text to match against verbs and recipes." },
+        query: {
+          type: "string",
+          description:
+            "One or more keywords, matched case-insensitively against verb names, descriptions and flag names, and against recipe names and descriptions.",
+        },
       },
       required: ["query"],
       additionalProperties: false,
@@ -39,11 +44,16 @@ const tools = [
   },
   {
     name: "maestro_run",
-    description: "Run one Maestro verb line through the normal strict CLI dispatcher.",
+    description:
+      "Run one Maestro verb through the same strict CLI dispatcher as the terminal. Returns the verb's {ok: true, data} JSON envelope; on any failure (an unknown verb or flag, a stray positional, a policy gate such as GATE_BLOCKED) the result is a tool error carrying the CLI's {ok: false, error} envelope, which names the unblocking command when there is one. Mutating verbs run for real; there is no dry run. The line is split with shell-style quoting but no shell runs, so pipes, redirects, globs and environment variables are unavailable, and mcp serve cannot be started from here.",
     inputSchema: {
       type: "object",
       properties: {
-        line: { type: "string", description: "One Maestro verb line without a shell." },
+        line: {
+          type: "string",
+          description:
+            "The verb and its arguments exactly as typed after the word maestro, without that word, on one line; quote an argument that contains spaces with single or double quotes, or escape with a backslash.",
+        },
       },
       required: ["line"],
       additionalProperties: false,
