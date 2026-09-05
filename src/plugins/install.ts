@@ -736,11 +736,8 @@ export const installPlugin: BuiltInPlugin = {
           `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-watch.ts")).href)});\n`,
         );
         await chmod(watchShim, 0o755);
-        await writeFile(
-          observeShim,
-          `#!/usr/bin/env bun\nawait import(${JSON.stringify(pathToFileURL(join(runtimeRoot, "bin", "maestro-slp-observe.ts")).href)});\n`,
-        );
-        await chmod(observeShim, 0o755);
+        // Hub d97/d98: the sentinel shim is retired with the Observer seat.
+        await rm(observeShim, { force: true });
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
         const profileSync = await materializeProfiles(home, repo);

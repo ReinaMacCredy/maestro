@@ -23,6 +23,8 @@ test("282 first install needs no rollback binary and targets the detected shell"
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro")).exists()).toBe(true);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists()).toBe(true);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists()).toBe(false);
+    // Hub d97/d98: a stale sentinel shim from an earlier install is removed.
+    expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-observe")).exists()).toBe(false);
   });
 
   await withFixture(async (fixture) => {

@@ -4981,7 +4981,7 @@ test("SLP v2 install removes only the old managed block and leaves clean file en
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-watch")).exists())
       .toBe(true);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-slp-observe")).exists())
-      .toBe(true);
+      .toBe(false);
     expect(await Bun.file(join(fixture.home, ".local", "bin", "maestro-team-sensor")).exists())
       .toBe(false);
   });
@@ -5787,3 +5787,84 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
   });
 }, 30_000);
 
+
+test("observer-gone: two seats in the plan, no sentinel tab or status field, observer marker refused, --observer-model unknown, --stall refused for every pane, no sentinel shim (red 9, Hub d97 d98)", async () => {
+  const plan = buildSlpTeamPlan({
+    generation: 1,
+    lead: { harness: "codex", profile: "lead" },
+    projectPath: "/tmp/observer-gone",
+    teamId: "observer-gone",
+    teamSupervisor: { harness: "claude", profile: "team-supervisor" },
+  });
+  expect(plan.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead"]);
+  expect(await Bun.file(join(import.meta.dir, "..", "src", "plugins", "slp-observe.ts")).exists()).toBe(false);
+  expect(await Bun.file(join(import.meta.dir, "..", "bin", "maestro-slp-observe.ts")).exists()).toBe(false);
+
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const packPath = join(room, "SLP.md");
+    const shipped = await readFile(packPath, "utf8");
+
+    await writeFile(packPath, shipped.replace("<!-- slp:profile:peer=peer -->", "<!-- slp:profile:peer=peer -->\n<!-- slp:profile:observer=observer -->"));
+    const refused = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Observer marker", "--json"], fake.env);
+    expect(refused.exitCode).toBe(1);
+    expect(failureEnvelope(refused.stderr).error.code).toBe("INVALID_SLP_PACK");
+    expect(failureEnvelope(refused.stderr).error.message).toContain("Observer seat was removed");
+    await writeFile(packPath, shipped);
+
+    const unknown = await runCliAt(fixture, room, ["team", "start", fixture.repo, "x", "--observer-model", "luna", "--json"], fake.env);
+    expect(unknown.exitCode).toBe(2);
+    expect(failureEnvelope(unknown.stderr).error.code).toBe("UNKNOWN_FLAG");
+
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "No Observer", "--json"], fake.env);
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }>; teamId: string };
+      work: { id: string };
+    }>(started.stdout);
+    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead"]);
+    const state = await readFakeHerdrState(fake);
+    expect((state.tabs as Array<{ label: string }>).some((tab) => tab.label.endsWith(":sentinel"))).toBe(false);
+    expect((await fakeHerdrCommands(fake)).some((command) => command[0] === "pane" && command[1] === "run")).toBe(false);
+    expect(state.agents.map((agent: { name: string }) => agent.name).sort()).toEqual(
+      [`lead-${data.team.teamId}`, `supervisor-${data.team.teamId}`].sort(),
+    );
+
+    const hubText = (await runCliAt(fixture, room, ["status"], fake.env)).stdout;
+    expect(hubText).toContain("RUNNING; watch off; missing none");
+    expect(hubText).not.toContain("sentinel");
+    const hubJson = envelope<{ teams: Array<Record<string, unknown>> }>(
+      (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
+    );
+    expect(hubJson.teams[0]).not.toHaveProperty("sentinel");
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const teamJson = envelope<Record<string, unknown>>(
+      (await runCliAt(fixture, fixture.repo, ["status", "--json"], { ...fake.env, HERDR_PANE_ID: lead.paneId })).stdout,
+    );
+    expect(teamJson).not.toHaveProperty("sentinel");
+
+    for (const pane of [lead.paneId, supervisor.paneId]) {
+      const stall = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "note", data.work.id, "looks stuck", "--stall", "repeat", "--json"],
+        { ...fake.env, HERDR_PANE_ID: pane },
+      );
+      expect(stall.exitCode).toBe(1);
+      expect(failureEnvelope(stall.stderr).error.code).toBe("STALL_RETIRED");
+      expect(failureEnvelope(stall.stderr).error.message).toContain("--blocked");
+    }
+    expect((await runCliAt(fixture, fixture.repo, ["help", "work"], fake.env)).stdout).not.toContain("--stall");
+  });
+}, 30_000);
