@@ -587,6 +587,29 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
     expect(verifierAgent).toContain('sandbox_mode = "read-only"\n');
     expect(await readFile(join(codexHome, "maestro-verifier.config.toml"), "utf8")).not.toContain("sandbox_mode");
 
+    // graph-engine red 14 (d83, d100): every shipped node preset renders into
+    // both harness agent dirs with the same instruction body.
+    for (const node of [
+      "classifier",
+      "reviewer-simplify",
+      "reviewer-correctness",
+      "reviewer-regression",
+      "reviewer-contracts",
+      "reviewer-security",
+      "refuter",
+      "fixer",
+      "synthesizer",
+    ]) {
+      const claude = await readFile(join(claudeAgents, `maestro-${node}.md`), "utf8");
+      const codex = await readFile(join(codexAgents, `maestro-${node}.toml`), "utf8");
+      const body = claude.slice(claude.indexOf("\n---\n\n") + "\n---\n\n".length).trimEnd();
+      expect({ node, starts: claude.startsWith(`---\nname: maestro-${node}\n`) }).toEqual({ node, starts: true });
+      expect({ node, starts: body.startsWith("Role: ") }).toEqual({ node, starts: true });
+      expect({ node, codexHasBody: codex.includes(body) }).toEqual({ node, codexHasBody: true });
+      expect(codex).toContain(`name = "maestro-${node}"\n`);
+      expect(await Bun.file(join(claudeAgents, `maestro-peer-${node}.md`)).exists()).toBe(true);
+    }
+
     // model: default omits the model line on all three carriers.
     for (const file of [
       join(claudeAgents, "maestro-peer.md"),
