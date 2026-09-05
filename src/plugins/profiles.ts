@@ -358,9 +358,15 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
   const peer = await resolveProfile("peer", directories);
   if (!peer) throw new CliError("PROFILE_NOT_FOUND", "the peer profile is missing from every profile directory");
   const targets: RenderTarget[] = [];
-  const seats = new Map<SeatProfileName, SeatDirectoryPlan>(
-    seatProfileNames.map((seat) => [seat, { deny: [], overlay: {}, seat, skills: [] }]),
-  );
+  const seats = new Map<SeatProfileName, SeatDirectoryPlan>();
+  // d855: the shipped seat's patterns are the floor of that seat's deny; a
+  // shadow adds to it and never narrows it (a shadow that dropped them
+  // rendered deny [] under the token-bearing settings).
+  for (const seat of seatProfileNames) {
+    const shipped = await resolveProfile(seat, [shippedProfiles]);
+    const deny = (shipped?.frontmatter.disallowed_tools ?? []).filter((tool) => tool.includes("("));
+    seats.set(seat, { deny, overlay: {}, seat, skills: [] });
+  }
   const push = (renderedName: string, profile: Profile, frontmatter: ProfileFrontmatter, mandate: string) => {
     const seat = seatForRenderedName(renderedName);
     const plan = seat ? (seats.get(seat) as SeatDirectoryPlan) : null;

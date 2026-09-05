@@ -266,8 +266,9 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
     };
     const leadSettings = join(seatDirectory(fixture.home, "lead"), "settings.json");
     expect(JSON.parse(await readFile(leadSettings, "utf8"))).toEqual({
-      // d854: the Bash(...) pattern moved off the agent line into the seat deny (R11).
-      permissions: { defaultMode: "bypassPermissions", deny: ["Bash(claude:*)"] },
+      // d854: the Bash(...) pattern moved off the agent line into the seat deny (R11);
+      // d855: the shipped two are the floor, so the shadow's one pattern adds nothing (R14).
+      permissions: { defaultMode: "bypassPermissions", deny: ["Bash(claude:*)", "Bash(npx claude:*)"] },
       skipDangerousModePermissionPrompt: true,
       hooks: { SessionStart: [hook] },
       env: {
@@ -373,7 +374,9 @@ test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries
     expect(leadLine).toEqual(expect.stringContaining("LSP"));
     expect(await denyOf("lead")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)"]);
     expect(await denyOf("peer")).toContain("Bash(herdr:*)");
-    expect(await denyOf("team-supervisor")).toEqual(["Bash(claude:*)", "WebFetch"]);
+    // d855: the shipped patterns are the floor, so the shadow's single pattern
+    // no longer narrows the list (R14).
+    expect(await denyOf("team-supervisor")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)", "WebFetch"]);
     const supervisorText = await readFile(renderedProfilePath(fixture.home, "claude", "team-supervisor"), "utf8");
     expect(supervisorText.slice(0, supervisorText.indexOf("\n---\n", 4)).split("\n")).toContain("disallowedTools: Agent");
   });
@@ -491,5 +494,38 @@ test("seat-dirs-owner-only-keys: a <repo>/.maestro/profiles profile with setting
     expect(message).toContain(escaping);
     expect(message).toContain("escaped");
     expect(message).toContain(join(fixture.home, "maestro", "skills"));
+  });
+});
+
+// seat-config-dirs R14 (d855 rule 3): a shadow that drops the shipped Bash(...)
+// patterns at the source rendered deny [] (SEC-1), so the shipped seat's
+// patterns seed every seat deny and a shadow can only add to them.
+test("seat-dirs-deny-floor: a ~/maestro/profiles lead shadow that drops every Bash(...) entry still renders the lead settings permissions.deny as the shipped two patterns, a peer shadow keeps Bash(herdr:*), and a team-supervisor shadow that adds a pattern widens the list (R14, d855)", async () => {
+  await withFixture(async (fixture) => {
+    await materializeSkills(fixture.home, "dev");
+    const homeProfiles = join(fixture.home, "maestro", "profiles");
+    await writeProfile(homeProfiles, "lead", "---\nharness: claude\nmodel: opus\ndisallowed_tools: [Agent, LSP]\n---\nRole: narrowed lead.\n");
+    await writeProfile(homeProfiles, "peer", "---\nharness: claude\nmodel: opus\n---\nRole: narrowed peer.\n");
+    await writeProfile(
+      homeProfiles,
+      "team-supervisor",
+      "---\nharness: claude\nmodel: opus\ndisallowed_tools: [Agent, \"Bash(git push:*)\"]\n---\nRole: widened supervisor.\n",
+    );
+    await materializeProfiles(fixture.home, fixture.repo);
+
+    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+      const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
+      return parsed.permissions.deny;
+    };
+    const lineOf = async (name: string) => {
+      const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
+      return text.slice(0, text.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
+    };
+    const twoBash = ["Bash(claude:*)", "Bash(npx claude:*)"];
+    expect(await denyOf("lead")).toEqual(twoBash);
+    expect(await lineOf("lead")).toBe("disallowedTools: Agent, LSP");
+    expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)"]);
+    expect(await denyOf("team-supervisor")).toEqual([...twoBash, "Bash(git push:*)"]);
+    expect(await lineOf("team-supervisor")).toBe("disallowedTools: Agent");
   });
 });
