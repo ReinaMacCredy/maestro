@@ -98,10 +98,13 @@ test("graph-limits: a fan-out over limits.fanout, a loop over limits.loops and a
 
     const path = await writeGraph(graphs, "wide", nodes);
     const capped = await graphRun(fixture, ["--file", path]);
-    expect(capped.envelope).toEqual(expect.objectContaining({ done: true, stopped: "LIMIT", limit: "nodes", used: 7 }));
+    // d836 (live row 12): nodes counts issued agent nodes, so four instances
+    // issue and the fifth stops the run; deterministic rows never counted.
+    expect(capped.envelope).toEqual(expect.objectContaining({ done: true, stopped: "LIMIT", limit: "nodes", used: 5 }));
     expect((capped.envelope.partial as { items?: number[] }).items).toEqual([1, 2, 3, 4, 5]);
     const trace = data<{ events: Array<{ payload: Record<string, unknown>; type: string }> }>(await runCli(fixture, ["trace", capped.run, "--json"]));
-    expect(trace.events.at(-1)).toEqual(expect.objectContaining({ type: "graph.stopped", payload: { limit: "nodes", used: 7 } }));
+    expect(trace.events.filter((event) => event.type === "graph.node.issued")).toHaveLength(4);
+    expect(trace.events.at(-1)).toEqual(expect.objectContaining({ type: "graph.stopped", payload: { limit: "nodes", used: 5 } }));
 
     const raised = await graphRun(fixture, ["--file", path, "--limit", "nodes=10"]);
     expect(raised.envelope.done).toBe(false);

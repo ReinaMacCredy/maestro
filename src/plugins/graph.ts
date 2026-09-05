@@ -42,6 +42,7 @@ interface RunRow {
   executor: Executor;
   graph: string;
   input: string;
+  issued: number;
   limits: string;
   loops: number;
   origin: GraphOrigin;
@@ -417,8 +418,6 @@ class GraphEngine {
       return null;
     }
     const scoped = run.definition.nodes.filter((candidate) => run.scopes.get(candidate.id) === node.id);
-    const total = rows.length + list.length * scoped.length;
-    if (total > run.limits.nodes) return { limit: "nodes", used: total };
     const now = new Date().toISOString();
     const insert = this.database.query(
       `INSERT INTO graph_nodes
@@ -476,6 +475,14 @@ class GraphEngine {
   private issue(run: Run, rows: NodeRow[], row: NodeRow): Stop | null {
     const inflight = rows.filter((candidate) => candidate.state === "issued").length;
     if (inflight + 1 > run.limits.fanout) return { limit: "fanout", used: inflight + 1 };
+    // d836: limits.nodes bounds model spend, so it counts issued agent nodes
+    // (a later round counts again) and is checked before the spawn exists.
+    if (row.kind === "agent") {
+      const used = run.row.issued + 1;
+      if (used > run.limits.nodes) return { limit: "nodes", used };
+      run.row.issued = used;
+      this.database.query("UPDATE graph_runs SET issued = ? WHERE run_id = ?").run(used, run.row.run_id);
+    }
     const node = this.nodeOf(run, row.node_id);
     const prompt = fillPlaceholders(node.prompt as string, this.stateFor(run, rows, row));
     this.setState(row, "issued", { prompt });
@@ -813,6 +820,7 @@ export const graphPlugin: BuiltInPlugin = {
         limits TEXT NOT NULL,
         executor TEXT NOT NULL,
         loops INTEGER NOT NULL DEFAULT 0,
+        issued INTEGER NOT NULL DEFAULT 0,
         stopped TEXT,
         verdict TEXT,
         created_at TEXT NOT NULL,
@@ -838,6 +846,7 @@ export const graphPlugin: BuiltInPlugin = {
         PRIMARY KEY (run_id, node_id, instance_key)
       );
     `);
+    context.store.ensureColumn("graph_runs", "issued", "ALTER TABLE graph_runs ADD COLUMN issued INTEGER NOT NULL DEFAULT 0");
     const engine = new GraphEngine(context, repo, home);
 
     context.effect(() =>
@@ -917,8 +926,8 @@ export const graphPlugin: BuiltInPlugin = {
               .run(runId, title, `the run of graph ${definition.name} reaches a verdict`, session.id, now, now);
             context.store.database
               .query(
-                `INSERT INTO graph_runs (run_id, graph, origin, path, source, input, limits, executor, loops, stopped, verdict, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, ?, ?)`,
+                `INSERT INTO graph_runs (run_id, graph, origin, path, source, input, limits, executor, loops, issued, stopped, verdict, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, NULL, ?, ?)`,
               )
               .run(runId, definition.name, source.origin, source.path === "-" ? null : source.path, source.text, JSON.stringify(input), JSON.stringify(limits), executor, now, now);
             const insert = context.store.database.query(
