@@ -11,6 +11,14 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.121.0] - 2026-09-06
+
+Every Claude seat launches under its own `CLAUDE_CONFIG_DIR` rendered by
+`maestro install`: its own settings, skill allowlist and deny list, one
+`claude setup-token` token handed to `maestro install --seat-token`, and no
+sight of the owner's `~/.claude`. Proven live on a lab team; the seat profile
+keys that reach env, hooks or the filesystem are owner-only.
+
 Every Claude seat now launches under its own `CLAUDE_CONFIG_DIR` rendered by
 `maestro install`, with its own settings, skill allowlist and deny list, the
 way seatworks-starter isolates its seats; auth is one `claude setup-token`
