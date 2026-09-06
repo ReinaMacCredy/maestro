@@ -1,6 +1,6 @@
 ---
 name: maestro-explore
-description: Answer an evidence question without touching production code - research external facts against primary sources, build or iterate a disposable prototype (its own bugfixes included), or baseline current repository behavior before deciding or implementing. Use when the question is answerable by reading, building, or measuring with no user decision required; unsettled decisions belong to maestro-design. Prototypes are throwaway.
+description: Answer an evidence question without touching production code - research external facts against primary sources, build or iterate a disposable prototype (its own bugfixes included), or baseline current repository behavior before deciding or implementing. Use when the question is answerable by reading, building, or measuring with no user decision required; unsettled decisions belong to maestro-design. Prototypes are throwaway. Also triggers on Vietnamese phrasings such as làm 1 vòng research xem, research xem.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->

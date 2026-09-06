@@ -1,6 +1,6 @@
 ---
 name: maestro-improve
-description: Turn filed lessons into the smallest doctrine edit. Use when a Lead assigns improvement work for one target: group pending lessons, make one evidence-linked commit per target, return it for independent challenge, and process each accepted or rejected lesson without deleting history.
+description: "Turn filed lessons into the smallest doctrine edit. Use when a Lead assigns improvement work for one target: group pending lessons, make one evidence-linked commit per target, return it for independent challenge, and process each accepted or rejected lesson without deleting history."
 review-date: 2026-11-29
 ---
 <!-- maestro-skill-version: dev -->

@@ -1,6 +1,6 @@
 ---
 name: maestro-questionnaire
-description: Turn a decision the user cannot fully answer into a Markdown questionnaire for the one person who can - filled in async, or together over a meeting.
+description: Turn a decision the user cannot fully answer into a Markdown questionnaire for the one person who can - filled in async, or together over a meeting. Also triggers on Vietnamese phrasings such as phỏng vấn đi, phỏng vấn tôi, interview tôi.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->

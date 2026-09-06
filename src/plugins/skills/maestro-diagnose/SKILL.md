@@ -1,6 +1,6 @@
 ---
 name: maestro-diagnose
-description: Diagnosis-only investigation of a failure with unknown cause - reproduce, localize, reduce, deliver root cause with evidence. Read-only; an explicit fix request routes by target and tier instead, never here.
+description: Diagnosis-only investigation of a failure with unknown cause - reproduce, localize, reduce, deliver root cause with evidence. Read-only; an explicit fix request routes by target and tier instead, never here. Also triggers on Vietnamese phrasings such as root cause là ở đâu, nguyên nhân là gì, tại sao nó không.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->

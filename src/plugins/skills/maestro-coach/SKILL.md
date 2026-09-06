@@ -1,6 +1,6 @@
 ---
 name: maestro-coach
-description: Decision support and grounded teaching for the human. Invoke when the user signals a message did not land ("wait, what?", "I don't understand", "explain it like I'm five", "which is better?", "I'm not sure") about a question or fork they have been asked, or when they hand over a locked decision, a lesson, or a bundle and want to learn the concept behind it.
+description: Decision support and grounded teaching for the human. Invoke when the user signals a message did not land ("wait, what?", "I don't understand", "explain it like I'm five", "which is better?", "I'm not sure") about a question or fork they have been asked, or when they hand over a locked decision, a lesson, or a bundle and want to learn the concept behind it. Also triggers on Vietnamese phrasings such as giải thích chi tiết, giải thích rõ hơn, rõ hơn, tôi không hiểu, cái nào tốt hơn.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
