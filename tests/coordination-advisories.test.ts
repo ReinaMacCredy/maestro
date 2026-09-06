@@ -71,6 +71,29 @@ test("B3.6 status and hook briefs show live peers with held work and stay silent
       await runCli(fixture, ["work", "add", "peer-held work", "--parent", parent]),
     );
     expect((await runCli(fixture, ["work", "start", held], sessionEnvironment("peer-a"))).exitCode).toBe(0);
+    expect(
+      (await runCli(
+        fixture,
+        // The literal two-character \\n an agent types in a shell, not a newline.
+        ["work", "note", held, "checkpoint:\\nstate: half done\\nnext: finish the seam"],
+        sessionEnvironment("peer-a"),
+      )).exitCode,
+    ).toBe(0);
+    const holderBrief = await runCli(
+      fixture,
+      ["hook", "record", "--event", "SessionStart"],
+      sessionEnvironment("peer-a"),
+    );
+    expect(holderBrief.stdout).toContain(
+      `checkpoint ${held}: state: half done | next: finish the seam | avoid: none`,
+    );
+    const holderPrompt = await runCli(
+      fixture,
+      ["hook", "record", "--event", "UserPromptSubmit"],
+      sessionEnvironment("peer-a"),
+    );
+    expect(holderPrompt.stdout).toContain(`held work: ${held}`);
+    expect(holderPrompt.stdout).not.toContain("checkpoint ");
 
     const status = await runCli(fixture, ["status"], sessionEnvironment("peer-b"));
     expect(status.stdout).toContain("live peers:");
@@ -85,6 +108,7 @@ test("B3.6 status and hook briefs show live peers with held work and stay silent
     expect(brief.stdout).toContain("live peers:");
     expect(brief.stdout).toContain("peer-a");
     expect(brief.stdout).toContain(held);
+    expect(brief.stdout).not.toContain("checkpoint ");
   });
 
   await withFixture(async (fixture) => {

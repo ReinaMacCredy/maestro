@@ -108,9 +108,15 @@ primary sources, never from memory.
 Then exit by tier (`maestro-bundle` tier rule):
 
 - Light: design ends with a work item whose acceptance fits in one sentence,
-  `maestro work add "<title>" --acceptance "<observable result>"`, plus the
-  locked decisions. No SPEC, no red-test list; the work is verified
-  inline by `maestro-work`. A quickfix never reaches design.
+  `maestro work add "<title>" --acceptance "<observable result>" --kind <kind>`,
+  plus the locked decisions. Kind routes the policies: `feature`, `task`,
+  `bug`, `chore`, `implement` are execution units; `idea` and `research` are
+  scope notes under a parent and never hold it open. The why lives in the
+  title or acceptance; when it needs a paragraph, add
+  `maestro work note <id> "why: <paragraph>"`, and record findings from the
+  research mode as `research: <finding>` notes (what `policy-research` reads
+  when enabled). No SPEC, no red-test list; the work is verified inline by
+  `maestro-work`. A quickfix never reaches design.
 - Full: `maestro bundle open <id> --work <workId>`, opened in the
   store whose checkout will change (a walk run in the Hub room still opens
   its bundle where the code lives; note the bundle on the Hub map and the map

@@ -29,6 +29,22 @@ test("168 handoff renders every store-provable NOTES section", async () => {
       .toBe(0);
     expect((await runCli(fixture, ["work", "note", open, "failed: second path"])).exitCode)
       .toBe(0);
+    expect(
+      (await runCli(fixture, [
+        "work",
+        "note",
+        open,
+        "checkpoint:\nstate: stale first pass\nnext: stale next\navoid: stale avoid",
+      ])).exitCode,
+    ).toBe(0);
+    expect(
+      (await runCli(fixture, [
+        "work",
+        "note",
+        open,
+        "checkpoint:\nstate: parser green, renderer untested\nnext: run the renderer fixture\navoid: re-reading the whole transcript",
+      ])).exitCode,
+    ).toBe(0);
     const decision = idFrom(
       await runCli(fixture, [
         "decision",
@@ -106,9 +122,11 @@ test("168 handoff renders every store-provable NOTES section", async () => {
     expect(notes.indexOf(`${done}: failed: first path`)).toBeLessThan(
       notes.indexOf(`${open}: failed: second path`),
     );
-    for (const section of ["Next Action", "Authority", "Do not repeat"]) {
-      expect(notes).toContain(`## ${section}\n\n${placeholder}`);
-    }
+    expect(notes).toContain(`Checkpoint:\n- ${open}: parser green, renderer untested`);
+    expect(notes).toContain(`## Next Action\n\n- ${open}: run the renderer fixture`);
+    expect(notes).toContain(`## Do not repeat\n\n- ${open}: re-reading the whole transcript`);
+    expect(notes).not.toContain("stale");
+    expect(notes).toContain(`## Authority\n\n${placeholder}`);
   });
 });
 

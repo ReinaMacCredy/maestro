@@ -4,7 +4,7 @@ import type { Disposer } from "../kernel/events.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import { tableExists } from "../kernel/store.ts";
-import type { WorkRecord, WorkService } from "./work.ts";
+import { latestCheckpoints, type WorkRecord, type WorkService } from "./work.ts";
 import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
@@ -215,6 +215,26 @@ export const coordinationPlugin: BuiltInPlugin = {
         const peers = livePeers(context.sessions.list(), items, sessionId);
         return [heldText, formatLivePeers(peers)].filter(Boolean).join("\n");
       }),
+    );
+    // Recovery print (Hub d106): the latest checkpoint per held item, at session
+    // start only, which in both harnesses also fires after compaction.
+    context.effect(() =>
+      brief.register(
+        (sessionId) => {
+          const held = work.list().filter((item) => item.heldBy === sessionId);
+          const checkpoints = latestCheckpoints(context.store.database, held.map((item) => item.id));
+          return held
+            .flatMap((item) => {
+              const checkpoint = checkpoints.get(item.id);
+              if (!checkpoint) return [];
+              return [
+                `checkpoint ${item.id}: state: ${checkpoint.state || "none"} | next: ${checkpoint.next || "none"} | avoid: ${checkpoint.avoid || "none"}`,
+              ];
+            })
+            .join("\n");
+        },
+        { events: ["SessionStart"] },
+      ),
     );
     context.effect(() =>
       brief.register(

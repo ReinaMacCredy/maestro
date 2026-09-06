@@ -59,9 +59,12 @@ maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link wo
   in place; scope expansion needs the user.
 - `NOTES.md` is a pure handoff: current state, next action, base commit.
   It also names Authority transferred and retained, Failed approaches, and Do
-  not repeat. Overwrite it; never append. History lives in `maestro trace`,
-  work notes, and decisions. Refresh it before ending any turn with work
-  remaining.
+  not repeat. It is rendered, not authored: `maestro handoff <bundle-id>`
+  fills every section the store can prove (work, decisions, handbacks,
+  `failed:` notes, the latest `checkpoint:` note) and leaves placeholders only
+  where it cannot; hand-edit those and nothing else. Never append. History
+  lives in `maestro trace`, work notes, and decisions. Re-run it before
+  ending any turn with work remaining.
 - `VERIFY.md` is scenarios + results; each scenario points at a work item's
   acceptance or claim instead of restating it. Results hold the latest run
   only, stamped with date and commit.
@@ -147,12 +150,16 @@ Hand off instead of compacting when:
 - the context is full of false starts
 
 Compact only when ownership, scope, and role stay stable and the history still
-helps the same writer continue.
+helps the same writer continue. Compaction gives no warning turn in either
+harness, so the checkpoint must already exist: keep a `checkpoint:` work note
+(state / next / avoid, latest wins) on each held item, rewritten at every
+write point; the SessionStart brief prints it back in the first context after
+the compaction. Nothing summarized is trusted over it.
 
 Use break-before-make when the writer on a moving scope changes: release the
-lease and overwrite NOTES.md before the new session starts. The handoff packet
-must preserve the base, Current State, Next Action, Authority transferred and
-retained, Failed approaches, and Do not repeat.
+lease and run `maestro handoff <bundle-id>` before the new session starts. The
+handoff packet must preserve the base, Current State, Next Action, Authority
+transferred and retained, Failed approaches, and Do not repeat.
 
 ## Hand-off
 
@@ -160,7 +167,7 @@ Run `maestro handoff <bundle-id>` to seed untouched NOTES.md sections before tra
 Then decide which of three cases this is; the destination differs:
 
 1. **Continuation with a bundle.** A future session, in any tool, continues
-   this bundle in this workspace. The handoff IS the NOTES.md overwrite
+   this bundle in this workspace. The handoff IS the rendered NOTES.md
    covering every section the trio contract names, with a `Driver:` line
    naming the tool expected to resume. The bundle stays active; the next
    session's resume protocol must find it.

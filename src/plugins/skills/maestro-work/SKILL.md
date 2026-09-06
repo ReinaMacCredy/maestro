@@ -110,7 +110,11 @@ Smallest new information needed: <next fact that would change the approach>
    Full bundle, write the failing test the SPEC's red list names before
    production code and watch it fail for the expected reason; under Light,
    name the inline check that will falsify the change instead. New child work
-   gets `--acceptance "<observable result>"`.
+   gets `--acceptance "<observable result>"` and `--kind`: `feature`, `task`,
+   `bug`, `chore`, `implement` are execution units; `idea` and `research` are
+   scope notes under a parent and never hold it open. A parentless item the
+   agent creates carries its why in the title or acceptance; a longer why is a
+   `maestro work note <id> "why: <one paragraph>"`.
 3. **Act** - `maestro work start <id>`. With `policy-breakdown` enabled it
    refuses a parentless write-like item: pass `--atomic-reason "<why this is
    one unit>"` when it truly is one, otherwise `maestro work add ... --parent
@@ -132,11 +136,18 @@ Smallest new information needed: <next fact that would change the approach>
 5. **Learn** - a pass that failed gets exactly one line,
    `maestro work note <id> "failed: <one line>"`; the lowercase `failed: `
    prefix is what `maestro attention` counts. Otherwise note only a reusable
-   correction.
+   correction. Keep a checkpoint on the held item, rewritten at each write
+   point (after a decision lock, a dispatch or handback, whenever the next
+   action changes, and before any handoff):
+   `maestro work note <id> "checkpoint:\nstate: <where it stands>\nnext: <concrete action>\navoid: <what not to repeat>"`.
+   Only the latest one counts; the SessionStart brief prints it back after a
+   compaction, and `maestro handoff` renders it into NOTES.md.
 6. **Continue** - `maestro work done <id>` with `--claim`/`--proof` naming the
    real falsifier (the check that would have failed if the claim were wrong).
-   In a bundle, overwrite NOTES.md (current state, next action, base commit)
-   before releasing the work item.
+   In a bundle, run `maestro handoff <bundle-id>` before releasing the work
+   item: it renders NOTES.md from the store (work, decisions, handbacks,
+   `failed:` and `checkpoint:` notes, base commit); hand-edit only Authority
+   and whatever the store cannot derive, never the rendered sections.
 
 ## Test-first root laws
 

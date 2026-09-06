@@ -91,11 +91,13 @@ outside a running SLP team.
   with a matching VERIFY.md check), Decisions (store ids, rendered by
   `maestro bundle show <id>`), Red tests (named risks only). Revise in place;
   scope expansion needs the user.
-- `NOTES.md` is a pure handoff, overwritten wholesale, never a log: Current
-  State, Next Action, Authority transferred and retained, Failed approaches,
-  Do not repeat, `Base: <commit>`, `Driver: <tool>`. Refresh before ending any
-  turn with work remaining. History lives in the store: `maestro work note`,
-  `maestro trace`, decisions.
+- `NOTES.md` is a pure handoff, rendered by `maestro handoff <id>` from the
+  store, never authored or appended: Current State, Next Action, Authority
+  transferred and retained, Failed approaches, Do not repeat,
+  `Base: <commit>`, `Driver: <tool>`. Hand-edit only the placeholders it
+  leaves. Re-run before ending any turn with work remaining. History lives in
+  the store: `maestro work note`, `maestro trace`, decisions; the latest
+  `checkpoint:` note (state / next / avoid) is what survives a compaction.
 - `VERIFY.md` is the scenario table drafted at design time and filled at
   verify time. Results hold the latest run only, stamped with date and commit.
 

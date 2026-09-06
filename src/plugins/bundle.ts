@@ -17,7 +17,7 @@ import type {
 import { formatImportReport, importWaymarkTree } from "./bundle-import.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import type { WorkService } from "./work.ts";
+import { latestCheckpoints, type WorkService } from "./work.ts";
 
 export interface BundleRecord {
   id: string;
@@ -433,12 +433,23 @@ function handoffContent(
   const failed = failedNotesForWork(context, workIds).map(
     (note) => `- ${note.workId}: ${note.text}`,
   );
+  const checkpoints = latestCheckpoints(context.store.database, workIds);
+  const checkpointLines = (field: "avoid" | "next" | "state") =>
+    workIds.flatMap((workId) => {
+      const value = checkpoints.get(workId)?.[field];
+      return value ? [`- ${workId}: ${value}`] : [];
+    });
+  const stateLines = checkpointLines("state");
+  if (stateLines.length > 0) {
+    if (currentState.length > 0) currentState.push("");
+    currentState.push("Checkpoint:", ...stateLines);
+  }
   return new Map([
     ["Current State", currentState.join("\n") || handoffPlaceholder],
-    ["Next Action", handoffPlaceholder],
+    ["Next Action", checkpointLines("next").join("\n") || handoffPlaceholder],
     ["Authority", handoffPlaceholder],
     ["Failed approaches", failed.join("\n") || handoffPlaceholder],
-    ["Do not repeat", handoffPlaceholder],
+    ["Do not repeat", checkpointLines("avoid").join("\n") || handoffPlaceholder],
   ]);
 }
 

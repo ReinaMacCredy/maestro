@@ -6,6 +6,7 @@ import {
   type CliInvocation,
   type CliResult,
 } from "../kernel/cli.ts";
+import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
@@ -56,6 +57,45 @@ interface WorkRow {
 interface WorkNoteRow {
   text: string;
   created_at: string;
+}
+
+export interface Checkpoint {
+  avoid: string;
+  next: string;
+  state: string;
+}
+
+// The latest `checkpoint:` note per work item (Hub d105/d106): three lines,
+// state / next / avoid, written incrementally so a compaction never loses them.
+export function latestCheckpoints(
+  database: Database,
+  workIds: string[],
+): Map<string, Checkpoint> {
+  if (workIds.length === 0) return new Map();
+  const placeholders = workIds.map(() => "?").join(", ");
+  const rows = database
+    .query<{ text: string; work_id: string }, string[]>(
+      `SELECT work_id, text FROM work_notes
+       WHERE work_id IN (${placeholders}) AND SUBSTR(text, 1, 11) = 'checkpoint:'
+       ORDER BY id DESC`,
+    )
+    .all(...workIds);
+  const checkpoints = new Map<string, Checkpoint>();
+  for (const row of rows) {
+    if (checkpoints.has(row.work_id)) continue;
+    checkpoints.set(row.work_id, parseCheckpoint(row.text));
+  }
+  return checkpoints;
+}
+
+function parseCheckpoint(text: string): Checkpoint {
+  const fields: Checkpoint = { avoid: "", next: "", state: "" };
+  // Agents typing the doc example in a shell send a literal backslash-n; accept both.
+  for (const line of text.slice("checkpoint:".length).split(/\n|\\n/)) {
+    const match = line.match(/^\s*(state|next|avoid):\s*(.*)$/);
+    if (match) fields[match[1] as keyof Checkpoint] = (match[2] ?? "").trim();
+  }
+  return fields;
 }
 
 export interface WorkService {

@@ -117,8 +117,9 @@ durable constraint becomes a locked decision or a work note - never only chat.
 
 Close order, on PASS with durable ship or handoff proof:
 
-1. Overwrite NOTES.md one last time with a dated close-out line citing the
-   ship evidence (commit hashes or the handoff target).
+1. Run `maestro handoff <bundle-id>` one last time, then add a dated
+   close-out line citing the ship evidence (commit hashes or the handoff
+   target).
 2. Harvest: any mid-flight choice that is hard to reverse, surprising without
    context, and a real trade-off is a locked decision with its rejected
    alternative; a new domain term is `maestro term add`.
