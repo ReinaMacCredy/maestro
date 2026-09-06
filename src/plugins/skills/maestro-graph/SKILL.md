@@ -34,9 +34,9 @@ diagnosis and the SLP seat protocol stay outside graphs.
 ## The pull loop (executor subagent)
 
 ```text
-maestro graph run <name>|--file <path> [key=value ...] [--limit k=v] --json
+maestro graph run <name>|--file <path> [key=value ...] [--limit k=v] --json > run.json
 loop:
-  envelope = the JSON just returned (or maestro graph next <run> --json)
+  envelope = read run.json (or maestro graph next <run> --json > run.json)
   if envelope.done: stop; the verdict, LIMIT stop or failed node is in it
   for each node in envelope.nodes (all at once, they are independent):
     kind human  -> stop and ask the user the prompt; feed the answer back
@@ -47,6 +47,11 @@ loop:
 ```
 
 - `run` returns the first envelope, so the first `next` is implicit.
+- Redirect every `--json` envelope to a file and read the fields you need
+  out of it (`jq`, or one `python3 -c` line); never let it land inline. An
+  envelope carrying several node briefs and their schemas routinely passes
+  a harness output cap, and a truncated envelope costs a second read of the
+  same bytes before the loop can continue.
 - Every node in `nodes` is ready now; spawn them in parallel. Nodes that
   depend on one of them appear on a later `next`, as soon as their own
   inputs are in: only a `join` waits for a whole fan-out (Hub d82).

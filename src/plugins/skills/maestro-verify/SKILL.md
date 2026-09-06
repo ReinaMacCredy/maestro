@@ -27,8 +27,13 @@ Proof follows five links. Claim only as far as the last proven link.
 - `journey` - the real user path reaches the observable outcome end to end.
 
 "Tests pass" is a source claim. A claim that touches install or runtime must
-include a readback at that layer. Every proof and VERIFY result lists untested
-links explicitly as `NOT TESTED`, never by omission:
+include a readback at that layer. A suite that is green only on this machine
+is not a `source` claim about the repo: before any commit, release, or handback
+gate, re-run the touched suite with the developer environment removed
+(`HOME=$(mktemp -d)`, `env -u HERDR_ENV`). A test that reads the installed
+copy, the room, or a home config passes for you and fails in CI. Every proof
+and VERIFY result lists untested links explicitly as `NOT TESTED`, never by
+omission:
 
 ```text
 proof: "suite 135 pass @ a52bd4a7 (source); runtime stamp readback a52bd4a7 (installed); live: NOT TESTED"
