@@ -6414,3 +6414,127 @@ test("SLP v2 status <decision-id> reaches an owner-scope decision recorded in th
     ]);
   });
 }, 20_000);
+
+test("SLP v2 work add refuses --acceptance and --blocked-by instead of discarding them, naming both flags and the objective text, before any Peer pane opens; the Hub path keeps both flags and its blocker validation (w701, d859)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Discarded flags", "--json"],
+      { ...fake.env, HERDR_PANE_ID: "hub:p0" },
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    // The Lead's own view: every item this team assigned to it.
+    const workRows = async () =>
+      envelope<{ work: Array<{ id: string }> }>(
+        (await runCliAt(fixture, fixture.repo, ["status", "--json"], leadEnvironment)).stdout,
+      ).work;
+    const paneCreates = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) => command[0] === "tab" && command[1] === "create",
+      ).length;
+    const beforeWork = (await workRows()).map((row) => row.id);
+    const beforePaneCreates = await paneCreates();
+
+    // The specimen: a Lead brief carrying both flags. Both parse, and before
+    // w701 both vanished with a success envelope and no word.
+    const both = await runCliAt(
+      fixture,
+      fixture.repo,
+      [
+        "work",
+        "add",
+        "Independent result",
+        "--to",
+        "peer-one",
+        "--acceptance",
+        "the suite is green",
+        "--blocked-by",
+        data.work.id,
+        "--json",
+      ],
+      leadEnvironment,
+    );
+    expect(both.exitCode).toBe(1);
+    const refusal = failureEnvelope(both.stderr).error;
+    expect(refusal.code).toBe("INVALID_OPTION");
+    expect(refusal.message).toContain("--acceptance");
+    expect(refusal.message).toContain("--blocked-by");
+    expect(refusal.message).toContain("objective text");
+    // Refused before anything happened: no item, and no Peer pane opened for it.
+    expect((await workRows()).map((row) => row.id)).toEqual(beforeWork);
+    expect(await paneCreates()).toBe(beforePaneCreates);
+
+    // Each flag alone is refused too, by the flag the caller actually passed.
+    const acceptanceOnly = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Lead task", "--acceptance", "green", "--json"],
+      supervisorEnvironment,
+    );
+    expect(acceptanceOnly.exitCode).toBe(1);
+    expect(failureEnvelope(acceptanceOnly.stderr).error.message).toContain("--acceptance");
+    const blockedByOnly = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Lead task", "--blocked-by", data.work.id, "--json"],
+      supervisorEnvironment,
+    );
+    expect(blockedByOnly.exitCode).toBe(1);
+    expect(failureEnvelope(blockedByOnly.stderr).error.message).toContain("--blocked-by");
+
+    // Neither flag: SLP work add is unchanged.
+    const plain = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Lead task", "--json"],
+      supervisorEnvironment,
+    );
+    expect(phaseFree(plain.stderr)).toBe("");
+    expect(plain.exitCode).toBe(0);
+    expect((await workRows()).length).toBe(beforeWork.length + 1);
+
+    // The Hub path below this branch keeps both flags, blocker validation included.
+    const hubEnvironment = { MAESTRO_ROOM_SCAFFOLD: "1" };
+    const first = envelope<{ work: { id: string } }>(
+      (await runCliAt(fixture, room, ["work", "add", "first", "--json"], hubEnvironment)).stdout,
+    ).work;
+    const second = await runCliAt(
+      fixture,
+      room,
+      ["work", "add", "second", "--acceptance", "the report reads clean", "--blocked-by", first.id, "--json"],
+      hubEnvironment,
+    );
+    expect(second.exitCode).toBe(0);
+    const stored = envelope<{ work: { acceptance: string | null; id: string } }>(second.stdout).work;
+    expect(stored.acceptance).toBe("the report reads clean");
+    expect(
+      (await runCliAt(fixture, room, ["work", "show", stored.id], hubEnvironment)).stdout,
+    ).toContain("the report reads clean");
+    const unknownBlocker = await runCliAt(
+      fixture,
+      room,
+      ["work", "add", "third", "--blocked-by", "w999", "--json"],
+      hubEnvironment,
+    );
+    expect(unknownBlocker.exitCode).toBe(1);
+  });
+}, 30_000);

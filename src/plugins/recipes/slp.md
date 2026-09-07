@@ -131,7 +131,11 @@ reviewer to run `maestro work note <id> "<specific gap>" --rework`; the grant
 belongs only to the current return revision and is consumed when the same
 assignee takes it once. Blocked work is returned with a blocker; there is no
 `BLOCKED` state. A work item's objective and acceptance contract are immutable.
-`maestro work note` adds context only. Changed scope requires a new work item; the
+`maestro work note` adds context only. `maestro work add` inside a team refuses
+`--acceptance` and `--blocked-by` with `INVALID_OPTION` rather than accepting
+them silently: SLP stores no acceptance field and has no gating concept, so
+acceptance and ordering belong in the objective text. Both flags keep their
+meaning outside a team. Changed scope requires a new work item; the
 reviewer may close the superseded `OPEN` or `RETURNED` item with
 `maestro work accept --outcome cancelled`.
 

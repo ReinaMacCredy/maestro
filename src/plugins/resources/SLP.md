@@ -52,7 +52,10 @@ Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Raw transcript is
 runtime-only. A work item's objective and acceptance contract never change;
 changed scope requires new work. `RETURNED` work can be retaken only once after
 its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
-for that return revision. Notes add context but do not rewrite the contract.
+for that return revision. Notes add context but do not rewrite the contract. Inside a team `maestro work
+add` takes neither `--acceptance` nor `--blocked-by` and refuses both with
+`INVALID_OPTION`: write the acceptance condition and any ordering into the
+objective text, which is the part that never changes.
 `maestro team start` and `maestro work add --to` return only after the
 new pane has acknowledged its contract, normally within a minute; they print
 their phases on stderr, so do not re-run either while it is still running.

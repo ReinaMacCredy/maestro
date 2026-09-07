@@ -2237,6 +2237,25 @@ function appendPinnedProfile(
   }
 }
 
+// w701 (d859): --acceptance and --blocked-by are declared in the shared work add
+// flag table, so the parser accepts them inside a team and the SLP branch, which
+// reads only --to, --profile and --fresh, then drops them without a word. Refuse
+// instead of persisting: SLP has no acceptance column and no gating concept, so a
+// stored blocker nothing enforces would read as a gate that is not one. Both flags
+// keep working unchanged on the Hub path below this branch.
+function refuseDiscardedWorkAddOptions(invocation: CliInvocation): void {
+  const discarded = ["acceptance", "blocked-by"].filter(
+    (flag) => invocation.options[flag] !== undefined,
+  );
+  if (discarded.length === 0) return;
+  throw new CliError(
+    "INVALID_OPTION",
+    `${discarded.map((flag) => `--${flag}`).join(" and ")} ` +
+      `${discarded.length > 1 ? "are" : "is"} not recorded by SLP work add; ` +
+      "write the acceptance condition and any ordering into the objective text",
+  );
+}
+
 export async function maybeHandleSlpWorkAdd(
   context: PluginContext,
   invocation: CliInvocation,
@@ -2250,6 +2269,7 @@ export async function maybeHandleSlpWorkAdd(
   if (!requireActiveOrLegacy(context)) return null;
   const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
   requireRunningGeneration(context.store, actor.team);
+  refuseDiscardedWorkAddOptions(invocation);
   const objective = requiredPosition(invocation, 0, "work objective");
   const requestedTarget = stringOption(invocation, "to");
   const profileOption = stringOption(invocation, "profile");
