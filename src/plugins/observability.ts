@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 
 interface SearchRow {
@@ -108,6 +109,30 @@ function decisionHit(context: PluginContext, id: string, snippet: string): Searc
     : null;
 }
 
+// w697: decisions recorded by `maestro decide` live in slp_decisions, a
+// different table from the legacy `decisions` ledger the triggers above feed.
+function slpDecisionHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
+  if (!tableExists(context.store, "slp_decisions")) return null;
+  const decision = context.store.database
+    .query<{ choice: string; id: string; scope: string }, [string]>(
+      "SELECT id, choice, scope FROM slp_decisions WHERE id = ?",
+    )
+    .get(id);
+  return decision
+    ? {
+        key: `native:slp-decision:${decision.id}`,
+        snippets: snippet ? [snippet] : [],
+        summary: {
+          id: decision.id,
+          kind: "decision",
+          source: "native",
+          state: decision.scope,
+          title: decision.choice,
+        },
+      }
+    : null;
+}
+
 function bundleHit(context: PluginContext, id: string, snippet: string): SearchHit | null {
   const bundle = context.store.database
     .query<{ id: string; state: string }, [string]>(
@@ -174,6 +199,7 @@ function memoryHit(context: PluginContext, id: string, snippet: string): SearchH
 function nativeHit(context: PluginContext, match: SearchRow): SearchHit | null {
   if (match.surface === "work") return workHit(context, match.entity_id, match.text);
   if (match.surface === "decision") return decisionHit(context, match.entity_id, match.text);
+  if (match.surface === "slp-decision") return slpDecisionHit(context, match.entity_id, match.text);
   if (match.surface === "bundle") return bundleHit(context, match.entity_id, match.text);
   if (match.surface === "term") return termHit(context, match.entity_id, match.text);
   if (match.surface === "memory") return memoryHit(context, match.entity_id, match.text);
@@ -327,6 +353,26 @@ async function searchHub(context: PluginContext, term: string, limit: number): P
   }
 }
 
+// w697: slp_decisions cannot be indexed by a trigger like the tables above.
+// It is created by the SLP migration, not by this plugin, so a store that has
+// not adopted SLP has no table to attach a trigger to, and a store that adopts
+// it later would miss every row written before the next process started. This
+// tops the index up at read time instead: bounded by the number of decisions,
+// a no-op once they are indexed, and skipped on a read-only store.
+function indexSlpDecisions(context: PluginContext): void {
+  if (context.store.readOnly || !tableExists(context.store, "slp_decisions")) return;
+  context.store.database.run(`
+    INSERT INTO search_index(surface, entity_id, text)
+    SELECT 'slp-decision', decision.id,
+           decision.id || ' ' || decision.choice || ' ' || decision.why
+      FROM slp_decisions AS decision
+     WHERE NOT EXISTS (
+       SELECT 1 FROM search_index
+        WHERE surface = 'slp-decision' AND entity_id = decision.id
+     )
+  `);
+}
+
 export const observabilityPlugin: BuiltInPlugin = {
   name: "observability",
   inject: ["work", "decision"],
@@ -433,6 +479,7 @@ export const observabilityPlugin: BuiltInPlugin = {
               { command: "maestro search" },
             );
           }
+          indexSlpDecisions(context);
           const term = requiredPosition(invocation, 0, "search term");
           const limit = resultLimit(invocation);
           const query = `"${term.replaceAll('"', '""')}"`;

@@ -140,7 +140,10 @@ to the Lead, team scope to the Team Supervisor, and owner or cross-team scope
 to the Hub Supervisor. In a team workspace, `--work wN` links local work. At
 Hub, a unique `wN` resolves directly; when several teams contain that id, use
 `--work <team-id>:wN`. A later choice replaces an earlier one explicitly with
-`--replaces`.
+`--replaces`. Read one back by its own id with `maestro status <decision-id>`,
+which returns its choice, why and scope, reaches an owner-scope ruling recorded
+in the Hub store, and names the store each match came from; `maestro search`
+finds a decision by its id or by words from its choice or why.
 
 ## Runtime pane
 

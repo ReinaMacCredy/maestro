@@ -6155,3 +6155,247 @@ test("SLP v2 team start pushes one [from hub-supervisor][<id> OPEN] line to the 
   });
 }, 20_000);
 
+// w697: decisions were recorded with no way back to them. A work-linked
+// decision could be reached only through `status <work-id> --json`, an
+// unlinked one not at all, and the retired `decision show` pointed the reader
+// at `decide`, a write verb. `status <decision-id>` is that read path; the
+// nine-operation surface gains no verb.
+test("SLP v2 status <decision-id> returns a decision by its own id, linked or not, and refuses an unknown id", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Read decisions back", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ paneId: string; role: string }> };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+
+    const linked = envelope<{ decision: { id: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          [
+            "decide",
+            "Cache the rendered profile per digest",
+            "--why",
+            "rendering twice cost more than the cache",
+            "--work",
+            data.work.id,
+            "--json",
+          ],
+          leadEnvironment,
+        )
+      ).stdout,
+    ).decision;
+    const unlinked = envelope<{ decision: { id: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["decide", "Keep the store the truth", "--why", "panes lose lines", "--json"],
+          supervisorEnvironment,
+        )
+      ).stdout,
+    ).decision;
+
+    for (
+      const expected of [
+        {
+          actor: lead.paneId ? expect.stringMatching(/^lead-/) : "",
+          choice: "Cache the rendered profile per digest",
+          id: linked.id,
+          scope: "technical",
+          store: "project",
+          why: "rendering twice cost more than the cache",
+          workId: data.work.id,
+        },
+        {
+          actor: expect.stringMatching(/^supervisor-/),
+          choice: "Keep the store the truth",
+          id: unlinked.id,
+          scope: "team",
+          store: "project",
+          why: "panes lose lines",
+          workId: null,
+        },
+      ]
+    ) {
+      const read = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["status", expected.id, "--json"],
+        leadEnvironment,
+      );
+      expect(phaseFree(read.stderr)).toBe("");
+      expect(read.exitCode).toBe(0);
+      expect(envelope<{ decisions: Array<Record<string, unknown>> }>(read.stdout).decisions)
+        .toEqual([expect.objectContaining(expected)]);
+    }
+
+    // The plain-text view carries the content, not just the id.
+    const text = await runCliAt(fixture, fixture.repo, ["status", linked.id], leadEnvironment);
+    expect(text.exitCode).toBe(0);
+    expect(text.stdout).toContain(`${linked.id} [technical]`);
+    expect(text.stdout).toContain("choice: Cache the rendered profile per digest");
+    expect(text.stdout).toContain("why: rendering twice cost more than the cache");
+
+    // A Peer reads team doctrine too.
+    const peerWork = envelope<{ role: { paneId: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          ["work", "add", "Peer reads doctrine", "--to", "reader", "--json"],
+          leadEnvironment,
+        )
+      ).stdout,
+    );
+    const peerRead = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["status", unlinked.id, "--json"],
+      { ...fake.env, HERDR_PANE_ID: peerWork.role.paneId },
+    );
+    expect(peerRead.exitCode).toBe(0);
+
+    const missing = await runCliAt(fixture, fixture.repo, ["status", "d987", "--json"], leadEnvironment);
+    expect(missing.exitCode).toBe(1);
+    expect((JSON.parse(missing.stderr) as { error: { code: string } }).error.code).toBe("NOT_FOUND");
+  });
+}, 20_000);
+
+// w697: search hit the legacy `decisions` ledger only, so no decision recorded
+// by `maestro decide` was findable by id or by text.
+test("SLP v2 search matches an slp_decisions row by its id and by text from choice and why", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Find decisions again", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{ team: { roles: Array<{ paneId: string; role: string }> } }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const decision = envelope<{ decision: { id: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          fixture.repo,
+          [
+            "decide",
+            "Pin the runtime to surface-tourmaline",
+            "--why",
+            "the alternative surface-zircon drifts per machine",
+            "--json",
+          ],
+          leadEnvironment,
+        )
+      ).stdout,
+    ).decision;
+
+    for (const term of [decision.id, "surface-tourmaline", "surface-zircon"]) {
+      const found = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["search", term, "--local", "--json"],
+        leadEnvironment,
+      );
+      expect(found.exitCode).toBe(0);
+      expect(
+        envelope<{ matches: Array<{ id: string; kind: string }> }>(found.stdout).matches,
+      ).toContainEqual(expect.objectContaining({ id: decision.id, kind: "decision" }));
+    }
+  });
+}, 20_000);
+
+// w697: an owner-scope ruling has no work id and lives in the Hub store, so
+// the one working read path could not reach it and the Hub had to paste it by
+// hand into the pane.
+test("SLP v2 status <decision-id> reaches an owner-scope decision recorded in the Hub store", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Reach owner rulings", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{ team: { roles: Array<{ paneId: string; role: string }> } }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const owner = envelope<{ decision: { id: string; scope: string } }>(
+      (
+        await runCliAt(
+          fixture,
+          room,
+          [
+            "decide",
+            "Do not resync the runtime while another team is live",
+            "--why",
+            "a mid-flight resync breaks a live team's panes",
+            "--json",
+          ],
+          fake.env,
+        )
+      ).stdout,
+    ).decision;
+    expect(owner.scope).toBe("owner");
+
+    const read = await runCliAt(fixture, fixture.repo, ["status", owner.id, "--json"], leadEnvironment);
+
+    expect(phaseFree(read.stderr)).toBe("");
+    expect(read.exitCode).toBe(0);
+    expect(envelope<{ decisions: Array<Record<string, unknown>> }>(read.stdout).decisions).toEqual([
+      expect.objectContaining({
+        actor: "hub-supervisor",
+        choice: "Do not resync the runtime while another team is live",
+        id: owner.id,
+        scope: "owner",
+        store: "hub",
+        why: "a mid-flight resync breaks a live team's panes",
+        workId: null,
+      }),
+    ]);
+  });
+}, 20_000);

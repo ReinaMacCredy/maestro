@@ -205,6 +205,8 @@ const retiredSlpOperations = new Map<string, string>([
   ["attention", "status"],
   ["brief", "status"],
   ["decision", "decide"],
+  ["decision list", "status"],
+  ["decision show", "status <decision-id>"],
   ["dispatch", "work add, work take, or work return"],
   ["handback", "work return or work accept"],
   ["ready", "status"],
@@ -3979,6 +3981,98 @@ function teamDecisionRefs(
     .map((row) => ({ id: row.id, workId: row.work_id }));
 }
 
+const decisionIdPattern = /^d\d+$/;
+
+interface SlpDecisionRow {
+  actor: string;
+  choice: string;
+  created_at: string;
+  id: string;
+  replaces_id: string | null;
+  scope: string;
+  why: string;
+  work_id: string | null;
+}
+
+interface SlpDecisionData {
+  actor: string;
+  choice: string;
+  createdAt: string;
+  id: string;
+  replaces: string | null;
+  scope: string;
+  store: "hub" | "project";
+  why: string;
+  workId: string | null;
+}
+
+// A seat reads its own store's rows unfiltered; from the Hub store it reads
+// its own team's rows plus the owner and cross-team rulings, which carry no
+// work id and belong to no team (teamId null asks for the whole store).
+function decisionRowsById(store: Store, id: string, teamId: string | null): SlpDecisionRow[] {
+  if (!tableExists(store, "slp_decisions")) return [];
+  const columns =
+    `SELECT id, choice, why, scope, work_id, replaces_id, actor, created_at
+     FROM slp_decisions WHERE id = ?`;
+  return teamId === null
+    ? store.database.query<SlpDecisionRow, [string]>(columns).all(id)
+    : store.database
+      .query<SlpDecisionRow, [string, string]>(
+        `${columns} AND (team_id = ? OR scope IN ('owner', 'cross-team'))`,
+      )
+      .all(id, teamId);
+}
+
+function decisionData(row: SlpDecisionRow, store: "hub" | "project"): SlpDecisionData {
+  return {
+    actor: row.actor,
+    choice: row.choice,
+    createdAt: row.created_at,
+    id: row.id,
+    replaces: row.replaces_id,
+    scope: row.scope,
+    store,
+    why: row.why,
+    workId: row.work_id,
+  };
+}
+
+function decisionText(decision: SlpDecisionData): string {
+  return [
+    `${decision.id} [${decision.scope}] by ${decision.actor} (${decision.store} store)`,
+    `work: ${decision.workId ?? "none"}`,
+    ...(decision.replaces ? [`replaces: ${decision.replaces}`] : []),
+    `choice: ${decision.choice}`,
+    `why: ${decision.why}`,
+  ].join("\n");
+}
+
+// w697: decision ids are per-store sequences, so the same id can in principle
+// name a row in both stores. Every match is returned carrying the store it came
+// from rather than one store silently winning; the two stores hold no
+// overlapping id today (d857), so the plural case is a shape, not a claim.
+function decisionResult(decisions: readonly SlpDecisionData[], id: string): CliResult {
+  if (decisions.length === 0) throw new CliError("NOT_FOUND", `SLP decision not found: ${id}`);
+  return {
+    data: { decisions },
+    text: decisions.map(decisionText).join("\n\n"),
+  };
+}
+
+function readSlpDecision(context: PluginContext, actor: SlpActor, id: string): CliResult {
+  const local = decisionRowsById(context.store, id, null)
+    .map((row) => decisionData(row, "project"));
+  const roomStore = new Store(actor.team.room_store_path, { readonly: true });
+  let hub: SlpDecisionData[] = [];
+  try {
+    hub = decisionRowsById(roomStore, id, actor.team.team_id)
+      .map((row) => decisionData(row, "hub"));
+  } finally {
+    roomStore.close();
+  }
+  return decisionResult([...local, ...hub], id);
+}
+
 export async function maybeHandleSlpStatus(
   context: PluginContext,
   invocation: CliInvocation,
@@ -3986,6 +4080,14 @@ export async function maybeHandleSlpStatus(
   const requestedWork = invocation.positionals[0] ?? null;
   if (isRoom(context.store.database)) {
     if (requestedWork) {
+      // w697: the Hub reads its own rulings by id; work still belongs to the seats.
+      if (decisionIdPattern.test(requestedWork)) {
+        return decisionResult(
+          decisionRowsById(context.store, requestedWork, null)
+            .map((row) => decisionData(row, "hub")),
+          requestedWork,
+        );
+      }
       throw new CliError(
         "ROLE_FORBIDDEN",
         "Hub Supervisor does not manage project work directly; run status <work-id> in the team workspace",
@@ -4123,6 +4225,9 @@ export async function maybeHandleSlpStatus(
   if (!requireActiveOrLegacy(context)) return null;
   const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
   const roles = roleRows(context.store, actor.team.team_id, actor.team.generation, true);
+  if (requestedWork && decisionIdPattern.test(requestedWork)) {
+    return readSlpDecision(context, actor, requestedWork);
+  }
   if (requestedWork) {
     const work = requireSlpWork(context, actor, requestedWork);
     if (actor.role === "peer" && work.assigned_to !== actor.name) {

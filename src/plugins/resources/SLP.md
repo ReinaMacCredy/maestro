@@ -90,7 +90,10 @@ slash command, and confirming `agent_status=working` before leaving: a dropped
 brief looks identical to a slow start. `maestro status` lists the team's non-DONE
 items with `*` on those waiting on you (a Peer sees only its own) and collapses
 DONE into a count that `--all` expands; `maestro status <work-id>` ends with a
-`next:` line naming what you may run on it.
+`next:` line naming what you may run on it. `maestro status <decision-id>`
+reads one settled decision back with its choice, why and scope, including an
+owner-scope ruling recorded in the Hub store, and `maestro search` finds a
+decision by its id or by words from its choice or why.
 <!-- slp:shared:end -->
 
 <!-- slp:role:hub-supervisor:begin -->
