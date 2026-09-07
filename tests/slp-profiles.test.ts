@@ -163,7 +163,11 @@ test("team-start-launch-args: --agent/--profile with autocompact and no --model,
     expect(starts.get(`supervisor-${data.team.teamId}`)).toEqual(["--agent", "maestro-team-supervisor", "--autocompact", "250000"]);
     expect(starts.get(`lead-${data.team.teamId}`)).toEqual(["--profile", "maestro-lead"]);
     for (const command of commands) expect(command).not.toContain("--model");
-    const prompts = commands.filter((command) => command[0] === "agent" && command[1] === "prompt");
+    // Contract prompts only; the w696 wake-up for the initial item rides along.
+    const prompts = commands.filter(
+      (command) =>
+        command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("slp team "),
+    );
     expect(prompts).toHaveLength(2);
     for (const prompt of prompts) {
       expect(prompt[3]).toMatch(/^slp team \S+ generation 1 instance [0-9a-f-]{36}; reply [0-9a-f]{32}$/);

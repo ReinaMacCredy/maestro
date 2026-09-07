@@ -1512,6 +1512,25 @@ async function ensureRuntimePane(
   return paneId;
 }
 
+// w696: team start creates the Lead's first item itself, so it owes that item
+// the same d753 wake-up work add sends; without it the Lead pane holds only its
+// acknowledgement and sits idle while the store says OPEN. A repeat start
+// re-wakes an item still OPEN and stays quiet once the Lead has taken it.
+async function pushInitialWorkNotice(
+  projectPath: string,
+  work: { assigned_to: string; id: string; objective: string; state: WorkState },
+): Promise<void> {
+  if (work.state !== "OPEN") return;
+  await pushNotice(
+    projectPath,
+    "hub-supervisor",
+    work.assigned_to,
+    `${work.id} OPEN`,
+    work.objective,
+    `maestro status ${work.id}`,
+  );
+}
+
 async function startTeam(
   context: PluginContext,
   runtime: HerdrSlpRuntime,
@@ -1705,6 +1724,7 @@ async function startTeam(
             },
             started.roles,
           );
+          await pushInitialWorkNotice(projectPath, work);
           context.sessions.record("team.start");
           return {
             data: {
@@ -1804,6 +1824,7 @@ async function startTeam(
         },
         roles,
       );
+      await pushInitialWorkNotice(projectPath, work);
       context.sessions.record("team.start");
       return {
         data: {
@@ -2101,7 +2122,7 @@ function noticeSummary(body: string): string {
 // d753/d760: the store is the truth; the pushed line is only the wake-up.
 async function pushNotice(
   projectPath: string,
-  fromRole: SlpRole,
+  fromRole: SlpRole | "hub-supervisor",
   target: string | null,
   subject: string,
   summary: string,

@@ -142,7 +142,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
         state: string;
         teamId: string;
       };
-      work: { assignedTo: string; state: string };
+      work: { assignedTo: string; id: string; state: string };
     }>(started.stdout);
     const hubPack = await readFile(join(room, "SLP.md"));
     const projectPack = await readFile(join(fixture.repo, ".maestro", "SLP.md"));
@@ -218,9 +218,10 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
       ].sort(),
     );
     const commands = await fakeHerdrCommands(fake);
-    const prompts = commands.filter(
+    const allPrompts = commands.filter(
       (command) => command[0] === "agent" && command[1] === "prompt",
     );
+    const prompts = allPrompts.filter((command) => (command[3] ?? "").startsWith("slp team "));
     expect(prompts).toHaveLength(2);
     expect(prompts.every((command) => command.includes("--wait") && command.includes("--timeout")))
       .toBe(true);
@@ -231,6 +232,15 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
         new RegExp(`^slp team ${startData.team.teamId} generation 1 instance [0-9a-f-]{36}; reply [0-9a-f]{32}$`),
       );
     }
+    // w696: and the Lead's first item is pushed to it like any other item.
+    expect(allPrompts.filter((command) => !prompts.includes(command))).toEqual([
+      [
+        "agent",
+        "prompt",
+        lead!.name,
+        `[from hub-supervisor][${startData.work.id} OPEN] Implement the approved change; read: maestro status ${startData.work.id}`,
+      ],
+    ]);
     expect(
       commands.filter((command) => command[0] === "agent" && command[1] === "read"),
     ).toHaveLength(2);
@@ -494,7 +504,10 @@ test("SLP v2 retries a transient contract prompt stall without restarting roles"
       commands.filter((command) => command[0] === "agent" && command[1] === "start"),
     ).toHaveLength(2);
     expect(
-      commands.filter((command) => command[0] === "agent" && command[1] === "prompt"),
+      commands.filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("slp team "),
+      ),
     ).toHaveLength(4);
     expect((await readFakeHerdrState(fake)).agents).toHaveLength(2);
   });
@@ -1053,9 +1066,12 @@ test("SLP v2 repeats an identical start without duplicates and restores a missin
     expect(repeatedData.team.roles.map((role) => role.readyChallenge)).toEqual(
       firstData.team.roles.map((role) => role.readyChallenge),
     );
+    // Contract prompts only: the w696 wake-up for the still-OPEN initial item
+    // rides on every start and is asserted in its own test.
     const prompts = async () =>
       (await fakeHerdrCommands(fake)).filter(
-        (command) => command[0] === "agent" && command[1] === "prompt",
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("slp team "),
       );
     expect(await prompts()).toHaveLength(2);
     let runtime = await readFakeHerdrState(fake);
@@ -5137,6 +5153,8 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
           command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
       );
     const id = data.work.id;
+    // w696: team start already pushed this item's OPEN line to the Lead.
+    const beforeNotices = (await notices()).length;
 
     expect(
       (await runCliAt(fixture, fixture.repo, ["work", "take", id, "--json"], leadEnvironment)).exitCode,
@@ -5149,7 +5167,7 @@ test("SLP v2 pushes one notice line to the counterpart after return, rework, and
     );
     expect(phaseFree(returned.stderr)).toBe("");
     expect(returned.exitCode).toBe(0);
-    expect(await notices()).toEqual([
+    expect((await notices()).slice(beforeNotices)).toEqual([
       ["agent", "prompt", supervisor.name, `[from lead][${id} RETURNED] result: first pass; read: maestro status ${id}`],
     ]);
 
@@ -5369,6 +5387,8 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
           command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("[from "),
       );
     const id = data.work.id;
+    // w696: team start already pushed this item's OPEN line to the Lead.
+    const beforeNotices = (await notices()).length;
     const noteFlag = (stdout: string) => envelope<{ note: { flag: string | null } }>(stdout).note.flag;
 
     expect(
@@ -5392,7 +5412,7 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
     expect(phaseFree(blocked.stderr)).toBe("");
     expect(blocked.exitCode).toBe(0);
     expect(noteFlag(blocked.stdout)).toBe("blocked");
-    expect(await notices()).toEqual([
+    expect((await notices()).slice(beforeNotices)).toEqual([
       ["agent", "prompt", supervisor.name, `[from lead][${id} BLOCKED] need the API key name; read: maestro status ${id}`],
     ]);
 
@@ -5422,7 +5442,7 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
     const plain = await runCliAt(fixture, fixture.repo, ["work", "note", id, "still going", "--json"], leadEnvironment);
     expect(plain.exitCode).toBe(0);
     expect(noteFlag(plain.stdout)).toBeNull();
-    expect((await notices()).length).toBe(2);
+    expect((await notices()).length - beforeNotices).toBe(2);
   });
 }, 30_000);
 
@@ -6075,3 +6095,63 @@ test("SLP v2 work add --to --fresh sends /new to a reused Codex Peer pane (Hub d
     ).toEqual([`[from lead][${secondData.work.id} OPEN] codex second; read: maestro status ${secondData.work.id}`]);
   });
 }, 20_000);
+
+// w696: team start creates the Lead's first item itself, so it owes the same
+// d753 wake-up as work add; without it a fresh Lead pane holds only its
+// acknowledgement and sits idle while the store says the item is OPEN.
+test("SLP v2 team start pushes one [from hub-supervisor][<id> OPEN] line to the Lead pane, on a fresh start and on a repeat that leaves the item OPEN", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const args = ["team", "start", fixture.repo, "Wake the Lead on start", "--json"];
+
+    const started = await runCliAt(fixture, room, args, fake.env);
+
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+      work: { id: string; state: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const opens = async () =>
+      (await fakeHerdrCommands(fake)).filter(
+        (command) =>
+          command[0] === "agent" && command[1] === "prompt" && / OPEN\] /.test(command[3] ?? ""),
+      );
+    expect(await opens()).toEqual([
+      [
+        "agent",
+        "prompt",
+        lead.name,
+        `[from hub-supervisor][${data.work.id} OPEN] Wake the Lead on start; read: maestro status ${data.work.id}`,
+      ],
+    ]);
+
+    // A repeat start leaves the acknowledged panes alone but re-wakes the Lead
+    // while its first item is still OPEN.
+    const repeated = await runCliAt(fixture, room, args, fake.env);
+
+    expect(phaseFree(repeated.stderr)).toBe("");
+    expect(repeated.exitCode).toBe(0);
+    expect((await opens()).map((command) => command[2])).toEqual([lead.name, lead.name]);
+
+    // Once the Lead holds the item, a repeat start pushes no stale OPEN line.
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "take", data.work.id, "--json"], leadEnvironment))
+        .exitCode,
+    ).toBe(0);
+    expect((await runCliAt(fixture, room, args, fake.env)).exitCode).toBe(0);
+    expect(await opens()).toHaveLength(2);
+  });
+}, 20_000);
+
