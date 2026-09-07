@@ -5737,12 +5737,12 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
     await run(["work", "accept", id, "--json"], supervisorEnvironment);
     expect(await lines(["status"], leadEnvironment)).toEqual([
       header("lead", lead),
-      "1 DONE; --all to list",
+      "1 DONE (accepted); --all to list",
       `decisions: d1 (${id})`,
     ]);
     expect(await lines(["status", "--all"], leadEnvironment)).toEqual([
       header("lead", lead),
-      `  ${id} DONE hub-supervisor -> ${lead.name}: ${objective}`,
+      `  ${id} DONE (accepted) hub-supervisor -> ${lead.name}: ${objective}`,
       `decisions: d1 (${id})`,
     ]);
     const leadDone = await lines(["status", id], leadEnvironment);
@@ -5776,6 +5776,87 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
   });
 }, 30_000);
 
+
+test("done-outcome: a cancelled item and an accepted one are different lines in the DONE listing and different numbers in the collapsed count, with the four states unchanged (w707)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const delivered = "Delivered objective";
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, delivered, "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: {
+        generation: number;
+        roles: Array<{ name: string; paneId: string; role: string }>;
+        teamId: string;
+      };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const lines = async (args: string[], environment: Record<string, string>) => {
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      expect(result.exitCode).toBe(0);
+      return result.stdout.trim().split("\n");
+    };
+    const run = async (args: string[], environment: Record<string, string>) => {
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      expect(result.exitCode).toBe(0);
+      return result;
+    };
+
+    // One item travels the whole path and ships.
+    const shipped = data.work.id;
+    await run(["work", "take", shipped, "--json"], leadEnvironment);
+    await run(["work", "return", shipped, "result: built", "--json"], leadEnvironment);
+    await run(["work", "accept", shipped, "--json"], supervisorEnvironment);
+
+    // The collapsed count says what the one DONE item was, not just that it is done.
+    expect((await lines(["status"], leadEnvironment))[1]).toBe("1 DONE (accepted); --all to list");
+
+    // A second item is cancelled untaken: the live specimen w698 in this team.
+    const cancelled = "Cancelled objective";
+    const added = await run(["work", "add", cancelled, "--json"], supervisorEnvironment);
+    const parked = envelope<{ work: { id: string } }>(added.stdout).work.id;
+    await run(["work", "accept", parked, "--outcome", "cancelled", "--json"], supervisorEnvironment);
+
+    expect(await lines(["status"], leadEnvironment)).toEqual([
+      `${data.team.teamId} g${data.team.generation} lead ${lead.name} in ${lead.paneId}`,
+      "2 DONE (1 accepted, 1 cancelled); --all to list",
+      "decisions: none",
+    ]);
+    expect(await lines(["status", "--all"], leadEnvironment)).toEqual([
+      `${data.team.teamId} g${data.team.generation} lead ${lead.name} in ${lead.paneId}`,
+      `  ${shipped} DONE (accepted) hub-supervisor -> ${lead.name}: ${delivered}`,
+      `  ${parked} DONE (cancelled) ${supervisor.name} -> ${lead.name}: ${cancelled}`,
+      "decisions: none",
+    ]);
+
+    // No state was added: both rows are DONE, and the outcome stays a field the
+    // JSON already carried, which is why this is a read-path change.
+    const workJson = async (id: string) =>
+      envelope<{ work: { acceptanceOutcome: string; state: string } }>(
+        (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], leadEnvironment)).stdout,
+      ).work;
+    expect(await workJson(shipped)).toMatchObject({ acceptanceOutcome: "accepted", state: "DONE" });
+    expect(await workJson(parked)).toMatchObject({ acceptanceOutcome: "cancelled", state: "DONE" });
+  });
+}, 30_000);
 
 test("observer-gone: two seats in the plan, no sentinel tab or status field, observer marker refused, --observer-model unknown, --stall refused for every pane, no sentinel shim (red 9, Hub d97 d98)", async () => {
   const plan = buildSlpTeamPlan({

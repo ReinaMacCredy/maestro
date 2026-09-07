@@ -3971,9 +3971,41 @@ function nextLine(work: SlpWorkRow, step: SlpNextStep): string {
   return `next: waiting on ${step.waitingOn}${optional}`;
 }
 
+// w707: DONE is the one state that means two opposite things - delivered, or
+// cancelled without ever being worked - and the store already knows which, in
+// acceptance_outcome. Print it on every DONE line and in the collapsed count
+// rather than marking only the exception: an unmarked line would leave the
+// reader to supply "accepted", which is exactly the join w706 stopped asking
+// readers to make. No state is added; DONE is still DONE.
+function doneOutcome(work: SlpWorkRow): string {
+  return work.acceptance_outcome ?? "outcome unrecorded";
+}
+
+function doneSummary(done: SlpWorkRow[]): string {
+  const tally = new Map<string, number>();
+  for (const work of done) {
+    const outcome = doneOutcome(work);
+    tally.set(outcome, (tally.get(outcome) ?? 0) + 1);
+  }
+  const known = ["accepted", "cancelled"];
+  const rank = (outcome: string) => {
+    const at = known.indexOf(outcome);
+    return at < 0 ? known.length : at;
+  };
+  const outcomes = [...tally.keys()].sort((left, right) =>
+    rank(left) - rank(right) || left.localeCompare(right)
+  );
+  const first = outcomes[0];
+  const summary = outcomes.length === 1 && first !== undefined
+    ? first
+    : outcomes.map((outcome) => `${tally.get(outcome)} ${outcome}`).join(", ");
+  return `${done.length} DONE (${summary}); --all to list`;
+}
+
 function workLine(work: SlpWorkRow, step: SlpNextStep): string {
   const marker = work.state !== "DONE" && step.waitingOn === null ? "*" : " ";
-  return `${marker} ${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}: ${
+  const outcome = work.state === "DONE" ? ` (${doneOutcome(work)})` : "";
+  return `${marker} ${work.id} ${work.state}${outcome} ${work.created_by} -> ${work.assigned_to}: ${
     clipLine(work.objective, 72)
   }`;
 }
@@ -4465,7 +4497,7 @@ function teamStatusText(
     ...(invocation.options.all === true
       ? done.map(line)
       : done.length > 0
-      ? [`${done.length} DONE; --all to list`]
+      ? [doneSummary(done)]
       : []),
     decisionLine(teamDecisionRefs(context, actor)),
   ].join("\n");
