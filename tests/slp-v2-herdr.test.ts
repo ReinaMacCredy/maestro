@@ -62,6 +62,7 @@ async function promptRoleCommand(
   name: string,
   exactCommand: readonly string[],
   wait = true,
+  tolerate?: (receipt: RoleCommandReceipt) => Tolerance,
 ): Promise<RoleCommandReceipt | null> {
   const receiptPath = join(fixture.root, "role-receipts", `${randomUUID()}.json`);
   const executedCommand = wait
@@ -92,9 +93,22 @@ async function promptRoleCommand(
   await waitFor(() => existsSync(receiptPath), `${name} did not write its command receipt`);
   const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as RoleCommandReceipt;
   expect(receipt.command).toEqual([...exactCommand]);
+  return settleRoleCommand(name, receipt, tolerate);
+}
+
+// The pass/fail rule for one scripted command, split out so the tolerance can
+// be exercised without a live daemon.
+function settleRoleCommand(
+  name: string,
+  receipt: RoleCommandReceipt,
+  tolerate?: (receipt: RoleCommandReceipt) => Tolerance,
+): RoleCommandReceipt {
   if (receipt.exitCode !== 0) {
+    const verdict = tolerate?.(receipt);
+    if (verdict?.tolerated) return receipt;
     throw new Error(
       `${name} command failed (${receipt.exitCode}): ${receipt.command.join(" ")}\n` +
+        (verdict ? `not tolerated: ${verdict.evidence}\n` : "") +
         `stderr:\n${receipt.stderr}\nstdout:\n${receipt.stdout}`,
     );
   }
@@ -117,6 +131,143 @@ async function promptAgent<T = unknown>(
   );
   if (!receipt) return null;
   return envelope<T>({ exitCode: receipt.exitCode, stderr: receipt.stderr, stdout: receipt.stdout });
+}
+
+type Tolerance = { tolerated: boolean; evidence: string };
+
+// w703: the journey's subjects are live agents. An agent woken by its
+// `[from <role>][<id> OPEN]` line acts on it, so by the time a scripted prompt
+// lands the item may already be ACTIVE, RETURNED, or - as observed - DONE,
+// moved there by the very subjects the script was about to drive. That is
+// correct SLP behaviour on both sides, so the script follows the store instead
+// of assuming it is the only actor: it runs a step only while the store still
+// needs it, and tolerates a step raced mid-flight only when the store shows
+// that item moved FORWARD along the one legal path, still held by the same
+// assignee. Anything else - a backward or sideways state, another holder,
+// another error code, an unreadable envelope - is a state no correct subject
+// could have produced and still fails.
+const workStates = ["OPEN", "ACTIVE", "RETURNED", "DONE"] as const;
+type WorkState = (typeof workStates)[number];
+
+function workRank(state: string): number {
+  const rank = workStates.indexOf(state as WorkState);
+  if (rank < 0) throw new Error(`unknown work state: ${state}`);
+  return rank;
+}
+
+interface WorkRow {
+  assigned_to: string;
+  state: string;
+}
+
+function workRow(projectDatabasePath: string, workId: string): WorkRow | null {
+  if (!existsSync(projectDatabasePath)) return null;
+  const database = new Database(projectDatabasePath, { readonly: true });
+  try {
+    return (
+      database
+        .query<WorkRow, [string]>("SELECT assigned_to, state FROM slp_work WHERE id = ?")
+        .get(workId) ?? null
+    );
+  } finally {
+    database.close();
+  }
+}
+
+// One scripted command in an item's four-state path.
+interface ScriptedStep {
+  actor: string;
+  args: readonly string[];
+  assignee: string;
+  from: WorkState;
+  workId: string;
+}
+
+// Read the store, then decide whether this step is still the script's to run.
+function stepPlan(step: ScriptedStep, current: WorkRow | null): "run" | "skip" {
+  if (!current) throw new Error(`${step.workId} has no row in the store`);
+  if (current.assigned_to !== step.assignee) {
+    throw new Error(
+      `${step.workId} is held by ${current.assigned_to}, not its assignee ${step.assignee}`,
+    );
+  }
+  const rank = workRank(current.state);
+  const needed = workRank(step.from);
+  if (rank === needed) return "run";
+  if (rank > needed) return "skip";
+  throw new Error(
+    `${step.workId} is ${current.state}; ${step.args.join(" ")} needs it at ${step.from} or beyond`,
+  );
+}
+
+// The same forward-only rule applied to a step that lost the race mid-flight.
+function racedForward(
+  projectDatabasePath: string,
+  step: ScriptedStep,
+): (receipt: RoleCommandReceipt) => Tolerance {
+  return (receipt) => {
+    let code: string | null = null;
+    try {
+      code = (JSON.parse(receipt.stderr) as { error?: { code?: string } }).error?.code ?? null;
+    } catch {
+      return { tolerated: false, evidence: "stderr is not a maestro --json envelope" };
+    }
+    if (code !== "INVALID_STATE") {
+      return { tolerated: false, evidence: `error code is ${code ?? "absent"}, not INVALID_STATE` };
+    }
+    const current = workRow(projectDatabasePath, step.workId);
+    if (!current) {
+      return { tolerated: false, evidence: `no ${step.workId} row at ${projectDatabasePath}` };
+    }
+    const seen = `${step.workId} is ${current.state} held by ${current.assigned_to}`;
+    const evidence =
+      `${seen}; the race tolerates only a state past ${step.from} held by ${step.assignee}`;
+    if (current.assigned_to !== step.assignee) return { tolerated: false, evidence };
+    return { tolerated: workRank(current.state) > workRank(step.from), evidence };
+  };
+}
+
+async function runScriptedStep(
+  fixture: Fixture,
+  projectDatabasePath: string,
+  step: ScriptedStep,
+): Promise<void> {
+  if (stepPlan(step, workRow(projectDatabasePath, step.workId)) === "skip") return;
+  await promptRoleCommand(
+    fixture,
+    step.actor,
+    [process.execPath, maestroCli, ...step.args],
+    true,
+    racedForward(projectDatabasePath, step),
+  );
+}
+
+// Drive one item along OPEN -> ACTIVE -> RETURNED -> DONE, skipping whatever
+// its own subjects already did.
+async function driveWorkToDone(
+  fixture: Fixture,
+  projectDatabasePath: string,
+  work: { assignee: string; id: string },
+  reviewer: string,
+  body: { note?: string; result: string },
+): Promise<void> {
+  const steps: ScriptedStep[] = [
+    { actor: work.assignee, args: ["work", "take", work.id, "--json"], assignee: work.assignee, from: "OPEN", workId: work.id },
+  ];
+  if (body.note !== undefined) {
+    steps.push({
+      actor: work.assignee,
+      args: ["work", "note", work.id, body.note, "--json"],
+      assignee: work.assignee,
+      from: "ACTIVE",
+      workId: work.id,
+    });
+  }
+  steps.push(
+    { actor: work.assignee, args: ["work", "return", work.id, body.result, "--json"], assignee: work.assignee, from: "ACTIVE", workId: work.id },
+    { actor: reviewer, args: ["work", "accept", work.id, "--json"], assignee: work.assignee, from: "RETURNED", workId: work.id },
+  );
+  for (const step of steps) await runScriptedStep(fixture, projectDatabasePath, step);
 }
 
 async function waitFor(
@@ -200,15 +351,15 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         for (const malformed of ["", "w2G", "p3", "w2G:p", "w2G:t2", "workspace:pane"]) {
           expect(malformed).not.toMatch(herdrPaneIdShape);
         }
-        await promptAgent(fixture, lead.name, ["work", "take", started.work.id, "--json"]);
-        await promptAgent(fixture, lead.name, [
-          "work",
-          "return",
-          started.work.id,
-          "result: initial objective complete; proof: live Lead pane",
-          "--json",
-        ]);
-        await promptAgent(fixture, supervisor.name, ["work", "accept", started.work.id, "--json"]);
+        // w703: the Lead's first item is pushed to it by team start (w696), so
+        // it races the same way a Peer's does.
+        await driveWorkToDone(
+          fixture,
+          projectDatabasePath,
+          { assignee: lead.name, id: started.work.id },
+          supervisor.name,
+          { result: "result: initial objective complete; proof: live Lead pane" },
+        );
 
         for (const target of ["peer-real-one", "peer-real-two"]) {
           await promptAgent(fixture, lead.name, [
@@ -245,22 +396,16 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         for (const work of peerWork) {
           expect(peerRoles.has(work.assigned_to)).toBe(true);
           await promptAgent(fixture, work.assigned_to, ["status", work.id, "--json"]);
-          await promptAgent(fixture, work.assigned_to, ["work", "take", work.id, "--json"]);
-          await promptAgent(fixture, work.assigned_to, [
-            "work",
-            "note",
-            work.id,
-            "proof: direct note from this live Peer pane",
-            "--json",
-          ]);
-          await promptAgent(fixture, work.assigned_to, [
-            "work",
-            "return",
-            work.id,
-            "result: independent result complete; proof: live Peer pane",
-            "--json",
-          ]);
-          await promptAgent(fixture, lead.name, ["work", "accept", work.id, "--json"]);
+          await driveWorkToDone(
+            fixture,
+            projectDatabasePath,
+            { assignee: work.assigned_to, id: work.id },
+            lead.name,
+            {
+              note: "proof: direct note from this live Peer pane",
+              result: "result: independent result complete; proof: live Peer pane",
+            },
+          );
         }
         // Hub d96: the runtime pane holds the subscription; the runtime lock in
         // the generation directory proves it is up.
@@ -349,12 +494,12 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         hubDurable.close();
 
         const hubStatus = envelope<{
-          teams: Array<{ missingPanes: string[]; teamId: string; watch: string }>;
+          teams: Array<{ missingPanes: string[]; runtimePane: string; teamId: string }>;
         }>(
           await runCliAt(fixture, room, ["status", "--json"], liveEnvironment),
         );
         expect(hubStatus.teams).toContainEqual(
-          expect.objectContaining({ missingPanes: [], teamId, watch: "on" }),
+          expect.objectContaining({ missingPanes: [], runtimePane: "on", teamId }),
         );
 
         await promptAgent(
@@ -425,6 +570,85 @@ function tabCreates(commands: string[][]): Map<string, string[]> {
       .map((command) => [command[command.indexOf("--label") + 1] ?? "", command]),
   );
 }
+
+test("journey-race: a scripted step is skipped when its own subject already carried the item forward (take on a DONE item, note on a RETURNED one) and tolerated when it loses the race mid-flight, and still fails on a backward state, another holder, another error code, an unreadable envelope or an absent row (w703)", async () => {
+  await withFixture(async (fixture) => {
+    const databasePath = join(fixture.repo, "race.db");
+    const database = new Database(databasePath, { create: true });
+    database.run("CREATE TABLE slp_work (id TEXT PRIMARY KEY, assigned_to TEXT, state TEXT)");
+    // w2 is the live specimen: the Peer was woken by its OPEN push and carried
+    // the item to DONE with the Lead before the scripted take ever landed.
+    database.run("INSERT INTO slp_work VALUES ('w2', 'peer-real-one-f88a8b', 'DONE')");
+    database.run("INSERT INTO slp_work VALUES ('w3', 'peer-real-two-a1b2c3', 'RETURNED')");
+    database.run("INSERT INTO slp_work VALUES ('w4', 'lead-live-9c0d1e', 'OPEN')");
+    database.close();
+
+    const step = (workId: string, assignee: string, from: WorkState, verb: string): ScriptedStep => ({
+      actor: assignee,
+      args: ["work", verb, workId, "--json"],
+      assignee,
+      from,
+      workId,
+    });
+    const takeW2 = step("w2", "peer-real-one-f88a8b", "OPEN", "take");
+    const noteW3 = step("w3", "peer-real-two-a1b2c3", "ACTIVE", "note");
+    const takeW4 = step("w4", "lead-live-9c0d1e", "OPEN", "take");
+    const read = (workId: string) => workRow(databasePath, workId);
+
+    // The store decides which steps are still the script's to run.
+    expect(stepPlan(takeW4, read("w4"))).toBe("run");
+    expect(stepPlan(takeW2, read("w2"))).toBe("skip");
+    expect(stepPlan(noteW3, read("w3"))).toBe("skip");
+    // Backward, another holder, no row: no correct subject produced these.
+    expect(() => stepPlan(step("w4", "lead-live-9c0d1e", "ACTIVE", "return"), read("w4"))).toThrow(
+      /w4 is OPEN; work return w4 --json needs it at ACTIVE or beyond/,
+    );
+    expect(() => stepPlan(step("w2", "peer-real-two-a1b2c3", "OPEN", "take"), read("w2"))).toThrow(
+      /w2 is held by peer-real-one-f88a8b, not its assignee peer-real-two-a1b2c3/,
+    );
+    expect(() => stepPlan(step("w9", "lead-live-9c0d1e", "OPEN", "take"), read("w9"))).toThrow(
+      /w9 has no row in the store/,
+    );
+
+    // A step that read "run" and then lost the race reports the same failure
+    // the live journey produced.
+    const failed = (workId: string, message: string, code = "INVALID_STATE"): RoleCommandReceipt => ({
+      command: [process.execPath, maestroCli, "work", "take", workId, "--json"],
+      exitCode: 1,
+      stderr: JSON.stringify({ ok: false, error: { code, message } }),
+      stdout: "",
+    });
+    const raced = failed("w2", "w2 must be OPEN or RETURNED before work take");
+    const tolerated = racedForward(databasePath, takeW2);
+    expect(tolerated(raced).tolerated).toBe(true);
+    // Forward from ACTIVE counts too: a note lost to the subject's own return.
+    expect(racedForward(databasePath, noteW3)(raced).tolerated).toBe(true);
+    // Wired in: the command settles as a pass instead of throwing.
+    expect(settleRoleCommand("peer-real-one-f88a8b", raced, tolerated).exitCode).toBe(1);
+
+    // Everything a correct subject could not have produced still fails, and
+    // says in the failure what the store actually held.
+    const rejected: Array<[string, Tolerance]> = [
+      // the store never moved: INVALID_STATE here contradicts the store
+      ["a state still at OPEN", racedForward(databasePath, takeW4)(raced)],
+      // held by somebody other than this item's assignee
+      ["another holder", racedForward(databasePath, step("w2", "peer-real-two-a1b2c3", "OPEN", "take"))(raced)],
+      // no such row, and no such store
+      ["an absent row", racedForward(databasePath, step("w9", "peer-real-one-f88a8b", "OPEN", "take"))(raced)],
+      ["an absent store", racedForward(join(fixture.repo, "none.db"), takeW2)(raced)],
+      // right store state, wrong failure: not this race
+      ["another error code", tolerated(failed("w2", "no such work: w2", "NOT_FOUND"))],
+      ["a plain-text failure", tolerated({ ...raced, stderr: "bun: command not found" })],
+    ];
+    for (const [what, verdict] of rejected) {
+      expect(`${what}: ${verdict.tolerated}`).toBe(`${what}: false`);
+      expect(verdict.evidence).not.toBe("");
+      expect(() => settleRoleCommand("peer-real-one-f88a8b", raced, () => verdict)).toThrow(
+        new RegExp(`not tolerated: ${verdict.evidence.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+      );
+    }
+  });
+});
 
 test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE_CONFIG_DIR=<seat dir> and a Codex peer without env; a matching-label shell tab is closed then recreated with the env (A3); a missing token refuses SEAT_TOKEN_MISSING before any tab.create (R6, R7)", async () => {
   await withFixture(async (fixture) => {
