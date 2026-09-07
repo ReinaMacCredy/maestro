@@ -406,10 +406,37 @@ export async function driftAdvisory(_home: string, runningRoot: string): Promise
   // A nag is advisory: a git call that fails here drops the count rather than
   // printing NaN beside a commit the reader is meant to trust.
   const unpublished = Number.isFinite(counted) ? counted : 0;
-  const held = unpublished > 0
-    ? ` (${unpublished} commit${unpublished === 1 ? "" : "s"} no remote holds)`
-    : "";
-  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} differs from source ${sourceCommit.slice(0, 8)} ${where}${held}; run maestro update`;
+  const commits = (count: number) => `${count} commit${count === 1 ? "" : "s"}`;
+  // w706: the sentence used to state a difference with no size ("differs from")
+  // and then the unpublished count, and readers took the second number for the
+  // size of the first - three seats read one commit of runtime drift as eight.
+  // Measure the drift itself. --left-right counts both sides of the range, so a
+  // runtime that is not an ancestor of the source head is reported as diverged
+  // instead of being given a single "behind" number that computes but lies; a
+  // failed call drops to the old size-free wording rather than printing NaN.
+  const range = await command(source, [
+    "git",
+    "rev-list",
+    "--left-right",
+    "--count",
+    `${stampRead.stamp.commit}...${sourceCommit}`,
+  ]);
+  const sides = range.exitCode === 0 ? range.stdout.split(/\s+/).map(Number) : [];
+  const measured = sides.length === 2 && sides.every((side) => Number.isFinite(side));
+  const ahead = measured ? (sides[0] ?? 0) : 0;
+  const behind = measured ? (sides[1] ?? 0) : 0;
+  const from = `source ${sourceCommit.slice(0, 8)} ${where}`;
+  const drift = !measured
+    ? `differs from ${from}`
+    : ahead > 0 && behind > 0
+    ? `has diverged from ${from}: ${commits(behind)} behind and ${ahead} ahead`
+    : ahead > 0
+    ? `is ${commits(ahead)} ahead of ${from}`
+    : `is ${commits(behind)} behind ${from}`;
+  // The unpublished count is a different quantity, so it gets its own clause and
+  // its own subject rather than a parenthetical abutting the drift.
+  const held = unpublished > 0 ? `; separately, the source holds ${commits(unpublished)} no remote has` : "";
+  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} ${drift}${held}; run maestro update`;
 }
 
 async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {

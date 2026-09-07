@@ -47,16 +47,23 @@ follows, then run `maestro update`; to install the current branch on purpose,
 run `maestro install` from that checkout. A checkout with no remote at all is
 not affected: a branch there has nothing to be unpublished against.
 
-The drift line names both halves of the same fact, so the branch is visible
-before the update rather than after it:
+The drift line names two different quantities, so the branch and the size of
+the gap are both visible before the update rather than after it:
 
 ```
-[update] runtime 24002076 differs from source 8cc27daa on main (2 commits no remote holds); run maestro update
+[update] runtime 24002076 is 1 commit behind source 8cc27daa on main; separately, the source holds 2 commits no remote has; run maestro update
 ```
 
-The count is every commit reachable from `HEAD` that no remote-tracking ref
-holds. A tracking branch that is only ahead of its upstream still updates, so
-on that path the count is the only signal that the runtime would be built from
+The first number is the drift: how far the installed runtime is behind the
+source head. If the installed commit is not an ancestor of that head the line
+says so instead (`has diverged from ... 1 commit behind and 2 ahead`), and if
+the range cannot be measured at all it falls back to `differs from` with no
+number rather than an invented one.
+
+The second number is a different quantity, which is why it sits in its own
+clause: every commit reachable from `HEAD` that no remote-tracking ref holds.
+A tracking branch that is only ahead of its upstream still updates, so on that
+path the count is the only signal that the runtime would be built from
 unpublished commits.
 
 ## `LEASE_REQUIRED`

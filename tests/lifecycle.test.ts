@@ -859,7 +859,7 @@ test("562 the drift nag names the source branch and the commits no remote holds 
     const ahead = await runInstalled(fixture, runtime, source, ["status"]);
 
     expect(ahead.stdout).toContain("run maestro update");
-    expect(ahead.stdout).toContain("on main (1 commit no remote holds)");
+    expect(ahead.stdout).toContain("on main; separately, the source holds 1 commit no remote has");
 
     await git(source, ["checkout", "-b", "improver/w557"]);
     await writeFile(join(source, "lane-note.txt"), "lane work\n");
@@ -867,7 +867,62 @@ test("562 the drift nag names the source branch and the commits no remote holds 
     await git(source, ["commit", "-m", "lane work"]);
     const lane = await runInstalled(fixture, runtime, source, ["status"]);
 
-    expect(lane.stdout).toContain("on improver/w557 (2 commits no remote holds)");
+    expect(lane.stdout).toContain("on improver/w557; separately, the source holds 2 commits no remote has");
+  });
+});
+
+test("w706 the drift line states its own magnitude, keeps the unpublished count in a clause that cannot be read as that magnitude, calls a non-ancestor runtime diverged, and falls back to size-free wording when the range cannot be measured", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const installed = await git(source, ["rev-parse", "HEAD"]);
+    const short = (commit: string) => commit.slice(0, 8);
+    const updateLine = (result: { stdout: string }) =>
+      result.stdout.split("\n").find((line) => line.startsWith("[update] "));
+
+    // Three commits since the install, two of them published: the drift and the
+    // unpublished count are deliberately different numbers, which is the shape
+    // that misled three seats when the sentence carried only the second one.
+    for (const step of ["one", "two", "three"]) {
+      await writeFile(join(source, `drift-${step}.txt`), `${step}\n`);
+      await git(source, ["add", `drift-${step}.txt`]);
+      await git(source, ["commit", "-m", `drift ${step}`]);
+    }
+    await git(source, ["push", "origin", "HEAD~1:main"]);
+    const head = await git(source, ["rev-parse", "HEAD"]);
+    const behind = await runInstalled(fixture, runtime, source, ["status"]);
+    expect(updateLine(behind)).toBe(
+      `[update] runtime ${short(installed)} is 3 commits behind source ${short(head)} on main` +
+        "; separately, the source holds 1 commit no remote has; run maestro update",
+    );
+
+    // The runtime commit is no longer reachable from the source head, so a single
+    // "behind" number would be a lie however cleanly it computes.
+    await git(source, ["reset", "--hard", `${installed}~1`]);
+    await writeFile(join(source, "other-line.txt"), "other\n");
+    await git(source, ["add", "other-line.txt"]);
+    await git(source, ["commit", "-m", "other line of work"]);
+    const diverged = await git(source, ["rev-parse", "HEAD"]);
+    const split = await runInstalled(fixture, runtime, source, ["status"]);
+    expect(updateLine(split)).toBe(
+      `[update] runtime ${short(installed)} has diverged from source ${short(diverged)} on main: ` +
+        "1 commit behind and 1 ahead; separately, the source holds 1 commit no remote has; run maestro update",
+    );
+
+    // A source whose history no longer holds the installed commit cannot be
+    // measured; the nag stays advisory and drops the size rather than printing NaN.
+    await rm(join(source, ".git"), { force: true, recursive: true });
+    await git(source, ["init", "-b", "main"]);
+    await git(source, ["config", "user.name", "Maestro Tests"]);
+    await git(source, ["config", "user.email", "maestro-tests@example.invalid"]);
+    await git(source, ["add", "."]);
+    await git(source, ["commit", "-m", "reclone"]);
+    const reclone = await git(source, ["rev-parse", "HEAD"]);
+    const unmeasured = await runInstalled(fixture, runtime, source, ["status"]);
+    expect(updateLine(unmeasured)).toBe(
+      `[update] runtime ${short(installed)} differs from source ${short(reclone)} on main; run maestro update`,
+    );
+    expect(unmeasured.stdout).not.toContain("NaN");
   });
 });
 
