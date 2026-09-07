@@ -75,9 +75,20 @@ interface EntryRow {
   kind: string;
 }
 
+interface RecordRow {
+  actor: string;
+  at: string;
+  flag: string | null;
+  label: string;
+  mark: string;
+}
+
 interface PendingLine {
   line: string;
   queuedAt: string;
+  // w708 (d867): a stall line is about one item in one state, so it carries that
+  // state and holder and is revalidated against the store before it is sent.
+  stall?: { holder: string; state: WorkState; workId: string };
   subject: string;
 }
 
@@ -95,7 +106,9 @@ export interface RuntimeState {
   idleWakes: Record<string, number>;
   pending: Record<string, PendingLine[]>;
   recent: Record<string, number>;
-  stalls: Record<string, number>;
+  // w708 (d867): the mark is the holder's latest record ("entry:12", "decision:d5"
+  // or "none"), not an entry id, so supervision from above no longer re-arms it.
+  stalls: Record<string, string>;
   // Live row 17 (g18): a wake with no resolvable target is dropped once with
   // its reason, never queued for a pane that does not exist.
   unreachable: UnreachableLine[];
@@ -121,7 +134,13 @@ export async function readRuntimeState(directory: string): Promise<RuntimeState 
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(await readFile(path, "utf8")) as Partial<RuntimeState>;
-    return { ...emptyState(), ...parsed };
+    const state = { ...emptyState(), ...parsed };
+    // A state file written before w708 holds entry ids as numbers; they mean the
+    // same thing in the old vocabulary, so they are read as entry marks.
+    state.stalls = Object.fromEntries(
+      Object.entries(state.stalls).map(([key, mark]) => [key, typeof mark === "number" ? `entry:${mark}` : mark]),
+    );
+    return state;
   } catch {
     return null;
   }
@@ -203,12 +222,63 @@ function heldActive(
     .get(teamId, generation, name, excludeId ?? "") ?? null;
 }
 
-function latestEntry(store: Store, workId: string): EntryRow | null {
+// w708 (d867): a record against an item is an entry OR a decision. The detector
+// read slp_work_entries alone, so `maestro decide --work <id>` - the practice this
+// team runs on - left no trace it could see, and it called a seat with no entries
+// silent while that seat had recorded a decision sixteen minutes earlier. `actor`
+// narrows the read to one seat, which is how the once-rule keys on the HOLDER's
+// own records rather than on anyone's.
+// Two questions are about entries alone and keep this narrow read: whether the
+// last ENTRY was already a pane:lost mark, and whether the HOLDER's own latest
+// ENTRY declared --blocked. Both ask after a flag, and a flag is written by one
+// seat into one table: a decision carries no flag at all, and another seat's
+// entry is not this seat's declaration, so neither may mask one.
+function latestEntry(store: Store, workId: string, actor?: string): EntryRow | null {
+  const sql = `SELECT id, kind, actor, flag FROM slp_work_entries
+       WHERE work_id = ?${actor ? " AND actor = ?" : ""} ORDER BY id DESC LIMIT 1`;
+  return (actor
+    ? store.database.query<EntryRow, [string, string]>(sql).get(workId, actor)
+    : store.database.query<EntryRow, [string]>(sql).get(workId)) ?? null;
+}
+
+function heldById(store: Store, workId: string): WorkRow | null {
   return store.database
-    .query<EntryRow, [string]>(
-      `SELECT id, kind, actor, flag FROM slp_work_entries WHERE work_id = ? ORDER BY id DESC LIMIT 1`,
+    .query<WorkRow, [string]>(
+      `SELECT id, state, owner, assigned_to, created_by, return_revision FROM slp_work WHERE id = ?`,
     )
     .get(workId) ?? null;
+}
+
+function latestRecord(store: Store, workId: string, actor?: string): RecordRow | null {
+  const entry = store.database
+    .query<EntryRow & { created_at: string }, [string]>(
+      `SELECT id, kind, actor, flag, created_at FROM slp_work_entries
+       WHERE work_id = ?${actor ? " AND actor = ?" : ""} ORDER BY id DESC LIMIT 1`,
+    )
+    .get(...(actor ? [workId, actor] : [workId]) as [string]) ?? null;
+  const decision = tableExists(store, "slp_decisions")
+    ? store.database
+      .query<{ actor: string; created_at: string; id: string }, [string]>(
+        `SELECT id, actor, created_at FROM slp_decisions
+         WHERE work_id = ?${actor ? " AND actor = ?" : ""} ORDER BY created_at DESC, id DESC LIMIT 1`,
+      )
+      .get(...(actor ? [workId, actor] : [workId]) as [string]) ?? null
+    : null;
+  const fromEntry: RecordRow | null = entry
+    ? { actor: entry.actor, at: entry.created_at, flag: entry.flag, label: `entry ${entry.kind}`, mark: `entry:${entry.id}` }
+    : null;
+  const fromDecision: RecordRow | null = decision
+    ? { actor: decision.actor, at: decision.created_at, flag: null, label: `decision ${decision.id}`, mark: `decision:${decision.id}` }
+    : null;
+  if (!fromEntry) return fromDecision;
+  if (!fromDecision) return fromEntry;
+  return fromDecision.at > fromEntry.at ? fromDecision : fromEntry;
+}
+
+// The evidence names the latest record whoever wrote it, so a reader can tell a
+// seat that has been recording from one that truly has not.
+function recordEvidence(record: RecordRow | null, separator: string): string {
+  return record ? `${separator} latest ${record.label} by ${record.actor}` : `${separator} no entries or decisions`;
 }
 
 function activityMark(store: Store, teamId: string, generation: number): number {
@@ -322,6 +392,14 @@ function roleTarget(roles: RoleRow[], role: SlpRole): WakeTarget {
 // d763: the fixed template, never code advice; the actor is now the runtime.
 function stallLine(workId: string, kind: StallKind, evidence: string): string {
   return `[from ${runtimeActor}][${workId}] ${kind} ${evidence}; stop and run: maestro work note ${workId} "<what you need>" --blocked`;
+}
+
+// w708 (d867): the copy is information about someone else's item, so it ends
+// where the d753 push lines end - at a read. It carried the holder's imperative
+// verbatim, and a Team Supervisor came within one step of recording a false
+// blocker on an ACTIVE item it does not hold.
+function stallCopyLine(workId: string, kind: StallKind, evidence: string, holder: string): string {
+  return `[from ${runtimeActor}][${workId} copy] ${kind} ${evidence}; ${holder} holds ${workId} and has been nudged; read: maestro status ${workId}`;
 }
 
 export class AttentionRuntime {
@@ -443,7 +521,12 @@ export class AttentionRuntime {
     return Promise.resolve(roleTarget(this.roles, "team-supervisor"));
   }
 
-  private async deliver(wake: WakeTarget, subject: string, line: string): Promise<void> {
+  private async deliver(
+    wake: WakeTarget,
+    subject: string,
+    line: string,
+    stall?: { holder: string; state: WorkState; workId: string },
+  ): Promise<void> {
     if (wake.target === null) {
       this.log(`wake about ${subject} is unreachable and dropped: ${wake.reason}; the store remains the truth`);
       this.state.unreachable.push({ droppedAt: new Date().toISOString(), line, reason: wake.reason, subject });
@@ -452,7 +535,7 @@ export class AttentionRuntime {
     }
     const target = wake.target;
     const queue = this.state.pending[target] ?? [];
-    queue.push({ line, queuedAt: new Date().toISOString(), subject });
+    queue.push({ line, queuedAt: new Date().toISOString(), subject, ...(stall ? { stall } : {}) });
     this.state.pending[target] = queue;
     await this.flush(target);
   }
@@ -460,13 +543,45 @@ export class AttentionRuntime {
   // Queue: a wake for a working target waits for its own idle; a failed
   // prompt stays queued (SPEC item 4).
   async flush(target: string): Promise<void> {
-    const queue = this.state.pending[target] ?? [];
+    let queue = this.state.pending[target] ?? [];
     if (queue.length === 0) return;
     const pane = this.roles.find((role) => role.name === target)?.pane_id;
     const status = pane ? this.statuses.get(pane) : undefined;
     if (status === "working") {
       await this.persist();
       return;
+    }
+    // w708 (d867): a queued line waits for its target's own idle, which can be
+    // much later - a copy queued for a busy Team Supervisor was first delivered
+    // forty minutes on, about an item returned, accepted and committed since.
+    // A stall speaks about the present, so it is checked against the store at
+    // delivery and dropped rather than sent stale.
+    if (queue.some((entry) => entry.stall)) {
+      const store = openStore(this.config.projectPath, true);
+      try {
+        const live = queue.filter((entry) => {
+          if (!entry.stall) return true;
+          const held = heldById(store, entry.stall.workId);
+          const holder = held ? held.owner ?? held.assigned_to : null;
+          if (held && held.state === entry.stall.state && holder === entry.stall.holder) return true;
+          this.log(
+            `stale wake about ${entry.subject} dropped: ${entry.stall.workId} is ${held ? `${held.state} for ${holder}` : "gone"},` +
+              ` not ${entry.stall.state} for ${entry.stall.holder} as when it was queued`,
+          );
+          return false;
+        });
+        if (live.length !== queue.length) {
+          queue = live;
+          this.state.pending[target] = queue;
+          if (queue.length === 0) {
+            delete this.state.pending[target];
+            await this.persist();
+            return;
+          }
+        }
+      } finally {
+        store.close();
+      }
     }
     while (queue.length > 0) {
       const next = queue[0] as PendingLine;
@@ -506,16 +621,36 @@ export class AttentionRuntime {
     evidence: string,
   ): Promise<void> {
     const key = `${work.id}:${kind}`;
-    const latest = latestEntry(store, work.id);
-    if (latest && this.state.stalls[key] === latest.id) return;
+    const holder = work.owner ?? work.assigned_to;
+    // w708 (d867): the mark is the holder's own latest record. An entry written by
+    // another seat - a supervisor's correction on an item it does not hold - no
+    // longer releases the rule and re-arms the alarm against the holder.
+    const own = latestRecord(store, work.id, holder);
+    const mark = own?.mark ?? "none";
+    if (this.state.stalls[key] === mark) return;
+    // A seat that recorded on this item a moment ago is working, not silent; the
+    // same window Advisor F15 uses for a push, for the same reason. Silence only:
+    // a blocked pane is a fact about the present, not an inference from quiet, so
+    // a recent record must not hide it.
+    if (kind === "silence" && own && Date.now() - Date.parse(own.at) < pushWindowMs) {
+      // The mark is deliberately not consumed here: withholding is about how long
+      // ago the seat wrote, not about having answered for this record. A seat that
+      // records and then goes quiet for good is still nudged once, later.
+      this.log(`stall:${kind} on ${work.id} for ${seat.name} withheld: ${own.label} by ${own.actor} just recorded`);
+      await this.persist();
+      return;
+    }
     const body = `${kind}: ${evidence}`;
     const entryId = recordEntry(store, team, work.id, body, `stall:${kind}`, "work.stall");
-    this.state.stalls[key] = entryId;
+    this.state.stalls[key] = mark;
     this.log(`stall:${kind} on ${work.id} for ${seat.name}: entry ${entryId}`);
     const line = stallLine(work.id, kind, evidence);
-    await this.deliver({ target: seat.name }, `${work.id} ${kind}`, line);
+    const about = { holder, state: work.state, workId: work.id };
+    await this.deliver({ target: seat.name }, `${work.id} ${kind}`, line, about);
     const copy = await this.supervisorTarget(seat, team);
-    if (copy.target !== seat.name) await this.deliver(copy, `${work.id} ${kind} copy`, line);
+    if (copy.target !== seat.name) {
+      await this.deliver(copy, `${work.id} ${kind} copy`, stallCopyLine(work.id, kind, evidence, holder), about);
+    }
   }
 
   // Returns true when the subscription must be rebuilt (a new pane to watch).
@@ -578,10 +713,10 @@ export class AttentionRuntime {
         const held = heldActive(store, team.team_id, team.generation, seat.name) ??
           teamCard(store, team.team_id, team.generation);
         if (!held) return changed;
-        const latest = latestEntry(store, held.id);
+        const latest = latestRecord(store, held.id);
         const evidence = `${seat.name} pane ${paneId} agent_status blocked; store: ${held.id} ${held.state}` +
           `${held.owner ? ` owned by ${held.owner}` : ` assigned to ${held.assigned_to}`}` +
-          `${latest ? `, latest entry ${latest.kind} by ${latest.actor}` : ", no entries"}`;
+          recordEvidence(latest, ",");
         await this.stall(store, team, seat, "dialog", held, evidence);
         return changed;
       }
@@ -594,14 +729,26 @@ export class AttentionRuntime {
       const card = teamCard(store, team.team_id, team.generation);
       const held = heldActive(store, team.team_id, team.generation, seat.name, card?.id ?? null);
       if (held) {
-        const latest = latestEntry(store, held.id);
-        // d761 layer one: a seat that declared --blocked is legitimately waiting.
-        if (latest?.flag === "blocked") {
+        const holder = held.owner ?? held.assigned_to;
+        // d761 layer one, d868: a seat that declared --blocked is legitimately
+        // waiting. That declaration is the holder's own, so it is read from the
+        // holder's own latest entry. Reading the widest record here let a decision
+        // by the holder - or a note any other seat wrote on the item - stand newer
+        // than a --blocked that had never been withdrawn, and nudge a seat that had
+        // done exactly what the protocol asks of it. The holder's own later entry
+        // does still release it: that is the seat saying it is no longer waiting.
+        if (latestEntry(store, held.id, holder)?.flag === "blocked") {
           await this.flush(seat.name);
           return changed;
         }
-        const evidence = `${seat.name} pane ${paneId} agent_status ${status} while ${held.id} ACTIVE owned by ${seat.name}` +
-          `${latest ? `; latest entry ${latest.kind} by ${latest.actor}` : "; no entries"}`;
+        const latest = latestRecord(store, held.id);
+        // w708, field evidence from the other team: ACTIVE and "owned by <seat>"
+        // were template literals restating heldActive's where clause, so the two
+        // words a reader uses to sanity-check a nudge were the two that carried no
+        // measurement - which is what let a late line read as a fresh one. They are
+        // read from the row here, as the dialog branch already does.
+        const evidence = `${seat.name} pane ${paneId} agent_status ${status} while ${held.id} ${held.state}` +
+          ` owned by ${held.owner ?? held.assigned_to}` + recordEvidence(latest, ";");
         await this.stall(store, team, seat, "silence", held, evidence);
         await this.flush(seat.name);
         return changed;

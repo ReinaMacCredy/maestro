@@ -375,12 +375,17 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
     expect(entry).toMatchObject({ actor: "runtime", flag: "stall:dialog", work_id: data.work.id });
     expect(entry?.body).toContain("agent_status blocked");
     expect(entry?.body).toContain(`store: ${data.work.id} OPEN assigned to ${lead.name}`);
-    const line = `[from runtime][${data.work.id}] dialog ${entry?.body.replace(/^dialog: /, "")}; stop and run: maestro work note ${data.work.id} "<what you need>" --blocked`;
+    const evidence = entry?.body.replace(/^dialog: /, "");
+    const line = `[from runtime][${data.work.id}] dialog ${evidence}; stop and run: maestro work note ${data.work.id} "<what you need>" --blocked`;
+    // w708: the copy is about someone else's item, so it ends at a read and never
+    // tells the Team Supervisor to record a blocker on an item it does not hold.
+    const copy = `[from runtime][${data.work.id} copy] dialog ${evidence}; ${lead.name} holds ${data.work.id} and has been nudged; read: maestro status ${data.work.id}`;
     await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === 2, 5_000, "two nudges");
     expect(await attentionPrompts(fake)).toEqual([
       ["agent", "prompt", lead.name, line],
-      ["agent", "prompt", supervisor.name, line],
+      ["agent", "prompt", supervisor.name, copy],
     ]);
+    expect(copy).not.toContain("--blocked");
     // The same event again changes nothing until the store moves (d763).
     await Bun.sleep(50);
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "blocked" } });
@@ -454,6 +459,194 @@ test("runtime-silence: idle while holding ACTIVE work stalls once until the stor
     await Bun.sleep(300);
     expect((await attentionPrompts(fake)).length).toBe(beforeIdle + 1);
     expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);
+
+// w708: age one record in the store so a 60-second window can be crossed without
+// a 60-second test. The runtime reads created_at, so this is the same fact the
+// clock would have produced.
+function backdate(fixture: { repo: string }, table: "slp_work_entries" | "slp_decisions", id: string | number): void {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+  try {
+    database
+      .query(`UPDATE ${table} SET created_at = ? WHERE id = ?`)
+      .run(new Date(Date.now() - 300_000).toISOString(), id);
+  } finally {
+    database.close();
+  }
+}
+
+function latestDecision(fixture: { repo: string }, workId: string): { actor: string; id: string } {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+  try {
+    return database
+      .query<{ actor: string; id: string }, [string]>(
+        "SELECT id, actor FROM slp_decisions WHERE work_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+      )
+      .get(workId)!;
+  } finally {
+    database.close();
+  }
+}
+
+function ownEntries(fixture: { repo: string }, workId: string, actor: string): Array<{ id: number }> {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+  try {
+    return database
+      .query<{ id: number }, [string, string]>(
+        "SELECT id FROM slp_work_entries WHERE work_id = ? AND actor = ? ORDER BY id",
+      )
+      .all(workId, actor);
+  } finally {
+    database.close();
+  }
+}
+
+test("runtime-records-are-life: a decision against the held item is evidence of life - it suppresses the silence stall while fresh and is named in the evidence instead of 'no entries' - and only the holder's own records re-arm the once-rule, never a supervisor writing on the item (w708, d867)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake } = await startLiveTeam(fixture, { promptEvents: true });
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const run = async (args: string[], environment: Record<string, string>) => {
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      expect({ code: result.exitCode, stderr: result.stderr }).toMatchObject({ code: 0 });
+      return result;
+    };
+    // A delivery item the Lead holds: d834 leaves the team card out of this stall.
+    const added = await run(["work", "add", "Lead delivery item", "--json"], supervisorEnvironment);
+    const item = envelope<{ work: { id: string } }>(added.stdout).work.id;
+    await run(["work", "take", item, "--json"], leadEnvironment);
+    const silence = () => runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence" && entry.work_id === item);
+
+    // The practice this team runs on: record the decision before the code moves.
+    await run(["decide", "Shape it this way", "--why", "the narrow fix holds", "--work", item, "--json"], leadEnvironment);
+    const decision = latestDecision(fixture, item);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await Bun.sleep(400);
+    expect(silence()).toEqual([]);
+
+    // The same decision, no longer fresh: the seat is nudged once, and the
+    // evidence names the decision rather than claiming the item has no records.
+    backdate(fixture, "slp_decisions", decision.id);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(() => silence().length === 1, 5_000, "the silence entry naming the decision");
+    expect(silence()[0]?.body).toContain(`latest decision ${decision.id} by ${lead.name}`);
+    expect(silence()[0]?.body).not.toContain("no entries");
+
+    // Supervision does not re-arm the alarm against the seat being supervised.
+    await run(["work", "note", item, "carry on, this is a correction not a gap", "--json"], supervisorEnvironment);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await Bun.sleep(400);
+    expect(silence()).toHaveLength(1);
+
+    // The holder's own record still releases the rule (d763 survives): fresh, it
+    // is life and withholds the nudge; aged, it re-arms and the nudge lands.
+    await run(["work", "note", item, "still working, suite in flight", "--json"], leadEnvironment);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await Bun.sleep(400);
+    expect(silence()).toHaveLength(1);
+    const own = ownEntries(fixture, item, lead.name);
+    backdate(fixture, "slp_work_entries", own.at(-1)!.id);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(() => silence().length === 2, 5_000, "the second silence entry after the holder's own record aged");
+    expect(silence()[1]?.body).toContain(`latest entry NOTE by ${lead.name}`);
+  });
+}, 60_000);
+
+test("runtime-blocked-holder: the d761 exemption is the holder's own declaration, so neither a decision on the item nor another seat's note masks a standing --blocked, and the holder's own later record still releases it (w708 rework, d761)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake } = await startLiveTeam(fixture, { promptEvents: true });
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const run = async (args: string[], environment: Record<string, string>) => {
+      const result = await runCliAt(fixture, fixture.repo, args, environment);
+      expect({ code: result.exitCode, stderr: result.stderr }).toMatchObject({ code: 0 });
+      return result;
+    };
+    const added = await run(["work", "add", "Lead delivery item", "--json"], supervisorEnvironment);
+    const item = envelope<{ work: { id: string } }>(added.stdout).work.id;
+    await run(["work", "take", item, "--json"], leadEnvironment);
+    const silence = () => runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence" && entry.work_id === item);
+    const idle = async () => {
+      await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+      await Bun.sleep(400);
+    };
+
+    // The seat declares it is waiting, and the declaration is aged so that the
+    // recency withhold cannot be what keeps the nudge away: only d761 can.
+    await run(["work", "note", item, "waiting on the token from the owner", "--blocked", "--json"], leadEnvironment);
+    backdate(fixture, "slp_work_entries", ownEntries(fixture, item, lead.name).at(-1)!.id);
+    await idle();
+    expect(silence()).toEqual([]);
+
+    // A decision recorded against the same item carries no flag. It is evidence
+    // of life, not a withdrawal of the declaration, so the seat stays exempt.
+    await run(["decide", "Shape it this way", "--why", "the narrow fix holds", "--work", item, "--json"], leadEnvironment);
+    backdate(fixture, "slp_decisions", latestDecision(fixture, item).id);
+    await Bun.sleep(5_100);
+    await idle();
+    expect(silence()).toEqual([]);
+
+    // Nor is another seat's note this seat's declaration: being written about
+    // does not unblock a seat that is still waiting.
+    await run(["work", "note", item, "acknowledged, the owner has it", "--json"], supervisorEnvironment);
+    await Bun.sleep(5_100);
+    await idle();
+    expect(silence()).toEqual([]);
+
+    // The holder's own later record does release the exemption: it says the seat
+    // is no longer declaring itself blocked, and the detector arms again.
+    await run(["work", "note", item, "token arrived, back on it", "--json"], leadEnvironment);
+    backdate(fixture, "slp_work_entries", ownEntries(fixture, item, lead.name).at(-1)!.id);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(() => silence().length === 1, 5_000, "the silence entry once the declaration is withdrawn");
+    expect(silence()[0]?.body).toContain(`latest entry NOTE by ${lead.name}`);
+  });
+}, 60_000);
+
+test("runtime-stale-wake: a stall queued for a busy target is checked against the store when it finally flushes, and a nudge about an item that has since moved on is dropped rather than delivered (w708, d867)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, subscribed } = await startLiveTeam(fixture, { promptEvents: true });
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer item", "--to", "peer-busy", "--json"], leadEnvironment);
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    await subscribed();
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
+
+    // The seat above is mid-turn, so its copy queues instead of being delivered.
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "working" } });
+    await Bun.sleep(200);
+    const before = await attentionPrompts(fake);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(
+      () => runtimeEntries(fixture).some((entry) => entry.flag === "stall:silence" && entry.work_id === peer.work.id),
+      5_000,
+      "the silence entry",
+    );
+    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === before.length + 1, 5_000, "the holder's nudge");
+    const queued = await attentionPrompts(fake);
+    expect(queued.map((command) => command[2])).not.toContain(supervisor.name);
+
+    // The item moves on while the copy sits in the queue.
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", peer.work.id, "result: done", "--json"], peerEnvironment)).exitCode).toBe(0);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "idle" } });
+    await Bun.sleep(600);
+    const delivered = await attentionPrompts(fake);
+    expect(delivered.filter((command) => (command[3] ?? "").includes(`${peer.work.id} copy`))).toEqual([]);
+    expect(delivered.filter((command) => command[2] === supervisor.name && (command[3] ?? "").includes(peer.work.id))).toEqual([]);
   });
 }, 60_000);
 
