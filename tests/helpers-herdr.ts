@@ -95,6 +95,9 @@ interface FakeServer {
 }
 
 const servers = new Map<string, FakeServer>();
+// Base-36 origin for minted workspace ids: 101 renders "2T", inside the range
+// a Herdr that has been running for a while issues (w702).
+const workspaceIdOrigin = 100;
 const cliEntry = join(import.meta.dir, "..", "bin", "maestro.ts");
 const knownMethods = [
   "agent.get", "agent.list", "agent.prompt", "agent.read", "agent.start",
@@ -314,6 +317,14 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
   const state = server.state;
   const behavior = state.behavior as FakeHerdrBehavior;
   const next = (prefix: string) => prefix + String(++state.sequence);
+  // w702: real Herdr renders its workspace counter in base 36, so a live
+  // workspace id carries letters - w2D, w2G, w2M, w2P, w2Z read off this
+  // machine on 2026-09-07 - while tab and pane numbers stay small decimals
+  // (p1 through p7). This fake minted w1, w2, digit-only, which is why an
+  // assertion no real pane id could satisfy still passed against it. The
+  // origin puts the first minted id in the lettered range the way a
+  // long-running Herdr does.
+  const nextWorkspaceId = () => `w${(workspaceIdOrigin + ++state.sequence).toString(36).toUpperCase()}`;
   const pane = (paneId: string): Params | undefined =>
     state.panes.find((candidate: Params) => candidate.pane_id === paneId);
   const agentByTarget = (target: string): Params | undefined =>
@@ -340,7 +351,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       return { type: "workspace_list", workspaces: state.workspaces };
     }
     case "workspace.create": {
-      const workspaceId = next("w");
+      const workspaceId = nextWorkspaceId();
       const tabId = `${workspaceId}:${next("t")}`;
       const paneId = `${workspaceId}:${next("p")}`;
       const workspace = { workspace_id: workspaceId, cwd: params.cwd, label: params.label };

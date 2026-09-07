@@ -18,6 +18,11 @@ import {
 } from "./helpers.ts";
 
 const maestroCli = join(import.meta.dir, "..", "bin", "maestro.ts");
+// w702: Herdr renders its workspace counter in base 36, so a live pane id reads
+// w2D:p1 or w2P:p5, never the digit-only w1:p1 the old /^w\d+:p\d+$/ demanded.
+// That assertion could not pass against a real daemon, and this is the test
+// that runs against one.
+const herdrPaneIdShape = /^w[0-9A-Z]+:p\d+$/;
 const roleCommandRunner = join(import.meta.dir, "slp-role-command.ts");
 
 const runtimePhaseLine =
@@ -191,7 +196,10 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
         const supervisor = started.team.roles.find((role) => role.role === "team-supervisor")!;
         const projectDatabasePath = join(fixture.repo, ".maestro", "maestro.db");
         // Hub d96: team start opened the runtime pane beside the Supervisor.
-        expect(started.team.runtimePaneId).toMatch(/^w\d+:p\d+$/);
+        expect(started.team.runtimePaneId).toMatch(herdrPaneIdShape);
+        for (const malformed of ["", "w2G", "p3", "w2G:p", "w2G:t2", "workspace:pane"]) {
+          expect(malformed).not.toMatch(herdrPaneIdShape);
+        }
         await promptAgent(fixture, lead.name, ["work", "take", started.work.id, "--json"]);
         await promptAgent(fixture, lead.name, [
           "work",

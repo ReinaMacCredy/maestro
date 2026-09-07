@@ -33,6 +33,13 @@ function envelope<T>(stdout: string): T {
   return (JSON.parse(stdout) as { data: T }).data;
 }
 
+// w702: a Herdr pane id is a workspace segment rendered in base 36, so it
+// carries letters once the counter passes 9 (w2D:p1, w2G:p3, w2P:p5 read off a
+// live daemon), followed by a small decimal pane number. The old
+// /^w\d+:p\d+$/ described no id Herdr can issue and only ever passed because
+// the fake minted digit-only ids.
+const herdrPaneIdShape = /^w[0-9A-Z]+:p\d+$/;
+
 // The stop helper's own team stop commits STOPPED first and closes its helper
 // workspace in a finally, while the caller's team stop returns as soon as the
 // store shows STOPPED; a slow runner reads the fake before that close lands.
@@ -3609,7 +3616,15 @@ test("SLP v2 normal stop closes Peer Lead Watch transcript Supervisor then works
     // The runtime pane (Hub d96) sits beside the Supervisor and closes after
     // the Lead; its directory under the OS temp dir goes with it (d831).
     const runtimePaneId = data.team.runtimePaneId;
-    expect(runtimePaneId).toMatch(/^w\d+:p\d+$/);
+    expect(runtimePaneId).toMatch(herdrPaneIdShape);
+    // w702's other half: the fake mints base-36 workspace ids, so the shape
+    // above is exercised against an id carrying a letter, the way a live
+    // daemon issues them, instead of the digit-only ids that let an
+    // impossible assertion pass.
+    expect(runtimePaneId).toMatch(/^w[0-9]*[A-Z][0-9A-Z]*:p\d+$/);
+    for (const malformed of ["", "w2G", "p3", "w2G:p", "w2G:t2", "workspace:pane"]) {
+      expect(malformed).not.toMatch(herdrPaneIdShape);
+    }
     const runtimeDirectory = watchRuntimeDirectory(
       fixture.repo,
       data.team.teamId,
