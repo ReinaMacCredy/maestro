@@ -151,14 +151,25 @@ async function requireProfilesUnchanged(
   team: { generation: number; project_path: string; team_id: string },
 ): Promise<void> {
   const directories = seatDirectories(team.project_path);
+  const stop = `stop the generation with maestro team stop ${team.team_id}`;
   for (const [name, digest] of Object.entries(configuration.profileDigests)) {
     const profile = await resolveProfile(name, directories);
     const actual = profile ? profileDigest(profile) : null;
     if (actual === digest) continue;
+    // w705: the digest is of bytes in files, so the refusal names the files. Since
+    // 348f0a2b a frontmatter-only shadow inherits a lower layer's mandate, which
+    // means two paths can decide one profile and the reader has to be told both.
+    // Naming the two exits keeps the refusal from reading as a dead end.
+    const deciding = profile ? [...new Set([profile.path, profile.bodyPath])] : [];
+    const where = deciding.length > 1
+      ? `${deciding[0]} (frontmatter) and ${deciding[1]} (mandate)`
+      : deciding[0];
     throw new CliError(
       "SLP_SNAPSHOT_CHANGED",
-      `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name}${actual ? "" : " (now missing)"}`,
-      { actual, expected: digest, profile: name },
+      profile
+        ? `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name}, whose bytes are decided by ${where}; put those bytes back as they were pinned, or ${stop}`
+        : `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name} (now missing from ${directories.join(", ")}); restore it in one of those directories, or ${stop}`,
+      { actual, deciding, expected: digest, profile: name, searched: directories },
     );
   }
 }

@@ -259,6 +259,53 @@ test("pin-profiles: editing a referenced profile fails the next work add with th
   });
 }, 30_000);
 
+test("snapshot-changed-names-files: the refusal names every file whose bytes decide the pinned profile - both paths when a frontmatter-only shadow inherits, the searched directories when it is gone - and names the two ways out (w705)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    const profiles = join(fixture.home, "maestro", "profiles");
+    await mkdir(profiles, { recursive: true });
+    await writeFile(join(profiles, "housekeeper.md"), "---\nharness: claude\nmodel: sonnet\n---\nRole: Housekeeper.\n");
+    const fake = await installFakeHerdr(fixture);
+    const data = await startTeam(fixture, room, fake.env);
+    const teamId = data.team.teamId;
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const add = (node: string) =>
+      runCliAt(fixture, fixture.repo, ["work", "add", "item", "--to", node, "--json"], leadEnvironment);
+    const shadow = join(profiles, "peer.md");
+    const shippedPeer = join(shippedRoot, "profiles", "peer.md");
+
+    // One file decides the mandate: the shadow that replaced it outright.
+    await writeFile(shadow, "---\nharness: codex\nmodel: default\n---\nRole: Peer, edited mid-generation.\n");
+    const replaced = failure((await add("beta")).stderr);
+    expect(replaced.code).toBe("SLP_SNAPSHOT_CHANGED");
+    expect(replaced.message).toContain(`pinned profile peer, whose bytes are decided by ${shadow};`);
+    expect(replaced.message).toContain("put those bytes back as they were pinned");
+    expect(replaced.message).toContain(`stop the generation with maestro team stop ${teamId}`);
+
+    // Two files decide it: the shadow's frontmatter over the shipped mandate.
+    await writeFile(shadow, "---\nharness: codex\nmodel: default\n---\n");
+    const inheriting = failure((await add("beta")).stderr);
+    expect(inheriting.code).toBe("SLP_SNAPSHOT_CHANGED");
+    expect(inheriting.message).toContain(
+      `pinned profile peer, whose bytes are decided by ${shadow} (frontmatter) and ${shippedPeer} (mandate);`,
+    );
+    await rm(shadow);
+    expect((await add("beta")).exitCode).toBe(0);
+
+    // A pinned profile with no shipped layer to fall back to: name where it was sought.
+    expect((await add("peer-housekeeper")).exitCode).toBe(0);
+    await rm(join(profiles, "housekeeper.md"));
+    const missing = failure((await add("delta")).stderr);
+    expect(missing.code).toBe("SLP_SNAPSHOT_CHANGED");
+    expect(missing.message).toContain("pinned profile housekeeper (now missing from ");
+    expect(missing.message).toContain(join(".maestro", "profiles"));
+    expect(missing.message).toContain(`${profiles}, ${join(shippedRoot, "profiles")});`);
+    expect(missing.message).toContain("restore it in one of those directories");
+    expect(missing.message).toContain(`stop the generation with maestro team stop ${teamId}`);
+  });
+}, 30_000);
+
 test("work-add-profile: peer-<node> and --profile pick the render, a profile switch on an existing Peer is refused, a missing render is refused and never rendered (red 8, items 6 and 7)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
@@ -401,6 +448,42 @@ test("profile-shadow-reported: a seat shadow that still carries its own mandate 
     expect(inherited.exitCode).toBe(0);
     expect(inherited.stdout).not.toContain("lead mandate");
     expect((await claudeRender(fixture, "lead")).body).toBe(`\n${shared}\n\n${shippedLead}\n`);
+  });
+}, 40_000);
+
+test("shadow-advice-precondition: every install line that advises deleting a shadow body says the edit changes the pinned digest and when it is safe, whether the copy is identical or different (w705, d864)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const profiles = join(fixture.home, "maestro", "profiles");
+    await mkdir(profiles, { recursive: true });
+    const shippedLead = parseProfile(
+      "lead.md",
+      await readFile(join(shippedRoot, "profiles", "lead.md"), "utf8"),
+    ).body;
+    const shadow = join(profiles, "lead.md");
+    const frontmatter = "---\nharness: claude\nmodel: opus\ndescription: SLP Lead seat on Claude Opus\n---\n";
+    const precondition =
+      "that edit changes the lead profile digest, which any RUNNING SLP generation on this machine has pinned, so make it only when none is running or stop that generation first with maestro team stop <team>";
+
+    await writeFile(shadow, `${frontmatter}${shippedLead}\n`);
+    const duplicate = await runCli(fixture, ["install"], { PATH: path });
+    expect(duplicate.exitCode).toBe(0);
+    const duplicateLine = duplicate.stdout.split("\n").find((line) => line.includes("byte-identical copy"))!;
+    expect(duplicateLine).toContain("delete its body and keep its frontmatter");
+    expect(duplicateLine).toContain(precondition);
+
+    await writeFile(shadow, `${frontmatter}Role: Lead.\n\nThis room's Lead runs the release checklist first.\n`);
+    const different = await runCli(fixture, ["install"], { PATH: path });
+    expect(different.exitCode).toBe(0);
+    const differentLine = different.stdout.split("\n").find((line) => line.includes("carries its own lead mandate"))!;
+    expect(differentLine).toContain("delete its body to inherit instead");
+    expect(differentLine).toContain(precondition);
+
+    // Nothing to advise, nothing to caveat.
+    await writeFile(shadow, frontmatter);
+    const inherited = await runCli(fixture, ["install"], { PATH: path });
+    expect(inherited.exitCode).toBe(0);
+    expect(inherited.stdout).not.toContain("RUNNING SLP generation");
   });
 }, 40_000);
 

@@ -703,11 +703,18 @@ export function formatProfileSync(sync: ProfileSync): string {
   for (const { real, target } of sync.resolvedTargets) parts.push(`${target} resolves to ${real}`);
   // d862: inheritance alone is half the job; a shadow already carrying a copy of
   // the mandate has to be visible, or it forks the seat's contract in silence.
+  // w705 (d864): every one of these lines advises an edit that changes the seat's
+  // digest, and a running generation has that digest pinned, so the advice carries
+  // its own precondition unconditionally. It is not made conditional on a live
+  // generation: these files render globally, the generation at risk may belong to
+  // another repo, and the cross-repo liveness scan is the mechanism w704 records as
+  // blind - a caveat that depends on it would fall silent exactly when it matters.
   for (const shadow of sync.shadows) {
+    const advice = shadow.duplicate
+      ? `warning: ${shadow.path} shadows the shipped ${shadow.seat} mandate with a byte-identical copy, which goes stale the next time that mandate changes; delete its body and keep its frontmatter to inherit the shipped one`
+      : `${shadow.path} carries its own ${shadow.seat} mandate, which differs from the shipped one; delete its body to inherit instead`;
     parts.push(
-      shadow.duplicate
-        ? `warning: ${shadow.path} shadows the shipped ${shadow.seat} mandate with a byte-identical copy, which goes stale the next time that mandate changes; delete its body and keep its frontmatter to inherit the shipped one`
-        : `${shadow.path} carries its own ${shadow.seat} mandate, which differs from the shipped one; delete its body to inherit instead`,
+      `${advice} - that edit changes the ${shadow.seat} profile digest, which any RUNNING SLP generation on this machine has pinned, so make it only when none is running or stop that generation first with maestro team stop <team>`,
     );
   }
   // The seats were rendered from this Hub pack's shared contract; a stale
