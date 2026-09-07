@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, readdir, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 
 // Hub d83/d91/d98: one profile shape for SLP seats, council seats and graph
@@ -25,10 +25,22 @@ export interface ProfileFrontmatter {
 
 export interface Profile {
   body: string;
+  // The file the mandate came from: the profile's own path, or the layer below
+  // it when a seat shadow carries frontmatter only (w700, d862).
+  bodyPath: string;
   frontmatter: ProfileFrontmatter;
   name: string;
   path: string;
   source: Uint8Array;
+}
+
+// w700 (d862): a seat shadow that still carries its own mandate keeps overriding,
+// but it is reported where profiles are rendered, because a byte-identical copy is
+// a fork waiting to go stale the next time the shipped mandate improves.
+export interface ProfileShadowReport {
+  duplicate: boolean;
+  path: string;
+  seat: SeatProfileName;
 }
 
 export interface ProfileSync {
@@ -38,6 +50,7 @@ export interface ProfileSync {
   resolvedTargets: Array<{ real: string; target: string }>;
   seatDirectories: string[];
   seatToken: "missing" | "present";
+  shadows: ProfileShadowReport[];
 }
 
 export const seatProfileNames = ["team-supervisor", "lead", "peer"] as const;
@@ -102,7 +115,13 @@ function isRepoLayer(path: string): boolean {
   return basename(directory) === "profiles" && basename(dirname(directory)) === ".maestro";
 }
 
-export function parseProfile(path: string, text: string): { body: string; frontmatter: ProfileFrontmatter } {
+export function parseProfile(
+  path: string,
+  text: string,
+  // w700 (d862): only resolveProfile's seat-shadow layers pass true; every other
+  // caller, the shipped layer included, still refuses a profile with no mandate.
+  options: { allowEmptyBody?: boolean } = {},
+): { body: string; frontmatter: ProfileFrontmatter } {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text);
   if (!match) throw invalid(path, "expected YAML frontmatter between --- lines followed by the body");
   let parsed: unknown;
@@ -196,18 +215,50 @@ export function parseProfile(path: string, text: string): { body: string; frontm
     frontmatter.settings = raw.settings as Record<string, unknown>;
   }
   const body = (match[2] ?? "").trim();
-  if (body === "") throw invalid(path, "missing body: the mandate below the frontmatter is empty");
+  if (body === "" && options.allowEmptyBody !== true) {
+    throw invalid(path, "missing body: the mandate below the frontmatter is empty");
+  }
   return { body, frontmatter };
 }
 
+// w700 (d862): a seat shadow exists to change frontmatter - the owner's Hub copy
+// overrides harness, model and effort - and duplicating the mandate to get that is
+// what makes a shadow go stale the moment the mandate improves. So a seat shadow
+// may carry frontmatter only: its body then comes from the next layer down, and
+// the shipped layer, which has nothing below it, still refuses an empty body.
 export async function resolveProfile(name: string, directories: readonly string[]): Promise<Profile | null> {
   if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(name)) return null;
+  const inheritable = (seatProfileNames as readonly string[]).includes(name);
+  let shadow: { frontmatter: ProfileFrontmatter; path: string; source: Uint8Array } | null = null;
   for (const directory of directories) {
     const path = join(directory, `${name}.md`);
     if (!existsSync(path)) continue;
     const source = new Uint8Array(await readFile(path));
-    const parsed = parseProfile(path, new TextDecoder().decode(source));
-    return { ...parsed, name, path, source };
+    const parsed = parseProfile(path, new TextDecoder().decode(source), {
+      allowEmptyBody: inheritable && resolve(directory) !== shippedProfiles,
+    });
+    if (parsed.body === "") {
+      // The highest layer that has one wins the frontmatter, as it always has.
+      shadow ??= { frontmatter: parsed.frontmatter, path, source };
+      continue;
+    }
+    if (!shadow) return { ...parsed, bodyPath: path, name, path, source };
+    return {
+      body: parsed.body,
+      bodyPath: path,
+      frontmatter: shadow.frontmatter,
+      name,
+      path: shadow.path,
+      // profileDigest pins a generation and SLP_SNAPSHOT_CHANGED compares it, so
+      // when two files decide the mandate both are inside the hash.
+      source: new Uint8Array([...shadow.source, ...source]),
+    };
+  }
+  if (shadow) {
+    throw invalid(
+      shadow.path,
+      "missing body: the mandate below the frontmatter is empty and no lower profile layer supplies one",
+    );
   }
   return null;
 }
@@ -327,6 +378,7 @@ export interface SeatDirectoryPlan {
 
 export interface ProfilePlan {
   seats: SeatDirectoryPlan[];
+  shadows: ProfileShadowReport[];
   targets: RenderTarget[];
 }
 
@@ -362,10 +414,16 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
   // d855: the shipped seat's patterns are the floor of that seat's deny; a
   // shadow adds to it and never narrows it (a shadow that dropped them
   // rendered deny [] under the token-bearing settings).
+  const shadows: ProfileShadowReport[] = [];
   for (const seat of seatProfileNames) {
     const shipped = await resolveProfile(seat, [shippedProfiles]);
     const deny = (shipped?.frontmatter.disallowed_tools ?? []).filter((tool) => tool.includes("("));
     seats.set(seat, { deny, overlay: {}, seat, skills: [] });
+    const resolved = await resolveProfile(seat, directories);
+    // A shadow that supplies its own mandate rather than inheriting one.
+    if (resolved && shipped && resolved.path !== shipped.path && resolved.bodyPath === resolved.path) {
+      shadows.push({ duplicate: resolved.body === shipped.body, path: resolved.path, seat });
+    }
   }
   const push = (renderedName: string, profile: Profile, frontmatter: ProfileFrontmatter, mandate: string) => {
     const seat = seatForRenderedName(renderedName);
@@ -407,7 +465,7 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
     push(composed, profile, frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
   }
   for (const plan of seats.values()) plan.skills.sort((left, right) => left.name.localeCompare(right.name));
-  return { seats: [...seats.values()], targets };
+  return { seats: [...seats.values()], shadows, targets };
 }
 
 export async function planProfileRenders(home: string, repo: string): Promise<RenderTarget[]> {
@@ -592,7 +650,7 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
 }
 
 export async function materializeProfiles(home: string, repo: string): Promise<ProfileSync> {
-  const { seats, targets } = await planProfiles(home, repo);
+  const { seats, shadows, targets } = await planProfiles(home, repo);
   const keep = new Set(targets.map((target) => target.path));
   const rendered: string[] = [];
   for (const target of targets) {
@@ -617,6 +675,7 @@ export async function materializeProfiles(home: string, repo: string): Promise<P
     resolvedTargets: await resolvedTargets(home),
     seatDirectories,
     seatToken: token ? "present" : "missing",
+    shadows,
   };
 }
 
@@ -642,6 +701,15 @@ export function formatProfileSync(sync: ProfileSync): string {
   if (sync.removed.length > 0) parts.push(`profiles removed: ${sync.removed.join(", ")}`);
   parts.push(`seat dirs: ${sync.seatDirectories.join(", ")}`);
   for (const { real, target } of sync.resolvedTargets) parts.push(`${target} resolves to ${real}`);
+  // d862: inheritance alone is half the job; a shadow already carrying a copy of
+  // the mandate has to be visible, or it forks the seat's contract in silence.
+  for (const shadow of sync.shadows) {
+    parts.push(
+      shadow.duplicate
+        ? `warning: ${shadow.path} shadows the shipped ${shadow.seat} mandate with a byte-identical copy, which goes stale the next time that mandate changes; delete its body and keep its frontmatter to inherit the shipped one`
+        : `${shadow.path} carries its own ${shadow.seat} mandate, which differs from the shipped one; delete its body to inherit instead`,
+    );
+  }
   // The seats were rendered from this Hub pack's shared contract; a stale
   // pack renders a stale mandate, and team start refuses it anyway (D7).
   if (sync.hubPackVersion !== null && sync.hubPackVersion !== "3") {

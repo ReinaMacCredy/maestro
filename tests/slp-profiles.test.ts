@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseProfile, renderedProfilePath } from "../src/plugins/profiles.ts";
+import {
+  parseProfile,
+  profileDigest,
+  profileDirectories,
+  renderedProfilePath,
+  resolveProfile,
+} from "../src/plugins/profiles.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
@@ -292,3 +298,138 @@ test("work-add-profile: peer-<node> and --profile pick the render, a profile swi
     expect(await Bun.file(render).exists()).toBe(false);
   });
 }, 30_000);
+
+test("profile-shadow-inherits: a seat shadow carrying frontmatter and no body renders the shipped mandate under the shadow's frontmatter; its digest still covers both files; a shipped or non-seat profile with no body is still refused (w700, d862)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const profiles = join(fixture.home, "maestro", "profiles");
+    await mkdir(profiles, { recursive: true });
+    // The live specimen's shape: a shadow that exists for its frontmatter alone.
+    await writeFile(
+      join(profiles, "lead.md"),
+      "---\nharness: claude\nmodel: opus\neffort: high\ndescription: SLP Lead seat on Claude Opus\n---\n",
+    );
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+
+    const shared = sharedContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
+    const shippedLead = parseProfile(
+      "lead.md",
+      await readFile(join(shippedRoot, "profiles", "lead.md"), "utf8"),
+    ).body;
+    const rendered = await claudeRender(fixture, "lead");
+    // The body is the shipped mandate, inherited, not a copy anyone maintains.
+    expect(rendered.body).toBe(`\n${shared}\n\n${shippedLead}\n`);
+    expect(rendered.frontmatter).toContain("\nmodel: opus");
+    expect(rendered.frontmatter).toContain("\neffort: high");
+    // The frontmatter-only shadow carries no mandate of its own to report.
+    expect(installed.stdout).not.toContain("shadows the shipped lead mandate");
+
+    const resolved = (await resolveProfile("lead", profileDirectories(fixture.repo, fixture.home)))!;
+    expect(resolved.path).toBe(join(profiles, "lead.md"));
+    expect(resolved.bodyPath).toBe(join(shippedRoot, "profiles", "lead.md"));
+    expect(resolved.body).toBe(shippedLead);
+
+    // d862: two files decide this mandate, so both are inside the pinned digest -
+    // otherwise a mid-generation edit to the inherited body would pass unnoticed.
+    const layers = join(fixture.root, "layers");
+    await mkdir(join(layers, "top"), { recursive: true });
+    await mkdir(join(layers, "bottom"), { recursive: true });
+    await writeFile(join(layers, "top", "lead.md"), "---\nharness: claude\ndescription: shadow\n---\n");
+    const bottom = join(layers, "bottom", "lead.md");
+    await writeFile(bottom, "---\nharness: codex\ndescription: shipped-ish\n---\nRole: Lead.\n\nFirst.\n");
+    const directories = [join(layers, "top"), join(layers, "bottom")];
+    const before = profileDigest((await resolveProfile("lead", directories))!);
+    await writeFile(bottom, "---\nharness: codex\ndescription: shipped-ish\n---\nRole: Lead.\n\nSecond.\n");
+    const after = (await resolveProfile("lead", directories))!;
+    expect(after.body).toBe("Role: Lead.\n\nSecond.");
+    expect(profileDigest(after)).not.toBe(before);
+    // The shadow's own frontmatter still wins; only the mandate is inherited.
+    expect(after.frontmatter.harness).toBe("claude");
+
+    // The bottom layer is the last word, so an empty body there is still refused.
+    await writeFile(bottom, "---\nharness: codex\ndescription: shipped-ish\n---\n");
+    await expect(resolveProfile("lead", directories)).rejects.toThrow(/missing body/);
+    expect(() =>
+      parseProfile(join(shippedRoot, "profiles", "lead.md"), "---\nharness: codex\ndescription: x\n---\n"),
+    ).toThrow("missing body: the mandate below the frontmatter is empty");
+
+    // Seat shadows only: a non-seat profile with no body is refused as before.
+    await writeFile(join(profiles, "refuter.md"), "---\nharness: claude\ndescription: refuter\n---\n");
+    const refused = await runCli(fixture, ["install"], { PATH: path });
+    expect(refused.exitCode).toBe(1);
+    expect(failure(refused.stderr).code).toBe("INVALID_PROFILE");
+    expect(failure(refused.stderr).message).toContain("missing body");
+  });
+}, 40_000);
+
+test("profile-shadow-reported: a seat shadow that still carries its own mandate keeps overriding, and install reports it - a byte-identical copy as a warning, a genuinely different body as a plain line (w700, d862)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const profiles = join(fixture.home, "maestro", "profiles");
+    await mkdir(profiles, { recursive: true });
+    const shippedLead = parseProfile(
+      "lead.md",
+      await readFile(join(shippedRoot, "profiles", "lead.md"), "utf8"),
+    ).body;
+    const shadow = join(profiles, "lead.md");
+    const frontmatter = "---\nharness: claude\nmodel: opus\ndescription: SLP Lead seat on Claude Opus\n---\n";
+
+    // The duplicate: the exact shape that goes stale the next time lead.md changes.
+    await writeFile(shadow, `${frontmatter}${shippedLead}\n`);
+    const duplicate = await runCli(fixture, ["install"], { PATH: path });
+    expect(duplicate.exitCode).toBe(0);
+    expect(duplicate.stdout).toContain(
+      `warning: ${shadow} shadows the shipped lead mandate with a byte-identical copy`,
+    );
+    expect(duplicate.stdout).toContain("delete its body and keep its frontmatter");
+    const shared = sharedContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
+    expect((await claudeRender(fixture, "lead")).body).toBe(`\n${shared}\n\n${shippedLead}\n`);
+
+    // A deliberate override still overrides, and is reported without alarm.
+    const ownBody = "Role: Lead.\n\nThis room's Lead runs the release checklist first.";
+    await writeFile(shadow, `${frontmatter}${ownBody}\n`);
+    const different = await runCli(fixture, ["install"], { PATH: path });
+    expect(different.exitCode).toBe(0);
+    expect(different.stdout).toContain(`${shadow} carries its own lead mandate, which differs from the shipped one`);
+    expect(different.stdout).not.toContain("byte-identical");
+    expect((await claudeRender(fixture, "lead")).body).toBe(`\n${shared}\n\n${ownBody}\n`);
+
+    // Reduced to frontmatter, the shadow stops being reported and inherits.
+    await writeFile(shadow, frontmatter);
+    const inherited = await runCli(fixture, ["install"], { PATH: path });
+    expect(inherited.exitCode).toBe(0);
+    expect(inherited.stdout).not.toContain("lead mandate");
+    expect((await claudeRender(fixture, "lead")).body).toBe(`\n${shared}\n\n${shippedLead}\n`);
+  });
+}, 40_000);
+
+test("profile-shadow-composed: a frontmatter-only peer shadow leaves the composed peer variant byte-identical - shared contract, inherited peer mandate, then the node body (w700 scope check)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const profiles = join(fixture.home, "maestro", "profiles");
+    await mkdir(profiles, { recursive: true });
+    const refuterBody = "Role: Refuter.\n\nAttack the strongest claim in the return first.";
+    await writeFile(
+      join(profiles, "refuter.md"),
+      `---\nharness: claude\nmodel: sonnet\ndescription: refuter lens\n---\n${refuterBody}\n`,
+    );
+    // The peer seat is the one whose body the composed variant concatenates, so
+    // it is the only place inheritance could reach that site.
+    await writeFile(join(profiles, "peer.md"), "---\nharness: claude\nmodel: opus\ndescription: peer on opus\n---\n");
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const shared = sharedContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
+    const shippedPeer = parseProfile(
+      "peer.md",
+      await readFile(join(shippedRoot, "profiles", "peer.md"), "utf8"),
+    ).body;
+    // Identical to what a byte-copy shadow renders today: the concatenation site
+    // is untouched and only its input is inherited.
+    expect((await claudeRender(fixture, "peer-refuter")).body).toBe(
+      `\n${shared}\n\n${shippedPeer}\n\n${refuterBody}\n`,
+    );
+    expect((await claudeRender(fixture, "peer")).body).toBe(`\n${shared}\n\n${shippedPeer}\n`);
+    expect((await claudeRender(fixture, "peer")).frontmatter).toContain("\nmodel: opus");
+  });
+}, 40_000);
