@@ -1170,7 +1170,7 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
     }
     const managedPreToolUse = {
       matcher: "Agent|Task",
-      hooks: [{ type: "command", command: "bun .claude/hooks/maestro-record.ts" }],
+      hooks: [{ type: "command", command: "bun \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/maestro-record.ts\"" }],
     };
     const firstClaudePreToolUse = firstClaude.hooks.PreToolUse ?? [];
     expect(firstClaudePreToolUse).toEqual([managedPreToolUse]);

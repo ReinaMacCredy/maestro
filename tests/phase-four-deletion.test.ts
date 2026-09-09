@@ -180,11 +180,21 @@ test("350 installed hook configuration executes both current adapters", async ()
         ?.flatMap((group) => group.hooks)
         .find((candidate) => candidate.command.includes("maestro-record.ts"));
       expect(handler).toBeDefined();
-      const adapter = handler?.command.replace(/^bun /, "") ?? "";
+      // Claude expands $CLAUDE_PROJECT_DIR and runs the command through a shell,
+      // so the configured string only proves anything when run the same way.
+      const adapter = handler?.command.replace(/^bun /, `${process.execPath} `) ?? "";
       const sessionId = `phase-four-${harness}`;
-      const hook = Bun.spawn([process.execPath, adapter], {
-        cwd: fixture.repo,
-        env: { ...process.env, HOME: fixture.home, PATH: path },
+      const hook = Bun.spawn(["sh", "-c", adapter], {
+        // Claude hooks inherit a cwd that drifts out of the repo, so the claude
+        // leg only proves anything from a foreign one. Codex has no project-dir
+        // variable and stays relative, so its leg runs at the repo root.
+        cwd: harness === "claude" ? fixture.home : fixture.repo,
+        env: {
+          ...process.env,
+          CLAUDE_PROJECT_DIR: fixture.repo,
+          HOME: fixture.home,
+          PATH: path,
+        },
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",

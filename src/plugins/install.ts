@@ -458,7 +458,7 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
     {
       configPath: join(root, ".claude", "settings.json"),
       harness: "claude" as const,
-      hookCommand: "bun .claude/hooks/maestro-record.ts",
+      hookCommand: 'bun "${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/maestro-record.ts"',
       hookPath: join(root, ".claude", "hooks", "maestro-record.ts"),
     },
     {

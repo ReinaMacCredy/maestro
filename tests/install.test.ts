@@ -327,7 +327,7 @@ test("29 [lint] install writes portable hook files without machine-absolute path
     expect(hookFiles).not.toContain(fixture.root);
     expect(hookFiles).not.toContain(process.execPath);
     expect(codexHooks).toContain("bun .codex/hooks/maestro-record.ts");
-    expect(claudeHooks).toContain("bun .claude/hooks/maestro-record.ts");
+    expect(claudeHooks).toContain('bun \\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/maestro-record.ts\\"');
     expect(codexHookSource).toContain('"--harness", "codex"');
     expect(claudeHookSource).toContain('"--harness", "claude"');
   });
