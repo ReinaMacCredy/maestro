@@ -5531,6 +5531,43 @@ test("SLP v2 team start widens the role CHECK on stores created before d762 so O
   });
 }, 30_000);
 
+test("SLP v2 work add migrates a project store whose slp_local_teams predates the pane columns", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCliAt(fixture, fixture.repo, ["status", "--json"])).exitCode).toBe(0);
+    const projectPath = join(fixture.repo, ".maestro", "maestro.db");
+    const projectDatabase = new Database(projectPath);
+    projectDatabase.exec(
+      `DROP TABLE IF EXISTS slp_local_teams;
+       CREATE TABLE slp_local_teams (
+         team_id TEXT NOT NULL,
+         generation INTEGER NOT NULL,
+         room_store_path TEXT NOT NULL,
+         project_path TEXT NOT NULL,
+         configuration_json TEXT NOT NULL,
+         pack_version TEXT NOT NULL,
+         pack_digest TEXT NOT NULL,
+         state TEXT NOT NULL CHECK(state IN ('RUNNING', 'STOPPED')),
+         workspace_id TEXT NOT NULL,
+         bound_at TEXT NOT NULL,
+         PRIMARY KEY(team_id, generation)
+       );`,
+    );
+    projectDatabase.close();
+
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "pre-pane store", "--json"]);
+    expect(added.exitCode).toBe(0);
+
+    const migrated = new Database(projectPath, { readonly: true });
+    const columns = migrated
+      .query<{ name: string }, []>("PRAGMA table_info(slp_local_teams)")
+      .all()
+      .map((entry) => entry.name);
+    migrated.close();
+    expect(columns).toContain("runtime_pane_id");
+    expect(columns).toContain("supervisor_pane_id");
+  });
+}, 30_000);
+
 test("SLP v2 normal stop carries the Supervisor reason to the Hub ledger, status, and named Hub agent", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

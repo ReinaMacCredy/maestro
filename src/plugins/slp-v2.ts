@@ -663,6 +663,15 @@ function migrateProject(store: Store): void {
     "profile",
     "ALTER TABLE slp_local_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
   );
+  localTeamPaneColumns(store);
+  widenRoleCheck(store, "slp_local_roles");
+}
+
+// A project store written before the pane columns existed still carries the
+// table, so `tableExists` is not enough to prove its shape: every reader past
+// that gate brings the columns up to date first. Returns false only when the
+// store cannot be written (observer mode), where the reader degrades instead.
+function localTeamPaneColumns(store: Store): boolean {
   store.ensureColumn(
     "slp_local_teams",
     "runtime_pane_id",
@@ -675,7 +684,8 @@ function migrateProject(store: Store): void {
     "supervisor_pane_id",
     "ALTER TABLE slp_local_teams ADD COLUMN supervisor_pane_id TEXT NOT NULL DEFAULT ''",
   );
-  widenRoleCheck(store, "slp_local_roles");
+  return store.hasColumn("slp_local_teams", "runtime_pane_id") &&
+    store.hasColumn("slp_local_teams", "supervisor_pane_id");
 }
 
 function slug(value: string): string {
@@ -1917,6 +1927,7 @@ interface SlpWorkRow {
 
 function activeLocalTeam(context: PluginContext): ActiveLocalTeam | null {
   if (!tableExists(context.store, "slp_local_teams")) return null;
+  if (!localTeamPaneColumns(context.store)) return null;
   return context.store.database
     .query<ActiveLocalTeam, [string]>(
       `SELECT team_id, generation, room_store_path, project_path,
