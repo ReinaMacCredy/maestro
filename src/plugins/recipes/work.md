@@ -39,6 +39,9 @@ failed approach. Keep ordinary command output out of notes.
 ### Continue
 
 Complete with `maestro work done <id>` and the evidence required by enabled policies.
+On a delegated ticket the implementer never runs `work done`; a separate
+verifier closes it after rg/ls predicates on the acceptance (no residue,
+typecheck, tests, build, clean tree), and a red verify loops back to a fixer.
 `--evidence` records one opaque blob; `--claim`/`--proof` record paired
 assertions and are preferred when a pair-checking gate is enabled. Use
 tag-prefixed pairs such as `test:` or `qa:` when those gates are active;
