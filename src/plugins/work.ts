@@ -586,17 +586,19 @@ export const workPlugin: BuiltInPlugin = {
           throw new CliError("INVALID_STATE", `${id} is ${work.state}; its lease cannot be released`);
         }
         const sessionId = context.sessions.current().id;
-        if (work.heldBy !== sessionId) {
-          if (work.heldBy) {
-            throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
-              holder: work.heldBy,
-            });
-          }
+        const forced = invocation.options.force === true;
+        if (!work.heldBy) {
           throw new CliError("LEASE_REQUIRED", `${id} has no lease to release`, { id });
         }
+        if (work.heldBy !== sessionId && !forced) {
+          throw new CliError("LEASE_HELD", `${id} is held by ${work.heldBy}`, {
+            holder: work.heldBy,
+          });
+        }
+        const holder = work.heldBy;
         const updatedAt = new Date().toISOString();
         context.store.database.transaction(() => {
-          if (!service.release(id, sessionId, updatedAt)) {
+          if (!service.release(id, holder, updatedAt)) {
             const current = requireWork(context, id);
             throw new CliError("LEASE_HELD", `${id} is held by ${current.heldBy ?? "none"}`, {
               holder: current.heldBy,
@@ -607,12 +609,20 @@ export const workPlugin: BuiltInPlugin = {
             entityType: "work",
             entityId: id,
             sessionId,
-            payload: { holder: sessionId },
+            payload: holder === sessionId ? { holder } : { holder, forcedBy: sessionId },
           });
         })();
-        return { data: { work: service.get(id) }, text: `${id} released by ${sessionId}` };
+        const text = holder === sessionId
+          ? `${id} released by ${sessionId}`
+          : `${id} released by ${sessionId}; lease dropped from ${holder}`;
+        return { data: { work: service.get(id) }, text };
       }, {
         description: "Release the current session's lease without completing work.",
+        flags: {
+          "--force": {
+            description: "Drop another session's lease even while that session is alive; the event records who forced it.",
+          },
+        },
         positionals: [{ name: "id", required: true }],
       }),
     );

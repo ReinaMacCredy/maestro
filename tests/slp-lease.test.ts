@@ -208,6 +208,33 @@ test("190 a holder releases open work without losing evidence and records the ev
   });
 });
 
+test("652 work release --force drops another live session's lease and records who forced it", async () => {
+  await withFixture(async (fixture) => {
+    const holder = "stuck-holder";
+    const forcer = "forcing-session";
+    const work = idFrom(
+      await runCli(fixture, ["work", "add", "forced release", "--atomic-reason", "fixture"]),
+    );
+    expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
+
+    const forced = await runCli(fixture, ["work", "release", work, "--force"], session(forcer));
+    expect(forced.exitCode).toBe(0);
+    expect(forced.stdout).toContain(`lease dropped from ${holder}`);
+    const shown = JSON.parse((await runCli(fixture, ["work", "show", work, "--json"])).stdout) as {
+      data: { work: { heldBy: string | null; state: string } };
+    };
+    expect(shown.data.work).toEqual(expect.objectContaining({ heldBy: null, state: "open" }));
+    const trace = await runCli(fixture, ["trace", work]);
+    expect(trace.stdout).toContain("work.release");
+    expect(trace.stdout).toContain(`\"holder\":\"${holder}\"`);
+    expect(trace.stdout).toContain(`\"forcedBy\":\"${forcer}\"`);
+
+    const nothing = await runCli(fixture, ["work", "release", work, "--force"], session(forcer));
+    expect(nothing.exitCode).not.toBe(0);
+    expect(nothing.stderr).toContain("LEASE_REQUIRED");
+  });
+});
+
 test("191 work reclaim refuses a missing or blank reason", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
