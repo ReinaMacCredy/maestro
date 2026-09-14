@@ -53,8 +53,8 @@ test("14b method map renders on SessionStart only, not on UserPromptSubmit", asy
 
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain("method:");
-    expect(start.stdout).toContain("bundle open");
-    expect(start.stdout).toContain("decision draft");
+    expect(start.stdout).toContain("rules: ~/maestro/WORKFLOW.md");
+    expect(start.stdout).toContain("recon before tier selection");
     expect(prompt.exitCode).toBe(0);
     expect(prompt.stdout).not.toContain("method:");
     expect(prompt.stdout).toContain("held work");

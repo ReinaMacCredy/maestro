@@ -1,17 +1,16 @@
 ---
 name: maestro-design
-description: Settle unknowns and lock decisions before implementation - pick the mode per unknown (grill, research, prototype, model, wayfind), recall past bundles, walk one fork at a time, record every settled choice with a rationale, and open the bundle only when a Full trigger holds.
+description: Resolve material unknowns blocking the next authorized slice, using research, grilling, prototypes, models, or wayfinding. Record durable decisions and apply the shared workflow tier rule.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
 
 # maestro-design
 
-Use when the request, acceptance, authority, or implementation boundary is
-unsettled. Design is human-guided whenever a choice changes what will be
-built. Do not begin implementation until the relevant decisions are locked and
-the user has approved the resulting scope. Design is read-only toward
-production code and authorizes nothing.
+Use when a material choice blocks the next slice. Read
+[Decisions and readiness](~/maestro/WORKFLOW.md#decisions-and-readiness) and
+[Authorization boundaries](~/maestro/WORKFLOW.md#authorization-boundaries).
+Design is read-only toward production code and authorizes nothing.
 
 ## Mode per unknown
 
@@ -27,8 +26,8 @@ that resolves it:
 | Fuzzy terminology, or a hard-to-reverse choice worth recording | model | [references/domain-modeling.md](references/domain-modeling.md) |
 | The effort exceeds one session and is wrapped in fog, or the user does not know what to do next | wayfind | [references/wayfinder.md](references/wayfinder.md) |
 
-Facts are yours to find; decisions are the user's. Never ask the user for
-anything you could look up. Modes compose: grill runs with the glossary in
+Facts are yours to find; material product and scope choices are the user's.
+Never ask the user for anything you could look up. Modes compose: grill runs with the glossary in
 hand; wayfind dispatches grill, research, and prototype per child work item.
 Each design pass must close at least one fork; a pass that closes none
 surfaces the blocker to the user instead of looping.
@@ -79,8 +78,9 @@ re-deriving the argument.
 ## Working method
 
 - Read the current `maestro work show`, linked decisions, notes, and source.
-- Present ONE unresolved fork at a time with a concrete recommendation.
-- Record each settled fork immediately:
+- Present a blocking user-owned fork with a concrete recommendation;
+  resolve reversible implementation details within the approved scope directly.
+- Record durable decisions under WORKFLOW.md's threshold:
   `maestro decision draft "<choice>" --rationale "<why, with the rejected alternative>" --work <id>`
   then `maestro decision lock <id>`. Supersede an old decision with
   `--supersedes`; never rewrite its history.
@@ -98,24 +98,24 @@ a new candidate.
 
 ## Readiness gate and exit
 
-Count the material forks still open before writing anything down. More than
-two open forks: keep grilling (or route the unknown by the mode table); too
-foggy to state even the problem: wayfind. Forks the conversation already
+Check readiness of the next bounded slice, not the number of open questions
+about the whole project. Keep later questions visible without blocking an
+independent slice. If the problem itself is unclear, wayfind. Forks already
 settled are synthesized, never re-asked. An external claim entering a decision
 (API behavior, library semantics, versions) comes from research against
 primary sources, never from memory.
 
-Then exit by tier (`maestro-bundle` tier rule):
+Then exit by [Tiers](~/maestro/WORKFLOW.md#tiers):
 
-- Light: design ends with a work item whose acceptance fits in one sentence,
+- Light: design ends with a work item with clear acceptance,
   `maestro work add "<title>" --acceptance "<observable result>" --kind <kind>`,
-  plus the locked decisions. Kind routes the policies: `feature`, `task`,
+  plus any durable decisions. Kind routes the policies: `feature`, `task`,
   `bug`, `chore`, `implement` are execution units; `idea` and `research` are
   scope notes under a parent and never hold it open. The why lives in the
   title or acceptance; when it needs a paragraph, add
   `maestro work note <id> "why: <paragraph>"`, and record findings from the
   research mode as `research: <finding>` notes (what `policy-research` reads
-  when enabled). No SPEC, no red-test list; the work is verified inline by
+  when enabled). No SPEC is required; the work is verified inline by
   `maestro-work`. A quickfix never reaches design.
 - Full: `maestro bundle open <id> --work <workId>`, opened in the
   store whose checkout will change (a walk run in the Hub room still opens
@@ -124,17 +124,17 @@ Then exit by tier (`maestro-bundle` tier rule):
   Solution, Scope, Anti-goals (each traces to a real risk in this repo and gets a matching
   VERIFY.md check; an anti-goal that cannot be checked is a wish, not a
   constraint), Decisions (ids only, Hub decisions as `hub:<id>`;
-  `maestro bundle show <id>` renders them), and Red tests: one failing test at
-  an accepted seam per risk the SPEC names, nothing beyond that list. Work
-  with no executable seam (docs, config) or behavior-preserving work
-  (upgrades, refactors) lists VERIFY.md scenarios, a readback, diff, or
-  captured baseline, not tests. Draft the VERIFY.md rows from the red list and
-  anti-goals; seed NOTES.md with Current State, Next Action, and `Base:`.
+  `maestro bundle show <id>` renders them). Plan checks using
+  [Testing discipline](~/maestro/WORKFLOW.md#testing-discipline), including
+  existing checks and necessary new tests, not a test quota. Draft VERIFY.md
+  from acceptance, relevant risks, and anti-goals; seed NOTES.md with Current
+  State, Next Action, original authorization, and `Base:`.
 
-If the contract would need guessing to write a red test or an acceptance
-sentence, the fork is not settled: return to the walk. Finish with the next
-fork, an explicit implementation gate, or a named blocker. A SPEC authorizes
-nothing; implementation starts only on the user's explicit request.
+If the next slice's acceptance or authority needs guessing, resolve that
+blocker. Otherwise continue implementation when the user's original request
+already authorizes it; do not ask again merely because design is complete.
+For a design-only request, finish with the proposed scope and implementation
+gate. A SPEC authorizes nothing.
 
 For unattended/away-mode design constraints, read
 [references/unattended.md](references/unattended.md).

@@ -1,15 +1,15 @@
 # Design
 
-Use this recipe when the request, acceptance, authority, or implementation
-boundary is unsettled. Design is human-guided whenever a choice changes what
-will be built. Do not begin implementation until the relevant decisions are
-locked and the user has approved the resulting scope.
+Use this recipe when a material choice blocks the next slice. Apply
+[WORKFLOW.md](~/maestro/WORKFLOW.md) for readiness, decision ownership,
+authorization, and tier rules. This recipe is a procedure, not another policy.
 
 ## Working method
 
 - Read the current `maestro work show`, linked decisions, notes, and relevant source.
 - Present one unresolved fork at a time with a concrete recommendation.
-- Record each choice with `maestro decision draft` and `maestro decision lock`; supersede an
+- Record durable choices with `maestro decision draft` and `maestro decision lock`;
+  keep reversible implementation details in the work instead. Supersede an
   old decision instead of rewriting its history.
 - Keep acceptance, non-goals, and authority visible on the work item.
 - Finish with the next decision, an explicit implementation gate, or a named
@@ -44,6 +44,7 @@ decision or work note; do not leave it only in chat.
 
 ### Continue
 
-Return exactly one of: the next design fork, a request for explicit build
-approval, or a concrete blocker. Once the contract is settled and approved,
-use `maestro recipe show work` for implementation.
+Return the next blocking choice, a scoped design result, or a concrete blocker.
+When the next slice is ready and the original request already authorizes its
+implementation, continue with `maestro recipe show work` without another
+approval round. A design-only request stops before production edits.

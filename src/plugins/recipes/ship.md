@@ -1,8 +1,8 @@
 # Ship
 
 Use this recipe for close, commit, install, push, publish, release, or archive
-gates. Local implementation authority does not imply authority for remote or
-external state changes.
+gates. Apply [WORKFLOW.md](~/maestro/WORKFLOW.md) for authorization,
+verification, and completion versus delivery rules.
 
 ## Loop anatomy
 
@@ -20,7 +20,9 @@ whose authority differs.
 ### Act
 
 Run the accepted verification and complete the work with any required `qa:` or
-`witness:` evidence. Stage task-owned paths only and inspect the staged diff.
+`witness:` evidence. When a commit is authorized, stage task-owned paths only
+and inspect the staged diff. A verified implementation can finish without
+delivery when delivery is not part of its acceptance; record the pending gate.
 Perform external actions only when the user named them.
 
 ### Observe

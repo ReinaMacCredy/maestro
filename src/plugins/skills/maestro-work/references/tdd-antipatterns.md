@@ -1,31 +1,31 @@
 # TDD anti-patterns
 
-Each entry traces to one of the five root laws in SKILL.md and is checkable on
-a concrete diff or test. Curation rule: an entry that cannot fail a review of
-a real diff is a slogan and gets cut; the catalog stays at or under 20 entries.
+Apply [Testing discipline](~/maestro/WORKFLOW.md#testing-discipline) before
+using this catalog. These are diagnostic examples for a concrete concern,
+not a checklist requiring new tests or decision records for every task.
 
 | Anti-pattern | Smell on the diff | Fix |
 |---|---|---|
-| Contract minting (law 1) | Red test asserts behavior no decision or acceptance names | Return to design; decide the seam, then transcribe it |
-| Spec by accident (law 1) | Test freezes an arbitrary implementation detail (exact wording, ordering) nobody chose | Assert only the decided contract; loosen the rest |
-| Guessed seam (law 1) | Test drives an internal function while the CLI/API behavior is still undecided | Spike without tests, decide, then test the seam |
-| Internals lock-in (law 2) | Test imports private modules or reaches into state instead of the public surface | Rewrite against the outermost stable seam |
-| Mock theater (law 4) | Test asserts a mock was called with the mocked value | Assert observable output at the real seam |
-| Tautology (law 4) | Expected value computed by the same code path that produces the actual | Hardcode the expected literal from the decision |
-| Test-pleasing code (law 3) | Production code grows branches that only test inputs can reach | Fix or shift the test openly; delete the branch |
-| Goodhart anchoring (law 3) | Later work optimizes for the existing test wording, not the behavior it stands for | Re-read the decision behind the test before extending it |
-| Silent test shift (law 5) | Assertion changed in the same commit as the code it verifies, no reason recorded | Split the shift out; record it with a decision |
-| Silent test delete (law 5) | Failing test removed instead of the defect fixed | Fix the behavior, or record the deliberate contract change |
-| Junk evidence (laws 4, 5) | Claim/proof filled with placeholders ("test: a", "p1") to pass a gate | Name the real falsifier: the check that fails if the claim is wrong |
-| Forced green (law 3) | Work marked done while its verification still fails | Report the failure; done only after the falsifier passes |
-| Over-broad red (law 1) | One red test bundles several undecided behaviors | One behavior, one test; split the rest into their own decisions |
-| Snapshot everything (law 4) | Golden-file snapshot of an entire output where one field was decided | Assert the decided field; keep snapshots for decided wholes |
-| Flake tolerance (law 4) | Retries or sleeps added until the test passes | Remove the race at the seam or test a deterministic surface |
-| Coverage chasing (law 1) | Tests added purely to raise a coverage number, asserting nothing decided | Delete or replace with a falsifiable behavior test |
-| Fixture drift (law 2) | Test setup re-implements production logic and diverges from it | Build fixtures through the public seam the user would use |
-| Never-red or assertion-free (law 4) | Test added after the code already passed, or executes code and asserts only that no exception was thrown | Watch the test fail first; assert the observable result the decision names |
-| Test-driven API invention (law 1) | Red test names a production symbol that does not exist; the "fix" mints it to clear the compile error | Stabilize the minimum contract first (spec, existing code, or a decision — stable enough for this slice); red must fail on an assertion, not a missing symbol |
-| Contract drift (law 1) | Spec says A, existing code does B, the test asserts a third shape C and implementation follows C | Reconcile with a recorded decision before writing the test; the test transcribes, never arbitrates |
+| Contract minting | Test asserts behavior outside acceptance | Resolve the material contract gap; do not let the test authorize scope |
+| Spec by accident | Test freezes an arbitrary internal detail (exact wording, ordering) nobody chose | Assert the accepted contract rather than incidental structure |
+| Guessed seam | Test drives an internal function while CLI/API behavior is undecided | Resolve the observable outcome first |
+| Internals lock-in | Test reaches into private state instead of exercising the contract | Prefer a stable consumer seam |
+| Mock theater | Test asserts a mock was called with the mocked value | Assert observable output at the real seam |
+| Tautology | Expected value computed by the same code path as the actual | Derive the expected result independently |
+| Test-pleasing code | Production code grows branches solely to satisfy a wrong expectation | Correct the test openly against acceptance |
+| Goodhart anchoring | Work optimizes for existing test wording, not the behavior it represents | Re-read the contract before extending the check |
+| Silent test shift | Assertion changes without an explanation of the contract or measurement correction | Record the reason; a decision is needed only for a material choice |
+| Silent test delete | Failing test removed instead of the defect fixed | Fix the behavior or obtain approval for a contract change |
+| Junk evidence | Claim/proof uses placeholders ("test: a", "p1") | Name the check that would fail if the claim were wrong |
+| Forced green | Work marked done while acceptance still fails | Report the failure and keep the acceptance open |
+| Over-broad red | One test bundles several undecided behaviors | Settle the blocking behavior; defer unrelated questions |
+| Snapshot everything | Entire-output snapshot where only one field is contractual | Assert the relevant field; use snapshots for meaningful wholes |
+| Flake tolerance | Retries or sleeps added until the test happens to pass | Investigate the race or environment with new evidence |
+| Coverage chasing | Tests added solely to raise a number | Stop unless there is an uncovered in-scope behavior or risk |
+| Fixture drift | Setup re-implements production logic and diverges | Reuse fixtures or exercise the existing consumer path |
+| Assertion-free | Check cannot distinguish a plausible incorrect result | Assert the observable result and demonstrate sensitivity to the defect |
+| Test-driven API invention | Missing symbol in a test becomes an unapproved public API | Stabilize the minimum contract before implementing the symbol |
+| Contract drift | Spec says A, code does B, test asserts C | Resolve the contradiction rather than treating current output as authority |
 
 On API invention: red tests may discover implementation, but must not invent
 an unstabilized contract. Agents are especially prone here — a human reading a

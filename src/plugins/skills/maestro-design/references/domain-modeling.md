@@ -56,14 +56,9 @@ new `term add` with the same name; say why in the conversation.
 
 ### Lock decisions sparingly
 
-Every settled fork gets a decision, but only offer to lock one for a choice
-the user has not asked about when all three are true:
-
-1. **Hard to reverse**: the cost of changing your mind later is meaningful.
-2. **Surprising without context**: a future reader will wonder "why did they
-   do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and
-   you picked one for specific reasons.
+Apply [Decisions and readiness](~/maestro/WORKFLOW.md#decisions-and-readiness)
+to distinguish a durable domain choice from a reversible implementation detail.
+Do not create a decision record for every answer or fact found during modeling.
 
 The rationale carries the rejected alternative and the why; a later reversal
 is a new decision with `--supersedes <id>`, never an edit.

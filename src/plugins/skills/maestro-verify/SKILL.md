@@ -7,13 +7,13 @@ review-date: 2026-11-28
 
 # maestro-verify
 
-Use for close, commit, install, push, publish, release, or archive gates.
-Local implementation authority does not imply authority for remote or external
-state changes.
+Use for verification and close. Read [WORKFLOW.md](~/maestro/WORKFLOW.md)
+for testing, recovery, authorization, and completion rules. Delivery actions
+such as commit, install, push, or release remain separate gates.
 
-Precondition: an open bundle with a drafted VERIFY.md. No bundle means the
-change is quickfix or Light: verify the changed surface inline and close with
-`maestro work done`; this skill's table pass is a Full-tier instrument. The
+Precondition: an open bundle with a drafted VERIFY.md. Without a bundle,
+verify inline and close a tracked item with `maestro work done`; an untracked
+quickfix needs no record. This skill's table pass is for Full work. The
 evidence-layer vocabulary below still applies to any claim at any tier.
 
 ## Evidence layers
@@ -43,37 +43,24 @@ Residual risks: None
 
 ## Verify
 
-- Cross-check coverage before running anything: every behavior in scope has a
-  red test that went green, every red test maps to a VERIFY.md scenario or
-  repo check, and every scenario traces back to a work item's acceptance or an
-  anti-goal. An orphan on any side is a gap - record and surface it, never
-  silently proceed past it.
+- Cross-check the evidence plan against acceptance and relevant risks. Map
+  existing tests, necessary new checks, readbacks, or baselines to VERIFY.md.
+  A missing behavior check is a gap; the absence of a newly written test is not.
 - Run every VERIFY.md scenario against its work item's acceptance/claims and
   fill the Result column; run each anti-goal check (grep, diff, readback).
   Stamp the pass with its date and commit. Results hold this run only: a
   re-run replaces prior results wholesale, and a failed pass leaves its
   one-line `failed:` note on the work item, never accumulated rounds in
-  VERIFY.md. The scenario list is frozen once the pass starts: scenarios gain
-  results here, never rewrites or removals. A scenario that cannot run as
-  written goes back to `maestro-design` for a checkable rewrite - do not
-  invent a substitute measurement.
+  VERIFY.md. Apply [Recovery and verification](~/maestro/WORKFLOW.md#recovery-and-verification)
+  when a scenario cannot run as written: document and execute an equivalent
+  check without changing acceptance, or report the gap if equivalence is unknown.
 - Run the repo's checks for the touched surface (tests, lint, types, build),
   then freeze and review the task-owned diff: every changed line traces to
   the SPEC's scope or a linked work item; nothing unrelated is staged.
-- For risky seams, spot-check assertion strength before filling PASS.
-  First check the tests assert the decided contract itself: the decided
-  error class, and the message when one was decided - a bare `toThrow()`
-  passes on any thrown value, and a substring matcher like
-  `toThrow(string)` passes on a changed message; a decided contract no
-  assertion pins is a FAIL. Then derive mutants from the record, not at
-  random: bend the code toward each alternative the linked decisions
-  rejected - the suite must go red each time, and a survivor is a weak or
-  missing test and a FAIL of that scenario, not a side note. Last, probe
-  each input edge no decision settled (whitespace, case, sign, empty) by
-  mutating the code (e.g. insert an `input.trim()`), never by only calling
-  the function - a call shows current behavior, a surviving mutant shows no
-  test pins it; a suite that stays green under an edge mutant is an open
-  fork to record, not a pass. Restore after each mutant.
+- For a concrete assertion-strength concern, inspect whether the existing
+  check distinguishes the approved outcome from the suspected wrong behavior.
+  A focused mutation can establish that; restore it before continuing. Do not
+  expand verification into an unrelated edge-case or coverage campaign.
 - Re-read the user's exact delivery authority and target before any gate.
 - Select one legal next gate at a time: final verification, independent QA or
   witness, scoped commit, local install, external delivery, or stop. Do not
@@ -89,12 +76,10 @@ routing back to implementation belongs to the parent turn that holds the
 user's ask. A subagent that fails to start or report is a dispatch failure,
 not evidence: run the checklist in this session instead of polling for it.
 
-On FAIL, route back to `maestro-work` and leave the exact one-line failed-pass
-trace `maestro work note <id> "failed: <one line>"`. The prefix is the literal
-lowercase `failed:` followed by one space. A scenario still failing after three implement
-passes - counted from the work item's notes across sessions, not this
-session's memory - is a design problem, not an implementation one: stop and
-re-settle the decision via `maestro-design`.
+On FAIL, leave `maestro work note <id> "failed: <one line>"` and return the
+evidence to the implementation owner. Use the shared recovery rule to choose
+the next action from the cause, not a failure count. Read prior failed notes
+so a new session does not repeat the same uninformative attempt.
 
 Read-only review method: [references/audit.md](references/audit.md). When the
 failure location is unclear, follow [references/triage.md](references/triage.md).
@@ -104,8 +89,8 @@ failure location is unclear, follow [references/triage.md](references/triage.md)
 | The thought | The reality |
 |---|---|
 | "It obviously passes - running it is a formality" | Scenarios exist because "obviously" has been wrong before. Run every one and record the output. |
-| "The scenario can't run as written, but this similar check proves the same thing" | That is a substitute measurement. Route back to `maestro-design` for a checkable rewrite. |
-| "The mutant survived, but the code is clearly fine" | A surviving mutant is a weak or missing test, and a FAIL of that scenario. |
+| "The scenario command is stale, so I can skip the check" | Repair it or demonstrate an equivalent measurement; preserve acceptance and record the change. |
+| "The mutant survived, but the code is clearly fine" | If the mutant violates acceptance, the check is weak; report the gap rather than filling PASS. |
 | "I wrote this diff - I know it works" | That is the confirmation bias the fresh-context rule exists for. |
 | "I'll just fix this small failure while I'm verifying" | Verify delivers a verdict, never fixes. A FAIL routes back to `maestro-work`. |
 
@@ -115,11 +100,14 @@ Before closing, harvest what outlives the bundle
 ([references/learning.md](references/learning.md)): a verified correction or
 durable constraint becomes a locked decision or a work note - never only chat.
 
-Close order, on PASS with durable ship or handoff proof:
+Use [Completion and delivery](~/maestro/WORKFLOW.md#completion-and-delivery)
+to decide whether the accepted scope is complete or an authorized transfer is
+ready. Close procedure:
 
 1. Run `maestro handoff <bundle-id>` one last time, then add a dated
-   close-out line citing the ship evidence (commit hashes or the handoff
-   target).
+   close-out line citing verification evidence and the candidate (base commit
+   plus task-owned diff if uncommitted), or the explicit handoff/cancellation.
+   Record pending delivery actions and retained authority in the handoff.
 2. Harvest: any mid-flight choice that is hard to reverse, surprising without
    context, and a real trade-off is a locked decision with its rejected
    alternative; a new domain term is `maestro term add`.
@@ -129,18 +117,15 @@ Close order, on PASS with durable ship or handoff proof:
 The snapshot is the durable memory; after close the directory is disposable
 and `maestro search` still recalls the text.
 
-When the verdict passes but the ship commit has not landed yet, do not leave
-the close implicit: set NOTES.md Next Action to "commit, then close bundle".
-The turn that lands the commit performs the close in that same turn; a PASS
-bundle never stays active across sessions. Never close on a FAIL, and never
-stage or commit bundle contents as part of the ship commit.
+If acceptance includes delivery not yet authorized or proven, leave the work
+open with that exact next action and blocker. Otherwise a verified implementation
+may close without a commit. Do not mark failed acceptance complete; an explicit
+transfer or cancellation records the unresolved failure rather than calling it
+PASS. Never stage or commit bundle contents.
 
-Quality review is separate from verify: verify owns "does it meet the
-contract", review owns "is the code good". Light gets a simplification pass
-after green; Full gets one correctness review after verify passes, chosen by
-risk (a security review when the diff touches auth, secrets, or input
-handling). A code change after the verdict re-runs the affected VERIFY.md
-scenarios before close.
+Use the shared [review routing](~/maestro/WORKFLOW.md#per-tool-adapters).
+A code change after the verdict reruns the affected VERIFY.md scenarios
+before close; the old verdict does not cover the new diff.
 
 ## Definition of done
 

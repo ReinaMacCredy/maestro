@@ -286,8 +286,7 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit carries se
     const start = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain(
-      '  close: maestro bundle close <id> after VERIFY passes; recall with maestro search "<term>"\n' +
-        "intake: problem in one sentence; uncertainty -> lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); ROI of independent judgment -> tier; say the route and the one not taken; a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built\n",
+      "intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built\n",
     );
 
     const prompt = await runCli(

@@ -7,41 +7,16 @@ review-date: 2026-11-28
 
 # maestro-bundle
 
-Routing brain for maestro method work. Decide the tier first, then follow the
-matching skill; this skill owns the bundle lifecycle itself.
+Use [WORKFLOW.md](~/maestro/WORKFLOW.md) for method rules and routing.
+This skill owns record creation, resume, and handoff procedures.
 
 ## Tier rule
 
-Decide the tier from the request alone, before any recon: no bundle files, no
-code reading, no store lookups until the tier is known.
-
-- quickfix: the diff fits in one sentence and hits no Full trigger below. Do it
-  directly, verify inline (run the smallest check that can falsify it), no
-  skill, no record. If it grows past one sentence, stop, `maestro work add`,
-  and continue as Light.
-- Light: one session, one branch, and the acceptance fits in a sentence. Work
-  directly with `maestro work add|start|done` (no bundle). The work item is the
-  floor because `maestro ready`, attention, and the Supervisor's brief read the
-  store, not a session task list.
-- Full: any trigger below. Open a bundle, in the
-  store whose checkout will change: a design walk run in the Hub room still
-  builds where the code lives. List Hub decisions in the SPEC as `hub:<id>`
-  (`maestro bundle show` renders them) and note the bundle on the Hub map and
-  the map on the bundle's work item.
-
-Open a bundle when ANY trigger holds:
-- the work spans multiple sessions or must survive a context reset
-- multiple branches, worktrees, or agents touch the same scope
-- the scope is high risk (schema change, wide refactor, irreversible step)
-- a previous fix attempt for the same problem failed
-- the user asks for one
-
-Ceremony scales with tier. Quickfix and Light never demand a SPEC or a test;
-Red tests are a Full-tier instrument for the risks the SPEC names, and nothing
-beyond that list. Light work that hits a Full trigger mid-task opens the
-bundle then and backfills it from what is already done; finished work is
-evidence, never redone. During a production incident, fix and verify first,
-then backfill and close the bundle immediately after stabilizing.
+Apply [Tiers](~/maestro/WORKFLOW.md#tiers) after bounded reconnaissance.
+For tracked work use `maestro work add|start|done`. When Full is warranted,
+open the bundle in the store whose checkout will change, even when design
+runs in the Hub. List Hub decisions as `hub:<id>`; `maestro bundle show`
+renders them. Note the bundle on the Hub map and the map on its work item.
 
 ```
 maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link work
@@ -49,31 +24,12 @@ maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link wo
 
 ## The trio contract
 
-- `SPEC.md` is a pure contract: Problem, Solution, Scope, Anti-goals,
-  Decisions, Red tests. Mid-flight decisions are NOT written into SPEC prose;
-  record them with `maestro decision draft "<text>" --rationale "<why>" --work <id>`
-  and list the ids under Decisions (`maestro bundle show <id>` renders them
-  with ruling and rejected alternative). Every anti-goal gets a matching
-  VERIFY.md check. Red tests exist only in Full bundles and only for the risks
-  the SPEC names; the section stays empty when the SPEC names no risk. Revise
-  in place; scope expansion needs the user.
-- `NOTES.md` is a pure handoff: current state, next action, base commit.
-  It also names Authority transferred and retained, Failed approaches, and Do
-  not repeat. It is rendered, not authored: `maestro handoff <bundle-id>`
-  fills every section the store can prove (work, decisions, handbacks,
-  `failed:` notes, the latest `checkpoint:` note) and leaves placeholders only
-  where it cannot; hand-edit those and nothing else. Never append. History
-  lives in `maestro trace`, work notes, and decisions. Re-run it before
-  ending any turn with work remaining.
-- `VERIFY.md` is scenarios + results; each scenario points at a work item's
-  acceptance or claim instead of restating it. Results hold the latest run
-  only, stamped with date and commit.
-
-A bundle closes when its work ships, is handed off, is cancelled, or the
-investigation concludes no change is needed. Shipped or dead bundles never
-stay active; an archived bundle is never reopened, follow-up work gets a new
-bundle that links the old one. Never create root `SPEC-*`, `NOTES-*`, or
-`VERIFY-*` files.
+Follow [Bundle contract](~/maestro/WORKFLOW.md#bundle-contract-tier-full).
+Use `maestro handoff <bundle-id>` to render NOTES.md from work, decisions,
+handbacks, failures, and the latest checkpoint. Fill only placeholders the
+store cannot prove, including original authorization and retained gates.
+Use `maestro bundle show <id>` to read the contract and linked decisions.
+Never create root `SPEC-*`, `NOTES-*`, or `VERIFY-*` files.
 
 ## Verbs
 
@@ -90,55 +46,25 @@ maestro search "<term>"                 # recall: hits labeled (bundle, ...)
 
 ## Authorization boundaries
 
-- A request to design or plan does not authorize production edits.
-- An explicit request to implement or fix authorizes only that stated scope.
-- Read-only requests (answer, review, report, diagnose, explore) stay
-  read-only.
-- Workflow ownership never grants authority to push, merge, release, deploy,
-  publish, or mutate external systems.
-- Authorization does not travel with a bundle between tools or sessions: the
-  receiving session needs the user's explicit ask before it edits.
+Follow [Authorization boundaries](~/maestro/WORKFLOW.md#authorization-boundaries).
+Put the original user instruction or retrievable reference on the work item
+so the successor can verify the grant, rather than relying on an agent's summary.
 
 ## Routing
 
-Route only work that needs a skill; a quickfix proceeds directly.
-
-- Unsettled decisions, design questions, efforts too big for one session, or
-  new scope on shipped work (review findings, follow-ups): `maestro-design`.
-- Research, disposable prototype, or current-behavior baseline:
-  `maestro-explore`.
-- Authorized implementation or fix: `maestro-work` (a Light fix proceeds
-  there directly; Full needs the bundle and its red list).
-- Diagnosis-only work: `maestro-diagnose`; on a fix request, diagnosis is the
-  first phase of `maestro-work`, not a separate engagement.
-- Verifying and closing an open bundle: `maestro-verify`.
-- The user does not understand a fork they have been asked, or wants to learn
-  the concept behind a recorded decision: `maestro-coach`.
-- A decision owned by someone not in the conversation:
-  `maestro-questionnaire`.
-- Filed lessons into the smallest doctrine edit: `maestro-improve`.
+Use [Routing](~/maestro/WORKFLOW.md#routing); a skill transition is internal,
+not another user approval gate.
 
 ## Resume protocol
 
-On resume, `maestro bundle list` first; pick the bundle matching this task.
-Two plausible matches is a scope collision: ask. Read its NOTES.md, then
-`maestro bundle show` for linked work and decisions. Never trust
-conversational memory over the bundle; the files and the store are the spec.
-
-Reconcile NOTES against live repo state before the first edit:
-`git log <Base>..HEAD` and `git status` show what happened behind NOTES' back
-(another tool or session may have driven the bundle meanwhile). Repo state
-beats NOTES, NOTES beats memory. A bundle whose scope already shipped is
-closed on sight, not resumed. An interrupted operation has unknown outcome
-until checked.
+Follow [Resume](~/maestro/WORKFLOW.md#resume). For Light, read the work and
+checkpoint without opening a bundle. For Full, locate and read the existing
+bundle, then reconcile it with the checkout before continuing.
 
 ## Concurrency and git
 
-One work item and bundle per thread; concurrent threads write only disjoint,
-exclusively owned paths. Dirty or untracked content visible in the checkout
-is not owned by this thread merely because it is visible: leave it alone.
-Stage explicit task-owned paths only, never bundle contents, and inspect the
-staged diff before committing.
+Follow [Concurrency and git](~/maestro/WORKFLOW.md#concurrency-and-git).
+Record the work owner and task-owned paths in the handoff, not just the branch.
 
 ## Compact or hand off
 
@@ -153,17 +79,17 @@ Compact only when ownership, scope, and role stay stable and the history still
 helps the same writer continue. Compaction gives no warning turn in either
 harness, so the checkpoint must already exist: keep a `checkpoint:` work note
 (state / next / avoid, latest wins) on each held item, rewritten at every
-write point; the SessionStart brief prints it back in the first context after
+meaningful change of state or next action; the SessionStart brief prints it back after
 the compaction. Nothing summarized is trusted over it.
 
 Use break-before-make when the writer on a moving scope changes: release the
-lease and run `maestro handoff <bundle-id>` before the new session starts. The
+lease and refresh the handoff before the new session starts. The
 handoff packet must preserve the base, Current State, Next Action, Authority
 transferred and retained, Failed approaches, and Do not repeat.
 
 ## Hand-off
 
-Run `maestro handoff <bundle-id>` to seed untouched NOTES.md sections before transferring ownership.
+Run `maestro handoff <bundle-id>` to seed untouched NOTES.md sections when a bundle exists.
 Then decide which of three cases this is; the destination differs:
 
 1. **Continuation with a bundle.** A future session, in any tool, continues
@@ -175,10 +101,12 @@ Then decide which of three cases this is; the destination differs:
    or an agent that will not resume the bundle. Write the standalone document
    below, then close the bundle per `maestro-verify`'s close order, citing
    the handoff target.
-3. **No bundle.** If the work continues in this workspace it now spans
-   sessions, a Full trigger: open a bundle and use case 1. Otherwise write
-   the standalone document to the OS temporary directory, not the workspace,
-   and report the path.
+3. **No bundle.** For tracked work, save the continuation packet as a
+   `checkpoint:` work note with original authorization and retained gates.
+   If an untracked quickfix needs continuation, create a Light work item.
+   For a transfer outside this workspace, provide a standalone document in
+   the OS temporary directory, report its path, and transfer it to the recipient;
+   a local path alone is not accessible from another machine.
 
 The standalone document (cases 2 and 3) names the suggested skills for the
 next agent, references specs, decisions, commits, and diffs by path or id

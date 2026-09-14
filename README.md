@@ -148,10 +148,11 @@ setup at [SLP setup and storage](https://maestro.maccredyreina.me/getting-starte
   `maestro ready` shows work that can start and the gates blocking other work.
 - `maestro work` manages work trees, dependencies, leases, notes, cancellation,
   claims, and proof.
-- Method depth is **quickfix** for a one-sentence diff with inline verification
-  and no record, **Light** for one session and branch tracked with a work item,
-  and **Full** for multi-session, shared-scope, high-risk, or repeated work
-  tracked with a SPEC/NOTES/VERIFY bundle.
+- Method rules live in [WORKFLOW.md](src/plugins/resources/WORKFLOW.md), installed
+  to `~/maestro/WORKFLOW.md`. Inspect the task before choosing **quickfix**,
+  **Light**, or **Full** by risk and coordination needs. Session changes use
+  checkpoints, not automatic bundles. Verification is required; new tests
+  need a concrete gap in existing checks. Completion and delivery are separate.
 - `maestro decision` records draft, locked, and superseded choices with their
   rationale and work links. Supersession takes effect when the replacement is
   locked, not while it is still a draft.

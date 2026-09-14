@@ -9,7 +9,8 @@ review-date: 2026-11-28
 
 Answer an open question with evidence, without touching production code.
 Read-only toward production paths; exploration never authorizes
-implementation. Any tier may use it.
+implementation. Any tier may use it. Apply [WORKFLOW.md](~/maestro/WORKFLOW.md)
+for tier selection, authority, and durable decision thresholds.
 
 Three modes; pick whichever settles the question:
 
@@ -36,7 +37,8 @@ Three modes; pick whichever settles the question:
 
 ## Where findings land
 
-- A fact that settles a fork becomes a decision:
+- A fact is evidence, not automatically a decision. If it supports a durable
+  choice under the shared workflow, record that choice:
   `maestro decision draft "<choice>" --rationale "<why, with source link>" --work <id>`,
   then `maestro decision lock <id>`.
 - Working evidence for an open work item: `maestro work note <id> "<finding + link>"`;

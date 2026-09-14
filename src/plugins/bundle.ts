@@ -73,7 +73,7 @@ Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lo
 
 ## Red tests
 
-Full tier only, and only for the risks this SPEC names; leave empty when it names none. Quickfix and Light work never carries this section.
+Apply Testing discipline in \`~/maestro/WORKFLOW.md#testing-discipline\`. List necessary new tests and the gaps they cover; reference existing checks in VERIFY.md. Leave empty when existing evidence suffices. This is not a quota or an exhaustive whitelist.
 `;
 }
 

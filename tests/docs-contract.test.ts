@@ -170,71 +170,51 @@ test("311 [lint] SLP v2 is the only registered team architecture and states its 
   }
 });
 
-test("576 [lint] no doctrine, template, or skill demands a test or SPEC from quickfix or Light work", async () => {
-  // Anti-goal A6 / d784: ceremony scales with tier. Proves the shipped text and
-  // the scaffolded SPEC, not how a harness reads them.
+test("576 [lint] non-SLP procedures share one risk-based workflow without mandatory test generation", async () => {
+  // Proves the shipped instructions and scaffold, not an agent's compliance.
   const root = join(import.meta.dir, "..", "src", "plugins");
-  // A sentence that denies the demand ("no SPEC", "never demand a test") is
-  // the rule itself, not a demand; strip those clauses before matching.
-  const denial = /\b(no|never|without|nor)\b[^.;]*?\b(SPEC|red[- ]tests?( list)?|red list|tests?|VERIFY\.md)\b[^.;]*/gi;
-  const demand = /\b(red[- ]tests?|red list|SPEC|VERIFY\.md|failing test|write (a|the) test)\b/i;
-  const demands = (text: string): boolean => demand.test(text.replace(denial, ""));
-  const section = (text: string, heading: string): string => {
-    const start = text.indexOf(heading);
-    expect({ heading, found: start >= 0 }).toEqual({ heading, found: true });
-    const rest = text.slice(start + heading.length);
-    const next = rest.search(/\n## /);
-    return next >= 0 ? rest.slice(0, next) : rest;
-  };
-  const bullets = (text: string, prefix: string): string[] => {
-    const lines = text.split("\n");
-    const out: string[] = [];
-    for (let index = 0; index < lines.length; index += 1) {
-      if (!lines[index]?.startsWith(prefix)) continue;
-      const item = [lines[index]];
-      while (lines[index + 1]?.startsWith("  ")) item.push(lines[++index] ?? "");
-      out.push(item.join("\n"));
-    }
-    return out;
-  };
-  const lowTierBullets = (text: string, prefixes: string[]): string[] =>
-    prefixes.flatMap((prefix) => bullets(text, prefix));
-
-  const bundle = await Bun.file(join(root, "skills", "maestro-bundle", "SKILL.md")).text();
-  const tierRule = section(bundle, "## Tier rule");
-  const work = await Bun.file(join(root, "skills", "maestro-work", "SKILL.md")).text();
-  const tierFirst = section(work, "## Tier first, recon second");
   const workflow = await Bun.file(join(root, "resources", "WORKFLOW.md")).text();
-  const tiers = section(workflow, "## Tiers");
-  const surfaces: Array<[string, string[]]> = [
-    [tierRule, lowTierBullets(tierRule, ["- quickfix:", "- Light:"])],
-    [tierFirst, lowTierBullets(tierFirst, ["- quickfix:", "- Light:"])],
-    [tiers, lowTierBullets(tiers, ["- **quickfix**", "- **Light"])],
-  ];
-  for (const [, low] of surfaces) {
-    expect(low).toHaveLength(2);
-    for (const bullet of low) {
-      expect({ bullet, demands: demands(bullet) }).toEqual({ bullet, demands: false });
-      expect(bullet).toMatch(/inline|no record|no bundle/i);
-    }
+  for (const heading of ["## Tiers", "## Authorization boundaries", "## Decisions and readiness", "## Testing discipline", "## Recovery and verification", "## Completion and delivery"]) {
+    expect(sectionOf(workflow, heading).trim().length).toBeGreaterThan(0);
   }
-  expect(tierRule).toContain("Quickfix and Light never demand a SPEC or a test");
-  expect(tiers).toContain("Red tests are a Full-tier instrument");
+  expect(sectionOf(workflow, "## Tiers")).toContain("Read-only reconnaissance comes before tier selection");
+  expect(sectionOf(workflow, "## Tiers")).toContain("A context reset, session change, or failed attempt alone is not a Full trigger");
+  const testing = sectionOf(workflow, "## Testing discipline");
+  expect(testing).toContain("Verification is required; new tests are not");
+  expect(testing).toContain("Which plausible wrong implementation would this catch");
+  expect(testing).toContain("Reuse or extend existing tests first");
+  expect(testing).toContain("Stop when acceptance and in-scope risks have sufficient evidence");
+  const authority = sectionOf(workflow, "## Authorization boundaries");
+  expect(authority).toContain("original user instruction");
+  expect(authority).toContain("host permissions");
+  expect(authority).toContain("push, merge, release, deploy");
+  const recovery = sectionOf(workflow, "## Recovery and verification");
+  expect(recovery).toContain("not proof of a design flaw");
+  expect(recovery).toContain("equivalent measurement");
+  expect(sectionOf(workflow, "## Completion and delivery")).toContain("awaiting delivery approval");
 
-  const design = await Bun.file(join(root, "skills", "maestro-design", "SKILL.md")).text();
-  const exit = section(design, "## Readiness gate and exit");
-  const lightExit = bullets(exit, "- Light:")[0] ?? "";
-  expect({ lightExit, demands: demands(lightExit) }).toEqual({ lightExit, demands: false });
+  for (const path of [
+    ...["bundle", "design", "work", "verify", "explore"].map((name) => `skills/maestro-${name}/SKILL.md`),
+    "skills/maestro-design/references/grilling.md",
+    "skills/maestro-design/references/domain-modeling.md",
+    "skills/maestro-work/references/tdd-antipatterns.md",
+    ...["design", "work", "ship"].map((name) => `recipes/${name}.md`),
+  ]) {
+    const text = await Bun.file(join(root, path)).text();
+    expect({ path, canonical: text.includes("~/maestro/WORKFLOW.md") }).toEqual({ path, canonical: true });
+    expect(text).not.toMatch(/before any recon|No tests beyond the SPEC|A never-red test proves nothing|Every settled fork gets a decision|Authorization does not travel|every behavior in scope has a\s+red test|More than\s+two open forks|sessions, a Full trigger/i);
+  }
 
   await withFixture(async (fixture) => {
+    await scaffoldRoom(fixture.home);
+    expect(await Bun.file(join(fixture.home, "maestro", "WORKFLOW.md")).text()).toBe(workflow);
     const opened = await runCli(fixture, ["bundle", "open", "tier-lint"]);
     expect(opened.exitCode).toBe(0);
     const spec = await Bun.file(join(fixture.repo, ".maestro", "bundle", "tier-lint", "SPEC.md")).text();
-    const redTests = section(spec, "## Red tests");
-    expect(redTests).toContain("Full tier only");
-    expect(redTests).toContain("Quickfix and Light work never carries this section");
-    expect(section(spec, "## Decisions")).toContain("maestro bundle show tier-lint");
-    expect(section(spec, "## Anti-goals")).toContain("matching VERIFY.md check");
+    expect(spec).toContain("~/maestro/WORKFLOW.md#testing-discipline");
+    expect(spec).not.toContain("Full tier only");
+    expect(sectionOf(spec, "## Decisions")).toContain("maestro bundle show tier-lint");
+    expect(sectionOf(spec, "## Anti-goals")).toContain("matching VERIFY.md check");
   });
 });
 
@@ -304,7 +284,7 @@ test("648 [lint] wayfinder: fog notes carry evidence and are cleared by note, an
 
 test("649 [lint] grilling: a fork answer is a decision to record, never an implementation order (doctrine review 5)", async () => {
   const grilling = await Bun.file(join(skillsRoot, "maestro-design", "references", "grilling.md")).text();
-  const record = grilling.slice(grilling.indexOf("- Record each answer the moment it lands"));
+  const record = grilling.slice(grilling.indexOf("- Record durable decisions"));
   const bullet = record.split("\n\n")[0] ?? "";
   expect(bullet).toContain("never an implementation order");
   expect(bullet).toContain("explicit request");
