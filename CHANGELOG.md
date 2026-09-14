@@ -11,6 +11,39 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.122.0] - 2026-09-15
+
+### Changed
+
+- Non-SLP workflow rules now share one canonical WORKFLOW.md: reconnaissance
+  before tier selection, risk-based record depth, durable authorization across
+  sessions, material decisions only, and completion separate from delivery.
+- Verification remains required without mandatory test generation. Reuse
+  existing checks, justify new tests by uncovered behavior, and stop when
+  acceptance and in-scope risks have sufficient evidence.
+- Repeated failures trigger evidence-based diagnosis rather than automatic
+  redesign; equivalent verification commands may be repaired without weakening
+  acceptance. Work checkpoints preserve continuation across context resets.
+
+### Added
+
+- Explicit force-release of a live work lease, SLP decision readback, and
+  frontmatter-only seat profile shadows.
+
+### Fixed
+
+- Claude hooks resolve from the project directory instead of the caller cwd.
+- SLP initial OPEN delivery, pre-pane store compatibility, unsupported work-add
+  flag validation, stall reporting, DONE explanations, and profile refusal guidance.
+- Update output distinguishes source drift from the unpublished commit count.
+
+### Verification notes
+
+- Workflow checks, installation readback in an isolated HOME, type-checking,
+  and architectural gates passed during implementation. Two pre-existing suite
+  failures remain: recipe command-prefix lint and room hook command expectations.
+- Live SLP agent behavior was not re-verified for this release.
+
 ## [0.121.0] - 2026-09-06
 
 Every Claude seat launches under its own `CLAUDE_CONFIG_DIR` rendered by
