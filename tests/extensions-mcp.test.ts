@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { version } from "../package.json";
 import {
   idFrom,
   runCli,
@@ -93,7 +94,7 @@ test("42 MCP initialize carries the dynamic brief and lists exactly two meta-too
     const tools = (listed.result?.tools ?? []) as Array<{ name: string }>;
 
     expect(initialized.error).toBeUndefined();
-    expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version: "0.121.0" });
+    expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version });
     expect(initialized.result?.instructions).toContain("held work:");
     expect(initialized.result?.instructions).toContain("enabled policies:");
     expect(initialized.result?.instructions).not.toContain("pending message");
