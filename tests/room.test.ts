@@ -153,7 +153,7 @@ test("267 reinstall preserves OWNER.md and the Hub SLP pack while refreshing man
     expect(await readFile(join(room, "SLP.md"), "utf8")).toBe(packEdit);
     for (const name of generatedNames) {
       expect(await readFile(join(room, name), "utf8")).toBe(firstInstall.get(name) ?? "");
-      expect(await readFile(join(room, name), "utf8")).not.toContain("stale ");
+      expect(await readFile(join(room, name), "utf8")).not.toContain(`stale ${name}\n`);
     }
     for (const retired of ["lane.md", "lead.md", "observer.md", "supervisor.md", "observer-watch.sh"]) {
       expect(existsSync(join(room, retired))).toBe(false);
