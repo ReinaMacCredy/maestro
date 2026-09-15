@@ -374,7 +374,16 @@ export const workPlugin: BuiltInPlugin = {
         context,
         "work add",
         async (invocation): Promise<CliResult> => {
-  const slp = await maybeHandleSlpWorkAdd(context, invocation);
+          // room d126: there is no per-item collaboration mode. The flag is
+          // declared hidden only so the refusal names the doctrine instead
+          // of an unknown-flag error, on every path, before any pane opens.
+          if (invocation.options.mode !== undefined) {
+            throw new CliError(
+              "INVALID_OPTION",
+              "--mode is not an option (room d126): items carry no collaboration tag; the owner's presence (maestro owner) decides who answers an owner-scope fork, and a fork is always raised with work note --blocked",
+            );
+          }
+          const slp = await maybeHandleSlpWorkAdd(context, invocation);
           if (slp) return slp;
           if (invocation.options.profile !== undefined) {
             throw new CliError("INVALID_OPTION", "--profile is available only for SLP work add --to <peer>");
@@ -464,6 +473,7 @@ export const workPlugin: BuiltInPlugin = {
             "--fresh": {
               description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.",
             },
+            "--mode": { hidden: true, value: true },
           },
           positionals: [{ name: "title", required: true }],
           rootDescription: "Manage tracked work, leases, dependencies, and evidence.",
