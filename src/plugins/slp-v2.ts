@@ -2724,8 +2724,17 @@ async function noteWorkAs(
   const work = requireSlpWork(context, actor, id);
   const rework = invocation.options.rework === true;
   const blocked = invocation.options.blocked === true;
-  if (rework && blocked) {
-    throw new CliError("INVALID_OPTION", "--blocked and --rework are separate notes");
+  // room d123: --owner is provenance, not a state. It marks the note as an
+  // owner walk-in recorded by the seat before acting, so the seat above can
+  // tell an owner instruction from the seat changing course on its own.
+  const owner = invocation.options.owner === true;
+  const separate = [
+    ...(blocked ? ["--blocked"] : []),
+    ...(rework ? ["--rework"] : []),
+    ...(owner ? ["--owner"] : []),
+  ];
+  if (separate.length > 1) {
+    throw new CliError("INVALID_OPTION", `${separate.join(" and ")} are separate notes`);
   }
   if (actor.role === "peer" && work.assigned_to !== actor.name) {
     throw new CliError("ROLE_FORBIDDEN", `${actor.name} may note only its assigned work`);
@@ -2740,7 +2749,7 @@ async function noteWorkAs(
     }
   }
   const now = new Date().toISOString();
-  const flag = blocked ? "blocked" : null;
+  const flag = blocked ? "blocked" : owner ? "owner" : null;
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     requireRunningGeneration(context.store, actor.team);
@@ -2804,21 +2813,12 @@ async function noteWorkAs(
   // so a Lead's blocked note escalates there. Before this, that note resolved
   // to a team-supervisor pane that does not exist in such a team and the
   // escalation - the only question channel a seat has - was dropped silently.
-  if (blocked) {
-    const toHub = actor.role === "team-supervisor" ||
-      (actor.role === "lead" && teamShape(actor.team.configuration_json) === "lead-only");
-    await pushNotice(
-      actor.team.project_path,
-      actor.role,
-      toHub
-        ? hubSupervisorTarget(actor.team)
-        : rolePaneName(context, actor, actor.role === "lead" ? "team-supervisor" : "lead"),
-      `${id} BLOCKED`,
-      toHub ? `${body} in ${actor.team.team_id} g${actor.team.generation}` : body,
-      toHub ? "maestro status" : `maestro status ${id}`,
-    );
+  // room d123: the owner walk-in rides the same path with its own subject; it
+  // is one line up for the record, never a stall and never the blocked flag.
+  if (blocked || owner) {
+    await pushOneSeatUp(context, actor, id, blocked ? "BLOCKED" : "OWNER", body);
   }
-  const kind = rework ? "rework grant" : blocked ? "blocked note" : "note";
+  const kind = rework ? "rework grant" : blocked ? "blocked note" : owner ? "owner note" : "note";
   return {
     data: {
       note: { actor: actor.name, body, createdAt: now, flag, rework },
@@ -2826,6 +2826,31 @@ async function noteWorkAs(
     },
     text: `${id} ${kind} by ${actor.name}: ${body}`,
   };
+}
+
+// The one upward push a seat has: Peer to Lead, Lead to Team Supervisor, Team
+// Supervisor to the Hub pane, and a lead-only Lead straight to the Hub (room
+// d117). The Hub cannot read a supervised team's items, so its line carries the
+// team and points at the room's own status.
+async function pushOneSeatUp(
+  context: PluginContext,
+  actor: SlpActor,
+  id: string,
+  subject: "BLOCKED" | "OWNER",
+  body: string,
+): Promise<void> {
+  const toHub = actor.role === "team-supervisor" ||
+    (actor.role === "lead" && teamShape(actor.team.configuration_json) === "lead-only");
+  await pushNotice(
+    actor.team.project_path,
+    actor.role,
+    toHub
+      ? hubSupervisorTarget(actor.team)
+      : rolePaneName(context, actor, actor.role === "lead" ? "team-supervisor" : "lead"),
+    `${id} ${subject}`,
+    toHub ? `${body} in ${actor.team.team_id} g${actor.team.generation}` : body,
+    toHub ? "maestro status" : `maestro status ${id}`,
+  );
 }
 
 function takeWork(context: PluginContext, id: string): CliResult {
