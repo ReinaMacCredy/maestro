@@ -10,6 +10,7 @@ import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
 import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, setFakeHerdrBehavior, tripwireInvocations } from "./helpers-herdr.ts";
 import {
+  assertNoLiveHerdrSocket,
   runCliAt,
   withFixture,
   writeConfig,
@@ -285,7 +286,15 @@ async function waitFor(
 
 async function withHerdrFixture<T>(run: (fixture: Fixture) => Promise<T>): Promise<T> {
   const configured = process.env.MAESTRO_HERDR_TRUSTED_PROJECT;
-  if (!configured) return withFixture(run);
+  // w718: this used to `return withFixture(run)`, so the live journey ran
+  // against an ordinary maestro-stage1-* temp dir whenever the valve was
+  // unset - the trusted-project valve was optional while the live gate was
+  // not conditioned on it. Reaching here unset is now a bug, not a fallback.
+  if (!configured) {
+    throw new Error(
+      "the live Herdr journey requires MAESTRO_HERDR_TRUSTED_PROJECT; it must never fall back to an ordinary fixture (w718)",
+    );
+  }
   const repo = resolve(configured);
   const allowedParents = new Set([resolve("/private/tmp"), resolve(tmpdir())]);
   if (!allowedParents.has(dirname(repo)) || !basename(repo).startsWith("maestro-")) {
@@ -307,7 +316,33 @@ async function withHerdrFixture<T>(run: (fixture: Fixture) => Promise<T>): Promi
   }
 }
 
-test.skipIf(process.env.HERDR_ENV !== "1")(
+// w718 (d120, d31): HERDR_ENV=1 is exported into EVERY pane Herdr spawns, so
+// gating on it alone meant a suite that skips in CI and on a normal dev
+// machine silently UN-SKIPPED inside any team pane and drove the owner's live
+// daemon. The live journey now requires the explicit trusted-project valve as
+// well; an ambient variable can no longer enable it.
+export function liveJourneyEnabled(
+  environment: Record<string, string | undefined> = process.env,
+): boolean {
+  return environment.HERDR_ENV === "1" && !!environment.MAESTRO_HERDR_TRUSTED_PROJECT;
+}
+
+// w718: recover the team id from raw stdout before envelope() can throw.
+// envelope() asserts on stderr first, and on a protocol-drift machine that
+// assertion throws while stdout still carries a valid JSON envelope - which
+// left teamId null and made the finally-block emergency stop unreachable, so
+// every failed run abandoned a live team.
+export function teamIdFromStdout(stdout: string): string | null {
+  try {
+    const parsed = JSON.parse(stdout) as { data?: { team?: { teamId?: unknown } } };
+    const id = parsed.data?.team?.teamId;
+    return typeof id === "string" && id !== "" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+test.skipIf(!liveJourneyEnabled())(
   "SLP v2 completes the nine-operation journey through live Herdr agents",
   async () => {
     await withHerdrFixture(async (fixture) => {
@@ -325,6 +360,15 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
       let teamId: string | null = null;
       let stopped = false;
       try {
+        const startResult = await runCliAt(
+          fixture,
+          room,
+          ["team", "start", fixture.repo, "Complete the real Herdr SLP journey", "--json"],
+          liveEnvironment,
+        );
+        // w718: claim the id BEFORE any assertion can throw, so the finally
+        // block below can always stop what this test started.
+        teamId = teamIdFromStdout(startResult.stdout);
         const started = envelope<{
           team: {
             generation: number;
@@ -334,14 +378,7 @@ test.skipIf(process.env.HERDR_ENV !== "1")(
             workspaceId: string;
           };
           work: { id: string };
-        }>(
-          await runCliAt(
-            fixture,
-            room,
-            ["team", "start", fixture.repo, "Complete the real Herdr SLP journey", "--json"],
-            liveEnvironment,
-          ),
-        );
+        }>(startResult);
         teamId = started.team.teamId;
         const lead = started.team.roles.find((role) => role.role === "lead")!;
         const supervisor = started.team.roles.find((role) => role.role === "team-supervisor")!;
@@ -850,3 +887,57 @@ test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* rema
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
+
+
+// w718 (d120, d31): the live-Herdr journey leak. These three tests are the
+// gate itself and always run - they must never be skipped, because the bug
+// they pin was a test that skipped everywhere except where it did damage.
+test("w718 the live journey cannot be enabled by an ambient Herdr variable", () => {
+  // The exact shape of the leak: Herdr exports HERDR_ENV=1 into every pane it
+  // spawns, so this is what any `bun test` from a team pane used to look like.
+  expect(liveJourneyEnabled({ HERDR_ENV: "1" })).toBe(false);
+  expect(liveJourneyEnabled({})).toBe(false);
+  expect(liveJourneyEnabled({ MAESTRO_HERDR_TRUSTED_PROJECT: "/private/tmp/maestro-x" })).toBe(false);
+  // An explicit opt-in still runs it.
+  expect(
+    liveJourneyEnabled({ HERDR_ENV: "1", MAESTRO_HERDR_TRUSTED_PROJECT: "/private/tmp/maestro-x" }),
+  ).toBe(true);
+});
+
+test("w718 the team id survives the envelope assertion that used to abandon teams", () => {
+  // The real failure on a protocol-drift machine: stderr carries a warning, so
+  // envelope() throws on its stderr assertion - while stdout holds a perfectly
+  // good envelope. teamId stayed null, `if (teamId && !stopped)` was false, and
+  // the emergency stop never fired.
+  const stdout = JSON.stringify({ ok: true, data: { team: { teamId: "maestro-abc123", generation: 1 } } });
+  const drifted: CliResult = {
+    exitCode: 0,
+    stderr: "warning: Herdr speaks protocol 22 (version 0.9.0) while maestro was built for protocol 20\n",
+    stdout,
+  };
+  expect(() => envelope(drifted)).toThrow();
+  // ...and the teardown still learns what to stop.
+  expect(teamIdFromStdout(drifted.stdout)).toBe("maestro-abc123");
+  expect(teamIdFromStdout("not json")).toBe(null);
+  expect(teamIdFromStdout(JSON.stringify({ ok: true, data: {} }))).toBe(null);
+});
+
+test("w718 a fixture CLI is refused the owner's live Herdr socket", async () => {
+  await withFixture(async (fixture) => {
+    // A HOME inside the fixture is always fine.
+    expect(() => assertNoLiveHerdrSocket(fixture, { HOME: fixture.home })).not.toThrow();
+    // Stand up a directory that looks like a real home with a live socket.
+    const foreignHome = join(fixture.root, "..", `w718-home-${randomUUID()}`);
+    await mkdir(join(foreignHome, ".config", "herdr"), { recursive: true });
+    await writeFile(join(foreignHome, ".config", "herdr", "herdr.sock"), "");
+    try {
+      expect(() => assertNoLiveHerdrSocket(fixture, { HOME: foreignHome })).toThrow(/live Herdr socket/);
+      // An explicit HERDR_SOCKET_PATH outside the fixture is refused too.
+      expect(() =>
+        assertNoLiveHerdrSocket(fixture, { HERDR_SOCKET_PATH: "/tmp/other.sock", HOME: foreignHome })
+      ).toThrow(/HERDR_SOCKET_PATH/);
+    } finally {
+      await rm(foreignHome, { recursive: true, force: true });
+    }
+  });
+});

@@ -424,9 +424,27 @@ export class HerdrClient {
     await this.request("pane.send_input", { keys, pane_id: paneId });
   }
 
+  // d875: a SUCCESSFUL answer whose `agents` field is absent, renamed or not
+  // an array is a protocol violation, not an empty list, and it throws here
+  // rather than at one caller because it is a violation for every caller.
+  // `Array.isArray(result.agents) ? result.agents : []` made "Herdr answered
+  // in a shape this maestro does not understand" indistinguishable from
+  // "Herdr knows of no agents"; the orphan auto-close reads that difference
+  // as the death of a whole team and emergency-abandons its work, and the
+  // protocol check only warns on a version mismatch, so drift arrives here
+  // unfenced. A real empty array stays a legitimate empty list.
   async agentList(timeoutMs?: number): Promise<HerdrAgent[]> {
     const result = await this.request<{ agents?: HerdrAgent[] }>("agent.list", {}, timeoutMs);
-    return Array.isArray(result.agents) ? result.agents : [];
+    if (!Array.isArray(result.agents)) {
+      throw new SlpRuntimeError(
+        `Herdr agent.list answered without an agents array (maestro speaks protocol ${herdrProtocol}); ` +
+          `the response carried ${result.agents === undefined ? "no agents field" : `agents as ${typeof result.agents}`}`,
+        ["agent.list"],
+        undefined,
+        { code: "HERDR_MALFORMED_RESPONSE" },
+      );
+    }
+    return result.agents;
   }
 
   async agentGet(target: string): Promise<HerdrAgent | null> {

@@ -185,27 +185,34 @@ function herdrErrorCode(error: unknown): string | null {
   return error instanceof SlpRuntimeError ? error.herdrCode : null;
 }
 
+// room d117: a lead-only generation passes teamSupervisor: null, which drops
+// that seat from the plan entirely. Every consumer already iterates plan.roles,
+// so nothing downstream needs to know which shape produced the list. The
+// runtime pane is created outside this plan and stays in both shapes (d97).
 export function buildSlpTeamPlan(input: {
   generation: number;
   lead: SeatLaunch;
   projectPath: string;
   teamId: string;
-  teamSupervisor: SeatLaunch;
+  teamSupervisor: SeatLaunch | null;
 }): SlpTeamPlan {
   const projectPath = resolve(input.projectPath);
   const prefix = `slp:${input.teamId}:g${input.generation}`;
+  const teamSupervisor = input.teamSupervisor;
   return {
     generation: input.generation,
     projectPath,
     roles: [
-      {
-        autocompact: input.teamSupervisor.autocompact ?? null,
-        kind: input.teamSupervisor.harness,
-        label: `${prefix}:team-supervisor`,
-        name: `supervisor-${input.teamId}`,
-        profile: input.teamSupervisor.profile,
-        role: "team-supervisor",
-      },
+      ...(teamSupervisor
+        ? [{
+          autocompact: teamSupervisor.autocompact ?? null,
+          kind: teamSupervisor.harness,
+          label: `${prefix}:team-supervisor`,
+          name: `supervisor-${input.teamId}`,
+          profile: teamSupervisor.profile,
+          role: "team-supervisor" as const,
+        }]
+        : []),
       {
         autocompact: input.lead.autocompact ?? null,
         kind: input.lead.harness,

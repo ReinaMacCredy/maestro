@@ -1,5 +1,6 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { grantTrust } from "../src/plugins/plugin-trust.ts";
 
@@ -115,6 +116,38 @@ async function runCliBinary(
   return spawnCli(fixture, command, cwd, env, stdin);
 }
 
+// w718 (d31, d120): hostEnvironment() strips HERDR_*, but a caller-supplied
+// HOME override walked straight past that guard. herdrSocketPath() falls back
+// to <HOME>/.config/herdr/herdr.sock when HERDR_SOCKET_PATH is unset, so a
+// test that handed the CLI the real HOME reached the owner's live daemon and
+// spawned real teams into their session. The stripping was sound; the bypass
+// was HOME. Refuse any HOME outside the fixture that resolves to an existing
+// Herdr socket, unless the trusted-project valve is explicitly open - that
+// valve is what makes a deliberate live journey legible instead of ambient.
+export function assertNoLiveHerdrSocket(
+  fixture: Fixture,
+  childEnvironment: Record<string, string | undefined>,
+): void {
+  if (process.env.MAESTRO_HERDR_TRUSTED_PROJECT) return;
+  const home = childEnvironment.HOME;
+  if (!home) return;
+  const resolved = resolve(home);
+  if (resolved === resolve(fixture.home) || resolved.startsWith(resolve(fixture.root))) return;
+  if (childEnvironment.HERDR_SOCKET_PATH) {
+    throw new Error(
+      `test refused: HERDR_SOCKET_PATH ${childEnvironment.HERDR_SOCKET_PATH} is set outside the fixture`,
+    );
+  }
+  const socket = join(resolved, ".config", "herdr", "herdr.sock");
+  if (existsSync(socket)) {
+    throw new Error(
+      `test refused: HOME ${resolved} resolves to the live Herdr socket ${socket}; ` +
+        "a fixture CLI must not reach the owner's daemon (w718, d31). Set " +
+        "MAESTRO_HERDR_TRUSTED_PROJECT to opt into a deliberate live journey.",
+    );
+  }
+}
+
 async function spawnCli(
   fixture: Fixture,
   command: string[],
@@ -135,6 +168,7 @@ async function spawnCli(
       childEnvironment[name] = value;
     }
   }
+  assertNoLiveHerdrSocket(fixture, childEnvironment);
   const child = Bun.spawn(command, {
     cwd,
     env: childEnvironment,

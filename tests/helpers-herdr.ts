@@ -25,7 +25,22 @@ export interface FakeHerdrBehavior {
   closeWorkspaceWithLastTab?: boolean;
   closeWorkspace?: boolean;
   codexNotReadyAttempts?: number;
+  // Named JSON-RPC methods answered with a Herdr error response while the
+  // server stays up and its socket stays in place (w712, d871). Stopping the
+  // server is not a substitute: it also kills spawned children and removes
+  // the socket the CLI still needs. A real Herdr never turns an outage into
+  // an empty result, so a test that needs agent.list to fail must see the
+  // call throw rather than return [].
+  failMethods?: string[];
   failWorkspaceId?: string;
+  // Named methods answered SUCCESSFULLY with a result of the test's choosing
+  // (w717, d875): a protocol drift, which an error response cannot stage.
+  // `{ "agent.list": {} }` answers with no agents field at all and
+  // `{ "agent.list": { agents: "none" } }` with one that is not an array -
+  // the two shapes a caller cannot tell from "zero agents" once the client
+  // coerces them to []. Applied after failMethods, so a method either fails
+  // or answers malformed, not both.
+  malformedResults?: Record<string, Record<string, unknown>>;
   invalidAcknowledgementField?: "challenge" | "generation";
   spacedChallenge?: boolean;
   processInfo?: boolean;
@@ -335,6 +350,14 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       `invalid request: unknown variant \`${method}\`, expected one of ${knownMethods.map((known) => `\`${known}\``).join(", ")}`,
     );
   }
+  // After the unknown-method guard so a method the fake does not know still
+  // fails as invalid_request and keeps its HERDR_METHOD_MISSING mapping; this
+  // reaches the caller as an ordinary Herdr error response instead.
+  if (behavior.failMethods?.includes(method)) {
+    throw new FakeHerdrError("internal", `injected ${method} failure`);
+  }
+  const malformed = behavior.malformedResults?.[method];
+  if (malformed) return malformed as Params;
   switch (method) {
     case "ping":
       return { type: "pong", version: "0.8.2", protocol: state.protocol, capabilities: { live_handoff: true } };

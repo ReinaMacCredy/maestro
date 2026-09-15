@@ -73,6 +73,45 @@ test("herdr-client-request: one line per connection resolved by id, Herdr error 
   });
 });
 
+// w712, d871: the orphan predicate turns on telling a successful empty
+// agent.list apart from an outage, so the fixture must be able to fail one
+// named method while the server stays up and the socket stays in place.
+// stopFakeHerdrServers cannot stand in for this: it kills spawned children
+// and unlinks the socket the CLI still needs.
+test("herdr-fail-methods: a named method answered with a Herdr error makes agentList throw instead of returning an empty list, while the server stays up and every other method keeps serving; unset, the same call succeeds (w712, d871)", async () => {
+  await withFixture(async (fixture) => {
+    const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
+    const client = new HerdrClient({ ...process.env, ...fake.env, HOME: fixture.home });
+
+    // Two successful answers, one empty and one not. Neither is an outage.
+    expect(await client.agentList()).toEqual([]);
+    await editFakeHerdrState(fake, (state) => {
+      state.agents = [{ agent_status: "idle", name: "lead-probe", pane_id: "wZ:p1", workspace_id: "wZ" }];
+    });
+    expect((await client.agentList()).map((agent) => agent.name)).toEqual(["lead-probe"]);
+
+    // The outage. It must throw, and it must not degrade to [].
+    await setFakeHerdrBehavior(fake, { failMethods: ["agent.list"] });
+    const failure = await client.agentList().catch((error: unknown) => error);
+    expect(Array.isArray(failure)).toBe(false);
+    expect(failure).toBeInstanceOf(SlpRuntimeError);
+    expect((failure as SlpRuntimeError).herdrCode).toBe("internal");
+    expect((failure as SlpRuntimeError).code).not.toBe("HERDR_METHOD_MISSING");
+    expect((failure as SlpRuntimeError).message).toContain("agent.list");
+
+    // The server is still up and the socket is still in place: the whole
+    // reason this knob exists rather than stopping the server.
+    expect(existsSync(fake.socket)).toBe(true);
+    expect(await client.workspaceList()).toEqual([]);
+    expect(await client.agentGet("lead-probe")).toMatchObject({ name: "lead-probe" });
+
+    // Unset restores the successful answer on the same client.
+    await setFakeHerdrBehavior(fake, { failMethods: [] });
+    expect((await client.agentList()).map((agent) => agent.name)).toEqual(["lead-probe"]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+});
+
 test("herdr-client-subscribe: pushed events arrive over one open connection until closed (red 2)", async () => {
   await withFixture(async (fixture) => {
     const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
@@ -860,6 +899,32 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     // Restore again: the loss is noted once.
     await runCliAt(fixture, room, ["slp", "restore", "--json"], fake.env);
     expect(runtimeEntries(fixture)).toHaveLength(1);
+    // w713, d870: restore NEVER commits, however total the loss looks. At
+    // Herdr startup an agent.list that answers successfully but empty is
+    // indistinguishable from genuine loss, so restore records and stops
+    // there; only the event hook, triggered by a real pane death, may stop a
+    // generation. Every seat is gone here and the generation is still
+    // RUNNING with no STOP row at all.
+    const projectAfterRestore = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const roomAfterRestore = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
+    expect(
+      projectAfterRestore
+        .query<{ state: string }, []>("SELECT state FROM slp_local_teams")
+        .get()?.state,
+    ).toBe("RUNNING");
+    expect(roomAfterRestore.query<{ state: string }, []>("SELECT state FROM slp_teams").get()?.state).toBe("RUNNING");
+    expect(
+      projectAfterRestore
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_lifecycle_operations WHERE operation = 'STOP'")
+        .get()?.count,
+    ).toBe(0);
+    expect(
+      projectAfterRestore
+        .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM slp_work WHERE abandoned_at IS NOT NULL")
+        .get()?.count,
+    ).toBe(0);
+    projectAfterRestore.close();
+    roomAfterRestore.close();
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);

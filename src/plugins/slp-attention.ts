@@ -915,10 +915,21 @@ export async function registeredProjects(home = resolveHomeDirectory()): Promise
   return (await readFile(registry, "utf8")).split(/\r?\n/).filter((line) => line.trim() !== "");
 }
 
+// w713: the stop phases need the full ActiveLocalTeam shape `team stop`
+// selects, so a generation carries it here rather than being re-read. Every
+// added column is optional in an old store, so each is selected the way
+// teamRow already selects supervisor_pane_id: present, or an empty default.
+export interface RunningTeamRow extends TeamRow {
+  configuration_json: string;
+  pack_digest: string;
+  room_store_path: string;
+  runtime_pane_id: string;
+}
+
 interface RunningGeneration {
   projectPath: string;
   roles: RoleRow[];
-  team: TeamRow;
+  team: RunningTeamRow;
 }
 
 export function runningGenerations(projectPath: string): RunningGeneration[] {
@@ -927,9 +938,14 @@ export function runningGenerations(projectPath: string): RunningGeneration[] {
   const store = new Store(location.path, { readonly: true });
   try {
     if (!tableExists(store, "slp_local_teams") || !tableExists(store, "slp_local_roles")) return [];
+    const column = (name: string) =>
+      store.hasColumn("slp_local_teams", name) ? name : `'' AS ${name}`;
     return store.database
-      .query<TeamRow, []>(
-        `SELECT team_id, generation, project_path, state, workspace_id
+      .query<RunningTeamRow, []>(
+        `SELECT team_id, generation, project_path, state, workspace_id,
+                ${column("supervisor_pane_id")}, ${column("runtime_pane_id")},
+                ${column("room_store_path")}, ${column("configuration_json")},
+                ${column("pack_digest")}
          FROM slp_local_teams WHERE state = 'RUNNING' ORDER BY team_id, generation`,
       )
       .all()
@@ -1070,6 +1086,38 @@ export async function runSlpRestore(
   };
 }
 
+// d874 (superseding d871): a generation is orphaned only when a single
+// successful agent.list
+// shows neither its recorded lead row nor its recorded team-supervisor row,
+// matched on BOTH name and pane_id - the match runSlpRestore already uses.
+// Pane identity recorded in the project store survives a Herdr restart; the
+// workspace-label lookup is exactly what collapses when Herdr is down, which
+// is why the plan's workspace label is never consulted here. Narrowed to
+// those two seats rather than "every pane is gone": a generation whose Peers
+// are alive but whose Lead and Team Supervisor are both dead is precisely the
+// orphan, because no surviving seat can reach `maestro team stop`.
+// Returns the two dead seats, or null when it is not an orphan.
+async function orphanedSupervision(
+  client: HerdrClient,
+  generation: { roles: RoleRow[] },
+): Promise<string[] | null> {
+  // room d117: a lead-only generation has no team-supervisor row at all, and
+  // the old `if (!lead || !supervisor) return null` read that as "not an
+  // orphan", so such a team could never be auto-closed. The supervising seats
+  // are now whichever of the two this generation actually recorded; the Lead
+  // is still required, because a generation with no Lead row is a broken
+  // record rather than an orphan and must not be stopped on that evidence.
+  const lead = generation.roles.find((role) => role.role === "lead");
+  const supervisor = generation.roles.find((role) => role.role === "team-supervisor");
+  if (!lead) return null;
+  const supervising = supervisor ? [lead, supervisor] : [lead];
+  const agents = await client.agentList();
+  const alive = (role: RoleRow) =>
+    agents.some((agent) => agent.name === role.name && agent.pane_id === role.pane_id);
+  if (supervising.some(alive)) return null;
+  return supervising.map((role) => `${role.role} ${role.name}`);
+}
+
 // Item 2: the [[events]] safety net; a role pane dying while no runtime is
 // subscribed still records the loss and wakes the Team Supervisor.
 export async function runSlpEvent(
@@ -1097,23 +1145,94 @@ export async function runSlpEvent(
       continue;
     }
     for (const generation of generations) {
+      // w716 F6, left unfixed on purpose: Herdr can reissue a pane id, so a
+      // stale role row in one generation can match an event that belongs to
+      // another, and the second generation's orphan check then never runs.
+      // That direction is a MISSED stop, never a wrong one, and by d875 every
+      // ambiguity here resolves to not stopping - so the fix would have to
+      // buy something, and a pane id is the only identity the event carries.
       const seat = generation.roles.find((role) => role.pane_id === paneId);
       if (!seat) continue;
       const label = `${generation.team.team_id}:g${generation.team.generation}`;
       const directory = slpRuntimeDirectory(projectPath, generation.team.team_id, generation.team.generation);
-      if (await runtimeLockHolder(directory) !== null) {
-        return { data: { handled: false, runtime: true }, text: `${label}: the runtime handles ${kind} for ${seat.name}` };
+      const runtimeHolder = await runtimeLockHolder(directory);
+      // d874: the loss is recorded FIRST and is never suppressed. The event
+      // is Herdr's own positive evidence that this pane died and rests on
+      // nothing else; only the orphan conclusion below depends on agent.list.
+      // The two are different claims on different evidence, so they must not
+      // share one abort - suppressing the entry would lose the record of a
+      // pane death exactly when Herdr is flaky and this safety net is the
+      // only thing recording it.
+      if (runtimeHolder === null) {
+        const runtime = new AttentionRuntime({ environment, generation: generation.team.generation, projectPath, teamId: generation.team.team_id });
+        await runtime.load();
+        const store = openStore(projectPath, true);
+        try {
+          runtime.refreshRoles(store);
+        } finally {
+          store.close();
+        }
+        await runtime.handle({ data: { pane_id: paneId, workspace_id: generation.team.workspace_id }, event: kind });
       }
-      const runtime = new AttentionRuntime({ environment, generation: generation.team.generation, projectPath, teamId: generation.team.team_id });
-      await runtime.load();
-      const store = openStore(projectPath, true);
+      // d874 + d875: one successful agent.list, and every part of the orphan
+      // decision is read from that one answer. A HerdrClient turns a connect
+      // failure, a timeout, a closed connection, an error response and (since
+      // d875) a malformed successful response into a throw, and returns a
+      // list only after a well-formed success - so any of those aborts the
+      // COMMIT here with nothing committed, where reading the failure as an
+      // empty list would be reading it as total loss and would auto-kill a
+      // healthy team.
+      //
+      // d875 F3: caught at the hook boundary and turned into a clean exit
+      // carrying the reason. This does not weaken d874's ban - the ban is on
+      // treating a failed read as loss, and aborting is the opposite of
+      // concluding loss. What it fixes is that the predicate now runs on
+      // every role-pane loss, including the ones a subscribed runtime owns,
+      // so an uncaught throw would fail a hook that used to exit 0. The
+      // pane-loss entry above is already recorded and is untouched by this.
+      let dead: string[] | null;
       try {
-        runtime.refreshRoles(store);
-      } finally {
-        store.close();
+        dead = await orphanedSupervision(new HerdrClient(environment), generation);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        const record = runtimeHolder === null
+          ? `recorded ${kind} for ${seat.name}`
+          : `the runtime handles ${kind} for ${seat.name}`;
+        return {
+          data: {
+            aborted: "orphan-check",
+            reason: detail,
+            ...(runtimeHolder === null ? { handled: true, seat: seat.name } : { handled: false, runtime: true }),
+          },
+          text: `${label}: ${record}; orphan check aborted, nothing stopped: ${detail}`,
+        };
       }
-      await runtime.handle({ data: { pane_id: paneId, workspace_id: generation.team.workspace_id }, event: kind });
-      return { data: { handled: true, seat: seat.name }, text: `${label}: recorded ${kind} for ${seat.name}` };
+      if (!dead) {
+        // Unchanged for every pane loss that is not an orphan: a subscribed
+        // runtime owns the record, otherwise this hook just made it.
+        return runtimeHolder === null
+          ? { data: { handled: true, seat: seat.name }, text: `${label}: recorded ${kind} for ${seat.name}` }
+          : { data: { handled: false, runtime: true }, text: `${label}: the runtime handles ${kind} for ${seat.name}` };
+      }
+      // d870: this hook is the only point that both detects and may commit,
+      // so the commit is NOT deferred to a subscribed runtime - by d870 a
+      // runtime never commits, and waiting for one that never will is how the
+      // generation stays orphaned.
+      const reason =
+        `orphaned: ${label} lost ${dead.join(" and ")} (${kind} on ${seat.name} pane ${paneId}); ` +
+        `store: no lead or team-supervisor pane in agent.list`;
+      const { commitOrphanStop } = await import("./slp-v2.ts");
+      const stop = await commitOrphanStop(generation.team, reason, dead);
+      if (stop.outcome !== "committed") {
+        return {
+          data: { handled: false, orphaned: true, outcome: stop.outcome },
+          text: `${label}: orphaned, stop not taken (${stop.outcome})`,
+        };
+      }
+      return {
+        data: { abandonedWorkCount: stop.abandonedWorkCount, handled: true, orphaned: true, seat: seat.name, stopped: true },
+        text: `${label}: orphaned by ${dead.join(" and ")}; STOPPED, ${stop.abandonedWorkCount} work item(s) abandoned`,
+      };
     }
   }
   return { data: { handled: false }, text: `no running generation owns pane ${paneId}` };
