@@ -5292,7 +5292,7 @@ export const slpV2Plugin: BuiltInPlugin = {
             "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
             "--reason": {
               description:
-                "Team Supervisor: the closing report shown to the Hub. Hub: why unfinished work is abandoned by emergency stop.",
+                "Team Supervisor, or the Hub for a lead-only team (w722): the closing report shown on the Hub ledger. Hub with --emergency: why unfinished work is abandoned.",
               value: true,
             },
           },

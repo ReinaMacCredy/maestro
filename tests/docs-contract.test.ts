@@ -459,3 +459,69 @@ test("slp-doctrine: the shipped Lead mandate makes self-work the default and Pee
   ).split("\n");
   expect(publicSurface).toEqual([...slpOperations]);
 });
+
+// room d122-d126: the collaboration and autonomy layer is doctrine text plus
+// three small mechanisms (work note --owner, maestro owner, decide
+// --provisional / decision confirm). The pack version, marker lines and the
+// nine-operation surface stay byte-unchanged: `maestro owner` and
+// `maestro decision confirm` are Hub-room verbs like `decision`, not SLP
+// operations.
+test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner walk-in, presence and provisional rulings, and every profile knows its part (room d122-d126)", async () => {
+  const root = join(import.meta.dir, "..");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const read = async (...parts: string[]) => Bun.file(join(root, "src", "plugins", "resources", ...parts)).text();
+  const pack = await read("SLP.md");
+  const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
+  const hub = unwrap(/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "");
+
+  // d122: one seat at a time, every seat filters, the Team Supervisor embodies
+  // the owner, the Hub takes its part in a lead-only generation.
+  expect(shared).toContain("A `--blocked` fork climbs one seat at a time and every seat filters");
+  expect(shared).toContain("a technical question is answered by the seat that owns it (a Lead decides)");
+  expect(shared).toContain("The Team Supervisor is the owner's embodiment inside its team");
+  expect(shared).toContain("asks the Hub with its own `--blocked` note only when it cannot");
+  expect(shared).toContain("The Hub decides what a Hub Supervisor may decide and puts to the owner only what is hers");
+  expect(shared).toContain("in a lead-only generation the Hub takes the Team Supervisor's part for its Lead");
+  // d123: the walk-in note.
+  expect(shared).toContain('record it first as `maestro work note <id> "owner asked: <what>" --owner`');
+  expect(shared).toContain("a provenance flag exclusive with `--blocked` and `--rework` that stops nobody, sets no blocked flag");
+  expect(shared).toContain("pushes `[from <role>][<work-id> OWNER]` one seat up");
+  expect(shared).toContain("Inside the item's objective act at once; outside it, record the `--owner` note and do not widen the item: the Lead reads the push and opens new work");
+  expect(shared).toContain("A walk-in never rewrites an objective or an acceptance, and never redefines a seat's mandate");
+
+  // d124, d125 and the two w722 leftovers live in the Hub Supervisor section.
+  expect(hub).toContain("`maestro owner here|away`, a Hub-room verb like `decision`, not an SLP operation");
+  expect(hub).toContain("no hook and no other seat infers it, and a `[from <role>]` push line never counts as the owner");
+  expect(hub).toContain("`maestro owner` prints it, and the Hub prompt line and `maestro status` carry `owner: here|away`");
+  expect(hub).toContain("Presence changes only who answers an owner-scope `--blocked` note that has reached you");
+  expect(hub).toContain("`here`, you wait for the owner; `away`, you resolve it at once through advisor");
+  expect(hub).toContain('`maestro decide "<choice>" --why "<reason>" --work <id> --provisional`');
+  expect(hub).toContain("`maestro status` lists every provisional ruling until she confirms it with `maestro decision confirm <id>` or supersedes it with a decision that `--replaces` it");
+  expect(hub).toContain("`away` never grants commit, push, tag, release, install mid-generation, or any destructive change");
+  expect(hub).toContain("You also run the normal stop of a lead-only team, `maestro team stop <team-id> --reason \"<closing report>\"`");
+  expect(hub).toContain("a supervised team you stop with `--emergency` only");
+
+  // Every seat profile knows the walk-in and its place on the ladder.
+  const lead = unwrap(await read("profiles", "lead.md"));
+  expect(lead).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
+  expect(lead).toContain("outside it open new work");
+  expect(lead).toContain("never widen the item");
+  expect(lead).toContain("a technical fork you own you decide");
+  const supervisor = unwrap(await read("profiles", "team-supervisor.md"));
+  expect(supervisor).toContain("You are the owner's embodiment inside the team");
+  expect(supervisor).toContain("by your own judgment or through advisor");
+  expect(supervisor).toContain("only what you cannot resolve");
+  expect(supervisor).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
+  const peer = unwrap(await read("profiles", "peer.md"));
+  expect(peer).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
+  expect(peer).toContain("the Lead opens the work");
+
+  // Byte-unchanged: version, marker lines, and the locked surface.
+  expect(pack).toContain("<!-- slp:version=3 -->");
+  expect(pack).toContain("<!-- slp:profile:team-supervisor=team-supervisor -->\n<!-- slp:profile:lead=lead -->\n<!-- slp:profile:peer=peer -->");
+  const publicSurface = (
+    pack.match(/The public SLP surface is exactly:\n\n```text\n([\s\S]*?)\n```/)?.[1] ?? ""
+  ).split("\n");
+  expect(publicSurface).toEqual([...slpOperations]);
+  expect(publicSurface).not.toContain("maestro owner");
+});

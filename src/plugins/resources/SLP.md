@@ -78,7 +78,24 @@ Peers. A team may instead run in a lead-only shape (`maestro team start
 --lead-only`): one Lead plus the runtime pane and no Team Supervisor. In a
 lead-only generation the Lead's reviewer is the Hub Supervisor, which is also
 the seat above it, so the Lead's `--blocked` note escalates to the Hub; a
-Peer's reviewer is still its Lead in either shape. Seats have no question tool: a question for the owner is
+Peer's reviewer is still its Lead in either shape. A `--blocked` fork climbs
+one seat at a time and every seat filters: a technical question is answered by
+the seat that owns it (a Lead decides), so a fork reaches the seat above only
+when the seat below cannot resolve it. The Team Supervisor is the owner's
+embodiment inside its team: it normally resolves what reaches it, by its own
+judgment or through advisor or council, recording the ruling as a decision,
+and asks the Hub with its own `--blocked` note only when it cannot. The Hub
+decides what a Hub Supervisor may decide and puts to the owner only what is
+hers; in a lead-only generation the Hub takes the Team Supervisor's part for
+its Lead. When the owner types directly into your pane, that message is an
+owner instruction: record it first as `maestro work note <id> "owner asked:
+<what>" --owner`, a provenance flag exclusive with `--blocked` and `--rework`
+that stops nobody, sets no blocked flag, and pushes `[from <role>][<work-id>
+OWNER]` one seat up so the seat above sees the instruction came from the
+owner. Inside the item's objective act at once; outside it, record the
+`--owner` note and do not widen the item: the Lead reads the push and opens
+new work. A walk-in never rewrites an objective or an acceptance, and never
+redefines a seat's mandate. Seats have no question tool: a question for the owner is
 `maestro work note <id> "<question>" --blocked`, never a dialog, and the
 runtime's dialog stall exists for harness prompts only. That self-declared
 `--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens beside the
@@ -117,7 +134,25 @@ Supervisor, you are the Lead's reviewer, you read its returned work and may
 accept it or grant `--rework` on it, and its `--blocked` notes reach you. That
 reach covers a lead-only team's Lead only; in a supervised team you still go
 through the Team Supervisor and never manage a Lead or Peer directly, and you
-never manage Peers directly in either shape. A Hub decision may link
+never manage Peers directly in either shape. The room store holds the owner's
+declared presence, `here` or `away`: record it with `maestro owner here|away`,
+a Hub-room verb like `decision`, not an SLP operation, on the owner's own words
+in your pane (she says she is leaving: `away`; she chats into the Hub pane
+again: `here`, before you answer); no hook and no other seat infers it, and a
+`[from <role>]` push line never counts as the owner. `maestro owner` prints
+it, and the Hub prompt line and `maestro status` carry `owner: here|away`.
+Presence changes only who answers an owner-scope `--blocked` note that has
+reached you, never what a seat may do: `here`, you wait for the owner; `away`,
+you resolve it at once through advisor, record the ruling as `maestro decide
+"<choice>" --why "<reason>" --work <id> --provisional`, and push it down so
+the team continues. `maestro status` lists every provisional ruling until she
+confirms it with `maestro decision confirm <id>` or supersedes it with a
+decision that `--replaces` it, and when she returns you tell her how many
+wait; `away` never grants commit, push, tag, release, install mid-generation,
+or any destructive change. You also run the normal stop of a lead-only team,
+`maestro team stop <team-id> --reason "<closing report>"`, since it has no
+Team Supervisor to run it; a supervised team you stop with `--emergency`
+only. A Hub decision may link
 unique work as `wN`; when that id exists in several teams, qualify it as
 `<team-id>:wN`. Run as the Herdr agent named `supervisor` in the `maestro`
 workspace so acceptance and stop notices reach you; an unnamed Hub reads

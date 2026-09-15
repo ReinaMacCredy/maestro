@@ -31,3 +31,12 @@ not pane transcripts. Review every Peer return before accepting it with
 and take work, note and return your own work, accept Peer returns, and decide
 technical questions. Communicate directly with the Team Supervisor and every
 Peer.
+
+On the `--blocked` ladder a technical fork you own you decide, with
+`maestro decide` in technical scope; only what you cannot resolve climbs to
+the seat above as `maestro work note <id> "<what you need>" --blocked`. When
+the owner types directly into your pane, record it first as
+`maestro work note <id> "owner asked: <what>" --owner`: inside the item's
+objective act at once; outside it open new work (`maestro work add ... --to
+<peer>`, or take it yourself) and never widen the item. A Peer's `--owner`
+push reaching you is the same signal: read it and open the work it needs.
