@@ -11,6 +11,44 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.123.0] - 2026-09-16
+
+### Added
+
+- `maestro team start --lead-only` opens one Lead pane and the runtime pane
+  and no Team Supervisor. The shape is pinned in the generation's
+  configuration; the Hub Supervisor reviews the Lead's returned work from
+  `~/maestro` through the same transition code a Team Supervisor uses, and
+  the Peer boundary is unchanged (room d117, d118).
+- Orphan auto-close: a RUNNING generation whose Lead and Team Supervisor panes
+  are both gone from a successful `agent.list` is stopped by maestro itself
+  from the Herdr events hook, its unfinished work abandoned the way an
+  emergency stop already does; `maestro status` flags a report-only
+  `ORPHANED?` verdict when Herdr cannot be reached (d869-d875).
+
+### Fixed
+
+- The live Herdr test journey no longer reaches the owner's daemon from a team
+  pane: it requires `MAESTRO_HERDR_TRUSTED_PROJECT` alongside `HERDR_ENV`,
+  `withHerdrFixture` throws instead of silently falling back, the fixture home
+  is applied after caller overrides so `herdrSocketPath` never resolves to the
+  live socket, and the journey records its team id before the stderr envelope
+  assertion so its cleanup stop is reachable (d876).
+- `agentList` throws on a successful Herdr answer whose `agents` field is
+  missing or not an array instead of coercing it to an empty list, which the
+  orphan detector would have read as a dead team.
+- A lead-only generation, which records no Team Supervisor seat, is now
+  eligible for orphan detection instead of being skipped.
+
+### Verification notes
+
+- Full suite on the release tree: 74 files, 682 pass, 1 skip, 2 pre-existing
+  failures (recipe command-prefix lint, room installer OWNER.md wiring);
+  `tsc` clean. The leak gate was reproduced from a Team Supervisor pane and
+  from the Hub pane: the live journey skips and no team workspace appears.
+- The RETURNED push to a live Hub in a lead-only team was not exercised on a
+  real team.
+
 ## [0.122.0] - 2026-09-15
 
 ### Changed
