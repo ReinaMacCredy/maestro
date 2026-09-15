@@ -414,3 +414,48 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(recipe).not.toContain("The Team Supervisor, Lead, and Peers may talk directly");
   expect(recipe).toContain("recorded work notes and returns");
 });
+
+// room d118: the Lead self-works its items by default and opens a Peer the way
+// a harness opens a sub-agent; the Lead-must-not-implement rule is replaced by
+// "may implement its own items and any item not already assigned to a Peer".
+// room d117: a generation may run lead-only, where the Hub Supervisor is the
+// Lead's reviewer; the supervised shape stays the default.
+test("slp-doctrine: the shipped Lead mandate makes self-work the default and Peers sub-agent-shaped, and the pack carries the lead-only shape in the shared contract and the Hub Supervisor section (room d117, room d118)", async () => {
+  const root = join(import.meta.dir, "..");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const lead = unwrap(await Bun.file(join(root, "src", "plugins", "resources", "profiles", "lead.md")).text());
+
+  // d118: implementing is the Lead's default path, not the Peer brief.
+  expect(lead).toContain("Working your own items is the default path");
+  expect(lead).toContain("You may implement your own items and any item you have not already assigned to a Peer");
+  expect(lead).toContain("Open a Peer the way a harness opens a sub-agent, never as the default path for every item");
+  expect(lead).not.toContain("never implement a Peer's item yourself");
+  expect(lead).not.toContain("Brief every Peer");
+  // What d118 does not touch: an item already delegated, context hygiene,
+  // review of every return, and acceptance that is never the Lead's own.
+  expect(lead).toContain("An item that is already a Peer's stays the Peer's");
+  expect(lead).toContain("read returns through `maestro status <work-id>`, not pane transcripts");
+  expect(lead).toContain("Review every Peer return before accepting it with `maestro work accept`");
+  expect(lead).toContain("you never accept your own");
+
+  const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
+  const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
+  expect(shared).toContain("The supervised shape is the default");
+  expect(shared).toContain("lead-only shape (`maestro team start --lead-only`): one Lead plus the runtime pane and no Team Supervisor");
+  expect(shared).toContain("the Lead's reviewer is the Hub Supervisor");
+  expect(shared).toContain("the Lead's `--blocked` note escalates to the Hub");
+  expect(shared).toContain("a Peer's reviewer is still its Lead in either shape");
+
+  const hub = unwrap(/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "");
+  expect(hub).toContain("you are the Lead's reviewer");
+  expect(hub).toContain("accept it or grant `--rework` on it");
+  expect(hub).toContain("That reach covers a lead-only team's Lead only");
+  expect(hub).toContain("in a supervised team you still go through the Team Supervisor");
+
+  // The shape is doctrine text only: the locked surface and pack version stand.
+  expect(pack).toContain("<!-- slp:version=3 -->");
+  const publicSurface = (
+    pack.match(/The public SLP surface is exactly:\n\n```text\n([\s\S]*?)\n```/)?.[1] ?? ""
+  ).split("\n");
+  expect(publicSurface).toEqual([...slpOperations]);
+});

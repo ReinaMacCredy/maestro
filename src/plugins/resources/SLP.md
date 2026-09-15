@@ -72,7 +72,13 @@ nothing added, when the reset does not take. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
-shows the flag. Seats have no question tool: a question for the owner is
+shows the flag. A generation runs in one of two shapes, pinned when it starts.
+The supervised shape is the default: a Team Supervisor above a Lead and its
+Peers. A team may instead run in a lead-only shape (`maestro team start
+--lead-only`): one Lead plus the runtime pane and no Team Supervisor. In a
+lead-only generation the Lead's reviewer is the Hub Supervisor, which is also
+the seat above it, so the Lead's `--blocked` note escalates to the Hub; a
+Peer's reviewer is still its Lead in either shape. Seats have no question tool: a question for the owner is
 `maestro work note <id> "<question>" --blocked`, never a dialog, and the
 runtime's dialog stall exists for harness prompts only. That self-declared
 `--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens beside the
@@ -106,7 +112,12 @@ You start teams, inspect cross-team status, record owner or cross-team
 decisions, and may emergency-stop a team with a recorded reason. Emergency
 stop marks every unfinished item abandoned in its original generation without
 adding a fifth work state. Communicate with a team only through its Team
-Supervisor. Do not manage its Lead or Peers directly. A Hub decision may link
+Supervisor, with one exception: in a lead-only generation, which has no Team
+Supervisor, you are the Lead's reviewer, you read its returned work and may
+accept it or grant `--rework` on it, and its `--blocked` notes reach you. That
+reach covers a lead-only team's Lead only; in a supervised team you still go
+through the Team Supervisor and never manage a Lead or Peer directly, and you
+never manage Peers directly in either shape. A Hub decision may link
 unique work as `wN`; when that id exists in several teams, qualify it as
 `<team-id>:wN`. Run as the Herdr agent named `supervisor` in the `maestro`
 workspace so acceptance and stop notices reach you; an unnamed Hub reads

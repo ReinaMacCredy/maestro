@@ -99,6 +99,17 @@ class FakeHerdrError extends Error {
   }
 }
 
+// w722: a live Herdr answers tab.list and pane.list scoped to a workspace it
+// no longer has with workspace_not_found (herdr-server.log 2026-09-15), never
+// with an empty list; a fake that answered [] hid the non-atomic stop of a
+// lead-only team whose workspace auto-closed with its last tab.
+function requireWorkspace(state: Params, workspaceId: unknown): void {
+  if (workspaceId === undefined || workspaceId === null) return;
+  if (!state.workspaces.some((candidate: Params) => candidate.workspace_id === workspaceId)) {
+    throw new FakeHerdrError("workspace_not_found", `workspace not found: ${String(workspaceId)}`);
+  }
+}
+
 interface FakeServer {
   children: Map<string, ReturnType<typeof Bun.spawn>>;
   fixture: Fixture;
@@ -409,6 +420,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       return { type: "ok" };
     }
     case "tab.list":
+      requireWorkspace(state, params.workspace_id);
       return {
         type: "tab_list",
         tabs: state.tabs.filter((candidate: Params) => !params.workspace_id || candidate.workspace_id === params.workspace_id),
@@ -446,6 +458,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       return { type: "ok" };
     }
     case "pane.list":
+      requireWorkspace(state, params.workspace_id);
       return {
         type: "pane_list",
         panes: state.panes.filter((candidate: Params) => !params.workspace_id || candidate.workspace_id === params.workspace_id),

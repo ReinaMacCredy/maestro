@@ -516,3 +516,21 @@ test("profile-shadow-composed: a frontmatter-only peer shadow leaves the compose
     expect((await claudeRender(fixture, "peer")).frontmatter).toContain("\nmodel: opus");
   });
 }, 40_000);
+
+test("lead-mandate-rendered: the installed maestro-lead seat carries room d118's self-work default and room d117's lead-only reviewer line from the shared contract", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+    // The doctrine has to reach the seat as launched, not just the source file.
+    const rendered = unwrap((await claudeRender(fixture, "lead")).body);
+    expect(rendered).toContain("Working your own items is the default path");
+    expect(rendered).toContain("Open a Peer the way a harness opens a sub-agent");
+    expect(rendered).toContain("the Lead's reviewer is the Hub Supervisor");
+    expect(rendered).not.toContain("never implement a Peer's item yourself");
+
+    const codexSeat = unwrap(await readFile(join(fixture.home, ".codex", "maestro-lead.config.toml"), "utf8"));
+    expect(codexSeat).toContain("Working your own items is the default path");
+  });
+}, 30_000);

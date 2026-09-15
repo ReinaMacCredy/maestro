@@ -3716,6 +3716,18 @@ function reserveStop(
       }
     } else {
       requireRunningState(store, team);
+      // w722: a normal stop never abandons work, whoever runs it - the Hub
+      // Supervisor's lead-only stop is refused here as the helper's is above.
+      if (!input.emergency) {
+        const unfinished = unfinishedWork(store, team);
+        if (unfinished.length > 0) {
+          throw new CliError(
+            "TEAM_UNFINISHED",
+            `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
+            { unfinished },
+          );
+        }
+      }
     }
 
     const pending = lifecycleRow(store, team.team_id, team.generation, "STOP");
@@ -3958,9 +3970,13 @@ async function stopTeam(
   const requestedTeam = requiredPosition(invocation, 0, "team id");
   const emergency = invocation.options.emergency === true;
   const requestedReason = stringOption(invocation, "reason");
-  const emergencyReason = emergency
+  // Under --emergency the reason says why unfinished work is abandoned; on a
+  // normal stop it is the closing report (stopSuffix reads it back as
+  // "(supervisor): ..."), which w722 lets the Hub Supervisor file for a
+  // lead-only generation exactly as a Team Supervisor files it.
+  const stopReason = emergency
     ? requestedReason ?? "Hub Supervisor emergency stop"
-    : "";
+    : requestedReason ?? "";
   const proxy = stopProxyEnvironment();
   if (!isRoom(context.store.database)) {
     if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper must run from its Hub");
@@ -3980,18 +3996,13 @@ async function stopTeam(
     return requestNormalStop(context, runtime, actor, requestedReason ?? "");
   }
 
-  if (requestedReason !== undefined && !emergency) {
-    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
-  }
-  if (!emergency && !proxy) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      "Hub Supervisor may stop a team only with --emergency; normal stop belongs to Team Supervisor",
-    );
-  }
   if (emergency && proxy) {
     throw new CliError("INVALID_STOP_GRANT", "stop helper cannot claim emergency authority");
   }
+  // A Hub `team stop` with neither --emergency nor a helper grant is the
+  // normal stop; whether the Hub may run it depends on the shape of the team
+  // it names, which is read below.
+  const hubNormalStop = !emergency && !proxy;
   migrateRoom(context.store);
   if (!tableExists(context.store, "slp_teams")) {
     throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
@@ -4005,6 +4016,23 @@ async function stopTeam(
     )
     .get(requestedTeam);
   if (!roomTeam) throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
+  // w722, room d117: a lead-only generation has no Team Supervisor to run the
+  // normal stop, and the Hub Supervisor is the seat above its Lead, so from
+  // ~/maestro that seat performs the normal stop itself - the same phases and
+  // the same non-emergency STOPPED record a Team Supervisor's stop commits,
+  // refused on unfinished work by reserveStop exactly as that stop is. A
+  // supervised team keeps d72's boundary: the Hub stops it with --emergency
+  // only, and --reason without --emergency stays the Team Supervisor's option.
+  const hubLeadOnlyStop = hubNormalStop && teamShape(roomTeam.configuration_json) === "lead-only";
+  if (requestedReason !== undefined && !emergency && !hubLeadOnlyStop) {
+    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
+  }
+  if (hubNormalStop && !hubLeadOnlyStop) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      "Hub Supervisor may stop a team only with --emergency; normal stop belongs to Team Supervisor",
+    );
+  }
   if (proxy && canonicalCheckoutRoot(proxy.projectPath) !== roomTeam.project_path) {
     throw new CliError("INVALID_STOP_GRANT", "stop helper project does not match its Hub team");
   }
@@ -4036,10 +4064,10 @@ async function stopTeam(
     if (roomTeam.state === "STOPPED") {
       if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
       await runtime.stop(await stopPlan(team), stopRoles(projectStore, team));
-      context.sessions.record("team.stop.emergency");
+      context.sessions.record(emergency ? "team.stop.emergency" : "team.stop");
       return {
         data: {
-          emergency: true,
+          emergency,
           team: {
             generation: team.generation,
             projectPath: team.project_path,
@@ -4061,7 +4089,7 @@ async function stopTeam(
         emergency,
         ownerToken,
         proxyToken: proxy?.token ?? null,
-        reason: emergencyReason,
+        reason: stopReason,
       });
       if (reservation.kind !== "wait") break;
       if (Date.now() >= deadline) {

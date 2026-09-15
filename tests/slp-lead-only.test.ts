@@ -1,7 +1,16 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { installFakeHerdr, readFakeHerdrState } from "./helpers-herdr.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
+import {
+  fakeHerdrCommands,
+  installFakeHerdr,
+  readFakeHerdrState,
+  setFakeHerdrBehavior,
+} from "./helpers-herdr.ts";
 import { runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 // room d117 (store at ~/maestro): `maestro team start` gains a lead-only shape
@@ -321,5 +330,261 @@ test("lead-only: room d117 moves only the boundary above the Lead - a Peer's wor
     );
     expect(accepted.exitCode).toBe(0);
     expect(envelope<{ work: { state: string } }>(accepted.stdout).work.state).toBe("DONE");
+  });
+});
+
+// w722 DEFECT 1: a lead-only generation has no Team Supervisor, so nothing
+// could run the normal stop; the Hub Supervisor, which room d117 makes the
+// seat above the Lead, was left with --emergency as its only way to close a
+// finished team. From ~/maestro, `team stop <id>` without --emergency now
+// performs the Team Supervisor's normal stop for that shape: the same phases,
+// the same non-emergency STOPPED recording, refused while work is unfinished.
+
+async function finishLeadWork(
+  fixture: Fixture,
+  started: Started,
+): Promise<void> {
+  const lead = started.data.team.roles.find((role) => role.role === "lead")!;
+  const leadEnvironment = { ...started.fake.env, HERDR_PANE_ID: lead.paneId };
+  const workId = started.data.work.id;
+  expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+    .toBe(0);
+  expect(
+    (await runCliAt(fixture, fixture.repo, ["work", "return", workId, "done"], leadEnvironment))
+      .exitCode,
+  ).toBe(0);
+}
+
+// The runtime pane child may still be releasing the project store when the
+// stop returns, so a read-only assertion waits on the lock instead of
+// reporting SQLITE_BUSY as a test failure.
+function openReadonly(path: string): Database {
+  const database = new Database(path, { readonly: true });
+  database.exec("PRAGMA busy_timeout = 5000");
+  return database;
+}
+
+function localTeamState(fixture: Fixture, teamId: string, generation: number): string | undefined {
+  const database = openReadonly(join(fixture.repo, ".maestro", "maestro.db"));
+  try {
+    return database
+      .query<{ state: string }, [string, number]>(
+        "SELECT state FROM slp_local_teams WHERE team_id = ? AND generation = ?",
+      )
+      .get(teamId, generation)?.state;
+  } finally {
+    database.close();
+  }
+}
+
+test("lead-only: the Hub Supervisor closes a finished lead-only team with a normal team stop, committed STOPPED without emergency and with the supervisor's closing-report semantics (w722, room d117)", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, true);
+    const { data, fake, room } = started;
+    await finishLeadWork(fixture, started);
+    expect((await runCliAt(fixture, room, ["work", "accept", data.work.id], fake.env)).exitCode).toBe(0);
+
+    const reason = "all green: the one item is accepted";
+    const stopped = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--reason", reason, "--json"],
+      fake.env,
+    );
+    expect(stopped.exitCode).toBe(0);
+    const result = envelope<{ emergency: boolean; team: { state: string } }>(stopped.stdout);
+    expect(result.emergency).toBe(false);
+    expect(result.team.state).toBe("STOPPED");
+    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("STOPPED");
+
+    // The committed STOP row is the normal one: the Hub Supervisor as actor,
+    // emergency 0, the closing report as its reason - what a Team Supervisor's
+    // normal stop records in a supervised team, less the seat that is absent.
+    const hub = openReadonly(join(room, ".maestro", "maestro.db"));
+    try {
+      expect(
+        hub
+          .query<{ actor: string; emergency: number; phase: string; reason: string }, [string]>(
+            `SELECT actor, emergency, phase, reason FROM slp_lifecycle_operations
+             WHERE operation = 'STOP' AND team_id = ?`,
+          )
+          .get(data.team.teamId),
+      ).toEqual({ actor: "hub-supervisor", emergency: 0, phase: "COMMITTED", reason });
+      expect(
+        hub
+          .query<{ operation: string }, [string]>(
+            "SELECT operation FROM slp_activity WHERE team_id = ? AND target_type = 'team'",
+          )
+          .all(data.team.teamId)
+          .map((row) => row.operation),
+      ).toEqual(["team.start", "team.stop"]);
+    } finally {
+      hub.close();
+    }
+
+    // Nothing was abandoned: this was not an emergency.
+    const project = openReadonly(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      expect(
+        project
+          .query<{ abandoned_at: string | null }, [string]>(
+            "SELECT abandoned_at FROM slp_work WHERE id = ?",
+          )
+          .get(data.work.id)?.abandoned_at,
+      ).toBeNull();
+    } finally {
+      project.close();
+    }
+
+    const status = await runCliAt(fixture, room, ["status"], fake.env);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain(`STOPPED (supervisor): ${reason}`);
+    expect(status.stdout).not.toContain("(emergency)");
+  });
+});
+
+test("lead-only: the Hub's normal stop is refused while the team holds unfinished work, exactly as the supervised normal stop is, and --emergency keeps its meaning (w722)", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, true);
+    const { data, fake, room } = started;
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", data.work.id], leadEnvironment)).exitCode)
+      .toBe(0);
+
+    const refused = await runCliAt(fixture, room, ["team", "stop", data.team.teamId, "--json"], fake.env);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stderr).toContain("TEAM_UNFINISHED");
+    expect(refused.stderr).toContain(`${data.work.id} [ACTIVE]`);
+    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("RUNNING");
+
+    // The refusal wrote no STOP row: the next stop starts clean.
+    const hub = openReadonly(join(room, ".maestro", "maestro.db"));
+    try {
+      expect(
+        hub
+          .query<{ count: number }, [string]>(
+            "SELECT count(*) AS count FROM slp_lifecycle_operations WHERE operation = 'STOP' AND team_id = ?",
+          )
+          .get(data.team.teamId)?.count,
+      ).toBe(0);
+    } finally {
+      hub.close();
+    }
+
+    const emergency = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--emergency", "--reason", "abandoning w722 check", "--json"],
+      fake.env,
+    );
+    expect(emergency.exitCode).toBe(0);
+    expect(envelope<{ emergency: boolean; team: { state: string } }>(emergency.stdout)).toMatchObject({
+      emergency: true,
+      team: { state: "STOPPED" },
+    });
+    const stopped = openReadonly(join(room, ".maestro", "maestro.db"));
+    try {
+      expect(
+        stopped
+          .query<{ actor: string; emergency: number; phase: string }, [string]>(
+            "SELECT actor, emergency, phase FROM slp_lifecycle_operations WHERE operation = 'STOP' AND team_id = ?",
+          )
+          .get(data.team.teamId),
+      ).toEqual({ actor: "hub-supervisor", emergency: 1, phase: "COMMITTED" });
+    } finally {
+      stopped.close();
+    }
+    const project = openReadonly(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      expect(
+        project
+          .query<{ abandonment_reason: string | null }, [string]>(
+            "SELECT abandonment_reason FROM slp_work WHERE id = ?",
+          )
+          .get(data.work.id)?.abandonment_reason,
+      ).toBe("abandoning w722 check");
+    } finally {
+      project.close();
+    }
+  });
+});
+
+test("lead-only: a supervised team's Hub stop stays --emergency only, even once its work is DONE (d72 survives w722)", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, false);
+    const { data, fake, room } = started;
+    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    await finishLeadWork(fixture, started);
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "accept", data.work.id], {
+        ...fake.env,
+        HERDR_PANE_ID: supervisor.paneId,
+      })).exitCode,
+    ).toBe(0);
+
+    const refused = await runCliAt(fixture, room, ["team", "stop", data.team.teamId, "--json"], fake.env);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stderr).toContain("ROLE_FORBIDDEN");
+    expect(refused.stderr).toContain("Team Supervisor");
+    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("RUNNING");
+
+    // --reason without --emergency is still not the Hub's option in this shape.
+    const reasoned = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--reason", "not the Hub's call", "--json"],
+      fake.env,
+    );
+    expect(reasoned.exitCode).toBe(1);
+    expect(reasoned.stderr).toContain("INVALID_OPTION");
+  });
+});
+
+// w722 DEFECT 2: in a lead-only team no Team Supervisor pane keeps the
+// workspace alive, so Herdr auto-closes it when the last seat tab closes
+// (herdr-server.log 2026-09-15T17:24:23: three tab.close, then
+// workspace.close), and the remaining-pane check that follows saw
+// workspace_not_found before the store commit. The panes were dead, the store
+// still said RUNNING, and status recommended the very command that had just
+// failed. A workspace that disappears during teardown is a workspace that is
+// torn down: the stop proceeds to its commit on the first call.
+test("lead-only: a workspace that auto-closes with its last tab lets team stop commit STOPPED on the first call, transcript cleaned (w722)", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, true);
+    const { data, fake, room } = started;
+    await finishLeadWork(fixture, started);
+    expect((await runCliAt(fixture, room, ["work", "accept", data.work.id], fake.env)).exitCode).toBe(0);
+
+    const runtimeDirectory = slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation);
+    await mkdir(runtimeDirectory, { recursive: true });
+    await writeFile(join(runtimeDirectory, "state.json"), "{}\n");
+    await setFakeHerdrBehavior(fake, { closeWorkspaceWithLastTab: true });
+    const commandsBefore = (await fakeHerdrCommands(fake)).length;
+
+    const stopped = await runCliAt(fixture, room, ["team", "stop", data.team.teamId, "--json"], fake.env);
+    expect(stopped.exitCode, stopped.stderr).toBe(0);
+    expect(envelope<{ emergency: boolean; team: { state: string } }>(stopped.stdout)).toMatchObject({
+      emergency: false,
+      team: { state: "STOPPED" },
+    });
+    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("STOPPED");
+    expect(existsSync(runtimeDirectory)).toBe(false);
+
+    // The workspace really did vanish under the stop, and the stop noticed
+    // rather than assuming: it asked Herdr, got workspace_not_found, and went on.
+    const after = await readFakeHerdrState(fake);
+    expect(
+      (after.workspaces as Array<{ workspace_id: string }>)
+        .some((workspace) => workspace.workspace_id === data.team.workspaceId),
+    ).toBe(false);
+    const stopCommands = (await fakeHerdrCommands(fake)).slice(commandsBefore);
+    expect(stopCommands.filter((command) => command[0] === "tab" && command[1] === "close").length)
+      .toBeGreaterThan(0);
+
+    const status = await runCliAt(fixture, room, ["status"], fake.env);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain("STOPPED");
+    expect(status.stdout).not.toContain("ORPHANED?");
   });
 });

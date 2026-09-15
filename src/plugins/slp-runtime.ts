@@ -1145,8 +1145,41 @@ export class HerdrSlpRuntime {
       );
     }
     const workspaceId = matchingWorkspaces[0].workspace_id;
-    const tabs = await this.tabs(workspaceId);
-    const panes = await this.panes(workspaceId);
+    // w722: Herdr closes a workspace on its own when its last tab closes, and
+    // a lead-only generation has no Team Supervisor tab to outlive the Lead
+    // and runtime panes, so the workspace can vanish under this teardown at
+    // any step after the first tab.close (herdr-server.log 2026-09-15: three
+    // tab.close, then workspace.close). A vanished workspace is a torn-down
+    // one: every Herdr call below that finds it gone, and workspace.list
+    // agrees, counts as done rather than failing the stop between dead panes
+    // and a store that still says RUNNING. The check is the error code AND
+    // the listing, so a stale id never passes as a clean shutdown, and a
+    // workspace that still exists keeps the full remaining-pane check.
+    const vanished = async (error: unknown): Promise<boolean> => {
+      if (!(error instanceof SlpRuntimeError) || error.herdrCode !== "workspace_not_found") {
+        return false;
+      }
+      return !(await this.workspaces()).some(
+        (workspace) => workspace.workspace_id === workspaceId,
+      );
+    };
+    const unlessVanished = async <T>(action: () => Promise<T>): Promise<T | null> => {
+      try {
+        return await action();
+      } catch (error) {
+        if (await vanished(error)) return null;
+        throw error;
+      }
+    };
+    const listed = await unlessVanished(async () => ({
+      panes: await this.panes(workspaceId),
+      tabs: await this.tabs(workspaceId),
+    }));
+    if (listed === null) {
+      await rm(runtimeDirectory, { force: true, recursive: true });
+      return;
+    }
+    const { panes, tabs } = listed;
     const closedTabs = new Set<string>();
     const closedPanes = new Set<string>();
     const closePane = async (paneId: string): Promise<void> => {
@@ -1165,11 +1198,11 @@ export class HerdrSlpRuntime {
             !closedPanes.has(candidate.pane_id),
         );
         if (hasOpenSibling) {
-          await this.client.paneClose(paneId);
+          await unlessVanished(() => this.client.paneClose(paneId));
           closedPanes.add(paneId);
           return;
         }
-        await this.client.tabClose(tab.tab_id);
+        await unlessVanished(() => this.client.tabClose(tab.tab_id as string));
         closedTabs.add(tab.tab_id);
         for (const candidate of panes) {
           if (candidate.tab_id === tab.tab_id && candidate.pane_id) {
@@ -1179,7 +1212,7 @@ export class HerdrSlpRuntime {
         return;
       }
       if (pane) {
-        await this.client.paneClose(paneId);
+        await unlessVanished(() => this.client.paneClose(paneId));
         closedPanes.add(paneId);
       }
     };
@@ -1212,7 +1245,11 @@ export class HerdrSlpRuntime {
         .filter((role) => role.role === "team-supervisor")
         .map((role) => role.paneId),
     );
-    const preFinalRemainder = (await this.panes(workspaceId)).filter(
+    // The transcript is already gone above; a workspace that closed with its
+    // last seat tab has nothing left to check or shut down.
+    const remaining = await unlessVanished(() => this.panes(workspaceId));
+    if (remaining === null) return;
+    const preFinalRemainder = remaining.filter(
       (pane) => pane.pane_id && !supervisorPanes.has(pane.pane_id),
     );
     if (preFinalRemainder.length > 0) {
