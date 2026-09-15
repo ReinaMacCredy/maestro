@@ -11,6 +11,70 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.124.0] - 2026-09-16
+
+### Added
+
+- `maestro work note --owner` records an owner walk-in typed into a seat's
+  pane: `maestro work note <id> "owner asked: <what>" --owner`. The flag is
+  provenance stored on the note, shown by `maestro status <work-id>` as
+  `note [owner]`, exclusive with `--blocked` and `--rework`, and pushed one
+  seat up as `[from <role>][<work-id> OWNER]` through the same path a
+  `--blocked` note takes (Peer to Lead, Lead to Team Supervisor or, in a
+  lead-only generation, to the Hub). It never sets the blocked flag and never
+  stalls the item (room d123).
+- Owner presence: the room store holds one declared presence, here or away.
+  `maestro owner here|away` records it and `maestro owner` prints it, Hub-only
+  and `ROLE_FORBIDDEN` elsewhere, with no expiry and nothing inferring it. The
+  Hub prompt hook line and `maestro status` from the room open with
+  "owner: here" or "owner: away; N provisional decisions waiting" (room d124).
+- Provisional rulings: `maestro decide --provisional`, Hub-only and requiring
+  `--work`, records an away ruling that the room's `maestro status` lists (id,
+  work, choice) until `maestro decision confirm <id>`, a new Hub-only verb, or
+  a decision that `--replaces` it clears the flag. `maestro status
+  <decision-id>` prints "provisional: yes" while it stands. No timer, no
+  window (room d125).
+- The Hub Supervisor runs the normal stop of a lead-only generation:
+  `maestro team stop <team-id> --reason "<closing report>"` from `~/maestro`
+  commits the same phases and the same STOPPED record a Team Supervisor's stop
+  does, is still refused on unfinished work, and the `--reason` help text says
+  so (room d117).
+- Doctrine in the shipped `SLP.md` and in the lead, team-supervisor and peer
+  profiles: a `--blocked` fork climbs one seat at a time and every seat
+  filters; the Team Supervisor is the owner's embodiment in its team and asks
+  the Hub only when it cannot resolve a fork; the Hub decides what it may and
+  puts to the owner only what is hers, taking the Team Supervisor's part in a
+  lead-only generation; plus the owner walk-in, presence, and provisional
+  rulings. `slp:version=3`, the marker lines, and the nine-operation surface
+  are unchanged: `maestro owner` and `maestro decision confirm` are Hub-room
+  verbs, not SLP operations (room d122-d126).
+
+### Fixed
+
+- `maestro work add` refuses `--mode` with `INVALID_OPTION` on the team path
+  and on the Hub path: items carry no collaboration tag, and presence alone
+  decides who answers an owner-scope fork (room d126).
+- `runtime.stop` tolerates a workspace that Herdr closes on its own after the
+  last seat tab closes: a `workspace_not_found` confirmed by `workspace.list`
+  is a finished teardown, not a failure between dead panes and a RUNNING
+  store, so a lead-only team's stop commits STOPPED on the first call. The
+  fake Herdr now answers `tab.list` and `pane.list` on a missing workspace
+  with `workspace_not_found`, as the live server does.
+- The lead-only doctrine text landed: the shared contract names both
+  generation shapes, the Hub Supervisor section carries its lead-only reach,
+  and the Lead profile makes self-work the default with Peers opened the way a
+  harness opens a sub-agent (room d117, d118).
+
+### Verification notes
+
+- Full suite on the release tree: 75 files, 697 tests, 694 pass, 1 skip, 2
+  pre-existing failures (recipe command-prefix lint, room installer OWNER.md
+  wiring); `tsc` clean; the A1/A2/A3 anti-goal greps clean.
+- The OWNER push and the provisional flow were exercised against the fake
+  Herdr only, not against a live team. In a lead-only generation the Lead
+  still cannot self-assign work (`work add` requires `--to <peer>`), so room
+  d118 has no mechanism there yet (room d127).
+
 ## [0.123.0] - 2026-09-16
 
 ### Added
