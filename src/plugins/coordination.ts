@@ -9,7 +9,7 @@ import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { maybeHandleSlpStatus } from "./slp-v2.ts";
+import { maybeHandleSlpStatus, roomOwnerLine } from "./slp-v2.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -240,6 +240,11 @@ export const coordinationPlugin: BuiltInPlugin = {
             : "",
         { events: ["SessionStart", "UserPromptSubmit"] },
       ),
+    );
+    // room d124: the Hub prompt line carries the owner's declared presence and,
+    // while she is away, how many provisional rulings wait for her.
+    context.effect(() =>
+      brief.register(() => roomOwnerLine(context), { events: ["SessionStart", "UserPromptSubmit"] }),
     );
     context.effect(() =>
       brief.register(

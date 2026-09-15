@@ -456,6 +456,196 @@ function migrateRoom(store: Store): void {
     "ALTER TABLE slp_team_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
   );
   widenRoleCheck(store, "slp_team_roles");
+  // room d124: one declared presence row; no row reads as here.
+  store.migrate(`
+    CREATE TABLE IF NOT EXISTS slp_owner_presence (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      presence TEXT NOT NULL CHECK(presence IN ('here', 'away')),
+      updated_at TEXT NOT NULL,
+      set_by TEXT NOT NULL
+    );
+  `);
+  // room d125: a Hub ruling made while the owner is away stands provisional
+  // until she confirms or supersedes it.
+  store.ensureColumn(
+    "slp_decisions",
+    "provisional",
+    "ALTER TABLE slp_decisions ADD COLUMN provisional INTEGER NOT NULL DEFAULT 0",
+  );
+}
+
+type OwnerPresence = "here" | "away";
+
+interface OwnerPresenceRow {
+  presence: OwnerPresence;
+  setBy: string | null;
+  updatedAt: string | null;
+}
+
+interface ProvisionalDecision {
+  choice: string;
+  createdAt: string;
+  generation: number;
+  id: string;
+  teamId: string;
+  workId: string | null;
+}
+
+// room d124: presence is a declared fact in the room store, never inferred
+// (d705). A store that predates the table, or holds no row, reads as here.
+function readOwnerPresence(store: Store): OwnerPresenceRow {
+  if (!tableExists(store, "slp_owner_presence")) {
+    return { presence: "here", setBy: null, updatedAt: null };
+  }
+  const row = store.database
+    .query<{ presence: OwnerPresence; set_by: string; updated_at: string }, []>(
+      "SELECT presence, set_by, updated_at FROM slp_owner_presence WHERE id = 1",
+    )
+    .get();
+  return row
+    ? { presence: row.presence, setBy: row.set_by, updatedAt: row.updated_at }
+    : { presence: "here", setBy: null, updatedAt: null };
+}
+
+// The column may be missing on a room store no Hub command has migrated since
+// the update; a reader never fails on it.
+function provisionalColumn(store: Store): string {
+  return store.hasColumn("slp_decisions", "provisional") ? "provisional" : "0 AS provisional";
+}
+
+function provisionalDecisions(store: Store): ProvisionalDecision[] {
+  if (!tableExists(store, "slp_decisions") || !store.hasColumn("slp_decisions", "provisional")) {
+    return [];
+  }
+  return store.database
+    .query<{
+      choice: string;
+      created_at: string;
+      generation: number;
+      id: string;
+      team_id: string;
+      work_id: string | null;
+    }, []>(
+      `SELECT id, team_id, generation, work_id, choice, created_at
+       FROM slp_decisions WHERE provisional = 1 ORDER BY created_at, id`,
+    )
+    .all()
+    .map((row) => ({
+      choice: row.choice,
+      createdAt: row.created_at,
+      generation: row.generation,
+      id: row.id,
+      teamId: row.team_id,
+      workId: row.work_id,
+    }));
+}
+
+function ownerPresenceLine(presence: OwnerPresence, waiting: number): string {
+  if (presence === "here") return "owner: here";
+  return `owner: away; ${waiting} provisional decision${waiting === 1 ? "" : "s"} waiting`;
+}
+
+// The Hub prompt hook line and `maestro status` from the room print the same
+// presence line (room d124); anywhere else it is empty.
+export function roomOwnerLine(context: PluginContext): string {
+  if (!isRoom(context.store.database)) return "";
+  return ownerPresenceLine(
+    readOwnerPresence(context.store).presence,
+    provisionalDecisions(context.store).length,
+  );
+}
+
+function requireRoom(context: PluginContext, verb: string): void {
+  if (!isRoom(context.store.database)) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${verb} is a Hub-room verb; run it from the Hub at ~/maestro`,
+    );
+  }
+}
+
+function ownerPresence(context: PluginContext, invocation: CliInvocation): CliResult {
+  requireRoom(context, "maestro owner");
+  const requested = invocation.positionals[0];
+  if (requested !== undefined) {
+    if (requested !== "here" && requested !== "away") {
+      throw new CliError(
+        "INVALID_ARGUMENT",
+        `maestro owner takes here or away, not ${requested}`,
+        { presence: requested },
+      );
+    }
+    if (context.store.readOnly) {
+      throw new CliError("READ_ONLY", "maestro owner here|away writes the room store");
+    }
+    migrateRoom(context.store);
+    const now = new Date().toISOString();
+    context.store.database
+      .query(
+        `INSERT INTO slp_owner_presence (id, presence, updated_at, set_by)
+         VALUES (1, ?, ?, 'hub-supervisor')
+         ON CONFLICT(id) DO UPDATE SET presence = excluded.presence,
+           updated_at = excluded.updated_at, set_by = excluded.set_by`,
+      )
+      .run(requested, now);
+    context.sessions.record("owner");
+  }
+  const owner = readOwnerPresence(context.store);
+  const waiting = provisionalDecisions(context.store);
+  return {
+    data: { owner, provisionalDecisions: waiting },
+    text: ownerPresenceLine(owner.presence, waiting.length),
+  };
+}
+
+function provisionalLines(decisions: ProvisionalDecision[]): string[] {
+  return decisions.map((decision) =>
+    `provisional: ${decision.id} ${decision.workId ?? "none"} ${clipLine(decision.choice, 120)}`
+  );
+}
+
+// room d125: confirmation clears the provisional flag; the choice, why and
+// links are immutable and stay as recorded.
+function confirmDecision(context: PluginContext, id: string): CliResult {
+  requireRoom(context, "maestro decision confirm");
+  migrateRoom(context.store);
+  const row = context.store.database
+    .query<SlpDecisionRow, [string]>(
+      `SELECT id, team_id, generation, choice, why, scope, work_id, replaces_id, actor,
+              created_at, provisional
+       FROM slp_decisions WHERE id = ?`,
+    )
+    .get(id);
+  if (!row) throw new CliError("NOT_FOUND", `SLP decision not found: ${id}`);
+  if (row.provisional !== 1) {
+    throw new CliError("INVALID_STATE", `${id} is not provisional; nothing to confirm`);
+  }
+  const now = new Date().toISOString();
+  context.store.database.exec("BEGIN IMMEDIATE");
+  try {
+    const cleared = context.store.database
+      .query("UPDATE slp_decisions SET provisional = 0 WHERE id = ? AND provisional = 1")
+      .run(id);
+    if (cleared.changes !== 1) {
+      throw new CliError("INVALID_STATE", `${id} changed before it could be confirmed`);
+    }
+    context.store.database
+      .query(
+        `INSERT INTO slp_activity
+          (team_id, generation, actor, operation, target_type, target_id, created_at)
+         VALUES (?, ?, 'hub-supervisor', 'decision confirm', 'decision', ?, ?)`,
+      )
+      .run(row.team_id, row.generation, id, now);
+    context.store.database.exec("COMMIT");
+  } catch (error) {
+    try {
+      context.store.database.exec("ROLLBACK");
+    } catch {}
+    throw error;
+  }
+  context.sessions.record("decision.confirm");
+  const decision = decisionData({ ...row, provisional: 0 }, "hub");
+  return { data: { decision }, text: `${id} confirmed: ${row.choice}` };
 }
 
 const ROLE_TABLE_COLUMNS = [
@@ -2834,11 +3024,14 @@ async function noteWorkAs(
 // team and points at the room's own status.
 async function pushOneSeatUp(
   context: PluginContext,
-  actor: SlpActor,
+  actor: SlpReviewerActor,
   id: string,
   subject: "BLOCKED" | "OWNER",
   body: string,
 ): Promise<void> {
+  // The Hub reviewer never notes --blocked or --owner (refused at the room
+  // path), and it has no seat above to push to.
+  if (actor.role === hubReviewerName) return;
   const toHub = actor.role === "team-supervisor" ||
     (actor.role === "lead" && teamShape(actor.team.configuration_json) === "lead-only");
   await pushNotice(
@@ -3217,6 +3410,7 @@ function decideHubWork(
   context: PluginContext,
   input: {
     choice: string;
+    provisional: boolean;
     replaces: string | null;
     scope: string;
     target: HubWorkTarget;
@@ -3256,8 +3450,8 @@ function decideHubWork(
     const insertDecision = context.store.database.query(
       `INSERT INTO slp_decisions
         (id, team_id, generation, choice, why, scope, work_id, replaces_id,
-         actor, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'hub-supervisor', ?)`,
+         actor, created_at, provisional)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'hub-supervisor', ?, ?)`,
     );
     const values = [
       id,
@@ -3269,8 +3463,10 @@ function decideHubWork(
       input.target.workId,
       input.replaces,
       now,
+      input.provisional ? 1 : 0,
     ] as const;
     insertDecision.run(...values);
+    if (input.replaces) clearProvisional(context.store, input.replaces);
     context.store.database
       .query(
         `INSERT INTO slp_activity
@@ -3294,12 +3490,24 @@ function decideHubWork(
     choice: input.choice,
     createdAt: now,
     id,
+    provisional: input.provisional,
     replaces: input.replaces,
     scope: input.scope,
     why: input.why,
     workId: input.target.workId,
   };
-  return { data: { decision }, text: `${id} [${input.scope}] ${input.choice}` };
+  return {
+    data: { decision },
+    text: `${id} [${input.scope}]${input.provisional ? " provisional" : ""} ${input.choice}`,
+  };
+}
+
+// room d125: a decision that replaces a provisional ruling settles it; the
+// superseded row keeps its text and loses only the flag. Runs inside the
+// caller's transaction.
+function clearProvisional(store: Store, id: string): void {
+  if (!store.hasColumn("slp_decisions", "provisional")) return;
+  store.database.query("UPDATE slp_decisions SET provisional = 0 WHERE id = ?").run(id);
 }
 
 function decide(context: PluginContext, invocation: CliInvocation): CliResult {
@@ -3338,9 +3546,23 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
   }
   const workId = stringOption(invocation, "work") ?? null;
   const replaces = stringOption(invocation, "replaces") ?? null;
+  // room d125: only the Hub rules provisionally, and only on a fork that a
+  // work item raised; a free-standing provisional ruling has nothing to
+  // continue and nobody to push to.
+  const provisional = invocation.options.provisional === true;
+  if (provisional && local) {
+    throw new CliError(
+      "ROLE_FORBIDDEN",
+      `${actor} cannot decide provisionally; --provisional is the Hub Supervisor's away ruling (room d125)`,
+    );
+  }
+  if (provisional && !workId) {
+    throw new CliError("MISSING_ARGUMENT", "--provisional requires --work <id>: the fork it resolves");
+  }
   if (workId && !local) {
     return decideHubWork(context, {
       choice,
+      provisional,
       replaces,
       scope,
       target: resolveHubWorkTarget(context, workId),
@@ -3385,6 +3607,7 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
+    if (replaces && !local) clearProvisional(context.store, replaces);
     context.store.database
       .query(
         `INSERT INTO slp_activity
@@ -3400,7 +3623,7 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
     throw error;
   }
   context.sessions.record("decide");
-  const decision = { actor, choice, createdAt: now, id, replaces, scope, why, workId };
+  const decision = { actor, choice, createdAt: now, id, provisional: false, replaces, scope, why, workId };
   return { data: { decision }, text: `${id} [${scope}] ${choice}` };
 }
 
@@ -4481,9 +4704,12 @@ interface SlpDecisionRow {
   actor: string;
   choice: string;
   created_at: string;
+  generation: number;
   id: string;
+  provisional: number;
   replaces_id: string | null;
   scope: string;
+  team_id: string;
   why: string;
   work_id: string | null;
 }
@@ -4493,6 +4719,7 @@ interface SlpDecisionData {
   choice: string;
   createdAt: string;
   id: string;
+  provisional: boolean;
   replaces: string | null;
   scope: string;
   store: "hub" | "project";
@@ -4506,7 +4733,8 @@ interface SlpDecisionData {
 function decisionRowsById(store: Store, id: string, teamId: string | null): SlpDecisionRow[] {
   if (!tableExists(store, "slp_decisions")) return [];
   const columns =
-    `SELECT id, choice, why, scope, work_id, replaces_id, actor, created_at
+    `SELECT id, team_id, generation, choice, why, scope, work_id, replaces_id, actor, created_at,
+            ${provisionalColumn(store)}
      FROM slp_decisions WHERE id = ?`;
   return teamId === null
     ? store.database.query<SlpDecisionRow, [string]>(columns).all(id)
@@ -4523,6 +4751,7 @@ function decisionData(row: SlpDecisionRow, store: "hub" | "project"): SlpDecisio
     choice: row.choice,
     createdAt: row.created_at,
     id: row.id,
+    provisional: row.provisional === 1,
     replaces: row.replaces_id,
     scope: row.scope,
     store,
@@ -4535,6 +4764,7 @@ function decisionText(decision: SlpDecisionData): string {
   return [
     `${decision.id} [${decision.scope}] by ${decision.actor} (${decision.store} store)`,
     `work: ${decision.workId ?? "none"}`,
+    ...(decision.provisional ? ["provisional: yes"] : []),
     ...(decision.replaces ? [`replaces: ${decision.replaces}`] : []),
     `choice: ${decision.choice}`,
     `why: ${decision.why}`,
@@ -4869,13 +5099,21 @@ export async function maybeHandleSlpStatus(
         workspaceId: row.workspace_id,
       });
     }
+    // room d124, d125: the room's status opens with the owner's presence and
+    // closes with every provisional ruling still waiting on her.
+    const owner = readOwnerPresence(context.store);
+    const waiting = provisionalDecisions(context.store);
     return {
-      data: { teams },
-      text: teams.length === 0
-        ? "no SLP teams"
-        : teams.map((team) =>
-          `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; runtime pane ${team.runtimePane}; missing ${(team.missingPanes as string[]).join(", ") || "none"}${orphanedSuffix(team)}`
-        ).join("\n"),
+      data: { owner, provisionalDecisions: waiting, teams },
+      text: [
+        ownerPresenceLine(owner.presence, waiting.length),
+        ...(teams.length === 0
+          ? ["no SLP teams"]
+          : teams.map((team) =>
+            `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; runtime pane ${team.runtimePane}; missing ${(team.missingPanes as string[]).join(", ") || "none"}${orphanedSuffix(team)}`
+          )),
+        ...provisionalLines(waiting),
+      ].join("\n"),
     };
   }
 
@@ -5160,10 +5398,38 @@ export const slpV2Plugin: BuiltInPlugin = {
         { description: "Read the runtime's pending wakes for the running generation.", mutates: false },
       ),
     );
+    // room d124: presence is declared by the Hub on the owner's own words and
+    // read by anyone in the room; it is a Hub-room verb, not an SLP operation.
+    context.effect(() =>
+      context.cli.register(
+        "owner",
+        (invocation): CliResult => ownerPresence(context, invocation),
+        {
+          description: "Hub only: print the owner's declared presence, or record here|away on her own words (room d124).",
+          positionals: [{ name: "here|away", required: false }],
+        },
+      ),
+    );
+    // room d125: the owner confirms a provisional ruling from the Hub pane.
+    context.effect(() =>
+      registerSessionCommand(
+        context,
+        "decision confirm",
+        (invocation): CliResult =>
+          confirmDecision(context, requiredPosition(invocation, 0, "decision id")),
+        {
+          description: "Hub only: confirm a provisional decision recorded while the owner was away (room d125).",
+          positionals: [{ name: "decision-id", required: true }],
+        },
+      ),
+    );
     context.effect(() =>
       registerSessionCommand(context, "decide", (invocation): CliResult => decide(context, invocation), {
         description: "Record one immutable settled decision.",
         flags: {
+          "--provisional": {
+            description: "Hub only, with --work: an away ruling that stands until the owner confirms or supersedes it (room d125).",
+          },
           "--replaces": { description: "Link the decision it replaces.", value: true },
           "--scope": {
             description: "Select owner or cross-team scope when acting as Hub Supervisor.",
