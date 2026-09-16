@@ -214,6 +214,15 @@ After code changes, rerun affected checks; changed shared boundaries may
 require broader checks. Use focused mutation checks only for a concrete
 assertion-strength concern, never as a blanket close gate.
 
+Believe a run on the count of what actually executed - suites started, tests
+run, files compiled - never on an exit code or a summary line, and treat a pass
+with a suspiciously small count as the finding rather than the result. Never
+read an exit status from a pipeline whose last command is not the thing under
+test. Before attributing a failure to work you do not own, check the shared
+generated and ignored inputs first: they change under everyone and are
+invisible to git. Distrust hardest the explanation that removes your reason to
+look further.
+
 ## Completion and delivery
 
 Distinguish implementation verified, awaiting delivery approval, and delivered.

@@ -584,3 +584,18 @@ test("655 [lint] the room's IDENTITY.md makes a gate result name the machine's l
     expect(identity).toContain("one fact about the box, not two facts about the tree");
   });
 });
+
+// room lesson l19: in one hour a mistyped -only-testing target reported GREEN
+// WITH NOTHING RUN, an appended `; echo EXIT=0` turned a red run into exit 0,
+// and a stale gitignored generated project invited a false accusation.
+test("656 [lint] WORKFLOW.md believes a run on what executed, not on an exit code (l19)", async () => {
+  const workflow = (await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "WORKFLOW.md"),
+  ).text()).replaceAll(/\s+/g, " ");
+  expect(workflow).toContain("Believe a run on the count of what actually executed");
+  expect(workflow).toContain("never on an exit code or a summary line");
+  expect(workflow).toContain("a pass with a suspiciously small count as the finding");
+  expect(workflow).toContain("whose last command is not the thing under test");
+  expect(workflow).toContain("check the shared generated and ignored inputs first");
+  expect(workflow).toContain("Distrust hardest the explanation that removes your reason to look further");
+});
