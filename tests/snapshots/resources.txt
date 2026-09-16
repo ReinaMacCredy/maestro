@@ -1,4 +1,4 @@
-bef3c3776f63ae54fe07953a9a3817146cd502fe4196e8c6f4c60550e153bce2  src/plugins/resources/ANTI_PATTERN.md
+22c95305ffc815cc2bd8ba270e2ed2fc4e473e45276a9bf29e1780118fb74319  src/plugins/resources/ANTI_PATTERN.md
 0002f6fa501ecfa74b6b21c006f0acc4fd57f026808f1629d6502b4643ae7b45  src/plugins/resources/SLP.md
 065bb6be6723220423dd395780cffa0adfa79d28c593e6329387a62910431f88  src/plugins/resources/WORKFLOW.md
 e8a7936e46d994a502cf57470fbdeb276231508ff6405aae208e9798e3aab408  src/plugins/resources/herdr-plugin/herdr-plugin.toml
