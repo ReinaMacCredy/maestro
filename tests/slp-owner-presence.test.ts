@@ -409,6 +409,8 @@ test("d126: maestro work add refuses --mode with INVALID_OPTION inside a team an
     expect(failureCode(plain.stderr)).toBe("INVALID_OPTION");
     const help = await runCli(fixture, ["help", "work", "add"]);
     expect(help.exitCode).toBe(0);
-    expect(help.stdout).not.toContain("--mode");
+    // room d128 added --model, whose spelling contains --mode; the hidden
+    // flag is the whole word.
+    expect(help.stdout).not.toMatch(/--mode\b/);
   });
 }, 40_000);

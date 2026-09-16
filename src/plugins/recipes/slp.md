@@ -78,9 +78,9 @@ pane opens. The Team Supervisor and Lead change through a shadowing file
 `maestro work add "<objective>" --to <peer> --profile <name>` for one Peer,
 and `--to peer-<name>` where `<name>` is a profile composes shared contract +
 Peer mandate + that body. A seat's model is a launch-time choice
-(`team start --lead-model`, `--peer-model`, `--supervisor-model`, and
-`work add --to <peer> --model` for one Peer): it rides the launch line and
-changes neither the profile nor its digest. A generation pins the pack and
+(`maestro team start --lead-model`, `--peer-model`, `--supervisor-model`, and
+`maestro work add --to <peer> --model` for one Peer): it rides the launch line
+and changes neither the profile nor its digest. A generation pins the pack and
 every profile it referenced; editing one mid-generation is refused like a pack
 edit.
 
