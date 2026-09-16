@@ -204,7 +204,9 @@ test("548 five pending lessons raise LESSONS_PENDING for their project (w551/d42
 
     const raised = await runCli(fixture, ["attention"]);
     expect(raised.exitCode).toBe(0);
-    expect(raised.stdout).toContain("attention LESSONS_PENDING lesson l1");
+    // room d129 point 2: the headline carries the count and the oldest id with
+    // its age, because one id is not something a Hub can act on.
+    expect(raised.stdout).toContain("attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days)");
     expect(raised.stdout).toContain("5 lessons pending for repo");
     expect(raised.stdout).toContain("maestro lesson list --project repo");
   });
@@ -219,7 +221,7 @@ test("549 seven days without an improver run raise it before the count does (w55
 
     backdate(fixture, "l1", 8);
     const aged = await runCli(fixture, ["attention"]);
-    expect(aged.stdout).toContain("attention LESSONS_PENDING lesson l1");
+    expect(aged.stdout).toContain("attention LESSONS_PENDING 1 lesson pending for repo, oldest l1 (8 days)");
     expect(aged.stdout).toContain("no improver run");
 
     // Processing it is the improver run: the clock restarts from there, so a
@@ -539,4 +541,60 @@ test("566 [lint] the improver skill returns through the SLP work surface", async
   expect(skill).toContain("lesson in another store is processed by that store's holder");
   expect(skill).not.toContain("--lessons");
   expect(skill).not.toContain("File one handback");
+});
+
+// room d129 points 2 and 3: today the hook line prints one lesson id and the
+// smallest action is "read the list". A Hub cannot act on either. The headline
+// carries the count and the oldest id with its age, and both the headline and
+// the room's ready line name an improver generation as the next thing to open
+// at the next generation boundary. Nothing starts a team: both are read verbs
+// (d705, d124), and room d132 keeps the shipped 5 and 7.
+test("663 the pending-lessons headline names an improver generation at the registered checkout (room d129, d132)", async () => {
+  await withFixture(async (fixture) => {
+    for (let index = 0; index < 5; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+    backdate(fixture, "l1", 3);
+    await mkdir(join(fixture.home, "maestro"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
+
+    const raised = await runCli(fixture, ["attention"]);
+    expect(raised.exitCode).toBe(0);
+    const headline = raised.stdout.split("\n")[0];
+    expect(headline).toBe(
+      `attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (3 days); ` +
+        `next: open an improver generation on repo at the next generation boundary: ` +
+        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
+    );
+    // The packet fields stay; only the smallest action becomes the generation.
+    for (const field of ["observed:", "evidence:", "unknown:", "question:", "human decision needed:"]) {
+      expect(raised.stdout).toContain(field);
+    }
+    expect(raised.stdout).toContain(
+      `smallest action: open an improver generation on repo at the next generation boundary: ` +
+        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
+    );
+    expect(raised.stdout).not.toContain("smallest action: maestro lesson list");
+
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    expect(ready.stdout).toContain(
+      `next: open an improver generation on repo at the next generation boundary: ` +
+        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
+    );
+  });
+});
+
+test("664 a quiet project names no improver generation in attention or ready (room d129, d132)", async () => {
+  await withFixture(async (fixture) => {
+    for (let index = 0; index < 4; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+
+    const quiet = await runCli(fixture, ["attention"]);
+    expect(quiet.stdout).not.toContain("LESSONS_PENDING");
+    const ready = await runCli(fixture, ["ready"]);
+    expect(ready.exitCode).toBe(0);
+    expect(ready.stdout).not.toContain("improver generation");
+  });
 });

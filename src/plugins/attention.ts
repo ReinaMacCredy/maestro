@@ -3,6 +3,7 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
 import type { BriefService } from "./coordination.ts";
 import type { DispatchRecord, DispatchService, HandbackService } from "./dispatch.ts";
+import { improverNextAction, improverTriggers } from "./lesson.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -87,10 +88,6 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "lesson" | "w
   LESSONS_PENDING: "lesson",
 };
 
-// d42 runs the improver on a schedule or a threshold, never per correction.
-const lessonsPendingCount = 5;
-const lessonsPendingDays = 7;
-
 function numericOption(
   invocation: CliInvocation,
   name: string,
@@ -149,6 +146,10 @@ function packet(
   subject: string,
   fields: {
     evidence: string;
+    // room d129 point 2: one id is not enough to act on. A kind may replace the
+    // "<subject kind> <subject>" tail of its headline with what the reader
+    // needs, and the packet fields below stay as they are.
+    headline?: string;
     holderRole?: "lead" | "peer";
     humanDecision?: boolean;
     observed: string;
@@ -158,7 +159,7 @@ function packet(
   },
 ): string {
   return [
-    `attention ${kind} ${subjectKind[kind]} ${subject}`,
+    `attention ${kind} ${fields.headline ?? `${subjectKind[kind]} ${subject}`}`,
     `  observed: ${fields.observed}`,
     ...(fields.holderRole ? [`  holder role: ${fields.holderRole}`] : []),
     `  evidence: ${fields.evidence}`,
@@ -711,65 +712,33 @@ function handbackUnreviewedDetections(
   });
 }
 
-interface PendingLessonRow {
-  created_at: string;
-  id: string;
-  project: string;
-}
-
 function lessonsPendingDetections(context: PluginContext, now: number): Detection[] {
-  if (!context.store.hasColumn("lessons", "state")) return [];
-  const pending = context.store.database
-    .query<PendingLessonRow, []>(
-      `SELECT id, project, created_at FROM lessons
-       WHERE state = 'pending'
-       ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
-    )
-    .all();
-  const byProject = new Map<string, PendingLessonRow[]>();
-  for (const lesson of pending) {
-    const group = byProject.get(lesson.project);
-    if (group) group.push(lesson);
-    else byProject.set(lesson.project, [lesson]);
-  }
-  return [...byProject].flatMap(([project, lessons]): Detection[] => {
-    const oldest = lessons[0];
-    if (!oldest) return [];
-    // An improver run is what marks lessons processed, so the last one in this
-    // project is the run; before the first, the oldest lesson starts the clock.
-    const lastRun = context.store.database
-      .query<{ created_at: string }, [string]>(
-        `SELECT event_log.created_at FROM event_log
-         JOIN lessons ON lessons.id = event_log.entity_id
-         WHERE event_log.type = 'lesson.process' AND lessons.project = ?
-         ORDER BY event_log.id DESC LIMIT 1`,
-      )
-      .get(project);
-    const since = lastRun?.created_at ?? oldest.created_at;
-    const overdue = now - Date.parse(since) >= lessonsPendingDays * 24 * 60 * 60_000;
-    if (lessons.length < lessonsPendingCount && !overdue) return [];
-    const clock = lastRun
-      ? `last improver run ${since}`
-      : `no improver run yet, oldest filed ${since}`;
-    return [{
-      entityId: oldest.id,
+  return improverTriggers(context, now).map((trigger): Detection => {
+    const clock = trigger.lastRun
+      ? `last improver run ${trigger.since}`
+      : `no improver run yet, oldest filed ${trigger.since}`;
+    const action = improverNextAction(trigger, process.env.HOME ?? "");
+    const days = trigger.ageDays === 1 ? "1 day" : `${trigger.ageDays} days`;
+    const count = trigger.pending === 1 ? "1 lesson" : `${trigger.pending} lessons`;
+    return {
+      entityId: trigger.oldestId,
       entityType: "lesson",
-      fingerprint: `lessons:${project}:${oldest.id}:${
-        lessons.length >= lessonsPendingCount ? "count" : "age"
-      }`,
+      fingerprint: `lessons:${trigger.project}:${trigger.oldestId}:${trigger.reason}`,
       kind: "LESSONS_PENDING",
-      packet: packet("LESSONS_PENDING", oldest.id, {
-        observed: `${lessons.length} lessons pending for ${project}; ${clock}`,
-        evidence: lastRun
-          ? `event_log lesson.process ${since}`
-          : `lessons.created_at ${since}`,
+      packet: packet("LESSONS_PENDING", trigger.oldestId, {
+        headline: `${count} pending for ${trigger.project}, ` +
+          `oldest ${trigger.oldestId} (${days}); ${action}`,
+        observed: `${count} pending for ${trigger.project}; ${clock}`,
+        evidence: trigger.lastRun
+          ? `event_log lesson.process ${trigger.since}`
+          : `lessons.created_at ${trigger.since}`,
         unknown: "whether these corrections still describe the doctrine as it stands",
-        question: `run the improver on ${project}?`,
-        smallestAction: `maestro lesson list --project ${project}`,
+        question: `run the improver on ${trigger.project}? read them with maestro lesson list --project ${trigger.project}`,
+        smallestAction: action.replace(/^next: /, ""),
       }),
       subjectSession: null,
       subjectWork: null,
-    }];
+    };
   });
 }
 

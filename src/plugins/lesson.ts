@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import {
@@ -11,6 +11,102 @@ import {
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { registerSessionCommand } from "./session-required.ts";
+
+// d42 runs the improver on a schedule or a threshold, never per correction.
+// room d132 keeps the shipped numbers: 5 pending lessons, or an oldest lesson
+// 7 days old.
+export const improverPendingCount = 5;
+export const improverPendingDays = 7;
+
+export interface ImproverTrigger {
+  // Age of the oldest pending lesson, which is what the reader is told; the
+  // trigger's own clock is `since`, the last improver run when there was one.
+  ageDays: number;
+  lastRun: string | null;
+  oldestId: string;
+  pending: number;
+  project: string;
+  reason: "age" | "count";
+  since: string;
+}
+
+interface PendingLessonRow {
+  created_at: string;
+  id: string;
+  project: string;
+}
+
+// The one place the improver threshold is evaluated, so the attention packet,
+// the prompt hook line and the room's ready line cannot drift apart.
+export function improverTriggers(context: PluginContext, now: number): ImproverTrigger[] {
+  if (!context.store.hasColumn("lessons", "state")) return [];
+  const pending = context.store.database
+    .query<PendingLessonRow, []>(
+      `SELECT id, project, created_at FROM lessons
+       WHERE state = 'pending'
+       ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
+    )
+    .all();
+  const byProject = new Map<string, PendingLessonRow[]>();
+  for (const lesson of pending) {
+    const group = byProject.get(lesson.project);
+    if (group) group.push(lesson);
+    else byProject.set(lesson.project, [lesson]);
+  }
+  return [...byProject].flatMap(([project, lessons]): ImproverTrigger[] => {
+    const oldest = lessons[0];
+    if (!oldest) return [];
+    // An improver run is what marks lessons processed, so the last one in this
+    // project is the run; before the first, the oldest lesson starts the clock.
+    const lastRun = context.store.database
+      .query<{ created_at: string }, [string]>(
+        `SELECT event_log.created_at FROM event_log
+         JOIN lessons ON lessons.id = event_log.entity_id
+         WHERE event_log.type = 'lesson.process' AND lessons.project = ?
+         ORDER BY event_log.id DESC LIMIT 1`,
+      )
+      .get(project);
+    const since = lastRun?.created_at ?? oldest.created_at;
+    const day = 24 * 60 * 60_000;
+    const overdue = now - Date.parse(since) >= improverPendingDays * day;
+    if (lessons.length < improverPendingCount && !overdue) return [];
+    return [{
+      ageDays: Math.max(0, Math.floor((now - Date.parse(oldest.created_at)) / day)),
+      lastRun: lastRun?.created_at ?? null,
+      oldestId: oldest.id,
+      pending: lessons.length,
+      project,
+      reason: lessons.length >= improverPendingCount ? "count" : "age",
+      since,
+    }];
+  });
+}
+
+// room d129 point 3: when the trigger fires, the next thing to open at the
+// next generation boundary is an improver generation, said in words a Hub
+// reads as an action. It is a sentence in a read verb, never a timer and never
+// an automatic start (d705, d124).
+export function improverNextAction(trigger: ImproverTrigger, home: string): string {
+  const checkout = registeredCheckout(trigger.project, home) ?? `<${trigger.project} checkout>`;
+  return `next: open an improver generation on ${trigger.project} at the next generation boundary: ` +
+    `maestro team start ${checkout} "<objective>" --lead-only`;
+}
+
+// The registry is the only place a project name is bound to a checkout path.
+// An unreadable or silent registry leaves the placeholder rather than a wrong
+// path: the Hub then supplies the checkout itself.
+function registeredCheckout(project: string, home: string): string | null {
+  const registry = join(home, "maestro", "registry");
+  if (!existsSync(registry)) return null;
+  try {
+    return readFileSync(registry, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .find((path) => basename(path) === project) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface LessonRecord {
   answer: string | null;

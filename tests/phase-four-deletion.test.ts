@@ -534,7 +534,11 @@ test("260 every exported attention kind has an independent read-only detection s
       LEAD_COLLISION: `attention LEAD_COLLISION work ${stalled},${repeated}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
       SCOPE_COLLISION: `attention SCOPE_COLLISION work ${collisionA},${collisionB}`,
-      LESSONS_PENDING: "attention LESSONS_PENDING lesson l1",
+      // room d129 point 2: this kind replaces the "<subject kind> <subject>"
+      // tail with the count, the oldest id and its age, plus the action.
+      LESSONS_PENDING: "attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days); " +
+        "next: open an improver generation on repo at the next generation boundary: " +
+        "maestro team start <repo checkout> \"<objective>\" --lead-only",
       STALLED_LEASE: `attention STALLED_LEASE work ${stalled}`,
     } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();

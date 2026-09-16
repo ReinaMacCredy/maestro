@@ -12,6 +12,7 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
 import type { DispatchService } from "./dispatch.ts";
 import { modifiedTrackedFiles, namesCommit } from "./git-status.ts";
+import { improverNextAction, improverTriggers } from "./lesson.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { maybeHandleSlpWorkAdd, maybeHandleSlpWorkNote } from "./slp-v2.ts";
 
@@ -1405,6 +1406,13 @@ export const workPlugin: BuiltInPlugin = {
           if (hiddenBlocked > 0) {
             lines.push(`${hiddenBlocked} blocked by open work hidden; --all to list`);
           }
+          // room d129 point 3: when the improver threshold has fired, the next
+          // thing to open at the next generation boundary is named here as an
+          // action, in the same words the prompt hook line carries. Nothing
+          // starts a team: ready is a read verb (d705, d124).
+          const improver = improverTriggers(context, Date.now())
+            .map((trigger) => improverNextAction(trigger, process.env.HOME ?? ""));
+          lines.push(...improver);
           const held = allWorks.filter(
             (work) => work.state === "active" && work.heldBy === sessionId,
           );
