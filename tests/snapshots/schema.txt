@@ -51,7 +51,7 @@ index sqlite_autoindex_work_blockers_1
 table attention
   CREATE TABLE attention ( id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, fingerprint TEXT NOT NULL UNIQUE, subject_work TEXT, subject_session TEXT, packet TEXT NOT NULL, created_at TEXT NOT NULL )
 table bundle_work
-  CREATE TABLE bundle_work ( bundle_id TEXT NOT NULL REFERENCES bundles(id), work_id TEXT NOT NULL REFERENCES work(id), PRIMARY KEY(bundle_id, work_id) )
+  CREATE TABLE bundle_work ( bundle_id TEXT NOT NULL REFERENCES bundles(id), work_id TEXT NOT NULL, PRIMARY KEY(bundle_id, work_id) )
 table bundles
   CREATE TABLE bundles ( id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('active', 'archived')), directory TEXT NOT NULL, spec TEXT, notes TEXT, verify TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , paused_at TEXT)
 table decisions

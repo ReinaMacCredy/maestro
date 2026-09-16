@@ -387,6 +387,51 @@ function replaceUntouchedSections(
   return { leftAlone, notes: output + notes.slice(cursor), written };
 }
 
+// Hub finding F4 (w734): a bundle links work in either table, so work_id
+// carries no foreign key to work(id); bundle_id still references bundles(id)
+// and the row shape (bundle_id, work_id) and its primary key are unchanged.
+const createBundleWorkTableSql = `CREATE TABLE IF NOT EXISTS bundle_work (
+        bundle_id TEXT NOT NULL REFERENCES bundles(id),
+        work_id TEXT NOT NULL,
+        PRIMARY KEY(bundle_id, work_id)
+      );`;
+
+function bundleWorkReferencesWork(context: PluginContext): boolean {
+  const schema = context.store.database
+    .query<{ sql: string | null }, []>(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bundle_work'",
+    )
+    .get()?.sql;
+  return schema?.includes("REFERENCES work(id)") ?? false;
+}
+
+// SQLite cannot drop a foreign key in place, so an existing table is rebuilt
+// once, rows copied, the way the handbacks status vocabulary was widened.
+function migrateBundleWorkWorkIdForeignKey(context: PluginContext): void {
+  if (context.store.readOnly || !bundleWorkReferencesWork(context)) return;
+  const migration = context.store.database.transaction(() => {
+    if (!bundleWorkReferencesWork(context)) return;
+    context.store.database.exec("ALTER TABLE bundle_work RENAME TO bundle_work_legacy_work_fk");
+    context.store.database.exec(createBundleWorkTableSql);
+    context.store.database.exec("INSERT INTO bundle_work SELECT * FROM bundle_work_legacy_work_fk");
+    context.store.database.exec("DROP TABLE bundle_work_legacy_work_fk");
+  });
+  migration.immediate();
+}
+
+// Hub finding F4 (w734): an SLP generation writes its items to slp_work in the
+// same project store, so a bundle may be linked to an id that the non-SLP work
+// table does not hold. A store that has never run SLP has no slp_work table.
+function knownWorkId(context: PluginContext, work: WorkService, workId: string): boolean {
+  if (work.get(workId)) return true;
+  if (!tableExists(context.store.database, "slp_work")) return false;
+  return (
+    context.store.database
+      .query<{ present: number }, [string]>("SELECT 1 AS present FROM slp_work WHERE id = ?")
+      .get(workId) !== null
+  );
+}
+
 function replaceScaffoldBase(
   notes: string,
   base: string,
@@ -475,12 +520,9 @@ export const bundlePlugin: BuiltInPlugin = {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS bundle_work (
-        bundle_id TEXT NOT NULL REFERENCES bundles(id),
-        work_id TEXT NOT NULL REFERENCES work(id),
-        PRIMARY KEY(bundle_id, work_id)
-      );
+      ${createBundleWorkTableSql}
     `);
+    migrateBundleWorkWorkIdForeignKey(context);
     // A paused bundle stays active in the state machine and only carries the
     // pause stamp (d778: waymark paused -> paused); the CHECK is left alone.
     context.store.ensureColumn("bundles", "paused_at", "ALTER TABLE bundles ADD COLUMN paused_at TEXT");
@@ -532,7 +574,9 @@ export const bundlePlugin: BuiltInPlugin = {
           const workIds = stringOptions(invocation, "work");
           const work = context.work as WorkService;
           for (const workId of workIds) {
-            if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            if (!knownWorkId(context, work, workId)) {
+              throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+            }
           }
           mkdirSync(directory, { recursive: true });
           const templates = {
