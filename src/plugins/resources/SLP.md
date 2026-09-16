@@ -175,7 +175,10 @@ else will reason its way to the action that was refused (room lesson l14).
 `maestro status` lists the team's non-DONE
 items with `*` on those waiting on you (a Peer sees only its own) and collapses
 DONE into a count that `--all` expands; `maestro status <work-id>` ends with a
-`next:` line naming what you may run on it. `maestro status <decision-id>`
+`next:` line naming what you may run on it. That text read shows one line of the
+objective and says so when there is more, so read your item's objective in full
+with `maestro status <work-id> --json` before the first edit: an item you have
+read in part you have not read (project lesson l9). `maestro status <decision-id>`
 reads one settled decision back with its choice, why and scope, including an
 owner-scope ruling recorded in the Hub store, and `maestro search` finds a
 decision by its id or by words from its choice or why.
@@ -217,8 +220,10 @@ maestro work return <work-id> "<result>"
 
 A request arrives as an item, moving `OPEN -> ACTIVE -> RETURNED -> DONE`.
 `maestro status` lists the items waiting on you; `maestro status <work-id>`
-prints one in full and ends with a `next:` line naming what you may run on it.
-Claim it with `maestro work take <work-id>` before you start.
+prints one and ends with a `next:` line naming what you may run on it. Its text
+shows one line of the request and says so when there is more, so read the
+request in full with `maestro status <work-id> --json` before you start.
+Claim it with `maestro work take <work-id>`.
 
 Deliver with proof. `maestro work return <work-id> "<result>"` carries what you
 changed, the evidence that it works, what you could not verify, and the risk

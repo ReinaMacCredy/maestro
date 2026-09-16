@@ -5845,6 +5845,72 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
 }, 30_000);
 
 
+// project lesson l9 (w739, d896): a Peer read the one-line objective the text
+// mode prints and took it for the whole request, which was a 4,000-word brief.
+// Nothing in the output suggested anything was missing.
+test("l9 objective-truncation: the text read of an item names the objective's size and the command that prints it whole, and a one-line objective is unchanged", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const brief = [
+      "Port the module map into the worktree and prove the split holds.",
+      "",
+      "Scope: .maestro/worktree/g1-slp-split only; main is not yours to touch.",
+      "Gates: tsc clean, the replay gate green, no allowlist line added.",
+    ].join("\n");
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, brief, "--json"], fake.env);
+    expect(started.exitCode).toBe(0);
+    const data = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const id = data.work.id;
+    const lines = async (args: string[]) => {
+      const result = await runCliAt(fixture, fixture.repo, args, leadEnvironment);
+      expect(result.exitCode).toBe(0);
+      return result.stdout.trim().split("\n");
+    };
+
+    const read = await lines(["status", id]);
+    expect(read[2]).toBe("objective: Port the module map into the worktree and prove the split holds.");
+    expect(read[3]).toBe(
+      `objective truncated here: ${brief.length} characters over 4 lines; ` +
+        `read it in full with: maestro status ${id} --json`,
+    );
+    // The pointer is honest: --json carries the objective whole.
+    const json = envelope<{ work: { objective: string } }>(
+      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], leadEnvironment)).stdout,
+    );
+    expect(json.work.objective).toBe(brief);
+
+    // An objective that already fits on one line gains no second line.
+    const added = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "Short objective", "--to", "peer-short", "--json"],
+      leadEnvironment,
+    );
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string }; work: { id: string } }>(added.stdout);
+    expect((await lines(["status", peer.work.id])).slice(0, 4)).toEqual([
+      `${peer.work.id} OPEN ${lead.name} -> ${peer.role.name}`,
+      "revision: 0",
+      "objective: Short objective",
+      "entries: none",
+    ]);
+  });
+}, 30_000);
+
 test("done-outcome: a cancelled item and an accepted one are different lines in the DONE listing and different numbers in the collapsed count, with the four states unchanged (w707)", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

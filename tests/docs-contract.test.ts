@@ -1014,3 +1014,29 @@ test("l7 [lint] the SPEC template and the design skill ship the artifact a locke
     "a VERIFY check that asks a later reviewer to re-derive what the design claimed to have settled is the sign the artifact is missing",
   );
 });
+
+// project lesson l9 (w739, d896): the text read printed one line of a 4,000-word
+// objective and said nothing about the rest, so the "read the request in full"
+// rule was unfollowable by the reader who obeyed it most literally.
+test("l9 [lint] the shared contract and the Peer block send a seat to --json for the whole objective", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const section = (name: string) =>
+    unwrap(new RegExp(`<!-- slp:${name}:begin -->([\\s\\S]*?)<!-- slp:${name}:end -->`).exec(pack)?.[1] ?? "");
+
+  const shared = section("shared");
+  expect(shared).toContain("That text read shows one line of the objective and says so when there is more");
+  expect(shared).toContain(
+    "read your item's objective in full with `maestro status <work-id> --json` before the first edit",
+  );
+  expect(shared).toContain("an item you have read in part you have not read");
+
+  const peer = section("shared:peer");
+  expect(peer).toContain("Its text shows one line of the request and says so when there is more");
+  expect(peer).toContain("read the request in full with `maestro status <work-id> --json` before you start");
+  // The old claim that the text read prints the item in full is what made the
+  // doctrine unfollowable; it does not come back.
+  expect(peer).not.toContain("prints one in full");
+});

@@ -4936,6 +4936,22 @@ interface SlpNextStep {
   waitingOn: string | null;
 }
 
+// l9 (w739, d896): the text read printed the first line of a 4,000-word brief
+// and said nothing about the rest, so a seat read its item, believed it had read
+// the request, and was wrong. A clipped objective now names its own size and the
+// command that prints it whole. An objective that fits on one line is unchanged.
+function objectiveLines(id: string, objective: string, limit: number): string[] {
+  const head = clipLine(objective, limit);
+  const full = objective.trim();
+  if (full === head) return [`objective: ${head}`];
+  const lines = full.split("\n").length;
+  return [
+    `objective: ${head}`,
+    `objective truncated here: ${full.length} characters over ${lines} line${lines === 1 ? "" : "s"};` +
+      ` read it in full with: maestro status ${id} --json`,
+  ];
+}
+
 function clipLine(text: string, limit: number): string {
   const line = text.split("\n").map((part) => part.trim()).find((part) => part !== "") ?? "";
   return line.length > limit ? `${line.slice(0, limit - 3)}...` : line;
@@ -5374,7 +5390,7 @@ async function readWorkDetail(
     text: [
       `${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}${compacts ? ` ${compacts}` : ""}`,
       `revision: ${work.return_revision}`,
-      `objective: ${clipLine(work.objective, 160)}`,
+      ...objectiveLines(work.id, work.objective, 160),
       latest
         ? `${latest.kind.toLowerCase()}${latest.flag ? ` [${latest.flag}]` : ""} by ${latest.actor}: ${
           clipLine(latest.body, 160)
