@@ -140,6 +140,18 @@ Then exit by [Tiers](~/maestro/WORKFLOW.md#tiers):
   from acceptance, relevant risks, and anti-goals; seed NOTES.md with Current
   State, Next Action, original authorization, and `Base:`.
 
+A SPEC that locks a decision on a derived artifact - a module map, a dependency
+graph, a measured table - ships that artifact in the bundle beside SPEC.md,
+under `## Derived artifacts`, with the script or command that produced it and a
+plain statement of what the method over- or under-approximates. The conclusion
+is not the evidence: a stated table nobody can re-run reads as settled
+precisely because it is stated with confidence, and a VERIFY check that asks a
+later reviewer to re-derive what the design claimed to have settled is the sign
+the artifact is missing. l7, d880: an 11-module split was locked on a hand
+tally that had asserted away a real cycle and missed the per-module counts by
+up to 56 lines, and only reconstruction - the thing the design existed to make
+unnecessary - exposed it.
+
 If the next slice's acceptance or authority needs guessing, resolve that
 blocker. Otherwise continue implementation when the user's original request
 already authorizes it; do not ask again merely because design is complete.

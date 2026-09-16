@@ -985,3 +985,32 @@ test("l5 [lint] the improver picks its per-edit gate by the output it changes, n
   expect(skill).toContain("grep the whole test tree for the string you are changing");
   expect(skill).toContain("run every suite that asserts it");
 });
+
+// project lesson l7 (w732, w733, d880, d889): a SPEC locked an 11-module split
+// on a hand tally that was never written down; re-deriving it found a real
+// cycle the tally had asserted away and per-module counts off by up to 56 lines.
+// The deliverable list is the instrument that was missing a slot.
+test("l7 [lint] the SPEC template and the design skill ship the artifact a locked decision rests on", async () => {
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const bundle = unwrap(
+    await Bun.file(join(import.meta.dir, "..", "src", "plugins", "bundle.ts")).text(),
+  );
+  expect(bundle).toContain("## Derived artifacts");
+  expect(bundle).toContain(
+    "A table, map, graph or measurement any decision above rests on ships in this bundle beside SPEC.md",
+  );
+  expect(bundle).toContain("what that method over- or under-approximates");
+  expect(bundle).toContain("The conclusion is not the evidence");
+
+  const design = unwrap(
+    await Bun.file(
+      join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-design", "SKILL.md"),
+    ).text(),
+  );
+  expect(design).toContain("ships that artifact in the bundle beside SPEC.md");
+  expect(design).toContain("under `## Derived artifacts`");
+  expect(design).toContain("what the method over- or under-approximates");
+  expect(design).toContain(
+    "a VERIFY check that asks a later reviewer to re-derive what the design claimed to have settled is the sign the artifact is missing",
+  );
+});
