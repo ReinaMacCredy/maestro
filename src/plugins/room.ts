@@ -90,7 +90,12 @@ Change one by shadowing it in \`profiles/<name>.md\` beside this file (YAML fron
 \`harness\`, \`model\`, \`effort\`, \`permission\` or \`sandbox\`, \`autocompact\`,
 \`disallowed_tools\`, \`description\`; body = the mandate), then run
 \`maestro install\` so the rendered launch bundles follow. A Peer variant is
-\`maestro team start --peer-profile <name>\`; do not keep a model table here.
+\`maestro team start --peer-profile <name>\`. A seat's model is a launch-time
+choice, not a reinstall: \`maestro team start --lead-model <model>\`,
+\`--peer-model <model>\` and \`--supervisor-model <model>\` set it for a
+generation and \`maestro work add --to <peer> --model <model>\` sets it for one
+Peer, riding the launch line, so no shadow edit and no \`maestro install\` is
+needed (room d128); do not keep a model table here.
 `;
 
 const shellrc = `function _maestro_home() {
