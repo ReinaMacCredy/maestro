@@ -3453,13 +3453,23 @@ interface HubTeamRow {
   team_id: string;
 }
 
-function hubWorkMatches(teams: HubTeamRow[], workId: string): HubWorkTarget[] {
+// `tolerant` is the archive pass: the room remembers every generation it ever
+// ran and some of those checkouts have since been deleted or moved, so a store
+// that will not open there is skipped rather than failing the whole read. The
+// RUNNING pass keeps the loud failure, because a live team whose project is
+// unreachable is a fault worth stopping on.
+function hubWorkMatches(
+  teams: HubTeamRow[],
+  workId: string,
+  tolerant = false,
+): HubWorkTarget[] {
   const matches: HubWorkTarget[] = [];
   for (const team of teams) {
     let projectStore: Store;
     try {
       projectStore = new Store(resolveStoreLocation(team.project_path).path, { readonly: true });
     } catch (error) {
+      if (tolerant) continue;
       throw new CliError(
         "PROJECT_UNAVAILABLE",
         `cannot inspect SLP work in ${team.project_path}`,
@@ -3525,7 +3535,7 @@ function resolveHubWorkTarget(
   const matches = hubWorkMatches(running, workId);
   if (matches.length > 0) return oneHubWorkMatch(matches, workId);
   const closed = all.filter((team) => team.state !== "RUNNING");
-  const archived = closed.length > 0 ? hubWorkMatches(closed, workId) : [];
+  const archived = closed.length > 0 ? hubWorkMatches(closed, workId, true) : [];
   if (archived.length === 0) {
     throw new CliError("NOT_FOUND", `SLP work not found from Hub: ${reference}`);
   }

@@ -875,6 +875,28 @@ test("w736 a stopped generation's work is still readable from the Hub, while eve
     const unknown = await runCliAt(fixture, room, ["status", "w9999"], fake.env);
     expect(unknown.exitCode).not.toBe(0);
     expect(`${unknown.stdout}${unknown.stderr}`).toContain("SLP work not found from Hub: w9999");
+
+    // The room remembers every generation it ever ran, and some of those
+    // checkouts are gone. A running team's store must still be reachable, and
+    // a miss must still read as a miss, when an old row points at nothing.
+    const hub = new Database(join(room, ".maestro", "maestro.db"));
+    hub
+      .query(
+        `INSERT INTO slp_teams (team_id, generation, project_path, objective,
+           configuration_json, pack_version, pack_digest, state, workspace_id, created_at)
+         SELECT 'gone-3f2a', 1, ?, objective, configuration_json, pack_version,
+                pack_digest, 'STOPPED', workspace_id, created_at
+         FROM slp_teams WHERE team_id = ?`,
+      )
+      .run(join(fixture.root, "a-checkout-that-was-deleted"), data.team.teamId);
+    hub.close();
+    const stillMissing = await runCliAt(fixture, room, ["status", "w9999"], fake.env);
+    expect(`${stillMissing.stdout}${stillMissing.stderr}`)
+      .toContain("SLP work not found from Hub: w9999");
+    expect(`${stillMissing.stdout}${stillMissing.stderr}`).not.toContain("PROJECT_UNAVAILABLE");
+    const stillReadable = await runCliAt(fixture, room, ["status", workId], fake.env);
+    expect(stillReadable.exitCode).toBe(0);
+    expect(stillReadable.stdout).toContain(`${workId} DONE`);
   });
 });
 
