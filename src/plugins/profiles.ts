@@ -44,7 +44,11 @@ export interface ProfileShadowReport {
 }
 
 export interface ProfileSync {
+  hubPackPath: string;
   hubPackVersion: string | null;
+  // d892: whether the Hub pack carries its own Peer block, or the Peer fell
+  // back to that pack's shared section.
+  hubPeerSection: "missing" | "present";
   removed: string[];
   rendered: string[];
   resolvedTargets: Array<{ real: string; target: string }>;
@@ -338,21 +342,40 @@ export function renderProfile(renderedName: string, frontmatter: ProfileFrontmat
   return { claude, codexAgent, codexSession };
 }
 
-function sharedContract(pack: string): string | null {
-  const match = /<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack);
+function packSection(pack: string, marker: string): string | null {
+  const match = new RegExp(`<!-- slp:${marker}:begin -->([\\s\\S]*?)<!-- slp:${marker}:end -->`)
+    .exec(pack);
   return match?.[1]?.trim() || null;
+}
+
+// room d134 (d892): the Peer reads its own block of the same pack, so the
+// words it meets carry no seat name while the pinned bytes stay one file. A
+// Hub pack older than that block falls back to *its own* shared section, never
+// the shipped Peer one: what a seat reads has to come from the pack its
+// generation pinned, and install warns which block to copy.
+interface SharedContracts {
+  default: string;
+  peer: string;
+  peerSection: "present" | "missing";
 }
 
 // The seat mandate opens with the Hub's shared contract; a Hub pack without
 // that section (owner-edited, or not yet migrated) falls back to the shipped
 // one so install and update still complete, and team start is where the
 // broken pack is refused.
-async function sharedContractFor(home: string): Promise<string> {
+async function sharedContractFor(home: string): Promise<SharedContracts> {
   const hubPack = join(home, "maestro", "SLP.md");
-  const fromHub = existsSync(hubPack) ? sharedContract(await readFile(hubPack, "utf8")) : null;
-  const shared = fromHub ?? sharedContract(await readFile(shippedPack, "utf8"));
+  const pack = existsSync(hubPack) ? await readFile(hubPack, "utf8") : null;
+  const fromHub = pack === null ? null : packSection(pack, "shared");
+  const shared = fromHub ?? packSection(await readFile(shippedPack, "utf8"), "shared");
   if (!shared) throw new CliError("INVALID_SLP_PACK", `${shippedPack} is missing section: shared`);
-  return shared;
+  const source = fromHub === null ? await readFile(shippedPack, "utf8") : (pack as string);
+  const peer = packSection(source, "shared:peer");
+  return {
+    default: shared,
+    peer: peer ?? shared,
+    peerSection: peer === null ? "missing" : "present",
+  };
 }
 
 interface RenderTarget {
@@ -377,6 +400,7 @@ export interface SeatDirectoryPlan {
 }
 
 export interface ProfilePlan {
+  peerSection: "missing" | "present";
   seats: SeatDirectoryPlan[];
   shadows: ProfileShadowReport[];
   targets: RenderTarget[];
@@ -450,7 +474,8 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
     const profile = await resolveProfile(name, directories);
     if (!profile) continue;
     if ((seatProfileNames as readonly string[]).includes(name)) {
-      push(name, profile, profile.frontmatter, `${shared}\n\n${profile.body}`);
+      const section = name === "peer" ? shared.peer : shared.default;
+      push(name, profile, profile.frontmatter, `${section}\n\n${profile.body}`);
       (seats.get(name as SeatProfileName) as SeatDirectoryPlan).overlay = profile.frontmatter.settings ?? {};
       continue;
     }
@@ -462,10 +487,11 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
       ...(peer.frontmatter.disallowed_tools ?? []).filter((tool) => !(profile.frontmatter.disallowed_tools ?? []).includes(tool)),
     ];
     const frontmatter = disallowed.length > 0 ? { ...profile.frontmatter, disallowed_tools: disallowed } : profile.frontmatter;
-    push(composed, profile, frontmatter, `${shared}\n\n${peer.body}\n\n${profile.body}`);
+    // d851/d892: a composed peer is a Peer seat, so it reads the Peer block.
+    push(composed, profile, frontmatter, `${shared.peer}\n\n${peer.body}\n\n${profile.body}`);
   }
   for (const plan of seats.values()) plan.skills.sort((left, right) => left.name.localeCompare(right.name));
-  return { seats: [...seats.values()], shadows, targets };
+  return { peerSection: shared.peerSection, seats: [...seats.values()], shadows, targets };
 }
 
 export async function planProfileRenders(home: string, repo: string): Promise<RenderTarget[]> {
@@ -650,7 +676,7 @@ async function materializeSeatDirectory(home: string, plan: SeatDirectoryPlan, t
 }
 
 export async function materializeProfiles(home: string, repo: string): Promise<ProfileSync> {
-  const { seats, shadows, targets } = await planProfiles(home, repo);
+  const { peerSection, seats, shadows, targets } = await planProfiles(home, repo);
   const keep = new Set(targets.map((target) => target.path));
   const rendered: string[] = [];
   for (const target of targets) {
@@ -669,7 +695,9 @@ export async function materializeProfiles(home: string, repo: string): Promise<P
   const seatDirectories: string[] = [];
   for (const seat of seats) seatDirectories.push(await materializeSeatDirectory(home, seat, token));
   return {
+    hubPackPath: join(home, "maestro", "SLP.md"),
     hubPackVersion: hubPackVersion(home),
+    hubPeerSection: peerSection,
     removed,
     rendered,
     resolvedTargets: await resolvedTargets(home),
@@ -722,6 +750,16 @@ export function formatProfileSync(sync: ProfileSync): string {
   if (sync.hubPackVersion !== null && sync.hubPackVersion !== "3") {
     parts.push(
       `warning: the Hub SLP.md is pack version ${sync.hubPackVersion}, so the rendered seats carry its shared contract and team start will refuse it; migrate it to version 3 (slp:profile markers, no Observer section) and run maestro install again`,
+    );
+  }
+  // room d134 (d892): the Hub pack is written once and never refreshed by
+  // install, so an older one has no Peer block and the Peer falls back to that
+  // pack's shared contract - the seat-named wording room d134 replaced. The
+  // fallback is deliberate (a seat reads the pack its generation pinned), so
+  // this names the one hand-copy that finishes the change.
+  if (sync.hubPeerSection === "missing") {
+    parts.push(
+      `warning: ${sync.hubPackPath} has no <!-- slp:shared:peer:begin -->...<!-- slp:shared:peer:end --> block, so the Peer seat renders from that pack's shared contract instead; copy the block from ${shippedPack} between its slp:shared:end and slp:role:hub-supervisor:begin lines and run maestro install again`,
     );
   }
   return parts.join("\n");

@@ -3,8 +3,6 @@ harness: claude
 model: opus
 effort: high
 disallowed_tools: [AskUserQuestion]
-description: SLP Peer variant on Claude Opus
+description: the engineer profile on Claude Opus
 ---
-Role: Peer on Claude Opus.
-
-The Peer mandate above is your whole mandate.
+The instructions above are your whole brief.

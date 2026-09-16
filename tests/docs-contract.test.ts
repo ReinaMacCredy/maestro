@@ -5,6 +5,13 @@ import { scaffoldRoom } from "../src/plugins/room.ts";
 import { skillNames } from "../src/plugins/skills.ts";
 import { runCli, withFixture } from "./helpers.ts";
 
+// room d134 (d892): the pack carries two shared blocks, the default one every
+// seat reads and the Peer's.
+function block(pack: string, marker: string): string {
+  return (new RegExp(`<!-- slp:${marker}:begin -->([\\s\\S]*?)<!-- slp:${marker}:end -->`)
+    .exec(pack)?.[1] ?? "").trim();
+}
+
 const slpOperations = [
   "maestro team start",
   "maestro team stop",
@@ -27,16 +34,27 @@ test("308 [lint] the canonical Workspace Pack exposes only the locked SLP v2 con
   expect(pack).toContain("OPEN -> ACTIVE -> RETURNED -> DONE");
 
   // Hub d91/d98: the seat mandates live in the shipped profiles, not the pack.
+  // room d134 (d891, d894): the Peer mandate names no rung and no verb it
+  // cannot run; its surface is listed in the pack's Peer block instead.
   const peer = await Bun.file(
     join(import.meta.dir, "..", "src", "plugins", "resources", "profiles", "peer.md"),
   ).text();
   expect(pack).not.toContain("slp:role:peer:begin");
-  for (const allowed of ["status", "take assigned work", "notes", "return results"]) {
+  for (const allowed of ["the scope it names is yours", "work note", "the blocker named", "Judgment inside the scope is yours"]) {
     expect(peer).toContain(allowed);
   }
-  for (const forbidden of ["team start", "team stop", "accept Peer", "decide technical"]) {
+  for (const forbidden of ["team start", "team stop", "accept Peer", "decide technical", "Role: Peer", "the Lead", "Team Supervisor", "SLP"]) {
     expect(peer).not.toContain(forbidden);
   }
+  const peerBlock = pack.match(/<!-- slp:shared:peer:begin -->([\s\S]*?)<!-- slp:shared:peer:end -->/)?.[1] ?? "";
+  expect(peerBlock).not.toBe("");
+  for (const surface of ["maestro status", "maestro work take", "maestro work note", "maestro work return"]) {
+    expect(peerBlock).toContain(surface);
+  }
+  // d894: the refusal is a verb it does not run, never a sentence about rank.
+  expect(peerBlock).toContain("`maestro work accept` is not a command you\nrun");
+  expect(peerBlock).not.toContain("maestro team start");
+  expect(peerBlock).not.toContain("maestro decide");
 
   const recipe = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "recipes", "slp.md"))
     .text();
@@ -416,9 +434,12 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(shared).toContain("herdr agent prompt");
 
   const profiles = join(root, "src", "plugins", "resources", "profiles");
+  // room d134: the same doctrine, in words that name nobody to reach.
   const peer = unwrap(await Bun.file(join(profiles, "peer.md")).text());
   expect(peer).not.toContain("Communicate directly");
-  expect(peer).toContain("only through recorded work notes and returns");
+  expect(peer).not.toContain("herdr agent prompt");
+  expect(peer).toContain("record `maestro work note <work-id> \"<your objection>\"` on the item");
+  expect(unwrap(block(pack, "shared:peer"))).toContain("There is no one to hand it to and no dialog to ask a question through");
   expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
   expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
 
@@ -524,9 +545,12 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   expect(supervisor).toContain("by your own judgment or through advisor");
   expect(supervisor).toContain("only what you cannot resolve");
   expect(supervisor).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
-  const peer = unwrap(await read("profiles", "peer.md"));
-  expect(peer).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
-  expect(peer).toContain("the Lead opens the work");
+  // room d134: the walk-in reaches the Peer through the pack's Peer block, and
+  // it names no seat that opens the follow-up work.
+  const peerBlock = unwrap(block(pack, "shared:peer"));
+  expect(peerBlock).toContain('`maestro work note <work-id> "owner asked: <what>" --owner`');
+  expect(peerBlock).toContain("new work will come for it");
+  expect(peerBlock).not.toContain("the Lead opens the work");
 
   // Byte-unchanged: version, marker lines, and the locked surface.
   expect(pack).toContain("<!-- slp:version=3 -->");

@@ -43,13 +43,19 @@ function sharedContract(pack: string): string {
   return (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "").trim();
 }
 
+// room d134 (d892): a Peer seat, composed or not, renders from the pack's own
+// Peer block instead of the shared contract every other seat carries.
+function peerContract(pack: string): string {
+  return (/<!-- slp:shared:peer:begin -->([\s\S]*?)<!-- slp:shared:peer:end -->/.exec(pack)?.[1] ?? "").trim();
+}
+
 async function claudeRender(fixture: Fixture, name: string): Promise<{ body: string; frontmatter: string }> {
   const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
   const close = text.indexOf("\n---\n");
   return { body: text.slice(close + "\n---\n".length), frontmatter: text.slice(0, close) };
 }
 
-test("profile-seat-body: maestro-peer renders shared contract + peer body; maestro-peer-refuter adds the node body under the node's frontmatter (red 3, items 3 and 7)", async () => {
+test("profile-seat-body: maestro-peer renders the Peer block + peer body, the Lead keeps the shared contract; maestro-peer-refuter adds the node body under the node's frontmatter (red 3, items 3 and 7)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -60,13 +66,17 @@ test("profile-seat-body: maestro-peer renders shared contract + peer body; maest
     );
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
-    const shared = sharedContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
+    const pack = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
+    const shared = sharedContract(pack);
+    const peerShared = peerContract(pack);
     const peerBody = parseProfile("peer.md", await readFile(join(shippedRoot, "profiles", "peer.md"), "utf8")).body;
     expect(shared.startsWith("## Shared contract")).toBe(true);
-    expect((await claudeRender(fixture, "peer")).body).toBe(`\n${shared}\n\n${peerBody}\n`);
+    expect(peerShared.startsWith("## Working agreement")).toBe(true);
+    expect((await claudeRender(fixture, "peer")).body).toBe(`\n${peerShared}\n\n${peerBody}\n`);
+    expect((await claudeRender(fixture, "lead")).body).toContain(shared);
 
     const composed = await claudeRender(fixture, "peer-refuter");
-    expect(composed.body).toBe(`\n${shared}\n\n${peerBody}\n\n${refuterBody}\n`);
+    expect(composed.body).toBe(`\n${peerShared}\n\n${peerBody}\n\n${refuterBody}\n`);
     expect(composed.frontmatter).toContain("\nmodel: sonnet");
     expect(composed.frontmatter).toContain("\nname: maestro-peer-refuter\n");
     const codexSession = await readFile(join(fixture.home, ".codex", "maestro-peer-refuter.config.toml"), "utf8");
@@ -502,7 +512,7 @@ test("profile-shadow-composed: a frontmatter-only peer shadow leaves the compose
     await writeFile(join(profiles, "peer.md"), "---\nharness: claude\nmodel: opus\ndescription: peer on opus\n---\n");
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
-    const shared = sharedContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
+    const shared = peerContract(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"));
     const shippedPeer = parseProfile(
       "peer.md",
       await readFile(join(shippedRoot, "profiles", "peer.md"), "utf8"),

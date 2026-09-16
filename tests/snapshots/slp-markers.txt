@@ -4,5 +4,7 @@
 <!-- slp:profile:peer=peer -->
 <!-- slp:shared:begin -->
 <!-- slp:shared:end -->
+<!-- slp:shared:peer:begin -->
+<!-- slp:shared:peer:end -->
 <!-- slp:role:hub-supervisor:begin -->
 <!-- slp:role:hub-supervisor:end -->
