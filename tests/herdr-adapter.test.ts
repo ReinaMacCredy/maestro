@@ -520,13 +520,19 @@ test("runtime-silence: idle while holding ACTIVE work stalls once until the stor
 
 // w708: age one record in the store so a 60-second window can be crossed without
 // a 60-second test. The runtime reads created_at, so this is the same fact the
-// clock would have produced.
-function backdate(fixture: { repo: string }, table: "slp_work_entries" | "slp_decisions", id: string | number): void {
+// clock would have produced. l3 added a second, longer window, so the age is a
+// parameter rather than the one constant that used to cross the only window.
+function backdate(
+  fixture: { repo: string },
+  table: "slp_work_entries" | "slp_decisions",
+  id: string | number,
+  ageMs = 300_000,
+): void {
   const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
   try {
     database
       .query(`UPDATE ${table} SET created_at = ? WHERE id = ?`)
-      .run(new Date(Date.now() - 300_000).toISOString(), id);
+      .run(new Date(Date.now() - ageMs).toISOString(), id);
   } finally {
     database.close();
   }
@@ -599,18 +605,40 @@ test("runtime-records-are-life: a decision against the held item is evidence of 
     await Bun.sleep(400);
     expect(silence()).toHaveLength(1);
 
-    // The holder's own record still releases the rule (d763 survives): fresh, it
-    // is life and withholds the nudge; aged, it re-arms and the nudge lands.
+    // l3 (w712): the holder answers the nudge with an account of why it is
+    // waiting. Fresh, it is life and withholds the nudge. Aged past the 60-second
+    // push window it used to re-arm the once-rule and the same nudge landed a
+    // second time, which punished the seat for reporting; a record written after
+    // the stall entry now quiets that nudge for the whole answered window.
     await run(["work", "note", item, "still working, suite in flight", "--json"], leadEnvironment);
     await Bun.sleep(5_100);
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
     await Bun.sleep(400);
     expect(silence()).toHaveLength(1);
     const own = ownEntries(fixture, item, lead.name);
-    backdate(fixture, "slp_work_entries", own.at(-1)!.id);
+    // Both records age together, because the account was written after the nudge
+    // it answers and the runtime reads created_at for both.
+    const age = (noteMs: number) => {
+      backdate(fixture, "slp_decisions", decision.id, noteMs + 120_000);
+      backdate(fixture, "slp_work_entries", ownEntries(fixture, item, "runtime").at(-1)!.id, noteMs + 60_000);
+      backdate(fixture, "slp_work_entries", own.at(-1)!.id, noteMs);
+    };
+    age(300_000);
     await Bun.sleep(5_100);
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
-    await waitForFakeHerdr(() => silence().length === 2, 5_000, "the second silence entry after the holder's own record aged");
+    await Bun.sleep(400);
+    expect(silence()).toHaveLength(1);
+
+    // l3: the withhold does not consume the once-rule mark. Once the account is
+    // older than the answered window, the next idle event that arrives still
+    // carries the nudge, and the evidence still names the holder's own record.
+    // w742 Q1: the event here is injected, and the runtime has no timer that
+    // would produce one on its own - this pins the withhold's expiry, not the
+    // arrival of a second nudge against a pane that has stopped changing.
+    age(20 * 60_000);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(() => silence().length === 2, 5_000, "the second silence entry once the holder's account is stale");
     expect(silence()[1]?.body).toContain(`latest entry NOTE by ${lead.name}`);
   });
 }, 60_000);

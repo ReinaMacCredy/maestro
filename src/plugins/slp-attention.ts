@@ -31,6 +31,18 @@ const dedupeWindowMs = 5_000;
 // d832: a seat that just pushed a return, accept or note finishes its turn
 // well after the push; its idle inside this window is not a second wake.
 const pushWindowMs = 60_000;
+// l3: a holder that answers a silence nudge with a record of its own has given
+// the store the one thing pane idleness cannot see - why it is waiting. That
+// account quiets the same nudge while the record is younger than this, measured
+// from the record rather than from the previous store write, so a seat is not
+// nudged again at the next idle sample for having reported. It withholds
+// without consuming the once-rule mark, so the first idle event that arrives
+// once the account is older than this still carries the nudge. That is a
+// weaker promise than it sounds: w742 Q1, the runtime has no timer of its own
+// and acts only on pane status changes, so a pane that goes quiet and never
+// changes status again produces no further event to carry it - as was already
+// true of the 60-second window this widens.
+const silenceAnsweredMs = 15 * 60_000;
 const runningWaitMs = 10_000;
 const replayQuietMs = 1_000;
 const replayMaxMs = 60_000;
@@ -274,6 +286,19 @@ function latestRecord(store: Store, workId: string, actor?: string): RecordRow |
   if (!fromEntry) return fromDecision;
   if (!fromDecision) return fromEntry;
   return fromDecision.at > fromEntry.at ? fromDecision : fromEntry;
+}
+
+// l3: the runtime's own stall entry is the mark of a nudge already delivered, so
+// a holder record written after it is that holder answering the nudge rather
+// than a fresh store write that should re-arm it.
+function answersStall(store: Store, workId: string, kind: StallKind, record: RecordRow): boolean {
+  const sent = store.database
+    .query<{ created_at: string }, [string, string, string]>(
+      `SELECT created_at FROM slp_work_entries
+       WHERE work_id = ? AND actor = ? AND flag = ? ORDER BY id DESC LIMIT 1`,
+    )
+    .get(workId, runtimeActor, `stall:${kind}`) ?? null;
+  return sent !== null && record.at > sent.created_at;
 }
 
 // The evidence names the latest record whoever wrote it, so a reader can tell a
@@ -641,11 +666,22 @@ export class AttentionRuntime {
     // same window Advisor F15 uses for a push, for the same reason. Silence only:
     // a blocked pane is a fact about the present, not an inference from quiet, so
     // a recent record must not hide it.
-    if (kind === "silence" && own && Date.now() - Date.parse(own.at) < pushWindowMs) {
+    // l3 (w712): a holder that recorded after the stall entry has answered this
+    // nudge. The once-rule read that record as a store change and re-armed, so the
+    // next idle sample past pushWindowMs sent the same nudge and the same
+    // supervisor copy again - the seat was nudged for complying. Its account is
+    // the strongest evidence the store has about a quiet pane, so it quiets the
+    // same nudge for silenceAnsweredMs measured from itself. d96/d97 are
+    // untouched: this withholds a nudge, it gates nothing.
+    const answered = kind === "silence" && own !== null && answersStall(store, work.id, kind, own);
+    if (kind === "silence" && own && Date.now() - Date.parse(own.at) < (answered ? silenceAnsweredMs : pushWindowMs)) {
       // The mark is deliberately not consumed here: withholding is about how long
       // ago the seat wrote, not about having answered for this record. A seat that
       // records and then goes quiet for good is still nudged once, later.
-      this.log(`stall:${kind} on ${work.id} for ${seat.name} withheld: ${own.label} by ${own.actor} just recorded`);
+      this.log(
+        `stall:${kind} on ${work.id} for ${seat.name} withheld: ${own.label} by ${own.actor} ` +
+          `${answered ? "answers the nudge already sent" : "just recorded"}`,
+      );
       await this.persist();
       return;
     }
