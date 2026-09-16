@@ -633,3 +633,19 @@ test("658 [lint] the Hub section and the SLP recipe say team start pins every la
   expect(recipe).toContain("whether or not it ever opens a Peer");
   expect(recipe).not.toContain("every profile it referenced");
 });
+
+// room lesson l14: the room told a team the runtime was ten commits behind
+// when the true figure was one, and the team had refused maestro update partly
+// on the size of the ten. The single commit was w700, the one that changes how
+// profile shadows resolve.
+test("659 [lint] the shared contract makes a correction that lowers a risk figure carry the conclusion it does not change (l14)", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("A correction that makes a risk figure smaller travels with the conclusion it does not change");
+  expect(shared).toContain("say whether the ruling moves");
+  expect(shared).toContain("give the reason that survives the new number");
+  expect(shared).toContain("will reason its way to the action that was refused");
+});

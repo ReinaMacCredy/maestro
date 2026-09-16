@@ -118,7 +118,12 @@ ask: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record with `herdr agent prompt`, opening every
 prompt with a plain lowercase sentence, never a word a harness could read as a
 slash command, and confirming `agent_status=working` before leaving: a dropped
-brief looks identical to a slow start. `maestro status` lists the team's non-DONE
+brief looks identical to a slow start. A correction that makes a risk figure
+smaller travels with the conclusion it does not change, in the same message:
+say whether the ruling moves, and when it does not, give the reason that
+survives the new number, because a seat handed a smaller number and nothing
+else will reason its way to the action that was refused (room lesson l14).
+`maestro status` lists the team's non-DONE
 items with `*` on those waiting on you (a Peer sees only its own) and collapses
 DONE into a count that `--all` expands; `maestro status <work-id>` ends with a
 `next:` line naming what you may run on it. `maestro status <decision-id>`
