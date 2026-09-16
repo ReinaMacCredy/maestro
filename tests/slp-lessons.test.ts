@@ -660,3 +660,57 @@ test("670 a count-fired headline carries no improver clock (room d129, d132)", a
     expect(headline).not.toContain("no improver run in");
   });
 });
+
+// Hub finding F5 (w734): the LESSONS_PENDING trigger evaluates the store of
+// the workspace it runs in, so in the Hub room it saw room lessons only and a
+// project's pending lessons never reached the Hub's own attention scan or its
+// prompt-hook line. In the Hub room the trigger also evaluates every checkout
+// in ~/maestro/registry, read-only, under the same thresholds (room d132: 5
+// lessons or 7 days).
+test("552 the Hub's attention scan and prompt-hook line carry a registered project's LESSONS_PENDING (w734 F5)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    for (let index = 0; index < 5; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+    // A registry path that does not exist is skipped in silence, never an
+    // error on the hook line.
+    await writeFile(join(room, "registry"), `${fixture.repo}\n${join(fixture.root, "gone")}\n`);
+
+    const headline = "attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days)";
+    const action = `next: open an improver generation on repo at the next generation boundary: ` +
+      `maestro team start ${fixture.repo} "<objective>" --lead-only`;
+
+    const scanned = await runCliAt(fixture, room, ["attention"], { MAESTRO_READ_ONLY: "1" });
+    expect(scanned.stderr).toBe("");
+    expect(scanned.exitCode).toBe(0);
+    expect(scanned.stdout).toContain(headline);
+    expect(scanned.stdout).toContain(action);
+
+    // The prompt-hook line is the SessionStart brief, whose attention section
+    // is the same evaluation.
+    const hookLine = await runCliAt(fixture, room, ["brief", "--session"]);
+    expect(hookLine.exitCode).toBe(0);
+    expect(hookLine.stdout).toContain(headline);
+    expect(hookLine.stdout).toContain(action);
+  });
+}, 30_000);
+
+test("553 the Hub stays quiet for a registered project under both thresholds (w734 F5)", async () => {
+  await withFixture(async (fixture) => {
+    const room = join(fixture.home, "maestro");
+    await makeStore(room);
+    for (let index = 0; index < 3; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+    await writeFile(join(room, "registry"), `${fixture.repo}\n`);
+
+    const scanned = await runCliAt(fixture, room, ["attention"], { MAESTRO_READ_ONLY: "1" });
+    expect(scanned.exitCode).toBe(0);
+    expect(scanned.stdout).not.toContain("LESSONS_PENDING");
+    const hookLine = await runCliAt(fixture, room, ["brief", "--session"]);
+    expect(hookLine.exitCode).toBe(0);
+    expect(hookLine.stdout).not.toContain("LESSONS_PENDING");
+  });
+}, 30_000);

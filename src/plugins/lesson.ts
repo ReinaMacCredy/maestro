@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
@@ -10,6 +11,7 @@ import {
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { resolveHomeDirectory, resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
 
 // d42 runs the improver on a schedule or a threshold, never per correction.
@@ -42,9 +44,63 @@ interface PendingLessonRow {
 
 // The one place the improver threshold is evaluated, so the attention packet,
 // the prompt hook line and the room's ready line cannot drift apart.
+//
+// Hub finding F5 (w734, d890): this used to read the running workspace's store
+// only, so in the Hub room it saw room lessons and a project's pending lessons
+// never reached the Hub at all. In the Hub room it also evaluates every
+// checkout in the registry, under the same thresholds and with the same
+// headline. A project the Hub store already speaks for keeps the Hub's own
+// reading: the registry never overrides what is in front of it.
 export function improverTriggers(context: PluginContext, now: number): ImproverTrigger[] {
-  if (!context.store.hasColumn("lessons", "state")) return [];
-  const pending = context.store.database
+  const own = storeTriggers(context.store.database, now);
+  // The room directory, not the store file: a Hub whose store has not been
+  // created yet (a read-only first scan) still is the Hub, and samePath can
+  // only resolve a path that exists.
+  if (!samePath(dirname(dirname(context.store.path)), resolveHubRoom().room)) return own;
+  const seen = new Set(own.map((trigger) => trigger.project));
+  const registered: ImproverTrigger[] = [];
+  for (const checkout of registeredCheckouts(resolveHomeDirectory())) {
+    for (const trigger of checkoutTriggers(checkout, now)) {
+      if (seen.has(trigger.project)) continue;
+      seen.add(trigger.project);
+      registered.push(trigger);
+    }
+  }
+  return [...own, ...registered];
+}
+
+// d890: the store is opened read-only and every failure - a path that is gone,
+// a store that is not a maestro store, a schema this binary cannot read - skips
+// that project in silence. The hook line never carries an error from another
+// project's store, and never a headline it is not sure of.
+function checkoutTriggers(checkout: string, now: number): ImproverTrigger[] {
+  const storePath = join(checkout, ".maestro", "maestro.db");
+  if (!existsSync(storePath)) return [];
+  let database: Database | null = null;
+  try {
+    database = new Database(storePath, { readonly: true });
+    return storeTriggers(database, now);
+  } catch {
+    return [];
+  } finally {
+    database?.close();
+  }
+}
+
+function lessonsCarryState(database: Database): boolean {
+  try {
+    return database
+      .query<{ name: string }, []>("PRAGMA table_info(lessons)")
+      .all()
+      .some((column) => column.name === "state");
+  } catch {
+    return false;
+  }
+}
+
+function storeTriggers(database: Database, now: number): ImproverTrigger[] {
+  if (!lessonsCarryState(database)) return [];
+  const pending = database
     .query<PendingLessonRow, []>(
       `SELECT id, project, created_at FROM lessons
        WHERE state = 'pending'
@@ -62,7 +118,7 @@ export function improverTriggers(context: PluginContext, now: number): ImproverT
     if (!oldest) return [];
     // An improver run is what marks lessons processed, so the last one in this
     // project is the run; before the first, the oldest lesson starts the clock.
-    const lastRun = context.store.database
+    const lastRun = database
       .query<{ created_at: string }, [string]>(
         `SELECT event_log.created_at FROM event_log
          JOIN lessons ON lessons.id = event_log.entity_id
@@ -95,6 +151,18 @@ export function improverNextAction(trigger: ImproverTrigger, home: string): stri
   const checkout = registeredCheckout(trigger.project, home) ?? `<${trigger.project} checkout>`;
   return `next: open an improver generation on ${trigger.project} at the next generation boundary: ` +
     `maestro team start ${checkout} "<objective>" --lead-only`;
+}
+
+// Every checkout the registry lists, in file order. A registry that is absent
+// or unreadable simply lists nothing: the Hub then sees only its own store.
+function registeredCheckouts(home: string): string[] {
+  const registry = join(home, "maestro", "registry");
+  if (!existsSync(registry)) return [];
+  try {
+    return readFileSync(registry, "utf8").split(/\r?\n/).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // The registry is the only place a project name is bound to a checkout path.
