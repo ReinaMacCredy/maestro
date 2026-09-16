@@ -173,10 +173,14 @@ test("d123: work note --owner records the walk-in with an owner flag, pushes one
       `[from peer][${peer.work.id} OWNER] owner asked: use tabs; read: maestro status ${peer.work.id}`,
     ]);
 
-    // The Hub is not a seat that notes; a plain repository has no owner flag.
+    // w736 F1: the Hub is not a seat that receives a walk-in on a team's item.
+    // The room now resolves the flag itself and names the reason (room d123)
+    // instead of falling through to the room's own work table, whose
+    // INVALID_OPTION said only that a plain repository has no owner flag.
     const hubNote = await runCliAt(fixture, room, ["work", "note", id, "x", "--owner", "--json"], fake.env);
     expect(hubNote.exitCode).toBe(1);
-    expect(failureCode(hubNote.stderr)).toBe("INVALID_OPTION");
+    expect(failureCode(hubNote.stderr)).toBe("ROLE_FORBIDDEN");
+    expect(hubNote.stderr).toContain("maestro decide --scope owner");
   });
 }, 40_000);
 
