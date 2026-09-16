@@ -175,6 +175,9 @@ are never staged or committed.
 - Record: a durable decision has its rationale and rejected alternative;
   a domain term is `maestro term add`; a failed pass is one
   `maestro work note <id> "failed: <one line>"`.
+- Name the shape: `ANTI_PATTERN.md` beside this file holds the seven named
+  failure shapes of multi-agent work, and a lesson names the anti-pattern it
+  shows when one fits, so corrections that rhyme collect under one word.
 - Per-tool stores (Claude auto-memory under `~/.claude/projects/*/memory/`,
   Codex `~/.codex/memories/`) are write buffers their tools keep writing.
   Promotion into the Hub store is `maestro memory ingest` (dry-run first),

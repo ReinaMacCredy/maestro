@@ -126,6 +126,9 @@ test("267 reinstall preserves OWNER.md and the Hub SLP pack while refreshing man
       "CLAUDE.md",
       "shellrc",
       "WORKFLOW.md",
+      // room d138: the anti-pattern vocabulary is a shared contract resource,
+      // so the room's copy is the install render and a reinstall refreshes it.
+      "ANTI_PATTERN.md",
       ".claude/settings.json",
     ];
     const firstInstall = new Map(

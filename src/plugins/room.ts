@@ -151,6 +151,12 @@ export async function scaffoldRoom(home: string): Promise<string> {
     ["CLAUDE.md", agents],
     ["shellrc", shellrc],
     ["WORKFLOW.md", await readFile(join(import.meta.dir, "resources", "WORKFLOW.md"), "utf8")],
+    // room d138: the anti-pattern vocabulary is a shipped contract resource,
+    // so the room's copy is this render and a reinstall refreshes it.
+    [
+      "ANTI_PATTERN.md",
+      await readFile(join(import.meta.dir, "resources", "ANTI_PATTERN.md"), "utf8"),
+    ],
   ] as const) {
     await writeFile(join(room, name), content);
   }

@@ -770,3 +770,35 @@ test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say owned wo
   );
   expect(body).toContain("kind agent -> spawn a read-only scouting sub-agent");
 });
+
+// room d138: the anti-pattern vocabulary ships as one file beside SLP.md and
+// WORKFLOW.md, seven named patterns in the order the giáo án walked them, each
+// with the maestro evidence where one exists and "not yet seen here" where
+// none does, so a filed lesson can name the pattern it shows.
+test("674 [lint] ANTI_PATTERN.md carries the seven patterns in order and WORKFLOW.md and the improver point at it (room d138)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const path = join(root, "resources", "ANTI_PATTERN.md");
+  expect(await Bun.file(path).exists()).toBe(true);
+  const text = await Bun.file(path).text();
+  expect([...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])).toEqual([
+    "balloon",
+    "brake",
+    "pre-solve",
+    "weak scout",
+    "polling waste",
+    "dual ownership",
+    "priority by label",
+  ]);
+  // Every entry states its evidence or says plainly that there is none yet.
+  for (const section of text.split(/^## /m).slice(1)) {
+    expect(section).toContain("evidence:");
+  }
+  expect(unwrap(text)).toContain("work you notice beyond it is a note on the item");
+  expect(unwrap(text)).toContain("not yet seen here");
+  const workflow = unwrap(await Bun.file(join(root, "resources", "WORKFLOW.md")).text());
+  expect(workflow).toContain("ANTI_PATTERN.md");
+  expect(workflow).toContain("a lesson names the anti-pattern it shows when one fits");
+  const skill = unwrap(await Bun.file(join(root, "skills", "maestro-improve", "SKILL.md")).text());
+  expect(skill).toContain("ANTI_PATTERN.md");
+});
