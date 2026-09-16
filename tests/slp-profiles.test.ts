@@ -153,7 +153,7 @@ function startsOf(commands: string[][]): Map<string, string[]> {
   );
 }
 
-test("team-start-launch-args: --agent/--profile with autocompact and no --model, a one-line prompt, --peer-profile recorded and applied, retired flags refused by name (red 5, items 5 and 6)", async () => {
+test("team-start-launch-args: --agent/--profile with autocompact and no --model when no model flag is given, a one-line prompt, --peer-profile recorded and applied, --lead-profile unknown (red 5, items 5 and 6; room d128 keeps the model flags)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -194,15 +194,15 @@ test("team-start-launch-args: --agent/--profile with autocompact and no --model,
     );
     expect(hub.teams[0]?.roles.map((role) => role.profile)).toEqual(["team-supervisor", "lead", "peer-opus"]);
 
-    const retired = await runCliAt(fixture, room, ["team", "start", fixture.repo, "x", "--lead-model", "opus", "--json"], fake.env);
-    expect(retired.exitCode).toBe(1);
-    expect(failure(retired.stderr).code).toBe("RETIRED_FLAG");
-    expect(failure(retired.stderr).message).toContain("--peer-profile");
-    expect(failure(retired.stderr).message).toContain("profiles/lead.md");
+    // room d128: --lead-model is a live launch-time choice again (see
+    // slp-seat-model.test.ts); only the profile flags for the two upper seats
+    // stay unknown, since the mandate changes through a shadowing file only.
     const unknown = await runCliAt(fixture, room, ["team", "start", fixture.repo, "x", "--lead-profile", "lead", "--json"], fake.env);
     expect(unknown.exitCode).toBe(2);
     expect(failure(unknown.stderr).code).toBe("UNKNOWN_FLAG");
-    expect((await runCliAt(fixture, room, ["help", "team"], fake.env)).stdout).not.toContain("--lead-model");
+    const help = (await runCliAt(fixture, room, ["help", "team"], fake.env)).stdout;
+    for (const flag of ["--lead-model", "--peer-model", "--supervisor-model"]) expect(help).toContain(flag);
+    expect(help).not.toContain("--lead-profile");
   });
 }, 30_000);
 

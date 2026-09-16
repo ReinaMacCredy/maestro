@@ -33,6 +33,9 @@ export type SlpRole = "team-supervisor" | "lead" | "peer";
 export interface SeatLaunch {
   autocompact?: number | null;
   harness: "claude" | "codex";
+  // room d128: a launch-time model choice; null means the profile's own
+  // frontmatter model is the default the harness uses.
+  model?: string | null;
   profile: string;
 }
 
@@ -40,6 +43,7 @@ export interface SlpRolePlan {
   autocompact?: number | null;
   kind: "claude" | "codex";
   label: string;
+  model?: string | null;
   name: string;
   profile: string;
   role: SlpRole;
@@ -208,6 +212,7 @@ export function buildSlpTeamPlan(input: {
           autocompact: teamSupervisor.autocompact ?? null,
           kind: teamSupervisor.harness,
           label: `${prefix}:team-supervisor`,
+          model: teamSupervisor.model ?? null,
           name: `supervisor-${input.teamId}`,
           profile: teamSupervisor.profile,
           role: "team-supervisor" as const,
@@ -217,6 +222,7 @@ export function buildSlpTeamPlan(input: {
         autocompact: input.lead.autocompact ?? null,
         kind: input.lead.harness,
         label: `${prefix}:lead`,
+        model: input.lead.model ?? null,
         name: `lead-${input.teamId}`,
         profile: input.lead.profile,
         role: "lead",
@@ -229,10 +235,18 @@ export function buildSlpTeamPlan(input: {
 
 // d90: the harness flag names the rendered profile and nothing else; the
 // agent file has no carrier for autocompact, so it rides the launch line (F10).
-export function launchArguments(role: Pick<SlpRolePlan, "autocompact" | "kind" | "profile">): string[] {
-  if (role.kind === "codex") return ["--profile", `maestro-${role.profile}`];
-  const args = ["--agent", `maestro-${role.profile}`];
-  if (role.autocompact) args.push("--autocompact", String(role.autocompact));
+// room d128: a launch-time model rides the same way, after the profile flag,
+// so the rendered file and its digest never change to switch a seat's model;
+// the launch-line --model beats the frontmatter model in both harnesses, and
+// maestro validates nothing about the value (the harness does).
+export function launchArguments(
+  role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "profile">,
+): string[] {
+  const args = role.kind === "codex"
+    ? ["--profile", `maestro-${role.profile}`]
+    : ["--agent", `maestro-${role.profile}`];
+  if (role.kind === "claude" && role.autocompact) args.push("--autocompact", String(role.autocompact));
+  if (role.model) args.push("--model", role.model);
   return args;
 }
 
@@ -483,7 +497,7 @@ export class HerdrSlpRuntime {
 
   private async startAgent(
     plan: SlpTeamPlan,
-    role: Pick<SlpRolePlan, "autocompact" | "kind" | "name" | "profile">,
+    role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "name" | "profile">,
     paneId: string,
   ): Promise<void> {
     const launch = launchArguments(role);

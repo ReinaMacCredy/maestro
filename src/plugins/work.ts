@@ -470,6 +470,10 @@ export const workPlugin: BuiltInPlugin = {
               description: "Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).",
               value: true,
             },
+            "--model": {
+              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).",
+              value: true,
+            },
             "--fresh": {
               description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.",
             },
