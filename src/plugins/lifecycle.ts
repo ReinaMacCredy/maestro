@@ -16,7 +16,7 @@ import {
   uninstallRepo,
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
-import { resolveHomeDirectory } from "./home.ts";
+import { resolveHomeDirectory, resolveHubRoom } from "./home.ts";
 import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { installInRoomMessage, isRoom } from "./room.ts";
 import { skillNames } from "./skills.ts";
@@ -436,7 +436,48 @@ export async function driftAdvisory(_home: string, runningRoot: string): Promise
   // The unpublished count is a different quantity, so it gets its own clause and
   // its own subject rather than a parenthetical abutting the drift.
   const held = unpublished > 0 ? `; separately, the source holds ${commits(unpublished)} no remote has` : "";
-  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} ${drift}${held}; run maestro update`;
+  // w736 F6: room d118 and room lesson l13 forbid install and update while a
+  // generation is RUNNING - update swaps the runtime under live seats, and the
+  // shadow digests every running generation pins move with it. The drift is
+  // still worth stating; the verb that would break the rule is not, so while
+  // the room store shows a RUNNING generation the line names the boundary
+  // instead. With no room, or none running, nothing about the line moves.
+  const next = roomHoldsRunningGeneration(home)
+    ? "; install at the next boundary (a generation is running)"
+    : "; run maestro update";
+  return `[update] runtime ${stampRead.stamp.commit.slice(0, 8)} ${drift}${held}${next}`;
+}
+
+// A read of the one machine-scoped store, never a write and never a failure:
+// the drift line is advisory, so a missing room, a room from before SLP, or an
+// unreadable store all answer "no generation is running" and leave the line as
+// it was.
+function roomHoldsRunningGeneration(home: string): boolean {
+  const { storePath } = resolveHubRoom(home);
+  if (!existsSync(storePath)) return false;
+  let database: Database;
+  try {
+    database = new Database(storePath, { readonly: true });
+  } catch {
+    return false;
+  }
+  try {
+    const table = database
+      .query<{ present: number }, []>(
+        "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'slp_teams'",
+      )
+      .get();
+    if (!table) return false;
+    return database
+      .query<{ present: number }, []>(
+        "SELECT 1 AS present FROM slp_teams WHERE state = 'RUNNING' LIMIT 1",
+      )
+      .get() !== null;
+  } catch {
+    return false;
+  } finally {
+    database.close();
+  }
 }
 
 async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {

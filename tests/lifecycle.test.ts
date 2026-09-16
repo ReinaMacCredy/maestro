@@ -926,6 +926,48 @@ test("w706 the drift line states its own magnitude, keeps the unpublished count 
   });
 });
 
+// w736 F6: the same line ran in the Hub room all through g11 and g12 telling
+// the Hub to "run maestro update", which room d118 and room lesson l13 forbid
+// while a generation is RUNNING - update swaps the runtime under live seats.
+// The drift is still worth saying; the verb is not.
+test("w736 the drift line names the boundary instead of the update verb while the room store holds a RUNNING generation", async () => {
+  await withFixture(async (fixture) => {
+    const { source } = await createSourceCheckout(fixture);
+    const runtime = await installSource(fixture, source);
+    const updateLine = (result: { stdout: string }) =>
+      result.stdout.split("\n").find((line) => line.startsWith("[update] "));
+
+    await writeFile(join(source, "drift.txt"), "drift\n");
+    await git(source, ["add", "drift.txt"]);
+    await git(source, ["commit", "-m", "drift"]);
+
+    // No room at all: the line is unchanged, which is every repository that is
+    // not driving a team.
+    expect(updateLine(await runInstalled(fixture, runtime, source, ["status"])))
+      .toContain("; run maestro update");
+
+    const roomStore = join(fixture.home, "maestro", ".maestro", "maestro.db");
+    await mkdir(join(fixture.home, "maestro", ".maestro"), { recursive: true });
+    const room = new Database(roomStore, { create: true });
+    room.exec("CREATE TABLE slp_teams (team_id TEXT, generation INTEGER, state TEXT)");
+    room.query("INSERT INTO slp_teams (team_id, generation, state) VALUES (?, ?, ?)")
+      .run("maestro-w736", 13, "RUNNING");
+    room.close();
+
+    const running = updateLine(await runInstalled(fixture, runtime, source, ["status"]));
+    expect(running).toContain("commit behind source");
+    expect(running).toEndWith("; install at the next boundary (a generation is running)");
+    expect(running).not.toContain("run maestro update");
+
+    // Stopped: the boundary has arrived and the verb comes back.
+    const stopped = new Database(roomStore);
+    stopped.query("UPDATE slp_teams SET state = 'STOPPED'").run();
+    stopped.close();
+    expect(updateLine(await runInstalled(fixture, runtime, source, ["status"])))
+      .toEndWith("; run maestro update");
+  });
+});
+
 test("518 update moves a pinned source tag to tag, not to the branch tip", async () => {
   await withFixture(async (fixture) => {
     const { publisher, source } = await createSourceCheckout(fixture);
