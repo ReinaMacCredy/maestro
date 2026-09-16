@@ -4943,6 +4943,24 @@ function decisionData(row: SlpDecisionRow, store: "hub" | "project"): SlpDecisio
   };
 }
 
+// w736 F4: the Hub room holds two decision spaces in one store - the project
+// decision ledger (`decisions`, with the draft/lock/withdraw lifecycle) and the
+// room's own rulings (`slp_decisions`) - and their ids are separate sequences
+// that already overlap in a live room. `maestro status dNNN` reads the second;
+// `maestro decision show dNNN` read only the first and answered NOT_FOUND for
+// every ruling the Hub had recorded. `decision show` now reads both and labels
+// each, which is w697's shape: a store never silently wins an id it shares.
+// Outside the room there is one space and this returns nothing.
+export function roomSlpDecisionResult(
+  context: PluginContext,
+  id: string,
+): { decisions: unknown[]; text: string } | null {
+  if (!isRoom(context.store.database)) return null;
+  const decisions = decisionRowsById(context.store, id, null).map((row) => decisionData(row, "hub"));
+  if (decisions.length === 0) return null;
+  return { decisions, text: decisions.map(decisionText).join("\n\n") };
+}
+
 function decisionText(decision: SlpDecisionData): string {
   return [
     `${decision.id} [${decision.scope}] by ${decision.actor} (${decision.store} store)`,

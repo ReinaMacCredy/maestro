@@ -262,6 +262,7 @@ resolveSourceRoot
 resolveStoreLocation
 revokeTrust
 roomOwnerLine
+roomSlpDecisionResult
 run
 runLifecycleCommand
 runSlpEvent

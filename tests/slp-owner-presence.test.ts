@@ -450,3 +450,75 @@ test("d126: maestro work add refuses --mode with INVALID_OPTION inside a team an
     expect(help.stdout).not.toMatch(/--mode\b/);
   });
 }, 40_000);
+
+// w736 F4: the Hub read its own rulings back with `maestro status dNNN` and
+// tried `maestro decision show dNNN` for the same thing, which answered
+// NOT_FOUND. The room holds two decision spaces in one store - the project
+// ledger's `decisions` (draft/lock/withdraw) and the room's `slp_decisions` -
+// and their ids are separate sequences that already overlap in the live room.
+// So `decision show` in the room answers from both and labels each, the way
+// w697 made status answer from both stores rather than letting one win.
+test("w736 decision show in the room resolves a room ruling, and prints both spaces when one id names a row in each", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    const hubEnvironment = { HERDR_PANE_ID: "hub:p0" };
+
+    const ruled = await runCliAt(
+      fixture,
+      room,
+      ["decide", "Lock the g13 brief as written", "--why", "owner's word in the Hub pane", "--json"],
+      hubEnvironment,
+    );
+    expect(phaseFree(ruled.stderr)).toBe("");
+    expect(ruled.exitCode).toBe(0);
+    const rulingId = envelope<{ decision: { id: string } }>(ruled.stdout).decision.id;
+
+    // What status already prints, decision show now prints too.
+    const status = await runCliAt(fixture, room, ["status", rulingId], hubEnvironment);
+    const shown = await runCliAt(fixture, room, ["decision", "show", rulingId], hubEnvironment);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("Lock the g13 brief as written");
+    expect(shown.stdout).toContain("(hub store)");
+    expect(shown.stdout.trim()).toBe(status.stdout.trim());
+
+    // The ledger in the same store runs its own dNNN sequence, so one id can
+    // name a row in each; neither is allowed to hide the other.
+    const drafted = await runCliAt(
+      fixture,
+      room,
+      ["decision", "draft", "A ledger decision that happens to share an id", "--json"],
+      hubEnvironment,
+    );
+    expect(drafted.exitCode).toBe(0);
+    const ledgerId = envelope<{ decision: { id: string } }>(drafted.stdout).decision.id;
+    expect(ledgerId).toBe(rulingId);
+
+    const both = await runCliAt(fixture, room, ["decision", "show", ledgerId], hubEnvironment);
+    expect(both.exitCode).toBe(0);
+    expect(both.stdout).toContain("A ledger decision that happens to share an id");
+    expect(both.stdout).toContain("Lock the g13 brief as written");
+
+    // An id in neither space still fails, and it names the room verb that reads
+    // rulings so the reader is not sent to a third place.
+    const missing = await runCliAt(fixture, room, ["decision", "show", "d4242", "--json"], hubEnvironment);
+    expect(missing.exitCode).toBe(1);
+    expect(failureCode(missing.stderr)).toBe("NOT_FOUND");
+  });
+});
+
+// Outside the room there is one decision space and `decision show` keeps
+// exactly the behaviour it had.
+test("w736 decision show outside the room is unchanged: the project ledger answers and an unknown id is NOT_FOUND", async () => {
+  await withFixture(async (fixture) => {
+    const drafted = await runCli(fixture, ["decision", "draft", "A project decision", "--json"]);
+    expect(drafted.exitCode).toBe(0);
+    const id = envelope<{ decision: { id: string } }>(drafted.stdout).decision.id;
+    const shown = await runCli(fixture, ["decision", "show", id]);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("A project decision");
+    expect(shown.stdout).not.toContain("hub store");
+    const missing = await runCli(fixture, ["decision", "show", "d4242", "--json"]);
+    expect(missing.exitCode).toBe(1);
+    expect(failureCode(missing.stderr)).toBe("NOT_FOUND");
+  });
+});
