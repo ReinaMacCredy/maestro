@@ -20,7 +20,10 @@ different files and can run at once, or a context-heavy investigation whose
 noise would eat your own context. Any one of the three is reason enough, even
 when the diff would be small. Brief it with a bounded objective and its
 acceptance in `maestro work add "<objective>" --to <peer>`; that operation
-reuses or opens the named Peer. Until you can write both, the work is yours.
+reuses or opens the named Peer. Until you can write both, the work is yours:
+open it for yourself with `maestro work add "<objective>"` and no `--to`, then
+take it with `maestro work take <id>`; nobody is woken, and your reviewer
+accepts it as it accepts your other returns.
 The exception that never moves is your own coordination work: briefs, reviews
 and technical decisions stay with you.
 

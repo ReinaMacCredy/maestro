@@ -588,3 +588,71 @@ test("lead-only: a workspace that auto-closes with its last tab lets team stop c
     expect(status.stdout).not.toContain("ORPHANED?");
   });
 });
+
+// room d118 mechanism (w725 Finding A): a Lead opens its own item with
+// `work add` and no --to. The row is the same one team start writes for Lead
+// work - the Lead is its own assignee, no Peer pane is opened, nothing is
+// pushed because there is no counterpart to wake - so its reviewer falls out
+// of the existing boundary: the Hub in this shape, the Team Supervisor in the
+// supervised one (asserted in tests/slp-v2.test.ts).
+test("lead-only: a Lead opens its own item with work add and no --to, takes it, and the Hub reviews it; a Peer still cannot add work (room d118, w725)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, room } = await startTeam(fixture, true);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const promptsBefore = (await fakeHerdrCommands(fake))
+      .filter((command) => command[0] === "agent" && command[1] === "prompt").length;
+
+    const added = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "A follow-up the Lead will do itself", "--json"],
+      leadEnvironment,
+    );
+    expect(added.stderr).not.toContain("error");
+    expect(added.exitCode).toBe(0);
+    const own = envelope<{
+      role: { name: string; paneId: string; role: string };
+      work: { assignedTo: string; createdBy: string; id: string; owner: string | null; state: string };
+    }>(added.stdout);
+    expect(own.work).toMatchObject({ assignedTo: lead.name, createdBy: lead.name, owner: null, state: "OPEN" });
+    expect(own.role).toMatchObject({ name: lead.name, paneId: lead.paneId, role: "lead" });
+    // No Peer pane and no wake line: the Lead is the only party to this item.
+    const promptsAfter = (await fakeHerdrCommands(fake))
+      .filter((command) => command[0] === "agent" && command[1] === "prompt").length;
+    expect(promptsAfter).toBe(promptsBefore);
+    expect(JSON.stringify(await readFakeHerdrState(fake))).not.toContain(":peer:");
+
+    // The list marks it as waiting on the Lead while OPEN.
+    const listed = await runCliAt(fixture, fixture.repo, ["status"], leadEnvironment);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain(`* ${own.work.id} OPEN`);
+
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", own.work.id], leadEnvironment)).exitCode)
+      .toBe(0);
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "return", own.work.id, "done"], leadEnvironment))
+        .exitCode,
+    ).toBe(0);
+    const waiting = await runCliAt(fixture, fixture.repo, ["status", own.work.id], leadEnvironment);
+    expect(waiting.stdout).toContain("waiting on hub-supervisor");
+    const accepted = await runCliAt(fixture, room, ["work", "accept", own.work.id, "--json"], fake.env);
+    expect(accepted.exitCode).toBe(0);
+    expect(envelope<{ work: { acceptedBy: string; state: string } }>(accepted.stdout).work)
+      .toMatchObject({ acceptedBy: "hub-supervisor", state: "DONE" });
+
+    // A Peer has no work add, with or without --to.
+    const peerAdded = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "A genuinely parallel part", "--to", "peer-parallel", "--json"],
+      leadEnvironment,
+    );
+    expect(peerAdded.exitCode).toBe(0);
+    const peer = envelope<{ role: { paneId: string } }>(peerAdded.stdout);
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    const refused = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer self-work"], peerEnvironment);
+    expect(refused.exitCode).not.toBe(0);
+    expect(`${refused.stdout}${refused.stderr}`).toContain("ROLE_FORBIDDEN");
+  });
+});

@@ -6656,3 +6656,82 @@ test("SLP v2 work add refuses --acceptance and --blocked-by instead of discardin
     expect(unknownBlocker.exitCode).toBe(1);
   });
 }, 30_000);
+
+// room d118 mechanism (w725 Finding A), supervised shape: a Lead opens its own
+// item with `work add` and no --to, takes it, and the Team Supervisor reviews
+// it exactly as it reviews the Lead work team start hands out. The refusals
+// around it do not move: the Hub's `work add --to` stays ROLE_FORBIDDEN.
+test("SLP v2 lets a Lead open its own item with work add and no --to, which the Team Supervisor reviews, while the Hub's work add --to stays refused (room d118, w725)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Lead opens its own follow-up", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const startData = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+    }>(started.stdout);
+    const lead = startData.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const promptsBefore = (await fakeHerdrCommands(fake))
+      .filter((command) => command[0] === "agent" && command[1] === "prompt").length;
+
+    const added = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", "A follow-up the Lead will do itself", "--json"],
+      leadEnvironment,
+    );
+    expect(phaseFree(added.stderr)).toBe("");
+    expect(added.exitCode).toBe(0);
+    const own = envelope<{
+      role: { name: string; role: string };
+      work: { assignedTo: string; createdBy: string; id: string; owner: string | null; state: string };
+    }>(added.stdout);
+    expect(own.work).toMatchObject({ assignedTo: lead.name, createdBy: lead.name, owner: null, state: "OPEN" });
+    expect(own.role).toMatchObject({ name: lead.name, role: "lead" });
+    // Nothing to wake: no Peer pane was opened and no OPEN line went out.
+    const promptsAfter = (await fakeHerdrCommands(fake))
+      .filter((command) => command[0] === "agent" && command[1] === "prompt").length;
+    expect(promptsAfter).toBe(promptsBefore);
+
+    const listed = await runCliAt(fixture, fixture.repo, ["status"], leadEnvironment);
+    expect(listed.stdout).toContain(`* ${own.work.id} OPEN`);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", own.work.id], leadEnvironment)).exitCode)
+      .toBe(0);
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "return", own.work.id, "done"], leadEnvironment))
+        .exitCode,
+    ).toBe(0);
+    const waiting = await runCliAt(fixture, fixture.repo, ["status", own.work.id], leadEnvironment);
+    expect(waiting.stdout).toContain(`waiting on ${supervisor.name}`);
+    const accepted = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "accept", own.work.id, "--json"],
+      supervisorEnvironment,
+    );
+    expect(accepted.exitCode).toBe(0);
+    expect(envelope<{ work: { acceptedBy: string; state: string } }>(accepted.stdout).work)
+      .toMatchObject({ acceptedBy: supervisor.name, state: "DONE" });
+
+    // The Hub still cannot assign team work directly.
+    const hubAdd = await runCliAt(fixture, room, ["work", "add", "Hub team work", "--to", lead.name], fake.env);
+    expect(hubAdd.exitCode).not.toBe(0);
+    expect(`${hubAdd.stdout}${hubAdd.stderr}`).toContain("ROLE_FORBIDDEN");
+  });
+});

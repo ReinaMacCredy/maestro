@@ -2624,10 +2624,17 @@ export async function maybeHandleSlpWorkAdd(
       throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
     }
     if (fresh) throw new CliError("INVALID_OPTION", "--fresh applies to Lead work add --to <peer>");
-  } else {
-    if (!requestedTarget) {
-      throw new CliError("MISSING_ARGUMENT", "Lead work add requires --to <peer>");
+  } else if (!requestedTarget) {
+    // room d118 (w725): a Lead opens its own item with no --to. The row is the
+    // one team start writes for Lead work - the Lead is its own assignee - so
+    // no Peer pane is opened, no wake line goes out, and its reviewer is the
+    // seat above exactly as for Lead work today.
+    if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
+    if (profileOption !== undefined) {
+      throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
     }
+    if (fresh) throw new CliError("INVALID_OPTION", "--fresh applies to Lead work add --to <peer>");
+  } else {
     const peerName = normalizedPeerName(
       actor.team.team_id,
       requestedTarget,
@@ -2758,12 +2765,13 @@ export async function maybeHandleSlpWorkAdd(
     };
   }
   if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
+  const opensPeer = actor.role === "lead" && assignee.role === "peer";
 
   const now = new Date().toISOString();
   let attachedRoom = false;
   let id = "";
   try {
-    if (actor.role === "lead") {
+    if (opensPeer) {
       const roomStore = new Store(actor.team.room_store_path);
       try {
         migrateRoom(roomStore);
@@ -2775,7 +2783,7 @@ export async function maybeHandleSlpWorkAdd(
     }
     context.store.database.exec("BEGIN IMMEDIATE");
     requireRunningGeneration(context.store, actor.team);
-    if (actor.role === "lead") {
+    if (opensPeer) {
       for (const table of ["slp_local_roles", "slp_room.slp_team_roles"]) {
         context.store.database
           .query(
@@ -2849,15 +2857,18 @@ export async function maybeHandleSlpWorkAdd(
   context.sessions.record("work.add");
   // Live row 17 (g18): an acknowledged Peer pane never learned about its next
   // item and a fresh one sat idle after READY, so the assignee is woken here
-  // in both cases, the same d753 line as return and accept.
-  await pushNotice(
-    actor.team.project_path,
-    actor.role,
-    assignee.name,
-    `${id} OPEN`,
-    objective,
-    `maestro status ${id}`,
-  );
+  // in both cases, the same d753 line as return and accept. A Lead's own item
+  // (room d118) has no counterpart to wake.
+  if (assignee.name !== actor.name) {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      assignee.name,
+      `${id} OPEN`,
+      objective,
+      `maestro status ${id}`,
+    );
+  }
   const work = readSlpWork(context, actor, id);
   return {
     data: {
