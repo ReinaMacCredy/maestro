@@ -599,3 +599,16 @@ test("656 [lint] WORKFLOW.md believes a run on what executed, not on an exit cod
   expect(workflow).toContain("check the shared generated and ignored inputs first");
   expect(workflow).toContain("Distrust hardest the explanation that removes your reason to look further");
 });
+
+// room lesson l24: two safety clauses this room wrote converted into
+// permissions when their conditions lapsed with nobody deciding anything.
+test("657 [lint] WORKFLOW.md words safety clauses in the affirmative polarity (l24)", async () => {
+  const workflow = (await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "WORKFLOW.md"),
+  ).text()).replaceAll(/\s+/g, " ");
+  expect(workflow).toContain("Word a safety clause in the affirmative");
+  expect(workflow).toContain('"X happens only when <a named party does Y>"');
+  expect(workflow).toContain("A permission must be created by an act");
+  expect(workflow).toContain("never by a state ceasing");
+  expect(workflow).toContain("the condition's expiry coincides with the hazard's end");
+});

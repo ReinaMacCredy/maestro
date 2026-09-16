@@ -64,6 +64,13 @@ trade-offs, or durable constraints. Keep routine details in the work or final
 diff, not separate decision records. Supersede conflicting durable decisions
 explicitly; do not silently rewrite them.
 
+Word a safety clause in the affirmative: "X happens only when <a named party
+does Y>", never "do not X while <state>". A permission must be created by an
+act - the user's word, or a named party recording a proof - never by a state
+ceasing, because nobody is present at the moment a condition lapses and a
+conditioned prohibition becomes a permission the moment its condition does. It
+is sound only when the condition's expiry coincides with the hazard's end.
+
 The next bounded slice is ready when its outcome, scope, authority, and check
 are clear and no unresolved choice blocks it. Count blockers to that slice,
 not all open questions about later work. A design-only request still authorizes
