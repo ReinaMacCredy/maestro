@@ -365,11 +365,15 @@ interface SharedContracts {
 // broken pack is refused.
 async function sharedContractFor(home: string): Promise<SharedContracts> {
   const hubPack = join(home, "maestro", "SLP.md");
-  const pack = existsSync(hubPack) ? await readFile(hubPack, "utf8") : null;
-  const fromHub = pack === null ? null : packSection(pack, "shared");
-  const shared = fromHub ?? packSection(await readFile(shippedPack, "utf8"), "shared");
+  const fromHub = existsSync(hubPack) ? await readFile(hubPack, "utf8") : null;
+  // Both blocks come from one pack, never one from each: a seat's words have to
+  // come from the file its generation pinned, and a Hub pack with no readable
+  // shared section is not that file for any seat.
+  const source = fromHub !== null && packSection(fromHub, "shared") !== null
+    ? fromHub
+    : await readFile(shippedPack, "utf8");
+  const shared = packSection(source, "shared");
   if (!shared) throw new CliError("INVALID_SLP_PACK", `${shippedPack} is missing section: shared`);
-  const source = fromHub === null ? await readFile(shippedPack, "utf8") : (pack as string);
   const peer = packSection(source, "shared:peer");
   return {
     default: shared,
