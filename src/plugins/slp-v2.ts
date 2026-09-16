@@ -2997,7 +2997,26 @@ export async function maybeHandleSlpWorkNote(
     if (flags.length > 1) {
       throw new CliError("INVALID_OPTION", `${flags.join(" and ")} are separate notes`);
     }
-    if (flags.length === 0 && roomHoldsLocalWork(context.store, id)) return null;
+    if (flags.length === 0 && roomHoldsLocalWork(context.store, id)) {
+      // Two id spaces meet on this verb, and both are live: the room's own
+      // `work` sequence and every team's. They do not overlap today, and the
+      // room's d118/d125 collision in `decisions` is what one looks like when
+      // it happens, so when both hold the id neither wins silently - the Hub
+      // qualifies the team's item the way it already qualifies an ambiguous
+      // one (w736 F1).
+      let team: string | null = null;
+      try {
+        team = resolveHubWorkTarget(context, id, "read").teamId;
+      } catch {
+        team = null;
+      }
+      if (team === null) return null;
+      throw new CliError(
+        "AMBIGUOUS_WORK",
+        `${id} names both a Hub work item and SLP work in ${team}; qualify the team's item as ${team}:${id}`,
+        { candidates: [id, `${team}:${id}`] },
+      );
+    }
     if (invocation.options.blocked === true) {
       throw new CliError(
         "ROLE_FORBIDDEN",

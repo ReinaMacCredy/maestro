@@ -960,12 +960,42 @@ test("w736 the Hub records a plain note on a lead-only team's Lead item, wakes t
     expect(unknown.exitCode).not.toBe(0);
     expect(`${unknown.stdout}${unknown.stderr}`).toContain("SLP work not found from Hub: w9999");
 
-    // The room's own work items keep their own note verb.
-    const own = await runCliAt(fixture, room, ["work", "add", "A Hub-local reminder", "--json"], fake.env);
-    expect(own.exitCode).toBe(0);
-    const ownId = (JSON.parse(own.stdout) as { data: { work: { id: string } } }).data.work.id;
-    const ownNote = await runCliAt(fixture, room, ["work", "note", ownId, "still local", "--json"], fake.env);
+    // The room keeps its own work items, on their own id sequence, and the
+    // plain verb still answers for them.
+    const ownIds: string[] = [];
+    for (const objective of ["A Hub-local reminder", "A second Hub-local reminder"]) {
+      const added = await runCliAt(fixture, room, ["work", "add", objective, "--json"], fake.env);
+      expect(added.exitCode).toBe(0);
+      ownIds.push((JSON.parse(added.stdout) as { data: { work: { id: string } } }).data.work.id);
+    }
+    const ownOnly = ownIds.find((candidate) => candidate !== workId)!;
+    const ownNote = await runCliAt(fixture, room, ["work", "note", ownOnly, "still local", "--json"], fake.env);
     expect(ownNote.exitCode).toBe(0);
     expect(ownNote.stdout).toContain("still local");
+
+    // Where the two sequences do collide, neither wins silently: the room's
+    // `decisions` and `slp_decisions` already share ids, which is what that
+    // failure looks like when it is allowed to pass.
+    expect(ownIds).toContain(workId);
+    const ambiguous = await runCliAt(
+      fixture,
+      room,
+      ["work", "note", workId, "which one?", "--json"],
+      fake.env,
+    );
+    expect(ambiguous.exitCode).not.toBe(0);
+    const clash = `${ambiguous.stdout}${ambiguous.stderr}`;
+    expect(clash).toContain("AMBIGUOUS_WORK");
+    expect(clash).toContain(`${data.team.teamId}:${workId}`);
+    // The qualified form reaches the team's item, as it does for every other
+    // Hub verb that can meet the same id twice.
+    const qualified = await runCliAt(
+      fixture,
+      room,
+      ["work", "note", `${data.team.teamId}:${workId}`, "qualified", "--json"],
+      fake.env,
+    );
+    expect(qualified.exitCode).toBe(0);
+    expect(qualified.stdout).toContain("qualified");
   });
 });

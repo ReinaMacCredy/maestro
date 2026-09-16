@@ -195,9 +195,10 @@ line it can send down, and it is the only plain note in SLP that wakes anyone.
 `--blocked` and `--owner` from the room stay refused, since you have no seat
 above you to escalate to and an owner instruction typed into your pane is
 recorded as `maestro decide --scope owner`, never as a note on a team's item.
-A work id the room's own work table holds is still the room's own item and the
-plain verb answers for it; any other id is resolved as SLP work, so a miss says
-`SLP work not found from Hub`. That
+A work id only the room's own work table holds is still the room's own item and
+the plain verb answers for it; an id both spaces hold is refused until you
+qualify the team's as `<team-id>:<id>`; any other id is resolved as SLP work,
+so a miss says `SLP work not found from Hub`. That
 reach covers a lead-only team's Lead only; in a supervised team you still go
 through the Team Supervisor and never manage a Lead or Peer directly, and you
 never manage Peers directly in either shape. The room store holds the owner's

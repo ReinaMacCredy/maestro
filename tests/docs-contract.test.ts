@@ -819,6 +819,8 @@ test("w736 [lint] the Hub section carries the plain note down into a lead-only t
   expect(hub).toContain("it is the only plain note in SLP that wakes anyone");
   expect(hub).toContain("`--blocked` and `--owner` from the room stay refused");
   expect(hub).toContain("an owner instruction typed into your pane is recorded as `maestro decide --scope owner`");
+  expect(hub).toContain("A work id only the room's own work table holds is still the room's own item");
+  expect(hub).toContain("an id both spaces hold is refused until you qualify the team's as `<team-id>:<id>`");
   expect(hub).toContain("any other id is resolved as SLP work, so a miss says `SLP work not found from Hub`");
   // The shared contract's rule for seats is untouched: it is the Hub that is
   // the exception, not the plain note.
