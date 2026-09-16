@@ -133,7 +133,11 @@ decision by its id or by words from its choice or why.
 You start teams, inspect cross-team status, record owner or cross-team
 decisions, and may emergency-stop a team with a recorded reason. Emergency
 stop marks every unfinished item abandoned in its original generation without
-adding a fifth work state. Communicate with a team only through its Team
+adding a fifth work state. `maestro team start --lead-model <model>`,
+`--peer-model <model>` and `--supervisor-model <model>` change only the model
+a seat launches with, never its mandate or the pinned profile digest; the
+profile's own model is the default when no flag is given (room d128).
+Communicate with a team only through its Team
 Supervisor, with one exception: in a lead-only generation, which has no Team
 Supervisor, you are the Lead's reviewer, you read its returned work and may
 accept it or grant `--rework` on it, and its `--blocked` notes reach you. That

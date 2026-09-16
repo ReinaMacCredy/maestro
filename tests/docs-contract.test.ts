@@ -348,7 +348,7 @@ test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guar
   expect(work).toContain("COUNCIL_REQUEST");
 });
 
-test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the retired flags absent, OWNER.md template names the three seat profiles (red 11, item 9)", async () => {
+test("docs-contract: pack v3 markers, no Observer, --peer-profile and the room d128 model flags named, no --lead-profile, OWNER.md template names the three seat profiles (red 11, item 9)", async () => {
   const root = join(import.meta.dir, "..");
   const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
   expect(pack).toContain("<!-- slp:version=3 -->");
@@ -370,6 +370,7 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the 
 
   const recipe = await Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text();
   const cli = await Bun.file(join(root, "site", "src", "content", "docs", "reference", "cli.md")).text();
+  const readme = await Bun.file(join(root, "README.md")).text();
   for (const surface of [recipe, cli]) {
     expect(surface).toContain("--peer-profile");
     expect(surface).not.toContain("--lead-profile");
@@ -377,6 +378,17 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile named and the 
     expect(surface).not.toContain("sentinel");
   }
   expect(cli).not.toContain("--stall repeat");
+  // room d128 (w728): a seat's model is a launch-time choice. The Hub
+  // Supervisor section of the pack, the README and the CLI reference name
+  // the three team start flags and say they change the model only, never
+  // the mandate or the pinned digest; the retired-flag refusal is gone.
+  const hub = /<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "";
+  for (const surface of [hub, readme, cli]) {
+    for (const flag of ["--lead-model", "--peer-model", "--supervisor-model"]) expect(surface).toContain(flag);
+    expect(surface).not.toContain("RETIRED_FLAG");
+  }
+  expect(hub).toContain("never its mandate or the pinned profile digest");
+  expect(cli).toContain('maestro work add "<objective>" --to <peer-name> --model <model>');
 
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

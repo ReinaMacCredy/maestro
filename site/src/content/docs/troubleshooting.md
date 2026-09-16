@@ -160,8 +160,10 @@ seat, under `~/.maestro/claude/<seat>/agents/`), so run `maestro install`;
 `claude setup-token` token at `~/.maestro/claude/oauth-token`, so run
 `claude setup-token | maestro install --seat-token` and check `maestro doctor`
 for `seat token: present`; `PEER_PROFILE_MISMATCH` means the named Peer already runs
-another profile, so pick another Peer name; `RETIRED_FLAG` names the
-replacement for `--lead-model`, `--peer-model` or `--supervisor-model`;
+another profile, so pick another Peer name; `INVALID_OPTION` on
+`--lead-model`, `--peer-model`, `--supervisor-model` or `work add --model`
+means an empty model name, `--supervisor-model` on a `--lead-only` team, or
+`--model` on an item with no `--to`;
 `STALL_RETIRED` means `work note --stall` left with the retired Observer seat;
 `--blocked` is the attention note and the runtime pane records stalls.
 

@@ -18,7 +18,7 @@ development or administrative Maestro surfaces and are not extra SLP tools.
 ### `team start`
 
 ```sh
-maestro team start <project> "<objective>" [--peer-profile <name>] [--json]
+maestro team start <project> "<objective>" [--lead-only] [--peer-profile <name>] [--lead-model <model>] [--peer-model <model>] [--supervisor-model <model>] [--json]
 ```
 
 Hub Supervisor authority. It runs from `~/maestro`, pins the canonical
@@ -35,8 +35,16 @@ generation whose runtime pane did not open fails with `RUNTIME_PANE_FAILED`
 naming `maestro install`. `--peer-profile <name>` overrides the pack's `peer`
 profile for this generation and is recorded on the team row; the Team
 Supervisor and Lead change through a shadowing file in `~/maestro/profiles/`.
-The retired `--lead-model`, `--peer-model` and `--supervisor-model` flags are
-refused with `RETIRED_FLAG` naming the replacement; a missing render fails with
+`--lead-model <model>`, `--peer-model <model>` and `--supervisor-model <model>`
+launch that seat with the named model (`claude --model` or `codex --model`
+after the profile flag, as `--autocompact` already rides), recorded on the
+team row and printed as `lead model: <model>` among the start phases; the
+profile's frontmatter model is the default when no flag is given, the rendered
+profile and its pinned digest are unchanged, an empty value and
+`--supervisor-model` with `--lead-only` are `INVALID_OPTION`, and the name is
+passed through unvalidated for the harness to judge. `maestro work add --to
+<peer> --model <model>` picks the model for one Peer over the generation's
+`--peer-model`. A missing render fails with
 `PROFILE_NOT_INSTALLED` before any pane opens. Each Claude seat pane is
 created with `CLAUDE_CONFIG_DIR=~/.maestro/claude/<seat>` (d850); a Claude
 seat with no seat token fails with `SEAT_TOKEN_MISSING`, naming
@@ -100,6 +108,7 @@ maestro work add "<objective>"
 maestro work add "<objective>" --to <peer-name>
 maestro work add "<objective>" --to <peer-name> --profile <name>
 maestro work add "<objective>" --to <peer-name> --fresh
+maestro work add "<objective>" --to <peer-name> --model <model>
 ```
 
 Team Supervisor creates work for Lead. Lead must name a Peer with `--to`;
@@ -118,7 +127,9 @@ pane to a fresh harness context first (Claude Code `/clear`, Codex `/new`,
 proven by a new harness session, then the same READY challenge a new pane
 passes) and is refused with `PEER_ACTIVE` while that Peer holds ACTIVE work;
 a reset that does not take is refused with `PEER_RESET_FAILED` and nothing is
-added (Hub d101).
+added (Hub d101). `--model <model>` launches that one Peer with the named
+model over the generation's `--peer-model`, on the launch line only, and is
+`INVALID_OPTION` without `--to` or with an empty value (room d128).
 
 ### `work take`
 

@@ -106,7 +106,11 @@ digest for that generation, creates exactly one Team Supervisor and one Lead,
 and creates initial `OPEN` work for the Lead. Peers are opened lazily by
 assigned work. `maestro team start --lead-only` opens the other shape, one Lead
 plus the runtime pane and no Team Supervisor; the shape is pinned for the
-generation and the Hub Supervisor is that Lead's reviewer. Install seeds the
+generation and the Hub Supervisor is that Lead's reviewer.
+`--lead-model`, `--peer-model` and `--supervisor-model` pick a seat's model
+for the generation on its launch line, leaving the profile, its digest and the
+pack untouched; `maestro work add --to <peer> --model <model>` does the same
+for one Peer. Install seeds the
 Hub pack only when it is absent; later installs and updates preserve owner
 edits.
 
