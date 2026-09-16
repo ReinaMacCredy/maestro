@@ -816,3 +816,64 @@ test("667 a Hub decision with --replaces on a lead-only team's work marks that i
     );
   });
 });
+
+// w736 F3: after a team stop the Hub could no longer read the items it had
+// just accepted - `maestro status w732` from ~/maestro answered "SLP work not
+// found from Hub", because the resolver only ever looked at RUNNING teams. The
+// record is the point of the record, and reading it changes nothing; the write
+// verbs still refuse, and now they say why instead of pretending the id does
+// not exist.
+test("w736 a stopped generation's work is still readable from the Hub, while every write verb refuses it by naming the team's state", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, true);
+    const { data, fake, room } = started;
+    const workId = data.work.id;
+    await finishLeadWork(fixture, started);
+    expect((await runCliAt(fixture, room, ["work", "accept", workId], fake.env)).exitCode).toBe(0);
+    const stopped = await runCliAt(
+      fixture,
+      room,
+      ["team", "stop", data.team.teamId, "--reason", "one item accepted", "--json"],
+      fake.env,
+    );
+    expect(stopped.exitCode).toBe(0);
+    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("STOPPED");
+
+    // The read still answers, with the same detail it answered while running.
+    const read = await runCliAt(fixture, room, ["status", workId], fake.env);
+    expect(read.exitCode).toBe(0);
+    expect(read.stdout).toContain(`${workId} DONE`);
+    expect(read.stdout).toContain("acceptance by hub-supervisor: accepted");
+    expect(read.stdout).toContain("next: none (accepted)");
+
+    // Qualifying the id by team reads the same row.
+    const qualified = await runCliAt(
+      fixture,
+      room,
+      ["status", `${data.team.teamId}:${workId}`],
+      fake.env,
+    );
+    expect(qualified.exitCode).toBe(0);
+    expect(qualified.stdout).toContain(`${workId} DONE`);
+
+    // Writes are refused, and the refusal names the state rather than claiming
+    // the id is unknown - the message that sent the Hub to the wrong table.
+    for (const argv of [
+      ["work", "accept", workId],
+      ["work", "note", workId, "one more thing", "--rework"],
+      ["decide", "A late ruling", "--why", "because", "--work", workId],
+    ]) {
+      const refused = await runCliAt(fixture, room, [...argv, "--json"], fake.env);
+      expect(refused.exitCode).not.toBe(0);
+      const message = `${refused.stdout}${refused.stderr}`;
+      expect(message).toContain("STOPPED");
+      expect(message).toContain(data.team.teamId);
+      expect(message).not.toContain("SLP work not found from Hub");
+    }
+
+    // An id no team ever held is still simply not found.
+    const unknown = await runCliAt(fixture, room, ["status", "w9999"], fake.env);
+    expect(unknown.exitCode).not.toBe(0);
+    expect(`${unknown.stdout}${unknown.stderr}`).toContain("SLP work not found from Hub: w9999");
+  });
+});
