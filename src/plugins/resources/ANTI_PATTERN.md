@@ -18,11 +18,12 @@ In maestro: a Peer that finds a second defect while fixing the first and fixes
 both; a Lead that widens an item instead of opening new work; a return whose
 diff is larger than its objective.
 
-evidence: the Peer mandate exists because of it - `profiles/peer.md` says the
-objective "is the whole of your authority, never quietly narrowed, and work you
-notice beyond it is a note on the item". The shared contract's companion rule
-is that an objective and its acceptance never change: changed scope requires
-new work.
+evidence: the Peer mandate exists because of it - `profiles/peer.md` says
+"deliver the brief at the scope it set: a brief you cannot meet is returned
+with its blocker, never quietly narrowed, and work you notice beyond it is a
+note on the item, never part of the change". The shared contract's companion
+rule is that an objective and its acceptance never change: changed scope
+requires new work.
 
 ## brake
 
