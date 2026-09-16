@@ -969,3 +969,19 @@ test("l8 [lint] WORKFLOW.md and the Team Supervisor mandate falsify an evidence 
   expect(supervisor).toContain("believe a negative from it only after it has produced a positive on a case you know is positive");
   expect(supervisor).toContain("An empty result and a broken command print the same nothing");
 });
+
+// project lesson l5 (w730, w731): eleven doctrine commits passed per-edit gates
+// chosen by the file being edited, and the full suite at the end found two reds
+// those edits had caused in assertions living elsewhere.
+test("l5 [lint] the improver picks its per-edit gate by the output it changes, not by the file", async () => {
+  const skill = (await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-improve", "SKILL.md"),
+  ).text()).replaceAll(/\s+/g, " ");
+  expect(skill).toContain("The replay is necessary and never sufficient");
+  expect(skill).toContain("most doctrine output is exercised by no scenario at all");
+  expect(skill).toContain(
+    "Choose the rest of the per-edit gate by the output the edit changes, not by the file it changed",
+  );
+  expect(skill).toContain("grep the whole test tree for the string you are changing");
+  expect(skill).toContain("run every suite that asserts it");
+});

@@ -80,7 +80,15 @@ it produced. In this repository they are `tests/scenarios/<name>.script` and
 `<name>.golden`, replayed by `bun test tests/scenario-golden.test.ts`.
 
 Run the replay after every edit. An edit is accepted only when it still matches
-the golden set, or matches the change a lesson explicitly expected. A replay
+the golden set, or matches the change a lesson explicitly expected.
+
+The replay is necessary and never sufficient, because most doctrine output is
+exercised by no scenario at all. Choose the rest of the per-edit gate by the
+output the edit changes, not by the file it changed: grep the whole test tree
+for the string you are changing, and run every suite that asserts it. An
+improver that runs the replay plus the test file nearest the edit is holding an
+instrument that passes exactly where nobody would look, and the full suite at
+the end is where that shows up - as reds its own edits caused (l5, w730/w731). A replay
 that drifts in a way no lesson asked for is a regression in the doctrine, not an
 improvement, and it goes back before the work return. When a lesson did ask for the
 change, re-record with `MAESTRO_GOLDEN_UPDATE=1 bun test
