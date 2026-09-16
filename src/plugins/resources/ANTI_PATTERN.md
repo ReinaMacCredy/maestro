@@ -19,11 +19,12 @@ both; a Lead that widens an item instead of opening new work; a return whose
 diff is larger than its objective.
 
 evidence: the Peer mandate exists because of it - `profiles/peer.md` says
-"deliver the brief at the scope it set: a brief you cannot meet is returned
-with its blocker, never quietly narrowed, and work you notice beyond it is a
-note on the item, never part of the change". The shared contract's companion
-rule is that an objective and its acceptance never change: changed scope
-requires new work.
+"a different scope is a different request, so work you notice beyond this one
+is `maestro work note <work-id> \"<what you found>\"` and never part of the
+change, and a request you cannot meet at the scope it set comes back with the
+blocker named, never quietly narrowed". The shared contract's companion rule is
+that an objective and its acceptance never change: changed scope requires new
+work.
 
 ## brake
 

@@ -818,7 +818,11 @@ test("674 [lint] ANTI_PATTERN.md carries the seven patterns in order and WORKFLO
   for (const section of text.split(/^## /m).slice(1)) {
     expect(section).toContain("evidence:");
   }
-  expect(unwrap(text)).toContain("work you notice beyond it is a note on the item");
+  // room d134 re-worded the mandate this quotes; the balloon entry has to keep
+  // quoting what profiles/peer.md actually says, or its evidence is a fiction.
+  expect(unwrap(text)).toContain("work you notice beyond this one is `maestro work note");
+  expect(unwrap(await Bun.file(join(root, "resources", "profiles", "peer.md")).text()))
+    .toContain("work you notice beyond this one is `maestro work note");
   expect(unwrap(text)).toContain("not yet seen here");
   const workflow = unwrap(await Bun.file(join(root, "resources", "WORKFLOW.md")).text());
   expect(workflow).toContain("ANTI_PATTERN.md");

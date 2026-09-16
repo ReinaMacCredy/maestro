@@ -84,8 +84,12 @@ pane opens. The Team Supervisor and Lead change through a shadowing file
 (`~/maestro/profiles/lead.md`); a Peer variant is
 `maestro team start --peer-profile <name>` for the generation or
 `maestro work add "<objective>" --to <peer> --profile <name>` for one Peer,
-and `--to peer-<name>` where `<name>` is a profile composes shared contract +
-Peer mandate + that body. A seat's model is a launch-time choice
+and `--to peer-<name>` where `<name>` is a profile composes the pack's Peer
+block + Peer mandate + that body. That Peer block is the pack's second shared
+section (`<!-- slp:shared:peer:begin -->`): every Peer seat reads it in place of
+the shared contract the other seats carry, so the words a Peer meets name no
+seat and no rung (room d134); a Hub pack without it renders the Peer from its
+own shared contract and `maestro install` says which block to copy. A seat's model is a launch-time choice
 (`maestro team start --lead-model`, `--peer-model`, `--supervisor-model`, and
 `maestro work add --to <peer> --model` for one Peer): it rides the launch line
 and changes neither the profile nor its digest. A generation pins the pack and
