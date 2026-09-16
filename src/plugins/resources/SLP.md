@@ -75,7 +75,14 @@ After `maestro work add`, `maestro work return`, `maestro work accept`, and
 pane (`[from <role>][<work-id> <STATE>] <summary>; read: maestro status
 <work-id>`); an assignee is woken per item, whether its pane was just opened or
 already acknowledged; the store stays the truth and that line is only the
-wake-up. `maestro work add --to <peer> --fresh` resets a reused Peer pane to a
+wake-up. An instruction whose value expires before the recipient's next action
+travels on one of those four waking operations, never on a plain note: a plain
+note is read when the seat next looks, and a pane inside a tool call is not a
+slow reader but no reader at all until that call returns, so work already
+running cannot be stopped from outside its own pane. Where no waking channel
+is available, write the instruction knowing it will be read after the fact and
+do not build the plan on its arriving in time (room lesson l15).
+`maestro work add --to <peer> --fresh` resets a reused Peer pane to a
 fresh harness context (Claude Code `/clear`, Codex `/new`), proven by a new
 harness session, and re-checks READY before that OPEN push; it is refused with
 `PEER_ACTIVE` while the Peer holds ACTIVE work and with `PEER_RESET_FAILED`,
@@ -124,7 +131,12 @@ ask: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record with `herdr agent prompt`, opening every
 prompt with a plain lowercase sentence, never a word a harness could read as a
 slash command, and confirming `agent_status=working` before leaving: a dropped
-brief looks identical to a slow start. A correction that makes a risk figure
+brief looks identical to a slow start. Write that prompt to a file and send it
+as an expanded variable, `mbrief <agent> <file>` in the room's shellrc, never
+as an inline double-quoted argument: zsh performs command substitution inside
+double quotes, so a brief that describes a command can execute it here before
+it is delivered, and the parse error that follows destroys the brief with
+nobody knowing one was owed (room lesson l26). A correction that makes a risk figure
 smaller travels with the conclusion it does not change, in the same message:
 say whether the ruling moves, and when it does not, give the reason that
 survives the new number, because a seat handed a smaller number and nothing

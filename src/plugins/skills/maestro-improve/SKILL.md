@@ -51,6 +51,15 @@ The improver never deletes a lesson and never edits one. Processing is a
 pointer, so the record of what was corrected stays readable after the doctrine
 it corrected has changed again.
 
+A lesson whose hazard is mechanical is not answered by a sentence. Where the
+hazard has a mechanical form available - a helper that removes the unsafe
+shape, a refusal, a check that fails - the edit is that mechanism, and the
+return names which mechanism now makes the recurrence impossible rather than
+which sentence now warns about it. Where none is possible, say so in the
+return. A described remedy fails invisibly until it recurs, and its recurrence
+reads as carelessness, which tends to produce a second warning rather than a
+mechanism (l26, the recurrence of l8).
+
 ## Rejecting a lesson
 
 A lesson can be wrong: the rule already covers it, the correction misread it,

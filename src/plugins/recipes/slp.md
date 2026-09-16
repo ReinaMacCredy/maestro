@@ -26,7 +26,14 @@ Maestro pushes for it, and its seat denies `herdr` (d847). When you prompt a
 pane by hand (`herdr agent prompt`), open every prompt with a
 plain lowercase sentence, never a word a harness could read as a slash command,
 and confirm `agent_status=working` before leaving: a dropped brief looks
-identical to a slow start.
+identical to a slow start. Write the brief to a file and send it as an expanded
+variable, `mbrief <agent> <file>` from the room's shellrc, never as an inline
+double-quoted argument: zsh substitutes commands inside double quotes, so a
+brief describing a command runs it on the sender's machine and then vanishes
+with a parse error (l26). An instruction that must land before the recipient's
+next action goes on a waking operation - `work add`, `work return`,
+`work accept`, `work note --rework` - never on a plain note, and a pane inside a
+tool call reads nothing until that call returns (l15).
 When a Peer accepts a dispatch, run `maestro dispatch confirm <id>` at once,
 before arming any wait: the Peer's own `maestro work start` is gated on that confirm,
 so a Lead that batches it with the wait costs the lane its first turn. A Peer

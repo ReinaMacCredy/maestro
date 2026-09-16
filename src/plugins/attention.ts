@@ -637,7 +637,7 @@ function dispatchUnacceptedDetections(
         question: pendingClaim ? "confirm the claim or cancel and reopen?" : "was the stored contract delivered?",
         smallestAction: pendingClaim
           ? `maestro dispatch confirm ${record.id} --session ${record.claimedBy}`
-          : `herdr agent list, then herdr agent prompt <name> with the stored contract from maestro dispatch show ${record.id}; open the prompt with a plain lowercase sentence, never a word a harness could read as a slash command, and confirm agent_status=working before leaving`,
+          : `herdr agent list, then send the stored contract from maestro dispatch show ${record.id} with mbrief <name> <file>, never an inline double-quoted brief (l26); open the prompt with a plain lowercase sentence, never a word a harness could read as a slash command, and confirm agent_status=working before leaving`,
       }),
       subjectSession: record.claimedBy ?? record.targetSession,
       subjectWork: record.workId,

@@ -108,6 +108,24 @@ const shellrc = `function _maestro_home() {
 }
 
 alias hm=_maestro_home
+
+# room lesson l26: a brief typed inline is evaluated by zsh before it is sent,
+# so text describing a command can run on this machine and the brief then
+# vanishes with a parse error. mbrief keeps the body off the command line: a
+# variable expansion never re-evaluates what it holds.
+function mbrief() {
+  local target="$1" file="$2" body
+  if [[ -z "$target" || -z "$file" ]]; then
+    print -u2 'usage: mbrief <agent> <brief-file>; write the brief to a file, never inline'
+    return 2
+  fi
+  if [[ ! -r "$file" ]]; then
+    print -u2 "mbrief: cannot read $file"
+    return 2
+  fi
+  body="$(<"$file")"
+  herdr agent prompt "$target" "$body"
+}
 `;
 
 const retiredRoomFiles = [

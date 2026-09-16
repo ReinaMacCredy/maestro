@@ -665,3 +665,26 @@ test("660 [lint] the shared contract requires an acceptance clause the receiving
   expect(shared).toContain("state in advance the exact words for reporting it unproven");
   expect(shared).toContain("rather than a contract nobody can accept");
 });
+
+// room lessons l15 and l26: a stop that had to land before the peer's next
+// tool call went out as plain work notes, which wake nobody; and l8's
+// described remedy for zsh command substitution in a brief recurred, so the
+// remedy is now a shipped shell function and the improver is told to prefer a
+// mechanism over a sentence.
+test("662 [lint] the pack, the recipe and the improver name the waking channel and the file-based brief (l15, l26)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
+  const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
+  expect(shared).toContain("An instruction whose value expires before the recipient's next action travels on one of those four waking operations, never on a plain note");
+  expect(shared).toContain("a pane inside a tool call is not a slow reader but no reader at all");
+  expect(shared).toContain("work already running cannot be stopped from outside its own pane");
+  expect(shared).toContain("`mbrief <agent> <file>` in the room's shellrc, never as an inline double-quoted argument");
+  expect(shared).toContain("zsh performs command substitution inside double quotes");
+  const recipe = unwrap(await Bun.file(join(root, "recipes", "slp.md")).text());
+  expect(recipe).toContain("`mbrief <agent> <file>` from the room's shellrc");
+  expect(recipe).toContain("never on a plain note");
+  const skill = unwrap(await Bun.file(join(root, "skills", "maestro-improve", "SKILL.md")).text());
+  expect(skill).toContain("A lesson whose hazard is mechanical is not answered by a sentence");
+  expect(skill).toContain("the return names which mechanism now makes the recurrence impossible");
+});

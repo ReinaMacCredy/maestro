@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { scaffoldRoom } from "../src/plugins/room.ts";
 import { formatSkillSync, materializeSkills, skillNames } from "../src/plugins/skills.ts";
 import {
   idFrom,
@@ -1087,5 +1088,53 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
     expect(await readFile(agents, "utf8")).toBe(original);
     expect(first.stdout).not.toContain("retired:");
     expect(second.stdout).not.toContain("retired:");
+  });
+});
+
+// room lesson l26: l8 recorded that every brief this room sends goes out as a
+// double-quoted argument to `herdr agent prompt`, and that a double-quoted
+// string in zsh still performs command substitution. l8 produced prose and no
+// mechanism, and it recurred in the hands of the seat that filed it. The
+// mechanism is a shipped shell function that never puts the body on a command
+// line: the file is read into a variable, and a variable expansion does not
+// re-evaluate its contents.
+test("661 the room's shellrc sends a brief from a file, so command text inside a brief is never evaluated (l26)", async () => {
+  const zsh = "/bin/zsh";
+  expect(existsSync(zsh)).toBe(true);
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    const shellrc = join(room, "shellrc");
+    const bin = join(fixture.root, "fake-bin");
+    const record = join(fixture.root, "herdr-argv.txt");
+    await mkdir(bin, { recursive: true });
+    await writeFile(
+      join(bin, "herdr"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(record)}\n`,
+    );
+    await chmod(join(bin, "herdr"), 0o755);
+    const body = "hold at $(echo pwned) iterations";
+    const brief = join(fixture.root, "brief.txt");
+    await writeFile(brief, `${body}\n`);
+    const run = (script: string): number =>
+      Bun.spawnSync([zsh, "-c", script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+        stderr: "pipe",
+        stdout: "pipe",
+      }).exitCode;
+
+    // The instrument shows a positive first (l23): the inline form this
+    // replaces really does evaluate the same text on this machine.
+    expect(run(`herdr agent prompt lead "${body}"`)).toBe(0);
+    expect(await readFile(record, "utf8")).toContain("hold at pwned iterations");
+
+    expect(run(`source ${JSON.stringify(shellrc)}; mbrief lead ${JSON.stringify(brief)}`)).toBe(0);
+    const argv = (await readFile(record, "utf8")).split("\n");
+    expect(argv.slice(0, 3)).toEqual(["agent", "prompt", "lead"]);
+    expect(argv[3]).toBe(body);
+    expect(await readFile(record, "utf8")).not.toContain("pwned iterations");
+
+    // A missing target or file refuses rather than sending an empty brief.
+    expect(run(`source ${JSON.stringify(shellrc)}; mbrief lead`)).toBe(2);
+    expect(run(`source ${JSON.stringify(shellrc)}; mbrief lead /nope/missing.txt`)).toBe(2);
   });
 });
