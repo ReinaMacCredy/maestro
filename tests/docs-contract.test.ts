@@ -572,3 +572,15 @@ test("654 [lint] the room's IDENTITY.md tells a monitor to prove its own livenes
     expect(identity).toContain("a watcher that fails only on new arrivals passes every spot-check");
   });
 });
+
+// room lesson l12: two honest gate reports on the identical tree disagreed
+// twenty minutes apart, and the only difference was what else was running.
+test("655 [lint] the room's IDENTITY.md makes a gate result name the machine's load and re-run a loaded-machine timeout (l12)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    const identity = (await Bun.file(join(room, "IDENTITY.md")).text()).replaceAll(/\s+/g, " ");
+    expect(identity).toContain("A gate result names the machine's concurrent load");
+    expect(identity).toContain("A red that is only a timeout on a loaded machine is re-run on a quiet one");
+    expect(identity).toContain("one fact about the box, not two facts about the tree");
+  });
+});

@@ -56,6 +56,13 @@ is present, watching or reachable, measure that claim yourself before
 recording anything that rests on it, and treat a message with a deadline as
 undelivered until a channel independent of that screen has carried it (l16).
 
+A gate result names the machine's concurrent load beside the variables the
+runner saw: what else was running - lanes, installs, other suites. A red that
+is only a timeout on a loaded machine is re-run on a quiet one before it is
+called a red or used to hold an external effect, because a green on a quiet
+machine and a red on a loaded one for the same tree is one fact about the box,
+not two facts about the tree (l12).
+
 ## Monitors
 
 A monitor you will cite as cover emits a liveness line every cycle, separate
