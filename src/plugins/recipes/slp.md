@@ -28,7 +28,7 @@ plain lowercase sentence, never a word a harness could read as a slash command,
 and confirm `agent_status=working` before leaving: a dropped brief looks
 identical to a slow start.
 When a Peer accepts a dispatch, run `maestro dispatch confirm <id>` at once,
-before arming any wait: the Peer's own `work start` is gated on that confirm,
+before arming any wait: the Peer's own `maestro work start` is gated on that confirm,
 so a Lead that batches it with the wait costs the lane its first turn. A Peer
 whose agent process is interrupted mid-slice keeps everything that matters,
 its files on disk and its lease and dispatch hold in the store; recover it with
