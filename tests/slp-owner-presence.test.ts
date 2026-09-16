@@ -501,6 +501,11 @@ test("w736 decision show in the room resolves a room ruling, and prints both spa
     expect(both.exitCode).toBe(0);
     expect(both.stdout).toContain("A ledger decision that happens to share an id");
     expect(both.stdout).toContain("Lock the g13 brief as written");
+    // w743 F5: both spaces live in this one store, so the store label cannot
+    // separate them and the ledger's own render names no space at all. When the
+    // id answers in both, each block says which space answered.
+    expect(both.stdout).toContain(`${ledgerId} in the decision ledger:`);
+    expect(both.stdout).toContain(`${ledgerId} in the SLP rulings:`);
 
     // An id in neither space still fails, and it names the room verb that reads
     // rulings so the reader is not sent to a third place.
@@ -540,6 +545,9 @@ test("l4 decision show inside a project checkout reads that store's SLP rulings 
     // it: that inversion is what let a project row read as a hub row.
     expect(shown.stdout).toContain("(project store)");
     expect(shown.stdout).not.toContain("(hub store)");
+    // w743 F5: one space answered, so there is no collision to head off.
+    expect(shown.stdout).not.toContain("in the SLP rulings:");
+    expect(shown.stdout).not.toContain("in the decision ledger:");
 
     const json = await runCli(fixture, ["decision", "show", rulingId, "--json"]);
     expect(json.exitCode).toBe(0);

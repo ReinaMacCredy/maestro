@@ -621,11 +621,20 @@ export const decisionPlugin: BuiltInPlugin = {
         const width = invocation.options.wide === true || !process.stdout.isTTY
           ? null
           : process.stdout.columns || 80;
+        // w743 F5: the store label alone cannot separate two spaces that live in
+        // the same store, and the ledger's own render carries no space at all. So
+        // when this one id answers in both, each block is headed with the space
+        // that answered. One space answering prints exactly what it printed
+        // before: a heading on a single answer would be noise about a collision
+        // that is not happening.
+        const collided = decision !== null && slp !== null;
         return {
           data: { decision, ...(slp ? { slpDecisions: slp.decisions } : {}) },
           text: [
-            ...(decision ? [formatDecision(decision, width)] : []),
-            ...(slp ? [slp.text] : []),
+            ...(decision
+              ? [`${collided ? `${id} in the decision ledger:\n` : ""}${formatDecision(decision, width)}`]
+              : []),
+            ...(slp ? [`${collided ? `${id} in the SLP rulings:\n` : ""}${slp.text}`] : []),
           ].join("\n\n"),
         };
       }, {

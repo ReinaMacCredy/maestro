@@ -984,6 +984,11 @@ test("l5 [lint] the improver picks its per-edit gate by the output it changes, n
   );
   expect(skill).toContain("grep the whole test tree for the string you are changing");
   expect(skill).toContain("run every suite that asserts it");
+  // w743 F3: one of the two reds l5 cites is a corpus-wide property lint that
+  // quotes no string of the edit's, so a grep alone would still have missed it.
+  expect(skill).toContain("it cannot find a property lint that walks a corpus");
+  expect(skill).toContain("because such a lint names no string of yours");
+  expect(skill).toContain("also run the suite that owns the corpus the edited file belongs to");
 });
 
 // project lesson l7 (w732, w733, d880, d889): a SPEC locked an 11-module split

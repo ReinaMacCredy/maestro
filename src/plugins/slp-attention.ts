@@ -289,8 +289,15 @@ function latestRecord(store: Store, workId: string, actor?: string): RecordRow |
 }
 
 // l3: the runtime's own stall entry is the mark of a nudge already delivered, so
-// a holder record written after it is that holder answering the nudge rather
-// than a fresh store write that should re-arm it.
+// a holder record written after it is an account of an item the holder knows is
+// being watched, rather than a fresh store write that should re-arm the alarm.
+// w743 F6: the test is deliberately this wide and not "the record that answered
+// the first nudge". Once an item has been nudged for silence, every later record
+// its holder writes carries the longer window, so the seat stays quiet by going
+// on reporting - which is l3's whole complaint, that reporting made the runtime
+// louder. The stall entry names no holder, so a different seat holding the item
+// later inherits the longer window too; that is a wider quiet on an item already
+// nudged once, never a nudge nobody gets.
 function answersStall(store: Store, workId: string, kind: StallKind, record: RecordRow): boolean {
   const sent = store.database
     .query<{ created_at: string }, [string, string, string]>(
