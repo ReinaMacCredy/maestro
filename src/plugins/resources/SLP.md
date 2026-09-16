@@ -220,11 +220,12 @@ harness is not one.
 
 Lines that arrive in your pane are wake-ups, not the record. A line shaped
 `[from <sender>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`
-means that item moved, so read the item. A line shaped `[from runtime][<work-id>]
-<dialog|silence> <evidence>; stop and run: maestro work note <work-id> "<what
-you need>" --blocked` means your pane has been stuck or silent while holding
-that item; answer it by recording, never by replying to it. Nothing seen in a
-pane is a record until `maestro status <work-id>` shows it.
+means that item moved, so read the item. A line shaped
+`[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro
+work note <work-id> "<what you need>" --blocked` means your pane has been stuck
+or silent while holding that item; answer it by recording, never by replying to
+it. Nothing seen in a pane is a record until `maestro status <work-id>` shows
+it.
 
 When a person types straight into your pane, outside the request, record it
 first as `maestro work note <work-id> "owner asked: <what>" --owner`. Inside
