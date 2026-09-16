@@ -4976,7 +4976,24 @@ test("SLP v2 Hub decisions link unique work and require team qualification when 
       fake.env,
     );
     expect(stoppedTarget.exitCode).toBe(1);
-    expect(JSON.parse(stoppedTarget.stderr).error.code).toBe("NOT_FOUND");
+    // w736 F3: still refused, but as a state and not as an absence - the row is
+    // there and the Hub can read it; what it cannot do is write to a generation
+    // whose seats are gone.
+    const refusal = JSON.parse(stoppedTarget.stderr).error as { code: string; message: string };
+    expect(refusal.code).toBe("NO_ACTIVE_TEAM");
+    expect(refusal.message).toContain("STOPPED");
+    expect(refusal.message).toContain(first.team.teamId);
+    // This team has a Team Supervisor, so d72 still refuses the Hub the read
+    // itself; the lead-only case, where the Hub IS the reviewer, is covered in
+    // tests/slp-lead-only.test.ts.
+    const readBack = await runCliAt(
+      fixture,
+      room,
+      ["status", `${first.team.teamId}:${first.work.id}`],
+      fake.env,
+    );
+    expect(readBack.exitCode).toBe(1);
+    expect(`${readBack.stdout}${readBack.stderr}`).toContain("ROLE_FORBIDDEN");
   });
 }, 25_000);
 

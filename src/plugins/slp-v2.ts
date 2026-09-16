@@ -3385,24 +3385,22 @@ interface HubWorkTarget {
   workId: string;
 }
 
-function resolveHubWorkTarget(context: PluginContext, reference: string): HubWorkTarget {
-  migrateRoom(context.store);
-  const separator = reference.indexOf(":");
-  const qualifiedTeam = separator > 0 ? reference.slice(0, separator) : null;
-  const workId = separator > 0 ? reference.slice(separator + 1) : reference;
-  if (!workId) throw new CliError("INVALID_WORK_ID", "--work requires a work id");
-  const teams = context.store.database
-    .query<{
-      generation: number;
-      project_path: string;
-      team_id: string;
-    }, []>(
-      `SELECT team_id, generation, project_path FROM slp_teams
-       WHERE state = 'RUNNING'
-       ORDER BY project_path, generation`,
-    )
-    .all()
-    .filter((team) => qualifiedTeam === null || team.team_id === qualifiedTeam);
+// w736 F3: a read reaches a stopped generation, a write does not. Every item
+// the Hub accepted becomes unreadable the moment the team stops if the
+// resolver only ever looks at RUNNING teams, and "SLP work not found from Hub"
+// is the wrong sentence for a record that exists and is finished. Writing to a
+// stopped generation stays refused - the seats are gone and the store is
+// closed - but the refusal now names the state instead of denying the id.
+type HubWorkAccess = "read" | "write";
+
+interface HubTeamRow {
+  generation: number;
+  project_path: string;
+  state: string;
+  team_id: string;
+}
+
+function hubWorkMatches(teams: HubTeamRow[], workId: string): HubWorkTarget[] {
   const matches: HubWorkTarget[] = [];
   for (const team of teams) {
     let projectStore: Store;
@@ -3435,17 +3433,60 @@ function resolveHubWorkTarget(context: PluginContext, reference: string): HubWor
       projectStore.close();
     }
   }
-  if (matches.length === 0) {
-    throw new CliError("NOT_FOUND", `SLP work not found from Hub: ${reference}`);
-  }
-  if (matches.length > 1) {
+  return matches;
+}
+
+function oneHubWorkMatch(matches: HubWorkTarget[], workId: string): HubWorkTarget {
+  // Newest generation first, so a team that reused an id across generations
+  // answers with the latest; two different teams are still ambiguous and say so.
+  const ordered = [...matches].sort((left, right) => right.generation - left.generation);
+  const teams = new Set(ordered.map((match) => match.teamId));
+  if (teams.size > 1) {
     throw new CliError(
       "AMBIGUOUS_WORK",
       `${workId} exists in multiple teams; qualify it as <team-id>:${workId}`,
-      { candidates: matches.map((match) => `${match.teamId}:${match.workId}`) },
+      { candidates: ordered.map((match) => `${match.teamId}:${match.workId}`) },
     );
   }
-  return matches[0] as HubWorkTarget;
+  return ordered[0] as HubWorkTarget;
+}
+
+function resolveHubWorkTarget(
+  context: PluginContext,
+  reference: string,
+  access: HubWorkAccess = "write",
+): HubWorkTarget {
+  migrateRoom(context.store);
+  const separator = reference.indexOf(":");
+  const qualifiedTeam = separator > 0 ? reference.slice(0, separator) : null;
+  const workId = separator > 0 ? reference.slice(separator + 1) : reference;
+  if (!workId) throw new CliError("INVALID_WORK_ID", "--work requires a work id");
+  const all = context.store.database
+    .query<HubTeamRow, []>(
+      `SELECT team_id, generation, project_path, state FROM slp_teams
+       ORDER BY project_path, generation`,
+    )
+    .all()
+    .filter((team) => qualifiedTeam === null || team.team_id === qualifiedTeam);
+  const running = all.filter((team) => team.state === "RUNNING");
+  const matches = hubWorkMatches(running, workId);
+  if (matches.length > 0) return oneHubWorkMatch(matches, workId);
+  const closed = all.filter((team) => team.state !== "RUNNING");
+  const archived = closed.length > 0 ? hubWorkMatches(closed, workId) : [];
+  if (archived.length === 0) {
+    throw new CliError("NOT_FOUND", `SLP work not found from Hub: ${reference}`);
+  }
+  const found = oneHubWorkMatch(archived, workId);
+  if (access === "read") return found;
+  const state = all.find(
+    (team) => team.team_id === found.teamId && team.generation === found.generation,
+  )?.state ?? "STOPPED";
+  throw new CliError(
+    "NO_ACTIVE_TEAM",
+    `${found.teamId}:g${found.generation} is ${state}; a stopped generation's work is readable` +
+      ` (maestro status ${workId}) and no longer writable`,
+    { generation: found.generation, state, team: found.teamId, work: workId },
+  );
 }
 
 // room d117: the Hub Supervisor reviews a lead-only team's work from ~/maestro.
@@ -3466,8 +3507,9 @@ interface HubReviewerBinding {
 function bindHubReviewer(
   context: PluginContext,
   reference: string,
+  access: HubWorkAccess = "write",
 ): HubReviewerBinding {
-  const target = resolveHubWorkTarget(context, reference);
+  const target = resolveHubWorkTarget(context, reference, access);
   const projectStore = new Store(resolveStoreLocation(target.projectPath).path);
   try {
     // The Hub writes this store while the team's own seats are live in it;
@@ -3475,13 +3517,16 @@ function bindHubReviewer(
     // than waiting, which is the guard team start already sets for itself.
     projectStore.database.exec("PRAGMA busy_timeout = 300000");
     migrateProject(projectStore);
+    // w736 F3: a read binds a stopped generation too; only the writes need it
+    // live, and resolveHubWorkTarget has already refused those by name.
     const team = projectStore.database
       .query<ActiveLocalTeam, [string, number]>(
         `SELECT team_id, generation, room_store_path, project_path,
                 configuration_json, pack_digest, workspace_id, runtime_pane_id,
                 supervisor_pane_id
          FROM slp_local_teams
-         WHERE team_id = ? AND generation = ? AND state = 'RUNNING'`,
+         WHERE team_id = ? AND generation = ?` +
+          (access === "read" ? "" : " AND state = 'RUNNING'"),
       )
       .get(target.teamId, target.generation);
     if (!team) {
@@ -5162,7 +5207,7 @@ export async function maybeHandleSlpStatus(
       // anything that is not a lead-only generation, so a supervised team's
       // work still answers with d72's refusal and the Hub still cannot read
       // work it holds no boundary over.
-      const bound = bindHubReviewer(context, requestedWork);
+      const bound = bindHubReviewer(context, requestedWork, "read");
       try {
         const roles = roleRows(
           bound.context.store,
