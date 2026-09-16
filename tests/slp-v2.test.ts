@@ -6749,3 +6749,66 @@ test("SLP v2 lets a Lead open its own item with work add and no --to, which the 
     expect(`${hubAdd.stdout}${hubAdd.stderr}`).toContain("ROLE_FORBIDDEN");
   });
 });
+
+// room d137: per-pane session telemetry starts with the compact count. The
+// PostCompact hook records one row per compaction for the session and pane it
+// fires in, and the reviewer reads it back beside the assignee seat. It gates
+// nothing: a seat with two compactions is refused nothing (d96/d97 hold).
+test("SLP v2 reads the compact count back beside the assignee seat and prints nothing for a seat that never compacted (room d137)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Count the compactions", "--json"],
+      fake.env,
+    );
+    expect(started.exitCode).toBe(0);
+    const startData = envelope<{
+      team: { roles: Array<{ name: string; paneId: string; role: string }> };
+      work: { id: string };
+    }>(started.stdout);
+    const lead = startData.team.roles.find((role) => role.role === "lead")!;
+    const supervisor = startData.team.roles.find((role) => role.role === "team-supervisor")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
+    const workId = startData.work.id;
+
+    // Nobody has compacted: the line is absent, not "compacts: 0".
+    const quiet = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(quiet.exitCode).toBe(0);
+    expect(quiet.stdout).toContain(`${workId} OPEN hub-supervisor -> ${lead.name}`);
+    expect(quiet.stdout).not.toContain("compacts:");
+
+    for (const session of ["compact-session-a", "compact-session-a"]) {
+      const recorded = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["hook", "record", "--event", "PostCompact", "--harness", "claude"],
+        { ...leadEnvironment, MAESTRO_SESSION_ID: session, MAESTRO_SESSION_PID: String(process.pid) },
+      );
+      expect(recorded.exitCode).toBe(0);
+    }
+
+    const counted = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(counted.exitCode).toBe(0);
+    expect(counted.stdout).toMatch(
+      new RegExp(`^${workId} OPEN hub-supervisor -> ${lead.name} compacts: 2 \\(last \\d+[smhd]\\)$`, "m"),
+    );
+    // The reviewer sees the assignee's figure, not its own.
+    const reviewer = await runCliAt(fixture, fixture.repo, ["status", workId], supervisorEnvironment);
+    expect(reviewer.stdout).toContain(`-> ${lead.name} compacts: 2 (last `);
+    // Telemetry only: the seat may still run its operations.
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+      .toBe(0);
+  });
+}, 30_000);

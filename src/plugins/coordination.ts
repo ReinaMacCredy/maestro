@@ -9,7 +9,8 @@ import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { maybeHandleSlpStatus, roomOwnerLine } from "./slp-v2.ts";
+import { recordCompaction, relativeAge } from "./session-telemetry.ts";
+import { currentPaneId, maybeHandleSlpStatus, roomOwnerLine } from "./slp-v2.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -122,12 +123,8 @@ function livePeers(
 }
 
 function formatAge(iso: string, now = Date.now()): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
-  if (!Number.isFinite(seconds)) return "";
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
-  return `${Math.round(seconds / 86_400)}d ago`;
+  const age = relativeAge(iso, now);
+  return age === "" ? "" : `${age} ago`;
 }
 
 const deadSessionRetentionMs = 30 * 86_400_000;
@@ -398,6 +395,10 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
+          // room d137: one row per compaction, for the session and the pane it fired in.
+          if (event === "PostCompact") {
+            recordCompaction(context.log, session.id, harness ?? null, currentPaneId() ?? null);
+          }
           if (event === "SessionStart") pruneDeadSessions(context);
           if (event === "UserPromptSubmit" && !process.stdin.isTTY) {
             const raw = (await Bun.stdin.text()).trim();

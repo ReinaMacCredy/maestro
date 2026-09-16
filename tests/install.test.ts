@@ -191,6 +191,10 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     expect(codexHooks.hooks.UserPromptSubmit).toBeArray();
     expect(claudeHooks.hooks.SessionStart).toBeArray();
     expect(claudeHooks.hooks.UserPromptSubmit).toBeArray();
+    // room d137: the compact count starts with a PostCompact hook. Claude Code
+    // fires that event; Codex has none, so its hook config stays as it was.
+    expect(claudeHooks.hooks.PostCompact).toBeArray();
+    expect(codexHooks.hooks.PostCompact).toBeUndefined();
     expect(existsSync(join(fixture.repo, "AGENTS.md"))).toBe(false);
     expect(existsSync(join(fixture.repo, "CLAUDE.md"))).toBe(false);
     expect(await Bun.file(join(localBin, "maestro-slp-watch")).exists()).toBe(false);

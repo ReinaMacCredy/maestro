@@ -131,7 +131,13 @@ async function writeHookConfig(
 ): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
-  for (const event of ["SessionStart", "UserPromptSubmit"]) {
+  // room d137: PostCompact records one compaction per event for the session
+  // and pane it fires in. Codex has no such event, so its hook config keeps
+  // the two it does fire.
+  const events = harness === "claude"
+    ? ["SessionStart", "UserPromptSubmit", "PostCompact"]
+    : ["SessionStart", "UserPromptSubmit"];
+  for (const event of events) {
     const retained = retainForeignHookGroups(config.hooks[event] ?? []);
     const handler: HookHandler = {
       type: "command",

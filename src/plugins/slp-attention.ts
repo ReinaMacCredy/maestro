@@ -13,6 +13,7 @@ import {
 } from "./herdr-client.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { herdrPluginId } from "./slp-plugin.ts";
+import { compactLine, compactsForPane } from "./session-telemetry.ts";
 import { acquireProcessLock, slpRuntimeDirectory } from "./slp-process.ts";
 
 // Hub d96/d97: one runtime process per generation, opened as the maestro
@@ -279,6 +280,14 @@ function latestRecord(store: Store, workId: string, actor?: string): RecordRow |
 // seat that has been recording from one that truly has not.
 function recordEvidence(record: RecordRow | null, separator: string): string {
   return record ? `${separator} latest ${record.label} by ${record.actor}` : `${separator} no entries or decisions`;
+}
+
+// room d137: the compact count rides the evidence of a nudge the runtime was
+// already sending, and nothing else. It is not a nudge kind, it fires no
+// attention of its own, and an empty string here leaves the old line intact.
+function compactEvidence(store: Store, paneId: string): string {
+  const line = compactLine(compactsForPane(store, paneId));
+  return line === "" ? "" : `; ${line}`;
 }
 
 function activityMark(store: Store, teamId: string, generation: number): number {
@@ -716,7 +725,7 @@ export class AttentionRuntime {
         const latest = latestRecord(store, held.id);
         const evidence = `${seat.name} pane ${paneId} agent_status blocked; store: ${held.id} ${held.state}` +
           `${held.owner ? ` owned by ${held.owner}` : ` assigned to ${held.assigned_to}`}` +
-          recordEvidence(latest, ",");
+          recordEvidence(latest, ",") + compactEvidence(store, paneId);
         await this.stall(store, team, seat, "dialog", held, evidence);
         return changed;
       }
@@ -748,7 +757,8 @@ export class AttentionRuntime {
         // measurement - which is what let a late line read as a fresh one. They are
         // read from the row here, as the dialog branch already does.
         const evidence = `${seat.name} pane ${paneId} agent_status ${status} while ${held.id} ${held.state}` +
-          ` owned by ${held.owner ?? held.assigned_to}` + recordEvidence(latest, ";");
+          ` owned by ${held.owner ?? held.assigned_to}` + recordEvidence(latest, ";") +
+          compactEvidence(store, paneId);
         await this.stall(store, team, seat, "silence", held, evidence);
         await this.flush(seat.name);
         return changed;

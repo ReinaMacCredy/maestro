@@ -35,6 +35,7 @@ import {
   type SlpTeamPlan,
 } from "./slp-runtime.ts";
 import { registerSessionCommand } from "./session-required.ts";
+import { compactLine, compactsForPane } from "./session-telemetry.ts";
 import {
   openRuntimePane,
   recordRuntimePane,
@@ -5057,6 +5058,15 @@ async function readWorkDetail(
   );
   const latest = entries.at(-1) ?? null;
   const candidateSources = lessonCandidateSources(context.store, workId);
+  // room d137: the assignee's compact count, read beside its seat and nowhere
+  // else. It is evidence for the reviewer's judgment, never a gate: no branch
+  // below it refuses, nudges or stops anything on the figure.
+  const compacts = compactLine(
+    compactsForPane(
+      context.store,
+      roles.find((role) => role.name === work.assigned_to)?.pane_id ?? null,
+    ),
+  );
   return {
     data: {
       acceptance: entries.findLast((entry) => entry.kind === "ACCEPTANCE") ?? null,
@@ -5076,7 +5086,7 @@ async function readWorkDetail(
       work: workData(work),
     },
     text: [
-      `${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}`,
+      `${work.id} ${work.state} ${work.created_by} -> ${work.assigned_to}${compacts ? ` ${compacts}` : ""}`,
       `revision: ${work.return_revision}`,
       `objective: ${clipLine(work.objective, 160)}`,
       latest

@@ -408,12 +408,29 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
     const { data, fake } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    // room d137: the runtime may name the compact count in the evidence of a
+    // nudge it already sends. It is not a nudge kind and fires nothing by
+    // itself: the entry below exists because the pane went blocked.
+    expect(
+      (await runCliAt(
+        fixture,
+        fixture.repo,
+        ["hook", "record", "--event", "PostCompact", "--harness", "claude"],
+        {
+          ...fake.env,
+          HERDR_PANE_ID: lead.paneId,
+          MAESTRO_SESSION_ID: "runtime-compact-session",
+          MAESTRO_SESSION_PID: String(process.pid),
+        },
+      )).exitCode,
+    ).toBe(0);
     expect(await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "blocked" } })).toBe(1);
     await waitForFakeHerdr(() => runtimeEntries(fixture).length === 1, 5_000, "the stall entry");
     const [entry] = runtimeEntries(fixture);
     expect(entry).toMatchObject({ actor: "runtime", flag: "stall:dialog", work_id: data.work.id });
     expect(entry?.body).toContain("agent_status blocked");
     expect(entry?.body).toContain(`store: ${data.work.id} OPEN assigned to ${lead.name}`);
+    expect(entry?.body).toMatch(/; compacts: 1 \(last \d+[smhd]\)/);
     const evidence = entry?.body.replace(/^dialog: /, "");
     const line = `[from runtime][${data.work.id}] dialog ${evidence}; stop and run: maestro work note ${data.work.id} "<what you need>" --blocked`;
     // w708: the copy is about someone else's item, so it ends at a read and never

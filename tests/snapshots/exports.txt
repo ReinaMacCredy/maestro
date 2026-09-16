@@ -19,6 +19,7 @@ CliOptions
 CliResult
 CliSuccessEnvelope
 CommandOptions
+CompactSummary
 Condition
 CouncilStatus
 DecisionRecord
@@ -133,6 +134,8 @@ builtInPlugins
 bundlePlugin
 codexHookTrustRecorded
 commitOrphanStop
+compactLine
+compactsForPane
 composedPeerName
 coordinationPlugin
 currentPaneId
@@ -237,9 +240,11 @@ readSeatToken
 readSourceRecord
 readTrust
 recipePlugin
+recordCompaction
 recordRuntimePane
 registerSessionCommand
 registeredProjects
+relativeAge
 removeRenderedProfiles
 renderHerdrPluginManifest
 renderIndex
