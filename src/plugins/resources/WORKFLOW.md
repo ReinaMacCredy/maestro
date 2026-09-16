@@ -108,6 +108,12 @@ fix the generator or pin and regenerate.
 - Quality review: use Per-tool adapters below. Verify owns "does it meet
   the contract"; review owns "is the code good".
 
+Route by who owns the result, not only by skill. Work that has an owner,
+writes files, returns or is accepted runs in a Herdr pane through the SLP
+operations and leaves a store row; give a harness sub-agent (Agent, Task,
+Workflow, or a maestro-graph agent node) only read-only scouting that
+returns text and writes nothing.
+
 ## Two coordination models
 
 Maestro keeps two coordination models with an explicit boundary. Inside a

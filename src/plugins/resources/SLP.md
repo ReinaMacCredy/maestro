@@ -137,7 +137,11 @@ until the store changes), and `[attention] <seat> idle` or `[attention]
 <seat> pane exited|closed` to the seat above. Answer a nudge by recording,
 never by replying to the runtime. A Peer reaches the Lead and other Peers only
 through recorded work notes and returns; those push lines are its wake-ups and
-its seat denies `herdr`. The Lead and the Team Supervisor may add a hand-typed
+its seat denies `herdr`. Work that has an owner, writes files, returns or is
+accepted runs in a Herdr pane through the SLP operations and leaves a store
+row; a harness sub-agent (Agent, Task or Workflow) is used only for read-only
+scouting that returns text and writes nothing. The Lead and the Team
+Supervisor may add a hand-typed
 ask: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record with `herdr agent prompt`, opening every
 prompt with a plain lowercase sentence, never a word a harness could read as a

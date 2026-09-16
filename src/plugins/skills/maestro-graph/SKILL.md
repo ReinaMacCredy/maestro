@@ -1,6 +1,6 @@
 ---
 name: maestro-graph
-description: Drive a pre-known multi-agent path as a maestro graph - run it by name or from a file you just wrote, pull each agent node with graph next, spawn it as a sub-agent under its maestro-<profile> definition, hand the result back with graph result, repeat until the verdict. Author a new graph from the reference when no preset fits.
+description: Drive a pre-known multi-agent path as a maestro graph - run it by name or from a file you just wrote, pull each agent node with graph next, spawn it as a sub-agent under its maestro-<profile> definition, hand the result back with graph result, repeat until the verdict. A sub-agent node is read-only scouting; a node that writes files or is accepted is opened as a pane instead. Author a new graph from the reference when no preset fits.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
@@ -40,12 +40,16 @@ loop:
   if envelope.done: stop; the verdict, LIMIT stop or failed node is in it
   for each node in envelope.nodes (all at once, they are independent):
     kind human  -> stop and ask the user the prompt; feed the answer back
-    kind agent  -> spawn a sub-agent with the node's profile and brief
+    kind agent  -> spawn a read-only scouting sub-agent with the node's profile and brief
   for each returned sub-agent:
     maestro graph result <run> <ref> --file <path>|--text "<result>"
   maestro graph next <run> --json
 ```
 
+- A sub-agent node is read-only scouting that returns text and writes
+  nothing; a node whose work writes files, returns or is accepted is opened
+  as a pane with `maestro work add --to <peer>` and its result handed back
+  with `graph result` as before.
 - `run` returns the first envelope, so the first `next` is implicit.
 - Redirect every `--json` envelope to a file and read the fields you need
   out of it (`jq`, or one `python3 -c` line); never let it land inline. An

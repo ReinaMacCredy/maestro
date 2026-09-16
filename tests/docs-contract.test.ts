@@ -728,3 +728,45 @@ test("669 [lint] the shared contract says pane text is not a push and a state ex
   expect(phantom).toBeGreaterThan(wakeUp);
   expect(phantom - wakeUp).toBeLessThan(200);
 });
+
+// room d135: one HR protocol for owned work. A harness sub-agent leaves no
+// store row, cannot return and cannot be accepted, so owned work runs in a
+// Herdr pane and a sub-agent is read-only scouting - including a
+// maestro-graph agent node.
+test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say owned work runs in a pane and a sub-agent only scouts (room d135)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
+  const shared = unwrap(
+    /<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "",
+  );
+  expect(shared).toContain(
+    "Work that has an owner, writes files, returns or is accepted runs in a Herdr pane through the SLP operations and leaves a store row",
+  );
+  expect(shared).toContain(
+    "a harness sub-agent (Agent, Task or Workflow) is used only for read-only scouting that returns text and writes nothing",
+  );
+  // It belongs beside the paragraph that already tells a Peer which channels
+  // it has, where `herdr` is named.
+  const herdr = shared.indexOf("its seat denies `herdr`");
+  const protocol = shared.indexOf("Work that has an owner, writes files, returns or is accepted");
+  expect(herdr).toBeGreaterThan(-1);
+  expect(protocol).toBeGreaterThan(herdr);
+  expect(protocol - herdr).toBeLessThan(200);
+  const workflow = unwrap(await Bun.file(join(root, "resources", "WORKFLOW.md")).text());
+  expect(workflow).toContain(
+    "Work that has an owner, writes files, returns or is accepted runs in a Herdr pane through the SLP operations and leaves a store row",
+  );
+  expect(workflow).toContain(
+    "give a harness sub-agent (Agent, Task, Workflow, or a maestro-graph agent node) only read-only scouting that returns text and writes nothing",
+  );
+  const graph = await Bun.file(join(root, "skills", "maestro-graph", "SKILL.md")).text();
+  const description = /^description:.*$/m.exec(graph)?.[0] ?? "";
+  expect(description).toContain("A sub-agent node is read-only scouting");
+  expect(description).toContain("a node that writes files or is accepted is opened as a pane");
+  const body = unwrap(graph);
+  expect(body).toContain(
+    "A sub-agent node is read-only scouting that returns text and writes nothing; a node whose work writes files, returns or is accepted is opened as a pane with `maestro work add --to <peer>` and its result handed back with `graph result` as before.",
+  );
+  expect(body).toContain("kind agent -> spawn a read-only scouting sub-agent");
+});
