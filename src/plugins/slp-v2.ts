@@ -3672,18 +3672,19 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
   }
   const workId = stringOption(invocation, "work") ?? null;
   const replaces = stringOption(invocation, "replaces") ?? null;
-  // room d125: only the Hub rules provisionally, and only on a fork that a
-  // work item raised; a free-standing provisional ruling has nothing to
-  // continue and nobody to push to.
+  // room d125: only the Hub rules provisionally, and the flag says the ruling
+  // stands until the owner confirms or supersedes it.
+  // w736 F2: it no longer requires --work. An owner-scope ruling an away Hub
+  // makes before any item exists - a SPEC lock, an amendment to a brief - is
+  // exactly as unconfirmed as one that resolves a fork a seat raised, and
+  // refusing the flag there left the Hub recording it as final or hanging it
+  // on an unrelated item. A ruling with no item simply pushes to nobody.
   const provisional = invocation.options.provisional === true;
   if (provisional && local) {
     throw new CliError(
       "ROLE_FORBIDDEN",
       `${actor} cannot decide provisionally; --provisional is the Hub Supervisor's away ruling (room d125)`,
     );
-  }
-  if (provisional && !workId) {
-    throw new CliError("MISSING_ARGUMENT", "--provisional requires --work <id>: the fork it resolves");
   }
   if (workId && !local) {
     return decideHubWork(context, {
@@ -3725,14 +3726,30 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
   try {
     if (local) requireRunningGeneration(context.store, local);
     id = nextDecisionId(context.store);
-    context.store.database
-      .query(
-        `INSERT INTO slp_decisions
-          (id, team_id, generation, choice, why, scope, work_id, replaces_id,
-           actor, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
+    // Only the room store carries the provisional column (migrateRoom), and
+    // only the Hub can set it, so the team insert keeps the shape it had.
+    if (local) {
+      context.store.database
+        .query(
+          `INSERT INTO slp_decisions
+            (id, team_id, generation, choice, why, scope, work_id, replaces_id,
+             actor, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
+    } else {
+      context.store.database
+        .query(
+          `INSERT INTO slp_decisions
+            (id, team_id, generation, choice, why, scope, work_id, replaces_id,
+             actor, created_at, provisional)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id, teamId, generation, choice, why, scope, workId, replaces, actor, now,
+          provisional ? 1 : 0,
+        );
+    }
     if (replaces && workId && local) {
       markLessonCandidate(context.store, workId, `decision ${id}`, now);
     }
@@ -3752,8 +3769,9 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
     throw error;
   }
   context.sessions.record("decide");
-  const decision = { actor, choice, createdAt: now, id, provisional: false, replaces, scope, why, workId };
-  return { data: { decision }, text: `${id} [${scope}] ${choice}` };
+  const ruled = provisional && !local;
+  const decision = { actor, choice, createdAt: now, id, provisional: ruled, replaces, scope, why, workId };
+  return { data: { decision }, text: `${id} [${scope}]${ruled ? " provisional" : ""} ${choice}` };
 }
 
 function stopPlan(team: ActiveLocalTeam): Promise<SlpTeamPlan> {
@@ -5622,7 +5640,7 @@ export const slpV2Plugin: BuiltInPlugin = {
         description: "Record one immutable settled decision.",
         flags: {
           "--provisional": {
-            description: "Hub only, with --work: an away ruling that stands until the owner confirms or supersedes it (room d125).",
+            description: "Hub only: an away ruling that stands until the owner confirms or supersedes it (room d125); --work links the fork it resolves when one exists.",
           },
           "--replaces": { description: "Link the decision it replaces.", value: true },
           "--scope": {

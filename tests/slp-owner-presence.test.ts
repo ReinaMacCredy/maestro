@@ -293,14 +293,50 @@ test("d125: decide --provisional is a Hub ruling linked to work, listed by the r
     );
     expect(seatProvisional.exitCode).toBe(1);
     expect(failureCode(seatProvisional.stderr)).toBe("ROLE_FORBIDDEN");
+    // The Hub-only guard holds with or without an item to link.
+    const seatUnlinked = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "Use vendor A", "--why", "lead guess", "--provisional", "--json"],
+      leadEnvironment,
+    );
+    expect(seatUnlinked.exitCode).toBe(1);
+    expect(failureCode(seatUnlinked.stderr)).toBe("ROLE_FORBIDDEN");
+
+    // w736 F2: an owner-scope ruling with no item - a SPEC lock, a brief
+    // amendment recorded before the item exists - is provisional like any
+    // other away ruling. Refusing it left an away Hub two bad choices: link it
+    // to an unrelated item, or record it as final, and final is the one thing
+    // an unconfirmed away ruling is not.
     const unlinked = await runCliAt(
       fixture,
       room,
-      ["decide", "Use vendor A", "--why", "advisor", "--provisional", "--json"],
+      ["decide", "Lock SPEC section 4 as written", "--why", "advisor; no item exists yet", "--provisional", "--json"],
       hubEnvironment,
     );
-    expect(unlinked.exitCode).toBe(1);
-    expect(failureCode(unlinked.stderr)).toBe("MISSING_ARGUMENT");
+    expect(phaseFree(unlinked.stderr)).toBe("");
+    expect(unlinked.exitCode).toBe(0);
+    const unlinkedRuling = envelope<{
+      decision: { id: string; provisional: boolean; workId: string | null };
+    }>(unlinked.stdout);
+    expect(unlinkedRuling.decision.provisional).toBe(true);
+    expect(unlinkedRuling.decision.workId).toBe(null);
+    expect(unlinked.stdout).toContain("provisional");
+    const unlinkedId = unlinkedRuling.decision.id;
+    expect((await runCliAt(fixture, room, ["status"], hubEnvironment)).stdout.split("\n"))
+      .toContain(`provisional: ${unlinkedId} none Lock SPEC section 4 as written`);
+    expect((await runCliAt(fixture, room, ["status", unlinkedId], hubEnvironment)).stdout)
+      .toContain("provisional: yes");
+    // It confirms like any other, so it does not sit in the list forever.
+    const unlinkedConfirm = await runCliAt(
+      fixture,
+      room,
+      ["decision", "confirm", unlinkedId, "--json"],
+      hubEnvironment,
+    );
+    expect(unlinkedConfirm.exitCode).toBe(0);
+    expect(envelope<{ decision: { provisional: boolean } }>(unlinkedConfirm.stdout).decision.provisional)
+      .toBe(false);
 
     const ruled = await runCliAt(
       fixture,

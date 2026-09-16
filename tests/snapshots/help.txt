@@ -135,7 +135,7 @@ usage: maestro bundle show <id>
 decide  Record one immutable settled decision.
 usage: maestro decide <choice>
     --json              Emit one compact JSON success envelope.
-    --provisional       Hub only, with --work: an away ruling that stands until the owner confirms or supersedes it (room d125).
+    --provisional       Hub only: an away ruling that stands until the owner confirms or supersedes it (room d125); --work links the fork it resolves when one exists.
     --replaces <value>  Link the decision it replaces.
     --scope <value>     Select owner or cross-team scope when acting as Hub Supervisor.
     --why <value>       Record why this choice is settled.
