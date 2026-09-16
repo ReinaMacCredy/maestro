@@ -269,6 +269,12 @@ interface SlpLifecycleRow {
 
 const packSource = join(import.meta.dir, "resources", "SLP.md");
 
+// room d155 (w740): the shipped question-back profile. It is named here
+// because one rule turns on it - the single Peer a Team Supervisor may open
+// (room d154) - and a literal spread across that check and its message is a
+// rename waiting to go half-done.
+const questionerProfile = "questioner";
+
 const retiredSlpOperations = new Map<string, string>([
   ["attention", "status"],
   ["brief", "status"],
@@ -2683,10 +2689,29 @@ export async function maybeHandleSlpWorkAdd(
   let plan: SlpTeamPlan | null = null;
   let pinnedProfile: { digest: string; name: string } | null = null;
   const runtime = new HerdrSlpRuntime();
-  if (actor.role === "team-supervisor") {
+  // w740 (room d154, d902): the one Peer a Team Supervisor may open is the
+  // question-back seat, because d153 puts that seat in the reviewer's hands and
+  // the reviewer of a Lead in a supervised team is the Team Supervisor. It is a
+  // narrowing by profile name and nothing else: --profile cannot smuggle a
+  // different lens in under this name, every other --to is refused as before,
+  // and the item it creates is an ordinary Peer item whose reviewer is still
+  // the Lead, since expectedReviewer keys off the assignee's role.
+  const openingQuestioner = actor.role === "team-supervisor" &&
+    requestedTarget === composedPeerName(questionerProfile) &&
+    (await resolveProfile(questionerProfile, seatDirectories(actor.team.project_path))) !== null;
+  if (openingQuestioner && profileOption !== undefined) {
+    throw new CliError(
+      "INVALID_OPTION",
+      `--profile does not apply to ${composedPeerName(questionerProfile)}; the name is the profile`,
+    );
+  }
+  if (actor.role === "team-supervisor" && !openingQuestioner) {
     if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
     if (requestedTarget && requestedTarget !== "lead" && requestedTarget !== assignee.name) {
-      throw new CliError("ROLE_FORBIDDEN", "Team Supervisor work is assigned to the Lead");
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        `Team Supervisor work is assigned to the Lead, or to ${composedPeerName(questionerProfile)} (room d154)`,
+      );
     }
     if (profileOption !== undefined) {
       throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
@@ -2853,7 +2878,12 @@ export async function maybeHandleSlpWorkAdd(
     };
   }
   if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
-  const opensPeer = actor.role === "lead" && assignee.role === "peer";
+  // w740 (d902): the Peer's role rows are written because a Peer pane was
+  // opened, not because of who opened it. Keyed on the actor being a Lead,
+  // a Team Supervisor opening the question-back seat wrote the work row and
+  // no role row, and every later read of that item died on
+  // SLP_BINDING_MISSING - the reviewer lookup starts from the assignee row.
+  const opensPeer = assignee.role === "peer";
 
   const now = new Date().toISOString();
   let attachedRoom = false;
@@ -3221,6 +3251,84 @@ async function pushOneSeatUp(
     toHub ? `${body} in ${actor.team.team_id} g${actor.team.generation}` : body,
     toHub ? "maestro status" : `maestro status ${id}`,
   );
+}
+
+// w740 (room d153, d898): opening a Full-tier bundle on an item is the store's
+// signal that a design phase has begun, and the seat it must reach is the
+// reviewer above the one designing - the Team Supervisor for a Lead in a
+// supervised team, the Hub for a lead-only Lead, the Lead for a Peer - because
+// d153 puts the question-back pass in the reviewer's hands, not the designer's.
+// Every failure here is silent: a bundle open outside a running team, from a
+// pane with no role, or on an id no SLP item holds, is an ordinary bundle open.
+async function pushDesignOpened(
+  context: PluginContext,
+  bundleId: string,
+  workIds: readonly string[],
+): Promise<void> {
+  if (workIds.length === 0) return;
+  let actor: SlpActor;
+  try {
+    actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  } catch {
+    return;
+  }
+  for (const workId of workIds) {
+    const work = context.store.database
+      .query<SlpWorkRow, [string, string, number]>(
+        "SELECT * FROM slp_work WHERE id = ? AND team_id = ? AND generation = ?",
+      )
+      .get(workId, actor.team.team_id, actor.team.generation);
+    if (!work) continue;
+    const toHub = expectedReviewer(context, actor, work).kind === "hub";
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      reviewerPushTarget(context, actor, work),
+      `${workId} DESIGN`,
+      toHub
+        ? `design bundle ${bundleId} in ${actor.team.team_id} g${actor.team.generation}`
+        : `design bundle ${bundleId}`,
+      toHub ? "maestro status" : `maestro status ${workId}`,
+    );
+  }
+}
+
+// w740 (room d154, d899): decide is the fifth waking operation. A ruling on an
+// item is an instruction to the seat holding it, so the line goes to the
+// assignee and not to the reviewer; that is what carries the Hub's order down
+// to a lead-only Lead, which d154 relies on and no code sent before. A ruling
+// with no item, or one a seat makes on its own item, wakes nobody.
+async function pushDecision(
+  store: Store,
+  projectPath: string,
+  actor: SlpRole | typeof hubReviewerName,
+  actorName: string,
+  workId: string,
+  choice: string,
+): Promise<void> {
+  if (!tableExists(store, "slp_work")) return;
+  const assignee = store.database
+    .query<{ assigned_to: string }, [string]>("SELECT assigned_to FROM slp_work WHERE id = ?")
+    .get(workId)?.assigned_to;
+  if (!assignee || assignee === actorName) return;
+  await pushNotice(projectPath, actor, assignee, `${workId} DECIDED`, choice, `maestro status ${workId}`);
+}
+
+// The Hub rules from the room store, which holds no slp_work; the item lives in
+// the project store, so the assignee is read there, read-only, the way the
+// lesson-candidate mark is written there.
+async function pushHubDecision(target: HubWorkTarget, choice: string): Promise<void> {
+  let store: Store;
+  try {
+    store = new Store(resolveStoreLocation(target.projectPath).path, { readonly: true });
+  } catch {
+    return;
+  }
+  try {
+    await pushDecision(store, target.projectPath, hubReviewerName, hubReviewerName, target.workId, choice);
+  } finally {
+    store.close();
+  }
 }
 
 function takeWork(context: PluginContext, id: string): CliResult {
@@ -3638,7 +3746,7 @@ function bindHubReviewer(
   }
 }
 
-function decideHubWork(
+async function decideHubWork(
   context: PluginContext,
   input: {
     choice: string;
@@ -3648,7 +3756,7 @@ function decideHubWork(
     target: HubWorkTarget;
     why: string;
   },
-): CliResult {
+): Promise<CliResult> {
   let transactionOpen = false;
   let id = "";
   const now = new Date().toISOString();
@@ -3737,6 +3845,7 @@ function decideHubWork(
       );
     }
   }
+  await pushHubDecision(input.target, input.choice);
   context.sessions.record("decide");
   const decision = {
     actor: "hub-supervisor",
@@ -3763,12 +3872,13 @@ function clearProvisional(store: Store, id: string): void {
   store.database.query("UPDATE slp_decisions SET provisional = 0 WHERE id = ?").run(id);
 }
 
-function decide(context: PluginContext, invocation: CliInvocation): CliResult {
+async function decide(context: PluginContext, invocation: CliInvocation): Promise<CliResult> {
   const choice = requiredPosition(invocation, 0, "choice");
   const why = stringOption(invocation, "why")?.trim();
   if (!why) throw new CliError("MISSING_ARGUMENT", "decide requires --why <reason>");
   const local = activeLocalTeam(context);
   let actor: string;
+  let actorRole: SlpRole = "lead";
   let teamId: string;
   let generation: number;
   let defaultScope: "technical" | "team" | "owner";
@@ -3777,6 +3887,7 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
     const role = requireSlpActor(context, ["team-supervisor", "lead"]);
     requireRunningGeneration(context.store, role.team);
     actor = role.name;
+    actorRole = role.role;
     teamId = role.team.team_id;
     generation = role.team.generation;
     defaultScope = role.role === "lead" ? "technical" : "team";
@@ -3814,7 +3925,7 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
     );
   }
   if (workId && !local) {
-    return decideHubWork(context, {
+    return await decideHubWork(context, {
       choice,
       provisional,
       replaces,
@@ -3894,6 +4005,9 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
       context.store.database.exec("ROLLBACK");
     } catch {}
     throw error;
+  }
+  if (local && workId) {
+    await pushDecision(context.store, local.project_path, actorRole, actor, workId, choice);
   }
   context.sessions.record("decide");
   const ruled = provisional && !local;
@@ -5144,7 +5258,16 @@ async function readWorkDetail(
     work.assigned_to !== actor.name &&
     work.created_by !== actor.name
   ) {
-    throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${workId}`);
+    // w740 (d902): a Lead reviews every Peer return in its team, and until now
+    // it could read only what it was assigned or had opened itself. A Team
+    // Supervisor opening the question-back seat is the first item that is
+    // neither, and the Lead is still its reviewer - so the rule the read
+    // follows is the one review already follows: you may read what you must
+    // review. For every item a Lead opened this changes nothing.
+    const reviewer = expectedReviewer(context, actor, work);
+    if (reviewer.kind !== "role" || reviewer.role !== "lead") {
+      throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${workId}`);
+    }
   }
   const entries = context.store.database
     .query<{
@@ -5780,8 +5903,19 @@ export const slpV2Plugin: BuiltInPlugin = {
         },
       ),
     );
+    // w740 (d898): bundle open says a design has begun; the SLP plugin owns
+    // the push, so the bundle plugin only announces the event.
     context.effect(() =>
-      registerSessionCommand(context, "decide", (invocation): CliResult => decide(context, invocation), {
+      context.events.on<{ bundleId: string; workIds: string[] }>(
+        "bundle.open",
+        async (opened, next) => {
+          await pushDesignOpened(context, opened.bundleId, opened.workIds);
+          return next();
+        },
+      ),
+    );
+    context.effect(() =>
+      registerSessionCommand(context, "decide", (invocation): Promise<CliResult> => decide(context, invocation), {
         description: "Record one immutable settled decision.",
         flags: {
           "--provisional": {

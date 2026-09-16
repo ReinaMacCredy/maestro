@@ -610,6 +610,16 @@ export const bundlePlugin: BuiltInPlugin = {
             sessionId: context.sessions.current().id,
             payload: { directory, workIds },
           });
+          // w740 (room d153, d898): opening a Full-tier bundle on a work item
+          // is the store's signal that a design phase has begun. The listener
+          // is the SLP plugin, which owns every push line; this stays a plain
+          // event so the bundle plugin keeps knowing nothing about panes. Only
+          // this path fires it: a resume returned above, and a second open of
+          // the same id threw DUPLICATE, so one design wakes a reviewer once.
+          await context.events.emit<{ bundleId: string; workIds: string[] }>(
+            "bundle.open",
+            { bundleId: id, workIds },
+          );
           const bundle = getBundle(context, id) as BundleRecord;
           return {
             data: { bundle, workIds },
