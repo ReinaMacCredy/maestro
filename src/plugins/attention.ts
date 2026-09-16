@@ -720,6 +720,14 @@ function lessonsPendingDetections(context: PluginContext, now: number): Detectio
     const action = improverNextAction(trigger, process.env.HOME ?? "");
     const days = trigger.ageDays === 1 ? "1 day" : `${trigger.ageDays} days`;
     const count = trigger.pending === 1 ? "1 lesson" : `${trigger.pending} lessons`;
+    // The headline names the number that fired. A count trigger shows it in
+    // `count`; an age trigger runs off the last improver run, which is not the
+    // oldest lesson's age once an improver has run, so say that clock rather
+    // than let the reader take the age beside `oldest` for the reason.
+    const sinceDays = trigger.sinceDays === 1 ? "1 day" : `${trigger.sinceDays} days`;
+    const fired = trigger.reason === "age" && trigger.lastRun
+      ? `, no improver run in ${sinceDays}`
+      : "";
     return {
       entityId: trigger.oldestId,
       entityType: "lesson",
@@ -727,7 +735,7 @@ function lessonsPendingDetections(context: PluginContext, now: number): Detectio
       kind: "LESSONS_PENDING",
       packet: packet("LESSONS_PENDING", trigger.oldestId, {
         headline: `${count} pending for ${trigger.project}, ` +
-          `oldest ${trigger.oldestId} (${days}); ${action}`,
+          `oldest ${trigger.oldestId} (${days})${fired}; ${action}`,
         observed: `${count} pending for ${trigger.project}; ${clock}`,
         evidence: trigger.lastRun
           ? `event_log lesson.process ${trigger.since}`

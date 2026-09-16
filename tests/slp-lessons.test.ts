@@ -598,3 +598,65 @@ test("664 a quiet project names no improver generation in attention or ready (ro
     expect(ready.stdout).not.toContain("improver generation");
   });
 });
+
+// Put the improver's own clock in the past: the last `lesson.process` event is
+// what `improverTriggers` measures the age trigger from, and once an improver
+// has run it is no longer the oldest pending lesson's age. The event log is
+// append-only by trigger, so this appends the later event rather than editing
+// one - which is also what a real second improver run would do.
+function recordImproverRun(fixture: Fixture, lessonId: string, days: number): void {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+  try {
+    const when = new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
+    database
+      .query(
+        `INSERT INTO event_log (type, entity_type, entity_id, session_id, payload, created_at)
+         VALUES ('lesson.process', 'lesson', ?, NULL, '{}', ?)`,
+      )
+      .run(lessonId, when);
+  } finally {
+    database.close();
+  }
+}
+
+// w731 finding 2: the headline must name the number that fired. An age trigger
+// runs off the last improver run, so after one has happened a reader must not
+// be shown only the oldest lesson's age - which can sit under both thresholds
+// while the attention is entirely correct (room d129 point 2, d132).
+test("669 an age-fired headline names the improver clock, not only the oldest lesson's age (room d129, d132)", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, fileArgs("correction one"))).exitCode).toBe(0);
+    expect((await runCli(fixture, fileArgs("correction two"))).exitCode).toBe(0);
+    expect(
+      (await runCli(fixture, ["lesson", "process", "l1", "--answer", "already covered"])).exitCode,
+    ).toBe(0);
+    recordImproverRun(fixture, "l1", 30);
+    backdate(fixture, "l2", 2);
+
+    const raised = await runCli(fixture, ["attention"]);
+    expect(raised.exitCode).toBe(0);
+    const headline = raised.stdout.split("\n")[0] ?? "";
+    // It fired on the improver clock, so the clock is on the headline.
+    expect(headline).toContain("no improver run in 30 days");
+    // And the age beside `oldest` still labels the oldest lesson, not the clock.
+    expect(headline).toContain("1 lesson pending for repo, oldest l2 (2 days)");
+    expect(headline).toContain("next: open an improver generation on repo");
+  });
+});
+
+// The count trigger needs no clock: the number that fired is the count, and it
+// is already the first thing on the line.
+test("670 a count-fired headline carries no improver clock (room d129, d132)", async () => {
+  await withFixture(async (fixture) => {
+    for (let index = 0; index < 5; index += 1) {
+      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
+    }
+    backdate(fixture, "l1", 3);
+
+    const raised = await runCli(fixture, ["attention"]);
+    expect(raised.exitCode).toBe(0);
+    const headline = raised.stdout.split("\n")[0] ?? "";
+    expect(headline).toContain("5 lessons pending for repo, oldest l1 (3 days);");
+    expect(headline).not.toContain("no improver run in");
+  });
+});

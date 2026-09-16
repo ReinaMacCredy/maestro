@@ -14,13 +14,16 @@ import { registerSessionCommand } from "./session-required.ts";
 
 // d42 runs the improver on a schedule or a threshold, never per correction.
 // room d132 keeps the shipped numbers: 5 pending lessons, or an oldest lesson
-// 7 days old.
-export const improverPendingCount = 5;
-export const improverPendingDays = 7;
+// 7 days old. d129 point 3 moved the pair here from attention.ts so one
+// evaluation feeds the packet, the hook line and ready; the names are the ones
+// d132 cites, because a decision that names a symbol should still find it.
+const lessonsPendingCount = 5;
+const lessonsPendingDays = 7;
 
 export interface ImproverTrigger {
-  // Age of the oldest pending lesson, which is what the reader is told; the
-  // trigger's own clock is `since`, the last improver run when there was one.
+  // Age of the oldest pending lesson, which is what `oldest <id>` is labelled
+  // with. It is not always the number that fired: that is `sinceDays`, off the
+  // trigger's own clock `since`, the last improver run when there was one.
   ageDays: number;
   lastRun: string | null;
   oldestId: string;
@@ -28,6 +31,7 @@ export interface ImproverTrigger {
   project: string;
   reason: "age" | "count";
   since: string;
+  sinceDays: number;
 }
 
 interface PendingLessonRow {
@@ -68,16 +72,17 @@ export function improverTriggers(context: PluginContext, now: number): ImproverT
       .get(project);
     const since = lastRun?.created_at ?? oldest.created_at;
     const day = 24 * 60 * 60_000;
-    const overdue = now - Date.parse(since) >= improverPendingDays * day;
-    if (lessons.length < improverPendingCount && !overdue) return [];
+    const overdue = now - Date.parse(since) >= lessonsPendingDays * day;
+    if (lessons.length < lessonsPendingCount && !overdue) return [];
     return [{
       ageDays: Math.max(0, Math.floor((now - Date.parse(oldest.created_at)) / day)),
       lastRun: lastRun?.created_at ?? null,
       oldestId: oldest.id,
       pending: lessons.length,
       project,
-      reason: lessons.length >= improverPendingCount ? "count" : "age",
+      reason: lessons.length >= lessonsPendingCount ? "count" : "age",
       since,
+      sinceDays: Math.max(0, Math.floor((now - Date.parse(since)) / day)),
     }];
   });
 }
