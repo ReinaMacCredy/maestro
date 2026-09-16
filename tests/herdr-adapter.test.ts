@@ -415,7 +415,7 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
       (await runCliAt(
         fixture,
         fixture.repo,
-        ["hook", "record", "--event", "PostCompact", "--harness", "claude"],
+        ["hook", "record", "--event", "SessionStart", "--source", "compact", "--harness", "claude"],
         {
           ...fake.env,
           HERDR_PANE_ID: lead.paneId,

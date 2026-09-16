@@ -492,6 +492,7 @@ subverbs:
     --event <value>    Record this harness event name.
     --harness <value>  Record the originating harness.
     --json             Emit one compact JSON success envelope.
+    --source <value>   Why the harness event fired (SessionStart: startup, resume, clear, compact).
 
 ### maestro hook record --help
 hook record  Record a harness event and print the dynamic brief.
@@ -499,6 +500,7 @@ usage: maestro hook record
     --event <value>    Record this harness event name.
     --harness <value>  Record the originating harness.
     --json             Emit one compact JSON success envelope.
+    --source <value>   Why the harness event fired (SessionStart: startup, resume, clear, compact).
 
 ### maestro import --help
 import  Import one-shot data from legacy Maestro stores.

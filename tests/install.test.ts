@@ -191,9 +191,10 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     expect(codexHooks.hooks.UserPromptSubmit).toBeArray();
     expect(claudeHooks.hooks.SessionStart).toBeArray();
     expect(claudeHooks.hooks.UserPromptSubmit).toBeArray();
-    // room d137: the compact count starts with a PostCompact hook. Claude Code
-    // fires that event; Codex has none, so its hook config stays as it was.
-    expect(claudeHooks.hooks.PostCompact).toBeArray();
+    // room d140 amends d137: Claude Code has no PostCompact event, so the
+    // compact count rides the SessionStart hook that is already installed and
+    // neither harness gains an event here.
+    expect(claudeHooks.hooks.PostCompact).toBeUndefined();
     expect(codexHooks.hooks.PostCompact).toBeUndefined();
     expect(existsSync(join(fixture.repo, "AGENTS.md"))).toBe(false);
     expect(existsSync(join(fixture.repo, "CLAUDE.md"))).toBe(false);
@@ -242,6 +243,49 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
       expect(envelope.data.sessions.find((session) => session.id === sessionId)?.harness).toBe(
         harness,
       );
+    }
+
+    // room d137/d140 end to end: the installed Claude adapter forwards the
+    // SessionStart source, and source "compact" is the one that records a
+    // compaction row. A plain startup records none.
+    const compactAdapter = join(fixture.repo, ".claude", "hooks", "maestro-record.ts");
+    for (const source of ["compact", "startup"]) {
+      const hook = Bun.spawn([process.execPath, compactAdapter], {
+        cwd: fixture.repo,
+        env: { ...hostEnvironment(), HOME: fixture.home, PATH: path },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      hook.stdin.write(
+        JSON.stringify({
+          cwd: fixture.repo,
+          hook_event_name: "SessionStart",
+          session_id: `install-compact-${source}`,
+          source,
+        }),
+      );
+      hook.stdin.end();
+      expect(await hook.exited).toBe(0);
+    }
+    const events = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      expect(
+        events
+          .query<{ count: number }, []>(
+            "SELECT COUNT(*) AS count FROM event_log WHERE type = 'session.compact'",
+          )
+          .get()?.count,
+      ).toBe(1);
+      expect(
+        events
+          .query<{ session_id: string | null }, []>(
+            "SELECT session_id FROM event_log WHERE type = 'session.compact'",
+          )
+          .get()?.session_id,
+      ).toBe("install-compact-compact");
+    } finally {
+      events.close();
     }
   });
 });

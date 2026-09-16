@@ -131,13 +131,10 @@ async function writeHookConfig(
 ): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
-  // room d137: PostCompact records one compaction per event for the session
-  // and pane it fires in. Codex has no such event, so its hook config keeps
-  // the two it does fire.
-  const events = harness === "claude"
-    ? ["SessionStart", "UserPromptSubmit", "PostCompact"]
-    : ["SessionStart", "UserPromptSubmit"];
-  for (const event of events) {
+  // room d140 amends d137: Claude Code has no PostCompact event. A completed
+  // compaction arrives as SessionStart with source "compact", so the event
+  // list is unchanged and the adapter below forwards the source instead.
+  for (const event of ["SessionStart", "UserPromptSubmit"]) {
     const retained = retainForeignHookGroups(config.hooks[event] ?? []);
     const handler: HookHandler = {
       type: "command",
@@ -437,7 +434,12 @@ const raw = await Bun.stdin.text();
 const input = raw.trim() ? JSON.parse(raw) : {};
 const event = typeof input.hook_event_name === "string" ? input.hook_event_name : "SessionStart";
 const sessionId = typeof input.session_id === "string" ? input.session_id : undefined;
-const child = Bun.spawn(["maestro", "hook", "record", "--event", event, "--harness", "${harness}"], {
+// room d137/d140: SessionStart carries why it fired; "compact" is one
+// completed compaction, counted per session and pane.
+const source = typeof input.source === "string" ? input.source : "";
+const args = ["maestro", "hook", "record", "--event", event, "--harness", "${harness}"];
+if (source) args.push("--source", source);
+const child = Bun.spawn(args, {
   cwd: typeof input.cwd === "string" ? input.cwd : process.cwd(),
   env: { ...process.env, ...(sessionId ? { MAESTRO_SESSION_ID: sessionId } : {}) },
   stdin: new TextEncoder().encode(raw),

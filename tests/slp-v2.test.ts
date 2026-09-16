@@ -6750,10 +6750,12 @@ test("SLP v2 lets a Lead open its own item with work add and no --to, which the 
   });
 });
 
-// room d137: per-pane session telemetry starts with the compact count. The
-// PostCompact hook records one row per compaction for the session and pane it
-// fires in, and the reviewer reads it back beside the assignee seat. It gates
-// nothing: a seat with two compactions is refused nothing (d96/d97 hold).
+// room d137, as amended by d140: per-pane session telemetry starts with the
+// compact count. A completed compaction reaches Claude Code as SessionStart
+// with source "compact" - there is no PostCompact event - and the hook records
+// one row per compaction for the session and pane it fires in, which the
+// reviewer reads back beside the assignee seat. It gates nothing: a seat with
+// two compactions is refused nothing (d96/d97 hold).
 test("SLP v2 reads the compact count back beside the assignee seat and prints nothing for a seat that never compacted (room d137)", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
@@ -6793,11 +6795,21 @@ test("SLP v2 reads the compact count back beside the assignee seat and prints no
       const recorded = await runCliAt(
         fixture,
         fixture.repo,
-        ["hook", "record", "--event", "PostCompact", "--harness", "claude"],
+        ["hook", "record", "--event", "SessionStart", "--source", "compact", "--harness", "claude"],
         { ...leadEnvironment, MAESTRO_SESSION_ID: session, MAESTRO_SESSION_PID: String(process.pid) },
       );
       expect(recorded.exitCode).toBe(0);
     }
+
+    // A SessionStart that is not a compaction is not a compaction.
+    expect(
+      (await runCliAt(
+        fixture,
+        fixture.repo,
+        ["hook", "record", "--event", "SessionStart", "--source", "startup", "--harness", "claude"],
+        { ...leadEnvironment, MAESTRO_SESSION_ID: "compact-session-b", MAESTRO_SESSION_PID: String(process.pid) },
+      )).exitCode,
+    ).toBe(0);
 
     const counted = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
     expect(counted.exitCode).toBe(0);

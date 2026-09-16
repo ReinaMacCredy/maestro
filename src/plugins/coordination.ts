@@ -395,8 +395,10 @@ export const coordinationPlugin: BuiltInPlugin = {
             sessionId: session.id,
             payload: { event, harness, pid: session.pid },
           });
-          // room d137: one row per compaction, for the session and the pane it fired in.
-          if (event === "PostCompact") {
+          // room d137 as amended by d140: a completed compaction reaches the
+          // harness as SessionStart with source "compact"; one row per
+          // compaction, for the session and the pane it fired in.
+          if (event === "SessionStart" && invocation.options.source === "compact") {
             recordCompaction(context.log, session.id, harness ?? null, currentPaneId() ?? null);
           }
           if (event === "SessionStart") pruneDeadSessions(context);
@@ -429,6 +431,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           flags: {
             "--event": { description: "Record this harness event name.", value: true },
             "--harness": { description: "Record the originating harness.", value: true },
+            "--source": { description: "Why the harness event fired (SessionStart: startup, resume, clear, compact).", value: true },
           },
           rootDescription: "Record harness events and print the current brief.",
         },
