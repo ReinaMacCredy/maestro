@@ -55,6 +55,16 @@ A tool's refusal is evidence about the tool. Where it implies that the owner
 is present, watching or reachable, measure that claim yourself before
 recording anything that rests on it, and treat a message with a deadline as
 undelivered until a channel independent of that screen has carried it (l16).
+
+## Monitors
+
+A monitor you will cite as cover emits a liveness line every cycle, separate
+from its event lines, so its silence reads as failure rather than as quiet;
+and its input set never empties when the work goes right, or the empty set is
+an explicit state that reports itself. Re-measure the monitor before citing
+it, never the things it is supposed to be holding: a watcher that fails only
+on new arrivals passes every spot-check, because it looks perfect exactly
+where anyone would look (l17, l18).
 `;
 
 const owner = `# OWNER — stable model

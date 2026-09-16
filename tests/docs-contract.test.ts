@@ -557,3 +557,18 @@ test("653 [lint] the room's IDENTITY.md carries the evidence rule for documents,
     expect(identity).toContain("measure that claim yourself before recording anything that rests on it");
   });
 });
+
+// room lessons l17, l18: the room's snapshot watcher wedged silently and was
+// still described as live cover, and its input set emptied on the first
+// commit - the success it was waiting for killed it.
+test("654 [lint] the room's IDENTITY.md tells a monitor to prove its own liveness and never define itself over a set that empties on success (l17, l18)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    const identity = (await Bun.file(join(room, "IDENTITY.md")).text()).replaceAll(/\s+/g, " ");
+    expect(identity).toContain("emits a liveness line every cycle");
+    expect(identity).toContain("its silence reads as failure rather than as quiet");
+    expect(identity).toContain("its input set never empties when the work goes right");
+    expect(identity).toContain("Re-measure the monitor before citing it");
+    expect(identity).toContain("a watcher that fails only on new arrivals passes every spot-check");
+  });
+});
