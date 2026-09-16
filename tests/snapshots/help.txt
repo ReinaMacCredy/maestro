@@ -1,0 +1,1115 @@
+### maestro help
+verbs:
+  attention  Scan store state for attention packets without mutating work. *
+  brief      Summarize registered repository work without changing project stores. *
+  bundle     Durable design bundles: scaffold, snapshot, recall. *
+  decide     Record one immutable settled decision.
+  decision   Record durable decisions and their lifecycle. *
+  dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
+  doctor     Diagnose the machine runtime and current repository wiring read-only. *
+  graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
+  handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
+  handoff    Seed untouched NOTES.md sections from store and git evidence.
+  help       Show top-level or per-verb help. *
+  hook       Record harness events and print the current brief.
+  import     Import one-shot data from legacy Maestro stores.
+  install    Install Maestro runtime and repository hook wiring.
+  legacy     Read imported legacy cards without changing them. *
+  lesson     Record corrections the improver turns into doctrine edits. *
+  mcp        Expose Maestro through a foreground stdio MCP transport. *
+  memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
+  owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
+  plugin     Manage built-in, global, and repository plugins. *
+  prompt     Recorded user prompts from harness hooks. *
+  ready      List ready work and gated items with their blockers. *
+  recipe     Browse and read shipped workflow recipes. *
+  room       Manage the room repository registry.
+  search     Search work, decisions, notes, terms and event history, here and in the Hub. *
+  slp        Maestro's Herdr plugin entrypoints and the runtime readout.
+  status     Show sessions, live peers, and held work. *
+  team       Run the simplified supervised-team lifecycle.
+  term       Record or redefine one glossary term. *
+  trace      Reconstruct one work item's event history. *
+  uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
+  update     Fast-forward the recorded source checkout and resync the runtime.
+  version    Show the installed or source Maestro version. *
+  work       Move supervised work through its four-state lifecycle. *
+
+environment:
+  MAESTRO_READ_ONLY=1  Run only pure observer verbs without persisting session, lease, or liveness updates.
+  *  a verb it admits (on a root verb: at least one of its subverbs)
+
+### maestro attention --help
+attention  Scan store state for attention packets without mutating work. *
+usage: maestro attention
+    --decision-stale <value>  Draft decision threshold in hours (default 24).
+    --dispatch-stale <value>  Unreturned dispatch threshold in hours (default 2).
+    --json                    Emit one compact JSON success envelope.
+    --stale <value>           Stalled lease threshold in minutes (default 30).
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro brief --help
+brief  Summarize registered repository work without changing project stores. *
+usage: maestro brief
+    --json     Emit one compact JSON success envelope.
+    --session  Print this session's SessionStart brief instead (the hook and MCP text).
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro bundle --help
+bundle  Durable design bundles: scaffold, snapshot, recall.
+subverbs:
+  close   Snapshot the trio text into the store and archive the bundle.
+    usage: maestro bundle close <id>
+    --json  Emit one compact JSON success envelope.
+  import  Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.
+    usage: maestro bundle import <directory>
+    --dry-run  Report the mapping without writing.
+    --json     Emit one compact JSON success envelope.
+  list    List bundles and their states. *
+    --json  Emit one compact JSON success envelope.
+  open    Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
+    usage: maestro bundle open <id>
+    --json                       Emit one compact JSON success envelope.
+    --work <value> (repeatable)  Link a work item to this bundle.
+  pause   Pause an active bundle: it stays open but out of the way.
+    usage: maestro bundle pause <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Why the bundle pauses.
+  resume  Resume a paused bundle.
+    usage: maestro bundle resume <id>
+    --json  Emit one compact JSON success envelope.
+  save    Ingest a foreign SPEC/NOTES/VERIFY dir straight to archived.
+    usage: maestro bundle save <directory>
+    --json  Emit one compact JSON success envelope.
+  show    Compose one bundle: trio text, linked work, decisions. *
+    usage: maestro bundle show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro bundle close --help
+bundle close  Snapshot the trio text into the store and archive the bundle.
+usage: maestro bundle close <id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro bundle import --help
+bundle import  Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.
+usage: maestro bundle import <directory>
+    --dry-run  Report the mapping without writing.
+    --json     Emit one compact JSON success envelope.
+
+### maestro bundle list --help
+bundle list  List bundles and their states. *
+usage: maestro bundle list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro bundle open --help
+bundle open  Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
+usage: maestro bundle open <id>
+    --json                       Emit one compact JSON success envelope.
+    --work <value> (repeatable)  Link a work item to this bundle.
+
+### maestro bundle pause --help
+bundle pause  Pause an active bundle: it stays open but out of the way.
+usage: maestro bundle pause <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Why the bundle pauses.
+
+### maestro bundle resume --help
+bundle resume  Resume a paused bundle.
+usage: maestro bundle resume <id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro bundle save --help
+bundle save  Ingest a foreign SPEC/NOTES/VERIFY dir straight to archived.
+usage: maestro bundle save <directory>
+    --json  Emit one compact JSON success envelope.
+
+### maestro bundle show --help
+bundle show  Compose one bundle: trio text, linked work, decisions. *
+usage: maestro bundle show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro decide --help
+decide  Record one immutable settled decision.
+usage: maestro decide <choice>
+    --json              Emit one compact JSON success envelope.
+    --provisional       Hub only, with --work: an away ruling that stands until the owner confirms or supersedes it (room d125).
+    --replaces <value>  Link the decision it replaces.
+    --scope <value>     Select owner or cross-team scope when acting as Hub Supervisor.
+    --why <value>       Record why this choice is settled.
+    --work <value>      Link the decision to SLP work.
+
+### maestro decision --help
+decision  Record durable decisions and their lifecycle.
+subverbs:
+  confirm   Hub only: confirm a provisional decision recorded while the owner was away (room d125).
+    usage: maestro decision confirm <decision-id>
+    --json  Emit one compact JSON success envelope.
+  draft     Create or edit a draft decision.
+    usage: maestro decision draft <text-or-id> [replacement]
+    --dissent <value>     Record the dissenting view.
+    --json                Emit one compact JSON success envelope.
+    --needs-owner         Mark this draft as requiring an owner decision.
+    --parent <value>      Attach this draft beneath a parent decision.
+    --rationale <value>   Record why this decision was made.
+    --review-at <value>   Schedule review at an ISO date.
+    --supersedes <value>  Supersede a locked decision with this draft.
+    --work <value>        Link this draft to a work item.
+  list      List decisions and their current states. *
+    --json  Emit one compact JSON success envelope.
+  lock      Lock a draft decision against further edits.
+    usage: maestro decision lock <id>
+    --dissent <value>    Record the dissenting view.
+    --json               Emit one compact JSON success envelope.
+    --review-at <value>  Schedule review at an ISO date.
+  show      Show one decision and its links; long fields wrap for a terminal. *
+    usage: maestro decision show <id>
+    --json  Emit one compact JSON success envelope.
+    --wide  Print every field on one raw line even in a terminal.
+  withdraw  Withdraw a draft decision that will not be locked.
+    usage: maestro decision withdraw <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the draft was withdrawn.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro decision confirm --help
+decision confirm  Hub only: confirm a provisional decision recorded while the owner was away (room d125).
+usage: maestro decision confirm <decision-id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro decision draft --help
+decision draft  Create or edit a draft decision.
+usage: maestro decision draft <text-or-id> [replacement]
+    --dissent <value>     Record the dissenting view.
+    --json                Emit one compact JSON success envelope.
+    --needs-owner         Mark this draft as requiring an owner decision.
+    --parent <value>      Attach this draft beneath a parent decision.
+    --rationale <value>   Record why this decision was made.
+    --review-at <value>   Schedule review at an ISO date.
+    --supersedes <value>  Supersede a locked decision with this draft.
+    --work <value>        Link this draft to a work item.
+
+### maestro decision list --help
+decision list  List decisions and their current states. *
+usage: maestro decision list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro decision lock --help
+decision lock  Lock a draft decision against further edits.
+usage: maestro decision lock <id>
+    --dissent <value>    Record the dissenting view.
+    --json               Emit one compact JSON success envelope.
+    --review-at <value>  Schedule review at an ISO date.
+
+### maestro decision show --help
+decision show  Show one decision and its links; long fields wrap for a terminal. *
+usage: maestro decision show <id>
+    --json  Emit one compact JSON success envelope.
+    --wide  Print every field on one raw line even in a terminal.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro decision withdraw --help
+decision withdraw  Withdraw a draft decision that will not be locked.
+usage: maestro decision withdraw <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the draft was withdrawn.
+
+### maestro dispatch --help
+dispatch  Lane contracts outside a running SLP team: open, accept, cancel, and read them.
+subverbs:
+  accept   Accept a dispatch without taking the work write lease.
+    usage: maestro dispatch accept <id>
+    --json  Emit one compact JSON success envelope.
+  cancel   Cancel a dispatch while keeping its row and reason.
+    usage: maestro dispatch cancel <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the lane was abandoned.
+  confirm  Confirm a dispatch claim or validate its targeted holder as the opener.
+    usage: maestro dispatch confirm <id>
+    --json             Emit one compact JSON success envelope.
+    --session <value>  Name the claimed or targeted session.
+  list     List dispatch contracts, optionally for one work item. *
+    usage: maestro dispatch list [work-id]
+    --json  Emit one compact JSON success envelope.
+  open     Store a complete lane contract on a work item.
+    usage: maestro dispatch open <work-id>
+    --council-anchor <value>     Join the council declared by this dispatch id.
+    --council-members <value>    Declare a blind council of this many views; later members join with --council-anchor.
+    --evidence-required <value>  Name the required evidence.
+    --excluded-scope <value>     Name the excluded scope.
+    --json                       Emit one compact JSON success envelope.
+    --lane <value>               Name the lane type.
+    --mutation <value>           Declare the mutation boundary.
+    --objective <value>          State the observable objective.
+    --owned-scope <value>        Name the lane-owned scope.
+    --pane <value>               Record the pane that owns the lane.
+    --stop-condition <value>     State when the lane stops.
+    --target-session <value>     Address a session already known by its harness session id, the value Herdr reports as agent_session.value; never the Herdr agent name.
+  show     Show one stored dispatch contract. *
+    usage: maestro dispatch show <id>
+    --json  Emit one compact JSON success envelope.
+  unseal   Open a sealed council early and record why.
+    usage: maestro dispatch unseal <work-id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the council opened early.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro dispatch accept --help
+dispatch accept  Accept a dispatch without taking the work write lease.
+usage: maestro dispatch accept <id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro dispatch cancel --help
+dispatch cancel  Cancel a dispatch while keeping its row and reason.
+usage: maestro dispatch cancel <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the lane was abandoned.
+
+### maestro dispatch confirm --help
+dispatch confirm  Confirm a dispatch claim or validate its targeted holder as the opener.
+usage: maestro dispatch confirm <id>
+    --json             Emit one compact JSON success envelope.
+    --session <value>  Name the claimed or targeted session.
+
+### maestro dispatch list --help
+dispatch list  List dispatch contracts, optionally for one work item. *
+usage: maestro dispatch list [work-id]
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro dispatch open --help
+dispatch open  Store a complete lane contract on a work item.
+usage: maestro dispatch open <work-id>
+    --council-anchor <value>     Join the council declared by this dispatch id.
+    --council-members <value>    Declare a blind council of this many views; later members join with --council-anchor.
+    --evidence-required <value>  Name the required evidence.
+    --excluded-scope <value>     Name the excluded scope.
+    --json                       Emit one compact JSON success envelope.
+    --lane <value>               Name the lane type.
+    --mutation <value>           Declare the mutation boundary.
+    --objective <value>          State the observable objective.
+    --owned-scope <value>        Name the lane-owned scope.
+    --pane <value>               Record the pane that owns the lane.
+    --stop-condition <value>     State when the lane stops.
+    --target-session <value>     Address a session already known by its harness session id, the value Herdr reports as agent_session.value; never the Herdr agent name.
+
+### maestro dispatch show --help
+dispatch show  Show one stored dispatch contract. *
+usage: maestro dispatch show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro dispatch unseal --help
+dispatch unseal  Open a sealed council early and record why.
+usage: maestro dispatch unseal <work-id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why the council opened early.
+
+### maestro doctor --help
+doctor  Diagnose the machine runtime and current repository wiring read-only.
+usage: maestro doctor
+    --json  Emit one compact JSON success envelope.
+
+### maestro graph --help
+graph  Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
+subverbs:
+  list    List graphs across repo, room and shipped locations with shadowing.
+    --json  Emit one compact JSON success envelope.
+  next    Advance a run: execute ready function, router, join and foreach nodes and return the agent and human nodes to spawn.
+    usage: maestro graph next <run>
+    --json  Emit one compact JSON success envelope.
+  result  Record an agent or human node's result (validated against its schema when one is declared).
+    usage: maestro graph result <run> <node>
+    --file <value>                Read the result from this file.
+    --files <value> (repeatable)  Files the node changed, comma separated.
+    --json                        Emit one compact JSON success envelope.
+    --text <value>                The result as inline text.
+    --work <value>                Team-executor (Lead only): bind the node to the SLP work item opened for it; next resolves it with the item's returned body once it is DONE.
+  run     Start a graph run (by name or --file) and return its first pull envelope.
+    usage: maestro graph run [name]
+    --executor <value>            subagent: the harness spawns each agent node; team: nodes bind to SLP work items; default by environment.
+    --file <value>                Run an uninstalled graph markdown file (- for stdin) instead of a named one.
+    --json                        Emit one compact JSON success envelope.
+    --limit <value> (repeatable)  Override a structural limit for this run: nodes=N, loops=N or fanout=N.
+  show    Show one graph file from the nearest location.
+    usage: maestro graph show <name>
+    --json  Emit one compact JSON success envelope.
+  trust   Trust a repo graph's current file so its function nodes may execute.
+    usage: maestro graph trust [name]
+    --file <value>  Trust an uninstalled graph file under the repo instead of a named one.
+    --json          Emit one compact JSON success envelope.
+
+### maestro graph list --help
+graph list  List graphs across repo, room and shipped locations with shadowing.
+usage: maestro graph list
+    --json  Emit one compact JSON success envelope.
+
+### maestro graph next --help
+graph next  Advance a run: execute ready function, router, join and foreach nodes and return the agent and human nodes to spawn.
+usage: maestro graph next <run>
+    --json  Emit one compact JSON success envelope.
+
+### maestro graph result --help
+graph result  Record an agent or human node's result (validated against its schema when one is declared).
+usage: maestro graph result <run> <node>
+    --file <value>                Read the result from this file.
+    --files <value> (repeatable)  Files the node changed, comma separated.
+    --json                        Emit one compact JSON success envelope.
+    --text <value>                The result as inline text.
+    --work <value>                Team-executor (Lead only): bind the node to the SLP work item opened for it; next resolves it with the item's returned body once it is DONE.
+
+### maestro graph run --help
+graph run  Start a graph run (by name or --file) and return its first pull envelope.
+usage: maestro graph run [name]
+    --executor <value>            subagent: the harness spawns each agent node; team: nodes bind to SLP work items; default by environment.
+    --file <value>                Run an uninstalled graph markdown file (- for stdin) instead of a named one.
+    --json                        Emit one compact JSON success envelope.
+    --limit <value> (repeatable)  Override a structural limit for this run: nodes=N, loops=N or fanout=N.
+
+### maestro graph show --help
+graph show  Show one graph file from the nearest location.
+usage: maestro graph show <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro graph trust --help
+graph trust  Trust a repo graph's current file so its function nodes may execute.
+usage: maestro graph trust [name]
+    --file <value>  Trust an uninstalled graph file under the repo instead of a named one.
+    --json          Emit one compact JSON success envelope.
+
+### maestro handback --help
+handback  Return packets for lane contracts outside a running SLP team: file, list, review.
+subverbs:
+  file    File a shape-checked return packet for a dispatch.
+    usage: maestro handback file <dispatch-id>
+    --assumptions <value>           List unverified assumptions or None.
+    --candidate <value>             Record an opaque commit or digest.
+    --claim <value>                 State what is now believed true.
+    --incidental-findings <value>   List incidental findings or None.
+    --json                          Emit one compact JSON success envelope.
+    --lessons <value> (repeatable)  Name a lesson this return answers as <lesson id>@<store path>; repeats.
+    --proof <value>                 Name layered evidence for the claim.
+    --request <value>               State the retry condition or requested action.
+    --residual-risks <value>        List residual risks or None.
+    --status <value>                Set the handback status.
+  list    List handbacks for one dispatch or work item. *
+    usage: maestro handback list <dispatch-or-work-id>
+    --json  Emit one compact JSON success envelope.
+  review  Record that the opener read a returned handback.
+    usage: maestro handback review <id>
+    --json          Emit one compact JSON success envelope.
+    --note <value>  State what the review concluded.
+  show    Show the handback for a handback or dispatch id. *
+    usage: maestro handback show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro handback file --help
+handback file  File a shape-checked return packet for a dispatch.
+usage: maestro handback file <dispatch-id>
+    --assumptions <value>           List unverified assumptions or None.
+    --candidate <value>             Record an opaque commit or digest.
+    --claim <value>                 State what is now believed true.
+    --incidental-findings <value>   List incidental findings or None.
+    --json                          Emit one compact JSON success envelope.
+    --lessons <value> (repeatable)  Name a lesson this return answers as <lesson id>@<store path>; repeats.
+    --proof <value>                 Name layered evidence for the claim.
+    --request <value>               State the retry condition or requested action.
+    --residual-risks <value>        List residual risks or None.
+    --status <value>                Set the handback status.
+
+### maestro handback list --help
+handback list  List handbacks for one dispatch or work item. *
+usage: maestro handback list <dispatch-or-work-id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro handback review --help
+handback review  Record that the opener read a returned handback.
+usage: maestro handback review <id>
+    --json          Emit one compact JSON success envelope.
+    --note <value>  State what the review concluded.
+
+### maestro handback show --help
+handback show  Show the handback for a handback or dispatch id. *
+usage: maestro handback show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro handoff --help
+handoff  Seed untouched NOTES.md sections from store and git evidence.
+usage: maestro handoff <bundle-id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro help --help
+verbs:
+  attention  Scan store state for attention packets without mutating work. *
+  brief      Summarize registered repository work without changing project stores. *
+  bundle     Durable design bundles: scaffold, snapshot, recall. *
+  decide     Record one immutable settled decision.
+  decision   Record durable decisions and their lifecycle. *
+  dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
+  doctor     Diagnose the machine runtime and current repository wiring read-only. *
+  graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
+  handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
+  handoff    Seed untouched NOTES.md sections from store and git evidence.
+  help       Show top-level or per-verb help. *
+  hook       Record harness events and print the current brief.
+  import     Import one-shot data from legacy Maestro stores.
+  install    Install Maestro runtime and repository hook wiring.
+  legacy     Read imported legacy cards without changing them. *
+  lesson     Record corrections the improver turns into doctrine edits. *
+  mcp        Expose Maestro through a foreground stdio MCP transport. *
+  memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
+  owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
+  plugin     Manage built-in, global, and repository plugins. *
+  prompt     Recorded user prompts from harness hooks. *
+  ready      List ready work and gated items with their blockers. *
+  recipe     Browse and read shipped workflow recipes. *
+  room       Manage the room repository registry.
+  search     Search work, decisions, notes, terms and event history, here and in the Hub. *
+  slp        Maestro's Herdr plugin entrypoints and the runtime readout.
+  status     Show sessions, live peers, and held work. *
+  team       Run the simplified supervised-team lifecycle.
+  term       Record or redefine one glossary term. *
+  trace      Reconstruct one work item's event history. *
+  uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
+  update     Fast-forward the recorded source checkout and resync the runtime.
+  version    Show the installed or source Maestro version. *
+  work       Move supervised work through its four-state lifecycle. *
+
+environment:
+  MAESTRO_READ_ONLY=1  Run only pure observer verbs without persisting session, lease, or liveness updates.
+  *  a verb it admits (on a root verb: at least one of its subverbs)
+
+### maestro hook --help
+hook  Record harness events and print the current brief.
+subverbs:
+  record  Record a harness event and print the dynamic brief.
+    --event <value>    Record this harness event name.
+    --harness <value>  Record the originating harness.
+    --json             Emit one compact JSON success envelope.
+
+### maestro hook record --help
+hook record  Record a harness event and print the dynamic brief.
+usage: maestro hook record
+    --event <value>    Record this harness event name.
+    --harness <value>  Record the originating harness.
+    --json             Emit one compact JSON success envelope.
+
+### maestro import --help
+import  Import one-shot data from legacy Maestro stores.
+subverbs:
+  rust  Import a legacy Rust card store read-only.
+    --json          Emit one compact JSON success envelope.
+    --path <value>  Read this legacy store.sqlite file.
+    --promote       Promote legacy cards into native work and decisions.
+
+### maestro import rust --help
+import rust  Import a legacy Rust card store read-only.
+usage: maestro import rust
+    --json          Emit one compact JSON success envelope.
+    --path <value>  Read this legacy store.sqlite file.
+    --promote       Promote legacy cards into native work and decisions.
+
+### maestro install --help
+install  Install Maestro runtime and repository hook wiring.
+usage: maestro install
+    --json        Emit one compact JSON success envelope.
+    --seat-token  Read one claude setup-token token from stdin and store it for every Claude seat (d846).
+
+### maestro legacy --help
+legacy  Read imported legacy cards without changing them.
+subverbs:
+  show  Show one read-only legacy card and its files. *
+    usage: maestro legacy show <id>
+    --file <value>  Show only this legacy file path.
+    --json          Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro legacy show --help
+legacy show  Show one read-only legacy card and its files. *
+usage: maestro legacy show <id>
+    --file <value>  Show only this legacy file path.
+    --json          Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro lesson --help
+lesson  Record corrections the improver turns into doctrine edits.
+subverbs:
+  file     File a correction as a lesson the improver will read.
+    usage: maestro lesson file <what-happened>
+    --evidence <value> (repeatable)  A work, handback, or decision id that evidences it.
+    --expected <value>               What was expected instead.
+    --json                           Emit one compact JSON success envelope.
+    --project <value>                Tag another project; defaults to this store's project.
+    --target <value>                 Name the doctrine this corrects: a recipe section, a rule, a template, a skill, or a Workspace Protocol.
+    --why <value>                    Why the expectation is the right one.
+  list     List pending lessons, or every lesson with --all. *
+    --all              Include lessons already processed.
+    --json             Emit one compact JSON success envelope.
+    --project <value>  Only lessons tagged with this project.
+  process  Mark a lesson processed by the commit that answers it, or by the reason it was rejected.
+    usage: maestro lesson process <id>
+    --answer <value>  Why this lesson produced no edit.
+    --commit <value>  The commit that carries the doctrine edit.
+    --json            Emit one compact JSON success envelope.
+  render   Render the per-project lesson view under ~/maestro/PROJECT.
+    --json  Emit one compact JSON success envelope.
+  show     Show one lesson and the evidence behind it. *
+    usage: maestro lesson show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro lesson file --help
+lesson file  File a correction as a lesson the improver will read.
+usage: maestro lesson file <what-happened>
+    --evidence <value> (repeatable)  A work, handback, or decision id that evidences it.
+    --expected <value>               What was expected instead.
+    --json                           Emit one compact JSON success envelope.
+    --project <value>                Tag another project; defaults to this store's project.
+    --target <value>                 Name the doctrine this corrects: a recipe section, a rule, a template, a skill, or a Workspace Protocol.
+    --why <value>                    Why the expectation is the right one.
+
+### maestro lesson list --help
+lesson list  List pending lessons, or every lesson with --all. *
+usage: maestro lesson list
+    --all              Include lessons already processed.
+    --json             Emit one compact JSON success envelope.
+    --project <value>  Only lessons tagged with this project.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro lesson process --help
+lesson process  Mark a lesson processed by the commit that answers it, or by the reason it was rejected.
+usage: maestro lesson process <id>
+    --answer <value>  Why this lesson produced no edit.
+    --commit <value>  The commit that carries the doctrine edit.
+    --json            Emit one compact JSON success envelope.
+
+### maestro lesson render --help
+lesson render  Render the per-project lesson view under ~/maestro/PROJECT.
+usage: maestro lesson render
+    --json  Emit one compact JSON success envelope.
+
+### maestro lesson show --help
+lesson show  Show one lesson and the evidence behind it. *
+usage: maestro lesson show <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro mcp --help
+mcp  Expose Maestro through a foreground stdio MCP transport.
+subverbs:
+  serve  Serve exactly two Maestro meta-tools over foreground stdio MCP. *
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro mcp serve --help
+mcp serve  Serve exactly two Maestro meta-tools over foreground stdio MCP. *
+usage: maestro mcp serve
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro memory --help
+memory  Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI.
+subverbs:
+  ingest   Promote buffer facts into the Hub through supersession, dedup and evidence gates.
+    --dry-run                    Report the gates' verdicts without writing.
+    --from <value> (repeatable)  Read this directory of markdown facts instead of the default buffers.
+    --json                       Emit one compact JSON success envelope.
+  list     List Hub memory facts from any cwd. *
+    --all   Include superseded and retracted facts.
+    --json  Emit one compact JSON success envelope.
+  render   Render the injected global index from the Hub store; refuse to overwrite a hand edit.
+    --check        Report whether the rendered file is current without writing.
+    --force        Overwrite a hand-edited render.
+    --json         Emit one compact JSON success envelope.
+    --out <value>  Write the render here instead of $HOME/maestro/MEMORY.md.
+  retract  Retire one fact so the buffers can never promote it again.
+    usage: maestro memory retract <fact>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Why the fact no longer holds.
+  show     Show one Hub memory fact with its body and links, from any cwd. *
+    usage: maestro memory show <fact>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro memory ingest --help
+memory ingest  Promote buffer facts into the Hub through supersession, dedup and evidence gates.
+usage: maestro memory ingest
+    --dry-run                    Report the gates' verdicts without writing.
+    --from <value> (repeatable)  Read this directory of markdown facts instead of the default buffers.
+    --json                       Emit one compact JSON success envelope.
+
+### maestro memory list --help
+memory list  List Hub memory facts from any cwd. *
+usage: maestro memory list
+    --all   Include superseded and retracted facts.
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro memory render --help
+memory render  Render the injected global index from the Hub store; refuse to overwrite a hand edit.
+usage: maestro memory render
+    --check        Report whether the rendered file is current without writing.
+    --force        Overwrite a hand-edited render.
+    --json         Emit one compact JSON success envelope.
+    --out <value>  Write the render here instead of $HOME/maestro/MEMORY.md.
+
+### maestro memory retract --help
+memory retract  Retire one fact so the buffers can never promote it again.
+usage: maestro memory retract <fact>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Why the fact no longer holds.
+
+### maestro memory show --help
+memory show  Show one Hub memory fact with its body and links, from any cwd. *
+usage: maestro memory show <fact>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro owner --help
+owner  Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
+usage: maestro owner [here|away]
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin --help
+plugin  Manage built-in, global, and repository plugins.
+subverbs:
+  add      Clone and enable a plugin from a Git URL.
+    usage: maestro plugin add <url>
+    --json  Emit one compact JSON success envelope.
+  disable  Disable a plugin and unwind its effects.
+    usage: maestro plugin disable <name>
+    --json  Emit one compact JSON success envelope.
+  enable   Enable an installed plugin.
+    usage: maestro plugin enable <name>
+    --json  Emit one compact JSON success envelope.
+  list     List built-in, global, and repository plugins. *
+    --json  Emit one compact JSON success envelope.
+  new      Scaffold a repository-local plugin.
+    usage: maestro plugin new <name>
+    --json  Emit one compact JSON success envelope.
+  remove   Remove a managed plugin and its files.
+    usage: maestro plugin remove <name>
+    --json  Emit one compact JSON success envelope.
+  trust    Trust an external plugin's current source so it may load.
+    usage: maestro plugin trust <name>
+    --json  Emit one compact JSON success envelope.
+  untrust  Withdraw an external plugin's trust so it stops loading.
+    usage: maestro plugin untrust <name>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro plugin add --help
+plugin add  Clone and enable a plugin from a Git URL.
+usage: maestro plugin add <url>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin disable --help
+plugin disable  Disable a plugin and unwind its effects.
+usage: maestro plugin disable <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin enable --help
+plugin enable  Enable an installed plugin.
+usage: maestro plugin enable <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin list --help
+plugin list  List built-in, global, and repository plugins. *
+usage: maestro plugin list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro plugin new --help
+plugin new  Scaffold a repository-local plugin.
+usage: maestro plugin new <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin remove --help
+plugin remove  Remove a managed plugin and its files.
+usage: maestro plugin remove <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin trust --help
+plugin trust  Trust an external plugin's current source so it may load.
+usage: maestro plugin trust <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro plugin untrust --help
+plugin untrust  Withdraw an external plugin's trust so it stops loading.
+usage: maestro plugin untrust <name>
+    --json  Emit one compact JSON success envelope.
+
+### maestro prompt --help
+prompt  Recorded user prompts from harness hooks.
+subverbs:
+  list  List recorded user prompts, most recent first (20). *
+    --json             Emit one compact JSON success envelope.
+    --session <value>  Only prompts from this session.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro prompt list --help
+prompt list  List recorded user prompts, most recent first (20). *
+usage: maestro prompt list
+    --json             Emit one compact JSON success envelope.
+    --session <value>  Only prompts from this session.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro ready --help
+ready  List ready work and gated items with their blockers. *
+usage: maestro ready
+    --all   List blocked work too; --json always carries it under gated.
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro recipe --help
+recipe  Browse and read shipped workflow recipes.
+subverbs:
+  list  List the shipped workflow recipes. *
+    --json  Emit one compact JSON success envelope.
+  show  Show one workflow recipe by name. *
+    usage: maestro recipe show <name>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro recipe list --help
+recipe list  List the shipped workflow recipes. *
+usage: maestro recipe list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro recipe show --help
+recipe show  Show one workflow recipe by name. *
+usage: maestro recipe show <name>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro room --help
+room  Manage the room repository registry.
+subverbs:
+  forget  Remove one repository from the room registry without uninstalling it.
+    usage: maestro room forget <path>
+    --json  Emit one compact JSON success envelope.
+  mark    Run room mark.
+    --json  Emit one compact JSON success envelope.
+
+### maestro room forget --help
+room forget  Remove one repository from the room registry without uninstalling it.
+usage: maestro room forget <path>
+    --json  Emit one compact JSON success envelope.
+
+### maestro room mark --help
+room mark  Run room mark.
+usage: maestro room mark
+    --json  Emit one compact JSON success envelope.
+
+### maestro search --help
+search  Search work, decisions, notes, terms and event history, here and in the Hub. *
+usage: maestro search <query>
+    --json           Emit one compact JSON success envelope.
+    --limit <value>  Set the maximum number of results.
+    --local          Search this store only; skip the Hub room.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro slp --help
+slp  Maestro's Herdr plugin entrypoints and the runtime readout.
+subverbs:
+  event    Herdr event hook: record a role pane loss when no runtime is subscribed.
+    --json  Emit one compact JSON success envelope.
+  restore  Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived.
+    --json  Emit one compact JSON success envelope.
+  runtime  Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).
+    --json  Emit one compact JSON success envelope.
+  status   Read the runtime's pending wakes for the running generation.
+    --json  Emit one compact JSON success envelope.
+
+### maestro slp event --help
+slp event  Herdr event hook: record a role pane loss when no runtime is subscribed.
+usage: maestro slp event
+    --json  Emit one compact JSON success envelope.
+
+### maestro slp restore --help
+slp restore  Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived.
+usage: maestro slp restore
+    --json  Emit one compact JSON success envelope.
+
+### maestro slp runtime --help
+slp runtime  Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).
+usage: maestro slp runtime
+    --json  Emit one compact JSON success envelope.
+
+### maestro slp status --help
+slp status  Read the runtime's pending wakes for the running generation.
+usage: maestro slp status
+    --json  Emit one compact JSON success envelope.
+
+### maestro status --help
+status  Show sessions, live peers, and held work. *
+usage: maestro status [work-id]
+    --all   Show all recorded sessions.
+    --json  Emit one compact JSON success envelope.
+    --live  Show live sessions only.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro team --help
+team  Run the simplified supervised-team lifecycle.
+subverbs:
+  start  Start or restore one SLP team generation, supervised or lead-only.
+    usage: maestro team start <project> <objective>
+    --json                      Emit one compact JSON success envelope.
+    --lead-model <value>        Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
+    --lead-only                 Open one Lead pane plus the runtime pane and no Team Supervisor; the Hub Supervisor reviews the Lead's work (room d117).
+    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128).
+    --peer-profile <value>      Override the Workspace Pack peer profile for this generation (recorded on the team row).
+    --supervisor-model <value>  Launch the Team Supervisor with this model; refused with --lead-only (room d128).
+  stop   Stop one complete SLP team, or abandon unfinished work from Hub.
+    usage: maestro team stop <team-id>
+    --emergency       Use Hub owner authority and abandon unfinished work.
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Team Supervisor, or the Hub for a lead-only team (w722): the closing report shown on the Hub ledger. Hub with --emergency: why unfinished work is abandoned.
+
+### maestro team start --help
+team start  Start or restore one SLP team generation, supervised or lead-only.
+usage: maestro team start <project> <objective>
+    --json                      Emit one compact JSON success envelope.
+    --lead-model <value>        Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
+    --lead-only                 Open one Lead pane plus the runtime pane and no Team Supervisor; the Hub Supervisor reviews the Lead's work (room d117).
+    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128).
+    --peer-profile <value>      Override the Workspace Pack peer profile for this generation (recorded on the team row).
+    --supervisor-model <value>  Launch the Team Supervisor with this model; refused with --lead-only (room d128).
+
+### maestro team stop --help
+team stop  Stop one complete SLP team, or abandon unfinished work from Hub.
+usage: maestro team stop <team-id>
+    --emergency       Use Hub owner authority and abandon unfinished work.
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Team Supervisor, or the Hub for a lead-only team (w722): the closing report shown on the Hub ledger. Hub with --emergency: why unfinished work is abandoned.
+
+### maestro term --help
+term  Record or redefine one glossary term.
+subverbs:
+  add   Record or redefine one glossary term.
+    usage: maestro term add <name> <definition>
+    --json          Emit one compact JSON success envelope.
+    --work <value>  Link the term to a work item.
+  list  List glossary terms. *
+    --json  Emit one compact JSON success envelope.
+  show  Show one glossary term. *
+    usage: maestro term show <name>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro term add --help
+term add  Record or redefine one glossary term.
+usage: maestro term add <name> <definition>
+    --json          Emit one compact JSON success envelope.
+    --work <value>  Link the term to a work item.
+
+### maestro term list --help
+term list  List glossary terms. *
+usage: maestro term list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro term show --help
+term show  Show one glossary term. *
+usage: maestro term show <name>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro trace --help
+trace  Reconstruct one work item's event history. *
+usage: maestro trace <id>
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro uninstall --help
+uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
+usage: maestro uninstall
+    --json  Emit one compact JSON success envelope.
+
+### maestro update --help
+update  Fast-forward the recorded source checkout and resync the runtime.
+usage: maestro update
+    --json  Emit one compact JSON success envelope.
+
+### maestro version --help
+version  Show the installed or source Maestro version. *
+usage: maestro version
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro work --help
+work  Move supervised work through its four-state lifecycle.
+subverbs:
+  accept   Accept RETURNED SLP work at the reviewer boundary.
+    usage: maestro work accept <work-id>
+    --json             Emit one compact JSON success envelope.
+    --outcome <value>  Record accepted or cancelled; cancellation may close OPEN work.
+  add      Add a tracked work item.
+    usage: maestro work add <title>
+    --acceptance <value>               Record the observable acceptance condition.
+    --atomic-reason <value>            Explain why parentless work needs no child breakdown.
+    --blocked-by <value> (repeatable)  Add a blocking work ID.
+    --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
+    --json                             Emit one compact JSON success envelope.
+    --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).
+    --parent <value>                   Attach the item beneath a parent work ID.
+    --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
+    --to <value>                       Assign SLP work to a Peer; Team Supervisor work defaults to Lead.
+  block    Add blocking work IDs to an existing work item.
+    usage: maestro work block <id>
+    --by <value> (repeatable)  The blocking work ID.
+    --json                     Emit one compact JSON success envelope.
+  cancel   Cancel open or currently held work and its open or active descendants with a recorded reason.
+    usage: maestro work cancel <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why this work is cancelled.
+  done     Complete work with policy-checked evidence, taking an unheld lease.
+    usage: maestro work done <id>
+    --atomic-reason <value>       Declare an unheld parentless item atomic while done takes its lease.
+    --candidate <value>           Record an opaque commit or digest.
+    --claim <value> (repeatable)  Record a completion claim.
+    --evidence <value>            Record opaque completion evidence.
+    --json                        Emit one compact JSON success envelope.
+    --proof <value> (repeatable)  Record proof paired with a claim.
+  list     List tracked work and current states. *
+    --json  Emit one compact JSON success envelope.
+  note     Append a note to a work item.
+    usage: maestro work note <id> <text>
+    --blocked       Flag the note as blocked and push it one SLP seat up.
+    --file <value>  Read the note body from this file instead of the text argument.
+    --json          Emit one compact JSON success envelope.
+    --owner         Record an owner walk-in typed into this seat's pane (room d123): provenance only, pushed one SLP seat up, never a blocked flag.
+    --rework        Grant the current SLP return revision one reviewer-authorized retake.
+  reclaim  Take an existing lease with a recorded reason without completing work.
+    usage: maestro work reclaim <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why this lease is being reclaimed.
+  release  Release the current session's lease without completing work.
+    usage: maestro work release <id>
+    --force  Drop another session's lease even while that session is alive; the event records who forced it.
+    --json   Emit one compact JSON success envelope.
+  return   Return ACTIVE SLP work with its bounded result body.
+    usage: maestro work return <work-id> <body>
+    --json  Emit one compact JSON success envelope.
+  show     Show one work item with its done gates, blockers, evidence, children, and the last five notes. *
+    usage: maestro work show <id>
+    --json           Emit one compact JSON success envelope.
+    --notes <value>  How many notes to print, newest last: an integer or all (default 5).
+  start    Start work and claim its live session lease.
+    usage: maestro work start <id>
+    --atomic-reason <value>  Declare this item atomic instead of breaking it down.
+    --json                   Emit one compact JSON success envelope.
+  take     Take assigned OPEN work or reviewer-granted RETURNED SLP work.
+    usage: maestro work take <work-id>
+    --json  Emit one compact JSON success envelope.
+  unblock  Remove blocking work IDs from an existing work item.
+    usage: maestro work unblock <id>
+    --by <value> (repeatable)  The blocking work ID.
+    --json                     Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro work accept --help
+work accept  Accept RETURNED SLP work at the reviewer boundary.
+usage: maestro work accept <work-id>
+    --json             Emit one compact JSON success envelope.
+    --outcome <value>  Record accepted or cancelled; cancellation may close OPEN work.
+
+### maestro work add --help
+work add  Add a tracked work item.
+usage: maestro work add <title>
+    --acceptance <value>               Record the observable acceptance condition.
+    --atomic-reason <value>            Explain why parentless work needs no child breakdown.
+    --blocked-by <value> (repeatable)  Add a blocking work ID.
+    --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
+    --json                             Emit one compact JSON success envelope.
+    --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).
+    --parent <value>                   Attach the item beneath a parent work ID.
+    --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
+    --to <value>                       Assign SLP work to a Peer; Team Supervisor work defaults to Lead.
+
+### maestro work block --help
+work block  Add blocking work IDs to an existing work item.
+usage: maestro work block <id>
+    --by <value> (repeatable)  The blocking work ID.
+    --json                     Emit one compact JSON success envelope.
+
+### maestro work cancel --help
+work cancel  Cancel open or currently held work and its open or active descendants with a recorded reason.
+usage: maestro work cancel <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why this work is cancelled.
+
+### maestro work done --help
+work done  Complete work with policy-checked evidence, taking an unheld lease.
+usage: maestro work done <id>
+    --atomic-reason <value>       Declare an unheld parentless item atomic while done takes its lease.
+    --candidate <value>           Record an opaque commit or digest.
+    --claim <value> (repeatable)  Record a completion claim.
+    --evidence <value>            Record opaque completion evidence.
+    --json                        Emit one compact JSON success envelope.
+    --proof <value> (repeatable)  Record proof paired with a claim.
+
+### maestro work list --help
+work list  List tracked work and current states. *
+usage: maestro work list
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro work note --help
+work note  Append a note to a work item.
+usage: maestro work note <id> <text>
+    --blocked       Flag the note as blocked and push it one SLP seat up.
+    --file <value>  Read the note body from this file instead of the text argument.
+    --json          Emit one compact JSON success envelope.
+    --owner         Record an owner walk-in typed into this seat's pane (room d123): provenance only, pushed one SLP seat up, never a blocked flag.
+    --rework        Grant the current SLP return revision one reviewer-authorized retake.
+
+### maestro work reclaim --help
+work reclaim  Take an existing lease with a recorded reason without completing work.
+usage: maestro work reclaim <id>
+    --json            Emit one compact JSON success envelope.
+    --reason <value>  Record why this lease is being reclaimed.
+
+### maestro work release --help
+work release  Release the current session's lease without completing work.
+usage: maestro work release <id>
+    --force  Drop another session's lease even while that session is alive; the event records who forced it.
+    --json   Emit one compact JSON success envelope.
+
+### maestro work return --help
+work return  Return ACTIVE SLP work with its bounded result body.
+usage: maestro work return <work-id> <body>
+    --json  Emit one compact JSON success envelope.
+
+### maestro work show --help
+work show  Show one work item with its done gates, blockers, evidence, children, and the last five notes. *
+usage: maestro work show <id>
+    --json           Emit one compact JSON success envelope.
+    --notes <value>  How many notes to print, newest last: an integer or all (default 5).
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro work start --help
+work start  Start work and claim its live session lease.
+usage: maestro work start <id>
+    --atomic-reason <value>  Declare this item atomic instead of breaking it down.
+    --json                   Emit one compact JSON success envelope.
+
+### maestro work take --help
+work take  Take assigned OPEN work or reviewer-granted RETURNED SLP work.
+usage: maestro work take <work-id>
+    --json  Emit one compact JSON success envelope.
+
+### maestro work unblock --help
+work unblock  Remove blocking work IDs from an existing work item.
+usage: maestro work unblock <id>
+    --by <value> (repeatable)  The blocking work ID.
+    --json                     Emit one compact JSON success envelope.

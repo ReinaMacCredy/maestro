@@ -1,0 +1,134 @@
+index dispatches_work_id
+  CREATE INDEX dispatches_work_id ON dispatches(work_id)
+index handbacks_dispatch_id
+  CREATE UNIQUE INDEX handbacks_dispatch_id ON handbacks(dispatch_id)
+index sqlite_autoindex_attention_1
+  (implicit)
+index sqlite_autoindex_bundle_work_1
+  (implicit)
+index sqlite_autoindex_bundles_1
+  (implicit)
+index sqlite_autoindex_decisions_1
+  (implicit)
+index sqlite_autoindex_dispatch_councils_1
+  (implicit)
+index sqlite_autoindex_dispatches_1
+  (implicit)
+index sqlite_autoindex_graph_nodes_1
+  (implicit)
+index sqlite_autoindex_graph_runs_1
+  (implicit)
+index sqlite_autoindex_handback_reviews_1
+  (implicit)
+index sqlite_autoindex_handbacks_1
+  (implicit)
+index sqlite_autoindex_legacy_cards_1
+  (implicit)
+index sqlite_autoindex_legacy_decisions_1
+  (implicit)
+index sqlite_autoindex_legacy_files_1
+  (implicit)
+index sqlite_autoindex_legacy_map_1
+  (implicit)
+index sqlite_autoindex_lessons_1
+  (implicit)
+index sqlite_autoindex_memory_facts_1
+  (implicit)
+index sqlite_autoindex_memory_facts_2
+  (implicit)
+index sqlite_autoindex_meta_1
+  (implicit)
+index sqlite_autoindex_sessions_1
+  (implicit)
+index sqlite_autoindex_terms_1
+  (implicit)
+index sqlite_autoindex_terms_2
+  (implicit)
+index sqlite_autoindex_work_1
+  (implicit)
+index sqlite_autoindex_work_blockers_1
+  (implicit)
+table attention
+  CREATE TABLE attention ( id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, fingerprint TEXT NOT NULL UNIQUE, subject_work TEXT, subject_session TEXT, packet TEXT NOT NULL, created_at TEXT NOT NULL )
+table bundle_work
+  CREATE TABLE bundle_work ( bundle_id TEXT NOT NULL REFERENCES bundles(id), work_id TEXT NOT NULL REFERENCES work(id), PRIMARY KEY(bundle_id, work_id) )
+table bundles
+  CREATE TABLE bundles ( id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('active', 'archived')), directory TEXT NOT NULL, spec TEXT, notes TEXT, verify TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , paused_at TEXT)
+table decisions
+  CREATE TABLE decisions ( id TEXT PRIMARY KEY, text TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('draft', 'locked', 'superseded')), parent_id TEXT REFERENCES decisions(id), work_id TEXT REFERENCES work(id), supersedes_id TEXT REFERENCES decisions(id), superseded_by_id TEXT REFERENCES decisions(id), created_at TEXT NOT NULL, updated_at TEXT NOT NULL , rationale TEXT, needs_owner INTEGER NOT NULL DEFAULT 0, dissent TEXT, review_at TEXT, withdrawn_at TEXT, withdraw_reason TEXT)
+table dispatch_councils
+  CREATE TABLE dispatch_councils ( work_id TEXT NOT NULL REFERENCES work(id), generation_anchor TEXT NOT NULL REFERENCES dispatches(id), unsealed_at TEXT NOT NULL, unseal_reason TEXT NOT NULL, PRIMARY KEY(work_id, generation_anchor) )
+table dispatches
+  CREATE TABLE dispatches ( id TEXT PRIMARY KEY, work_id TEXT NOT NULL REFERENCES work(id), objective TEXT NOT NULL, owned_scope TEXT NOT NULL, excluded_scope TEXT NOT NULL, mutation TEXT NOT NULL, stop_condition TEXT NOT NULL, lane TEXT NOT NULL, evidence_required TEXT NOT NULL, pane TEXT, target_session TEXT, opened_by TEXT, claimed_by TEXT, held_by TEXT, cancelled_at TEXT, cancel_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , generation_anchor TEXT, expected_members INTEGER)
+table event_log
+  CREATE TABLE event_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, entity_type TEXT, entity_id TEXT, session_id TEXT, payload TEXT NOT NULL, created_at TEXT NOT NULL )
+table graph_nodes
+  CREATE TABLE graph_nodes ( run_id TEXT NOT NULL REFERENCES work(id), node_id TEXT NOT NULL, instance_key TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending', 'issued', 'done', 'failed', 'skipped')), profile TEXT, prompt TEXT, schema TEXT, inputs TEXT NOT NULL DEFAULT '{}', result TEXT, round INTEGER NOT NULL DEFAULT 1, files TEXT, attempts INTEGER NOT NULL DEFAULT 0, work_id TEXT, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, node_id, instance_key) )
+table graph_runs
+  CREATE TABLE graph_runs ( run_id TEXT PRIMARY KEY REFERENCES work(id), graph TEXT NOT NULL, origin TEXT NOT NULL, path TEXT, source TEXT NOT NULL, input TEXT NOT NULL, limits TEXT NOT NULL, executor TEXT NOT NULL, loops INTEGER NOT NULL DEFAULT 0, issued INTEGER NOT NULL DEFAULT 0, stopped TEXT, verdict TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
+table handback_reviews
+  CREATE TABLE handback_reviews ( handback_id TEXT PRIMARY KEY REFERENCES handbacks(id), reviewed_by TEXT NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL )
+table handbacks
+  CREATE TABLE handbacks ( id TEXT PRIMARY KEY, dispatch_id TEXT NOT NULL REFERENCES dispatches(id), status TEXT NOT NULL CHECK(status IN ( 'DONE', 'BLOCKED', 'UNTESTABLE', 'UNKNOWN', 'FAILED', 'CHALLENGE', 'REOPEN_REQUEST', 'DEPENDENCY_REQUEST', 'COUNCIL_REQUEST' )), claim TEXT NOT NULL, proof TEXT NOT NULL, assumptions TEXT NOT NULL, residual_risks TEXT NOT NULL, incidental_findings TEXT NOT NULL, created_at TEXT NOT NULL , request TEXT, candidate TEXT, lessons TEXT)
+table legacy_cards
+  CREATE TABLE legacy_cards ( id TEXT PRIMARY KEY NOT NULL, source TEXT NOT NULL DEFAULT 'store', card_type TEXT NOT NULL, parent TEXT, status TEXT NOT NULL, title TEXT NOT NULL, record_file TEXT NOT NULL, card_yaml TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, imported_at TEXT NOT NULL )
+table legacy_decisions
+  CREATE TABLE legacy_decisions ( id TEXT PRIMARY KEY NOT NULL, source TEXT NOT NULL DEFAULT 'store', card_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, source_path TEXT NOT NULL, decision_yaml TEXT NOT NULL )
+table legacy_files
+  CREATE TABLE legacy_files ( card_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'store', path TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, text_content TEXT, PRIMARY KEY (card_id, path), FOREIGN KEY (card_id) REFERENCES legacy_cards(id) ON DELETE CASCADE )
+table legacy_map
+  CREATE TABLE legacy_map ( legacy_id TEXT PRIMARY KEY NOT NULL, native_id TEXT NOT NULL, entity_type TEXT NOT NULL CHECK(entity_type IN ('work', 'decision')) )
+table lessons
+  CREATE TABLE lessons ( id TEXT PRIMARY KEY, target TEXT NOT NULL, happened TEXT NOT NULL, expected TEXT NOT NULL, why TEXT NOT NULL, evidence TEXT NOT NULL, project TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending', 'processed')), commit_sha TEXT, answer TEXT, processed_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
+table memory_facts
+  CREATE TABLE memory_facts ( id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, description TEXT NOT NULL, body TEXT NOT NULL, source TEXT NOT NULL, source_path TEXT NOT NULL, content_hash TEXT NOT NULL, recorded_at TEXT, state TEXT NOT NULL CHECK(state IN ('active', 'superseded')), supersedes_id TEXT REFERENCES memory_facts(id), superseded_by_id TEXT REFERENCES memory_facts(id), retired_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
+table meta
+  CREATE TABLE meta ( key TEXT PRIMARY KEY, value TEXT NOT NULL )
+table prompts
+  CREATE TABLE prompts ( id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL )
+table search_index
+  CREATE VIRTUAL TABLE search_index USING fts5( surface UNINDEXED, entity_id UNINDEXED, text )
+table search_index_config
+  CREATE TABLE 'search_index_config'(k PRIMARY KEY, v) WITHOUT ROWID
+table search_index_content
+  CREATE TABLE 'search_index_content'(id INTEGER PRIMARY KEY, c0, c1, c2)
+table search_index_data
+  CREATE TABLE 'search_index_data'(id INTEGER PRIMARY KEY, block BLOB)
+table search_index_docsize
+  CREATE TABLE 'search_index_docsize'(id INTEGER PRIMARY KEY, sz BLOB)
+table search_index_idx
+  CREATE TABLE 'search_index_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
+table search_index_state
+  CREATE TABLE search_index_state ( version INTEGER NOT NULL )
+table sessions
+  CREATE TABLE sessions ( id TEXT PRIMARY KEY, pid INTEGER NOT NULL, last_event TEXT NOT NULL, last_seen TEXT NOT NULL, harness TEXT CHECK(harness IN ('claude', 'codex')), anchor TEXT NOT NULL DEFAULT 'pid' CHECK(anchor IN ('pid', 'ttl')), scope TEXT NOT NULL DEFAULT '' )
+table sqlite_sequence
+  CREATE TABLE sqlite_sequence(name,seq)
+table terms
+  CREATE TABLE terms ( id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, definition TEXT NOT NULL, work_id TEXT REFERENCES work(id), created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
+table work
+  CREATE TABLE work ( id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('open', 'active', 'done')), parent_id TEXT REFERENCES work(id), acceptance TEXT, atomic_reason TEXT, evidence TEXT, held_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , cancelled_at TEXT, cancel_reason TEXT, reclaimed_from TEXT, reclaimed_by TEXT, reclaim_reason TEXT, candidate TEXT)
+table work_blockers
+  CREATE TABLE work_blockers ( work_id TEXT NOT NULL REFERENCES work(id), blocker_id TEXT NOT NULL REFERENCES work(id), PRIMARY KEY(work_id, blocker_id) )
+table work_notes
+  CREATE TABLE work_notes ( id INTEGER PRIMARY KEY AUTOINCREMENT, work_id TEXT NOT NULL REFERENCES work(id), text TEXT NOT NULL, created_at TEXT NOT NULL )
+trigger event_log_no_delete
+  CREATE TRIGGER event_log_no_delete BEFORE DELETE ON event_log BEGIN SELECT RAISE(ABORT, 'event log is append-only'); END
+trigger event_log_no_replace
+  CREATE TRIGGER event_log_no_replace BEFORE INSERT ON event_log WHEN EXISTS(SELECT 1 FROM event_log WHERE id = NEW.id) BEGIN SELECT RAISE(ABORT, 'event log is append-only'); END
+trigger event_log_no_update
+  CREATE TRIGGER event_log_no_update BEFORE UPDATE ON event_log BEGIN SELECT RAISE(ABORT, 'event log is append-only'); END
+trigger search_decision_insert
+  CREATE TRIGGER search_decision_insert AFTER INSERT ON decisions BEGIN INSERT INTO search_index(surface, entity_id, text) VALUES ('decision', new.id, new.text); END
+trigger search_decision_update
+  CREATE TRIGGER search_decision_update AFTER UPDATE OF text ON decisions BEGIN DELETE FROM search_index WHERE surface = 'decision' AND entity_id = old.id; INSERT INTO search_index(surface, entity_id, text) VALUES ('decision', new.id, new.text); END
+trigger search_log_insert
+  CREATE TRIGGER search_log_insert AFTER INSERT ON event_log BEGIN INSERT INTO search_index(surface, entity_id, text) VALUES ('log', CAST(new.id AS TEXT), new.type || ' ' || new.payload); END
+trigger search_note_insert
+  CREATE TRIGGER search_note_insert AFTER INSERT ON work_notes BEGIN INSERT INTO search_index(surface, entity_id, text) VALUES ('note', CAST(new.id AS TEXT), new.text); END
+trigger search_prompt_insert
+  CREATE TRIGGER search_prompt_insert AFTER INSERT ON prompts BEGIN INSERT INTO search_index(surface, entity_id, text) VALUES ('prompt', CAST(new.id AS TEXT), new.text); END
+trigger search_work_insert
+  CREATE TRIGGER search_work_insert AFTER INSERT ON work BEGIN INSERT INTO search_index(surface, entity_id, text) VALUES ('work', new.id, new.title || ' ' || COALESCE(new.acceptance, '') || ' ' || COALESCE(new.evidence, '')); END
+trigger search_work_update
+  CREATE TRIGGER search_work_update AFTER UPDATE OF title, acceptance, evidence ON work BEGIN DELETE FROM search_index WHERE surface = 'work' AND entity_id = old.id; INSERT INTO search_index(surface, entity_id, text) VALUES ('work', new.id, new.title || ' ' || COALESCE(new.acceptance, '') || ' ' || COALESCE(new.evidence, '')); END
