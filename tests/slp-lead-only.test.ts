@@ -877,3 +877,73 @@ test("w736 a stopped generation's work is still readable from the Hub, while eve
     expect(`${unknown.stdout}${unknown.stderr}`).toContain("SLP work not found from Hub: w9999");
   });
 });
+
+// w736 F1: the Hub is the reviewer of a lead-only team's Lead item, and a
+// reviewer answer is not always a ruling. A fact, a commit hash, a pointer to
+// a decision has no `maestro decide` shape, and the Hub holds no other channel
+// down into the team. `maestro work note <id> "<text>"` from the room answered
+// NOT_FOUND from the non-SLP table, which sent the reader to `maestro work
+// list` and the wrong store entirely.
+test("w736 the Hub records a plain note on a lead-only team's Lead item, wakes the Lead with it, and is still refused --blocked and --owner", async () => {
+  await withFixture(async (fixture) => {
+    const started = await startTeam(fixture, true);
+    const { data, fake, room } = started;
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const workId = data.work.id;
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+      .toBe(0);
+
+    const body = "the g12 head is 50ef3cdf; d141 is the grant, not a new rule";
+    const noted = await runCliAt(fixture, room, ["work", "note", workId, body, "--json"], fake.env);
+    expect(noted.exitCode).toBe(0);
+    expect(noted.stdout).toContain("hub-supervisor");
+
+    // The Lead reads it off the record, and the item is untouched: a note is
+    // not a state change and the Hub is not the assignee.
+    const leadRead = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(leadRead.exitCode).toBe(0);
+    expect(leadRead.stdout).toContain(body);
+    expect(leadRead.stdout).toContain(`${workId} ACTIVE`);
+
+    // And it is a wake-up, not a message left on a shelf: the Hub has no other
+    // way to reach the Lead between one operation and the next.
+    const pushed = (await fakeHerdrCommands(fake))
+      .filter((command) => command[0] === "agent" && command[1] === "prompt")
+      .map((command) => command[3] ?? "")
+      .filter((line) => line.startsWith(`[from hub-supervisor][${workId} NOTE]`));
+    expect(pushed).toHaveLength(1);
+    expect(pushed[0]).toContain(body);
+    expect(pushed[0]).toContain(`read: maestro status ${workId}`);
+
+    // The Hub has no seat above it, so it cannot escalate to itself; and an
+    // owner walk-in in the Hub pane is a Hub ruling, not a seat's provenance
+    // note on somebody else's item.
+    for (const flag of ["--blocked", "--owner"]) {
+      const refused = await runCliAt(
+        fixture,
+        room,
+        ["work", "note", workId, "why?", flag, "--json"],
+        fake.env,
+      );
+      expect(refused.exitCode).not.toBe(0);
+      const message = `${refused.stdout}${refused.stderr}`;
+      expect(message).toContain("ROLE_FORBIDDEN");
+      expect(message).not.toContain("run: maestro work list");
+    }
+
+    // An id no SLP team holds answers from the SLP resolver, not from the room's
+    // own work table, which is the sentence that sent the Hub to the wrong place.
+    const unknown = await runCliAt(fixture, room, ["work", "note", "w9999", "hello", "--json"], fake.env);
+    expect(unknown.exitCode).not.toBe(0);
+    expect(`${unknown.stdout}${unknown.stderr}`).toContain("SLP work not found from Hub: w9999");
+
+    // The room's own work items keep their own note verb.
+    const own = await runCliAt(fixture, room, ["work", "add", "A Hub-local reminder", "--json"], fake.env);
+    expect(own.exitCode).toBe(0);
+    const ownId = (JSON.parse(own.stdout) as { data: { work: { id: string } } }).data.work.id;
+    const ownNote = await runCliAt(fixture, room, ["work", "note", ownId, "still local", "--json"], fake.env);
+    expect(ownNote.exitCode).toBe(0);
+    expect(ownNote.stdout).toContain("still local");
+  });
+});

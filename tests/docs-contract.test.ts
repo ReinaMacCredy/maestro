@@ -802,3 +802,27 @@ test("674 [lint] ANTI_PATTERN.md carries the seven patterns in order and WORKFLO
   const skill = unwrap(await Bun.file(join(root, "skills", "maestro-improve", "SKILL.md")).text());
   expect(skill).toContain("ANTI_PATTERN.md");
 });
+
+// w736 F1: the Hub's plain note down into a lead-only team is a new line in
+// the protocol, so the Hub section is where it is written and this is the lint
+// that keeps it written. The Hub hand-copies from this section; a sentence it
+// cannot quote is a sentence it does not have.
+test("w736 [lint] the Hub section carries the plain note down into a lead-only team, its push line, and the two flags that stay refused", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const hub = (/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/
+    .exec(pack)?.[1] ?? "").replaceAll(/\s+/g, " ");
+  expect(hub).toContain('you may also record a plain `maestro work note <id> "<text>"` on the Lead\'s item');
+  expect(hub).toContain("the reviewer answer that is a fact or a pointer and not a ruling");
+  expect(hub).toContain("it reaches the Lead's pane as `[from hub-supervisor][<id> NOTE]`");
+  expect(hub).toContain("it is the only plain note in SLP that wakes anyone");
+  expect(hub).toContain("`--blocked` and `--owner` from the room stay refused");
+  expect(hub).toContain("an owner instruction typed into your pane is recorded as `maestro decide --scope owner`");
+  expect(hub).toContain("any other id is resolved as SLP work, so a miss says `SLP work not found from Hub`");
+  // The shared contract's rule for seats is untouched: it is the Hub that is
+  // the exception, not the plain note.
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("never on a plain note");
+});

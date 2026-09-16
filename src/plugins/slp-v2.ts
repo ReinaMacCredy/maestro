@@ -2980,12 +2980,40 @@ export async function maybeHandleSlpWorkNote(
   // room d117: the Hub grants rework on a lead-only team's Lead work. It is a
   // reviewer here and nothing more - a Hub --blocked note would be the Hub
   // escalating to itself, so it is refused rather than quietly recorded.
+  // w736 F1: the plain note joins the grant. A reviewer answer is not always a
+  // ruling - a fact, a commit hash, a pointer to a decision has no
+  // `maestro decide` shape - and the room's plain note used to fall through to
+  // the non-SLP work table, whose "work not found; run: maestro work list"
+  // sent the reader to the wrong store. The room's OWN work items keep that
+  // table and that verb; only an id it does not hold is resolved as SLP work,
+  // so the failure names the SLP resolver.
   if (isRoom(context.store.database)) {
-    if (invocation.options.rework !== true) return null;
-    if (invocation.options.blocked === true) {
-      throw new CliError("INVALID_OPTION", "--blocked and --rework are separate notes");
+    const id = requiredPosition(invocation, 0, "work id");
+    const flags = [
+      ...(invocation.options.blocked === true ? ["--blocked"] : []),
+      ...(invocation.options.rework === true ? ["--rework"] : []),
+      ...(invocation.options.owner === true ? ["--owner"] : []),
+    ];
+    if (flags.length > 1) {
+      throw new CliError("INVALID_OPTION", `${flags.join(" and ")} are separate notes`);
     }
-    const bound = bindHubReviewer(context, requiredPosition(invocation, 0, "work id"));
+    if (flags.length === 0 && roomHoldsLocalWork(context.store, id)) return null;
+    if (invocation.options.blocked === true) {
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        "the Hub Supervisor has no seat above it inside SLP, so --blocked from the room would be the" +
+          " Hub escalating to itself (room d117); a question for the owner goes to the owner, and an" +
+          " answer that settles a fork is maestro decide",
+      );
+    }
+    if (invocation.options.owner === true) {
+      throw new CliError(
+        "ROLE_FORBIDDEN",
+        "--owner is a seat's record of an owner walk-in into its own pane before it acts (room d123);" +
+          " an owner instruction in the Hub pane is recorded as maestro decide --scope owner",
+      );
+    }
+    const bound = bindHubReviewer(context, id);
     try {
       return await noteWorkAs(bound.context, bound.actor, invocation, bound.workId);
     } finally {
@@ -2996,6 +3024,16 @@ export async function maybeHandleSlpWorkNote(
   migrateProject(context.store);
   const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
   return noteWorkAs(context, actor, invocation);
+}
+
+// The Hub room keeps its own non-SLP work items, whose ids run a separate
+// sequence from any team's. A plain note on one of those is still the plain
+// verb; anything else is SLP work and answers from the SLP resolver (w736 F1).
+function roomHoldsLocalWork(store: Store, id: string): boolean {
+  if (!tableExists(store, "work")) return false;
+  return store.database
+    .query<{ present: number }, [string]>("SELECT 1 AS present FROM work WHERE id = ?")
+    .get(id) !== null;
 }
 
 // room d117: reviewer-shaped like acceptWorkAs, so the Hub's --rework grant is
@@ -3099,6 +3137,21 @@ async function noteWorkAs(
       work.assigned_to,
       `${id} RETURNED`,
       `rework granted: ${body}`,
+      `maestro status ${id}`,
+    );
+  }
+  // w736 F1: a seat's plain note wakes nobody - the shared contract is explicit
+  // that an instruction whose value expires travels on a waking operation and
+  // never on a plain note. The Hub is not a seat in the team: it holds no
+  // `work add`, no pane, and no other line down, so its plain note is the one
+  // it has and it is delivered. The exception is exactly one seat wide.
+  if (!rework && actor.role === hubReviewerName) {
+    await pushNotice(
+      actor.team.project_path,
+      actor.role,
+      work.assigned_to,
+      `${id} NOTE`,
+      body,
       `maestro status ${id}`,
     );
   }

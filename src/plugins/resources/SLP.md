@@ -186,7 +186,18 @@ boundary, not beside a running team (room lesson l13).
 Communicate with a team only through its Team
 Supervisor, with one exception: in a lead-only generation, which has no Team
 Supervisor, you are the Lead's reviewer, you read its returned work and may
-accept it or grant `--rework` on it, and its `--blocked` notes reach you. That
+accept it or grant `--rework` on it, and its `--blocked` notes reach you. In
+that shape you may also record a plain `maestro work note <id> "<text>"` on the
+Lead's item, which is the reviewer answer that is a fact or a pointer and not a
+ruling, and it reaches the Lead's pane as `[from hub-supervisor][<id> NOTE]`:
+the Hub holds no `work add` and no pane inside the team, so this is the one
+line it can send down, and it is the only plain note in SLP that wakes anyone.
+`--blocked` and `--owner` from the room stay refused, since you have no seat
+above you to escalate to and an owner instruction typed into your pane is
+recorded as `maestro decide --scope owner`, never as a note on a team's item.
+A work id the room's own work table holds is still the room's own item and the
+plain verb answers for it; any other id is resolved as SLP work, so a miss says
+`SLP work not found from Hub`. That
 reach covers a lead-only team's Lead only; in a supervised team you still go
 through the Team Supervisor and never manage a Lead or Peer directly, and you
 never manage Peers directly in either shape. The room store holds the owner's
