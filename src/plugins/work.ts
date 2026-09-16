@@ -386,8 +386,18 @@ export const workPlugin: BuiltInPlugin = {
           }
           const slp = await maybeHandleSlpWorkAdd(context, invocation);
           if (slp) return slp;
+          // Hub finding F1 (g7, w734): every option that only a Lead's Peer
+          // add can honour refuses the same way here, before any store write.
+          // --model and --fresh used to fall through in silence, so an add
+          // outside SLP looked as if it had carried them.
           if (invocation.options.profile !== undefined) {
             throw new CliError("INVALID_OPTION", "--profile is available only for SLP work add --to <peer>");
+          }
+          if (invocation.options.model !== undefined) {
+            throw new CliError("INVALID_OPTION", "--model is available only for SLP work add --to <peer>");
+          }
+          if (invocation.options.fresh !== undefined) {
+            throw new CliError("INVALID_OPTION", "--fresh is available only for SLP work add --to <peer>");
           }
           const title = requiredPosition(invocation, 0, "work title");
           const parentId = stringOption(invocation, "parent") ?? null;
