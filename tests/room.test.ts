@@ -1108,8 +1108,16 @@ test("244 install leaves existing Irina instructions byte-identical", async () =
 // line: the file is read into a variable, and a variable expansion does not
 // re-evaluate its contents.
 test("661 the room's shellrc sends a brief from a file, so command text inside a brief is never evaluated (l26)", async () => {
-  const zsh = "/bin/zsh";
-  expect(existsSync(zsh)).toBe(true);
+  // Hub finding F6 (w734): resolve zsh on PATH first, /bin/zsh second. When
+  // neither exists this test fails and says why: the l26 instrument must not
+  // go silent, so it is never a skip.
+  const zsh = Bun.which("zsh") ?? "/bin/zsh";
+  if (!existsSync(zsh)) {
+    throw new Error(
+      `zsh is required by this test: it proves the l26 mbrief mechanism against the shell that has the flaw, ` +
+        `and no zsh was found on PATH or at /bin/zsh`,
+    );
+  }
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     const shellrc = join(room, "shellrc");
