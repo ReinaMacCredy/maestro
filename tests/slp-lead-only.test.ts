@@ -656,3 +656,163 @@ test("lead-only: a Lead opens its own item with work add and no --to, takes it, 
     expect(`${refused.stdout}${refused.stderr}`).toContain("ROLE_FORBIDDEN");
   });
 });
+
+// room d129 point 4: the natural capture points are recorded, never inferred
+// (d705). A reviewer's `work note --rework` and a decision recorded with
+// --replaces that also names --work mark that item as carrying a lesson
+// candidate; a stored row, not a reading of the text. `maestro status
+// <work-id>` prints the mark and its next: line reminds the holder that the
+// return must state the lesson it filed or why none applies.
+test("665 a rework grant marks its item as carrying a lesson candidate, and status reminds the holder and the reviewer (room d129 point 4)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, room } = await startTeam(fixture, true);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const workId = data.work.id;
+
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+      .toBe(0);
+
+    // Before the correction there is nothing to capture.
+    const clean = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(clean.exitCode).toBe(0);
+    expect(clean.stdout).not.toContain("lesson candidate");
+
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "return", workId, "first pass"], leadEnvironment))
+        .exitCode,
+    ).toBe(0);
+    const rework = await runCliAt(
+      fixture,
+      room,
+      ["work", "note", workId, "the verify story is missing", "--rework"],
+      fake.env,
+    );
+    expect(rework.exitCode).toBe(0);
+
+    // The reviewer's own read carries the mark and the acceptance condition.
+    const reviewerRead = await runCliAt(fixture, room, ["status", workId], fake.env);
+    expect(reviewerRead.exitCode).toBe(0);
+    expect(reviewerRead.stdout).toContain("lesson candidate: yes, from rework note on revision 1");
+    expect(reviewerRead.stdout).toContain(
+      "accept only after the return states the lesson it filed or why none applies",
+    );
+
+    const holderJson = await runCliAt(fixture, fixture.repo, ["status", workId, "--json"], leadEnvironment);
+    expect(holderJson.exitCode).toBe(0);
+    expect(envelope<{ lessonCandidate: { sources: string[] } | null }>(holderJson.stdout).lessonCandidate)
+      .toEqual({ sources: ["rework note on revision 1"] });
+    const holderRead = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(holderRead.exitCode).toBe(0);
+    expect(holderRead.stdout).toContain("lesson candidate: yes, from rework note on revision 1");
+    expect(holderRead.stdout).toContain(
+      "this item carries a lesson candidate: state in the return the lesson you filed (maestro lesson file) or why none applies",
+    );
+  });
+});
+
+test("666 a team decision with --replaces and --work marks that item, and one without --work marks nothing (room d129 point 4)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake } = await startTeam(fixture, true);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const workId = data.work.id;
+
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+      .toBe(0);
+    const first = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "keep the adapter", "--why", "it is the cheapest seam", "--json"],
+      leadEnvironment,
+    );
+    expect(first.exitCode).toBe(0);
+    const firstId = envelope<{ decision: { id: string } }>(first.stdout).decision.id;
+
+    // A plain decision on the item is not a correction and marks nothing.
+    const plain = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "name the seam", "--why", "readers ask", "--work", workId],
+      leadEnvironment,
+    );
+    expect(plain.exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment)).stdout)
+      .not.toContain("lesson candidate");
+
+    // A replacement without --work has no item to mark.
+    const unlinked = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "drop the adapter", "--why", "the seam moved", "--replaces", firstId],
+      leadEnvironment,
+    );
+    expect(unlinked.exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment)).stdout)
+      .not.toContain("lesson candidate");
+
+    const second = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "use the port", "--why", "the adapter leaked", "--replaces", firstId, "--work", workId, "--json"],
+      leadEnvironment,
+    );
+    expect(second.exitCode).toBe(0);
+    const secondId = envelope<{ decision: { id: string } }>(second.stdout).decision.id;
+
+    const read = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(read.exitCode).toBe(0);
+    expect(read.stdout).toContain(`lesson candidate: yes, from decision ${secondId}`);
+  });
+});
+
+// room d129 point 4, the Hub half: a Hub ruling is recorded in the Hub store,
+// but the item it corrects lives in the project store, so the mark is written
+// there or it reaches nobody.
+test("667 a Hub decision with --replaces on a lead-only team's work marks that item in the project store (room d129 point 4)", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, room } = await startTeam(fixture, true);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const workId = data.work.id;
+
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
+      .toBe(0);
+    const first = await runCliAt(
+      fixture,
+      room,
+      ["decide", "wait for the owner", "--why", "the fork is hers", "--work", workId, "--json"],
+      fake.env,
+    );
+    expect(first.exitCode).toBe(0);
+    const firstId = envelope<{ decision: { id: string } }>(first.stdout).decision.id;
+    expect((await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment)).stdout)
+      .not.toContain("lesson candidate");
+
+    const replacement = await runCliAt(
+      fixture,
+      room,
+      [
+        "decide",
+        "proceed without her",
+        "--why",
+        "she delegated it",
+        "--replaces",
+        firstId,
+        "--work",
+        workId,
+        "--json",
+      ],
+      fake.env,
+    );
+    expect(replacement.exitCode).toBe(0);
+    const replacementId = envelope<{ decision: { id: string } }>(replacement.stdout).decision.id;
+
+    const read = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
+    expect(read.exitCode).toBe(0);
+    expect(read.stdout).toContain(`lesson candidate: yes, from decision ${replacementId}`);
+    expect(read.stdout).toContain(
+      "this item carries a lesson candidate: state in the return the lesson you filed",
+    );
+  });
+});

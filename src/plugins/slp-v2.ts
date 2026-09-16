@@ -782,6 +782,12 @@ function migrateProject(store: Store): void {
       consumed_at TEXT,
       PRIMARY KEY(work_id, return_revision)
     );
+    CREATE TABLE IF NOT EXISTS slp_lesson_candidates (
+      work_id TEXT NOT NULL REFERENCES slp_work(id),
+      source TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      PRIMARY KEY(work_id, source)
+    );
     CREATE TABLE IF NOT EXISTS slp_decisions (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -3063,6 +3069,12 @@ async function noteWorkAs(
            VALUES (?, ?, ?, ?)`,
         )
         .run(id, current.return_revision, actor.name, now);
+      markLessonCandidate(
+        context.store,
+        id,
+        `rework note on revision ${current.return_revision}`,
+        now,
+      );
     }
     context.store.database
       .query(
@@ -3576,6 +3588,27 @@ function decideHubWork(
     }
     throw error;
   }
+  // room d129 point 4: the Hub's ruling lands in the Hub store, but the item it
+  // corrects lives in the project store, so the mark is written there. A store
+  // that cannot be opened leaves the ruling committed and the mark unwritten
+  // rather than failing a decision that is already recorded; the mark is a
+  // reminder, never the ruling.
+  if (input.replaces) {
+    try {
+      const projectStore = new Store(resolveStoreLocation(input.target.projectPath).path);
+      try {
+        markLessonCandidate(projectStore, input.target.workId, `decision ${id}`, now);
+      } finally {
+        projectStore.close();
+      }
+    } catch (error) {
+      process.stderr.write(
+        `lesson candidate not marked on ${input.target.workId}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      );
+    }
+  }
   context.sessions.record("decide");
   const decision = {
     actor: "hub-supervisor",
@@ -3699,6 +3732,9 @@ function decide(context: PluginContext, invocation: CliInvocation): CliResult {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
+    if (replaces && workId && local) {
+      markLessonCandidate(context.store, workId, `decision ${id}`, now);
+    }
     if (replaces && !local) clearProvisional(context.store, replaces);
     context.store.database
       .query(
@@ -4645,6 +4681,30 @@ function clipLine(text: string, limit: number): string {
   return line.length > limit ? `${line.slice(0, limit - 3)}...` : line;
 }
 
+// room d129 point 4: the capture points are recorded, never inferred (d705).
+// A reviewer's rework grant and a decision that both --replaces and names
+// --work are the two moments a correction is already being written down; the
+// row is the mark, and no text is read to produce it.
+function markLessonCandidate(store: Store, workId: string, source: string, at: string): void {
+  if (!tableExists(store, "slp_lesson_candidates")) return;
+  store.database
+    .query(
+      `INSERT OR IGNORE INTO slp_lesson_candidates (work_id, source, recorded_at)
+       VALUES (?, ?, ?)`,
+    )
+    .run(workId, source, at);
+}
+
+function lessonCandidateSources(store: Store, workId: string): string[] {
+  if (!tableExists(store, "slp_lesson_candidates")) return [];
+  return store.database
+    .query<{ source: string }, [string]>(
+      "SELECT source FROM slp_lesson_candidates WHERE work_id = ? ORDER BY recorded_at, source",
+    )
+    .all(workId)
+    .map((row) => row.source);
+}
+
 function reworkGrantOpen(context: PluginContext, work: SlpWorkRow): boolean {
   if (work.state !== "RETURNED" || !tableExists(context.store, "slp_rework_grants")) return false;
   return context.store.database
@@ -4710,11 +4770,23 @@ function nextStep(
   }
 }
 
-function nextLine(work: SlpWorkRow, step: SlpNextStep): string {
+function nextLine(work: SlpWorkRow, step: SlpNextStep, lessonCandidate = false): string {
   if (work.state === "DONE") return `next: none (${work.acceptance_outcome ?? "done"})`;
-  if (step.waitingOn === null) return `next: ${step.mayRun.join(" | ")}`;
   const optional = step.mayRun.length > 0 ? `; may run: ${step.mayRun.join(" | ")}` : "";
-  return `next: waiting on ${step.waitingOn}${optional}`;
+  const base = step.waitingOn === null
+    ? `next: ${step.mayRun.join(" | ")}`
+    : `next: waiting on ${step.waitingOn}${optional}`;
+  if (!lessonCandidate) return base;
+  // room d129 point 4: the reminder is addressed to whoever the next step is
+  // addressed to, so the holder reads what its return must say and the
+  // reviewer reads what it may accept on.
+  const may = (verb: string) => step.mayRun.some((command) => command.startsWith(`${verb} ${work.id}`));
+  const reminder = may("work accept")
+    ? "accept only after the return states the lesson it filed or why none applies"
+    : may("work return") || may("work take")
+    ? "this item carries a lesson candidate: state in the return the lesson you filed (maestro lesson file) or why none applies"
+    : "this item carries a lesson candidate";
+  return `${base}; ${reminder}`;
 }
 
 // w707: DONE is the one state that means two opposite things - delivered, or
@@ -4984,10 +5056,12 @@ async function readWorkDetail(
     left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
   );
   const latest = entries.at(-1) ?? null;
+  const candidateSources = lessonCandidateSources(context.store, workId);
   return {
     data: {
       acceptance: entries.findLast((entry) => entry.kind === "ACCEPTANCE") ?? null,
       decisions,
+      lessonCandidate: candidateSources.length > 0 ? { sources: candidateSources } : null,
       notes: entries
         .filter((entry) => entry.kind === "NOTE")
         .map((entry) => ({
@@ -5011,7 +5085,14 @@ async function readWorkDetail(
         }`
         : "entries: none",
       decisionLine(decisions.map((decision) => ({ id: decision.id, workId: null }))),
-      nextLine(work, nextStep(actor, roles, work, reworkGrantOpen(context, work))),
+      ...(candidateSources.length > 0
+        ? [`lesson candidate: yes, from ${candidateSources.join(", ")}`]
+        : []),
+      nextLine(
+        work,
+        nextStep(actor, roles, work, reworkGrantOpen(context, work)),
+        candidateSources.length > 0,
+      ),
     ].join("\n"),
   };
 }

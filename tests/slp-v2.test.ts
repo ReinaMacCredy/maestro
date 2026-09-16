@@ -5764,7 +5764,13 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
     await run(["work", "note", id, "needs a test", "--rework", "--json"], supervisorEnvironment);
     const leadRework = await lines(["status", id], leadEnvironment);
     expect(leadRework[3]).toBe(`note by ${supervisor.name}: needs a test`);
-    expect(leadRework.at(-1)).toBe(`next: work take ${id}`);
+    // room d129 point 4: the rework grant marks the item, so the read carries
+    // the mark and the next: line reminds the holder what its return owes.
+    expect(leadRework.at(-2)).toBe("lesson candidate: yes, from rework note on revision 1");
+    expect(leadRework.at(-1)).toBe(
+      `next: work take ${id}; this item carries a lesson candidate: ` +
+        "state in the return the lesson you filed (maestro lesson file) or why none applies",
+    );
     expect((await lines(["status"], supervisorEnvironment))[1]).toBe(
       `  ${id} RETURNED hub-supervisor -> ${lead.name}: ${objective}`,
     );
@@ -5806,6 +5812,7 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
     expect(Object.keys(workJson).sort()).toEqual([
       "acceptance",
       "decisions",
+      "lessonCandidate",
       "notes",
       "returns",
       "work",

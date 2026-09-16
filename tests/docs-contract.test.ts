@@ -688,3 +688,20 @@ test("662 [lint] the pack, the recipe and the improver name the waking channel a
   expect(skill).toContain("A lesson whose hazard is mechanical is not answered by a sentence");
   expect(skill).toContain("the return names which mechanism now makes the recurrence impossible");
 });
+
+// room d129 point 4: the two capture points are recorded, and the shared
+// contract is where the seat and its reviewer learn what the mark asks for.
+test("668 [lint] the shared contract names the lesson-candidate mark and what the return and the reviewer owe it (room d129)", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("mark that item as carrying a lesson candidate");
+  expect(shared).toContain("never a reading of anyone's text");
+  expect(shared).toContain("states either the lesson it filed (`maestro lesson file`, with its id) or why none applies");
+  expect(shared).toContain("accepts only after the return states one of the two");
+  expect(shared).toContain("`maestro lesson file` writes the store of the project it runs in");
+  // The nine-operation surface is unchanged: no new flag rides work return.
+  expect(shared).not.toContain("work return <id> --lesson");
+});

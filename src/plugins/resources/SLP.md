@@ -58,7 +58,15 @@ the preferred route, and state in advance the exact words for reporting it
 unproven, so a mechanism that becomes unavailable produces an honest return
 rather than a contract nobody can accept (room lesson l20). `RETURNED` work can be retaken only once after
 its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
-for that return revision. Notes add context but do not rewrite the contract. Inside a team `maestro work
+for that return revision. A rework grant, and a decision recorded with
+`--replaces` that also names `--work <id>`, mark that item as carrying a lesson
+candidate, which `maestro status <work-id>` prints; the mark is a stored row at
+the moment the correction is written down, never a reading of anyone's text.
+The `maestro work return` on a marked item states either the lesson it filed
+(`maestro lesson file`, with its id) or why none applies, and its reviewer
+accepts only after the return states one of the two. `maestro lesson file`
+writes the store of the project it runs in, so a correction about another
+project names that project (room d129). Notes add context but do not rewrite the contract. Inside a team `maestro work
 add` takes neither `--acceptance` nor `--blocked-by` and refuses both with
 `INVALID_OPTION`: write the acceptance condition and any ordering into the
 objective text, which is the part that never changes.
