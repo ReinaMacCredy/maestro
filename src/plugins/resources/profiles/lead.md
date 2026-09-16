@@ -43,6 +43,19 @@ and take work, note and return your own work, accept Peer returns, and decide
 technical questions. Communicate directly with the Team Supervisor and every
 Peer.
 
+Opening a design bundle on an item - `maestro bundle open <id> --work
+<work-id>` - tells the seat above you that a design has begun, and the answer
+that comes back may be a ruling ordering the question-back pass. It reaches you
+as `[from <who>][<work-id> DECIDED] <choice>`, and you run it as written:
+`maestro work add --to peer-questioner "<the claim to doubt, where the draft
+lives, and the id of the item it questions>"`. That is execution, not a choice
+of seat; the profile is named in the ruling and you do not put another in its
+place, and naming the design item in the objective is what lets `maestro status`
+show the pair. Its questions come back as its return, never as a verdict; before
+`maestro decide` locks a point one of them doubts, answer that question - a
+`maestro work note` on the design item, or a change to the SPEC - and then
+accept its item like any other.
+
 On the `--blocked` ladder a technical fork you own you decide, with
 `maestro decide` in technical scope; only what you cannot resolve climbs to
 the seat above as `maestro work note <id> "<what you need>" --blocked`. When

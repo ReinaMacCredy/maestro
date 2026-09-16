@@ -85,6 +85,16 @@ re-deriving the argument.
   then `maestro decision lock <id>`. Supersede an old decision with
   `--supersedes`; never rewrite its history.
 - Keep acceptance, non-goals, and authority visible on the work item.
+- A Full-tier `maestro bundle open <id> --work <workId>` tells the reviewer
+  above you that a design has begun, and the answer may be a question-back
+  pass opened on it: a read-only seat that reads the draft SPEC, the decisions
+  not yet locked, and the code the SPEC cites, and returns one to three
+  questions, each naming the claim it doubts and the evidence that would settle
+  it. It reaches no verdict and edits nothing. Before `maestro decide` locks a
+  point one of those questions doubts, answer that question - a work note on
+  the design item, or a change to the SPEC - and carry the answer into the
+  decision's `--why`. A point locked over an unanswered question is a decision
+  taken without the evidence it asked for.
 - Do not edit code during a design-only engagement.
 
 ## Council

@@ -700,7 +700,10 @@ test("662 [lint] the pack, the recipe and the improver name the waking channel a
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
   const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
-  expect(shared).toContain("An instruction whose value expires before the recipient's next action travels on one of those four waking operations, never on a plain note");
+  // w740 (d899): decide joined the four, so the count in this sentence moved
+  // with it; the rule it states - a waking operation, never a plain note - is
+  // what l15 pins and is unchanged.
+  expect(shared).toContain("An instruction whose value expires before the recipient's next action travels on one of those five waking operations, never on a plain note");
   expect(shared).toContain("a pane inside a tool call is not a slow reader but no reader at all");
   expect(shared).toContain("work already running cannot be stopped from outside its own pane");
   expect(shared).toContain("`mbrief <agent> <file>` in the room's shellrc, never as an inline double-quoted argument");
@@ -855,4 +858,90 @@ test("w736 [lint] the Hub section carries the plain note down into a lead-only t
   const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
     .replaceAll(/\s+/g, " ");
   expect(shared).toContain("never on a plain note");
+});
+
+// w740 (room d151-d155): the question-back seat is written in four places and
+// nowhere else - the shared contract every seat reads, the two mandates that
+// act on it, and the design skill that holds the designer's obligation. The
+// Hub hand-copies the SLP.md sentences into ~/maestro/SLP.md; a sentence it
+// cannot quote is a sentence it does not have.
+test("w740 [lint] the question-back seat's sentences are in the pack, the two mandates and the design skill", async () => {
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const resources = join(import.meta.dir, "..", "src", "plugins", "resources");
+  const flat = async (...parts: string[]) =>
+    unwrap(await Bun.file(join(resources, ...parts)).text());
+
+  const pack = await flat("SLP.md");
+  // d899: decide is the fifth waking operation, named in the same sentence as
+  // the other four so the two cannot drift apart.
+  expect(pack).toContain(
+    "After `maestro work add`, `maestro work return`, `maestro work accept`, " +
+      "`maestro work note --rework`, and `maestro decide --work <id>` commit",
+  );
+  expect(pack).toContain("a decision wakes the seat holding the item it names, under the subject `DECIDED`");
+  expect(pack).toContain("travels on one of those five waking operations, never on a plain note");
+  // d898: the signal, its one-per-design rule and its silence outside a team.
+  expect(pack).toContain(
+    "`maestro bundle open <id> --work <work-id>` is the store's signal that a design phase has begun",
+  );
+  expect(pack).toContain("once, on the open that creates the bundle and never on a resume");
+  expect(pack).toContain("nothing at all outside a running team");
+  // d902/d154: who opens it in each shape.
+  expect(pack).toContain(
+    "a Team Supervisor does so with its own `maestro work add --to peer-questioner`, " +
+      "which is the one Peer its `work add` may name",
+  );
+  expect(pack).toContain(
+    "the Hub, which manages no Peer, records `maestro decide --work <work-id>` instead " +
+      "and the Lead executes that ruling with the same `work add`",
+  );
+  // d152/d900: what it produces and what the designer owes it.
+  expect(pack).toContain("its questions arrive as its own return");
+  expect(pack).toContain(
+    "answers each, by note or by changing the SPEC, before `maestro decide` locks the point it doubts",
+  );
+
+  const lead = await flat("profiles", "lead.md");
+  expect(lead).toContain("`maestro work add --to peer-questioner");
+  expect(lead).toContain("That is execution, not a choice of seat");
+  expect(lead).toContain("[from <who>][<work-id> DECIDED] <choice>");
+  expect(lead).toContain(
+    "before `maestro decide` locks a point one of them doubts, answer that question",
+  );
+
+  const supervisor = await flat("profiles", "team-supervisor.md");
+  expect(supervisor).toContain("`maestro work add` to the Lead or to `peer-questioner`");
+  expect(supervisor).toContain("[from lead][<work-id> DESIGN] design bundle <id>");
+  expect(supervisor).toContain("It is the one Peer your `work add` may name");
+  expect(supervisor).toContain("You do not open it on every item or every return");
+
+  // d904/d155: the profile's frontmatter is the read-only contract, and the
+  // model stays a launch-time choice (room d128).
+  const questioner = await Bun.file(join(resources, "profiles", "questioner.md")).text();
+  expect(questioner).toContain("harness: claude\n");
+  expect(questioner).toContain("model: default\n");
+  expect(questioner).toContain("disallowed_tools: [Write, Edit, NotebookEdit, AskUserQuestion]\n");
+  // The whole file, frontmatter included: the description is rendered into the
+  // agent file the seat reads, so it is held to the same words as the body.
+  const flatQuestioner = unwrap(questioner);
+  expect(flatQuestioner).toContain("You settle nothing and you change no file");
+  expect(flatQuestioner).toContain("Ask one to three questions, no more");
+  expect(flatQuestioner).toContain("names the evidence that would settle it");
+  expect(flatQuestioner).toContain("maestro work return <work-id>");
+  // room d134: it reads the Peer block, so its own words name no rank either.
+  // tests/peer-pack.test.ts measures the rendered seat; this measures the file.
+  for (const forbidden of ["Role: Peer", "the Lead", "Team Supervisor", "SLP", "seat", "generation"]) {
+    expect({ forbidden, file: flatQuestioner })
+      .toEqual({ forbidden, file: expect.not.stringContaining(forbidden) });
+  }
+
+  const design = unwrap(
+    await Bun.file(join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-design", "SKILL.md")).text(),
+  );
+  expect(design).toContain("the answer may be a question-back pass opened on it");
+  expect(design).toContain("returns one to three questions, each naming the claim it doubts");
+  expect(design).toContain(
+    "Before `maestro decide` locks a point one of those questions doubts, answer that question",
+  );
+  expect(design).toContain("A point locked over an unanswered question is a decision taken without the evidence it asked for");
 });

@@ -78,16 +78,18 @@ for itself in its own team, OPEN with the Lead as its assignee, no pane opened
 and no line pushed; the Lead then takes it with `maestro work take <id>`, and
 its reviewer is the seat above, exactly as for the Lead work `team start`
 hands out.
-After `maestro work add`, `maestro work return`, `maestro work accept`, and
-`maestro work note --rework` commit, Maestro pushes one line to the counterpart
-pane (`[from <role>][<work-id> <STATE>] <summary>; read: maestro status
-<work-id>`); an assignee is woken per item, whether its pane was just opened or
-already acknowledged; the store stays the truth and that line is only the
-wake-up. Conversely, text seen in a pane's input box or transcript is not a
+After `maestro work add`, `maestro work return`, `maestro work accept`,
+`maestro work note --rework`, and `maestro decide --work <id>` commit, Maestro
+pushes one line to the counterpart pane (`[from <role>][<work-id> <STATE>]
+<summary>; read: maestro status <work-id>`); an assignee is woken per item,
+whether its pane was just opened or already acknowledged; a decision wakes the
+seat holding the item it names, under the subject `DECIDED`, because a ruling on
+an item is an instruction to the one holding it (room d154); the store stays the
+truth and that line is only the wake-up. Conversely, text seen in a pane's input box or transcript is not a
 push and not a record: a work state exists only when `maestro status
 <work-id>` shows it, and a Hub or Lead that reads a pane checks the store
 before acting on what it saw. An instruction whose value expires before the recipient's next action
-travels on one of those four waking operations, never on a plain note: a plain
+travels on one of those five waking operations, never on a plain note: a plain
 note is read when the seat next looks, and a pane inside a tool call is not a
 slow reader but no reader at all until that call returns, so work already
 running cannot be stopped from outside its own pane. Where no waking channel
@@ -97,7 +99,20 @@ do not build the plan on its arriving in time (room lesson l15).
 fresh harness context (Claude Code `/clear`, Codex `/new`), proven by a new
 harness session, and re-checks READY before that OPEN push; it is refused with
 `PEER_ACTIVE` while the Peer holds ACTIVE work and with `PEER_RESET_FAILED`,
-nothing added, when the reset does not take. When you cannot
+nothing added, when the reset does not take.
+`maestro bundle open <id> --work <work-id>` is the store's signal that a design
+phase has begun: it pushes `[from <role>][<work-id> DESIGN] design bundle <id>`
+to that item's reviewer, once, on the open that creates the bundle and never on
+a resume, and nothing at all outside a running team. The seat above the one
+designing is the seat that opens the question-back pass on that design (room
+d153): a Team Supervisor does so with its own `maestro work add --to
+peer-questioner`, which is the one Peer its `work add` may name; the Hub, which
+manages no Peer, records `maestro decide --work <work-id>` instead and the Lead
+executes that ruling with the same `work add` (room d154). The questioner is
+read-only and settles nothing: its questions arrive as its own return, each
+naming the claim it doubts and the evidence that would settle it, and the one
+designing answers each, by note or by changing the SPEC, before `maestro decide`
+locks the point it doubts (room d152). When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
