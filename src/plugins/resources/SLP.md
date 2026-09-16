@@ -50,7 +50,13 @@ maestro decide
 
 Work moves only through `OPEN -> ACTIVE -> RETURNED -> DONE`. Raw transcript is
 runtime-only. A work item's objective and acceptance contract never change;
-changed scope requires new work. `RETURNED` work can be retaken only once after
+changed scope requires new work. Because it never changes, an acceptance
+clause must be dischargeable by the seat that receives it: where the proof
+depends on a mechanism that seat does not control (a full suite, a screen, a
+network, a credential), name the property to be proven, name the mechanism as
+the preferred route, and state in advance the exact words for reporting it
+unproven, so a mechanism that becomes unavailable produces an honest return
+rather than a contract nobody can accept (room lesson l20). `RETURNED` work can be retaken only once after
 its correct reviewer records `maestro work note <id> "<specific gap>" --rework`
 for that return revision. Notes add context but do not rewrite the contract. Inside a team `maestro work
 add` takes neither `--acceptance` nor `--blocked-by` and refuses both with

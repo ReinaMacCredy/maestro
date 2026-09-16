@@ -649,3 +649,19 @@ test("659 [lint] the shared contract makes a correction that lowers a risk figur
   expect(shared).toContain("give the reason that survives the new number");
   expect(shared).toContain("will reason its way to the action that was refused");
 });
+
+// room lesson l20: five contracts named "the suite green under DEVELOPER_DIR"
+// as their acceptance clause; a later ruling made that mechanism unavailable to
+// every seat, and because acceptance never changes, all five became
+// permanently unacceptable however good the work was.
+test("660 [lint] the shared contract requires an acceptance clause the receiving seat can discharge (l20)", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("an acceptance clause must be dischargeable by the seat that receives it");
+  expect(shared).toContain("a mechanism that seat does not control");
+  expect(shared).toContain("state in advance the exact words for reporting it unproven");
+  expect(shared).toContain("rather than a contract nobody can accept");
+});
