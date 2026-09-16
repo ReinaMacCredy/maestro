@@ -81,8 +81,10 @@ Peer mandate + that body. A seat's model is a launch-time choice
 (`maestro team start --lead-model`, `--peer-model`, `--supervisor-model`, and
 `maestro work add --to <peer> --model` for one Peer): it rides the launch line
 and changes neither the profile nor its digest. A generation pins the pack and
-every profile it referenced; editing one mid-generation is refused like a pack
-edit.
+the bytes of every seat profile it launches - `team-supervisor`, `lead` and
+`peer`, or `lead` and `peer` when it is lead-only - whether or not it ever
+opens a Peer; editing one mid-generation is refused like a pack edit, on that
+team's next Lead `work add --to <peer>` and on its own `team start` restore.
 
 ## Roles
 

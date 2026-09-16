@@ -137,6 +137,14 @@ adding a fifth work state. `maestro team start --lead-model <model>`,
 `--peer-model <model>` and `--supervisor-model <model>` change only the model
 a seat launches with, never its mandate or the pinned profile digest; the
 profile's own model is the default when no flag is given (room d128).
+`maestro team start` also pins the bytes of every seat profile the generation
+launches: `team-supervisor`, `lead` and `peer` in the supervised shape, `lead`
+and `peer` in a lead-only one, whether or not that generation ever opens a
+Peer. Editing any of those shadows under `~/maestro/profiles/` while the
+generation is RUNNING refuses its Lead's `work add --to <peer>` and its own
+`team start` restore with `SLP_SNAPSHOT_CHANGED`, naming two digests, until the
+bytes are put back; so a shadow edit belongs at a generation boundary, not
+beside a running team (room lesson l13).
 Communicate with a team only through its Team
 Supervisor, with one exception: in a lead-only generation, which has no Team
 Supervisor, you are the Lead's reviewer, you read its returned work and may

@@ -612,3 +612,24 @@ test("657 [lint] WORKFLOW.md words safety clauses in the affirmative polarity (l
   expect(workflow).toContain("never by a state ceasing");
   expect(workflow).toContain("the condition's expiry coincides with the hazard's end");
 });
+
+// room lesson l13: a shadow edit to profiles/lead.md while two generations
+// were RUNNING blocked every Lead peer dispatch in both teams, and nothing the
+// room reads said team start pins all three seat profiles.
+test("658 [lint] the Hub section and the SLP recipe say team start pins every launched seat profile, so shadow edits wait for a generation boundary (l13)", async () => {
+  const root = join(import.meta.dir, "..", "src", "plugins");
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
+  const hub = unwrap(
+    /<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/
+      .exec(pack)?.[1] ?? "",
+  );
+  expect(hub).toContain("pins the bytes of every seat profile the generation launches");
+  expect(hub).toContain("whether or not that generation ever opens a Peer");
+  expect(hub).toContain("`SLP_SNAPSHOT_CHANGED`");
+  expect(hub).toContain("a shadow edit belongs at a generation boundary");
+  const recipe = unwrap(await Bun.file(join(root, "recipes", "slp.md")).text());
+  expect(recipe).toContain("the bytes of every seat profile it launches");
+  expect(recipe).toContain("whether or not it ever opens a Peer");
+  expect(recipe).not.toContain("every profile it referenced");
+});
