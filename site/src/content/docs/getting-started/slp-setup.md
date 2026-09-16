@@ -61,6 +61,11 @@ That single operation:
    Supervisor's pane as the target of the team's upward wakes;
 7. creates the initial `OPEN` work item assigned to the Lead.
 
+`maestro team start --lead-only` opens the other shape: one Lead plus the
+runtime pane and no Team Supervisor, pinned for the generation, with the Hub
+Supervisor as the Lead's reviewer (see [Roles](/concepts/roles/)); step 5 then
+opens the Lead alone.
+
 Both `team start` and `work add --to` block while a pane opens and acknowledges
 its contract, normally under a minute, and print their phases on stderr
 (`starting`, `waiting for acknowledgement (up to 30s)`, `ready in`); do not

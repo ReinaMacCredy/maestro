@@ -136,6 +136,7 @@ maestro work note <work-id> "<material note>"
 maestro work note <work-id> --file <path>
 maestro work note <work-id> "<specific gap>" --rework
 maestro work note <work-id> "<what I need>" --blocked
+maestro work note <work-id> "owner asked: <what>" --owner
 ```
 
 Appends context without changing state; `--file` reads the body from a file.
@@ -143,8 +144,12 @@ Appends context without changing state; `--file` reads the body from a file.
 grants the same assignee one retake of the current return revision; an
 ordinary note never grants a retake. `--blocked` flags the note and pushes a
 `BLOCKED` line to the seat above the caller; it is the team's first attention
-layer, and the runtime pane's stall nudges are the second (Hub d97, d98). The
-retired `--stall` is refused for every pane with `STALL_RETIRED`. No form can change the work objective or acceptance
+layer, and the runtime pane's stall nudges are the second (Hub d97, d98).
+`--owner` records an owner walk-in typed into the caller's pane: provenance
+only, refused together with `--blocked` or `--rework` as `INVALID_OPTION`, it
+sets no blocked flag and pushes an `OWNER` line to the seat above. It is a seat
+flag, so the Hub path refuses it. The retired `--stall` is refused for every
+pane with `STALL_RETIRED`. No form can change the work objective or acceptance
 contract. Changed scope is new work.
 
 ### `work return`
@@ -173,7 +178,8 @@ close `OPEN` or `RETURNED` work; `ACTIVE` work must return first.
 maestro decide "<choice>" --why "<reason>" \
   [--work <work-id>] \
   [--replaces <decision-id>] \
-  [--scope owner|cross-team]
+  [--scope owner|cross-team] \
+  [--provisional]
 ```
 
 Writes one immutable settled decision. Lead owns technical scope, Team
@@ -181,6 +187,13 @@ Supervisor owns team scope, and Hub Supervisor owns owner or cross-team scope.
 Inside a team workspace, `--work <work-id>` links local work. At Hub, a unique
 work id resolves directly; qualify an id shared by several teams as
 `<team-id>:<work-id>`.
+
+`--provisional` is Hub-only and requires `--work`: it marks a ruling the Hub
+Supervisor made while the owner was away, so the team can continue. The flag
+shows as `provisional: yes` in `maestro status <decision-id>` and the ruling
+stays listed by the room's `maestro status` until `decision confirm` clears it
+or a later decision `--replaces` it. The choice, why and scope are immutable
+either way.
 
 ## Work states
 
@@ -235,6 +248,15 @@ and does not replace SLP `status`.
 stores. `maestro brief --session` prints this session's SessionStart brief, the
 text the hooks and the MCP instructions deliver.
 
+### `owner`
+
+`maestro owner [here|away] [--json]` runs in the Hub room only and reads or
+records the owner's declared presence, `here` by default. The Hub Supervisor
+sets it on the owner's own words; no hook and no push line changes it. The
+reading prints as `owner: here` or `owner: away; <n> provisional decisions
+waiting`, and the Hub prompt line and the room's `maestro status` carry the
+same line. It is a Hub-room verb, not a tenth SLP operation.
+
 ### `prompt`
 
 `maestro prompt list [--session <value>] [--json]` lists recent recorded user
@@ -276,6 +298,12 @@ Neither verb is legacy.
 `decision draft`, `decision lock`, `decision show`, and `decision list` remain
 for Maestro's design and bundle workflow. A running SLP role records its
 settled choice with the one-step `decide` operation instead.
+
+`decision confirm <decision-id>` is the owner's acknowledgement of a Hub ruling
+recorded with `decide --provisional`. It runs in the Hub room, clears the
+provisional flag once and changes nothing else; a second confirm is
+`INVALID_STATE` and an unknown id is `NOT_FOUND`. Like `decision`, it is a
+Hub-room verb rather than an SLP operation.
 
 ### `lesson`
 
