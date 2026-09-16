@@ -5449,7 +5449,7 @@ export const slpV2Plugin: BuiltInPlugin = {
               value: true,
             },
             "--peer-model": {
-              description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128).",
+              description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.",
               value: true,
             },
             "--supervisor-model": {

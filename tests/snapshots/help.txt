@@ -864,7 +864,7 @@ subverbs:
     --json                      Emit one compact JSON success envelope.
     --lead-model <value>        Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
     --lead-only                 Open one Lead pane plus the runtime pane and no Team Supervisor; the Hub Supervisor reviews the Lead's work (room d117).
-    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128).
+    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --peer-profile <value>      Override the Workspace Pack peer profile for this generation (recorded on the team row).
     --supervisor-model <value>  Launch the Team Supervisor with this model; refused with --lead-only (room d128).
   stop   Stop one complete SLP team, or abandon unfinished work from Hub.
@@ -879,7 +879,7 @@ usage: maestro team start <project> <objective>
     --json                      Emit one compact JSON success envelope.
     --lead-model <value>        Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
     --lead-only                 Open one Lead pane plus the runtime pane and no Team Supervisor; the Hub Supervisor reviews the Lead's work (room d117).
-    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128).
+    --peer-model <value>        Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --peer-profile <value>      Override the Workspace Pack peer profile for this generation (recorded on the team row).
     --supervisor-model <value>  Launch the Team Supervisor with this model; refused with --lead-only (room d128).
 
@@ -959,7 +959,7 @@ subverbs:
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
     --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
-    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
     --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
     --to <value>                       Assign SLP work to a Peer; Team Supervisor work defaults to Lead.
@@ -1031,7 +1031,7 @@ usage: maestro work add <title>
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
     --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
-    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
     --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
     --to <value>                       Assign SLP work to a Peer; Team Supervisor work defaults to Lead.

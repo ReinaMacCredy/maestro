@@ -482,7 +482,7 @@ export const workPlugin: BuiltInPlugin = {
               value: true,
             },
             "--model": {
-              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128).",
+              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.",
               value: true,
             },
             "--fresh": {

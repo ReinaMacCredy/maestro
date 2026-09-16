@@ -341,11 +341,18 @@ export class HerdrSlpRuntime {
       if (remaining <= 0 || quiet) {
         const recent = await this.readPane(roleName, "recent_unwrapped", 120);
         if (includesExactAcknowledgement(recent, contract.acknowledgement)) return;
+        // project lesson l6 (w734 F2): the timeout alone reads as a slow seat,
+        // so a pane that died on a harness error (e.g. "400 The opus model is
+        // not supported when using Codex with a ChatGPT account") looked like
+        // one. The last non-empty pane line names the cause in the message
+        // itself; paneTail in the data is unchanged.
+        const tail = paneTailOf(visible);
+        const lastLine = tail.at(-1);
         throw new SlpRuntimeError(
-          `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement within ${Math.round(acknowledgementWindowMs / 1000)}s`,
+          `ROLE_ACKNOWLEDGEMENT_MISMATCH: ${roleName} did not return its exact generation contract acknowledgement within ${Math.round(acknowledgementWindowMs / 1000)}s${lastLine === undefined ? "" : `; last pane line: ${lastLine}`}`,
           ["agent", "read", roleName],
           undefined,
-          { code: "ROLE_ACKNOWLEDGEMENT_MISMATCH", paneTail: paneTailOf(visible) },
+          { code: "ROLE_ACKNOWLEDGEMENT_MISMATCH", paneTail: tail },
         );
       }
       await Bun.sleep(Math.min(acknowledgementPollMs, remaining));

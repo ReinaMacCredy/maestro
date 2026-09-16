@@ -5086,6 +5086,13 @@ test("SLP v2 reports an expired acknowledgement window with the pane tail", asyn
     expect(error.code).toBe("ROLE_ACKNOWLEDGEMENT_MISMATCH");
     expect(error.command).toEqual(["agent", "read", expect.stringMatching(/^supervisor-/)]);
     expect((error.paneTail as string[]).join("\n")).toContain("SLP_ROLE_READY");
+    // project lesson l6 (w734 F2): the message itself carries the last
+    // non-empty pane line, so a pane that died on a harness error (e.g. an
+    // unsupported model) does not read as a merely slow seat. paneTail in the
+    // data is unchanged.
+    const tail = error.paneTail as string[];
+    expect(error.message).toContain(`; last pane line: ${tail.at(-1)}`);
+    expect(error.message).toContain("within 30s");
     const reads = (await fakeHerdrCommands(fake)).filter(
       (command) => command[0] === "agent" && command[1] === "read",
     );
