@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   HerdrClient,
@@ -1232,8 +1232,23 @@ export class HerdrSlpRuntime {
       await closePane(pane.pane_id);
     }
 
+    // w727: this directory can come back under the rm. AttentionRuntime.load()
+    // mkdirs it as the very first step of runtime startup, and the tab closes
+    // above make Herdr fire its pane_closed hook, which loads a runtime
+    // whenever the lock has no live holder - so a runtime that is starting up
+    // only in order to read STOPPED and exit can recreate the directory, empty,
+    // in the window between the rm and the check. Seen on 2026-09-16 as a
+    // 3-in-5 failure of the w722 test under the full suite, where the leftover
+    // directory was empty: the mkdir had run and acquireProcessLock had not.
+    // So the check is on what the directory HOLDS, not on whether it exists.
+    // An empty directory is not a remaining transcript, and failing the stop
+    // over one leaves dead panes behind a store that still says RUNNING -
+    // exactly the w722 defect this cleanup exists to prevent.
     await rm(runtimeDirectory, { force: true, recursive: true });
     if (existsSync(runtimeDirectory)) {
+      await rm(runtimeDirectory, { force: true, recursive: true });
+    }
+    if (existsSync(runtimeDirectory) && (await readdir(runtimeDirectory)).length > 0) {
       throw new SlpRuntimeError(
         `SLP runtime transcript remains: ${runtimeDirectory}`,
         ["runtime", "cleanup"],
