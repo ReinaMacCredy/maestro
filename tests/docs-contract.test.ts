@@ -705,3 +705,26 @@ test("668 [lint] the shared contract names the lesson-candidate mark and what th
   // The nine-operation surface is unchanged: no new flag rides work return.
   expect(shared).not.toContain("work return <id> --lesson");
 });
+
+// Hub finding F7 (w734): four times since g6 a Hub read a seat pane and saw a
+// line such as "return w730" or "[w727 RETURNED]" sitting in the input box
+// before the store held any such record - the harness's own prompt suggestion,
+// not a push. The contract says beside the wake-up sentence that a pane is not
+// a record.
+test("669 [lint] the shared contract says pane text is not a push and a state exists only in the store (Hub finding F7)", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("text seen in a pane's input box or transcript is not a push and not a record");
+  expect(shared).toContain("a work state exists only when `maestro status <work-id>` shows it");
+  expect(shared).toContain("checks the store before acting on what it saw");
+  // It belongs beside the sentence it qualifies: the store is the truth and
+  // the pushed line is only the wake-up.
+  const wakeUp = shared.indexOf("the store stays the truth and that line is only the wake-up");
+  const phantom = shared.indexOf("text seen in a pane's input box or transcript is not a push");
+  expect(wakeUp).toBeGreaterThan(-1);
+  expect(phantom).toBeGreaterThan(wakeUp);
+  expect(phantom - wakeUp).toBeLessThan(200);
+});

@@ -1,4 +1,4 @@
-b5d8802dccdecfd82fc5e1620483ec431e12f4d7392f5b3e9268dba8bec5d04e  src/plugins/resources/SLP.md
+26108d3561203c6c77e4c3598bd4ce60cfb1262e140115ffdcb4a6cd45919b44  src/plugins/resources/SLP.md
 7a07d627b62424a75cfa4d81805b482cb78a4e08fd677b17036869a9ea0680da  src/plugins/resources/WORKFLOW.md
 e8a7936e46d994a502cf57470fbdeb276231508ff6405aae208e9798e3aab408  src/plugins/resources/herdr-plugin/herdr-plugin.toml
 3e0c45ce104e4ffadd7e57ef2202c7f4d00d3d628af1812f48b693b579536219  src/plugins/resources/profiles/auditor.md
