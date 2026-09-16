@@ -186,21 +186,19 @@ test("269 install wires both room harnesses without overwriting OWNER.md", async
       (await runInstalledCliAt(fixture, fixture.repo, ["install"], { PATH: path })).exitCode,
     ).toBe(0);
     expect(await readFile(join(room, "OWNER.md"), "utf8")).toBe(ownerEdit);
-    for (const [harness, configName] of [
-      ["claude", "settings.json"],
-      ["codex", "hooks.json"],
+    // 04045420: the Claude hook resolves against $CLAUDE_PROJECT_DIR rather
+    // than the cwd; Codex keeps the relative form.
+    for (const [harness, configName, hookCommand] of [
+      ["claude", "settings.json", 'bun "${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/maestro-record.ts"'],
+      ["codex", "hooks.json", "bun .codex/hooks/maestro-record.ts"],
     ] as const) {
       const hookPath = join(room, `.${harness}`, "hooks", "maestro-record.ts");
       const config = JSON.parse(
         await readFile(join(room, `.${harness}`, configName), "utf8"),
       ) as { hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>> };
       expect(await readFile(hookPath, "utf8")).toContain(`--harness\", \"${harness}`);
-      expect(config.hooks.SessionStart?.at(-1)?.hooks[0]?.command).toBe(
-        `bun .${harness}/hooks/maestro-record.ts`,
-      );
-      expect(config.hooks.UserPromptSubmit?.at(-1)?.hooks[0]?.command).toBe(
-        `bun .${harness}/hooks/maestro-record.ts`,
-      );
+      expect(config.hooks.SessionStart?.at(-1)?.hooks[0]?.command).toBe(hookCommand);
+      expect(config.hooks.UserPromptSubmit?.at(-1)?.hooks[0]?.command).toBe(hookCommand);
       expect(config.hooks.PostToolUse).toBeUndefined();
     }
   });
