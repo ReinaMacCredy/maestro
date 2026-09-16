@@ -85,10 +85,11 @@ pushes one line to the counterpart pane (`[from <role>][<work-id> <STATE>]
 whether its pane was just opened or already acknowledged; a decision wakes the
 seat holding the item it names, under the subject `DECIDED`, because a ruling on
 an item is an instruction to the one holding it (room d154); the store stays the
-truth and that line is only the wake-up. Conversely, text seen in a pane's input box or transcript is not a
-push and not a record: a work state exists only when `maestro status
-<work-id>` shows it, and a Hub or Lead that reads a pane checks the store
-before acting on what it saw. An instruction whose value expires before the recipient's next action
+truth and that line is only the wake-up. Conversely, text seen in a pane's
+input box or transcript is not a push and not a record: a work state exists
+only when `maestro status <work-id>` shows it, and a Hub or Lead that reads
+a pane checks the store before acting on what it saw.
+An instruction whose value expires before the recipient's next action
 travels on one of those five waking operations, never on a plain note: a plain
 note is read when the seat next looks, and a pane inside a tool call is not a
 slow reader but no reader at all until that call returns, so work already
