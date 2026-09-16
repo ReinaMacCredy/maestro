@@ -5,7 +5,7 @@ import { materializeProfiles, seatTokenPath } from "../src/plugins/profiles.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import type { Fixture } from "./helpers.ts";
 
-// A socket fake of Herdr 0.8.2 (protocol 20): newline JSON over a unix
+// A socket fake of Herdr 0.9.0 (protocol 22): newline JSON over a unix
 // socket, one request per connection, events.subscribe kept open. Every
 // request is logged in the argv shape the old CLI fake recorded, so the
 // suite's assertions read the same. A `herdr` script on the fixture PATH is
@@ -371,7 +371,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
   if (malformed) return malformed as Params;
   switch (method) {
     case "ping":
-      return { type: "pong", version: "0.8.2", protocol: state.protocol, capabilities: { live_handoff: true } };
+      return { type: "pong", version: "0.9.0", protocol: state.protocol, capabilities: { live_handoff: true } };
     case "workspace.list": {
       if (behavior.workspaceListDelayMs) await Bun.sleep(behavior.workspaceListDelayMs);
       for (const [workspaceId, remaining] of Object.entries(state.pending_workspace_closes as Record<string, number>)) {
@@ -851,7 +851,7 @@ export async function installFakeHerdr(
       plugins: [],
       processes: {},
       prompts: [],
-      protocol: 20,
+      protocol: 22,
       resetting: {},
       runtime_exits: [],
       sequence: 0,

@@ -7,7 +7,18 @@ import { resolveHomeDirectory } from "./home.ts";
 // The typed surface below is the whole set SLP uses; agent.wait, agent.focus,
 // pane.send_text and notification.show stay out (d767, d753, advisor F20).
 
-export const herdrProtocol = 20;
+// Raised 20 -> 22 for Herdr 0.9.0 (w736 F5). The evidence is the installed
+// Herdr's own bundled schema, `herdr api schema --json`, which declares
+// protocol 22 and names every method this file calls - agent.get/list/read/
+// start/prompt, pane.close/get/list/read/send_input, plugin.link/unlink,
+// plugin.pane.open, tab.close/create/list, workspace.close/create/list and
+// events.subscribe - so nothing maestro touches was removed. The one 0.9.0
+// change that reaches this client is a subscription change, not a method:
+// "New lifecycle event subscriptions now start with live events rather than
+// replaying retained history. API clients should subscribe before taking their
+// initial snapshot"; slp-attention already subscribes first and seeds statuses
+// afterwards (evaluateCurrent), so the order it needs is the order it has.
+export const herdrProtocol = 22;
 
 interface SlpRuntimeEvidence {
   code?: string;

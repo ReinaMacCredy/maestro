@@ -1087,3 +1087,27 @@ test("team-card-silence: a Lead idle while holding only the team card records no
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
+
+// w736 F5: every room verb printed the protocol warning because the constant
+// still named the Herdr maestro was built against in early September while the
+// installed Herdr had moved to 0.9.0. The evidence is that Herdr's own bundled
+// schema, `herdr api schema --json`, declares protocol 22 and lists every
+// method this client calls, so the warning was noise on every line the Hub
+// read. The fixture speaks the same protocol the client targets, which is what
+// makes a mismatch in a test a deliberate one.
+test("w736 the protocol constant names the Herdr the fixture speaks, so a matched server warns about nothing", async () => {
+  expect(herdrProtocol).toBe(22);
+  await withFixture(async (fixture) => {
+    const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
+    expect((await readFakeHerdrState(fake)).protocol).toBe(herdrProtocol);
+    const stderr = captureStderr();
+    let warned: string;
+    try {
+      const client = new HerdrClient({ ...process.env, ...fake.env, HOME: fixture.home });
+      await client.request<{ agents: unknown[] }>("agent.list");
+    } finally {
+      warned = stderr.restore();
+    }
+    expect(warned).not.toContain("built for protocol");
+  });
+});
