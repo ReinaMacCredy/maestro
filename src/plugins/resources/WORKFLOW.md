@@ -210,6 +210,12 @@ requirements without treating them as a demand for duplicate tests.
   testing. There is no arbitrary numerical cap on tests.
 - Never delete, skip, or weaken a failing test to manufacture a pass. Correct
   a wrong test openly against the approved contract and record the reason.
+- A command run as evidence shows its stderr, and a negative result from it is
+  believed only after that same command has produced a positive on a case known
+  to be positive. Where the claim is that nothing happened, falsify the check
+  first: point it at a case you know is positive and confirm it reports that
+  case. An empty result and a broken command are the same text on stdout, so a
+  suppressed error reads as a clean bill for the strongest claim in the room.
 
 ## Recovery and verification
 

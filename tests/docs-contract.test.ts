@@ -945,3 +945,27 @@ test("w740 [lint] the question-back seat's sentences are in the pack, the two ma
   );
   expect(design).toContain("A point locked over an unanswered question is a decision taken without the evidence it asked for");
 });
+
+// project lesson l8 (w739, d896): an evidence command with its stderr thrown
+// away reported a clean negative it could not have reported anything else from,
+// and that silence became a plank under the claim that a Peer had delivered
+// nothing. The rule lands in the shared testing discipline and again in the one
+// mandate that verifies another seat's claim.
+test("l8 [lint] WORKFLOW.md and the Team Supervisor mandate falsify an evidence command before believing its negative", async () => {
+  const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
+  const resources = join(import.meta.dir, "..", "src", "plugins", "resources");
+  const flat = async (...parts: string[]) => unwrap(await Bun.file(join(resources, ...parts)).text());
+
+  const workflow = await flat("WORKFLOW.md");
+  expect(workflow).toContain("A command run as evidence shows its stderr");
+  expect(workflow).toContain(
+    "believed only after that same command has produced a positive on a case known to be positive",
+  );
+  expect(workflow).toContain("Where the claim is that nothing happened, falsify the check first");
+  expect(workflow).toContain("An empty result and a broken command are the same text on stdout");
+
+  const supervisor = await flat("profiles", "team-supervisor.md");
+  expect(supervisor).toContain("show that command's stderr");
+  expect(supervisor).toContain("believe a negative from it only after it has produced a positive on a case you know is positive");
+  expect(supervisor).toContain("An empty result and a broken command print the same nothing");
+});
