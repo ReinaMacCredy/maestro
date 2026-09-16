@@ -2741,6 +2741,19 @@ export async function maybeHandleSlpWorkAdd(
         { peer: peerName, profile: knownPeer.profile, requested: renderedProfile },
       );
     }
+    // room d128 (w728 rework): the launch line is the only carrier for the
+    // model, and an acknowledged pane is never relaunched by work add - not
+    // even by --fresh, whose /clear keeps the process. The role row does not
+    // keep the launch model, so nothing could prove a repeated value matches
+    // either; any --model on a reused pane is refused before a pane is
+    // ensured and before any store write, like PEER_PROFILE_MISMATCH above.
+    if (modelOption !== undefined && knownPeer && knownPeer.ready_challenge !== "") {
+      throw new CliError(
+        "INVALID_OPTION",
+        `--model rides the launch line only, and ${peerName} is already running in ${knownPeer.pane_id}; drop --model to reuse it as it is, or pick another Peer name to open a new pane with --model ${modelOption}`,
+        { model: modelOption, pane: knownPeer.pane_id, peer: peerName },
+      );
+    }
     if (configuration.profileDigests[peerProfileName] === undefined) {
       pinnedProfile = { digest: profileDigest(peerProfile), name: peerProfileName };
     }

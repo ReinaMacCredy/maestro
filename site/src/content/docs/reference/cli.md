@@ -129,7 +129,10 @@ passes) and is refused with `PEER_ACTIVE` while that Peer holds ACTIVE work;
 a reset that does not take is refused with `PEER_RESET_FAILED` and nothing is
 added (Hub d101). `--model <model>` launches that one Peer with the named
 model over the generation's `--peer-model`, on the launch line only, and is
-`INVALID_OPTION` without `--to` or with an empty value (room d128).
+`INVALID_OPTION` without `--to`, with an empty value, or on a Peer pane that
+is already running (with or without `--fresh`, which clears context but does
+not relaunch): drop it to reuse that pane, or pick another Peer name to open a
+new one with it (room d128).
 
 ### `work take`
 

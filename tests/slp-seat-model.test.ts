@@ -243,3 +243,62 @@ test("seat-model: an empty model, --supervisor-model on a lead-only team, and wo
     expect((await fakeHerdrCommands(fake)).filter((command) => command[0] === "agent" && command[1] === "start")).toHaveLength(2);
   });
 }, 30_000);
+
+// Rework on w728 (part b): the launch line is the only carrier for --model, so
+// a Peer pane that is already acknowledged cannot take one, with or without
+// --fresh (a /clear is not a relaunch). Refused before any pane is ensured and
+// before any store write, like PEER_PROFILE_MISMATCH.
+test("seat-model: work add --to <peer> --model on an already-acknowledged Peer pane is refused with INVALID_OPTION naming the launch line and the way out, with or without --fresh, and writes nothing (room d128 b, rework)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await markedRoom(fixture);
+    const fake = await installFakeHerdr(fixture);
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Reused peer", "--json"], fake.env);
+    expect(started.exitCode).toBe(0);
+    const data = envelope<StartedTeam>(started.stdout);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const opened = await runCliAt(fixture, fixture.repo, ["work", "add", "first item", "--to", "alpha", "--model", "gpt-5.6-sol", "--json"], leadEnvironment);
+    expect(opened.exitCode).toBe(0);
+    const alpha = envelope<{ role: { name: string } }>(opened.stdout).role.name;
+    expect(startsOf(await fakeHerdrCommands(fake)).get(alpha)).toEqual(["--profile", "maestro-peer", "--model", "gpt-5.6-sol"]);
+    const startsBefore = (await fakeHerdrCommands(fake)).filter((command) => command[0] === "agent" && command[1] === "start").length;
+    const workCount = (): number => {
+      const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+      try {
+        return database.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM slp_work").get()!.n;
+      } finally {
+        database.close();
+      }
+    };
+    const workBefore = workCount();
+
+    for (const extra of [[], ["--fresh"]]) {
+      const refused = await runCliAt(
+        fixture,
+        fixture.repo,
+        ["work", "add", "second item", "--to", "alpha", "--model", "fable", ...extra, "--json"],
+        leadEnvironment,
+      );
+      expect(refused.exitCode).toBe(1);
+      expect(failure(refused.stderr).code).toBe("INVALID_OPTION");
+      expect(failure(refused.stderr).message).toContain("launch line");
+      expect(failure(refused.stderr).message).toContain("another Peer name");
+    }
+    // The same model as the pane was opened with is refused too: the row does
+    // not keep the launch model, so nothing can prove it matches.
+    const same = await runCliAt(fixture, fixture.repo, ["work", "add", "third item", "--to", "alpha", "--model", "gpt-5.6-sol", "--json"], leadEnvironment);
+    expect(same.exitCode).toBe(1);
+    expect(failure(same.stderr).code).toBe("INVALID_OPTION");
+    expect((await fakeHerdrCommands(fake)).filter((command) => command[0] === "agent" && command[1] === "start")).toHaveLength(startsBefore);
+    expect(workCount()).toBe(workBefore);
+
+    // Without --model the reused pane still takes work, and a new Peer name
+    // with --model opens a new pane carrying it.
+    const plain = await runCliAt(fixture, fixture.repo, ["work", "add", "plain reuse", "--to", "alpha", "--json"], leadEnvironment);
+    expect(plain.exitCode).toBe(0);
+    const fresh = await runCliAt(fixture, fixture.repo, ["work", "add", "new peer", "--to", "beta", "--model", "fable", "--json"], leadEnvironment);
+    expect(fresh.exitCode).toBe(0);
+    const beta = envelope<{ role: { name: string } }>(fresh.stdout).role.name;
+    expect(startsOf(await fakeHerdrCommands(fake)).get(beta)).toEqual(["--profile", "maestro-peer", "--model", "fable"]);
+  });
+}, 30_000);
