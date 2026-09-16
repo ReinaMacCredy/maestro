@@ -78,6 +78,17 @@ test("peer-pack-words: nothing a Peer reads names a seat, a rank or the protocol
     // A composed peer is a Peer seat, so it reads the same block (d892).
     const refuter = await renderedBody(fixture, "peer-refuter");
     expect(refuter).toContain(block(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"), "shared:peer"));
+
+    // w740 (d904, room d155): the questioner is the first composed peer whose
+    // own body is written to this lint rather than only inheriting the block
+    // above it, so the whole render is measured - block, peer body and lens
+    // body together. The older lens bodies (refuter says "graph node", auditor
+    // says "council seat") are not held to it and are not changed here.
+    const questioner = (await renderedBody(fixture, "peer-questioner"))
+      .split("\n").filter((line) => !handshake.test(line)).join("\n");
+    for (const word of seatWords) {
+      expect({ word, mandate: questioner }).toEqual({ word, mandate: expect.not.stringContaining(word) });
+    }
   });
 }, 30_000);
 
