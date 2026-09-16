@@ -537,3 +537,23 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   expect(publicSurface).toEqual([...slpOperations]);
   expect(publicSurface).not.toContain("maestro owner");
 });
+
+// room lessons l16, l21, l22, l23, l25: the room's own evidence rule. The
+// intake line already sends a question about the room to IDENTITY.md, so the
+// corrections land there rather than in the workflow every repository reads.
+test("653 [lint] the room's IDENTITY.md carries the evidence rule for documents, instruments and tool refusals (l16, l21, l22, l23, l25)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    const identity = (await Bun.file(join(room, "IDENTITY.md")).text()).replaceAll(/\s+/g, " ");
+    expect(identity).toContain("A tool verdict is an observation, and a document is weaker still");
+    expect(identity).toContain("Read a constant through the function that consumes it");
+    expect(identity).toContain("measure an environment precondition in the environment");
+    expect(identity).toContain("The link to verify is the one the remedy hangs on");
+    expect(identity).toContain("Before an instrument asserts a negative it must first show a positive on this machine");
+    expect(identity).toContain("`<symptom> observed, cause not measured`");
+    expect(identity).toContain("it must read differently from a true zero");
+    expect(identity).toContain("State the question the instrument answers before quoting its answer");
+    expect(identity).toContain("A tool's refusal is evidence about the tool");
+    expect(identity).toContain("measure that claim yourself before recording anything that rests on it");
+  });
+});

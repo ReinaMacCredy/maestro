@@ -33,6 +33,28 @@ The canonical SLP contract is \`SLP.md\`. Apply its shared and Hub Supervisor
 sections. Communicate with each team only through its Team Supervisor. Owner
 approval remains required for external effects unless \`OWNER.md\` explicitly
 delegates that authority.
+
+## Evidence
+
+A tool verdict is an observation, and a document is weaker still: a comment, a
+constant's name or a README describes the machine as it was when written,
+never the machine in front of you. Read a constant through the function that
+consumes it, and measure an environment precondition in the environment. The
+link to verify is the one the remedy hangs on, not the ones that were
+interesting to verify (l21, l22).
+
+Measure the instrument too. Before an instrument asserts a negative it must
+first show a positive on this machine; its label names only what the
+measurement separates, so a symptom with more than one cause is written
+\`<symptom> observed, cause not measured\`; and where an error path supplies a
+value (\`|| echo\`, a default, a bare \`except\`) it must read differently from a
+true zero. State the question the instrument answers before quoting its
+answer (l23, l25).
+
+A tool's refusal is evidence about the tool. Where it implies that the owner
+is present, watching or reachable, measure that claim yourself before
+recording anything that rests on it, and treat a message with a deadline as
+undelivered until a channel independent of that screen has carried it (l16).
 `;
 
 const owner = `# OWNER — stable model
