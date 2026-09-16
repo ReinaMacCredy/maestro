@@ -1,0 +1,517 @@
+{
+  "hash": "64d33357cbda0259e2377534fd03a5d991842f62",
+  "measuredAt": "2026-09-16T13:08:43.934Z",
+  "srcLines": 27236,
+  "srcFiles": 57,
+  "filesOverCap": [
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "lines": 5630
+    },
+    {
+      "file": "src/plugins/dispatch.ts",
+      "lines": 1580
+    },
+    {
+      "file": "src/plugins/work.ts",
+      "lines": 1446
+    },
+    {
+      "file": "src/plugins/slp-runtime.ts",
+      "lines": 1332
+    },
+    {
+      "file": "src/plugins/slp-attention.ts",
+      "lines": 1265
+    },
+    {
+      "file": "src/plugins/graph.ts",
+      "lines": 1235
+    },
+    {
+      "file": "src/plugins/import-rust.ts",
+      "lines": 1074
+    }
+  ],
+  "functionsOverCap": [
+    {
+      "file": "src/plugins/work.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 310,
+      "endLine": 1445,
+      "lines": 1136,
+      "bodyDigest": "1524fbed58f4ee82"
+    },
+    {
+      "file": "src/plugins/dispatch.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 628,
+      "endLine": 1579,
+      "lines": 952,
+      "bodyDigest": "906a6808e1172d4a"
+    },
+    {
+      "file": "src/plugins/decision.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 162,
+      "endLine": 639,
+      "lines": 478,
+      "bodyDigest": "fa3fa82ec2465003"
+    },
+    {
+      "file": "src/plugins/bundle.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 466,
+      "endLine": 922,
+      "lines": 457,
+      "bodyDigest": "a053a3b5ae60de6b"
+    },
+    {
+      "file": "src/plugins/coordination.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 177,
+      "endLine": 535,
+      "lines": 359,
+      "bodyDigest": "25af4a7db1d2a442"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "startTeam",
+      "kind": "function",
+      "startLine": 1827,
+      "endLine": 2167,
+      "lines": 341,
+      "bodyDigest": "637c41f605e623d1"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "maybeHandleSlpWorkAdd",
+      "kind": "function",
+      "startLine": 2641,
+      "endLine": 2973,
+      "lines": 333,
+      "bodyDigest": "808f39eb1d98e81f"
+    },
+    {
+      "file": "src/plugins/graph.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 972,
+      "endLine": 1234,
+      "lines": 263,
+      "bodyDigest": "f08660a5d5515cb6"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "maybeHandleSlpStatus",
+      "kind": "function",
+      "startLine": 5103,
+      "endLine": 5362,
+      "lines": 260,
+      "bodyDigest": "710276280bab73da"
+    },
+    {
+      "file": "src/plugins/import-rust.ts",
+      "name": "promoteLegacyRows",
+      "kind": "function",
+      "startLine": 663,
+      "endLine": 900,
+      "lines": 238,
+      "bodyDigest": "baeb57fe8307380"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 5399,
+      "endLine": 5629,
+      "lines": 231,
+      "bodyDigest": "b2c83e8143173fb2"
+    },
+    {
+      "file": "src/plugins/lesson.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 303,
+      "endLine": 532,
+      "lines": 230,
+      "bodyDigest": "8855bfcee23c013c"
+    },
+    {
+      "file": "src/plugins/decision.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 227,
+      "endLine": 449,
+      "lines": 223,
+      "bodyDigest": "abb0374998b235ea"
+    },
+    {
+      "file": "src/plugins/lifecycle.ts",
+      "name": "doctor",
+      "kind": "function",
+      "startLine": 512,
+      "endLine": 726,
+      "lines": 215,
+      "bodyDigest": "f52de9f5b320c4e8"
+    },
+    {
+      "file": "src/plugins/memory.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 726,
+      "endLine": 938,
+      "lines": 213,
+      "bodyDigest": "d8441901e6cf7604"
+    },
+    {
+      "file": "src/plugins/plugin-manager.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 64,
+      "endLine": 274,
+      "lines": 211,
+      "bodyDigest": "dc3c115d9ce51208"
+    },
+    {
+      "file": "src/plugins/install.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 610,
+      "endLine": 818,
+      "lines": 209,
+      "bodyDigest": "8b6c4c6ee7897120"
+    },
+    {
+      "file": "src/plugins/lifecycle.ts",
+      "name": "update",
+      "kind": "function",
+      "startLine": 179,
+      "endLine": 384,
+      "lines": 206,
+      "bodyDigest": "d9d16e5145ec212a"
+    },
+    {
+      "file": "src/plugins/decision.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 230,
+      "endLine": 431,
+      "lines": 202,
+      "bodyDigest": "49b035272680227d"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "migrateProject",
+      "kind": "function",
+      "startLine": 720,
+      "endLine": 920,
+      "lines": 201,
+      "bodyDigest": "abd42724d978e520"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "reserveStop",
+      "kind": "function",
+      "startLine": 4013,
+      "endLine": 4211,
+      "lines": 199,
+      "bodyDigest": "f903463789ac5611"
+    },
+    {
+      "file": "src/plugins/observability.ts",
+      "name": "apply",
+      "kind": "method",
+      "startLine": 379,
+      "endLine": 576,
+      "lines": 198,
+      "bodyDigest": "a781e14ffa7c6ed8"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "reserveStop>arrow",
+      "kind": "arrow",
+      "startLine": 4014,
+      "endLine": 4210,
+      "lines": 197,
+      "bodyDigest": "587c935ba1601d46"
+    },
+    {
+      "file": "src/plugins/bundle-import.ts",
+      "name": "importWaymarkTree",
+      "kind": "function",
+      "startLine": 184,
+      "endLine": 369,
+      "lines": 186,
+      "bodyDigest": "edc106d11435894b"
+    },
+    {
+      "file": "src/plugins/memory.ts",
+      "name": "ingest",
+      "kind": "function",
+      "startLine": 392,
+      "endLine": 571,
+      "lines": 180,
+      "bodyDigest": "ac6cf50fb82fa452"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "reserveStart",
+      "kind": "function",
+      "startLine": 1357,
+      "endLine": 1531,
+      "lines": 175,
+      "bodyDigest": "6d82c36106545edc"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "stopTeam",
+      "kind": "function",
+      "startLine": 4345,
+      "endLine": 4518,
+      "lines": 174,
+      "bodyDigest": "bfc32f2e0dd23e7"
+    },
+    {
+      "file": "src/plugins/slp-v2.ts",
+      "name": "reserveStart>arrow",
+      "kind": "arrow",
+      "startLine": 1358,
+      "endLine": 1530,
+      "lines": 173,
+      "bodyDigest": "d006eeb0ecd7a4cc"
+    },
+    {
+      "file": "src/plugins/dispatch.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 800,
+      "endLine": 971,
+      "lines": 172,
+      "bodyDigest": "8bf5bd09a2b9627b"
+    },
+    {
+      "file": "src/plugins/work.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 774,
+      "endLine": 938,
+      "lines": 165,
+      "bodyDigest": "cff182bd02403634"
+    },
+    {
+      "file": "src/plugins/install.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 655,
+      "endLine": 816,
+      "lines": 162,
+      "bodyDigest": "370a3815e10c9209"
+    },
+    {
+      "file": "src/plugins/install.ts",
+      "name": "apply>arrow",
+      "kind": "arrow",
+      "startLine": 655,
+      "endLine": 809,
+      "lines": 155,
+      "bodyDigest": "5a4e58058a51a4a9"
+    },
+    {
+      "file": "src/plugins/bundle-import.ts",
+      "name": "run",
+      "kind": "arrow",
+      "startLine": 201,
+      "endLine": 354,
+      "lines": 154,
+      "bodyDigest": "8fd9931dc155671f"
+    },
+    {
+      "file": "src/plugins/slp-runtime.ts",
+      "name": "stop",
+      "kind": "method",
+      "startLine": 1142,
+      "endLine": 1293,
+      "lines": 152,
+      "bodyDigest": "1b7e4b0550bd8bd2"
+    }
+  ],
+  "duplicateFamilies": 9,
+  "duplicateCopies": 13,
+  "duplicates": [
+    {
+      "digest": "47887da13be3da3",
+      "lines": 22,
+      "members": [
+        {
+          "file": "src/plugins/bundle.ts",
+          "name": "specTemplate",
+          "startLine": 57
+        },
+        {
+          "file": "src/plugins/bundle.ts",
+          "name": "notesTemplate",
+          "startLine": 99
+        }
+      ]
+    },
+    {
+      "digest": "77147c9c955940a3",
+      "lines": 9,
+      "members": [
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "release",
+          "startLine": 1295
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "commitLifecycle",
+          "startLine": 1750
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "update",
+          "startLine": 4221
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "commitLifecycle",
+          "startLine": 4318
+        }
+      ]
+    },
+    {
+      "digest": "3469fdb1686c50a1",
+      "lines": 11,
+      "members": [
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "stopRoles>arrow",
+          "startLine": 3763
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "maybeHandleSlpStatus>arrow",
+          "startLine": 5163
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "maybeHandleSlpStatus>arrow",
+          "startLine": 5322
+        }
+      ]
+    },
+    {
+      "digest": "199a16f890277f63",
+      "lines": 10,
+      "members": [
+        {
+          "file": "src/plugins/bundle.ts",
+          "name": "requireBundle",
+          "startLine": 153
+        },
+        {
+          "file": "src/plugins/dispatch.ts",
+          "name": "requireDispatch",
+          "startLine": 281
+        },
+        {
+          "file": "src/plugins/work.ts",
+          "name": "requireWork",
+          "startLine": 204
+        }
+      ]
+    },
+    {
+      "digest": "ab4a5a6f62a54f89",
+      "lines": 10,
+      "members": [
+        {
+          "file": "src/kernel/sessions.ts",
+          "name": "isPidAlive",
+          "startLine": 343
+        },
+        {
+          "file": "src/plugins/slp-process.ts",
+          "name": "pidIsLive",
+          "startLine": 20
+        }
+      ]
+    },
+    {
+      "digest": "d305246fad253df8",
+      "lines": 10,
+      "members": [
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "maybeHandleSlpStatus>arrow",
+          "startLine": 5254
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "maybeHandleSlpStatus>arrow",
+          "startLine": 5345
+        }
+      ]
+    },
+    {
+      "digest": "9683dd8b4060e5da",
+      "lines": 9,
+      "members": [
+        {
+          "file": "src/plugins/bundle.ts",
+          "name": "verifyTemplate",
+          "startLine": 122
+        },
+        {
+          "file": "src/plugins/install.ts",
+          "name": "hookSource",
+          "startLine": 428
+        }
+      ]
+    },
+    {
+      "digest": "810e0ead644e7b4f",
+      "lines": 9,
+      "members": [
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "insert",
+          "startLine": 1516
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "insert",
+          "startLine": 4195
+        }
+      ]
+    },
+    {
+      "digest": "98a504a54adfa8be",
+      "lines": 9,
+      "members": [
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "readWorkDetail>arrow",
+          "startLine": 5011
+        },
+        {
+          "file": "src/plugins/slp-v2.ts",
+          "name": "readWorkDetail>arrow",
+          "startLine": 5040
+        }
+      ]
+    }
+  ],
+  "exportedNames": 315,
+  "readyMedianMs": 57.788542,
+  "readyMinMs": 55.498833,
+  "readyMaxMs": 69.700959,
+  "readyRuns": 30
+}

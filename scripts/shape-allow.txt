@@ -1,0 +1,50 @@
+# scripts/shape.ts allowlist: offenders tolerated until their phase lands.
+# Each line pardons exactly one offender; delete the line when it is fixed.
+# A line that pardons nothing fails the gate, so this list cannot rot.
+# generated from 64d33357cbda0259e2377534fd03a5d991842f62 on 2026-09-16T13:08:20.803Z
+
+# 7 files over 1000 lines
+file src/plugins/slp-v2.ts
+file src/plugins/dispatch.ts
+file src/plugins/work.ts
+file src/plugins/slp-runtime.ts
+file src/plugins/slp-attention.ts
+file src/plugins/graph.ts
+file src/plugins/import-rust.ts
+
+# 34 function bodies over 150 lines
+fn src/plugins/work.ts apply
+fn src/plugins/dispatch.ts apply
+fn src/plugins/decision.ts apply
+fn src/plugins/bundle.ts apply
+fn src/plugins/coordination.ts apply
+fn src/plugins/slp-v2.ts startTeam
+fn src/plugins/slp-v2.ts maybeHandleSlpWorkAdd
+fn src/plugins/graph.ts apply
+fn src/plugins/slp-v2.ts maybeHandleSlpStatus
+fn src/plugins/import-rust.ts promoteLegacyRows
+fn src/plugins/slp-v2.ts apply
+fn src/plugins/lesson.ts apply
+fn src/plugins/decision.ts apply>arrow
+fn src/plugins/lifecycle.ts doctor
+fn src/plugins/memory.ts apply
+fn src/plugins/plugin-manager.ts apply
+fn src/plugins/install.ts apply
+fn src/plugins/lifecycle.ts update
+fn src/plugins/decision.ts apply>arrow
+fn src/plugins/slp-v2.ts migrateProject
+fn src/plugins/slp-v2.ts reserveStop
+fn src/plugins/observability.ts apply
+fn src/plugins/slp-v2.ts reserveStop>arrow
+fn src/plugins/bundle-import.ts importWaymarkTree
+fn src/plugins/memory.ts ingest
+fn src/plugins/slp-v2.ts reserveStart
+fn src/plugins/slp-v2.ts stopTeam
+fn src/plugins/slp-v2.ts reserveStart>arrow
+fn src/plugins/dispatch.ts apply>arrow
+fn src/plugins/work.ts apply>arrow
+fn src/plugins/install.ts apply>arrow
+fn src/plugins/install.ts apply>arrow
+fn src/plugins/bundle-import.ts run
+fn src/plugins/slp-runtime.ts stop
+
