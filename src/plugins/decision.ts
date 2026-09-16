@@ -2,7 +2,7 @@ import { CliError, requiredPosition, type CliInvocation, type CliResult } from "
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DispatchService } from "./dispatch.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { roomSlpDecisionResult } from "./slp-v2.ts";
+import { slpDecisionResult } from "./slp-v2.ts";
 import type { WorkService } from "./work.ts";
 
 export interface DecisionRecord {
@@ -610,22 +610,22 @@ export const decisionPlugin: BuiltInPlugin = {
       context.cli.register("decision show", (invocation): CliResult => {
         const id = requiredPosition(invocation, 0, "decision id");
         const decision = getDecision(context, id);
-        // w736 F4: in the Hub room the ledger is not the only decision space;
-        // the room's own rulings answer to the same dNNN ids. Both are printed
-        // rather than one hiding the other. Outside the room this is empty and
-        // the verb behaves exactly as it did.
-        const room = roomSlpDecisionResult(context, id);
-        if (!decision && !room) {
+        // w736 F4, l4: the ledger is not the only decision space in a store;
+        // the SLP rulings answer to the same dNNN ids, in the Hub room and in a
+        // project checkout alike. Both are printed rather than one hiding the
+        // other, each labelled with the store it was read from.
+        const slp = slpDecisionResult(context, id);
+        if (!decision && !slp) {
           throw new CliError("NOT_FOUND", `decision not found: ${id}`, { id });
         }
         const width = invocation.options.wide === true || !process.stdout.isTTY
           ? null
           : process.stdout.columns || 80;
         return {
-          data: { decision, ...(room ? { roomDecisions: room.decisions } : {}) },
+          data: { decision, ...(slp ? { slpDecisions: slp.decisions } : {}) },
           text: [
             ...(decision ? [formatDecision(decision, width)] : []),
-            ...(room ? [room.text] : []),
+            ...(slp ? [slp.text] : []),
           ].join("\n\n"),
         };
       }, {

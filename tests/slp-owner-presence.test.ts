@@ -510,6 +510,48 @@ test("w736 decision show in the room resolves a room ruling, and prints both spa
   });
 });
 
+// project lesson l4 (w719, w720, d121): F4 asked the same question of the room
+// only, so inside a project checkout every ruling a team records - d879-d903 in
+// the live store - answered NOT_FOUND to `decision show` while `status` printed
+// it. A reader who gets NOT_FOUND from one store and a row from another learns
+// the opposite of where the row lives, which is the half of l4 the convention
+// alone cannot reach.
+test("l4 decision show inside a project checkout reads that store's SLP rulings and labels them as the project store", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake } = await startTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", data.work.id], leadEnvironment)).exitCode).toBe(0);
+    const ruled = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["decide", "Split the module by hand", "--why", "the generated map is wrong", "--work", data.work.id, "--json"],
+      leadEnvironment,
+    );
+    expect(ruled.exitCode).toBe(0);
+    const rulingId = envelope<{ decision: { id: string } }>(ruled.stdout).decision.id;
+
+    // Unbound: a seat's own pane has `decision show` retired by the v2 cutover,
+    // so this is the read every other session in the checkout performs.
+    const shown = await runCli(fixture, ["decision", "show", rulingId]);
+    expect({ code: shown.exitCode, stderr: shown.stderr }).toMatchObject({ code: 0 });
+    expect(shown.stdout).toContain("Split the module by hand");
+    // The label names the store the row was read from, not the seat that wrote
+    // it: that inversion is what let a project row read as a hub row.
+    expect(shown.stdout).toContain("(project store)");
+    expect(shown.stdout).not.toContain("(hub store)");
+
+    const json = await runCli(fixture, ["decision", "show", rulingId, "--json"]);
+    expect(json.exitCode).toBe(0);
+    expect(envelope<{ slpDecisions: Array<{ id: string; store: string }> }>(json.stdout).slpDecisions)
+      .toMatchObject([{ id: rulingId, store: "project" }]);
+
+    const missing = await runCli(fixture, ["decision", "show", "d4242", "--json"]);
+    expect(missing.exitCode).toBe(1);
+    expect(failureCode(missing.stderr)).toBe("NOT_FOUND");
+  });
+}, 40_000);
+
 // Outside the room there is one decision space and `decision show` keeps
 // exactly the behaviour it had.
 test("w736 decision show outside the room is unchanged: the project ledger answers and an unknown id is NOT_FOUND", async () => {

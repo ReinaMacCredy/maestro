@@ -262,7 +262,6 @@ resolveSourceRoot
 resolveStoreLocation
 revokeTrust
 roomOwnerLine
-roomSlpDecisionResult
 run
 runLifecycleCommand
 runSlpEvent
@@ -289,6 +288,7 @@ seatTokenPath
 sessionTtlMs
 shippedGraphs
 skillNames
+slpDecisionResult
 slpRuntimeDirectory
 slpRuntimeStatus
 slpStopEnvironment

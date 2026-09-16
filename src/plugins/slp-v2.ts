@@ -5200,20 +5200,27 @@ function decisionData(row: SlpDecisionRow, store: "hub" | "project"): SlpDecisio
   };
 }
 
-// w736 F4: the Hub room holds two decision spaces in one store - the project
-// decision ledger (`decisions`, with the draft/lock/withdraw lifecycle) and the
-// room's own rulings (`slp_decisions`) - and their ids are separate sequences
-// that already overlap in a live room. `maestro status dNNN` reads the second;
-// `maestro decision show dNNN` read only the first and answered NOT_FOUND for
-// every ruling the Hub had recorded. `decision show` now reads both and labels
-// each, which is w697's shape: a store never silently wins an id it shares.
-// Outside the room there is one space and this returns nothing.
-export function roomSlpDecisionResult(
+// w736 F4: a store can hold two decision spaces at once - the project decision
+// ledger (`decisions`, with the draft/lock/withdraw lifecycle) and the SLP
+// rulings (`slp_decisions`) - and their ids are separate sequences that already
+// overlap. `maestro status dNNN` reads the second; `maestro decision show dNNN`
+// read only the first and answered NOT_FOUND for every ruling that had been
+// recorded. It now reads both and labels each, which is w697's shape: a store
+// never silently wins an id it shares.
+//
+// l4 (w719, w720): F4 asked this of the Hub room only, so inside a project
+// checkout every SLP decision a team records stayed NOT_FOUND to the same verb
+// that prints it one directory up - and a reader who gets NOT_FOUND from one
+// store and a row from another learns the opposite of where the row lives. The
+// space is read from whichever store the command runs in, and the label names
+// that store rather than the seat that authored the row, which is the label
+// l4 found pointing the wrong way.
+export function slpDecisionResult(
   context: PluginContext,
   id: string,
 ): { decisions: unknown[]; text: string } | null {
-  if (!isRoom(context.store.database)) return null;
-  const decisions = decisionRowsById(context.store, id, null).map((row) => decisionData(row, "hub"));
+  const store = isRoom(context.store.database) ? "hub" : "project";
+  const decisions = decisionRowsById(context.store, id, null).map((row) => decisionData(row, store));
   if (decisions.length === 0) return null;
   return { decisions, text: decisions.map(decisionText).join("\n\n") };
 }

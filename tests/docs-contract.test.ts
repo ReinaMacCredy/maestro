@@ -1040,3 +1040,22 @@ test("l9 [lint] the shared contract and the Peer block send a seat to --json for
   // doctrine unfollowable; it does not come back.
   expect(peer).not.toContain("prints one in full");
 });
+
+// project lesson l4 (w719, w720, d121): 'room decisions d117 and d118' resolved
+// against the project store, which held two real, locked, plausible rows about
+// something else. The convention is d121's; the contract is where a seat reads
+// it, and the refusal to resolve a bare id is what makes it actionable.
+test("l4 [lint] the shared contract store-qualifies a decision id crossing the Hub-to-team boundary", async () => {
+  const pack = await Bun.file(
+    join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
+  ).text();
+  const shared = (/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+  expect(shared).toContain("number decisions from `d1` independently");
+  expect(shared).toContain(
+    "a decision id that crosses the Hub-to-team boundary is written `room dN` or `project dN`",
+  );
+  expect(shared).toContain("a bare `dN` from another seat is read as a question back to whoever sent it");
+  expect(shared).toContain("never resolved against whichever store you are standing in");
+  expect(shared).toContain("A wrong-store hit returns a real, locked, plausible ruling instead of an error");
+});

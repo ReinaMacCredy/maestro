@@ -181,7 +181,13 @@ with `maestro status <work-id> --json` before the first edit: an item you have
 read in part you have not read (project lesson l9). `maestro status <decision-id>`
 reads one settled decision back with its choice, why and scope, including an
 owner-scope ruling recorded in the Hub store, and `maestro search` finds a
-decision by its id or by words from its choice or why.
+decision by its id or by words from its choice or why. The Hub store and every
+project store number decisions from `d1` independently, so a decision id that
+crosses the Hub-to-team boundary is written `room dN` or `project dN`: a bare
+`dN` from another seat is read as a question back to whoever sent it, never
+resolved against whichever store you are standing in. A wrong-store hit returns
+a real, locked, plausible ruling instead of an error, so the reader ends up
+confident and wrong (project lesson l4, project d121).
 <!-- slp:shared:end -->
 
 <!-- slp:shared:peer:begin -->
