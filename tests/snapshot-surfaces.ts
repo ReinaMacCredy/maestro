@@ -146,6 +146,38 @@ export async function errorCodesSurface(): Promise<string> {
   return `${[...codes].sort().join("\n")}\n`;
 }
 
+// --------------------------------------------------------------- exports
+
+// The shape tool counts exported names, and a count cannot tell a rename from a
+// no-op: removing X and adding Y leaves 315 at 315 (w733 finding 4). This
+// surface is the sorted set of the names themselves, so a rename lands as one
+// removal and one addition. Names only, no file paths, for the reason at the top
+// of this file.
+//
+// Value exports come from Bun's transpiler, which is a real parse. It erases
+// type-only exports, so those are read off the two forms this repo actually
+// uses. The set holds 314 names against the shape tool's 315 because
+// `SlpRuntimeError` is declared in herdr-client.ts and re-exported by
+// slp-runtime.ts, and the tool keys by file-and-name while this keys by name.
+export async function exportedNamesSurface(): Promise<string> {
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const names = new Set<string>();
+  for (const file of await sourceFiles()) {
+    const text = await readFile(join(repoRoot, file), "utf8");
+    for (const name of transpiler.scan(text).exports) names.add(name);
+    for (const match of text.matchAll(/^export\s+(?:declare\s+)?(?:interface|type)\s+([A-Za-z_$][\w$]*)/gm)) {
+      names.add(match[1]!);
+    }
+    for (const match of text.matchAll(/^export\s+type\s*\{([^}]*)\}/gm)) {
+      for (const part of (match[1] ?? "").split(",")) {
+        const name = part.trim().split(/\s+as\s+/).pop();
+        if (name) names.add(name);
+      }
+    }
+  }
+  return `${[...names].sort().join("\n")}\n`;
+}
+
 // ------------------------------------------------------------------ suite
 
 export interface Surface {
@@ -160,6 +192,7 @@ export const surfaces: Surface[] = [
   { name: "resources.txt", render: () => resourcesSurface() },
   { name: "slp-markers.txt", render: () => slpMarkersSurface() },
   { name: "error-codes.txt", render: () => errorCodesSurface() },
+  { name: "exports.txt", render: () => exportedNamesSurface() },
 ];
 
 export async function renderSurfaces(): Promise<Map<string, string>> {
