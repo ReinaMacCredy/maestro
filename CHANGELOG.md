@@ -11,6 +11,102 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.125.0] - 2026-09-28
+
+### Added
+
+- SLP doctrine from the article the owner adopted on 2026-09-28
+  (https://vhlam.com/article/agent-orchestration-multi-agent-slp): a seat
+  that can show its item rests on a false premise records the premise, the
+  evidence and what the item would become as a `--blocked` note before it
+  builds, and a doubt it cannot back is a plain note; the right to object is
+  not a duty. The receiving seat rules either way with `maestro decide --work`
+  (changing the plan needs evidence, keeping it needs a reason). A ruling that
+  only relaxes a constraint or replaces a chosen design is continued under;
+  when the goal or acceptance falls, the item closes with `work accept
+  --outcome cancelled` and new work opens; a ruling that changes another
+  item's premise is recorded on that item too (project d856).
+- An objective tells the goal (owner's words or a store-qualified decision
+  id), each binding constraint with its source, and any chosen design apart,
+  and a Peer may question an unsourced constraint or a chosen design with
+  evidence. `ANTI_PATTERN.md` gains an eighth entry, parachute, and pre-solve
+  names the fixed review brief.
+- A return names the commit or diff its evidence was taken on, and a reviewer
+  accepts only evidence taken on the state it accepts.
+- The improver skill: the smallest edit may be a deletion, and a mechanism is
+  judged by the outcomes it changed, not by how often it ran.
+- The Hub's `maestro status` lists every escalation waiting on it as
+  `blocked for the Hub: <team-id>:<id> <note>` with the command that answers
+  it, until a Hub ruling on that item lands (JSON: `hubBlocked`).
+- A seat's model is a launch-time choice: `team start --lead-model`,
+  `--peer-model`, `--supervisor-model` and `work add --to --model` ride the
+  launch line; a reused Peer pane refuses `--model` (room d128).
+- A Lead's `work add` with no `--to` opens its own item (room d118).
+- The question-back seat: a read-only `questioner` profile composed as
+  `peer-questioner`, the design-bundle signal to the seat above, and `decide
+  --work` as a waking operation (room d152-d154).
+- The Peer reads its own block of the pinned pack with no seat name in it
+  (room d134).
+- `ANTI_PATTERN.md` ships beside `SLP.md` and `WORKFLOW.md` (room d138).
+- Per-pane compaction count, recorded on `SessionStart source=compact` and
+  read back in status and nudge evidence (room d137, d140).
+- Lesson candidates: a rework grant or a `--replaces` decision with `--work`
+  marks the item, and the pending-lessons headline names the count, the
+  oldest id and an improver generation as the next step (room d129).
+- `mbrief` in the room shellrc sends a brief without shell evaluation (room
+  lessons l15, l26).
+- The Hub reads a stopped generation's work, records a plain note that wakes
+  a lead-only Lead, sees registered projects' pending lessons, and reads both
+  decision spaces labelled (w734, w736).
+- `scripts/shape.ts` and the interface snapshot gate (help, schema, resource
+  bytes, pack markers, error codes, exported names).
+- An away Hub ruling with no work item may be `--provisional` (w736 F2).
+
+### Changed
+
+- Room doctrine from lessons l3-l9 and l12-l26: evidence rules in the room's
+  `IDENTITY.md`, monitors that prove their own liveness, affirmative safety
+  clauses, dischargeable acceptance clauses, falsifying an evidence command
+  before believing its negative, the SPEC shipping the artifact a locked
+  decision rests on, and a clipped objective naming its size and the command
+  that prints it whole.
+- The Team Supervisor's forbidden verbs are named one by one (room lesson
+  l11); the lead-only shape, the blocked ladder and the owner verbs are
+  documented (room d117, d118).
+- The Herdr client speaks protocol 22 (Herdr 0.9.0).
+- One HR protocol for owned work: work that writes files, returns or is
+  accepted runs in a Herdr pane; a harness sub-agent only scouts read-only
+  (room d135).
+- While a generation is RUNNING, the drift line names the generation boundary
+  instead of `maestro update` (w736 F6).
+
+### Fixed
+
+- A role acknowledgement that a narrow pane hard-wrapped inside a token
+  ("chal" / "lenge=...") is accepted; whitespace is ignored and every other
+  byte stays exact. Found live at a 40-column pane.
+- A dialog in a pane that holds no active item is recorded on that seat's own
+  latest item, not on the team card another seat holds, so the nudge and the
+  supervisor copy name the right seat.
+- `ROLE_ACKNOWLEDGEMENT_MISMATCH` names the last pane line; team stop judges
+  the runtime directory by its contents (the w722 flake); `work add` refuses
+  `--model` and `--fresh` outside SLP; `bundle open --work` accepts an SLP
+  work id; a work id held by both the room and a team is refused rather than
+  answered by one.
+
+### Verification notes
+
+- Live SLP journeys on `~/Code/slp-v2-lab`, generations 26-30, all seats on
+  Claude Opus in Herdr 0.9.0: the premise objection from a Lead and from a
+  Peer, the Team Supervisor's ruling and escalation, Hub rulings that relax a
+  constraint (continued) and that drop the goal (cancelled), a ruling relayed
+  to a Peer's item, returns naming their commit, and a clean confirmation run
+  (g30) after the four fixes above.
+- The Hub rulings made in those journeys (room d162-d164) are provisional,
+  lab-only, and wait on the owner.
+- Full suite on the release tree at ec0e0604: 80 files, 765 tests, 764 pass,
+  1 skip, 0 fail; `tsc` clean; the A1/A2/A3 anti-goal greps clean.
+
 ## [0.124.0] - 2026-09-16
 
 ### Added
