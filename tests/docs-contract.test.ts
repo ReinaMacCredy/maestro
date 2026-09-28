@@ -1115,3 +1115,10 @@ test("slp-article parachute [lint] ANTI_PATTERN.md names the parachute and pre-s
   expect(await resourceText("resources", "WORKFLOW.md")).toContain("holds the eight named");
   expect(await resourceText("skills", "maestro-improve", "SKILL.md")).toContain("one of the eight in `~/maestro/ANTI_PATTERN.md`");
 });
+
+test("slp-article subtraction [lint] the improver may delete and judges a mechanism by the outcomes it changed", async () => {
+  const skill = await resourceText("skills", "maestro-improve", "SKILL.md");
+  expect(skill).toContain("The smallest edit may be a deletion.");
+  expect(skill).toContain("earns its place by the outcomes it changed, not by how often it ran");
+  expect(skill).toContain("remove it rather than add a counterweight");
+});

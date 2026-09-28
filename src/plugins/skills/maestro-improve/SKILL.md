@@ -38,6 +38,13 @@ maestro lesson show <id>                    # the gap, the expectation, the why
   happened. Doctrine is read under load, so a sentence that removes an
   ambiguity beats a paragraph that adds a procedure. If the existing text
   already says it, the lesson is a rejection, not an edit.
+- The smallest edit may be a deletion. A mechanism - a seat, a review pass, a
+  push, a sentence - earns its place by the outcomes it changed, not by how
+  often it ran: where the lessons show one that added traffic and changed no
+  result, remove it rather than add a counterweight. A repeating failure is
+  first answered by moving the responsibility to the seat that owns it, not by
+  another role, checklist or approval round, and three times a mechanism
+  helped is not a reason to run it more often.
 - One commit per target group, on a branch, with the **evidence ids** of every
   lesson in the group in the message. The ids are how a later reader gets from
   the rule back to the incident that shaped it.
