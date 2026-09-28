@@ -454,6 +454,27 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
   });
 }, 40_000);
 
+test("runtime-blocked-peer: a Peer pane in a dialog after its return is recorded on the Peer's own item, never on the team card another seat holds", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, subscribed } = await startLiveTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer item", "--to", "peer-dialog", "--json"], leadEnvironment);
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    await subscribed();
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", peer.work.id, "result: done", "--json"], peerEnvironment)).exitCode).toBe(0);
+    expect(await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "blocked" } })).toBe(1);
+    await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:dialog"), 5_000, "the dialog entry");
+    const entries = runtimeEntries(fixture).filter((entry) => entry.flag === "stall:dialog");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ work_id: peer.work.id });
+    expect(entries[0]?.work_id).not.toBe(data.work.id);
+  });
+}, 40_000);
+
 test("runtime-silence: idle while holding ACTIVE work stalls once until the store changes, a --blocked seat is left alone, an idle seat with nothing to do wakes the seat above unless it just pushed (red 5, A6)", async () => {
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture, { promptEvents: true });

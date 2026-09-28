@@ -219,6 +219,16 @@ function teamCard(store: Store, teamId: string, generation: number): WorkRow | n
     .get(teamId, generation) ?? null;
 }
 
+function latestAssigned(store: Store, teamId: string, generation: number, name: string): WorkRow | null {
+  return store.database
+    .query<WorkRow, [string, number, string]>(
+      `SELECT id, state, owner, assigned_to, created_by, return_revision FROM slp_work
+       WHERE team_id = ? AND generation = ? AND assigned_to = ?
+       ORDER BY updated_at DESC, id DESC LIMIT 1`,
+    )
+    .get(teamId, generation, name) ?? null;
+}
+
 function heldActive(
   store: Store,
   teamId: string,
@@ -763,6 +773,7 @@ export class AttentionRuntime {
       }
       if (status === "blocked") {
         const held = heldActive(store, team.team_id, team.generation, seat.name) ??
+          latestAssigned(store, team.team_id, team.generation, seat.name) ??
           teamCard(store, team.team_id, team.generation);
         if (!held) return changed;
         const latest = latestRecord(store, held.id);
