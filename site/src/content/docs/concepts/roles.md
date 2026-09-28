@@ -159,6 +159,17 @@ generation), and every seat filters. A technical question is answered by the
 seat that owns it, so a Lead decides it rather than passing it on, and a fork
 reaches the seat above only when the seat below cannot resolve it.
 
+The same note carries an objection. A seat that can show its item rests on a
+false premise (a failing case, a line of code, a measurement) records the
+premise, the evidence and what the item would become as a `--blocked` note
+before it builds; a doubt it cannot yet back is a plain note and it proceeds.
+The right to object is not a duty to find one. The seat that receives the
+objection rules on it either way with `maestro decide --work <id>`, which wakes
+the holder: changing the plan needs evidence and keeping it needs a reason.
+When the premise falls, the holder returns what it has, the reviewer closes the
+item with `maestro work accept <id> --outcome cancelled` and opens new work, and
+a ruling that changes what another item rests on is recorded on that item too.
+
 The Team Supervisor is the owner's embodiment inside its team. It normally
 resolves what reaches it, by its own judgment or through advisor or council
 review, neither of which is a team seat, and records the ruling as a decision
@@ -187,6 +198,7 @@ authority or accepted decisions. Record these changes before they govern:
 - material context on the same contract: `maestro work note`;
 - settled technical, team or owner choice: `maestro decide`;
 - a fact only the seat above can settle, while keeping the item: `maestro work note --blocked`;
+- evidence that the item rests on a false premise, before building: `maestro work note --blocked`, ruled on with `maestro decide --work`;
 - an owner instruction typed into the seat's pane: `maestro work note --owner`;
 - completed or blocked execution: `maestro work return`;
 - reviewer acceptance: `maestro work accept`.

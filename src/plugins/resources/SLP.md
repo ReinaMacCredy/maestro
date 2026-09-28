@@ -117,7 +117,24 @@ locks the point it doubts (room d152). When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
-shows the flag. A generation runs in one of two shapes, pinned when it starts.
+shows the flag.
+The same note carries an objection: a seat that can show its item rests on a
+false premise - a failing case, a line of code, a measurement - records the
+premise, that evidence and what the item would become as a `--blocked` note
+before it builds, and a doubt it cannot yet back is a plain note and it
+proceeds. The right to object is not a duty to find one. The seat that receives
+an objection rules on it either way with `maestro decide "<keep|change>" --why
+"<reason>" --work <id>`, which wakes the holder, whose next note or return
+releases the flag: changing the plan needs evidence and keeping it needs a
+reason. It asks under what condition the failure occurs, whether a smaller fix
+is enough, and what the changed design removes and adds, and it tells a
+finding that changes the decision from an equally reasonable alternative and
+from a dispute not worth the interruption. When the premise falls, the holder
+returns what it has and the reviewer closes the item with `maestro work accept
+<id> --outcome cancelled` and opens new work; a ruling that changes what another
+item rests on is recorded on that item too, `--work <that id>` with a why naming
+the first decision, because a ruling wakes only the holder of the item it names.
+A generation runs in one of two shapes, pinned when it starts.
 The supervised shape is the default: a Team Supervisor above a Lead and its
 Peers. A team may instead run in a lead-only shape (`maestro team start
 --lead-only`): one Lead plus the runtime pane and no Team Supervisor. In a
@@ -240,10 +257,12 @@ in the record, and your next return says which general lesson you wrote down
 (`maestro lesson file`) or why none applies.
 
 When you cannot proceed at all - a question only someone else can answer, a
-credential you do not hold, a choice above this request - record `maestro work
-note <work-id> "<what you need>" --blocked`. That reaches whoever can answer
-it, and it is the only way to ask: there is no dialog, and a prompt from the
-harness is not one.
+credential you do not hold, a choice above this request, or evidence that the
+request rests on something false - record `maestro work note <work-id> "<what
+you need>" --blocked`. That reaches whoever can answer it, and it is the only
+way to ask: there is no dialog, and a prompt from the harness is not one. The
+answer arrives as a `DECIDED` line on the item; your next note or return is
+what says you are no longer waiting.
 
 Lines that arrive in your pane are wake-ups, not the record. A line shaped
 `[from <sender>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`

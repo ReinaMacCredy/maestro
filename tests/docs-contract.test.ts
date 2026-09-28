@@ -438,7 +438,7 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   const peer = unwrap(await Bun.file(join(profiles, "peer.md")).text());
   expect(peer).not.toContain("Communicate directly");
   expect(peer).not.toContain("herdr agent prompt");
-  expect(peer).toContain("record `maestro work note <work-id> \"<your objection>\"` on the item");
+  expect(peer).toContain("record `maestro work note <work-id> \"<the premise, the evidence, and what the request would become>\" --blocked`");
   expect(unwrap(block(pack, "shared:peer"))).toContain("There is no one to hand it to and no dialog to ask a question through");
   expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
   expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
@@ -1063,4 +1063,33 @@ test("l4 [lint] the shared contract store-qualifies a decision id crossing the H
   expect(shared).toContain("a bare `dN` from another seat is read as a question back to whoever sent it");
   expect(shared).toContain("never resolved against whichever store you are standing in");
   expect(shared).toContain("A wrong-store hit returns a real, locked, plausible ruling instead of an error");
+});
+
+const packSection = async (name: string) => {
+  const pack = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md")).text();
+  return (new RegExp(`<!-- slp:${name}:begin -->([\\s\\S]*?)<!-- slp:${name}:end -->`).exec(pack)?.[1] ?? "")
+    .replaceAll(/\s+/g, " ");
+};
+const resourceText = async (...path: string[]) =>
+  (await Bun.file(join(import.meta.dir, "..", "src", "plugins", ...path)).text()).replaceAll(/\s+/g, " ");
+
+test("slp-article objection [lint] an evidence-backed premise objection travels on --blocked and is ruled on either way", async () => {
+  const shared = await packSection("shared");
+  expect(shared).toContain("The same note carries an objection");
+  expect(shared).toContain("a doubt it cannot yet back is a plain note and it proceeds");
+  expect(shared).toContain("The right to object is not a duty to find one");
+  expect(shared).toContain("rules on it either way with `maestro decide \"<keep|change>\" --why \"<reason>\" --work <id>`");
+  expect(shared).toContain("changing the plan needs evidence and keeping it needs a reason");
+  expect(shared).toContain("`maestro work accept <id> --outcome cancelled`");
+  expect(shared).toContain("a ruling that changes what another item rests on is recorded on that item too");
+
+  const peerBlock = await packSection("shared:peer");
+  expect(peerBlock).toContain("or evidence that the request rests on something false");
+  expect(peerBlock).toContain("The answer arrives as a `DECIDED` line on the item");
+
+  const peer = await resourceText("resources", "profiles", "peer.md");
+  expect(peer).toContain("\"<the premise, the evidence, and what the request would become>\" --blocked");
+  expect(peer).toContain("A doubt you cannot yet back is a plain `maestro work note");
+  expect(peer).toContain("Nothing obliges you to find an objection");
+  expect(peer).not.toContain("proceed or wait as your own judgment says");
 });
