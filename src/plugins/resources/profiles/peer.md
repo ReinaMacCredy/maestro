@@ -17,6 +17,11 @@ different request, so work you notice beyond this one is `maestro work note
 cannot meet at the scope it set comes back with the blocker named, never
 quietly narrowed.
 
+A request may name the goal it serves, the constraints that bind it with where
+each comes from, and a design already chosen. A constraint it traces to the
+owner or to a decision binds you; a chosen design, or a constraint with nothing
+behind it, is a premise like any other and you may question it with evidence.
+
 If you think the request is wrong - mistaken, or resting on something you can
 see is false - say so before you build, not in the return. When you can show
 it - a failing case, a line of code, a measurement - record `maestro work note

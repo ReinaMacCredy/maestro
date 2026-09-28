@@ -1,10 +1,12 @@
 # Anti-patterns
 
-Seven named failure shapes of multi-agent work, from the owner's giáo án walk
-of 2026-09-16 (room d138). They are vocabulary, not gates: nothing in maestro
-refuses an operation because a name below fits. A filed lesson names the
-pattern it shows when one fits, so corrections that rhyme collect under one
-word instead of seven descriptions.
+Eight named failure shapes of multi-agent work: the first seven from the
+owner's giáo án walk of 2026-09-16 (room d138), the eighth, parachute, from the
+SLP article the owner adopted on 2026-09-28
+(https://vhlam.com/article/agent-orchestration-multi-agent-slp). They are
+vocabulary, not gates: nothing in maestro refuses an operation because a name
+below fits. A filed lesson names the pattern it shows when one fits, so
+corrections that rhyme collect under one word instead of eight descriptions.
 
 Each entry gives the definition, what it looks like in maestro, and the
 evidence from this project - or "not yet seen here" when there is none.
@@ -49,7 +51,10 @@ so the seat below executes a plan it never checked and no second judgment is
 ever applied to the design.
 
 In maestro: a Hub or Lead brief that specifies the diff rather than the
-outcome and its acceptance.
+outcome and its acceptance; a review brief that fixes the hypothesis, the
+criterion and the answer shape in advance ("check whether A is right, look at
+X only, do not reopen Y, answer PASS or FAIL in five bullets"), so the reviewer
+can find faults in A but never ask whether A is the thing to build.
 
 evidence: not yet seen here as a recorded failure. The Hub's g11 brief is the
 allowed small-task form: seven findings specified in advance, each small enough
@@ -119,3 +124,24 @@ evidence: not yet seen here, and maestro has no priority field by design. Work
 carries an objective, an assignee and a state; ordering lives in the objective
 text ("write the acceptance condition and any ordering into the objective") and
 in what a seat is actually blocked on.
+
+## parachute
+
+A design choice made by one seat travels down later briefs as if it were a
+requirement, so every later seat improves the choice and none may ask whether
+it should exist; the owner's goal narrows into optimizing a solution someone
+picked.
+
+In maestro: an objective that states a mechanism an earlier item chose as a
+constraint with no source behind it; an item that answers "still too slow" by
+making the chosen mechanism faster; a fix that raises a limit (a history size,
+a timeout, a retry count) instead of asking why the limit is reached. The
+guard is the shared contract's brief rule - an objective tells the goal, its
+sourced constraints and any chosen design apart - and the `--blocked`
+objection a seat records when it can show the premise is false.
+
+evidence: not yet seen here as a recorded failure. The article's own cases are
+a bicycle given a braking parachute that each later agent made lighter or
+larger, and a replication history raised past 128 packets when the defect was
+that a packet dropping out of history was read as the client having
+acknowledged its state.

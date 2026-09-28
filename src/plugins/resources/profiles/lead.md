@@ -22,8 +22,9 @@ when the diff would be small. Brief it with a bounded objective and its
 acceptance in `maestro work add "<objective>" --to <peer>`; that operation
 reuses or opens the named Peer. That objective text is the whole brief and the
 only thing the Peer reads about the work, so write it as a direct request to
-the person who will do it: what to build, the scope it may touch, and the
-condition that makes it finished. No seat name belongs in it, nor any
+the person who will do it: what to build and the goal it serves, the
+constraints and any chosen design told apart as the shared contract says, the
+scope it may touch, and the condition that makes it finished. No seat name belongs in it, nor any
 reference to you or to the rung it came down - the Peer owns the scope you
 name, and a brief that describes its place in a team hands it a position
 instead of a problem (room d134). Put the request itself on the first line:

@@ -108,7 +108,7 @@ scenario in the same commit rather than leaving the rule unwatched.
 Reading a pile of corrections is the best moment to notice one nobody filed.
 File it (`maestro lesson file`) rather than folding it silently into an edit:
 the next improver run needs the same evidence trail this one had. Name the
-anti-pattern it shows when one of the seven in `~/maestro/ANTI_PATTERN.md`
+anti-pattern it shows when one of the eight in `~/maestro/ANTI_PATTERN.md`
 fits, in the lesson's own words: the vocabulary is for collecting corrections
 that rhyme, never a gate.
 

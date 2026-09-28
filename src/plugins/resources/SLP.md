@@ -69,7 +69,13 @@ writes the store of the project it runs in, so a correction about another
 project names that project (room d129). Notes add context but do not rewrite the contract. Inside a team `maestro work
 add` takes neither `--acceptance` nor `--blocked-by` and refuses both with
 `INVALID_OPTION`: write the acceptance condition and any ordering into the
-objective text, which is the part that never changes.
+objective text, which is the part that never changes. Write that objective so
+its reader can tell three things apart: the goal it serves, in the owner's
+words or as a decision id store-qualified as below; the constraints that bind
+it, each with where it comes from; and any design already chosen, named as a
+choice the reader may question with evidence. A choice written as a constraint
+is how one seat's solution becomes every later seat's requirement
+(`ANTI_PATTERN.md`, parachute).
 `maestro team start` and `maestro work add --to` return only after the
 new pane has acknowledged its contract, normally within a minute; they print
 their phases on stderr, so do not re-run either while it is still running.

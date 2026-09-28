@@ -799,10 +799,10 @@ test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say owned wo
 });
 
 // room d138: the anti-pattern vocabulary ships as one file beside SLP.md and
-// WORKFLOW.md, seven named patterns in the order the giáo án walked them, each
+// WORKFLOW.md, the seven named patterns in the order the giáo án walked them and the article's parachute after them, each
 // with the maestro evidence where one exists and "not yet seen here" where
 // none does, so a filed lesson can name the pattern it shows.
-test("674 [lint] ANTI_PATTERN.md carries the seven patterns in order and WORKFLOW.md and the improver point at it (room d138)", async () => {
+test("674 [lint] ANTI_PATTERN.md carries the eight patterns in order and WORKFLOW.md and the improver point at it (room d138)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const path = join(root, "resources", "ANTI_PATTERN.md");
@@ -816,6 +816,7 @@ test("674 [lint] ANTI_PATTERN.md carries the seven patterns in order and WORKFLO
     "polling waste",
     "dual ownership",
     "priority by label",
+    "parachute",
   ]);
   // Every entry states its evidence or says plainly that there is none yet.
   for (const section of text.split(/^## /m).slice(1)) {
@@ -1092,4 +1093,25 @@ test("slp-article objection [lint] an evidence-backed premise objection travels 
   expect(peer).toContain("A doubt you cannot yet back is a plain `maestro work note");
   expect(peer).toContain("Nothing obliges you to find an objection");
   expect(peer).not.toContain("proceed or wait as your own judgment says");
+});
+
+test("slp-article brief [lint] an objective tells the goal, its sourced constraints and the chosen design apart", async () => {
+  const shared = await packSection("shared");
+  expect(shared).toContain("so its reader can tell three things apart: the goal it serves");
+  expect(shared).toContain("the constraints that bind it, each with where it comes from");
+  expect(shared).toContain("named as a choice the reader may question with evidence");
+  const lead = await resourceText("resources", "profiles", "lead.md");
+  expect(lead).toContain("what to build and the goal it serves, the constraints and any chosen design told apart as the shared contract says");
+  const peer = await resourceText("resources", "profiles", "peer.md");
+  expect(peer).toContain("A constraint it traces to the owner or to a decision binds you");
+  expect(peer).toContain("is a premise like any other and you may question it with evidence");
+});
+
+test("slp-article parachute [lint] ANTI_PATTERN.md names the parachute and pre-solve covers the fixed review brief", async () => {
+  const text = await resourceText("resources", "ANTI_PATTERN.md");
+  expect(text).toContain("## parachute A design choice made by one seat travels down later briefs as if it were a requirement");
+  expect(text).toContain("https://vhlam.com/article/agent-orchestration-multi-agent-slp");
+  expect(text).toContain("a review brief that fixes the hypothesis, the criterion and the answer shape in advance");
+  expect(await resourceText("resources", "WORKFLOW.md")).toContain("holds the eight named");
+  expect(await resourceText("skills", "maestro-improve", "SKILL.md")).toContain("one of the eight in `~/maestro/ANTI_PATTERN.md`");
 });
