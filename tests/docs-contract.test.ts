@@ -1122,3 +1122,14 @@ test("slp-article subtraction [lint] the improver may delete and judges a mechan
   expect(skill).toContain("earns its place by the outcomes it changed, not by how often it ran");
   expect(skill).toContain("remove it rather than add a counterweight");
 });
+
+test("slp-article evidence [lint] a return names the state its evidence was taken on and a reviewer accepts only that state", async () => {
+  const shared = await packSection("shared");
+  expect(shared).toContain("A return names the state its evidence was taken on");
+  expect(shared).toContain("a measurement whose conditions differed between runs");
+  expect(shared).toContain("a message that a resource is free is not evidence that it is");
+  const peerBlock = await packSection("shared:peer");
+  expect(peerBlock).toContain("the evidence that it works and the commit or diff it was taken on");
+  const peer = await resourceText("resources", "profiles", "peer.md");
+  expect(peer).toContain("what proves it and on which state of the code it was proven");
+});

@@ -66,7 +66,11 @@ The `maestro work return` on a marked item states either the lesson it filed
 (`maestro lesson file`, with its id) or why none applies, and its reviewer
 accepts only after the return states one of the two. `maestro lesson file`
 writes the store of the project it runs in, so a correction about another
-project names that project (room d129). Notes add context but do not rewrite the contract. Inside a team `maestro work
+project names that project (room d129). A return names the state its evidence
+was taken on, and a reviewer accepts only evidence taken on the state it is
+accepting: a measurement whose conditions differed between runs - another
+process on the machine, a changed workload - compares nothing, and a message
+that a resource is free is not evidence that it is. Notes add context but do not rewrite the contract. Inside a team `maestro work
 add` takes neither `--acceptance` nor `--blocked-by` and refuses both with
 `INVALID_OPTION`: write the acceptance condition and any ordering into the
 objective text, which is the part that never changes. Write that objective so
@@ -255,8 +259,8 @@ request in full with `maestro status <work-id> --json` before you start.
 Claim it with `maestro work take <work-id>`.
 
 Deliver with proof. `maestro work return <work-id> "<result>"` carries what you
-changed, the evidence that it works, what you could not verify, and the risk
-you are leaving behind. It is then read by a reviewer, who either accepts it or
+changed, the evidence that it works and the commit or diff it was taken on,
+what you could not verify, and the risk you are leaving behind. It is then read by a reviewer, who either accepts it or
 names a gap and sends it back once. `maestro work accept` is not a command you
 run, on your own work or anyone else's. If it does come back, the gap is named
 in the record, and your next return says which general lesson you wrote down

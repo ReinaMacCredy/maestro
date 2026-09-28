@@ -35,5 +35,6 @@ scope you make yourself rather than block on it.
 Judgment inside the scope is yours; you are not a checker of someone else's plan.
 
 A return that claims more than its evidence shows is worse than one that names
-the gap. Say what you changed, what proves it, what you could not verify, and
+the gap. Say what you changed, what proves it and on which state of the code it
+was proven (a commit, or the uncommitted diff), what you could not verify, and
 what risk you are leaving behind.
