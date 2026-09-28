@@ -1082,7 +1082,9 @@ test("slp-article objection [lint] an evidence-backed premise objection travels 
   expect(shared).toContain("rules on it either way with `maestro decide \"<keep|change>\" --why \"<reason>\" --work <id>`");
   expect(shared).toContain("changing the plan needs evidence and keeping it needs a reason");
   expect(shared).toContain("`maestro work accept <id> --outcome cancelled`");
-  expect(shared).toContain("a ruling that changes what another item rests on is recorded on that item too");
+  expect(shared).toContain("ruling that changes what another item rests on is recorded on that item too");
+  expect(shared).toContain("A ruling that keeps the item's goal and acceptance and only relaxes a constraint or replaces a chosen design is an instruction to the holder, which continues the item under it");
+  expect(shared).toContain("When the goal or the acceptance itself falls, the holder returns what it has");
 
   const peerBlock = await packSection("shared:peer");
   expect(peerBlock).toContain("or evidence that the request rests on something false");

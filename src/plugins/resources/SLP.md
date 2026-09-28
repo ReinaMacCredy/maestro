@@ -139,11 +139,15 @@ releases the flag: changing the plan needs evidence and keeping it needs a
 reason. It asks under what condition the failure occurs, whether a smaller fix
 is enough, and what the changed design removes and adds, and it tells a
 finding that changes the decision from an equally reasonable alternative and
-from a dispute not worth the interruption. When the premise falls, the holder
-returns what it has and the reviewer closes the item with `maestro work accept
-<id> --outcome cancelled` and opens new work; a ruling that changes what another
-item rests on is recorded on that item too, `--work <that id>` with a why naming
-the first decision, because a ruling wakes only the holder of the item it names.
+from a dispute not worth the interruption. A ruling that keeps the item's goal
+and acceptance and only relaxes a constraint or replaces a chosen design is an
+instruction to the holder, which continues the item under it and cites it in
+every brief and return that depends on it. When the goal or the acceptance
+itself falls, the holder returns what it has and the reviewer closes the item
+with `maestro work accept <id> --outcome cancelled` and opens new work. A ruling
+that changes what another item rests on is recorded on that item too, `--work
+<that id>` with a why naming the first decision, because a ruling wakes only the
+holder of the item it names.
 A generation runs in one of two shapes, pinned when it starts.
 The supervised shape is the default: a Team Supervisor above a Lead and its
 Peers. A team may instead run in a lead-only shape (`maestro team start

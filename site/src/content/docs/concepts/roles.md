@@ -166,9 +166,12 @@ before it builds; a doubt it cannot yet back is a plain note and it proceeds.
 The right to object is not a duty to find one. The seat that receives the
 objection rules on it either way with `maestro decide --work <id>`, which wakes
 the holder: changing the plan needs evidence and keeping it needs a reason.
-When the premise falls, the holder returns what it has, the reviewer closes the
-item with `maestro work accept <id> --outcome cancelled` and opens new work, and
-a ruling that changes what another item rests on is recorded on that item too.
+A ruling that keeps the item's goal and acceptance and only relaxes a
+constraint or replaces a chosen design is an instruction to the holder, which
+continues the item under it. When the goal or the acceptance itself falls, the
+holder returns what it has, the reviewer closes the item with `maestro work
+accept <id> --outcome cancelled` and opens new work. A ruling that changes what
+another item rests on is recorded on that item too.
 
 The Team Supervisor is the owner's embodiment inside its team. It normally
 resolves what reaches it, by its own judgment or through advisor or council
