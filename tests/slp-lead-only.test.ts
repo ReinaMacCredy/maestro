@@ -999,3 +999,38 @@ test("w736 the Hub records a plain note on a lead-only team's Lead item, wakes t
     expect(qualified.stdout).toContain("qualified");
   });
 });
+
+test("hub-escalation: the Hub's status lists every blocked note that climbed to the Hub until a Hub ruling answers it, in both shapes", async () => {
+  for (const leadOnly of [false, true]) {
+    await withFixture(async (fixture) => {
+      const { data, fake, room } = await startTeam(fixture, leadOnly);
+      const lead = data.team.roles.find((role) => role.role === "lead")!;
+      const supervisor = data.team.roles.find((role) => role.role === "team-supervisor");
+      const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+      const workId = data.work.id;
+      const qualified = `${data.team.teamId}:${workId}`;
+      expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode).toBe(0);
+      expect(
+        (await runCliAt(fixture, fixture.repo, ["work", "note", workId, "the owner goal contradicts the tests", "--blocked"], leadEnvironment)).exitCode,
+      ).toBe(0);
+      if (supervisor) {
+        const beforeClimb = await runCliAt(fixture, room, ["status"], fake.env);
+        expect(beforeClimb.stdout).not.toContain("blocked for the Hub");
+        expect(
+          (await runCliAt(fixture, fixture.repo, ["work", "note", workId, "owner question: which constraint relaxes?", "--blocked"], { ...fake.env, HERDR_PANE_ID: supervisor.paneId })).exitCode,
+        ).toBe(0);
+      }
+      const waiting = await runCliAt(fixture, room, ["status"], fake.env);
+      expect(waiting.exitCode).toBe(0);
+      expect(waiting.stdout).toContain(`blocked for the Hub: ${qualified}`);
+      expect(waiting.stdout).toContain(supervisor ? "owner question: which constraint relaxes?" : "the owner goal contradicts the tests");
+      expect(waiting.stdout).toContain(`--work ${qualified}`);
+
+      expect(
+        (await runCliAt(fixture, room, ["decide", "relax the test constraint", "--why", "fixture", "--work", qualified], fake.env)).exitCode,
+      ).toBe(0);
+      const answered = await runCliAt(fixture, room, ["status"], fake.env);
+      expect(answered.stdout).not.toContain("blocked for the Hub");
+    });
+  }
+}, 60_000);

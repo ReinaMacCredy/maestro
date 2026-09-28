@@ -630,6 +630,35 @@ function ownerPresence(context: PluginContext, invocation: CliInvocation): CliRe
   };
 }
 
+// A Hub pane not named `supervisor` never receives the BLOCKED push, so a standing escalation has to show in the store.
+function blockedForHub(
+  room: Store,
+  project: Store,
+  team: { generation: number; team_id: string },
+  roles: ReadonlyArray<{ name: string; role: string }>,
+): Array<{ body: string; workId: string }> {
+  const escalator = roles.find((role) => role.role === "team-supervisor") ??
+    roles.find((role) => role.role === "lead");
+  if (!escalator || !tableExists(project, "slp_work_entries")) return [];
+  if (!project.hasColumn("slp_work_entries", "flag")) return [];
+  const notes = project.database
+    .query<{ body: string; created_at: string; work_id: string }, [string, number, string, string]>(
+      `SELECT e.work_id, e.body, e.created_at FROM slp_work_entries e
+       JOIN slp_work w ON w.id = e.work_id
+       WHERE w.team_id = ? AND w.generation = ? AND e.actor = ? AND e.flag = 'blocked'
+         AND e.id = (SELECT MAX(x.id) FROM slp_work_entries x WHERE x.work_id = e.work_id AND x.actor = ?)
+       ORDER BY e.id`,
+    )
+    .all(team.team_id, team.generation, escalator.name, escalator.name);
+  const ruled = room.database.query<{ present: number }, [string, number, string, string]>(
+    `SELECT 1 AS present FROM slp_decisions
+     WHERE team_id = ? AND generation = ? AND work_id = ? AND created_at > ? LIMIT 1`,
+  );
+  return notes
+    .filter((note) => !ruled.get(team.team_id, team.generation, note.work_id, note.created_at))
+    .map((note) => ({ body: note.body, workId: note.work_id }));
+}
+
 function provisionalLines(decisions: ProvisionalDecision[]): string[] {
   return decisions.map((decision) =>
     `provisional: ${decision.id} ${decision.workId ?? "none"} ${clipLine(decision.choice, 120)}`
@@ -5502,8 +5531,10 @@ export async function maybeHandleSlpStatus(
       }
       const counts: Record<WorkState, number> = { ACTIVE: 0, DONE: 0, OPEN: 0, RETURNED: 0 };
       let abandonedWorkCount = 0;
+      let hubBlocked: Array<{ body: string; workId: string }> = [];
       const projectStore = new Store(resolveStoreLocation(row.project_path).path, { readonly: true });
       try {
+        if (row.state === "RUNNING") hubBlocked = blockedForHub(context.store, projectStore, row, roles);
         if (tableExists(projectStore, "slp_work")) {
           for (const count of projectStore.database
             .query<{ count: number; state: WorkState }, [string, number]>(
@@ -5565,6 +5596,7 @@ export async function maybeHandleSlpStatus(
       teams.push({
         abandonedWorkCount,
         generation: row.generation,
+        hubBlocked,
         missingPanes,
         orphaned,
         packDigest: row.pack_digest,
@@ -5601,9 +5633,12 @@ export async function maybeHandleSlpStatus(
         ownerPresenceLine(owner.presence, waiting.length),
         ...(teams.length === 0
           ? ["no SLP teams"]
-          : teams.map((team) =>
-            `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; runtime pane ${team.runtimePane}; missing ${(team.missingPanes as string[]).join(", ") || "none"}${orphanedSuffix(team)}`
-          )),
+          : teams.flatMap((team) => [
+            `${team.teamId} g${team.generation} ${team.state}${stopSuffix(team.stop as { emergency: boolean; reason: string } | null)}; runtime pane ${team.runtimePane}; missing ${(team.missingPanes as string[]).join(", ") || "none"}${orphanedSuffix(team)}`,
+            ...(team.hubBlocked as Array<{ body: string; workId: string }>).map((blocked) =>
+              `  blocked for the Hub: ${team.teamId}:${blocked.workId} ${clipLine(blocked.body, 160)}; answer: maestro decide "<choice>" --why "<reason>" --work ${team.teamId}:${blocked.workId}`
+            ),
+          ])),
         ...provisionalLines(waiting),
       ].join("\n"),
     };

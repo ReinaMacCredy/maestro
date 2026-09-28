@@ -1135,3 +1135,8 @@ test("slp-article evidence [lint] a return names the state its evidence was take
   const peer = await resourceText("resources", "profiles", "peer.md");
   expect(peer).toContain("what proves it and on which state of the code it was proven");
 });
+
+test("slp-article hub-escalation [lint] the Hub section tells an unnamed Hub where a waiting escalation shows", async () => {
+  const hub = await packSection("role:hub-supervisor");
+  expect(hub).toContain("every escalation waiting on you as `blocked for the Hub: <team-id>:<id> <note>`");
+});

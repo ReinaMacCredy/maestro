@@ -353,7 +353,9 @@ unique work as `wN`; when that id exists in several teams, qualify it as
 `<team-id>:wN`. Run as the Herdr agent named `supervisor` in the `maestro`
 workspace so acceptance and stop notices reach you; an unnamed Hub reads
 `maestro status`, which prints a normal stop as
-`<team> g<n> STOPPED (supervisor): <reason>`.
+`<team> g<n> STOPPED (supervisor): <reason>` and every escalation waiting on
+you as `blocked for the Hub: <team-id>:<id> <note>` until a Hub ruling with
+`--work <team-id>:<id>` answers it.
 <!-- slp:role:hub-supervisor:end -->
 
 The Team Supervisor, Lead, and Peer mandates are the profile files the markers
