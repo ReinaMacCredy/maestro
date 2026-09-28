@@ -65,6 +65,7 @@ export interface FakeHerdrBehavior {
   settleAgents?: boolean;
   trustDialog?: "claude" | "codex";
   wrapAcknowledgements?: boolean;
+  wrapAcknowledgementsAt?: number;
   workspaceCloseListLag?: number;
   workspaceListDelayMs?: number;
 }
@@ -671,7 +672,10 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         if (behavior.invalidAcknowledgementField === "generation") acknowledgement[2] = "generation=0";
         if (behavior.invalidAcknowledgementField === "challenge") acknowledgement[4] = `challenge=${"0".repeat(32)}`;
         if (behavior.spacedChallenge) acknowledgement[4] = `challenge=${challengeLeft} ${challengeRight}`;
-        const lines = behavior.wrapAcknowledgements
+        const width = behavior.wrapAcknowledgementsAt;
+        const lines = width
+          ? (acknowledgement.join(" ").match(new RegExp(`.{1,${width}}`, "g")) ?? [])
+          : behavior.wrapAcknowledgements
           ? [acknowledgement.slice(0, 3).join(" "), acknowledgement.slice(3, 4).join(" "), acknowledgement.slice(4).join(" ")]
           : [acknowledgement.join(" ")];
         state.outputs[target] = `${behavior.acknowledgementPrefixes?.[role] ?? ""}${lines.join("\n")}\n`;

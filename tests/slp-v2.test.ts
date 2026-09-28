@@ -453,6 +453,29 @@ test("SLP v2 accepts one space between the challenge halves and nothing else (d7
   });
 }, 30_000);
 
+test("SLP v2 accepts an acknowledgement a narrow pane hard-wrapped inside a token", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (
+        await runCliAt(fixture, room, ["room", "mark"], {
+          MAESTRO_ROOM_SCAFFOLD: "1",
+          MAESTRO_SESSION_NONE: "1",
+        })
+      ).exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { wrapAcknowledgementsAt: 39 });
+    const started = await runCliAt(
+      fixture,
+      room,
+      ["team", "start", fixture.repo, "Accept the narrow-pane acknowledgement", "--json"],
+      fake.env,
+    );
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+  });
+}, 30_000);
+
 test("SLP v2 waits for newly created panes to become available shells", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);

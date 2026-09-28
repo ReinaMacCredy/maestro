@@ -162,25 +162,24 @@ function normalizeAcknowledgementLine(line: string): string {
 }
 
 // d768: the two challenge halves arrive on separate contract lines, so a
-// reply that joins them with one space (a wrap inside the value, or a small
-// model's habit) still proves both were read; every other byte stays exact.
+// reply that joins them with one space still proves both were read. A harness
+// also hard-wraps its own output at the pane width, inside a token when the
+// pane is narrow ("chal" / "lenge=..."), so whitespace is ignored and every
+// other byte stays exact.
 function includesExactAcknowledgement(
   lines: readonly string[],
   acknowledgement: string,
 ): boolean {
-  const spaced = acknowledgement.replace(
-    /challenge=([0-9a-f]{16})([0-9a-f]{16})$/,
-    "challenge=$1 $2",
-  );
+  const expected = acknowledgement.replaceAll(/\s+/g, "");
   for (let start = 0; start < lines.length; start += 1) {
     if (!/^SLP_ROLE_READY(?:\s|$)/.test(lines[start] ?? "")) continue;
-    let candidate = lines[start] ?? "";
-    for (let index = start; candidate.length <= spaced.length; index += 1) {
-      if (candidate === acknowledgement || candidate === spaced) return true;
-      const continuation = lines[index + 1];
-      if (!continuation) break;
-      candidate = `${candidate} ${continuation}`;
+    let candidate = "";
+    for (let index = start; index < lines.length && candidate.length < expected.length; index += 1) {
+      const line = lines[index];
+      if (!line) break;
+      candidate += line.replaceAll(/\s+/g, "");
     }
+    if (candidate === expected) return true;
   }
   return false;
 }
