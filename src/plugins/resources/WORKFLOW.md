@@ -289,6 +289,10 @@ Stage explicit task-owned paths only, and inspect the staged diff before
 committing. Commit or push only when asked; push, tag, publish, and release
 are the user's gates.
 
+Throwaway HTML demos, mockups, and their assets go in the folder
+`maestro demo path <slug>` prints (`.maestro/demo/<slug>/`, git-ignored),
+never in `docs/` or the source tree; `maestro demo list` shows them.
+
 ## Per-tool adapters
 
 Review routing is the same in every tool, using whatever the tool ships:

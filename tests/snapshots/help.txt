@@ -5,6 +5,7 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
+  demo       Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
   graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
@@ -216,6 +217,25 @@ decision withdraw  Withdraw a draft decision that will not be locked.
 usage: maestro decision withdraw <id>
     --json            Emit one compact JSON success envelope.
     --reason <value>  Record why the draft was withdrawn.
+
+### maestro demo --help
+demo  Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
+subverbs:
+  list  List demos under .maestro/demo with their files.
+    --json  Emit one compact JSON success envelope.
+  path  Create the demo folder for a slug and print its absolute path.
+    usage: maestro demo path <slug>
+    --json  Emit one compact JSON success envelope.
+
+### maestro demo list --help
+demo list  List demos under .maestro/demo with their files.
+usage: maestro demo list
+    --json  Emit one compact JSON success envelope.
+
+### maestro demo path --help
+demo path  Create the demo folder for a slug and print its absolute path.
+usage: maestro demo path <slug>
+    --json  Emit one compact JSON success envelope.
 
 ### maestro dispatch --help
 dispatch  Lane contracts outside a running SLP team: open, accept, cancel, and read them.
@@ -451,6 +471,7 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
+  demo       Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
   graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.

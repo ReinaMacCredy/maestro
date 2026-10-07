@@ -3,6 +3,7 @@ import { briefPlugin } from "./brief.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
+import { demoPlugin } from "./demo.ts";
 import { dispatchPlugin } from "./dispatch.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
@@ -53,6 +54,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   graphPlugin,
   observabilityPlugin,
   termPlugin,
+  demoPlugin,
   memoryPlugin,
   bundlePlugin,
   importRustPlugin,
