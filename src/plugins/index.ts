@@ -3,7 +3,6 @@ import { briefPlugin } from "./brief.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
-import { demoPlugin } from "./demo.ts";
 import { dispatchPlugin } from "./dispatch.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
@@ -29,6 +28,7 @@ import { versionPlugin } from "./version.ts";
 import { workPlugin } from "./work.ts";
 import { slpV2Plugin } from "./slp-v2.ts";
 import { termPlugin } from "./term.ts";
+import { topicPlugin } from "./topic.ts";
 import { memoryPlugin } from "./memory.ts";
 
 export const builtInPlugins: readonly BuiltInPlugin[] = [
@@ -54,7 +54,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   graphPlugin,
   observabilityPlugin,
   termPlugin,
-  demoPlugin,
+  topicPlugin,
   memoryPlugin,
   bundlePlugin,
   importRustPlugin,

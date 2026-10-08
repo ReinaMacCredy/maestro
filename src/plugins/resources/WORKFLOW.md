@@ -289,9 +289,13 @@ Stage explicit task-owned paths only, and inspect the staged diff before
 committing. Commit or push only when asked; push, tag, publish, and release
 are the user's gates.
 
-Throwaway HTML demos, mockups, and their assets go in the folder
-`maestro demo path <slug>` prints (`.maestro/demo/<slug>/`, git-ignored),
-never in `docs/` or the source tree; `maestro demo list` shows them.
+Files an agent produces while discussing or researching a topic (HTML
+demos, mockups, captures, sub-agent reports, inventories, plan briefs, owner
+notes) go in the folder `maestro topic path <slug>` prints
+(`.maestro/topic/<slug>/`, git-ignored), never in `docs/` or the source
+tree, whatever precedent the repository shows; `maestro topic list` shows
+them. A bundle opened for the topic links that folder from NOTES.md. Only
+what the user asks to keep as documentation moves into `docs/`.
 
 ## Per-tool adapters
 

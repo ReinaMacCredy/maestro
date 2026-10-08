@@ -7,13 +7,13 @@ import { resolveStoreLocation } from "../kernel/store.ts";
 
 const slugPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-function demoRoot(): string {
-  return join(resolveStoreLocation(process.cwd()).root, ".maestro", "demo");
+function topicRoot(): string {
+  return join(resolveStoreLocation(process.cwd()).root, ".maestro", "topic");
 }
 
 // The folder ignores itself so a repo that never ran maestro install still
-// keeps demos out of git.
-async function ensureDemoRoot(root: string): Promise<void> {
+// keeps topic files out of git.
+async function ensureTopicRoot(root: string): Promise<void> {
   await mkdir(root, { recursive: true });
   const ignore = join(root, ".gitignore");
   if (!existsSync(ignore)) await writeFile(ignore, "*\n");
@@ -29,46 +29,47 @@ async function listFiles(directory: string, prefix = ""): Promise<string[]> {
   return files.sort();
 }
 
-export const demoPlugin: BuiltInPlugin = {
-  name: "demo",
+export const topicPlugin: BuiltInPlugin = {
+  name: "topic",
   apply(context) {
     context.effect(() =>
       context.cli.register(
-        "demo path",
+        "topic path",
         async (invocation): Promise<CliResult> => {
           const slug = invocation.positionals[0]?.trim() ?? "";
           if (!slugPattern.test(slug)) {
             throw new CliError(
-              "INVALID_DEMO_SLUG",
-              `demo slug must be one path segment of letters, digits, '.', '_' or '-': ${slug}`,
+              "INVALID_TOPIC_SLUG",
+              `topic slug must be one path segment of letters, digits, '.', '_' or '-': ${slug}`,
             );
           }
-          const root = demoRoot();
-          await ensureDemoRoot(root);
+          const root = topicRoot();
+          await ensureTopicRoot(root);
           const directory = join(root, slug);
           await mkdir(directory, { recursive: true });
           return { data: { slug, directory }, text: directory };
         },
         {
-          description: "Create the demo folder for a slug and print its absolute path.",
+          description: "Create the folder for a topic and print its absolute path.",
           mutates: true,
           positionals: [{ name: "slug", required: true }],
-          rootDescription: "Keep throwaway HTML demos and their assets in .maestro/demo, out of git.",
+          rootDescription:
+            "Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.",
         },
       ),
     );
 
     context.effect(() =>
       context.cli.register(
-        "demo list",
+        "topic list",
         async (): Promise<CliResult> => {
-          const root = demoRoot();
-          const demos = [];
+          const root = topicRoot();
+          const topics = [];
           if (existsSync(root)) {
             for (const entry of await readdir(root, { withFileTypes: true })) {
               if (!entry.isDirectory()) continue;
               const directory = join(root, entry.name);
-              demos.push({
+              topics.push({
                 slug: entry.name,
                 directory,
                 files: await listFiles(directory),
@@ -76,15 +77,15 @@ export const demoPlugin: BuiltInPlugin = {
               });
             }
           }
-          demos.sort((left, right) => left.slug.localeCompare(right.slug));
+          topics.sort((left, right) => left.slug.localeCompare(right.slug));
           return {
-            data: { demos },
-            text: demos.length > 0
-              ? demos.map((demo) => `${demo.slug}  ${demo.files.join(", ")}`).join("\n")
-              : 'no demos; run: maestro demo path "<slug>"',
+            data: { topics },
+            text: topics.length > 0
+              ? topics.map((topic) => `${topic.slug}  ${topic.files.join(", ")}`).join("\n")
+              : 'no topics; run: maestro topic path "<slug>"',
           };
         },
-        { description: "List demos under .maestro/demo with their files.", mutates: false },
+        { description: "List topics under .maestro/topic with their files.", mutates: false },
       ),
     );
   },

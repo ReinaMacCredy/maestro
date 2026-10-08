@@ -45,6 +45,9 @@ Three modes; pick whichever settles the question:
   in a bundle, also the NOTES.md Current State.
 - A baseline the work must preserve: a VERIFY.md scenario in the bundle, or
   the work item's acceptance when there is no bundle.
+- A long-form artifact (a report, inventory, sub-agent answer, capture, or
+  demo): write it in `maestro topic path <slug>`, never in `docs/`, and link
+  it from the work note or NOTES.md.
 - No work item and no bundle: deliver the findings in the conversation. Open
   a work item only if the question feeds work that will actually happen; a
   finding alone never opens a bundle.

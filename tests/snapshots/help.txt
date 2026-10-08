@@ -5,7 +5,6 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
-  demo       Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
   graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
@@ -30,6 +29,7 @@ verbs:
   status     Show sessions, live peers, and held work. *
   team       Run the simplified supervised-team lifecycle.
   term       Record or redefine one glossary term. *
+  topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
   trace      Reconstruct one work item's event history. *
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
   update     Fast-forward the recorded source checkout and resync the runtime.
@@ -217,25 +217,6 @@ decision withdraw  Withdraw a draft decision that will not be locked.
 usage: maestro decision withdraw <id>
     --json            Emit one compact JSON success envelope.
     --reason <value>  Record why the draft was withdrawn.
-
-### maestro demo --help
-demo  Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
-subverbs:
-  list  List demos under .maestro/demo with their files.
-    --json  Emit one compact JSON success envelope.
-  path  Create the demo folder for a slug and print its absolute path.
-    usage: maestro demo path <slug>
-    --json  Emit one compact JSON success envelope.
-
-### maestro demo list --help
-demo list  List demos under .maestro/demo with their files.
-usage: maestro demo list
-    --json  Emit one compact JSON success envelope.
-
-### maestro demo path --help
-demo path  Create the demo folder for a slug and print its absolute path.
-usage: maestro demo path <slug>
-    --json  Emit one compact JSON success envelope.
 
 ### maestro dispatch --help
 dispatch  Lane contracts outside a running SLP team: open, accept, cancel, and read them.
@@ -471,7 +452,6 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
-  demo       Keep throwaway HTML demos and their assets in .maestro/demo, out of git.
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
   graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
@@ -496,6 +476,7 @@ verbs:
   status     Show sessions, live peers, and held work. *
   team       Run the simplified supervised-team lifecycle.
   term       Record or redefine one glossary term. *
+  topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
   trace      Reconstruct one work item's event history. *
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
   update     Fast-forward the recorded source checkout and resync the runtime.
@@ -944,6 +925,25 @@ term show  Show one glossary term. *
 usage: maestro term show <name>
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
+
+### maestro topic --help
+topic  Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
+subverbs:
+  list  List topics under .maestro/topic with their files.
+    --json  Emit one compact JSON success envelope.
+  path  Create the folder for a topic and print its absolute path.
+    usage: maestro topic path <slug>
+    --json  Emit one compact JSON success envelope.
+
+### maestro topic list --help
+topic list  List topics under .maestro/topic with their files.
+usage: maestro topic list
+    --json  Emit one compact JSON success envelope.
+
+### maestro topic path --help
+topic path  Create the folder for a topic and print its absolute path.
+usage: maestro topic path <slug>
+    --json  Emit one compact JSON success envelope.
 
 ### maestro trace --help
 trace  Reconstruct one work item's event history. *

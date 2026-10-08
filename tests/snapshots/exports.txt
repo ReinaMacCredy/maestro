@@ -144,7 +144,6 @@ dedupItems
 defaultBufferDirectories
 defaultLimits
 defaultSlpPack
-demoPlugin
 dispatchLaneVocabulary
 dispatchPlugin
 driftAdvisory
@@ -305,6 +304,7 @@ successEnvelope
 syncRuntime
 tableExists
 termPlugin
+topicPlugin
 trustFile
 trustPath
 uninstallRepo
