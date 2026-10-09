@@ -5,8 +5,8 @@ description: Verify a change in the maestro repository on the running product - 
 
 # verify-maestro
 
-Built from `maestro recipe show verify-skill`. Proves a change on an installed
-runtime without touching the owner's `~/.maestro` or `~/.local/bin`.
+Built from `maestro recipe show verification-skill`. Proves a change on an
+installed runtime without touching the owner's `~/.maestro` or `~/.local/bin`.
 
 ## Launch
 

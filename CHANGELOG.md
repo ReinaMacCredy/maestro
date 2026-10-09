@@ -13,7 +13,7 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
-- Recipe `verify-skill`, adopted from pstack's create-verification-skill
+- Recipe `verification-skill`, adopted from pstack's create-verification-skill
   (poteto): build or maintain a repository's `verify-<repo>` skill (launch,
   doctor, drive the user path, capture action, state and side effects, clean
   up without deleting proof, feature map updated in the same change). It

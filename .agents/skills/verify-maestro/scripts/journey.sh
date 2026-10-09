@@ -16,8 +16,8 @@ run maestro version
 run maestro doctor | head -12
 
 echo "## drive: recipe catalog"
-run maestro recipe list | grep -E 'verify-skill|exit'
-run maestro recipe show verify-skill | head -3
+run maestro recipe list | grep -E 'verification-skill|exit'
+run maestro recipe show verification-skill | head -3
 
 echo "## drive: policy-layer on a bug"
 run maestro plugin enable policy-layer

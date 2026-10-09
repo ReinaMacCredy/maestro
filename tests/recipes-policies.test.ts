@@ -8,7 +8,7 @@ const recipeNames = [
   "work",
   "audit",
   "ship",
-  "verify-skill",
+  "verification-skill",
   "unattended",
   "learning",
   "worktree",

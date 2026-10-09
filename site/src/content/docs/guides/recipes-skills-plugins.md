@@ -17,7 +17,7 @@ Read one without copying it into the repository:
 maestro recipe show work
 ```
 
-The current runtime includes design, work, audit, ship, verify-skill,
+The current runtime includes design, work, audit, ship, verification-skill,
 unattended, learning, worktree, conflict-handoff, and language/style recipes.
 Recipes are source-owned Markdown and are loaded only when requested.
 

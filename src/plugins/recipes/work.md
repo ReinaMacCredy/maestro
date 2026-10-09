@@ -32,7 +32,7 @@ Preserve unrelated files and avoid speculative abstractions or dependencies.
 Run the focused test, then the relevant type, lint, and build checks. Review
 the diff against acceptance and confirm the test could expose the defect.
 When the repository has a `verify-<repo>` skill, run its journeys for the
-changed feature; without one, `maestro recipe show verify-skill` builds it.
+changed feature; without one, `maestro recipe show verification-skill` builds it.
 
 ### Learn
 
