@@ -194,6 +194,9 @@ requirements without treating them as a demand for duplicate tests.
 - Before adding a test, name the gap: "Which plausible wrong implementation would this catch
   that existing checks would miss?" Assert the observable contract, not internal
   structure, mock choreography, or an expectation copied from the implementation.
+- Falsify the test itself: would it still pass if every function it imports
+  returned `undefined`? Then it checks nothing; rewrite the assertion around a
+  literal observed result or delete the test.
 - A bug needs a reproducer; use an existing failing test when it already catches
   it. When a new regression test is needed, demonstrate failure before the fix.
   A small feature may also need tests. Add them for uncovered behavior or risk,

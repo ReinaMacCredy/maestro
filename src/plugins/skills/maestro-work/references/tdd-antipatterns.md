@@ -23,7 +23,7 @@ not a checklist requiring new tests or decision records for every task.
 | Flake tolerance | Retries or sleeps added until the test happens to pass | Investigate the race or environment with new evidence |
 | Coverage chasing | Tests added solely to raise a number | Stop unless there is an uncovered in-scope behavior or risk |
 | Fixture drift | Setup re-implements production logic and diverges | Reuse fixtures or exercise the existing consumer path |
-| Assertion-free | Check cannot distinguish a plausible incorrect result | Assert the observable result and demonstrate sensitivity to the defect |
+| Assertion-free | Check cannot distinguish a plausible incorrect result (`toBeDefined`, `not.toThrow`, a constant compared with itself); it still passes when every import returns `undefined` | Assert the observable result and demonstrate sensitivity to the defect |
 | Test-driven API invention | Missing symbol in a test becomes an unapproved public API | Stabilize the minimum contract before implementing the symbol |
 | Contract drift | Spec says A, code does B, test asserts C | Resolve the contradiction rather than treating current output as authority |
 

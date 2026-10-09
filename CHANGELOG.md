@@ -11,6 +11,11 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Added
+
+- Testing discipline gains pstack's falsifier: a test that still passes when
+  every import returns `undefined` checks nothing; rewrite or delete it.
+
 ### Fixed
 
 - `maestro install` keeps a repository's existing policy choices and only adds
