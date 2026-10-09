@@ -24,6 +24,7 @@ The default policy state is:
 | `policy-qa` | disabled |
 | `policy-research` | disabled |
 | `policy-witness` | disabled |
+| `policy-layer` | disabled |
 | `policy-lifecycle` | disabled |
 
 Policy also has a machine layer, `~/.maestro/config`, with the same shape.

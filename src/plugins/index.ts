@@ -15,6 +15,7 @@ import { pluginTrustPlugin } from "./plugin-trust.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
 import { policyCardBudgetPlugin } from "./policy-card-budget.ts";
 import { policyDispatchPlugin } from "./policy-dispatch.ts";
+import { policyLayerPlugin } from "./policy-layer.ts";
 import { policyLifecyclePlugin } from "./policy-lifecycle.ts";
 import { policyProofPlugin } from "./policy-proof.ts";
 import { policyQaPlugin } from "./policy-qa.ts";
@@ -49,6 +50,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyQaPlugin,
   policyResearchPlugin,
   policyWitnessPlugin,
+  policyLayerPlugin,
   policyLifecyclePlugin,
   recipePlugin,
   graphPlugin,

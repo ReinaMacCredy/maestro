@@ -71,6 +71,7 @@ const policyDefaults: PluginEntry[] = [
   { name: "policy-qa", disabled: true },
   { name: "policy-research", disabled: true },
   { name: "policy-witness", disabled: true },
+  { name: "policy-layer", disabled: true },
   { name: "policy-lifecycle", disabled: true },
 ];
 

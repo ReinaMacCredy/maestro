@@ -13,6 +13,10 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- `policy-layer`, opt-in like the other prefixed gates: `work done` on
+  write-like work needs proof tagged with the layer it reached
+  (`(source)` .. `(journey)`) and the next layer named `NOT TESTED` or `n/a`,
+  so "tests pass" no longer closes work that never ran.
 - Testing discipline gains pstack's falsifier: a test that still passes when
   every import returns `undefined` checks nothing; rewrite or delete it.
 

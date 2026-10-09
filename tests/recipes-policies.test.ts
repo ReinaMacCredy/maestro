@@ -164,6 +164,57 @@ test("626 policy-tdd blocks untagged write completion and passes a test-tagged p
   });
 });
 
+test("policy-layer requires a proven evidence layer and names the first untested one", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["plugin", "enable", "policy-layer"])).exitCode).toBe(0);
+    const id = idFrom(
+      await runCli(fixture, ["work", "add", "layered fix", "--kind", "bug", "--atomic-reason", "small fix"]),
+    );
+    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+
+    const untagged = await runCli(fixture, ["work", "done", id, "--evidence", "tests pass"]);
+    const unbounded = await runCli(fixture, [
+      "work", "done", id, "--evidence", "suite 135 pass @ a52bd4a7 (source)",
+    ]);
+    const passed = await runCli(fixture, [
+      "work",
+      "done",
+      id,
+      "--claim",
+      "fix holds",
+      "--proof",
+      "suite 135 pass @ a52bd4a7 (source); runtime stamp readback a52bd4a7 (installed); live: NOT TESTED",
+    ]);
+
+    expect(untagged.exitCode).not.toBe(0);
+    expect(untagged.stderr).toContain("policy-layer");
+    expect(errorMessage(untagged)).toContain("(source)");
+    expect(unbounded.exitCode).not.toBe(0);
+    expect(errorMessage(unbounded)).toContain("artifact: NOT TESTED");
+    expect(passed.exitCode).toBe(0);
+  });
+});
+
+test("policy-layer accepts a journey proof and leaves non-write work alone", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["plugin", "enable", "policy-layer"])).exitCode).toBe(0);
+    const bug = idFrom(
+      await runCli(fixture, ["work", "add", "journey fix", "--kind", "bug", "--atomic-reason", "small fix"]),
+    );
+    const idea = idFrom(await runCli(fixture, ["work", "add", "think", "--kind", "idea"]));
+    expect((await runCli(fixture, ["work", "start", bug])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "start", idea])).exitCode).toBe(0);
+
+    const journey = await runCli(fixture, [
+      "work", "done", bug, "--evidence", "drove add -> start -> done in a fresh repo (journey)",
+    ]);
+    const plain = await runCli(fixture, ["work", "done", idea, "--evidence", "notes written"]);
+
+    expect(journey.exitCode).toBe(0);
+    expect(plain.exitCode).toBe(0);
+  });
+});
+
 test("7 policy-qa blocks an untagged parent close and passes a qa-tagged pair", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["plugin", "enable", "policy-qa"])).exitCode).toBe(0);
@@ -299,7 +350,7 @@ test("9 policy-witness requires a witness note from a different session", async 
   });
 });
 
-test("10 fresh install ships four disabled policies and honest enable activates tdd", async () => {
+test("10 fresh install ships five disabled policies and honest enable activates tdd", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
 
@@ -310,7 +361,7 @@ test("10 fresh install ships four disabled policies and honest enable activates 
       await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
     ) as { plugins: Array<{ disabled: boolean; name: string }> };
     const listed = await runCli(fixture, ["plugin", "list"]);
-    for (const name of ["policy-tdd", "policy-qa", "policy-research", "policy-witness"]) {
+    for (const name of ["policy-tdd", "policy-qa", "policy-research", "policy-witness", "policy-layer"]) {
       expect(config.plugins).toContainEqual({ name, disabled: true });
       expect(listed.stdout).toContain(`${name}\tbuilt-in\tdisabled`);
       expect(
