@@ -11,6 +11,11 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+### Fixed
+
+- `maestro install` keeps a repository's existing policy choices and only adds
+  missing defaults; it used to reset every enabled gate on reinstall.
+
 ## [0.125.0] - 2026-09-28
 
 ### Added

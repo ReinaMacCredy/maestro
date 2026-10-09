@@ -117,9 +117,8 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 
 async function writePolicyConfig(path: string): Promise<void> {
   const config = await readJson<PluginConfig>(path, { plugins: [] });
-  const defaults = new Map(policyDefaults.map((entry) => [entry.name, entry]));
-  const retained = config.plugins.filter((entry) => !defaults.has(entry.name));
-  config.plugins = [...retained, ...policyDefaults];
+  const present = new Set(config.plugins.map((entry) => entry.name));
+  config.plugins = [...config.plugins, ...policyDefaults.filter((entry) => !present.has(entry.name))];
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config)}\n`);
 }

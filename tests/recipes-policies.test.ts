@@ -371,8 +371,15 @@ test("10 fresh install ships four disabled policies and honest enable activates 
     expect(disabledDone.exitCode).toBe(0);
     expect(enabledBlock.exitCode).not.toBe(0);
     expect(enabledBlock.stderr).toContain("policy-tdd");
+
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+    const reinstalled = JSON.parse(
+      await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
+    ) as { plugins: Array<{ disabled: boolean; name: string }> };
+    expect(reinstalled.plugins).toContainEqual({ name: "policy-tdd", disabled: false });
+    expect(reinstalled.plugins.filter((entry) => entry.name === "policy-tdd")).toHaveLength(1);
   });
-});
+}, 30_000);
 
 test("36 stacked prefixed gates explain one-invocation claim and proof pairs", async () => {
   await withFixture(async (fixture) => {
