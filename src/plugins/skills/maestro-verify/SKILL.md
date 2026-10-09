@@ -26,6 +26,9 @@ Proof follows five links. Claim only as far as the last proven link.
 - `live` - the running process, pid, or active runtime matches the installed layer.
 - `journey` - the real user path reaches the observable outcome end to end.
 
+The repository's `verify-<repo>` skill is the route to `live` and `journey`;
+`maestro recipe show verify-skill` creates or maintains it.
+
 "Tests pass" is a source claim. A claim that touches install or runtime must
 include a readback at that layer. A suite that is green only on this machine
 is not a `source` claim about the repo: before any commit, release, or handback

@@ -17,9 +17,9 @@ Read one without copying it into the repository:
 maestro recipe show work
 ```
 
-The current runtime includes design, work, audit, ship, unattended, learning,
-worktree, conflict-handoff, and language/style recipes. Recipes are
-source-owned Markdown and are loaded only when requested.
+The current runtime includes design, work, audit, ship, verify-skill,
+unattended, learning, worktree, conflict-handoff, and language/style recipes.
+Recipes are source-owned Markdown and are loaded only when requested.
 
 SLP role behavior is not assembled from recipes or a skills tree. Its
 canonical contract is `~/maestro/SLP.md`, pinned into the project at team

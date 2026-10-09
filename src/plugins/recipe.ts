@@ -22,6 +22,7 @@ const catalog = [
   ["work", "Implement one accepted unit through proof and the next gate."],
   ["audit", "Review a bounded surface and record evidence-backed findings."],
   ["ship", "Cross close and delivery gates only with evidence and authority."],
+  ["verify-skill", "Create or maintain a repository skill that proves changes on the running product."],
   ["unattended", "Let an external driver advance one safe ready item at a time."],
   ["learning", "Turn sourced corrections into durable, reusable project knowledge."],
   ["worktree", "Isolate concurrent work and return a verified branch for merge-back."],

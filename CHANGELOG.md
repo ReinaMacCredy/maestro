@@ -13,6 +13,12 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- Recipe `verify-skill`, adopted from pstack's create-verification-skill
+  (poteto): build or maintain a repository's `verify-<repo>` skill (launch,
+  doctor, drive the user path, capture action, state and side effects, clean
+  up without deleting proof, feature map updated in the same change). It
+  counts only after one full run. The `work` recipe and maestro-verify point
+  to it as the route to the `live` and `journey` layers.
 - `policy-layer`, opt-in like the other prefixed gates: `work done` on
   write-like work needs proof tagged with the layer it reached
   (`(source)` .. `(journey)`) and the next layer named `NOT TESTED` or `n/a`,
