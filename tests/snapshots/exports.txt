@@ -262,6 +262,7 @@ resolvePluginEntrypoint
 resolveProfile
 resolveSourceRoot
 resolveStoreLocation
+retiredSkillNames
 revokeTrust
 roomOwnerLine
 run

@@ -708,6 +708,24 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
 // every profile rendered into it, resolved in ~/maestro/skills then
 // ~/.claude/skills; a stale link goes; projects and plugins reach ~/.claude;
 // .claude.json marks onboarding done with no MCP servers.
+test("pstack-port: an owner profile that still lists a retired skill installs, and the seat links skip that skill (d863)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(
+      join(fixture.home, "maestro", "profiles", "lead.md"),
+      "---\nharness: claude\nmodel: opus\nskills: [maestro-work, maestro-explore, maestro-diagnose]\n---\nRole: owner lead.\n",
+    );
+
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    expect(installed.exitCode).toBe(0);
+    const leadLinks = (await readdir(join(seatConfigRoot(fixture.home), "lead", "skills"))).sort();
+    expect(leadLinks).toContain("maestro-work");
+    expect(leadLinks).not.toContain("maestro-explore");
+    expect(leadLinks).not.toContain("maestro-diagnose");
+  });
+});
+
 test("seat-dirs-links: install renders skills/ as the union across the dir's profiles, removes a stale link, links projects and plugins to ~/.claude and writes .claude.json with mcpServers {} (R4)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

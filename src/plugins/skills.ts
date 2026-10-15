@@ -15,7 +15,7 @@ export const skillNames = [
 ] as const;
 
 // Removed by the pstack port (d863); install deletes only our stamped copies and links to them.
-const retiredSkillNames = ["maestro-diagnose", "maestro-explore"] as const;
+export const retiredSkillNames = ["maestro-diagnose", "maestro-explore"] as const;
 
 const stampPattern = /<!-- maestro-skill-version: ([0-9a-f]{40}|dev) -->/;
 

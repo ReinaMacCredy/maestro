@@ -3,6 +3,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, readdir, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { CliError } from "../kernel/cli.ts";
+import { retiredSkillNames } from "./skills.ts";
 
 // Hub d83/d91/d98: one profile shape for SLP seats, council seats and graph
 // nodes; install renders each into both harnesses' native launch bundles.
@@ -471,6 +472,7 @@ export async function planProfiles(home: string, repo: string): Promise<ProfileP
     );
     if (!plan) return;
     for (const name of profile.frontmatter.skills ?? []) {
+      if ((retiredSkillNames as readonly string[]).includes(name)) continue;
       if (!plan.skills.some((link) => link.name === name)) plan.skills.push(resolveSkill(home, profile, name));
     }
   };
