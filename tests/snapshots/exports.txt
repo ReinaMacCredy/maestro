@@ -219,6 +219,7 @@ planProfiles
 pluginManagerPlugin
 pluginTrustPlugin
 pluginTrustPredicate
+policyAutoPrPlugin
 policyBreakdownPlugin
 policyCardBudgetPlugin
 policyDispatchPlugin
