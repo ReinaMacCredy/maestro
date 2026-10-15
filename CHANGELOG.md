@@ -13,6 +13,27 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ### Added
 
+- pstack's task-type playbooks are maestro's main workflow (d857, d858):
+  `~/maestro/WORKFLOW.md` Routing is a table from task type to a recipe
+  (investigation, bug-fix, feature, refactoring, prototype, perf-issue,
+  hillclimb, forensics, eval, authoring-a-skill, visual-parity,
+  multi-phase-plan, opening-a-pr, babysit, shipping, unattended,
+  figure-it-out), and the agent copies the matched steps into its plan list
+  with `skip: <reason>` for a step it drops (d862). Method recipes the
+  playbooks call: how, why, architect, arena, fan-out, unslop,
+  technical-writing, benchmark-checklist, no-comments.
+- `~/maestro/PRINCIPLES.md`: pstack's 24 principles beside ANTI_PATTERN.md;
+  a reply closes by naming the principles that changed a decision (d867).
+- Subagent profiles `delegate`, `comment-sicko`, `explorer`, `explainer`,
+  `investigator`, `arena-runner`, `arena-judge`, `fan-out-worker`,
+  `reviewer-structure` and `reviewer-correctness-codex` (d868).
+- `policy-auto-pr`, disabled by default: enabling it is the repository's
+  delivery grant, so the deliver step commits, pushes the branch and opens
+  a PR; merge, tag and release stay the owner's (d859).
+- `maestro bundle check <id> [--final]` lints SPEC `## Units` and the
+  per-unit VERIFY rows (d866).
+- THIRD_PARTY.md carries pstack's MIT notice (Lauren Tan).
+
 - Recipe `verification-skill`, adopted from pstack's create-verification-skill
   (poteto): build or maintain a repository's `verify-<repo>` skill (launch,
   doctor, drive the user path, capture action, state and side effects, clean
@@ -25,6 +46,31 @@ TypeScript-on-Bun line and continues the existing version sequence.
   so "tests pass" no longer closes work that never ran.
 - Testing discipline gains pstack's falsifier: a test that still passes when
   every import returns `undefined` checks nothing; rewrite or delete it.
+
+### Changed
+
+- Inside a playbook the main chat never writes code: a `delegate` subagent
+  writes and the holder reviews every diff (d860). SLP seats delegate the
+  same way, the Lead and Peer seats keep Agent, Task, Workflow and
+  TodoWrite, and install retires the PreToolUse hook that denied sub-agents
+  to a dispatch holder (d861, d875).
+- Reversible external actions proceed without asking; irreversible ones
+  wait for the user (d865). An autonomous run fixes only what blocks its
+  goal (d864).
+- The review gate takes an `intent`, gives every finding a severity, adds a
+  Codex correctness reviewer and a structure reviewer at tier full, keeps an
+  unconfirmed security or correctness finding as Consider, and fails while
+  an Act on finding is neither fixed nor justified (d869, d870, d871).
+- maestro-improve gains a session-harvest intake and builds a mechanizable
+  lesson in the same pass (d872); maestro-coach drops its end-of-session
+  check (d873).
+- The SessionStart brief routes by playbook.
+
+### Removed
+
+- Skills `maestro-diagnose` and `maestro-explore`, and the generic `work`
+  recipe: the playbooks carry their rules (d863). maestro-work keeps the
+  dispatch envelope, handback, record and writing rules.
 
 ### Fixed
 
