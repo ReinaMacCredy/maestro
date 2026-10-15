@@ -18,6 +18,11 @@ export interface RecipeService {
 }
 
 const catalog = [
+  ["investigation", "Answer a read-only question with a cited explanation or recommendation."],
+  ["bug-fix", "Reproduce, root-cause, and fix a reported defect with runtime evidence."],
+  ["feature", "Build new or changed behavior from a named data shape."],
+  ["refactoring", "Change structure behind a pinned behavior contract."],
+  ["prototype", "Settle a design or empirical fork with a throwaway sketch."],
   ["design", "Settle one design fork at a time before implementation."],
   ["work", "Implement one accepted unit through proof and the next gate."],
   ["audit", "Review a bounded surface and record evidence-backed findings."],

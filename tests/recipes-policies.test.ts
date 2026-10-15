@@ -4,6 +4,11 @@ import { join, relative } from "node:path";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const recipeNames = [
+  "investigation",
+  "bug-fix",
+  "feature",
+  "refactoring",
+  "prototype",
   "design",
   "work",
   "audit",
