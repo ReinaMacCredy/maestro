@@ -44,17 +44,17 @@ the lead.
      separation. No "standing by" reply that waits on a nested agent.
    - A fix round or a retry goes to a fresh delegate with consolidated scope
      (the original brief, every later directive, the prior report and branch).
-   - The delegate keeps a comment only for a non-obvious why the code cannot
-     show. Edits stay surgical. Upstream-derived files are re-grounded against
+   - The delegate keeps only the comments `maestro recipe show no-comments`
+     keeps. Edits stay surgical. Upstream-derived files are re-grounded against
      their source. A shared-primitive improvement is ported to every consumer,
      and each consumer is verified. Under a commit grant, commit liberally.
 5. Verify on the running product through the repository's verify-<repo> skill
    (`maestro recipe show verification-skill`), and name the evidence layer the
    proof reached (maestro-verify's evidence layers). "Inconclusive" or a run
    against a different product is not a pass. Flag it.
-6. Rebase into small, ordered commits. Stack follow-ups. Build, verify, and
-   commit each small unit before the next, per **Sequence Work into
-   Verifiable Units** (PRINCIPLES.md).
+6. Build, verify, and land each small unit before the next, per **Sequence
+   Work into Verifiable Units** (PRINCIPLES.md), as small ordered commits
+   with follow-ups stacked. Commits happen only under a commit grant (`maestro recipe show opening-a-pr`, The grant); without one, shape the same units in the working tree.
 7. If the design is contested, run the review gate before delivery. Run the
    `review-gate` graph through the maestro-graph skill
    (`maestro graph run review-gate range=<git range> tier=<light|full>`).

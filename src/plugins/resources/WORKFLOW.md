@@ -122,7 +122,7 @@ depth; the playbook sets the steps.
 | Writing or editing a skill | authoring-a-skill |
 | Pixel-exact UI equivalence | visual-parity |
 | Work spanning several units, commits, or PRs | multi-phase-plan |
-| Opening, driving, or landing a PR, under a delivery grant | opening-a-pr, babysit, shipping |
+| Opening or driving a PR under a delivery grant; landing on the user's word | opening-a-pr, babysit, shipping |
 | A long task driven to a checkable predicate while the user is away | unattended |
 | No playbook fits, or large cross-cutting work the user steps away from | figure-it-out |
 
@@ -394,7 +394,8 @@ what the user asks to keep as documentation moves into `docs/`.
 
 ## Writing the reply
 
-Every playbook ends with a reply written this way; each playbook's Reply
+Every playbook ends with a reply written this way, a PR linked as its full
+`https://github.com/<owner>/<repo>/pull/<number>` URL; each playbook's Reply
 section names only what is unique to it. Write the reply clean as you draft
 it (`maestro recipe show unslop`); a cleanup pass afterwards does not remove
 these patterns.
@@ -404,16 +405,17 @@ these patterns.
 - Terse never drops content: every section the playbook's Reply names stays,
   with its details, trade-offs, choices, and open decisions.
 - Impact first. Name who the work is for and what changes for them before
-  any implementation detail, then what the next maintainer inherits.
+  any implementation detail, then what the next maintainer inherits. If you
+  cannot say what either would notice, the work or the explanation is off.
 - Never fabricate a link, citation, or transcript reference. Link only what
   you produced or read this session.
 - Every claim carries its evidence or its label in the same sentence:
-  measured, inferred, or guess. Never hand the user a check you could run.
+  measured, inferred, or guess. A prediction or an unseen cause is a guess.
+  Never hand the user a check you could run.
 - Close by naming each principle that changed a decision and the choice it
   changed, citing only `PRINCIPLES.md` sections read this session.
 
-Code comments follow the same rule: keep one only for a non-obvious why the
-code cannot show (`maestro recipe show no-comments`).
+Code comments keep only the kinds `maestro recipe show no-comments` keeps.
 
 ## Per-tool adapters
 
@@ -429,7 +431,9 @@ runs after green and before verify, so the reviewed diff is final. The
 At tier full it adds a Codex correctness reviewer and a structure reviewer
 that holds the approval bar as presumptive blockers and may propose
 restructuring beyond the diff, which is never applied. Its findings sort
-into Act on, Consider, Noted, and Dismissed; the gate fails while an Act on
+into Act on, Consider, Noted, and Dismissed (the synthesizer node sorts;
+the chat running the gate reads every Dismissed reason before it accepts
+the verdict); the gate fails while an Act on
 finding is neither fixed nor justified in writing, and an unconfirmed
 security or correctness finding stays visible as Consider.
 
@@ -443,5 +447,6 @@ security or correctness finding stays visible as Consider.
   `maestro install` maintains (restart Codex after a new link); the Full
   review runs in a fresh context. The plan list is `update_plan`. A profile
   runs as the sub-agent `maestro-<profile>` that install renders under
-  `~/.codex/agents`. In project work Codex reads `~/.codex/AGENTS.md`, which
+  `~/.codex/agents`. Forks go to the user as one plain question with a
+  `my rec:` line. In project work Codex reads `~/.codex/AGENTS.md`, which
   must point here; inside the Hub it reads `~/maestro/AGENTS.md`.

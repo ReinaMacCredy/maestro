@@ -42,8 +42,10 @@ These rules hold for every step below.
    subagent or a fresh harness session with no maestro profile. A profile's
    name and mandate are text the candidate sees, and the `arena-runner`
    profile names the arena.
-5. Run one blinded judge the way that recipe runs its cross-judge, under the
-   `arena-judge` profile, on a model family different from the candidates'.
+5. Run one blinded judge the way that recipe runs its cross-judge, on a
+   model family different from the candidates': the `arena-judge` profile
+   when no candidate ran on Claude, a Codex council profile such as
+   `challenger` when one did.
    The judge sees the rubric and the outputs by sanitized label, never a model
    name.
 6. Verify the chain from transcripts, not self-report. Read each candidate's

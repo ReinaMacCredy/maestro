@@ -9,11 +9,9 @@ THIRD_PARTY.md).
 You own the design decision, not the code. The prototype is a throwaway
 instrument. The real build follows `maestro recipe show feature`.
 
-Classify a fork before you ask the owner about it. If the answer to a "which
-approach", "how should I", or "what should this do" fork is a fact you could
-observe by running something (behavior, timing, layout, output, perf, even
-whether an eval separates), it is not the owner's to answer. Sketch it with
-this recipe and let the result decide. A read-only investigation whose
+An observable fork comes here instead of to the owner
+(`~/maestro/WORKFLOW.md#decisions-and-readiness`); that includes whether an
+eval separates. A read-only investigation whose
 deliverable is a cited answer stays in `maestro recipe show investigation` and
 answers from the evidence instead of building a sketch. Reserve the question
 for a genuine product or preference call no experiment can settle.

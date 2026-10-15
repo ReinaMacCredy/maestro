@@ -36,7 +36,8 @@ and point at files rather than pasting their content. Standing orders that
 apply to every writer of one run go in one file every brief points at.
 
 - `scout` reads and reports state, never writes.
-- `delivery` may write and is the only lane that holds the lease.
+- `delivery` may write and is the only lane that holds the lease; a
+  subagent's brief borrows the lane word but never takes the lease.
 - `decision` investigates, compares, and recommends without writing.
 - `challenge` breaks the premise or candidate and returns findings only, with
   no fixes or redesign.
@@ -153,12 +154,13 @@ Concrete smells and fixes: [references/tdd-antipatterns.md](references/tdd-antip
 - For a material choice outside the acceptance, pause that slice and apply
   [Decisions and readiness](~/maestro/WORKFLOW.md#decisions-and-readiness).
   Reversible internal details do not require a user question or a decision lock.
-- Scope the user cuts mid-loop leaves in the same turn: drop it from the red
+- Scope the user cuts mid-work leaves in the same turn: drop it from the red
   list and VERIFY.md, remove the tests and dead code written for it, and
   record the cut as a decision.
-- When the failure's cause is unknown, the bug-fix playbook's diagnosis
-  steps (`maestro recipe show bug-fix`) are the first phase of this
-  authorized fix, done here, not as a separate engagement.
+- When the failure's cause is unknown, the holder runs the bug-fix
+  playbook's diagnosis steps (`maestro recipe show bug-fix`) first, as part
+  of the authorized fix. A writer handed a fix whose cause turns out unknown
+  hands back `BLOCKED` with what it found.
 - A missing external fact (API behavior, library semantics, version
   differences) is not scope expansion: look it up against primary sources,
   record the finding and its link with `maestro work note <id>`, and

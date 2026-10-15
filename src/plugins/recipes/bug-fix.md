@@ -82,7 +82,7 @@ The smallest change the evidence justifies ships, nothing more.
    expensive, integration-heavy, or unclear
    (`~/maestro/WORKFLOW.md#testing-discipline`). This is **Sequence Work into
    Verifiable Units** (PRINCIPLES.md), the failing check first and the fix on
-   top.
+   top. Commits happen only under a commit grant (`maestro recipe show opening-a-pr`, The grant); without one, shape the same units in the working tree.
 8. Deliver: `maestro recipe show opening-a-pr`.
 
 ## Reply

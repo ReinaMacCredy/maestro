@@ -112,5 +112,5 @@ The standalone document (cases 2 and 3) names the suggested skills for the
 next agent, references specs, decisions, commits, and diffs by path or id
 instead of duplicating them, and redacts secrets and personal data.
 
-Design lane -> use the `maestro-design` skill. Implementation -> `maestro-work`.
+Design lane -> use the `maestro-design` skill. Implementation -> the matched playbook (`maestro recipe show <name>`).
 Verification and close -> `maestro-verify`.

@@ -97,7 +97,7 @@ failure location is unclear, follow [references/triage.md](references/triage.md)
 | "The scenario command is stale, so I can skip the check" | Repair it or demonstrate an equivalent measurement; preserve acceptance and record the change. |
 | "The mutant survived, but the code is clearly fine" | If the mutant violates acceptance, the check is weak; report the gap rather than filling PASS. |
 | "I wrote this diff - I know it works" | That is the confirmation bias the fresh-context rule exists for. |
-| "I'll just fix this small failure while I'm verifying" | Verify delivers a verdict, never fixes. A FAIL routes back to `maestro-work`. |
+| "I'll just fix this small failure while I'm verifying" | Verify delivers a verdict, never fixes. A FAIL routes back to the playbook's fix step. |
 
 ## Learn, then close
 

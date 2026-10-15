@@ -84,8 +84,8 @@ The profile is a definition `maestro install` rendered for both harnesses
 `~/.codex/agents/maestro-<profile>.toml`.
 
 - Claude Code: the `Agent` tool with `subagent_type: "maestro-<profile>"`,
-  no `model` override (the profile's own model applies), and the node's
-  `brief` verbatim as the task. A profile whose `harness` is codex
+  `model: "opus"` (graph nodes are judgment and writing roles), and the
+  node's `brief` verbatim as the task. A profile whose `harness` is codex
   (challenger, verifier, auditor, reviewer-correctness-codex) opens
   as a Codex pane with `--profile maestro-<profile>` instead; the Agent tool
   rejects its model.

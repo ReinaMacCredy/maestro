@@ -34,6 +34,9 @@ re-runs, proceed without asking.
    worktree is snarled, start a fresh one from the default branch and redo
    the change minimally.
 3. Run a simplification pass (WORKFLOW.md Per-tool adapters) over the diff.
+   On Full it already ran after green and before maestro-verify, so the
+   verified diff is final; mark this step and the next `skip: ran before
+   verify`.
 4. Run `maestro recipe show no-comments` on the diff. When either pass
    changed code, rerun the affected checks
    (`~/maestro/WORKFLOW.md#recovery-and-verification`).

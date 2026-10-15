@@ -72,7 +72,7 @@ This recipe is for the focused-to-medium change.
 8. Rebase into small ordered commits. A subtraction commit, then the reshape,
    then any follow-on cleanup. Shape them per **Sequence Work into Verifiable
    Units** (PRINCIPLES.md), so each behavior-preserving slice stays green
-   before the next.
+   before the next. Commits happen only under a commit grant (`maestro recipe show opening-a-pr`, The grant); without one, shape the same units in the working tree.
 9. Deliver: `maestro recipe show opening-a-pr`.
 
 ## Reply

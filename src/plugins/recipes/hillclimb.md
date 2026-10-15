@@ -62,7 +62,9 @@ untested changes, and never claim a win from code inspection, per
      Otherwise revert the change in full. A tweak that "might help" is not
      kept.
    - Commit each accepted win by itself, staging only the files it changed
-     (`~/maestro/WORKFLOW.md#concurrency-and-git`). Log the row either way,
+     (`~/maestro/WORKFLOW.md#concurrency-and-git`), under a commit grant
+     (`maestro recipe show opening-a-pr`). Without one, keep each win as a
+     work note with its diff and land none. Log the row either way,
      kept or reverted.
    - End each iteration in a check before the next begins, per
      **Sequence Work into Verifiable Units** (PRINCIPLES.md). An unattended run

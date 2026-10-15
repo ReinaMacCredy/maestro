@@ -23,7 +23,8 @@ Run the accepted verification and complete the work with any required `qa:` or
 `witness:` evidence. When a commit is authorized, stage task-owned paths only
 and inspect the staged diff. A verified implementation can finish without
 delivery when delivery is not part of its acceptance; record the pending gate.
-Perform external actions only when the user named them.
+Push and PRs follow `maestro recipe show opening-a-pr`; reversible external
+actions proceed; perform an irreversible one only when the user named it.
 
 ### Observe
 

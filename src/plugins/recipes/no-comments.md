@@ -1,7 +1,7 @@
 # No comments
 
-Use this recipe on a diff before review. The opening-a-pr and
-multi-phase-plan recipes call it as a step before the review gate. Spawn a
+Use this recipe on a diff before review. The opening-a-pr recipe
+calls it as a step. Spawn a
 subagent under the `comment-sicko` profile, audit its report, and act on
 accepted findings. Defer to the pass's fresh perspective. It is a step and
 not a review-gate lens, because the comment-sicko pass edits files and

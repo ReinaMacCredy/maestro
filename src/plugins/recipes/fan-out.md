@@ -22,8 +22,8 @@ it as each step says.
 
 ## Roles
 
-- You, the seat, own the program and never the code. You frame, write
-  briefs, drain returns, decide, and report. Conflicted merges and code
+- You, the seat, own the program; writers produce the code. You frame,
+  write briefs, drain returns, decide, and report. Conflicted merges and code
   changes are units with briefs. Landing a verified unit mechanically (a
   fast-forward or clean merge of a worker's branch per
   `maestro recipe show worktree`) is bookkeeping you may do yourself.
@@ -89,8 +89,10 @@ it as each step says.
    while the wave runs, never as a gate in front of it. A failing brief stops
    the next refill and fixes the template, not just that brief.
 5. Drain. A completion is a queue event. Note it and return to what you were
-   doing. Never review a diff inline; a return that needs review becomes a
-   verifier unit. Drain in batches at the end of a critical section (writing
+   doing. Every writing slice's diff is reviewed before it lands: read it
+   yourself, or, past what one drain can read, hand it to a verifier unit on
+   a different model family and read that verdict. A diff nobody reviewed
+   never lands. Drain in batches at the end of a critical section (writing
    a brief, a landing, a conflict decision, a ledger note) and before an
    owner report. Each drain classifies every return as landed, needs-verify,
    failed, zombie or noise, writes the ledger notes, and spawns the next wave

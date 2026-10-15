@@ -35,8 +35,9 @@ settled. If none is safe, return dry or blocked instead of inventing work.
 ### Act
 
 Run that one item through its playbook (`maestro recipe show <name>`, matched by
-`~/maestro/WORKFLOW.md#routing`). Stay within local reversible
-actions unless the unattended grant explicitly covers a named external action.
+`~/maestro/WORKFLOW.md#routing`). Reversible external actions
+proceed (`~/maestro/WORKFLOW.md#authorization-boundaries`); an irreversible one
+happens only when the unattended grant names it.
 Make the smallest change the evidence justifies and verify it before the next
 change, per **Sequence Work into Verifiable Units** (PRINCIPLES.md). Keep a
 change only when it advanced the predicate. A change that "might help" is

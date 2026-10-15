@@ -126,7 +126,7 @@ Then exit by [Tiers](~/maestro/WORKFLOW.md#tiers):
   `maestro work note <id> "why: <paragraph>"`, and record findings from the
   research mode as `research: <finding>` notes (what `policy-research` reads
   when enabled). No SPEC is required; the work is verified inline by
-  `maestro-work`. A quickfix never reaches design.
+  its playbook (`maestro recipe show <name>`). A quickfix never reaches design.
 - Full: `maestro bundle open <id> --work <workId>`, opened in the
   store whose checkout will change (a walk run in the Hub room still opens
   its bundle where the code lives; note the bundle on the Hub map and the map
