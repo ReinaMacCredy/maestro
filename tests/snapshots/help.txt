@@ -59,6 +59,10 @@ usage: maestro brief
 ### maestro bundle --help
 bundle  Durable design bundles: scaffold, snapshot, recall.
 subverbs:
+  check   Lint SPEC units and VERIFY rows for missing cells; --final adds the verify-time checks. *
+    usage: maestro bundle check <id>
+    --final  Also require every unit, live and perf cell to hold evidence or an n/a with its reason, and a filled Commit cell.
+    --json   Emit one compact JSON success envelope.
   close   Snapshot the trio text into the store and archive the bundle.
     usage: maestro bundle close <id>
     --json  Emit one compact JSON success envelope.
@@ -85,6 +89,13 @@ subverbs:
   show    Compose one bundle: trio text, linked work, decisions. *
     usage: maestro bundle show <id>
     --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro bundle check --help
+bundle check  Lint SPEC units and VERIFY rows for missing cells; --final adds the verify-time checks. *
+usage: maestro bundle check <id>
+    --final  Also require every unit, live and perf cell to hold evidence or an n/a with its reason, and a filled Commit cell.
+    --json   Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro bundle close --help

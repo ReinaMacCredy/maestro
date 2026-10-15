@@ -71,6 +71,17 @@ Each anti-goal gets a matching VERIFY.md check.
 
 Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lock, and list the ids here; a decision taken in the Hub store is listed as \`hub:<id>\`. \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
 
+## Units
+
+One unit is one commit, or one PR under a grant, with its own evidence. Write one \`### U<n>: <title>\` block per unit in build order. \`Depends on\` names the units it waits for, or none. \`Files\` lists each path as edit, create or delete. \`Build\` is the one change, naming the symbol and the file. \`You will see\` is the observable result once it lands, the exact output line or screen state. Each unit gets a VERIFY.md row whose Scenario names its id. Delete this section when the change is one or two files with an obvious approach. \`maestro bundle check ${id}\` lints this section and VERIFY.md.
+
+### U1: <title>
+
+Depends on:
+Files:
+Build:
+You will see:
+
 ## Derived artifacts
 
 A table, map, graph or measurement any decision above rests on ships in this bundle beside SPEC.md, named here with the command or script that produced it and what that method over- or under-approximates. The conclusion is not the evidence. Leave empty when no decision here rests on a derivation.
@@ -126,11 +137,132 @@ Retained:
 function verifyTemplate(id: string): string {
   return `# VERIFY — ${id}
 
-Scenarios point at work acceptance/claims; do not restate them.
+One row per SPEC unit, its Scenario naming the unit id, and one row per anti-goal. A unit, live or perf cell is filled only with evidence, or \`n/a: <reason>\`, and the Commit cell stamps the row. \`maestro bundle check ${id} --final\` lints the filled table.
 
-| # | Scenario | Work / acceptance | Result |
-|---|----------|-------------------|--------|
+| # | Scenario | unit | live | perf | Commit |
+|---|----------|------|------|------|--------|
+| 1 | U1: <scenario> | | | | |
 `;
+}
+
+const unitLabels = ["Depends on", "Files", "Build", "You will see"] as const;
+const requiredUnitLabels = ["Depends on", "Files", "You will see"] as const;
+const verifyColumns = ["Scenario", "unit", "live", "perf", "Commit"] as const;
+const stampedColumns = ["unit", "live", "perf", "Commit"] as const;
+
+interface PlanLine {
+  n: number;
+  text: string;
+}
+
+function proseLines(text: string): PlanLine[] {
+  let fenced = false;
+  return text.split("\n").flatMap((line, index) => {
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      return [];
+    }
+    return fenced ? [] : [{ n: index + 1, text: line }];
+  });
+}
+
+function tableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/(?<!\\)\|$/, "")
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim());
+}
+
+function checkPlan(
+  spec: string,
+  verify: string,
+  specPath: string,
+  verifyPath: string,
+  final: boolean,
+): { problems: string[]; rows: number; units: number } | null {
+  const specLines = proseLines(spec);
+  const start = specLines.findIndex((line) => line.text.trim() === "## Units");
+  const unitsHeading = specLines[start];
+  if (!unitsHeading) return null;
+  const problems: string[] = [];
+  const after = specLines.slice(start + 1);
+  const end = after.findIndex((line) => /^#{1,2} /.test(line.text));
+  const section = end === -1 ? after : after.slice(0, end);
+  const headings = section.flatMap((line, index) => (line.text.startsWith("### ") ? [index] : []));
+  if (headings.length === 0) problems.push(`${specPath}:${unitsHeading.n} ## Units is missing a ### unit`);
+  const unitIds: string[] = [];
+  headings.forEach((headingIndex, order) => {
+    const heading = section[headingIndex] as PlanLine;
+    const id = heading.text.match(/^### (U\d+)\b/)?.[1];
+    if (!id) {
+      problems.push(`${specPath}:${heading.n} unit heading is missing a U<n> id`);
+      return;
+    }
+    unitIds.push(id);
+    const body = section.slice(headingIndex + 1, headings[order + 1] ?? section.length);
+    const labelled = body.flatMap((line, index) => {
+      const label = unitLabels.find((name) => line.text.startsWith(`${name}:`));
+      return label ? [{ index, label, line }] : [];
+    });
+    for (const label of requiredUnitLabels) {
+      const at = labelled.findIndex((entry) => entry.label === label);
+      const entry = labelled[at];
+      if (!entry) {
+        problems.push(`${specPath}:${heading.n} ${id} is missing "${label}:"`);
+        continue;
+      }
+      const value = [
+        entry.line.text.slice(label.length + 1),
+        ...body.slice(entry.index + 1, labelled[at + 1]?.index ?? body.length).map((line) => line.text),
+      ].join("\n");
+      if (value.trim() === "") problems.push(`${specPath}:${entry.line.n} ${id} is missing "${label}:"`);
+    }
+  });
+
+  const verifyLines = proseLines(verify);
+  const headerAt = verifyLines.findIndex((line) => line.text.trim().startsWith("|"));
+  const header = verifyLines[headerAt];
+  const names = header ? tableCells(header.text).map((cell) => cell.toLowerCase()) : [];
+  const column = new Map(verifyColumns.map((name) => [name, names.indexOf(name.toLowerCase())]));
+  const rows: PlanLine[] = [];
+  if (!header) {
+    problems.push(`${verifyPath}:1 table with ${verifyColumns.join(", ")} columns is missing`);
+  } else {
+    const missing = verifyColumns.filter((name) => column.get(name) === -1);
+    if (missing.length > 0) problems.push(`${verifyPath}:${header.n} table is missing the ${missing.join(", ")} column${missing.length === 1 ? "" : "s"}`);
+    for (const line of verifyLines.slice(headerAt + 1)) {
+      if (!line.text.trim().startsWith("|")) break;
+      if (line.n === header.n + 1 && /^[\s|:-]*-[\s|:-]*$/.test(line.text)) continue;
+      rows.push(line);
+    }
+  }
+  for (const id of unitIds) {
+    const named = new RegExp(`\\b${id}\\b`);
+    if (!rows.some((row) => named.test(tableCells(row.text)[column.get("Scenario") ?? -1] ?? ""))) {
+      problems.push(`${verifyPath}:${header?.n ?? 1} ${id} is missing a row`);
+    }
+  }
+  for (const row of rows) {
+    const cells = tableCells(row.text);
+    const absent = verifyColumns.filter((name) => (column.get(name) ?? -1) >= cells.length);
+    if (absent.length > 0) problems.push(`${verifyPath}:${row.n} row is missing the ${absent.join(", ")} cell${absent.length === 1 ? "" : "s"}`);
+    for (const name of stampedColumns) {
+      const cell = cells[column.get(name) ?? -1];
+      if (cell === undefined) continue;
+      if (/^n\/a\b/i.test(cell) && !/^n\/a:\s*\S/i.test(cell)) {
+        problems.push(`${verifyPath}:${row.n} ${name} cell n/a is missing its reason`);
+      } else if (final && cell === "") {
+        problems.push(
+          name === "Commit"
+            ? `${verifyPath}:${row.n} Commit cell is missing a commit`
+            : `${verifyPath}:${row.n} ${name} cell is missing evidence or n/a: <reason>`,
+        );
+      }
+    }
+  }
+  return { problems, rows: rows.length, units: unitIds.length };
 }
 
 function fromRow(row: BundleRow): BundleRecord {
@@ -972,6 +1104,52 @@ export const bundlePlugin: BuiltInPlugin = {
         },
         {
           description: "Compose one bundle: trio text, linked work, decisions.",
+          mutates: false,
+          positionals: [{ name: "id", required: true }],
+        },
+      ),
+    );
+
+    context.effect(() =>
+      context.cli.register(
+        "bundle check",
+        async (invocation): Promise<CliResult> => {
+          const id = requiredPosition(invocation, 0, "bundle id");
+          const bundle = requireBundle(context, id);
+          const trio = bundle.state === "active"
+            ? await readTrio(bundle.directory)
+            : { spec: bundle.spec, notes: bundle.notes, verify: bundle.verify };
+          const final = invocation.options.final === true;
+          const specPath = join(bundle.directory, "SPEC.md");
+          const result = checkPlan(
+            trio.spec ?? "",
+            trio.verify ?? "",
+            specPath,
+            join(bundle.directory, "VERIFY.md"),
+            final,
+          ) ?? (final ? { problems: [`${specPath}:1 ## Units section is missing`], rows: 0, units: 0 } : null);
+          if (!result) {
+            return {
+              data: { final, id, problems: [], rows: 0, units: 0, unitsSection: false },
+              text: `bundle check ${id}: SPEC.md has no ## Units section; nothing to check`,
+            };
+          }
+          const { problems, rows, units } = result;
+          if (problems.length > 0) {
+            throw new CliError("BUNDLE_CHECK_PROBLEMS", problems.join("\n"), { final, id, problems });
+          }
+          return {
+            data: { final, id, problems, rows, units, unitsSection: true },
+            text: `bundle check ${id}${final ? " --final" : ""}: OK (${units} unit${units === 1 ? "" : "s"}, ${rows} VERIFY row${rows === 1 ? "" : "s"})`,
+          };
+        },
+        {
+          description: "Lint SPEC units and VERIFY rows for missing cells; --final adds the verify-time checks.",
+          flags: {
+            "--final": {
+              description: "Also require every unit, live and perf cell to hold evidence or an n/a with its reason, and a filled Commit cell.",
+            },
+          },
           mutates: false,
           positionals: [{ name: "id", required: true }],
         },
