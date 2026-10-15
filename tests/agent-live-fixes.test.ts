@@ -128,14 +128,12 @@ test("96 [lint] public docs name the stderr JSON failure envelope", async () => 
   }
 });
 
-test("97 [lint] work recipe disambiguates claim tagging and evidence forms", async () => {
-  // Documentation lint: proves the recipe contains both terms, not that their surrounding syntax is unambiguous.
-  await withFixture(async (fixture) => {
-    const recipe = await runCli(fixture, ["recipe", "show", "work"]);
-    expect(recipe.exitCode).toBe(0);
-    expect(recipe.stdout).toContain("the tag prefix goes on the claim");
-    expect(recipe.stdout).toContain("opaque");
-  });
+test("97 [lint] maestro-work disambiguates claim tagging and evidence forms", async () => {
+  // Documentation lint: proves the shared contract contains both terms, not that their surrounding syntax is unambiguous.
+  const skill = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md")).text();
+  const unwrapped = skill.replaceAll(/\s+/g, " ");
+  expect(unwrapped).toContain("tag prefix (`test:`, `qa:`) on the claim");
+  expect(unwrapped).toContain("opaque");
 });
 
 test("98 session lastEvent records what happened, not what was attempted", async () => {

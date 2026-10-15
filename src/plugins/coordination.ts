@@ -191,7 +191,7 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: match the task to a playbook (table in ~/maestro/WORKFLOW.md#routing) and copy its steps from maestro recipe show <name> into the plan list; a quickfix needs none; tracked work: maestro work add|start|done; Full adds a bundle with ~/maestro/skills/maestro-{bundle,verify}/SKILL.md; any tier: maestro-{coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
+            "method: before the first step, name the task's playbook from ~/maestro/WORKFLOW.md#routing (a question is investigation, a defect bug-fix, new behavior feature), run maestro recipe show <name>, and copy its numbered steps into your plan list (skip: <reason> for a step you drop); only a quickfix, a one-sentence change, skips this; tracked work: maestro work add|start|done; Full adds a bundle with ~/maestro/skills/maestro-{bundle,verify}/SKILL.md; any tier: maestro-{coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  read ~/maestro/WORKFLOW.md: recon before tier selection; decision ownership, testing discipline, resume authority, and completion/delivery rules live there, not in this brief",
             `intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
