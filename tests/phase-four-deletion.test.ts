@@ -231,13 +231,11 @@ test("351 [lint] installed work guidance stays on dispatch and handback vocabula
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const workSkillRoot = join(fixture.home, "maestro", "skills", "maestro-work");
     const workSkill = await readFile(join(workSkillRoot, "SKILL.md"), "utf8");
-    const conflictHandoff = await readFile(
-      join(workSkillRoot, "references", "conflict-handoff.md"),
-      "utf8",
-    );
-    const worktree = await readFile(join(workSkillRoot, "references", "worktree.md"), "utf8");
+    const conflictHandoff = (await runCli(fixture, ["recipe", "show", "conflict-handoff"], { PATH: path })).stdout;
+    const worktree = (await runCli(fixture, ["recipe", "show", "worktree"], { PATH: path })).stdout;
 
     expect(workSkill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
+    expect(workSkill).toContain("`maestro recipe show conflict-handoff`");
     for (const reference of [conflictHandoff, worktree]) {
       expect(reference).toContain("herdr pane send-text");
       expect(reference).toContain("maestro dispatch");
