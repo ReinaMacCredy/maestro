@@ -20,8 +20,13 @@ test("graph-presets: review-gate loads, covers function, agent, router, join and
     );
     expect(new Set(shown.graph.nodes.map((node) => node.kind))).toEqual(new Set(["function", "agent", "router", "join", "foreach"]));
 
-    // Tier light on a one-subsystem, no-boundary diff: simplify lens only.
-    const light = await graphRun(fixture, ["review-gate", "range=HEAD~1..HEAD"]);
+    // A caller that names no intent still runs; the reviewers infer it from the commits and say so.
+    const noIntent = await runCli(fixture, ["graph", "run", "review-gate", "range=HEAD~1..HEAD", "--json"]);
+    expect(noIntent.exitCode).toBe(0);
+
+    // Tier light on a one-subsystem, no-boundary diff: simplify lens only; the intent and the author's justification reach the lens and the synthesizer.
+    const intent = "export the answer constant for the CLI";
+    const light = await graphRun(fixture, ["review-gate", "range=HEAD~1..HEAD", `intent=${intent}`, "justified=src.ts:1 the answer is the public contract"]);
     expect(light.envelope.nodes.map((node) => node.ref)).toEqual(["classify"]);
     expect(light.envelope.nodes[0]?.profile).toBe("classifier");
     expect(light.envelope.nodes[0]?.prompt).toContain("src.ts | 1 +");
@@ -31,44 +36,68 @@ test("graph-presets: review-gate loads, covers function, agent, router, join and
     expect((await graphResult(fixture, light.run, "classify", JSON.stringify(classification))).exitCode).toBe(0);
     const lenses = await graphNext(fixture, light.run);
     expect(lenses.nodes.map((node) => [node.ref, node.profile])).toEqual([["review-simplify", "reviewer-simplify"]]);
+    expect(lenses.nodes[0]?.prompt).toContain(intent);
     expect((await graphResult(fixture, light.run, "review-simplify", JSON.stringify({ findings: [] }))).exitCode).toBe(0);
     const synth = await graphNext(fixture, light.run);
     expect(synth.nodes.map((node) => [node.ref, node.profile])).toEqual([["verdict", "synthesizer"]]);
     expect(synth.nodes[0]?.prompt).toContain('"items": []');
-    const lightVerdict = { verdict: "pass", confirmed: [], refuted: [], summary: "nothing to report" };
+    expect(synth.nodes[0]?.prompt).toContain(intent);
+    expect(synth.nodes[0]?.prompt).toContain("src.ts:1 the answer is the public contract");
+    const lightVerdict = { verdict: "pass", actOn: [], consider: [], noted: [], dismissed: [], agreement: "no lens raised anything", summary: "nothing to report" };
     expect((await graphResult(fixture, light.run, "verdict", JSON.stringify(lightVerdict))).exitCode).toBe(0);
     const lightDone = await graphNext(fixture, light.run);
     expect(lightDone.done).toBe(true);
     expect(lightDone.verdict).toEqual(lightVerdict);
 
-    // Tier full on a broad diff: correctness, regression, contracts and security fan out; one refuter per deduplicated finding.
-    const full = await graphRun(fixture, ["review-gate", "range=HEAD~1..HEAD", "tier=full"]);
+    // Tier full on a broad diff: the Claude and Codex correctness pair, structure, regression, contracts and security fan out; one refuter per deduplicated finding.
+    const full = await graphRun(fixture, ["review-gate", "range=HEAD~1..HEAD", "tier=full", `intent=${intent}`]);
     const broad = { ...classification, subsystems: ["src", "kernel"], touchesTrustBoundary: true, touchesAuthSecretsOrInput: true };
     expect((await graphResult(fixture, full.run, "classify", JSON.stringify(broad))).exitCode).toBe(0);
     const fanout = await graphNext(fixture, full.run);
-    expect(fanout.nodes.map((node) => node.ref)).toEqual(["review-correctness", "review-regression", "review-contracts", "review-security"]);
-    expect(fanout.nodes.map((node) => node.profile)).toEqual(["reviewer-correctness", "reviewer-regression", "reviewer-contracts", "reviewer-security"]);
-    const finding = (summary: string, line = 1) => ({ file: "src.ts", line, summary, evidence: "the diff" });
-    expect((await graphResult(fixture, full.run, "review-correctness", JSON.stringify({ findings: [finding("off by one")] }))).exitCode).toBe(0);
-    expect((await graphResult(fixture, full.run, "review-regression", JSON.stringify({ findings: [finding("same line again")] }))).exitCode).toBe(0);
+    expect(fanout.nodes.map((node) => [node.ref, node.profile])).toEqual([
+      ["review-correctness", "reviewer-correctness"],
+      ["review-correctness-codex", "reviewer-correctness-codex"],
+      ["review-structure", "reviewer-structure"],
+      ["review-regression", "reviewer-regression"],
+      ["review-contracts", "reviewer-contracts"],
+      ["review-security", "reviewer-security"],
+    ]);
+    const correctnessPrompt = (ref: string) => fanout.nodes.find((node) => node.ref === ref)?.prompt.split("```json")[0];
+    expect(correctnessPrompt("review-correctness-codex")).toBe(correctnessPrompt("review-correctness"));
+    const finding = (summary: string, line: number, severity: string) => ({ file: "src.ts", line, severity, summary, evidence: "the diff" });
+    expect((await graphResult(fixture, full.run, "review-correctness", JSON.stringify({ findings: [finding("off by one", 1, "warning")] }))).exitCode).toBe(0);
+    expect((await graphResult(fixture, full.run, "review-correctness-codex", JSON.stringify({ findings: [finding("off by one at the bound", 1, "warning")] }))).exitCode).toBe(0);
+    const blocker = { ...finding("pushes src.ts past 1000 lines", 1001, "warning"), beyondDiff: false };
+    expect((await graphResult(fixture, full.run, "review-structure", JSON.stringify({ findings: [blocker] }))).exitCode).toBe(0);
+    const regression = { findings: [], safetyFact: "only the new export changes", rung: 4, proof: "bun -e printed 42", cleared: ["src.ts:1 no caller reads the old value"] };
+    expect((await graphResult(fixture, full.run, "review-regression", JSON.stringify(regression))).exitCode).toBe(0);
     expect((await graphResult(fixture, full.run, "review-contracts", JSON.stringify({ findings: [] }))).exitCode).toBe(0);
-    expect((await graphResult(fixture, full.run, "review-security", JSON.stringify({ findings: [finding("secret in log", 7)] }))).exitCode).toBe(0);
+    expect((await graphResult(fixture, full.run, "review-security", JSON.stringify({ findings: [finding("secret in log", 7, "critical")] }))).exitCode).toBe(0);
     const refuters = await graphNext(fixture, full.run);
-    expect(refuters.nodes.map((node) => [node.ref, node.profile])).toEqual([["refute@0", "refuter"], ["refute@1", "refuter"]]);
-    expect(refuters.nodes[0]?.prompt).toContain("It came from the review-correctness lens.");
+    expect(refuters.nodes.map((node) => [node.ref, node.profile])).toEqual([["refute@0", "refuter"], ["refute@1", "refuter"], ["refute@2", "refuter"]]);
+    expect(refuters.nodes[0]?.prompt).toContain("It came from the review-correctness lens with severity warning.");
     expect(refuters.nodes[0]?.prompt).toContain("Claim: off by one");
-    expect(refuters.nodes[1]?.prompt).toContain("line 7");
-    expect((await graphResult(fixture, full.run, "refute@0", JSON.stringify({ refuted: true, reason: "handled by the caller" }))).exitCode).toBe(0);
-    expect((await graphResult(fixture, full.run, "refute@1", JSON.stringify({ refuted: false, reason: "the log line prints the token" }))).exitCode).toBe(0);
+    expect(refuters.nodes[1]?.prompt).toContain("It came from the review-structure lens");
+    expect(refuters.nodes[2]?.prompt).toContain("line 7");
+    expect((await graphResult(fixture, full.run, "refute@0", JSON.stringify({ outcome: "refuted", reason: "handled by the caller" }))).exitCode).toBe(0);
+    expect((await graphResult(fixture, full.run, "refute@1", JSON.stringify({ outcome: "confirmed", reason: "src.ts grows from 999 to 1004 lines" }))).exitCode).toBe(0);
+    expect((await graphResult(fixture, full.run, "refute@2", JSON.stringify({ outcome: "unconfirmed", reason: "the log level is set at runtime" }))).exitCode).toBe(0);
     const finalNode = await graphNext(fixture, full.run);
     expect(finalNode.nodes.map((node) => node.ref)).toEqual(["verdict"]);
-    expect(finalNode.nodes[0]?.prompt).toContain('"provenance": [\n        "review-regression"\n      ]');
-    expect(finalNode.nodes[0]?.prompt).toContain('"instance": "1"');
+    expect(finalNode.nodes[0]?.prompt).toContain('"provenance": [\n        "review-correctness-codex"\n      ]');
+    expect(finalNode.nodes[0]?.prompt).toContain('"instance": "2"');
+    expect(finalNode.nodes[0]?.prompt).toContain('"outcome": "unconfirmed"');
+    expect(finalNode.nodes[0]?.prompt).toContain("safety fact: only the new export changes\nrung: 4");
+    expect(finalNode.nodes[0]?.prompt).toContain("```text\nnone\n```");
     const fullVerdict = {
       verdict: "fail",
-      confirmed: [{ file: "src.ts", line: 7, summary: "secret in log", lens: "review-security" }],
-      refuted: [{ file: "src.ts", line: 1, summary: "off by one", reason: "handled by the caller" }],
-      summary: "one confirmed security finding",
+      actOn: [{ file: "src.ts", line: 1001, severity: "warning", summary: "pushes src.ts past 1000 lines", lenses: ["review-structure"], reason: "presumptive blocker with no justification" }],
+      consider: [{ file: "src.ts", line: 7, severity: "critical", summary: "secret in log", lenses: ["review-security"], reason: "unconfirmed security finding (d869)" }],
+      noted: [],
+      dismissed: [{ file: "src.ts", line: 1, severity: "warning", summary: "off by one", lenses: ["review-correctness", "review-correctness-codex"], reason: "handled by the caller" }],
+      agreement: "both families raised line 1 and the refuter cleared it",
+      safety: "only the new export changes, rung 4",
+      summary: "one unjustified presumptive blocker",
     };
     expect((await graphResult(fixture, full.run, "verdict", JSON.stringify(fullVerdict))).exitCode).toBe(0);
     const fullDone = await graphNext(fixture, full.run);

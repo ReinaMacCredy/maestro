@@ -643,6 +643,8 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
       "classifier",
       "reviewer-simplify",
       "reviewer-correctness",
+      "reviewer-correctness-codex",
+      "reviewer-structure",
       "reviewer-regression",
       "reviewer-contracts",
       "reviewer-security",
@@ -659,6 +661,7 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
       expect(codex).toContain(`name = "maestro-${node}"\n`);
       expect(await Bun.file(renderedProfilePath(fixture.home, "claude", `peer-${node}`)).exists()).toBe(true);
     }
+    expect(await readFile(join(codexAgents, "maestro-reviewer-correctness-codex.toml"), "utf8")).toContain('sandbox_mode = "read-only"\n');
 
     // model: default omits the model line on all three carriers.
     for (const file of [
