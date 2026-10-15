@@ -9,6 +9,13 @@ const recipeNames = [
   "feature",
   "refactoring",
   "prototype",
+  "perf-issue",
+  "hillclimb",
+  "forensics",
+  "eval",
+  "authoring-a-skill",
+  "visual-parity",
+  "multi-phase-plan",
   "opening-a-pr",
   "babysit",
   "shipping",
@@ -23,7 +30,6 @@ const recipeNames = [
   "benchmark-checklist",
   "no-comments",
   "design",
-  "work",
   "audit",
   "ship",
   "verification-skill",
@@ -115,7 +121,7 @@ test("624 recipe show leaves the repository tree unchanged", async () => {
   await withFixture(async (fixture) => {
     expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
     const before = await snapshotTree(fixture.repo);
-    const shown = await runCli(fixture, ["recipe", "show", "work"]);
+    const shown = await runCli(fixture, ["recipe", "show", "bug-fix"]);
     const after = await snapshotTree(fixture.repo);
 
     expect(shown.exitCode).toBe(0);

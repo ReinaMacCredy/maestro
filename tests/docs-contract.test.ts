@@ -212,11 +212,11 @@ test("576 [lint] non-SLP procedures share one risk-based workflow without mandat
   expect(sectionOf(workflow, "## Completion and delivery")).toContain("awaiting delivery approval");
 
   for (const path of [
-    ...["bundle", "design", "work", "verify", "explore"].map((name) => `skills/maestro-${name}/SKILL.md`),
+    ...["bundle", "design", "work", "verify"].map((name) => `skills/maestro-${name}/SKILL.md`),
     "skills/maestro-design/references/grilling.md",
     "skills/maestro-design/references/domain-modeling.md",
     "skills/maestro-work/references/tdd-antipatterns.md",
-    ...["design", "work", "ship"].map((name) => `recipes/${name}.md`),
+    ...["design", "bug-fix", "ship"].map((name) => `recipes/${name}.md`),
   ]) {
     const text = await Bun.file(join(root, path)).text();
     expect({ path, canonical: text.includes("~/maestro/WORKFLOW.md") }).toEqual({ path, canonical: true });

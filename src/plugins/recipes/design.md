@@ -46,5 +46,5 @@ decision or work note; do not leave it only in chat.
 
 Return the next blocking choice, a scoped design result, or a concrete blocker.
 When the next slice is ready and the original request already authorizes its
-implementation, continue with `maestro recipe show work` without another
-approval round. A design-only request stops before production edits.
+implementation, continue with the matched playbook (`maestro recipe show <name>`,
+`~/maestro/WORKFLOW.md#routing`) without another approval round. A design-only request stops before production edits.
