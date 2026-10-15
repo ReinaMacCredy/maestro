@@ -51,8 +51,8 @@ The smallest change the evidence justifies ships, nothing more.
    - Confirm the surviving mechanism with runtime evidence before step 5.
 4. Reduce to the smallest input or state that still fails, then record the
    cause. With a work item, run
-   `maestro work note <id> "cause: <one line>; repro: <command>"`, and in a
-   bundle also update the NOTES.md Current State. Without a work item, the
+   `maestro work note <id> "cause: <one line>; repro: <command>"`; in a
+   bundle, `maestro handoff <bundle-id>` renders it into NOTES.md. Without a work item, the
    record goes in the reply. The record holds the root cause, its evidence
    chain, the reduced repro, and the smallest fix direction.
    - Diagnosis is read-only toward production code. Instrumentation and
