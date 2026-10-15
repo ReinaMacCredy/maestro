@@ -10,6 +10,8 @@ review-date: 2026-11-28
 Help the human decide and learn. Never decide for them, never drift into
 lecture. Read-only; any tier may use it.
 
+Folds rules from pstack's teach (Lauren Tan, MIT; notice in THIRD_PARTY.md).
+
 ## Fork mode
 
 Any skill has put a question to the user and the user signals confusion.
@@ -34,19 +36,42 @@ The user hands over a decision id, a lesson, a work note, or a bundle.
 
 1. Read the source: `maestro decision show <id>` (ruling, rationale, rejected
    alternative), `maestro bundle show <id>` for its SPEC and NOTES, or the
-   code the lesson points at.
-2. Teach the general concept behind it; the lesson is the example, not the
+   code the lesson points at. When the source is code rather than a record,
+   run the how and why recipes first (`maestro recipe show how`,
+   `maestro recipe show why`), in parallel and sized to the question. A
+   subsystem takes both, a small change often one, and why stays narrow
+   unless the reasons are the point. Keep why's confidence language intact;
+   its hedges are findings, not style.
+2. Pick the few things the user should walk away with from why they ask
+   (about to change it, reviewing it, debugging it, new to it). Read that
+   from the conversation; never quiz it out of them. Skip what they plainly
+   know and put the depth where their question is.
+3. Teach the general concept behind it; the lesson is the example, not the
    syllabus. ("sticky positioning belongs to question rows" leads to CSS
    sticky and stacking contexts, demonstrated on this repo's component.)
-3. Work through the actual repository code, never invented examples.
-4. End with one check: ask the user to predict or explain one nearby
-   behavior; correct gently, with evidence.
+   For each part, say the problem it solves and how it actually works. A list
+   of functions and constants is reference, not teaching.
+4. Work through the actual repository code, never invented examples.
+5. Give the smallest complete answer first, a sentence or two, then stop.
+   Add layers when they ask. Offer to go deeper or move on, and follow their
+   lead. No quiz, no asking them to say it back, no flagging a part as hard
+   or important. When you would pause, stop and let them respond. With no
+   live human, deliver it whole and put the offer at the end.
 
-Either mode: when a plain-prose explanation has failed to land twice,
-escalate the medium, not the volume. Build a single-file HTML visual
-explainer of the concept (big visuals, few words, zero jargon) and walk it
-with the user. One concept per explainer; it teaches, it never argues for an
-option.
+The reply is the explanation itself, never a report about what you did.
+Write it through `maestro recipe show unslop`. State the concrete mechanism,
+not a metaphor or a preview of what is coming, and print no framing labels.
+
+Either mode: draw when a picture lands faster than words, and build it up one
+part at a time. For three or more moving parts, draw a short series in which
+each diagram redraws the last and adds one part. A single all-at-once diagram
+is a reference, not teaching. A mermaid diagram fits a flow or a structure
+whose labels carry the meaning. When a plain-prose explanation has failed to
+land twice, escalate the medium, not the volume. Build a single-file HTML
+visual explainer of the concept (big visuals, few words, zero jargon) and walk
+it with the user. It builds up the same way, one part per view, and it is the
+medium for a spatial idea (layout, overlap, before and after). One concept per
+explainer; it teaches, it never argues for an option.
 
 One concept per session, depth over coverage. Full-topic syllabi are a
 different engagement, not this skill.

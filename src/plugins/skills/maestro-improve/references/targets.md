@@ -22,4 +22,6 @@ disappear at that update.
 A repository's Workspace Protocol is the cheapest target and the narrowest. A
 correction that only applies to one repository belongs there, not in a recipe:
 doctrine that every session reads is the most expensive text in the system, and
-it earns its place by applying everywhere.
+it earns its place by applying everywhere. The Workspace Protocol also holds
+the rule-to-enforcer table, which pairs each rule a lesson produced with what
+enforces it.
