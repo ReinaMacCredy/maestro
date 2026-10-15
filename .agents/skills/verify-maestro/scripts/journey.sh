@@ -28,6 +28,26 @@ run maestro work done "$ID" --evidence "tests pass"
 run maestro work done "$ID" --evidence "suite green (source)"
 run maestro work done "$ID" --evidence "probe drove add/start/done (journey)"
 
+echo "## drive: playbooks, principles and skills"
+run maestro recipe list | grep -cE '^(investigation|bug-fix|feature|refactoring|prototype|perf-issue|hillclimb|forensics|eval|authoring-a-skill|visual-parity|multi-phase-plan|opening-a-pr|babysit|shipping|how|why|architect|arena|fan-out|figure-it-out|unslop|technical-writing|benchmark-checklist|no-comments)\b'
+run maestro recipe show bug-fix | grep -E '^[0-9]+\. ' | head -3
+run maestro recipe show work | tail -1
+grep -c '^## ' "$ROOT/home/maestro/PRINCIPLES.md"
+grep -c 'Inside a playbook the main chat never writes code' "$ROOT/home/maestro/WORKFLOW.md"
+ls "$ROOT/home/maestro/skills"
+ls "$ROOT/home/.claude/agents" | grep -cE 'maestro-(delegate|comment-sicko|explorer|explainer|investigator|arena-runner|arena-judge|fan-out-worker|reviewer-structure|reviewer-correctness-codex)\.md'
+grep -c PreToolUse .claude/settings.json
+
+echo "## drive: SessionStart brief and the delivery grant"
+run maestro hook record --event SessionStart | grep -E '^method:|delivery grant|exit'
+run maestro plugin enable policy-auto-pr
+run maestro hook record --event SessionStart | grep -E 'delivery grant|exit'
+run maestro plugin disable policy-auto-pr
+
+echo "## drive: bundle check"
+run maestro bundle open probe | tail -1
+run maestro bundle check probe | grep -oE 'U1 is missing [^:]+:|exit [0-9]+' | sort -u
+
 echo "## drive: reinstall keeps the enable"
 run bun "$CHECKOUT/bin/maestro.ts" install >/dev/null
 cat .maestro/config; echo

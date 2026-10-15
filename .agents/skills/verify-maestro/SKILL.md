@@ -30,6 +30,12 @@ Add one block to `scripts/journey.sh` per journey the change touches, invoking
 `maestro` exactly as a user types it. The script already drives:
 
 - recipe catalog: `recipe list` shows the recipe, `recipe show` prints it.
+- playbooks: 25 playbook and method recipes listed, bug-fix's steps shown,
+  the retired `work` recipe refused; `~/maestro/PRINCIPLES.md` has 24
+  sections; nine skills; the ten new agent renders; no PreToolUse hook.
+- brief and grant: the SessionStart `method:` line routes by playbook; the
+  `delivery grant:` line appears only while `policy-auto-pr` is enabled.
+- bundle check: a fresh bundle's U1 skeleton is reported and exits 1.
 - a policy gate: `plugin enable`, `work add|start|done` blocked, then passing.
 - reinstall: a second install keeps the repository's policy choices.
 
@@ -51,11 +57,14 @@ is the proof and stays.
 |---|---|---|
 | install / update / uninstall | install, reinstall | doctor healthy; `.maestro/config` keeps enables |
 | doctor, version | doctor | commit and source match the checkout |
-| recipe | recipe catalog | new recipe listed and shown |
+| recipe | recipe catalog, playbooks | new recipe listed and shown; playbooks listed, `work` refused |
+| PRINCIPLES.md, skills list, profiles, Claude hooks | playbooks | 24 sections, nine skills, ten renders, no PreToolUse |
+| brief, policy-auto-pr | brief and grant | `method:` line; grant line only while enabled |
 | plugin + policy gates | policy gate | blocked then passing `work done` |
 | work lifecycle (add, start, note, done, show) | policy gate (partial) | `w1 done` |
 | ready, status, trace, search | GAP | |
-| bundle, handoff | GAP | |
+| bundle check | bundle check | U1 skeleton reported, exit 1 |
+| bundle open/close, handoff | GAP | |
 | decision, decide, term, lesson | GAP | |
 | dispatch, handback | GAP | |
 | memory, room, owner (Hub) | GAP | |
