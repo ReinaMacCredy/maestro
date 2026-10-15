@@ -1,4 +1,5 @@
 6577777c235aca4d44d74caa520bead397d08feb3f32823fbf611233c3af06be  src/plugins/resources/ANTI_PATTERN.md
+0a5e4a91321f9612401d2c892efaa56d2c3e562397183e4d5a60ee83d55b900f  src/plugins/resources/PRINCIPLES.md
 e47c5e587c26410805d035ee939926e84c98c69473885bc69db138aaf322c105  src/plugins/resources/SLP.md
 0eb746ee7c8df281cba41fa96a1b27de8ba8e35c963e58aaeec9396753035cd9  src/plugins/resources/WORKFLOW.md
 e8a7936e46d994a502cf57470fbdeb276231508ff6405aae208e9798e3aab408  src/plugins/resources/herdr-plugin/herdr-plugin.toml

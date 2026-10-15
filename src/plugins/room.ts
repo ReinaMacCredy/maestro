@@ -157,6 +157,7 @@ export async function scaffoldRoom(home: string): Promise<string> {
       "ANTI_PATTERN.md",
       await readFile(join(import.meta.dir, "resources", "ANTI_PATTERN.md"), "utf8"),
     ],
+    ["PRINCIPLES.md", await readFile(join(import.meta.dir, "resources", "PRINCIPLES.md"), "utf8")],
   ] as const) {
     await writeFile(join(room, name), content);
   }
