@@ -21,8 +21,8 @@ that resolves it:
 |---|---|---|
 | Decisions only the user can make, several and interdependent | grill | [references/grilling.md](references/grilling.md) |
 | A decision owned by someone not in the conversation | route to `maestro-questionnaire` | |
-| A fact in docs, APIs, or source outside this repo | research | `maestro-explore` (research mode) |
-| "Does this state model feel right?" or "What should it look like?" | prototype | `maestro-explore` (prototype mode) |
+| A fact in docs, APIs, or source outside this repo | research | `maestro recipe show investigation` |
+| "Does this state model feel right?" or "What should it look like?" | prototype | `maestro recipe show prototype` |
 | Fuzzy terminology, or a hard-to-reverse choice worth recording | model | [references/domain-modeling.md](references/domain-modeling.md) |
 | The effort exceeds one session and is wrapped in fog, or the user does not know what to do next | wayfind | [references/wayfinder.md](references/wayfinder.md) |
 
@@ -159,4 +159,4 @@ For a design-only request, finish with the proposed scope and implementation
 gate. A SPEC authorizes nothing.
 
 For unattended/away-mode design constraints, read
-[references/unattended.md](references/unattended.md).
+`maestro recipe show unattended`.

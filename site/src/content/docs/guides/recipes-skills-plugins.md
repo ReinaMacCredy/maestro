@@ -14,12 +14,20 @@ maestro recipe list
 Read one without copying it into the repository:
 
 ```sh
-maestro recipe show work
+maestro recipe show bug-fix
 ```
 
-The current runtime includes design, work, audit, ship, verification-skill,
-unattended, learning, worktree, conflict-handoff, and language/style recipes.
-Recipes are source-owned Markdown and are loaded only when requested.
+Most recipes are playbooks: the numbered steps for one kind of task.
+`~/maestro/WORKFLOW.md` routes a task to its playbook (investigation,
+bug-fix, feature, refactoring, prototype, perf-issue, hillclimb, forensics,
+eval, authoring-a-skill, visual-parity, multi-phase-plan, opening-a-pr,
+babysit, shipping, unattended, figure-it-out), and the agent copies the steps
+into its plan list. The rest are methods the playbooks call (how, why,
+architect, arena, fan-out, unslop, technical-writing, benchmark-checklist,
+no-comments) and the design, audit, ship, verification-skill, learning,
+worktree, conflict-handoff, slp, and language/style recipes. Recipes are
+source-owned Markdown and are loaded only when requested. The playbooks,
+methods, and `PRINCIPLES.md` are ported from pstack (Lauren Tan, MIT).
 
 SLP role behavior is not assembled from recipes or a skills tree. Its
 canonical contract is `~/maestro/SLP.md`, pinned into the project at team
@@ -27,18 +35,17 @@ start.
 
 ## Skills
 
-Install materializes ten managed method skills under `~/maestro/skills/`
-and the shared method at `~/maestro/WORKFLOW.md`:
+Install materializes nine managed method skills under `~/maestro/skills/`
+and the shared method at `~/maestro/WORKFLOW.md`, with `PRINCIPLES.md` and
+`ANTI_PATTERN.md` beside it:
 
 - `maestro-bundle` chooses direct work or a durable SPEC/NOTES/VERIFY bundle.
 - `maestro-design` settles one fork at a time and records locked decisions.
-- `maestro-work` drives one accepted implementation unit through proof.
+- `maestro-work` holds the contract every playbook shares: the brief a
+  writer receives, its writing rules, the handback, and the store record.
 - `maestro-verify` checks evidence layers and controls close and delivery gates.
 - `maestro-improve` turns filed lessons into the smallest doctrine edit; the
   loop around it is in [Self-improvement](/guides/self-improvement/).
-- `maestro-explore` answers an evidence question read-only: research,
-  disposable prototype, or behavior baseline.
-- `maestro-diagnose` finds a failure's cause without changing anything.
 - `maestro-coach` re-pitches a fork the user did not follow, or teaches the
   concept behind a recorded decision.
 - `maestro-questionnaire` turns a decision someone else owns into a Markdown

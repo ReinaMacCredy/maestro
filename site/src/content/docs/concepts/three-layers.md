@@ -28,10 +28,12 @@ demand:
 
 ```sh
 maestro recipe list
-maestro recipe show work
+maestro recipe show bug-fix
 ```
 
-The nine installed skills cover bundle routing, design, implementation,
-verification, improvement, and the read-only explore, diagnose, coach, and
-questionnaire engagements. They add working depth without moving policy vocabulary into the
+Most recipes are playbooks, the steps for one kind of task, and
+`~/maestro/WORKFLOW.md` routes each task to one. The nine installed skills
+cover bundle routing, design, the delegation contract, verification,
+improvement, councils, graphs, and the read-only coach and questionnaire
+engagements. They add working depth without moving policy vocabulary into the
 kernel.

@@ -44,9 +44,11 @@ resolves through that live exchange; the agent never stands in for the
 human's side of it.
 
 - **research** (AFK): a fact outside the working directory that a decision
-  waits on. Resolved by `maestro-explore` in research mode.
+  waits on. Resolved by the investigation playbook
+  (`maestro recipe show investigation`).
 - **prototype** (HITL): raise the fidelity of the discussion with a cheap,
-  concrete artifact to react to, via `maestro-explore` prototype mode; link
+  concrete artifact to react to, via the prototype playbook
+  (`maestro recipe show prototype`); link
   the artifact from the ticket's note.
 - **grilling** (HITL): conversation. The default case; always with
   [grilling.md](grilling.md) and [domain-modeling.md](domain-modeling.md).

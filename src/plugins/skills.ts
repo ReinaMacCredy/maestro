@@ -7,8 +7,6 @@ export const skillNames = [
   "maestro-coach",
   "maestro-council",
   "maestro-design",
-  "maestro-diagnose",
-  "maestro-explore",
   "maestro-graph",
   "maestro-improve",
   "maestro-questionnaire",

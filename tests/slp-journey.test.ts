@@ -191,7 +191,7 @@ test("167 documented failed-pass notes trigger repeated-failure attention", asyn
     const skill = await Bun.file(
       join(fixture.home, "maestro", "skills", "maestro-work", "SKILL.md"),
     ).text();
-    const loop = skill.slice(skill.indexOf("## Loop"), skill.indexOf("## Test-first"));
+    const loop = skill.slice(skill.indexOf("## Record"), skill.indexOf("## Writing rules"));
     // The installed prose assertion is lint; the attention result proves the detector contract.
     expect(loop).toContain('maestro work note <id> "failed: ');
 

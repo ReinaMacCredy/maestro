@@ -11,7 +11,8 @@ loader); `src/plugins/` holds verbs and policies; `src/plugins/recipes/` and
 `scripts/install.sh` is the curl installer; `site/` is the Starlight docs site
 published by `.github/workflows/pages.yml`; `tests/` is `bun:test`.
 
-Method: `maestro recipe show work` for depth, `~/maestro/skills/maestro-bundle`
+Method: the playbook for the task (`~/maestro/WORKFLOW.md#routing`,
+`maestro recipe show <name>`), `~/maestro/skills/maestro-bundle`
 for the tier rule (quickfix: a one-sentence diff with no Full trigger, done
 directly with inline verification and no record; Light: a work item; Full: a
 bundle). Bundles live in `.maestro/bundle/<id>/` (SPEC/NOTES/VERIFY); NOTES.md
