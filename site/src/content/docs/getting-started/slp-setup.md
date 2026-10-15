@@ -187,8 +187,7 @@ servers. The dir holds:
   profile rendered into the dir, resolved in `~/maestro/skills` then
   `~/.claude/skills`; an unknown name fails install naming the profile (d848).
   Shipped defaults: lead `maestro-work, maestro-design, maestro-council,
-  maestro-graph, maestro-explore, maestro-diagnose`; peer `maestro-work,
-  maestro-explore, maestro-diagnose, maestro-verify`; team-supervisor
+  maestro-graph`; peer `maestro-work, maestro-verify`; team-supervisor
   `maestro-work`.
 - `projects` and `plugins`: symlinks to `~/.claude/projects` and
   `~/.claude/plugins`, so transcripts and plugins stay shared.
@@ -218,11 +217,14 @@ set afterwards. A pane launched by hand without the env fails at
 never runs silently on your `~/.claude`. Codex seats are unchanged.
 
 The shipped seat deny lists (d847, carried as `disallowed_tools`) take the
-seatworks set: every seat disallows `Agent`, `Task`, `Workflow`,
-`SlashCommand`, `WebSearch`, `TodoWrite`, `EnterPlanMode`, `ExitPlanMode`,
-`AskUserQuestion`, `Bash(claude:*)` and `Bash(npx claude:*)`; the Lead adds
-`LSP`; the Peer adds `Bash(herdr:*)`, so a Peer reaches the Lead and other
-Peers only through recorded work notes and returns. Every composed
+seatworks set: every seat disallows `SlashCommand`, `WebSearch`,
+`EnterPlanMode`, `ExitPlanMode`, `AskUserQuestion`, `Bash(claude:*)` and
+`Bash(npx claude:*)`; the Team Supervisor also disallows `Agent`, `Task`,
+`Workflow` and `TodoWrite`, which the working seats keep so they can delegate
+code edits to sub-agents and hold a playbook's steps in their plan list
+(d875); the Lead adds `LSP`; the Peer adds `Bash(herdr:*)`, so a Peer
+reaches the Lead and other Peers only through recorded work notes and
+returns. Every composed
 `peer-<name>` render carries the Peer list as well (d851). A `Bash(...)`
 pattern renders into the seat `settings.json` `permissions.deny` (unioned
 across the profiles in that dir and with any `settings:` overlay deny), and

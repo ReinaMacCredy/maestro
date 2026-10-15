@@ -1146,7 +1146,7 @@ test("144 attention --json computes findings without background state", async ()
   });
 });
 
-test("148 install and uninstall manage Claude PreToolUse without changing Codex hooks", async () => {
+test("148 install retires maestro's Claude PreToolUse group and keeps foreign ones (d875)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const first = await runCli(fixture, ["install"], { PATH: path });
@@ -1165,28 +1165,26 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
     for (const config of [firstClaude, firstCodex]) {
       expect(config.hooks.SessionStart).toBeArray();
       expect(config.hooks.UserPromptSubmit).toBeArray();
+      expect(config.hooks.PreToolUse).toBeUndefined();
       expect(config.hooks.PostToolUse).toBeUndefined();
     }
-    const managedPreToolUse = {
+
+    const staleManaged = {
       matcher: "Agent|Task",
       hooks: [{ type: "command", command: "bun \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/maestro-record.ts\"" }],
     };
-    const firstClaudePreToolUse = firstClaude.hooks.PreToolUse ?? [];
-    expect(firstClaudePreToolUse).toEqual([managedPreToolUse]);
-    expect(firstCodex.hooks.PreToolUse).toBeUndefined();
-
     const foreignPreToolUse = {
       matcher: "Write",
       hooks: [{ type: "command", command: "foreign-pre-tool-hook" }],
     };
-    firstClaudePreToolUse.unshift(foreignPreToolUse);
+    firstClaude.hooks.PreToolUse = [foreignPreToolUse, staleManaged];
     await Bun.write(claudePath, `${JSON.stringify(firstClaude, null, 2)}\n`);
 
     const second = await runCli(fixture, ["install"], { PATH: path });
     expect(second.exitCode).toBe(0);
     const secondClaudeText = await Bun.file(claudePath).text();
     const secondClaude = JSON.parse(secondClaudeText) as HookConfig;
-    expect(secondClaude.hooks.PreToolUse).toEqual([foreignPreToolUse, managedPreToolUse]);
+    expect(secondClaude.hooks.PreToolUse).toEqual([foreignPreToolUse]);
     expect((JSON.parse(await Bun.file(codexPath).text()) as HookConfig).hooks.PreToolUse)
       .toBeUndefined();
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -1200,165 +1198,6 @@ test("148 install and uninstall manage Claude PreToolUse without changing Codex 
     expect(remainingClaude.hooks.UserPromptSubmit).toBeUndefined();
     expect(remainingClaude.hooks.PostToolUse).toBeUndefined();
     expect(await Bun.file(codexPath).exists()).toBe(false);
-  });
-});
-
-test("447 PreToolUse denies returned holders and targets but stays silent for the opener", async () => {
-  await withFixture(async (fixture) => {
-    const opener = "peer-hook-opener";
-    const holder = "peer-hook-holder";
-    const target = "peer-hook-target";
-    await recordSession(fixture, opener);
-    await recordSession(fixture, holder);
-    await recordSession(fixture, target);
-    const work = await addWork(fixture, "deny peer sub-topology");
-    const dispatch = await openAttentionDispatch(
-      fixture,
-      work,
-      "delivery",
-      "src/plugins/coordination.ts",
-      "all other files",
-      holder,
-      opener,
-    );
-    expect(
-      (await runCli(fixture, ["dispatch", "accept", dispatch], session(holder))).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(
-          fixture,
-          [
-            "handback",
-            "file",
-            dispatch,
-            "--status",
-            "DONE",
-            "--candidate",
-            "fixture-candidate",
-            "--claim",
-            "returned holders remain Peers",
-            "--proof",
-            "source: hook stdout",
-            "--assumptions",
-            "None",
-            "--residual-risks",
-            "None",
-            "--incidental-findings",
-            "None",
-          ],
-          session(holder),
-        )
-      ).exitCode,
-    ).toBe(0);
-
-    const targetWork = await addWork(fixture, "deny targeted peer sub-topology");
-    const targetedDispatch = await openAttentionDispatch(
-      fixture,
-      targetWork,
-      "scout",
-      "tests/slp-adoption.test.ts",
-      "product source",
-      target,
-      opener,
-    );
-
-    for (const [peer, peerDispatch] of [
-      [holder, dispatch],
-      [target, targetedDispatch],
-    ] as const) {
-      for (const toolName of ["Agent", "Task"]) {
-        const denied = await runCli(
-          fixture,
-          ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-          session(peer),
-          JSON.stringify({ tool_name: toolName }),
-        );
-
-        expect(denied.exitCode).toBe(0);
-        expect(denied.stderr).toBe("");
-        expect(JSON.parse(denied.stdout)).toEqual({
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "deny",
-            permissionDecisionReason:
-              `${peerDispatch}: a Peer does not create sub-topology (SLP invariant 4)`,
-          },
-        });
-      }
-    }
-    for (const toolName of ["Agent", "Task"]) {
-      const allowed = await runCli(
-        fixture,
-        ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-        session(opener),
-        JSON.stringify({ tool_name: toolName }),
-      );
-      expect(allowed.exitCode).toBe(0);
-      expect(allowed.stdout).toBe("");
-      expect(allowed.stderr).toBe("");
-    }
-    const status = await runCli(fixture, ["status", "--json"], session(holder));
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ id: string; lastEvent: string }> };
-    }).data.sessions;
-    expect(sessions.find((candidate) => candidate.id === holder)?.lastEvent).toBe(
-      "SessionStart",
-    );
-  });
-});
-
-test("448 PreToolUse stays silent for a Lead invoking Agent or Task", async () => {
-  await withFixture(async (fixture) => {
-    const lead = "lead-with-unaccepted-dispatch";
-    await recordSession(fixture, lead);
-    const work = await addWork(fixture, "keep the Lead outside Peer enforcement");
-    const opened = await runCli(
-      fixture,
-      [
-        "dispatch",
-        "open",
-        work,
-        "--objective",
-        "leave the dispatch unaccepted",
-        "--owned-scope",
-        "tests/slp-adoption.test.ts",
-        "--excluded-scope",
-        "product source",
-        "--mutation",
-        "no-write",
-        "--stop-condition",
-        "PreToolUse remains silent",
-        "--lane",
-        "scout",
-        "--evidence-required",
-        "source: hook stdout",
-        "--pane",
-        "w1:p-lead-hook",
-      ],
-      session(lead),
-    );
-    expect(opened.exitCode).toBe(0);
-
-    for (const toolName of ["Agent", "Task"]) {
-      const allowed = await runCli(
-        fixture,
-        ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
-        session(lead),
-        JSON.stringify({ tool_name: toolName }),
-      );
-
-      expect(allowed.exitCode).toBe(0);
-      expect(allowed.stdout).toBe("");
-      expect(allowed.stderr).toBe("");
-    }
-    const status = await runCli(fixture, ["status", "--json"], session(lead));
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ id: string; lastEvent: string }> };
-    }).data.sessions;
-    expect(sessions.find((candidate) => candidate.id === lead)?.lastEvent).toBe(
-      "SessionStart",
-    );
   });
 });
 

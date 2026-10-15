@@ -1,8 +1,8 @@
 ---
 harness: codex
 model: default
-disallowed_tools: [Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)", LSP]
-skills: [maestro-work, maestro-design, maestro-council, maestro-graph, maestro-explore, maestro-diagnose]
+disallowed_tools: [SlashCommand, WebSearch, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)", LSP]
+skills: [maestro-work, maestro-design, maestro-council, maestro-graph]
 description: SLP Lead seat - technical coordination, its own implementation work, Peer briefs, and review of every Peer return
 ---
 Role: Lead.

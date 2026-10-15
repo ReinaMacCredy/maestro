@@ -4,10 +4,11 @@ The method behind maestro, shared across coding agents (Claude Code, Codex,
 and any tool that can read this file). Installed to `~/maestro/WORKFLOW.md`
 by `maestro install` and overwritten on every install; owner notes belong in
 `~/maestro/OWNER.md`. A closer repository instruction replaces this workflow.
-The skills under `~/maestro/skills/maestro-*/SKILL.md` hold the procedures;
-this file is the single source for non-SLP method rules. Skills, recipes,
-templates, and tool briefs reference these rules rather than defining copies.
-The running SLP team's pinned contract remains separate.
+The playbooks (`maestro recipe show <name>`) hold the steps for each kind of
+task; the skills under `~/maestro/skills/maestro-*/SKILL.md` hold the shared
+procedures; this file is the single source for non-SLP method rules. Skills,
+recipes, templates, and tool briefs reference these rules rather than
+defining copies. The running SLP team's pinned contract remains separate.
 
 ## Tiers
 
@@ -40,7 +41,15 @@ stabilize and verify first, then backfill the required record.
 - Read-only requests (answer, review, report, diagnose, explore) stay
   read-only.
 - Workflow ownership never grants authority to push, merge, release, deploy,
-  publish, or mutate external systems.
+  or publish. A push or an opened PR happens only when a delivery grant
+  exists: the repository enabled `policy-auto-pr`, or the user granted it in
+  this session and the agent recorded the quote as a `grant:` work note
+  (`maestro recipe show opening-a-pr`). Merge, tag, release, and deploy
+  happen only on the user's word for that action, under any grant.
+- Reversible external actions proceed without asking: issue and PR comments,
+  ticket updates, team chat, CI runs. An irreversible one happens only on the
+  user's word for that action: a force-push to a shared branch, a deploy,
+  data deletion, a message to a customer.
 - Preserve the original user instruction (quote or retrievable reference),
   approved scope, target, and remaining gates in work notes and handoffs.
   A successor may continue that same authorized work after checking the
@@ -48,8 +57,8 @@ stabilize and verify first, then backfill the required record.
   A bundle, decision, or agent-written claim of approval is not itself permission.
   If the original grant cannot be verified, ask before editing.
 - A new session or tool alone does not require renewed approval. Expanded
-  scope or an unapproved external action does. Never bypass host permissions,
-  identity checks, or repository restrictions to continue.
+  scope or an irreversible external action does. Never bypass
+  host permissions, identity checks, or repository restrictions to continue.
 
 ## Decisions and readiness
 
@@ -58,6 +67,13 @@ boundaries. The agent owns reversible implementation details within that
 contract: use existing patterns, state consequential assumptions, and continue.
 Ask only for a material unresolved choice or missing authority, not a method
 transition. Research facts directly instead of asking the user to find them.
+Classify a "which approach" fork before asking it. When running something
+could answer it (behavior, timing, layout, output, performance), it is not
+the user's question: sketch it with `maestro recipe show prototype` and let
+the result decide. Reserve the question for a product or preference call no
+experiment can settle. No is an acceptable answer: asked whether to do
+something, or shown an approach, give a real judgment, including "this does
+not earn its place".
 
 Lock decisions whose rationale must survive: hard-to-reverse choices, important
 trade-offs, or durable constraints. Keep routine details in the work or final
@@ -78,41 +94,100 @@ no implementation, and approval of a choice is not a request to build it.
 
 ## Routing
 
-The user supplies an outcome, not a skill name. Route internally and keep an
-authorized task continuous through investigation, implementation, and checks.
-Skills load by bare name in every tool (`maestro-design`, `maestro-work`,
-`maestro-verify`, `maestro-bundle`, `maestro-explore`, `maestro-diagnose`,
-`maestro-coach`, `maestro-questionnaire`, `maestro-improve`,
-`maestro-council`). Route only work
-that needs one: a quickfix or a Light production fix proceeds directly
-(stated assumption, root-cause fix, inline verification). Never downgrade a
-requested fix to analysis. Generated or vendored files are never the target:
-fix the generator or pin and regenerate.
+The user supplies an outcome, not a playbook or skill name. Route internally
+and keep an authorized task continuous through investigation,
+implementation, and checks. Never downgrade a requested fix to analysis.
+Generated or vendored files are never the target: fix the generator or pin
+and regenerate.
+
+Match the task to a playbook below and read it with
+`maestro recipe show <name>`. Copy its numbered steps verbatim into the
+harness plan list before any task-specific items. A step you choose not to do
+stays in the list as `skip: <reason>`. The checkpoint work note names the
+playbook and the current step. A quickfix needs no playbook (stated
+assumption, root-cause fix, inline verification). The tier sets the record
+depth; the playbook sets the steps.
+
+| Task | Playbook |
+|---|---|
+| A read-only question: how X works, why Y is this way, X or Y | investigation |
+| A reported defect to reproduce, root-cause, and fix; a diagnosis-only request stops at the cause | bug-fix |
+| New or changed behavior | feature |
+| A behavior-preserving change to structure | refactoring |
+| A throwaway sketch that settles a design or an observable fork | prototype |
+| A measured slowness against a baseline | perf-issue |
+| Sustained improvement of one metric against a target | hillclimb |
+| A live runtime symptom or a captured profiling artifact to diagnose | forensics |
+| How a skill, prompt, or structure change affects agent behavior | eval |
+| Writing or editing a skill | authoring-a-skill |
+| Pixel-exact UI equivalence | visual-parity |
+| Work spanning several units, commits, or PRs | multi-phase-plan |
+| Opening, driving, or landing a PR, under a delivery grant | opening-a-pr, babysit, shipping |
+| A long task driven to a checkable predicate while the user is away | unattended |
+| No playbook fits, or large cross-cutting work the user steps away from | figure-it-out |
+
+Program-scale work (multi-day, many units, several writers) runs as an SLP
+team (`maestro recipe show slp`); each seat runs these playbooks and fans out
+with `maestro recipe show fan-out`.
+
+Skills load by bare name in every tool and serve steps inside a playbook:
 
 - Material unsettled decisions, design questions, or new scope needing
   clarification: `maestro-design` (grill, research, prototype, model,
   wayfind by unknown).
 - A hard-to-reverse fork with wide blast radius, run by the Lead:
   `maestro-council`.
-- Research, disposable prototype, or current-behavior baseline:
-  `maestro-explore`.
-- Authorized implementation or fix: `maestro-work`.
-- Diagnosis-only work: `maestro-diagnose`; on a fix request, diagnosis is
-  `maestro-work`'s first phase.
+- The brief and handback for delegated work: `maestro-work`.
+- A pre-known multi-agent path such as the review gate: `maestro-graph`.
 - Verifying and closing an open bundle: `maestro-verify`.
 - A fork the user does not understand, or a recorded decision they want to
   learn from: `maestro-coach`.
 - A decision owned by someone not in the conversation:
   `maestro-questionnaire`.
 - Tier, bundle lifecycle, resume, and handoff: `maestro-bundle`.
+- Doctrine edits from filed lessons: `maestro-improve`.
 - Quality review: use Per-tool adapters below. Verify owns "does it meet
   the contract"; review owns "is the code good".
 
-Route by who owns the result, not only by skill. Work that has an owner,
-writes files, returns or is accepted runs in a Herdr pane through the SLP
-operations and leaves a store row; give a harness sub-agent (Agent, Task,
-Workflow, or a maestro-graph agent node) only read-only scouting that
-returns text and writes nothing.
+## Subagents
+
+Inside a playbook the main chat never writes code. A subagent under the
+`delegate` profile writes it; the main chat plans, briefs, reviews the diff,
+and verifies. The work item, its lease, and its proof stay with the main
+chat, so a subagent opens no dispatch row. A quickfix outside any playbook is
+written directly.
+
+- Brief every subagent in maestro-work's dispatch envelope, with file
+  pointers rather than pasted context. Give new work to a fresh subagent
+  with consolidated scope: the original brief, every later directive, the
+  prior report and branch. Resume an existing one only when the work needs
+  state that lives only in it, such as an uncommitted checkout or a running
+  process.
+- You own every subagent's work. Review its diff and write your own summary;
+  never pass its report through. A second opinion is the same brief on a
+  different model family, and agreement is high-signal.
+- Pick the profile by role. `delegate` writes code; `explorer`,
+  `investigator`, and `fan-out-worker` read in bulk; `explainer`,
+  `arena-judge`, and the review nodes judge. Writing and judgment roles run
+  Opus, read-only bulk roles run Sonnet, and panels pair Opus with Codex.
+  A role is overridden in `~/maestro/profiles/<name>.md`.
+- Parallel or repeated work follows `maestro recipe show fan-out`.
+- Work that needs a durable seat (multi-day, owner-visible, cross-harness,
+  or accepted by someone other than the main chat) runs in a Herdr pane
+  through the SLP operations and leaves a store row; the seat delegates the
+  same way.
+
+## Autonomy
+
+Reversible work proceeds without asking: present the result and let the
+user correct it. "Don't stop", "going to bed", or "run until done" keeps the
+run going (`maestro recipe show unattended`). Under such a grant, decide a
+call the grant covers, act on it, and report it. For a call only the user
+can make, apply a default, report it with the reason, and say in plain words
+what the user could ask for instead; never hand back a token to type. Gates
+the user named and the irreversible actions above still wait for the user.
+An autonomous run fixes only what blocks its goal, as its own change; every
+other discovery becomes a finding for the user, never a new work item.
 
 ## Two coordination models
 
@@ -130,9 +205,11 @@ outside a running SLP team.
 
 - `SPEC.md` is a pure contract: Problem, Solution, Scope, Anti-goals (each
   with a matching VERIFY.md check), Decisions (store ids, rendered by
-  `maestro bundle show <id>`), Red tests (when needed by Testing discipline,
-  not a quota or an exhaustive whitelist). Record newly discovered in-scope
-  risks and checks without reopening design; scope expansion needs the user.
+  `maestro bundle show <id>`), Units (one per commit or PR: depends on,
+  files, build, you will see; `maestro recipe show multi-phase-plan`), Red
+  tests (when needed by Testing discipline, not a quota or an exhaustive
+  whitelist). Record newly discovered in-scope risks and checks without
+  reopening design; scope expansion needs the user.
 - `NOTES.md` is a pure handoff, rendered by `maestro handoff <id>` from the
   store, never authored or appended: Current State, Next Action, Authority
   transferred and retained, Failed approaches, Do not repeat,
@@ -141,7 +218,10 @@ outside a running SLP team.
   the store: `maestro work note`, `maestro trace`, decisions; the latest
   `checkpoint:` note (state / next / avoid) is what survives a compaction.
 - `VERIFY.md` is the scenario table drafted at design time and filled at
-  verify time. Results hold the latest run only, stamped with date and commit.
+  verify time: one row per unit and per anti-goal with unit, live, and perf
+  cells, each holding evidence or `n/a: <reason>`. Results hold the latest
+  run only, stamped with date and commit. `maestro bundle check <id>` lints
+  SPEC units and VERIFY rows before work starts and again at verify.
 
 Close under Completion and delivery below: `maestro bundle close <id>`
 snapshots the trio into the store. Archived bundles are never reopened;
@@ -157,7 +237,13 @@ are never staged or committed.
 - Reconcile NOTES against live repo state first: `git log <Base>..HEAD` and
   `git status` show what happened behind NOTES' back. Repo state beats NOTES,
   NOTES beats memory. A bundle whose scope already shipped is closed on
-  sight. An interrupted operation has unknown outcome until checked.
+  sight. An interrupted operation has unknown outcome until checked. Do not
+  redo work or re-run a repro the record already proves. A pickup reply
+  lists each open thread with its status (done, in progress, blocked, not
+  started) and the next move.
+- Pausing (an explicit pause, going offline, imminent compaction) writes the
+  checkpoint note first; a `wip:` commit happens only when commits are
+  granted.
 - Light handoff uses a work note: state, next action, base, task-owned dirty
   paths, original authorization and retained gates, failed approaches, and
   what not to repeat. No bundle is needed just to remember these facts.
@@ -178,6 +264,9 @@ are never staged or committed.
 - Name the shape: `ANTI_PATTERN.md` beside this file holds the eight named
   failure shapes of multi-agent work, and a lesson names the anti-pattern it
   shows when one fits, so corrections that rhyme collect under one word.
+- Steer by name: `PRINCIPLES.md` beside this file holds the 24 judgment
+  principles, one `## <Title>` section each. Read a principle's whole section
+  before applying it.
 - Per-tool stores (Claude auto-memory under `~/.claude/projects/*/memory/`,
   Codex `~/.codex/memories/`) are write buffers their tools keep writing.
   Promotion into the Hub store is `maestro memory ingest` (dry-run first),
@@ -251,7 +340,8 @@ look further.
 ## Completion and delivery
 
 Distinguish implementation verified, awaiting delivery approval, and delivered.
-These are reported outcomes, not new work states. `work done` means the item's
+These are reported outcomes, not new work states. Every code playbook ends in
+its deliver step (`maestro recipe show opening-a-pr`). `work done` means the item's
 accepted scope is complete; it does not assert commit, push, install, or deploy.
 If delivery is part of that acceptance, the item remains unfinished until it
 is authorized and proven. Otherwise record the pending delivery action and
@@ -280,7 +370,8 @@ delivery from local evidence.
   do not redesign the product or relax acceptance based on the count alone.
 - **Implementation verified, no push approval:** if acceptance was the local
   fix, close it and report the pending push gate. If acceptance included remote
-  delivery, keep that work open. Neither case authorizes a push.
+  delivery, keep that work open. Neither case authorizes a push without a
+  delivery grant.
 
 ## Concurrency and git
 
@@ -289,8 +380,9 @@ concurrent threads write only disjoint, exclusively owned paths. Dirty or
 untracked content visible in the checkout
 is not owned by this thread merely because it is visible; leave it alone.
 Stage explicit task-owned paths only, and inspect the staged diff before
-committing. Commit or push only when asked; push, tag, publish, and release
-are the user's gates.
+committing. A commit happens only when the user asked for it or a delivery
+grant covers it; a push or a PR only under a delivery grant; merge, tag,
+publish, and release only on the user's word.
 
 Files an agent produces while discussing or researching a topic (HTML
 demos, mockups, captures, sub-agent reports, inventories, plan briefs, owner
@@ -300,6 +392,29 @@ tree, whatever precedent the repository shows; `maestro topic list` shows
 them. A bundle opened for the topic links that folder from NOTES.md. Only
 what the user asks to keep as documentation moves into `docs/`.
 
+## Writing the reply
+
+Every playbook ends with a reply written this way; each playbook's Reply
+section names only what is unique to it. Write the reply clean as you draft
+it (`maestro recipe show unslop`); a cleanup pass afterwards does not remove
+these patterns.
+
+- Short declarative sentences, one thought each, ended with a period.
+- No long-dash character anywhere. A colon goes only before a list.
+- Terse never drops content: every section the playbook's Reply names stays,
+  with its details, trade-offs, choices, and open decisions.
+- Impact first. Name who the work is for and what changes for them before
+  any implementation detail, then what the next maintainer inherits.
+- Never fabricate a link, citation, or transcript reference. Link only what
+  you produced or read this session.
+- Every claim carries its evidence or its label in the same sentence:
+  measured, inferred, or guess. Never hand the user a check you could run.
+- Close by naming each principle that changed a decision and the choice it
+  changed, citing only `PRINCIPLES.md` sections read this session.
+
+Code comments follow the same rule: keep one only for a non-obvious why the
+code cannot show (`maestro recipe show no-comments`).
+
 ## Per-tool adapters
 
 Review routing is the same in every tool, using whatever the tool ships:
@@ -308,15 +423,25 @@ runs one correctness review of the frozen task-owned diff after verify
 passes, a broader multi-reviewer pass when the diff touches trust boundaries,
 schemas or migrations, or several subsystems, plus a security review when it
 touches auth, secrets, or input handling. Any simplification pass on Full
-runs after green and before verify, so the reviewed diff is final.
+runs after green and before verify, so the reviewed diff is final. The
+`review-gate` graph routes those passes in every tool
+(`maestro graph run review-gate range=<range> tier=<light|full> intent=<the acceptance>`).
+At tier full it adds a Codex correctness reviewer and a structure reviewer
+that holds the approval bar as presumptive blockers and may propose
+restructuring beyond the diff, which is never applied. Its findings sort
+into Act on, Consider, Noted, and Dismissed; the gate fails while an Act on
+finding is neither fixed nor justified in writing, and an unconfirmed
+security or correctness finding stays visible as Consider.
 
 - **Claude Code**: skills load from `~/.claude/skills/maestro-*` symlinks
   that `maestro install` maintains; `/simplify` and `/code-review` are the
-  built-in simplification and correctness passes. Forks go to the user as
-  question cards: one decision per card, "what this does" first, a `my rec:`
-  line.
+  built-in simplification and correctness passes. The plan list is the todo
+  tool. A profile runs as the agent `maestro-<profile>`. Forks go to the user
+  as question cards: one decision per card, "what this does" first, a
+  `my rec:` line.
 - **Codex**: skills load from `~/.codex/skills/maestro-*` symlinks that
   `maestro install` maintains (restart Codex after a new link); the Full
-  review runs in a fresh context. In project work Codex reads
-  `~/.codex/AGENTS.md`, which must point here; inside the Hub it reads
-  `~/maestro/AGENTS.md`.
+  review runs in a fresh context. The plan list is `update_plan`. A profile
+  runs as the sub-agent `maestro-<profile>` that install renders under
+  `~/.codex/agents`. In project work Codex reads `~/.codex/AGENTS.md`, which
+  must point here; inside the Hub it reads `~/maestro/AGENTS.md`.

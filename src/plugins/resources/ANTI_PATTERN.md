@@ -65,19 +65,19 @@ settles it anyway.
 ## weak scout
 
 A weak or cheap model is given owned work - work that writes files, returns,
-or is accepted - instead of read-only scouting, and its output is trusted
-because the seat is trusted.
+or is accepted - and its output is trusted because the seat is trusted.
 
-In maestro: opening a seat on a smaller model to save quota; giving a harness
-sub-agent an item that writes.
+In maestro: opening a seat on a smaller model to save quota; running a
+writing sub-agent below its role's profile (`delegate` writes on Opus);
+passing a sub-agent's report through without reviewing its diff.
 
 evidence: room d130 and d132 - every seat of the cleanup and improver
 generations runs on Opus, never Fable, because a refactor Lead and the doctrine
 edits every seat reads warrant the strongest model; the Codex-quota pressure
-that prompted the question did not move the ruling. Room d135 draws the same
-line by capability rather than by model: owned work runs in a Herdr pane
-through the SLP operations, and a harness sub-agent is used only for read-only
-scouting that returns text and writes nothing.
+that prompted the question did not move the ruling. Room d135 drew the line by
+capability instead (sub-agents only scout); the pstack port (d860, d868) moved
+it back to the model and the review: a sub-agent writes under the `delegate`
+profile, and the seat or main chat that holds the item reviews every diff.
 
 ## polling waste
 

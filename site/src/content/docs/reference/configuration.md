@@ -27,6 +27,11 @@ The default policy state is:
 | `policy-layer` | disabled |
 | `policy-lifecycle` | disabled |
 
+`policy-auto-pr` also ships disabled and install does not write it. Enabling
+it is the repository's delivery grant: the deliver step commits, pushes the
+branch and opens a PR (`maestro recipe show opening-a-pr`); merge, tag and
+release stay the owner's.
+
 Policy also has a machine layer, `~/.maestro/config`, with the same shape.
 The loader reads it before the repository file, and a repository entry wins
 for the same plugin name. `maestro install` never writes the machine layer.

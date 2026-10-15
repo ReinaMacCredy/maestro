@@ -1,8 +1,8 @@
 ---
 harness: codex
 model: default
-disallowed_tools: [Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)"]
-skills: [maestro-work, maestro-explore, maestro-diagnose, maestro-verify]
+disallowed_tools: [SlashCommand, WebSearch, EnterPlanMode, ExitPlanMode, AskUserQuestion, "Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)"]
+skills: [maestro-work, maestro-verify]
 description: bounded execution with independent judgment
 ---
 The work is engineering, one request at a time, and it is yours to finish.

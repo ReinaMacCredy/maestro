@@ -439,7 +439,7 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(peer).not.toContain("Communicate directly");
   expect(peer).not.toContain("herdr agent prompt");
   expect(peer).toContain("record `maestro work note <work-id> \"<the premise, the evidence, and what the request would become>\" --blocked`");
-  expect(unwrap(block(pack, "shared:peer"))).toContain("There is no one to hand it to and no dialog to ask a question through");
+  expect(unwrap(block(pack, "shared:peer"))).toContain("no other seat takes the item, and there is no dialog to ask a question through");
   expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
   expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
 
@@ -756,11 +756,11 @@ test("669 [lint] the shared contract says pane text is not a push and a state ex
   expect(phantom - wakeUp).toBeLessThan(200);
 });
 
-// room d135: one HR protocol for owned work. A harness sub-agent leaves no
-// store row, cannot return and cannot be accepted, so owned work runs in a
-// Herdr pane and a sub-agent is read-only scouting - including a
-// maestro-graph agent node.
-test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say owned work runs in a pane and a sub-agent only scouts (room d135)", async () => {
+// pstack port d860 (superseding room d135): a sub-agent may write under a
+// writing profile, but it holds no lease and files no handback, so the seat or
+// main chat that holds the item reviews every diff and stays the one that
+// returns and is accepted; a result another seat must accept still needs a pane.
+test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say the holder delegates writes to sub-agents and reviews every diff (d860)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
@@ -768,34 +768,28 @@ test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say owned wo
     /<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "",
   );
   expect(shared).toContain(
-    "Work that has an owner, writes files, returns or is accepted runs in a Herdr pane through the SLP operations and leaves a store row",
+    "Work that has an owner, returns or is accepted runs in a Herdr pane through the SLP operations and leaves a store row",
   );
   expect(shared).toContain(
-    "a harness sub-agent (Agent, Task or Workflow) is used only for read-only scouting that returns text and writes nothing",
+    "reviews every sub-agent diff itself, and stays the one that returns and is accepted; a sub-agent holds no lease and files no handback",
   );
-  // It belongs beside the paragraph that already tells a Peer which channels
-  // it has, where `herdr` is named.
+  expect(shared).not.toContain("read-only scouting");
   const herdr = shared.indexOf("its seat denies `herdr`");
-  const protocol = shared.indexOf("Work that has an owner, writes files, returns or is accepted");
+  const protocol = shared.indexOf("Work that has an owner, returns or is accepted");
   expect(herdr).toBeGreaterThan(-1);
   expect(protocol).toBeGreaterThan(herdr);
   expect(protocol - herdr).toBeLessThan(200);
   const workflow = unwrap(await Bun.file(join(root, "resources", "WORKFLOW.md")).text());
-  expect(workflow).toContain(
-    "Work that has an owner, writes files, returns or is accepted runs in a Herdr pane through the SLP operations and leaves a store row",
-  );
-  expect(workflow).toContain(
-    "give a harness sub-agent (Agent, Task, Workflow, or a maestro-graph agent node) only read-only scouting that returns text and writes nothing",
-  );
+  expect(workflow).toContain("Inside a playbook the main chat never writes code.");
+  expect(workflow).toContain("A quickfix outside any playbook is written directly.");
+  expect(workflow).not.toContain("only read-only scouting");
   const graph = await Bun.file(join(root, "skills", "maestro-graph", "SKILL.md")).text();
   const description = /^description:.*$/m.exec(graph)?.[0] ?? "";
-  expect(description).toContain("A sub-agent node is read-only scouting");
-  expect(description).toContain("a node that writes files or is accepted is opened as a pane");
+  expect(description).toContain("A sub-agent node reads or writes as its profile allows");
+  expect(description).toContain("a node whose result another seat must accept is opened as a pane");
   const body = unwrap(graph);
-  expect(body).toContain(
-    "A sub-agent node is read-only scouting that returns text and writes nothing; a node whose work writes files, returns or is accepted is opened as a pane with `maestro work add --to <peer>` and its result handed back with `graph result` as before.",
-  );
-  expect(body).toContain("kind agent -> spawn a read-only scouting sub-agent");
+  expect(body).toContain("Review every diff a writing node leaves before the next node reads the tree.");
+  expect(body).toContain("kind agent -> spawn a sub-agent with the node's profile and brief");
 });
 
 // room d138: the anti-pattern vocabulary ships as one file beside SLP.md and

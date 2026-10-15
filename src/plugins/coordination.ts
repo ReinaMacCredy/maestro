@@ -191,7 +191,7 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: quickfix and Light load no skill (work add|start|done, verify inline); Full: design -> work -> verify with ~/maestro/skills/maestro-{bundle,design,work,verify}/SKILL.md; read-only any tier: maestro-{explore,diagnose,coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
+            "method: match the task to a playbook (table in ~/maestro/WORKFLOW.md#routing) and copy its steps from maestro recipe show <name> into the plan list; a quickfix needs none; tracked work: maestro work add|start|done; Full adds a bundle with ~/maestro/skills/maestro-{bundle,verify}/SKILL.md; any tier: maestro-{coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  read ~/maestro/WORKFLOW.md: recon before tier selection; decision ownership, testing discipline, resume authority, and completion/delivery rules live there, not in this brief",
             `intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
@@ -365,28 +365,6 @@ export const coordinationPlugin: BuiltInPlugin = {
             throw new CliError("MISSING_ARGUMENT", "missing hook event");
           }
           const harness = harnessOption(invocation);
-          if (event === "PreToolUse") {
-            const sessionId = context.sessions.current().id;
-            const held = (context.dispatch as DispatchService)
-              .list()
-              .filter(
-                (dispatch) =>
-                  dispatch.heldBy === sessionId ||
-                  dispatch.claimedBy === sessionId ||
-                  dispatch.targetSession === sessionId,
-              )
-              .at(-1);
-            if (!held) return { data: {}, text: "" };
-            const output = {
-              hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                permissionDecision: "deny",
-                permissionDecisionReason:
-                  `${held.id}: a Peer does not create sub-topology (SLP invariant 4)`,
-              },
-            };
-            return { data: output, text: JSON.stringify(output) };
-          }
           const session = context.sessions.record(event, harness ?? undefined);
           context.log.append({
             type: "hook.record",

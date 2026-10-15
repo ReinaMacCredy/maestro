@@ -142,8 +142,8 @@ test("seat-dirs-keys: parseProfile accepts skills and settings, refuses settings
   );
   expect(seat.frontmatter.skills).toEqual(["maestro-work", "maestro-design"]);
   expect(seat.frontmatter.settings).toEqual({ outputStyle: "Concise", autoMemoryEnabled: null });
-  const node = parseProfile("/profiles/refuter.md", "---\nharness: claude\nmodel: default\nskills: [maestro-explore]\n---\nRole: Refuter.\n");
-  expect(node.frontmatter.skills).toEqual(["maestro-explore"]);
+  const node = parseProfile("/profiles/refuter.md", "---\nharness: claude\nmodel: default\nskills: [maestro-coach]\n---\nRole: Refuter.\n");
+  expect(node.frontmatter.skills).toEqual(["maestro-coach"]);
   expect(node.frontmatter.settings).toBeUndefined();
 
   for (const [path, frontmatter] of [
@@ -311,7 +311,7 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
     };
     // d854: the Bash(...) patterns render into the seat settings deny (R11), so the
     // agent line keeps the bare names alone.
-    const common = ["Agent", "Task", "Workflow", "SlashCommand", "WebSearch", "TodoWrite", "EnterPlanMode", "ExitPlanMode", "AskUserQuestion"];
+    const common = ["SlashCommand", "WebSearch", "EnterPlanMode", "ExitPlanMode", "AskUserQuestion"];
     for (const tool of common) {
       for (const name of ["peer", "peer-opus", "peer-refuter", "peer-reviewer-security"]) {
         expect({ name, tool, line: await denyLine(name) }).toEqual({ name, tool, line: expect.stringContaining(tool) });
@@ -370,7 +370,7 @@ test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries
     const leadText = await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8");
     const leadLine = leadText.slice(0, leadText.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
     expect(leadLine).toEqual(expect.not.stringContaining("("));
-    expect(leadLine).toEqual(expect.stringContaining("Agent"));
+    expect(leadLine).toEqual(expect.not.stringContaining("Agent"));
     expect(leadLine).toEqual(expect.stringContaining("LSP"));
     expect(await denyOf("lead")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)"]);
     expect(await denyOf("peer")).toContain("Bash(herdr:*)");
@@ -399,11 +399,13 @@ test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders c
       return parsed.permissions.deny;
     };
     const nine = "Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion";
+    // the pstack port (d875) lets the working seats delegate and keep a plan list.
+    const five = "SlashCommand, WebSearch, EnterPlanMode, ExitPlanMode, AskUserQuestion";
     const twoBash = ["Bash(claude:*)", "Bash(npx claude:*)"];
 
-    expect(await lineOf("lead")).toBe(`disallowedTools: ${nine}, LSP`);
+    expect(await lineOf("lead")).toBe(`disallowedTools: ${five}, LSP`);
     expect(await denyOf("lead")).toEqual(twoBash);
-    expect(await lineOf("peer")).toBe(`disallowedTools: ${nine}`);
+    expect(await lineOf("peer")).toBe(`disallowedTools: ${five}`);
     expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)"]);
     expect(await lineOf("team-supervisor")).toBe(`disallowedTools: ${nine}`);
     expect(await denyOf("team-supervisor")).toEqual(twoBash);
@@ -411,7 +413,7 @@ test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders c
     // d851 union puts the node's own names first, so the composed line is the
     // peer set in a different order and nothing more.
     const names = (line: string) => line.slice("disallowedTools: ".length).split(", ").sort();
-    expect(await lineOf("peer-opus")).toBe(`disallowedTools: AskUserQuestion, ${nine.slice(0, nine.lastIndexOf(", AskUserQuestion"))}`);
+    expect(await lineOf("peer-opus")).toBe(`disallowedTools: AskUserQuestion, ${five.slice(0, five.lastIndexOf(", AskUserQuestion"))}`);
     expect(names(await lineOf("peer-opus"))).toEqual(names(await lineOf("peer")));
   });
 });

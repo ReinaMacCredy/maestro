@@ -16,9 +16,12 @@ one along the team topology.
 
 Working discipline, carried here because this profile replaces the harness's
 default instructions: prefer the harness's file and search tools over shell
-equivalents; read a file before editing it; never commit, push, tag, or publish
-without the owner's explicit word; report plainly, leading with the outcome and
-naming what was not verified.
+equivalents; read a file before editing it; commit, push, or open a PR only
+on the owner's explicit word or under a delivery grant (`maestro recipe show
+opening-a-pr`), and tag or publish only on the owner's explicit word; report
+plainly, leading with the outcome and naming what was not verified. A report
+to the owner opens with how many things need the owner, and each of them
+carries a recommendation and what happens if no answer comes.
 
 When a prompt opens with `slp team <team-id> generation <n> instance <uuid>;
 reply <challenge>`, reply on one line and nothing else:
@@ -184,10 +187,12 @@ until the store changes), and `[attention] <seat> idle` or `[attention]
 <seat> pane exited|closed` to the seat above. Answer a nudge by recording,
 never by replying to the runtime. A Peer reaches the Lead and other Peers only
 through recorded work notes and returns; those push lines are its wake-ups and
-its seat denies `herdr`. Work that has an owner, writes files, returns or is
-accepted runs in a Herdr pane through the SLP operations and leaves a store
-row; a harness sub-agent (Agent, Task or Workflow) is used only for read-only
-scouting that returns text and writes nothing. The Lead and the Team
+its seat denies `herdr`. Work that has an owner, returns or is accepted runs
+in a Herdr pane through the SLP operations and leaves a store row. Inside its
+seat, the Lead or Peer that holds an item delegates code edits to harness
+sub-agents under maestro profiles (`maestro recipe show fan-out`), reviews
+every sub-agent diff itself, and stays the one that returns and is accepted;
+a sub-agent holds no lease and files no handback. The Lead and the Team
 Supervisor may add a hand-typed
 ask: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record with `herdr agent prompt`, opening every
@@ -241,9 +246,11 @@ before editing it; never commit, push, tag, or publish unless the request you
 were given says to; report plainly, leading with the outcome and naming what
 you did not verify.
 
-You do the work yourself, in this workspace. There is no one to hand it to and
-no dialog to ask a question through; everything you need to say is written
-down with the commands below.
+You own the work in this workspace and answer for it. You may delegate code
+edits to sub-agents under maestro profiles (`maestro recipe show fan-out`)
+and review every diff yourself, but no other seat takes the item, and there
+is no dialog to ask a question through; everything you need to say is
+written down with the commands below.
 
 The record is one item, and these commands are your whole surface on it:
 

@@ -1,6 +1,6 @@
 ---
 name: maestro-graph
-description: Drive a pre-known multi-agent path as a maestro graph - run it by name or from a file you just wrote, pull each agent node with graph next, spawn it as a sub-agent under its maestro-<profile> definition, hand the result back with graph result, repeat until the verdict. A sub-agent node is read-only scouting; a node that writes files or is accepted is opened as a pane instead. Author a new graph from the reference when no preset fits.
+description: Drive a pre-known multi-agent path as a maestro graph - run it by name or from a file you just wrote, pull each agent node with graph next, spawn it as a sub-agent under its maestro-<profile> definition, hand the result back with graph result, repeat until the verdict. A sub-agent node reads or writes as its profile allows, and the chat running the graph reviews every diff a writing node leaves; a node whose result another seat must accept is opened as a pane instead. Author a new graph from the reference when no preset fits.
 review-date: 2026-11-28
 ---
 <!-- maestro-skill-version: dev -->
@@ -21,7 +21,8 @@ diagnosis and the SLP seat protocol stay outside graphs.
   set; a nearer file shadows a farther one by name. `maestro graph show
   <name>` prints one.
 - A shipped preset fits: run it by name. `review-gate` takes `range=<git
-  range>` and `tier=light|full`; `fix-loop` takes `scope=<what to fix>` and
+  range>`, `tier=light|full`, `intent=<what the change is for>` and, on a
+  re-run, `justified=<file:line reason per line>`; `fix-loop` takes `scope=<what to fix>` and
   `check=<command that must pass>` and drives a writing fixer for at most
   three rounds; `council` takes `brief=<neutral brief>` and
   `tier=lens|debate|debate-with-proof|high-risk` and runs the maestro-council
@@ -40,16 +41,18 @@ loop:
   if envelope.done: stop; the verdict, LIMIT stop or failed node is in it
   for each node in envelope.nodes (all at once, they are independent):
     kind human  -> stop and ask the user the prompt; feed the answer back
-    kind agent  -> spawn a read-only scouting sub-agent with the node's profile and brief
+    kind agent  -> spawn a sub-agent with the node's profile and brief
   for each returned sub-agent:
     maestro graph result <run> <ref> --file <path>|--text "<result>"
   maestro graph next <run> --json
 ```
 
-- A sub-agent node is read-only scouting that returns text and writes
-  nothing; a node whose work writes files, returns or is accepted is opened
-  as a pane with `maestro work add --to <peer>` and its result handed back
-  with `graph result` as before.
+- A sub-agent node reads or writes as its profile allows: review lenses
+  are read-only, `fixer` and `delegate` write. Review every diff a writing
+  node leaves before the next node reads the tree. A node whose result
+  another seat must accept is opened as a pane with
+  `maestro work add --to <peer>` and its result handed back with
+  `graph result` as before.
 - `run` returns the first envelope, so the first `next` is implicit.
 - Redirect every `--json` envelope to a file and read the fields you need
   out of it (`jq`, or one `python3 -c` line); never let it land inline. An
@@ -81,8 +84,9 @@ The profile is a definition `maestro install` rendered for both harnesses
 `~/.codex/agents/maestro-<profile>.toml`.
 
 - Claude Code: the `Agent` tool with `subagent_type: "maestro-<profile>"`,
-  `model: "opus"`, and the node's `brief` verbatim as the task.
-  A profile whose `harness` is codex (challenger, verifier, auditor) opens
+  no `model` override (the profile's own model applies), and the node's
+  `brief` verbatim as the task. A profile whose `harness` is codex
+  (challenger, verifier, auditor, reviewer-correctness-codex) opens
   as a Codex pane with `--profile maestro-<profile>` instead; the Agent tool
   rejects its model.
 - Codex: `spawn_agent` with agent type `maestro-<profile>` and the node's

@@ -124,11 +124,7 @@ async function writePolicyConfig(path: string): Promise<void> {
   await writeFile(path, `${JSON.stringify(config)}\n`);
 }
 
-async function writeHookConfig(
-  path: string,
-  command: string,
-  harness: "claude" | "codex",
-): Promise<void> {
+async function writeHookConfig(path: string, command: string): Promise<void> {
   const config = await readJson<HookConfig>(path, { hooks: {} });
   config.hooks ??= {};
   // room d140 amends d137: Claude Code has no PostCompact event. A completed
@@ -148,21 +144,14 @@ async function writeHookConfig(
       },
     ];
   }
-  if (harness === "claude") {
-    const retained = retainForeignHookGroups(config.hooks.PreToolUse ?? []);
-    config.hooks.PreToolUse = [
-      ...retained.groups,
-      {
-        matcher: "Agent|Task",
-        hooks: [{ type: "command", command }],
-      },
-    ];
-  }
-  const retiredGroups = retainForeignHookGroups(config.hooks.PostToolUse ?? []).groups;
-  if (retiredGroups.length > 0) {
-    config.hooks.PostToolUse = retiredGroups;
-  } else {
-    delete config.hooks.PostToolUse;
+  // d875 retired the PreToolUse sub-agent deny; PostToolUse retired earlier.
+  for (const retired of ["PreToolUse", "PostToolUse"]) {
+    const groups = retainForeignHookGroups(config.hooks[retired] ?? []).groups;
+    if (groups.length > 0) {
+      config.hooks[retired] = groups;
+    } else {
+      delete config.hooks[retired];
+    }
   }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
@@ -480,7 +469,7 @@ async function writeHarnessWiring(root: string): Promise<boolean> {
     await mkdir(dirname(adapter.hookPath), { recursive: true });
     await writeFile(adapter.hookPath, hookSource(adapter.harness));
     await chmod(adapter.hookPath, 0o755);
-    await writeHookConfig(adapter.configPath, adapter.hookCommand, adapter.harness);
+    await writeHookConfig(adapter.configPath, adapter.hookCommand);
   }
   return codexHooksBefore !== await readFile(codexConfigPath, "utf8");
 }
@@ -749,7 +738,6 @@ export const installPlugin: BuiltInPlugin = {
           await writeHookConfig(
             join(mainWorktree, ".codex", "hooks.json"),
             "bun .codex/hooks/maestro-record.ts",
-            "codex",
           );
         }
         await removeLegacySlpMirror(join(repo, "AGENTS.md"));
