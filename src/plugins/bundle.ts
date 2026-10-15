@@ -1127,7 +1127,7 @@ export const bundlePlugin: BuiltInPlugin = {
             specPath,
             join(bundle.directory, "VERIFY.md"),
             final,
-          ) ?? (final ? { problems: [`${specPath}:1 ## Units section is missing`], rows: 0, units: 0 } : null);
+          );
           if (!result) {
             return {
               data: { final, id, problems: [], rows: 0, units: 0, unitsSection: false },

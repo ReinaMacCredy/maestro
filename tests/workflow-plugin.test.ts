@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
@@ -186,6 +186,31 @@ test("128 bundle save ingests a foreign trio dir straight to archived", async ()
     const found = await runCli(fixture, ["search", "dissolve"]);
     expect(found.stdout).toContain("card-sprawl");
     expect(found.stdout).toContain("(bundle, archived)");
+  });
+});
+
+test("pstack-port: install retires the managed maestro-diagnose and maestro-explore copies and their links, and keeps a user's own (d863)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const stamped = "---\nname: retired\n---\n<!-- maestro-skill-version: dev -->\nold text\n";
+    const managed = join(fixture.home, "maestro", "skills", "maestro-diagnose");
+    await mkdir(managed, { recursive: true });
+    await writeFile(join(managed, "SKILL.md"), stamped);
+    await mkdir(join(fixture.home, ".claude", "skills"), { recursive: true });
+    await mkdir(join(fixture.home, ".codex", "skills"), { recursive: true });
+    await symlink(managed, join(fixture.home, ".claude", "skills", "maestro-diagnose"));
+    await symlink(managed, join(fixture.home, ".codex", "skills", "maestro-diagnose"));
+    const own = join(fixture.home, ".claude", "skills", "maestro-explore");
+    await mkdir(own, { recursive: true });
+    await writeFile(join(own, "SKILL.md"), "---\nname: maestro-explore\n---\nmine\n");
+
+    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
+
+    expect(existsSync(managed)).toBe(false);
+    for (const harness of [".claude", ".codex"]) {
+      expect(existsSync(join(fixture.home, harness, "skills", "maestro-diagnose"))).toBe(false);
+    }
+    expect(await readFile(join(own, "SKILL.md"), "utf8")).toContain("mine");
   });
 });
 

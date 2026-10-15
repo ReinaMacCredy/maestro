@@ -365,6 +365,8 @@ export const coordinationPlugin: BuiltInPlugin = {
             throw new CliError("MISSING_ARGUMENT", "missing hook event");
           }
           const harness = harnessOption(invocation);
+          // d875: a repo installed before d875 keeps firing PreToolUse on Agent|Task until its next install.
+          if (event === "PreToolUse") return { data: {}, text: "" };
           const session = context.sessions.record(event, harness ?? undefined);
           context.log.append({
             type: "hook.record",

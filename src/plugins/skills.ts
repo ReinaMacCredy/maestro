@@ -14,10 +14,14 @@ export const skillNames = [
   "maestro-verify",
 ] as const;
 
+// Removed by the pstack port (d863); install deletes only our stamped copies and links to them.
+const retiredSkillNames = ["maestro-diagnose", "maestro-explore"] as const;
+
 const stampPattern = /<!-- maestro-skill-version: ([0-9a-f]{40}|dev) -->/;
 
 export interface SkillSync {
   current: string[];
+  retired: string[];
   legacyRemoved: string[];
   legacySkipped: string[];
   linked: string[];
@@ -67,6 +71,7 @@ export async function materializeSkills(home: string, commit: string): Promise<S
   const targetRoot = join(home, "maestro", "skills");
   const sync: SkillSync = {
     current: [],
+    retired: [],
     legacyRemoved: [],
     legacySkipped: [],
     linked: [],
@@ -121,6 +126,26 @@ export async function materializeSkills(home: string, commit: string): Promise<S
       sync.legacySkipped.push(name);
     }
   }
+  for (const name of retiredSkillNames) {
+    const target = join(targetRoot, name);
+    let removed = false;
+    for (const link of [join(home, ".claude", "skills", name), join(home, ".codex", "skills", name)]) {
+      try {
+        const entry = await lstat(link);
+        if (entry.isSymbolicLink() && resolve(dirname(link), await readlink(link)) === target) {
+          await rm(link, { force: true });
+          removed = true;
+        }
+      } catch (error) {
+        if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+      }
+    }
+    if (await managedSkill(target)) {
+      await rm(target, { recursive: true, force: true });
+      removed = true;
+    }
+    if (removed) sync.retired.push(name);
+  }
   return sync;
 }
 
@@ -128,6 +153,7 @@ export function formatSkillSync(sync: SkillSync): string {
   const parts: string[] = [];
   if (sync.written.length > 0) parts.push(`skills wrote: ${sync.written.join(", ")}`);
   if (sync.current.length > 0) parts.push(`skills current: ${sync.current.join(", ")}`);
+  if (sync.retired.length > 0) parts.push(`skills retired: ${sync.retired.join(", ")}`);
   if (sync.linked.length > 0) parts.push(`skills linked for Claude: ${sync.linked.join(", ")}`);
   if (sync.linkedCodex.length > 0) parts.push(`skills linked for Codex: ${sync.linkedCodex.join(", ")}`);
   if (sync.legacyRemoved.length > 0) {

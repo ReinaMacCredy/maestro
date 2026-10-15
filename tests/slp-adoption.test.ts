@@ -1201,6 +1201,30 @@ test("148 install retires maestro's Claude PreToolUse group and keeps foreign on
   });
 });
 
+test("pstack-port: a stale PreToolUse hook from an older install records nothing and prints nothing (d875)", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "held while a sub-agent spawns");
+    await startWork(fixture, work, "stale-hook-holder");
+    const lastEvent = async (): Promise<string | undefined> => {
+      const status = await runCli(fixture, ["status", "--json"], session("stale-hook-holder"));
+      const sessions = (JSON.parse(status.stdout) as {
+        data: { sessions: Array<{ id: string; lastEvent: string }> };
+      }).data.sessions;
+      return sessions.find((candidate) => candidate.id === "stale-hook-holder")?.lastEvent;
+    };
+    const before = await lastEvent();
+    const fired = await runCli(
+      fixture,
+      ["hook", "record", "--event", "PreToolUse", "--harness", "claude"],
+      session("stale-hook-holder"),
+      JSON.stringify({ tool_name: "Agent" }),
+    );
+    expect(fired.exitCode).toBe(0);
+    expect(fired.stdout).toBe("");
+    expect(await lastEvent()).toBe(before);
+  });
+});
+
 test("150 install stays inert and read-time attention preserves work and decisions", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

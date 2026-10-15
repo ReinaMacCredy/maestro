@@ -230,18 +230,18 @@ test("bundle check prints one OK line for a clean plan, before and after verify 
   });
 }, 30_000);
 
-test("bundle check passes a bundle with no Units section, active or archived, and --final names it (d866)", async () => {
+test("bundle check passes a bundle with no Units section, active or archived, with or without --final (d866)", async () => {
   await withFixture(async (fixture) => {
     const oldSpec = "# SPEC old\n\n## Problem\n\n## Decisions\n";
     const oldVerify = "# VERIFY old\n\n| # | Scenario | Work / acceptance | Result |\n|---|----------|-------------------|--------|\n";
-    const directory = await openPlan(fixture, "old-plan", oldSpec, oldVerify);
+    await openPlan(fixture, "old-plan", oldSpec, oldVerify);
     const plan = await runCli(fixture, ["bundle", "check", "old-plan"]);
     expect(plan.stderr).toBe("");
     expect(plan.exitCode).toBe(0);
     expect(plan.stdout).toBe("bundle check old-plan: SPEC.md has no ## Units section; nothing to check\n");
     const final = await runCli(fixture, ["bundle", "check", "old-plan", "--final"]);
-    expect(final.exitCode).toBe(1);
-    expect(problems(final.stderr)).toEqual([`${join(directory, "SPEC.md")}:1 ## Units section is missing`]);
+    expect(final.exitCode).toBe(0);
+    expect(final.stdout).toBe("bundle check old-plan: SPEC.md has no ## Units section; nothing to check\n");
 
     const foreign = join(fixture.repo, "old-bundles", "archived-plan");
     await mkdir(foreign, { recursive: true });
