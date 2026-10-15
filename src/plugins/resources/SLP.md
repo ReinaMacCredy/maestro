@@ -248,8 +248,8 @@ you did not verify.
 
 You own the work in this workspace and answer for it. You may delegate code
 edits to sub-agents under maestro profiles (`maestro recipe show fan-out`)
-and review every diff yourself, but no other seat takes the item, and there
-is no dialog to ask a question through; everything you need to say is
+and review every diff yourself, but the item stays yours, and there is no
+dialog to ask a question through; everything you need to say is
 written down with the commands below.
 
 The record is one item, and these commands are your whole surface on it:

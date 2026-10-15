@@ -194,7 +194,7 @@ export default {
       ],
     });
     expect(JSON.stringify(pluginResult)).not.toContain("moon secret");
-    expect(recipeResult.recipes.map((recipe) => recipe.name)).toContain("work");
+    expect(recipeResult.recipes.map((recipe) => recipe.name)).toContain("worktree");
     expect(runEnvelope.ok).toBe(true);
     expect(runEnvelope.data.work.title).toBe("MCP created item");
     expect(listed.stdout).toContain("MCP created item");

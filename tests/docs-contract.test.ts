@@ -439,7 +439,7 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(peer).not.toContain("Communicate directly");
   expect(peer).not.toContain("herdr agent prompt");
   expect(peer).toContain("record `maestro work note <work-id> \"<the premise, the evidence, and what the request would become>\" --blocked`");
-  expect(unwrap(block(pack, "shared:peer"))).toContain("no other seat takes the item, and there is no dialog to ask a question through");
+  expect(unwrap(block(pack, "shared:peer"))).toContain("the item stays yours, and there is no dialog to ask a question through");
   expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
   expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
 
