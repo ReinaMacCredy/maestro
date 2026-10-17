@@ -11,6 +11,8 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.126.0] - 2026-10-17
+
 ### Added
 
 - pstack's task-type playbooks are maestro's main workflow (d857, d858):
@@ -33,6 +35,9 @@ TypeScript-on-Bun line and continues the existing version sequence.
 - `maestro bundle check <id> [--final]` lints SPEC `## Units` and the
   per-unit VERIFY rows (d866).
 - THIRD_PARTY.md carries pstack's MIT notice (Lauren Tan).
+- `maestro topic path <slug>` and `maestro topic list`: files an agent
+  produces while discussing a topic (demos, reports, notes, captures) go in a
+  git-ignored `.maestro/topic/<slug>`.
 
 - Recipe `verification-skill`, adopted from pstack's create-verification-skill
   (poteto): build or maintain a repository's `verify-<repo>` skill (launch,
@@ -76,6 +81,9 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 - `maestro install` keeps a repository's existing policy choices and only adds
   missing defaults; it used to reset every enabled gate on reinstall.
+- `maestro update` no longer stops with `INVALID_PROFILE` when a profile
+  shadow still lists `maestro-explore` or `maestro-diagnose`; install skips
+  the retired skill names.
 
 ## [0.125.0] - 2026-09-28
 
