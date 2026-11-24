@@ -25,11 +25,11 @@ the lead.
      Before Serializing Shared State** (PRINCIPLES.md). Serialize only for real
      invariants.
    - Smallest safe decomposition. If one worker is best, name why.
-4. Delegate the code to a subagent under the `delegate` profile with a brief in
+4. Delegate the code to a writing subagent on the strongest model with a brief in
    maestro-work's dispatch envelope (Objective, Owned scope, Excluded scope,
    Mutation, Stop condition, Evidence required). The scope names file paths,
    the success criteria, and the data shape with its organizing structure per
-   **Model the Domain** (PRINCIPLES.md), chosen before the delegate writes
+   **Model the Domain** (PRINCIPLES.md), chosen before the subagent writes
    logic. Prefer a state machine over scattered booleans, a table or registry
    over branching, and a typed model over repeated shape assumptions.
    - Review its diff yourself before anything else, and write your own

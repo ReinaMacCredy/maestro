@@ -5,7 +5,7 @@ against a target. It loops hypotheses with a before and after measurement,
 keeps a decision log, and lands one commit per accepted win. A one-off fix is
 `maestro recipe show bug-fix` or `maestro recipe show perf-issue`. This is the
 loop. You own the metric and the experiment's integrity. You supervise and
-review, and subagents under the `delegate` profile make the attempts. Ported
+review, and writing subagents on the strongest model make the attempts. Ported
 from pstack's hillclimb playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
 
 The core discipline is one change, one measurement, keep or revert. Never stack
@@ -26,7 +26,7 @@ untested changes, and never claim a win from code inspection, per
    owner otherwise. Every accepted win becomes its own commit, so confirm the
    delivery grant here (`maestro recipe show opening-a-pr`).
 2. Build the measurement harness, prove its sensitivity, then freeze it, per
-   **Build the Lever** (PRINCIPLES.md). A subagent under the `delegate` profile
+   **Build the Lever** (PRINCIPLES.md). A writing subagent on the strongest model
    writes the harness. Run contrasting realistic workloads and confirm that the
    target case reproduces the symptom while easier cases separate as expected.
    If the harness cannot tell them apart, revise the workload or the metric.
@@ -51,7 +51,7 @@ untested changes, and never claim a win from code inspection, per
    by the performance mantras in step 2 of `maestro recipe show perf-issue`.
    Borrow only their order, not that step's stop rule.
 5. Loop, one hypothesis per iteration:
-   - Hand the change to a subagent under the `delegate` profile with a tight
+   - Hand the change to a writing subagent on the strongest model with a tight
      scope. Supervise and review its diff rather than typing it, per
      **Guard the Context Window** (PRINCIPLES.md). When several independent
      hypotheses are live, fan them out to parallel subagents, each in its own

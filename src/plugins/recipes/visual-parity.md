@@ -20,7 +20,7 @@ decides equivalence, not your eye. Ported from pstack's visual-parity playbook
    blocking phase. After that, parallelize across worktrees with one owner per
    component (`maestro recipe show worktree`),
    per **Separate Before Serializing Shared State** (PRINCIPLES.md). A
-   subagent under the `delegate` profile writes each migration, and you review
+   writing subagent on the strongest model writes each migration, and you review
    its diff.
 4. Verify each component against its baseline with an image diff, driven
    through the repository's verify-<repo> skill

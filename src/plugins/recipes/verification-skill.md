@@ -109,8 +109,8 @@ describes that the product no longer does is either drift, so fix the map, or
 a product regression, so report it and never paper over it in the map.
 
 1. Read the feature map and fix missing, extra, duplicate or dead entries.
-2. Source wave. Launch one read-only subagent per feature under the
-   `explorer` profile, all at once. Each explains from source how the feature
+2. Source wave. Launch one read-only subagent per feature on a mid
+   model, all at once. Each explains from source how the feature
    works for its user, flags likely drift with citations, and returns one
    live-verification recipe. None drives the product or edits a file.
 3. Reconcile. Every feature has a returned summary. Merge overlapping recipes

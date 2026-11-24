@@ -11,13 +11,13 @@ The matched playbook (`maestro recipe show <name>`, chosen by
 [Routing](~/maestro/WORKFLOW.md#routing)) owns the steps of a task. This
 skill owns what every playbook shares: the brief a writer receives, the rules
 it writes by, the handback it returns, and the record the holder keeps. A
-writer is a `delegate` subagent, a lane in a Herdr pane, or the main chat on
+writer is a writing subagent, a lane in a Herdr pane, or the main chat on
 a quickfix. Apply [WORKFLOW.md](~/maestro/WORKFLOW.md) for method rules;
 pause only the slice blocked by scope or authority.
 
 ## Dispatch
 
-When work is handed to a writer (a `delegate` subagent, or a lane in a
+When work is handed to a writer (a writing subagent, or a lane in a
 Herdr pane in the room), send this envelope:
 
 ```text

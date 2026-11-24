@@ -18,7 +18,7 @@ pstack's multi-phase-plan playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    branch, SHA and screenshots for step 5. Ask the owner only about a product
    or preference call that no run can settle, and give options, per
    **Never Block on the Human** (PRINCIPLES.md).
-3. Explore in subagents under the `explorer` profile, per
+3. Explore in read-only subagents on a mid model, per
    **Guard the Context Window** (PRINCIPLES.md). Each returns file pointers,
    conventions, test commands and entry points, never an inlined dump.
 4. Open the bundle with `maestro bundle open <id> --work <work-id>`. It

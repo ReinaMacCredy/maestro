@@ -60,33 +60,29 @@ administrative Maestro commands, or direct Herdr calls; topology and
 external-effect limits remain obligations enforced by the Human and host
 policy.
 
-## Seat profiles
+## Seats
 
-Every seat is launched as a native harness profile rendered from a
-maestro-owned source: `claude --agent maestro-<name>` or
-`codex --profile maestro-<name>`. The Workspace Pack names one profile per
-seat (`<!-- slp:profile:lead=lead -->`, `peer`);
-the profile is a markdown file (YAML frontmatter `harness`, `model`, `effort`,
-`permission` or `sandbox`, `autocompact`, `disallowed_tools`, `description`;
-body = the mandate) looked up in `<project>/.maestro/profiles/`, then
-`~/maestro/profiles/`, then the shipped copies. `maestro install` renders
-every resolvable profile into `~/.claude/agents/maestro-<name>.md`,
-`~/.codex/maestro-<name>.config.toml` and `~/.codex/agents/maestro-<name>.toml`;
-a seat whose render is missing fails with `PROFILE_NOT_INSTALLED` before any
-pane opens. The Lead changes through a shadowing file
-(`~/maestro/profiles/lead.md`); a Peer variant is
-`maestro team start --peer-profile <name>` for the generation or
-`maestro work add "<objective>" --to <peer> --profile <name>` for one Peer,
-and `--to peer-<name>` where `<name>` is a profile composes the pack's Peer
-block + Peer mandate + that body. That Peer block is the pack's second shared
-section (`<!-- slp:shared:peer:begin -->`): every Peer seat reads it in place of
-the shared contract the other seats carry, so the words a Peer meets name no
+SLP has exactly two seats, each launched from a seat file maestro owns:
+`claude --agent maestro-<seat>` or `codex --profile maestro-<seat>`. A seat
+file is markdown (YAML frontmatter `harness`, `model`, `effort`,
+`permission`, `autocompact`, `disallowed_tools`, `description`, `skills`,
+`settings`; body = the mandate) looked up as `lead.md` or `peer.md` in
+`<project>/.maestro/profiles/`, then `~/maestro/profiles/`, then the shipped
+copies; a copy with frontmatter and no body keeps the mandate from the layer
+below. `maestro install` writes each seat into
+`~/.maestro/claude/<seat>/agents/maestro-<seat>.md` and
+`~/.codex/maestro-<seat>.config.toml`; a seat whose file is missing fails
+with `SEAT_NOT_INSTALLED` before any pane opens. Maestro ships no other agent
+definitions, and install retires the `maestro-*` agent files earlier releases
+rendered into `~/.claude/agents` and `~/.codex/agents`. The Peer reads the
+pack's second shared section (`<!-- slp:shared:peer:begin -->`) in place of
+the shared contract the Lead carries, so the words a Peer meets name no
 seat and no rung (room d134); a Hub pack without it renders the Peer from its
 own shared contract and `maestro install` says which block to copy. A seat's model is a launch-time choice
 (`maestro team start --lead-model`, `--peer-model`, and
 `maestro work add --to <peer> --model` for one Peer): it rides the launch line
-and changes neither the profile nor its digest. A generation pins the pack and
-the bytes of every seat profile it launches - `lead` and `peer` - whether or
+and changes neither the seat file nor its digest. A generation pins the pack and
+the bytes of both seat files - `lead` and `peer` - whether or
 not it ever opens a Peer; editing one mid-generation is refused like a pack edit, on that
 team's next Lead `maestro work add --to <peer>` and on its own
 `maestro team start` restore.
@@ -186,7 +182,7 @@ maestro team start /absolute/project/path "<observable objective>"
 Start creates one generation-scoped Herdr workspace, exactly one Lead, the
 runtime pane, and one initial `OPEN` work item for the Lead.
 Repeating the same start verifies and repairs required runtime roles without
-creating duplicates. A changed objective or peer profile is rejected until
+creating duplicates. A changed objective or seat model is rejected until
 stop.
 
 The Hub runs `maestro team stop <team-id> --reason "<closing report>"`, which

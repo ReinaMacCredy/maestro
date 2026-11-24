@@ -21,8 +21,8 @@ authoring-a-skill playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    load it. A skill maestro ships also carries `review-date: <YYYY-MM-DD>` in
    its frontmatter and the line `<!-- maestro-skill-version: dev -->` right
    after the frontmatter.
-3. For a skill maestro ships, hand the code to a subagent under the `delegate`
-   profile. That covers the entry in `skillNames` in `src/plugins/skills.ts`,
+3. For a skill maestro ships, hand the code to a writing subagent on the
+   strongest model. That covers the entry in `skillNames` in `src/plugins/skills.ts`,
    the skill and reference list in `tests/workflow-plugin.test.ts`, and a
    `[lint]` test in `tests/docs-contract.test.ts`. Add an assertion only for a
    structural rule, a shape or a command a check can assert. A subjective rule

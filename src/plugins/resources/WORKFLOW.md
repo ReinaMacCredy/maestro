@@ -149,9 +149,8 @@ Skills load by bare name in every tool and serve steps inside a playbook:
 
 ## Subagents
 
-Inside a playbook the main chat never writes code. A subagent under the
-`delegate` profile writes it; the main chat plans, briefs, reviews the diff,
-and verifies. The work item, its lease, and its proof stay with the main
+Inside a playbook the main chat never writes code. A writing subagent
+writes it; the main chat plans, briefs, reviews the diff, and verifies. The work item, its lease, and its proof stay with the main
 chat. A quickfix outside any playbook is
 written directly.
 
@@ -164,11 +163,11 @@ written directly.
 - You own every subagent's work. Review its diff and write your own summary;
   never pass its report through. A second opinion is the same brief on a
   different model family, and agreement is high-signal.
-- Pick the profile by role. `delegate` writes code; `explorer`,
-  `investigator`, and `fan-out-worker` read in bulk; `explainer`,
-  `arena-judge`, and the review nodes judge. Writing and judgment roles run
-  Opus, read-only bulk roles run Sonnet, and panels pair Opus with Codex.
-  A role is overridden in `~/maestro/profiles/<name>.md`.
+- Maestro ships no subagent definitions. Spawn one of the harness's own
+  agent types, give it a written brief, and name the model in the call each
+  time: the strongest model for writing code and judging a diff, a mid model
+  for bulk reading and reporting, a small model for search. Panels pair
+  Opus with Codex.
 - Work that needs a durable seat (multi-day, owner-visible, cross-harness,
   or accepted by someone other than the main chat) runs in a Herdr pane
   through the SLP operations and leaves a store row; the seat delegates the
@@ -429,13 +428,14 @@ security or correctness finding stays visible as Consider.
 - **Claude Code**: skills load from `~/.claude/skills/maestro-*` symlinks
   that `maestro install` maintains; `/simplify` and `/code-review` are the
   built-in simplification and correctness passes. The plan list is the todo
-  tool. A profile runs as the agent `maestro-<profile>`. Forks go to the user
+  tool. A subagent is one of Claude Code's own agent types with the model
+  named in the call. Forks go to the user
   as question cards: one decision per card, "what this does" first, a
   `my rec:` line.
 - **Codex**: skills load from `~/.codex/skills/maestro-*` symlinks that
   `maestro install` maintains (restart Codex after a new link); the Full
-  review runs in a fresh context. The plan list is `update_plan`. A profile
-  runs as the sub-agent `maestro-<profile>` that install renders under
-  `~/.codex/agents`. Forks go to the user as one plain question with a
+  review runs in a fresh context. The plan list is `update_plan`. A
+  sub-agent is one of Codex's own agent types with the model named in the
+  call. Forks go to the user as one plain question with a
   `my rec:` line. In project work Codex reads `~/.codex/AGENTS.md`, which
   must point here; inside the Hub it reads `~/maestro/AGENTS.md`.

@@ -13,7 +13,7 @@ redefines it. Record work, returns, reviewer acceptance, and settled decisions
 through Maestro before they govern execution; the push lines below carry each
 one along the team topology.
 
-Working discipline, carried here because this profile replaces the harness's
+Working discipline, carried here because this mandate replaces the harness's
 default instructions: prefer the harness's file and search tools over shell
 equivalents; read a file before editing it; commit, push, or open a PR only
 on the owner's explicit word or under a delivery grant (`maestro recipe show
@@ -116,15 +116,7 @@ nothing added, when the reset does not take.
 `maestro bundle open <id> --work <work-id>` is the store's signal that a design
 phase has begun: it pushes `[from <role>][<work-id> DESIGN] design bundle <id>`
 to that item's reviewer, once, on the open that creates the bundle and never on
-a resume, and nothing at all outside a running team. The seat above the one
-designing is the seat that opens the question-back pass on that design (room
-d153): the Hub, which manages no Peer, records `maestro decide --work
-<work-id>` and the Lead executes that ruling with `maestro work add --to
-peer-questioner` (room d154). The questioner is
-read-only and settles nothing: its questions arrive as its own return, each
-naming the claim it doubts and the evidence that would settle it, and the one
-designing answers each, by note or by changing the SPEC, before `maestro decide`
-locks the point it doubts (room d152). When you cannot
+a resume, and nothing at all outside a running team. When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
 the Hub) and `maestro status <work-id>` shows the flag.
@@ -179,8 +171,8 @@ never by replying to the runtime. A Peer reaches the Lead and other Peers only
 through recorded work notes and returns; those push lines are its wake-ups and
 its seat denies `herdr`. Work that has an owner, returns or is accepted runs
 in a Herdr pane through the SLP operations and leaves a store row. Inside its
-seat, the Lead or Peer that holds an item delegates code edits to harness
-sub-agents under maestro profiles, reviews
+seat, the Lead or Peer that holds an item delegates code edits to the harness's
+own sub-agents, naming the model in each call, reviews
 every sub-agent diff itself, and stays the one that returns and is accepted;
 a sub-agent holds no lease and files no handback. The Lead may add a
 hand-typed ask: record first (a decision with `--work`, a note), then prompt the
@@ -236,7 +228,7 @@ were given says to; report plainly, leading with the outcome and naming what
 you did not verify.
 
 You own the work in this workspace and answer for it. You may delegate code
-edits to sub-agents under maestro profiles
+edits to the harness's own sub-agents, naming the model in each call,
 and review every diff yourself, but the item stays yours, and there is no
 dialog to ask a question through; everything you need to say is
 written down with the commands below.
@@ -297,14 +289,14 @@ You start teams, inspect cross-team status, record owner or cross-team
 decisions, and may emergency-stop a team with a recorded reason. Emergency
 stop marks every unfinished item abandoned in its original generation without
 adding a fifth work state. `maestro team start --lead-model <model>` and
-`--peer-model <model>` change only the model a seat launches with, never its mandate or the pinned profile digest; the
-profile's own model is the default when no flag is given (room d128).
-`maestro team start` also pins the bytes of every seat profile the generation
-launches, `lead` and `peer`, whether or not that generation ever opens a
-Peer. Editing any of those shadows under `~/maestro/profiles/` while the
+`--peer-model <model>` change only the model a seat launches with, never its mandate or the pinned seat file digest; the
+seat file's own model is the default when no flag is given (room d128).
+`maestro team start` also pins the bytes of both seat files, `lead` and
+`peer`, whether or not that generation ever opens a
+Peer. Editing either owner copy under `~/maestro/profiles/` while the
 generation is RUNNING refuses its Lead's `maestro work add --to <peer>` and its
 own `maestro team start` restore with `SLP_SNAPSHOT_CHANGED`, naming two
-digests, until the bytes are put back; so a shadow edit belongs at a generation
+digests, until the bytes are put back; so a seat file edit belongs at a generation
 boundary, not beside a running team (room lesson l13).
 You are the Lead's reviewer: you read its returned work and may accept it or
 grant `--rework` on it, and its `--blocked` notes reach you. You may also
@@ -333,10 +325,10 @@ you as `blocked for the Hub: <team-id>:<id> <note>` until a Hub ruling with
 `--work <team-id>:<id>` answers it.
 <!-- slp:role:hub-supervisor:end -->
 
-The Lead and Peer mandates are the profile files the markers above name
-(`lead`, `peer`), looked up in
+The Lead and Peer mandates are the two seat files `lead.md` and `peer.md`,
+looked up in
 `<project>/.maestro/profiles/`, then `~/maestro/profiles/`, then the shipped
-copies, and rendered by `maestro install` into `claude --agent maestro-<name>`
-and `codex --profile maestro-<name>`. Every rendered seat carries the shared
+copies, and rendered by `maestro install` into `claude --agent maestro-<seat>`
+and `codex --profile maestro-<seat>`. Every rendered seat carries the shared
 contract above followed by its own mandate.
 

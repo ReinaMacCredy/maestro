@@ -39,13 +39,14 @@ These rules hold for every step below.
 4. Run N parallel candidates at once in the background, none seeing another,
    on different models where the harness offers them. Each works in
    its own sanitized directory on the same prompt. A candidate runs as a plain
-   subagent or a fresh harness session with no maestro profile. A profile's
-   name and mandate are text the candidate sees, and the `arena-runner`
-   profile names the arena.
-5. Once every candidate has finished, run one blinded judge on a model
-   family different from the candidates': the `arena-judge` profile
-   when no candidate ran on Claude, a Codex council profile such as
-   `challenger` when one did.
+   subagent or a fresh harness session briefed with the prompt alone; any
+   agent name or mandate that mentions the arena is text the candidate sees.
+5. Once every candidate has finished, run one blinded judge: a fresh
+   read-only subagent on the strongest model of a family different from the
+   candidates' (Claude when no candidate ran on Claude, Codex when one did).
+   Brief it to read every candidate end to end before scoring, score each
+   criterion with the file:line or check output behind it, recommend one
+   base, and name what each other candidate offers worth grafting.
    The judge sees the rubric and the outputs by sanitized label, never a model
    name.
 6. Verify the chain from transcripts, not self-report. Read each candidate's

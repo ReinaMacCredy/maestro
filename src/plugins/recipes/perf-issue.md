@@ -2,7 +2,7 @@
 
 Use this recipe when a measured slowness needs a trace and a fix against a
 baseline. You own the measurement story. You plan, review the diff and verify
-the numbers, and a subagent under the `delegate` profile writes the code. Tie
+the numbers, and a writing subagent on the strongest model writes the code. Tie
 every fix to a measurement. Reading source is not measuring. For sustained
 improvement of one metric against a target, use `maestro recipe show hillclimb`
 instead. Ported from pstack's perf-issue playbook (Lauren Tan, MIT; notice in
@@ -28,8 +28,8 @@ THIRD_PARTY.md).
    6. Do it concurrently.
    7. Do it cheaper.
 3. Plan the fix from the trace. If it crosses a function boundary, sketch the
-   new types and signatures first. Hand the implementation to a subagent
-   under the `delegate` profile, with a brief in maestro-work's dispatch
+   new types and signatures first. Hand the implementation to a writing subagent
+   on the strongest model, with a brief in maestro-work's dispatch
    envelope that names the files, the mechanism the trace names and the target
    number. Review its diff yourself. Capture a post-fix trace the same way as
    the baseline. Verify each attempt before you try the next, per

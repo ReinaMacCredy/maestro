@@ -62,7 +62,7 @@ skill (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    it if it advanced, and revert it if it did not. Verify each unit before
    starting the next, per **Sequence Work into Verifiable Units**
    (PRINCIPLES.md).
-   - A `delegate` subagent writes each unit's code. You review its diff and
+   - A writing subagent on the strongest model writes each unit's code. You review its diff and
      verify.
    - Verify by inspecting the artifact, never a self-report. When something
      passes too easily, suspect the observation method before the system.

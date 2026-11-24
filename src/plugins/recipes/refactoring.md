@@ -49,7 +49,7 @@ This recipe is for the focused-to-medium change.
      compatibility shims, no parallel old-and-new paths.
    - Spot-check every rename against the actual files. Renames silently miss
      usages in strings, prose, and back-references.
-   - Delegate the mechanical edits to a subagent under the `delegate` profile
+   - Delegate the mechanical edits to a writing subagent on the strongest model
      with a brief in maestro-work's dispatch envelope (Objective, Owned scope,
      Excluded scope, Mutation, Stop condition, Evidence required) and a
      specific scope (file paths, the names being moved, the guards to hold).

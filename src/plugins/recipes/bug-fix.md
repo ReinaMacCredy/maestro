@@ -61,8 +61,8 @@ The smallest change the evidence justifies ships, nothing more.
      record.
    - A diagnosis-only request stops here and replies with the cause.
 5. Plan the fix. If it crosses a function boundary, sketch the new types and
-   signatures before any body is written. Delegate the edit to a subagent under
-   the `delegate` profile with a brief in maestro-work's dispatch envelope
+   signatures before any body is written. Delegate the edit to a writing subagent
+   on the strongest model with a brief in maestro-work's dispatch envelope
    (Objective, Owned scope, Excluded scope, Mutation, Stop condition, Evidence
    required) and a specific scope.
    - Review its diff yourself before anything else, and write your own

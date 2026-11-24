@@ -26,7 +26,7 @@ slowness. Ported from pstack's runtime-forensics and trace-forensics playbooks
      (`maestro topic path <slug>`).
 2. Reach a queryable shape before you read. Dump the trace or heap snapshot
    into sqlite, one row per sample, frame or node. Parse a large artifact in a
-   subagent under the `delegate` profile and keep only the reduced finding in
+   writing subagent on the strongest model and keep only the reduced finding in
    the main thread, per **Guard the Context Window** (PRINCIPLES.md).
 3. Narrow to the cause. Query for the frames that hold the most time and walk
    the call tree to the hot path. For a leak, follow the retainer chain from

@@ -20,7 +20,7 @@ In maestro: a Peer that finds a second defect while fixing the first and fixes
 both; a Lead that widens an item instead of opening new work; a return whose
 diff is larger than its objective.
 
-evidence: the Peer mandate exists because of it - `profiles/peer.md` says
+evidence: the Peer mandate exists because of it - `resources/slp/peer.md` says
 "a different scope is a different request, so work you notice beyond this one
 is `maestro work note <work-id> \"<what you found>\"` and never part of the
 change, and a request you cannot meet at the scope it set comes back with the
@@ -68,7 +68,7 @@ A weak or cheap model is given owned work - work that writes files, returns,
 or is accepted - and its output is trusted because the seat is trusted.
 
 In maestro: opening a seat on a smaller model to save quota; running a
-writing sub-agent below its role's profile (`delegate` writes on Opus);
+writing sub-agent below the strongest model (code is written on Opus);
 passing a sub-agent's report through without reviewing its diff.
 
 evidence: room d130 and d132 - every seat of the cleanup and improver
@@ -76,8 +76,8 @@ generations runs on Opus, never Fable, because a refactor Lead and the doctrine
 edits every seat reads warrant the strongest model; the Codex-quota pressure
 that prompted the question did not move the ruling. Room d135 drew the line by
 capability instead (sub-agents only scout); the pstack port (d860, d868) moved
-it back to the model and the review: a sub-agent writes under the `delegate`
-profile, and the seat or main chat that holds the item reviews every diff.
+it back to the model and the review: a sub-agent writes on the strongest
+model, named in the call, and the seat or main chat that holds the item reviews every diff.
 
 ## polling waste
 
