@@ -12,6 +12,7 @@ export interface RunOptions {
   cli?: CliOptions;
   readOnly?: boolean;
   storeInMemory?: boolean;
+  tolerateConfig?: boolean;
 }
 
 export async function run(args: string[], options: RunOptions = {}): Promise<number> {
@@ -32,7 +33,7 @@ export async function run(args: string[], options: RunOptions = {}): Promise<num
     log,
     sessions,
     store,
-  });
+  }, options.tolerateConfig ? (message) => process.stderr.write(`warning: ${message}; plugins run with their defaults\n`) : undefined);
 
   try {
     await loader.loadAll();

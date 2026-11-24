@@ -19,6 +19,9 @@ maestro plugin enable slp
 ```
 
 `maestro team start` also enables it in the project it starts a team for.
+`maestro install` writes the seat files and links the Herdr plugin only where
+the plugin is on. After you enable it in a project, run `maestro install`
+there once; until then `team start` is refused with `SEAT_NOT_INSTALLED`.
 While the plugin is off, the team verbs (`team`, `slp`, `decide`, `status`,
 `work take`, `work return`, `work accept`, and `work add --to`) are refused
 with a line that names the enable command. `maestro install` then links no

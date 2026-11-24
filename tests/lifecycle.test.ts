@@ -592,6 +592,21 @@ test("48 status and hook brief report local drift unless auto-update checks are 
   });
 });
 
+test("doctor and uninstall still run when a plugin config file is not JSON, and say which file", async () => {
+  await withFixture(async (fixture) => {
+    const config = join(fixture.repo, ".maestro", "config");
+    await writeFile(config, "not json\n");
+    const listed = await runCli(fixture, ["work", "list"]);
+    expect(listed.exitCode).toBe(1);
+    expect(listed.stderr).toContain("invalid plugin config");
+    for (const verb of ["doctor", "uninstall"]) {
+      const result = await runCli(fixture, [verb]);
+      expect(result.stderr).toMatch(/^warning: invalid plugin config .*\.maestro\/config/m);
+      expect(result.stderr).not.toContain("INTERNAL");
+    }
+  });
+});
+
 test("49 doctor reports healthy components and structured fixable issues without repair", async () => {
   await withFixture(async (fixture) => {
     const { source } = await createSourceCheckout(fixture);

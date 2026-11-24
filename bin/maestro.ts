@@ -18,8 +18,9 @@ try {
     allowBuiltIn: (plugin) => observer.allowBuiltIn(plugin.name),
     cli: observer.cli,
     readOnly: observer.enabled,
-    // doctor diagnoses the store, update swaps the runtime under it, uninstall must not create one.
+    // doctor diagnoses the store, update swaps the runtime under it, uninstall must not create one; none of them may be stopped by a broken config.
     storeInMemory: ["doctor", "uninstall", "update"].includes(args[0] ?? ""),
+    tolerateConfig: ["doctor", "uninstall", "update"].includes(args[0] ?? ""),
   });
 } catch (error) {
   process.stderr.write(`${JSON.stringify(failureEnvelope(error))}\n`);

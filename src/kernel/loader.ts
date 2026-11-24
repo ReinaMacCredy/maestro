@@ -67,6 +67,7 @@ export class Loader {
       sessions: Sessions;
       store: Store;
     },
+    private readonly onConfigError?: (message: string) => void,
   ) {
     const base = {
       ...services,
@@ -211,9 +212,10 @@ export class Loader {
     try {
       return JSON.parse(readFileSync(path, "utf8")) as ConfigFile;
     } catch (error) {
-      throw new Error(
-        `invalid plugin config ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = `invalid plugin config ${path}: ${error instanceof Error ? error.message : String(error)}`;
+      if (!this.onConfigError) throw new Error(message);
+      this.onConfigError(message);
+      return {};
     }
   }
 }
