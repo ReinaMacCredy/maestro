@@ -146,7 +146,6 @@ herdrPluginManifestPath
 herdrProtocol
 herdrSocketPath
 importPluginEntrypoint
-importRustPlugin
 importWaymarkTree
 improverNextAction
 improverTriggers
@@ -158,6 +157,7 @@ isRoom
 laneVocabulary
 latestCheckpoints
 launchArguments
+legacyPlugin
 lessonPlugin
 lifecyclePlugin
 linkHerdrPlugin

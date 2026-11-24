@@ -81,21 +81,22 @@ test("223 doctor names the old store a migrating repo still carries", async () =
     const carrying = await runCli(fixture, ["doctor"], { PATH: path });
     expect(carrying.exitCode).toBe(0);
     expect(carrying.stdout).toContain("legacy store: 1 card(s) not imported");
-    expect(carrying.stdout).toContain("maestro import rust");
+    expect(carrying.stdout).not.toContain("maestro import rust");
 
-    expect((await runCli(fixture, ["import", "rust"])).exitCode).toBe(0);
+    const database = probeDatabase(fixture);
+    try {
+      database.run(
+        `INSERT INTO legacy_cards
+         (id, card_type, parent, status, title, record_file, card_yaml, created_at, updated_at, imported_at)
+         VALUES ('old-card', 'feature', NULL, 'shipped', 'Old card', 'card.yaml', 'id: old-card',
+                 '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+      );
+    } finally {
+      database.close();
+    }
     const imported = await runCli(fixture, ["doctor"], { PATH: path });
     expect(imported.stdout).toContain("legacy store: imported");
     expect(imported.stdout).not.toContain("not imported");
-  });
-});
-
-test("224 the import says how to read what it just imported", async () => {
-  await withFixture(async (fixture) => {
-    writeLegacyStore(fixture);
-    const imported = await runCli(fixture, ["import", "rust"]);
-    expect(imported.exitCode).toBe(0);
-    expect(imported.stdout).toContain("read them: maestro legacy show old-card");
   });
 });
 

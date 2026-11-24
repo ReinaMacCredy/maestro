@@ -9,7 +9,6 @@ verbs:
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *
   hook       Record harness events and print the current brief.
-  import     Import one-shot data from legacy Maestro stores.
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
   lesson     Record corrections the improver turns into doctrine edits. *
@@ -246,7 +245,6 @@ verbs:
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *
   hook       Record harness events and print the current brief.
-  import     Import one-shot data from legacy Maestro stores.
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
   lesson     Record corrections the improver turns into doctrine edits. *
@@ -290,21 +288,6 @@ usage: maestro hook record
     --harness <value>  Record the originating harness.
     --json             Emit one compact JSON success envelope.
     --source <value>   Why the harness event fired (SessionStart: startup, resume, clear, compact).
-
-### maestro import --help
-import  Import one-shot data from legacy Maestro stores.
-subverbs:
-  rust  Import a legacy Rust card store read-only.
-    --json          Emit one compact JSON success envelope.
-    --path <value>  Read this legacy store.sqlite file.
-    --promote       Promote legacy cards into native work and decisions.
-
-### maestro import rust --help
-import rust  Import a legacy Rust card store read-only.
-usage: maestro import rust
-    --json          Emit one compact JSON success envelope.
-    --path <value>  Read this legacy store.sqlite file.
-    --promote       Promote legacy cards into native work and decisions.
 
 ### maestro install --help
 install  Install Maestro runtime and repository hook wiring.

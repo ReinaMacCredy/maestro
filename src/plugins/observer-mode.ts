@@ -5,7 +5,7 @@ const observerPlugins = new Set([
   "bundle",
   "coordination",
   "decision",
-  "import-rust",
+  "legacy",
   "lesson",
   "lifecycle",
   "mcp",

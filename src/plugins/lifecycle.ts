@@ -540,7 +540,7 @@ function legacyStoreCheck(storePath: string): string | null {
         : 0;
       if (alreadyImported > 0) return `legacy store: imported (${alreadyImported} card(s))`;
     }
-    return `legacy store: ${cards} card(s) not imported; run: maestro import rust`;
+    return `legacy store: ${cards} card(s) not imported`;
   } catch {
     return null;
   } finally {

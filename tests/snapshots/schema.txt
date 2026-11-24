@@ -12,8 +12,6 @@ index sqlite_autoindex_legacy_decisions_1
   (implicit)
 index sqlite_autoindex_legacy_files_1
   (implicit)
-index sqlite_autoindex_legacy_map_1
-  (implicit)
 index sqlite_autoindex_lessons_1
   (implicit)
 index sqlite_autoindex_memory_facts_1
@@ -48,8 +46,6 @@ table legacy_decisions
   CREATE TABLE legacy_decisions ( id TEXT PRIMARY KEY NOT NULL, source TEXT NOT NULL DEFAULT 'store', card_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, source_path TEXT NOT NULL, decision_yaml TEXT NOT NULL )
 table legacy_files
   CREATE TABLE legacy_files ( card_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'store', path TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, text_content TEXT, PRIMARY KEY (card_id, path), FOREIGN KEY (card_id) REFERENCES legacy_cards(id) ON DELETE CASCADE )
-table legacy_map
-  CREATE TABLE legacy_map ( legacy_id TEXT PRIMARY KEY NOT NULL, native_id TEXT NOT NULL, entity_type TEXT NOT NULL CHECK(entity_type IN ('work', 'decision')) )
 table lessons
   CREATE TABLE lessons ( id TEXT PRIMARY KEY, target TEXT NOT NULL, happened TEXT NOT NULL, expected TEXT NOT NULL, why TEXT NOT NULL, evidence TEXT NOT NULL, project TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending', 'processed')), commit_sha TEXT, answer TEXT, processed_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
 table memory_facts

@@ -6,7 +6,6 @@ table event_log
 table legacy_cards
 table legacy_decisions
 table legacy_files
-table legacy_map
 table lessons
 table memory_facts
 table meta

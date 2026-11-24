@@ -3,8 +3,8 @@ import { briefPlugin } from "./brief.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
-import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
+import { legacyPlugin } from "./legacy.ts";
 import { lessonPlugin } from "./lesson.ts";
 import { lifecyclePlugin } from "./lifecycle.ts";
 import { mcpPlugin } from "./mcp.ts";
@@ -55,7 +55,7 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   topicPlugin,
   memoryPlugin,
   bundlePlugin,
-  importRustPlugin,
+  legacyPlugin,
   mcpPlugin,
   versionPlugin,
   installPlugin,
