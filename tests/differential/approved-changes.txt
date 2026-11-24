@@ -50,6 +50,8 @@ gone status # d896: status is deleted from core
 gone ready # d896: ready is deleted from core
 gone slp event # d897: the orphan auto-stop hook is deleted
 gone decision confirm # d899: provisional rulings are deleted
+drop-line decision show /^the slp plugin that recorded this is off/ # d879: a stored SLP ruling stays readable with the plugin off and says how to turn it on
+drop-line work show /^dispatch: x/ # d885: a card no longer lists the dispatches stored for it
 gone owner # d899: owner presence is deleted
 gone plugin enable policy-tdd # d902: the text gate is deleted
 gone plugin enable policy-layer # d902: the text gate is deleted
