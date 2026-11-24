@@ -211,7 +211,7 @@ the classic surface is the live model: `work start|done`,
   transferred and retained, Failed approaches, Do not repeat,
   `Base: <commit>`, `Driver: <tool>`. Hand-edit only the placeholders it
   leaves. Re-run at handoff or a meaningful checkpoint, not every reply. History lives in
-  the store: `maestro work note`, `maestro trace`, decisions; the latest
+  the store: `maestro work note`, decisions; the latest
   `checkpoint:` note (state / next / avoid) is what survives a compaction.
 - `VERIFY.md` is the scenario table drafted at design time and filled at
   verify time: one row per unit and per anti-goal with unit, live, and perf
@@ -255,7 +255,7 @@ are never staged or committed.
   instruction file. Cite what you use; re-verify fast-drifting
   facts (branches, ports, dirty state, test counts) live.
 - Record: a durable decision has its rationale and rejected alternative;
-  a domain term is `maestro term add`; a failed pass is one
+  a failed pass is one
   `maestro work note <id> "failed: <one line>"`.
 - Name the shape: `ANTI_PATTERN.md` beside this file holds the eight named
   failure shapes of multi-agent work, and a lesson names the anti-pattern it

@@ -36,11 +36,8 @@ Never create root `SPEC-*`, `NOTES-*`, or `VERIFY-*` files.
 ```
 maestro bundle open <id> [--work <id>]  # scaffold + active row
 maestro bundle close <id>               # snapshot trio into the store, archive
-maestro bundle pause <id> [--reason]    # active stays open, out of the way
-maestro bundle resume <id>              # paused back to active
 maestro bundle list                     # states: active | paused | archived
 maestro bundle show <id>                # trio + linked work + decisions
-maestro bundle save <dir>               # ingest a foreign trio dir as archived
 maestro search "<term>"                 # recall: hits labeled (bundle, ...)
 ```
 

@@ -115,7 +115,7 @@ it as each step says.
    state (done, abandoned, zombie reconciled). Confirm the predicate on the
    real artifact. Confirm every landed unit has a ledger verdict for its
    current head SHA. Encode recurring corrections into the standing orders
-   or the brief template. The work notes and `maestro trace <id>` are the
+   or the brief template. The work notes (`maestro work show <id>`) are the
    postmortem.
 
 ## The brief
@@ -226,6 +226,6 @@ At checkpoints and at close, the reply carries these items.
   rule when a race ran.
 - What was abandoned and why.
 - Gates waiting on the owner, which are the only asks.
-- The work id for `maestro trace`, and PR links when PRs exist.
+- The work id for `maestro work show`, and PR links when PRs exist.
 
 Numbers come from the ledger, not from narrative.

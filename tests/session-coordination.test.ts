@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { idFrom, runCli, withFixture } from "./helpers.ts";
+import { idFrom, recordedPrompts, runCli, withFixture } from "./helpers.ts";
 
 test("13 hook record persists a session event reflected by status", async () => {
   await withFixture(async (fixture) => {
@@ -78,14 +78,13 @@ test("14c UserPromptSubmit records the prompt into a listable, searchable corpus
       { MAESTRO_SESSION_ID: "prompt-session", MAESTRO_SESSION_PID: String(process.pid) },
       JSON.stringify({ hook_event_name: "SessionStart", prompt: "session start noise" }),
     );
-    const listed = await runCli(fixture, ["prompt", "list", "--session", "prompt-session"]);
     const found = await runCli(fixture, ["search", "flaky login retry"]);
 
     expect(submit.exitCode).toBe(0);
     expect(start.exitCode).toBe(0);
-    expect(listed.exitCode).toBe(0);
-    expect(listed.stdout).toContain("please fix the flaky login retry test");
-    expect(listed.stdout).not.toContain("session start noise");
+    const prompts = recordedPrompts(fixture, "prompt-session");
+    expect(prompts).toContain("please fix the flaky login retry test");
+    expect(prompts).not.toContain("session start noise");
     expect(found.exitCode).toBe(0);
     expect(found.stdout).toContain("(prompt");
     expect(found.stdout).toContain("flaky login retry");

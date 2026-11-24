@@ -11,6 +11,7 @@ import {
   type CliResult,
   type Fixture,
   withFixture,
+  recordedPrompts,
 } from "./helpers.ts";
 
 interface HookConfig {
@@ -115,7 +116,6 @@ test("257 agents outside Herdr still record SessionStart and UserPromptSubmit wi
       JSON.stringify({ prompt: "record this prompt outside a pane" }),
     );
     const status = await runCli(fixture, ["status", "--json"]);
-    const listed = await runCli(fixture, ["prompt", "list", "--session", "outside-pane-codex"]);
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ harness: string | null; id: string; lastEvent: string }> };
     }).data.sessions;
@@ -130,7 +130,7 @@ test("257 agents outside Herdr still record SessionStart and UserPromptSubmit wi
         lastEvent: "UserPromptSubmit",
       }),
     );
-    expect(listed.stdout).toContain("record this prompt outside a pane");
+    expect(recordedPrompts(fixture, "outside-pane-codex")).toContain("record this prompt outside a pane");
   });
 });
 

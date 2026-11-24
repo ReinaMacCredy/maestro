@@ -173,22 +173,6 @@ test("127 anti-sprawl law: the bundles table only accepts active or archived", a
   });
 });
 
-test("128 bundle save ingests a foreign trio dir straight to archived", async () => {
-  await withFixture(async (fixture) => {
-    const foreign = join(fixture.repo, "old-bundles", "card-sprawl");
-    await mkdir(foreign, { recursive: true });
-    await writeFile(join(foreign, "SPEC.md"), "# SPEC\n\ndissolve the card state machine\n");
-    await writeFile(join(foreign, "NOTES.md"), "# NOTES\n\ndone long ago\n");
-    await writeFile(join(foreign, "VERIFY.md"), "# VERIFY\n\nall rows pass\n");
-    const saved = await runCli(fixture, ["bundle", "save", foreign]);
-    expect(saved.exitCode).toBe(0);
-    expect(saved.stdout).toContain("card-sprawl [archived]");
-    const found = await runCli(fixture, ["search", "dissolve"]);
-    expect(found.stdout).toContain("card-sprawl");
-    expect(found.stdout).toContain("(bundle, archived)");
-  });
-});
-
 test("pstack-port: install retires the managed maestro-diagnose and maestro-explore copies and their links, and keeps a user's own (d863)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

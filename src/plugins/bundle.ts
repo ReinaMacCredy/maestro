@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join } from "node:path";
 import {
   CliError,
   requiredPosition,
@@ -9,7 +9,6 @@ import {
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation, tableExists } from "../kernel/store.ts";
-import { formatImportReport, importWaymarkTree } from "./bundle-import.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { latestCheckpoints, type WorkService } from "./work.ts";
@@ -617,7 +616,7 @@ export const bundlePlugin: BuiltInPlugin = {
   name: "bundle",
   inject: ["work", "decision"],
   requires:
-    "bundle open/close/list/show/save: scaffold a SPEC/NOTES/VERIFY trio, snapshot it into the store on close, recall it via search and bundle show",
+    "bundle open/close/list/show: scaffold a SPEC/NOTES/VERIFY trio, snapshot it into the store on close, recall it via search and bundle show",
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS bundles (
@@ -885,123 +884,6 @@ export const bundlePlugin: BuiltInPlugin = {
         },
       ),
     );
-
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "bundle save",
-        async (invocation): Promise<CliResult> => {
-          const directory = resolve(requiredPosition(invocation, 0, "bundle directory"));
-          const id = basename(directory);
-          if (getBundle(context, id)) {
-            throw new CliError("DUPLICATE", `bundle already exists: ${id}`, { id });
-          }
-          const trio = await readTrio(directory);
-          if (trio.spec === null && trio.notes === null && trio.verify === null) {
-            throw new CliError(
-              "NOT_FOUND",
-              `no SPEC.md/NOTES.md/VERIFY.md found in: ${directory}`,
-              { directory },
-            );
-          }
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              `INSERT INTO bundles (id, state, directory, spec, notes, verify, created_at, updated_at)
-               VALUES (?, 'archived', ?, ?, ?, ?, ?, ?)`,
-            )
-            .run(id, directory, trio.spec, trio.notes, trio.verify, now, now);
-          const saved = getBundle(context, id) as BundleRecord;
-          indexSnapshot(context, saved);
-          context.log.append({
-            type: "bundle.save",
-            entityType: "bundle",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { directory },
-          });
-          return { data: { bundle: saved }, text: headline(saved) };
-        },
-        {
-          description: "Ingest a foreign SPEC/NOTES/VERIFY dir straight to archived.",
-          positionals: [{ name: "directory", required: true }],
-        },
-      ),
-    );
-
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "bundle import",
-        (invocation): CliResult => {
-          const source = resolve(requiredPosition(invocation, 0, "source directory"));
-          if (!existsSync(source)) {
-            throw new CliError("NOT_FOUND", `directory not found: ${source}`, { directory: source });
-          }
-          const dryRun = invocation.options["dry-run"] === true;
-          const target = resolveStoreLocation(process.cwd()).root;
-          const report = importWaymarkTree(context, source, target, dryRun);
-          if (!dryRun) {
-            context.log.append({
-              type: "bundle.import",
-              entityType: "bundle",
-              entityId: basename(source),
-              sessionId: context.sessions.current().id,
-              payload: { counts: report.counts, source, target },
-            });
-          }
-          return { data: report, text: formatImportReport(report) };
-        },
-        {
-          description: "Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.",
-          flags: { "--dry-run": { description: "Report the mapping without writing." } },
-          positionals: [{ name: "directory", required: true }],
-        },
-      ),
-    );
-
-    for (const verb of ["pause", "resume"] as const) {
-      context.effect(() =>
-        registerSessionCommand(
-          context,
-          `bundle ${verb}`,
-          (invocation): CliResult => {
-            const id = requiredPosition(invocation, 0, "bundle id");
-            const bundle = requireBundle(context, id);
-            if (bundle.state !== "active") {
-              throw new CliError("INVALID_STATE", `${id} is ${bundle.state}`, { id, state: bundle.state });
-            }
-            if (verb === "pause" && bundle.pausedAt) {
-              throw new CliError("INVALID_STATE", `${id} is already paused`, { id });
-            }
-            if (verb === "resume" && !bundle.pausedAt) {
-              throw new CliError("INVALID_STATE", `${id} is not paused`, { id });
-            }
-            const now = new Date().toISOString();
-            context.store.database
-              .query("UPDATE bundles SET paused_at = ?, updated_at = ? WHERE id = ?")
-              .run(verb === "pause" ? now : null, now, id);
-            const reason = invocation.options.reason;
-            context.log.append({
-              type: `bundle.${verb}`,
-              entityType: "bundle",
-              entityId: id,
-              sessionId: context.sessions.current().id,
-              payload: { reason: typeof reason === "string" ? reason : null },
-            });
-            const updated = getBundle(context, id) as BundleRecord;
-            return { data: { bundle: updated }, text: headline(updated) };
-          },
-          {
-            description: verb === "pause"
-              ? "Pause an active bundle: it stays open but out of the way."
-              : "Resume a paused bundle.",
-            flags: verb === "pause" ? { "--reason": { description: "Why the bundle pauses.", value: true } } : {},
-            positionals: [{ name: "id", required: true }],
-          },
-        ),
-      );
-    }
 
     context.effect(() =>
       context.cli.register(

@@ -545,35 +545,5 @@ export const observabilityPlugin: BuiltInPlugin = {
         },
       ),
     );
-
-    context.effect(() =>
-      context.cli.register(
-        "trace",
-        (invocation): CliResult => {
-          const id = requiredPosition(invocation, 0, "work id");
-          const exists = context.store.database
-            .query<{ id: string }, [string]>("SELECT id FROM work WHERE id = ?")
-            .get(id);
-          if (!exists) {
-            throw new CliError("NOT_FOUND", `work not found: ${id}; run: maestro work list`, {
-              command: "maestro work list",
-              id,
-            });
-          }
-          const events = context.log.list("work", id);
-          return {
-            data: { events },
-            text: events
-              .map((event) => `${event.id} ${event.type} ${JSON.stringify(event.payload)}`)
-              .join("\n"),
-          };
-        },
-        {
-          description: "Reconstruct one work item's event history.",
-          mutates: false,
-          positionals: [{ name: "id", required: true }],
-        },
-      ),
-    );
   },
 };

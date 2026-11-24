@@ -10,6 +10,7 @@ import {
   runCliAt,
   withFixture,
   type Fixture,
+  recordedPrompts,
 } from "./helpers.ts";
 
 function sessionEnvironment(id: string, pid = process.pid): Record<string, string> {
@@ -58,9 +59,8 @@ test("B3.2 session and prompt records are shared across worktrees", async () => 
       sessionEnvironment("main-target"),
       JSON.stringify({ prompt: "cross-worktree prompt" }),
     );
-    const listed = await runCli(fixture, ["prompt", "list", "--session", "main-target"]);
     expect(submitted.exitCode).toBe(0);
-    expect(listed.stdout).toContain("cross-worktree prompt");
+    expect(recordedPrompts(fixture, "main-target")).toContain("cross-worktree prompt");
   });
 });
 

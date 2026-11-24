@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { prepareInstallFixture, runCli, runCliAt, seedTerms, withFixture, type Fixture } from "./helpers.ts";
 
 setDefaultTimeout(15_000);
 
@@ -199,9 +199,9 @@ test("572 R4 cross-store search: one maestro search in a project returns a proje
       "decision", "draft", "Seat leases expire after one silent hour", "--rationale", "hub-side rule",
     ]);
     expect(drafted.exitCode).toBe(0);
-    const term = await runCli(fixture, ["term", "add", "Seat", "One SLP role occupying one Herdr pane; a Seat holds at most one lease", "--json"]);
-    expect(term.exitCode).toBe(0);
-    expect(JSON.parse(term.stdout).data.term).toMatchObject({ id: "t1", name: "Seat" });
+    await seedTerms(fixture, [
+      { id: "t1", name: "Seat", definition: "One SLP role occupying one Herdr pane; a Seat holds at most one lease" },
+    ]);
 
     const search = await runCli(fixture, ["search", "Seat", "--json"]);
     expect(search.exitCode).toBe(0);
@@ -223,18 +223,17 @@ test("572 R4 cross-store search: one maestro search in a project returns a proje
   });
 });
 
-test("573 term add redefines in place, term show resolves name or id, and terms survive a search index rebuild", async () => {
+test("573 term show resolves name or id, and terms survive a search index rebuild", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
-    const redefined = await runCli(fixture, ["term", "add", "Lane", "A dispatch shape: scout, decision, delivery, challenge, shadow", "--json"]);
-    expect(JSON.parse(redefined.stdout).data).toMatchObject({ updated: true, term: { id: "t1" } });
+    await seedTerms(fixture, [
+      { id: "t1", name: "Lane", definition: "A dispatch shape: scout, decision, delivery, challenge, shadow" },
+    ]);
     const byName = await runCli(fixture, ["term", "show", "Lane"]);
     expect(byName.stdout).toContain("t1 Lane: A dispatch shape: scout");
+    const byId = await runCli(fixture, ["term", "show", "t1", "--json"]);
+    expect(JSON.parse(byId.stdout).data.term).toMatchObject({ id: "t1", name: "Lane" });
     const list = await runCli(fixture, ["term", "list", "--json"]);
     expect(JSON.parse(list.stdout).data.terms).toHaveLength(1);
-    const spaced = await runCli(fixture, ["term", "add", "two words", "x"]);
-    expect(spaced.exitCode).not.toBe(0);
-    expect(spaced.stderr).toContain("INVALID_ARGUMENT");
 
     // A fresh process re-indexes terms on apply, so a rebuilt search index still finds them.
     const { Database } = await import("bun:sqlite");
@@ -284,7 +283,7 @@ test("579 search fails closed when the Hub room cannot be read, --local still an
   await withFixture(async (fixture) => {
     const room = await hub(fixture);
     expect((await runCliAt(fixture, room, ["decision", "draft", "Seat leases expire", "--rationale", "hub"])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["term", "add", "Seat", "One role in one pane"])).exitCode).toBe(0);
+    await seedTerms(fixture, [{ id: "t1", name: "Seat", definition: "One role in one pane" }]);
     expect(JSON.parse((await runCli(fixture, ["search", "Seat", "--json"])).stdout).data.matches).toHaveLength(2);
 
     await writeFile(join(room, ".maestro", "maestro.db"), "not a sqlite database");
@@ -311,9 +310,10 @@ test("580 --limit bounds the combined project-plus-Hub list, project hits first,
     for (const text of ["Seat lease one", "Seat lease two", "Seat lease three"]) {
       expect((await runCliAt(fixture, room, ["decision", "draft", text, "--rationale", "hub"])).exitCode).toBe(0);
     }
-    for (const name of ["Seat", "SeatLease", "SeatPane"]) {
-      expect((await runCli(fixture, ["term", "add", name, "A Seat thing"])).exitCode).toBe(0);
-    }
+    await seedTerms(
+      fixture,
+      ["Seat", "SeatLease", "SeatPane"].map((name, index) => ({ id: `t${index + 1}`, name, definition: "A Seat thing" })),
+    );
     const limited = await runCli(fixture, ["search", "Seat", "--limit", "4", "--json"]);
     expect(limited.exitCode).toBe(0);
     const matches = JSON.parse(limited.stdout).data.matches as Array<{ id: string; store: string }>;
@@ -324,19 +324,6 @@ test("580 --limit bounds the combined project-plus-Hub list, project hits first,
     expect(text.stdout.split("\n").filter((line) => line.startsWith("[hub]"))).toHaveLength(1);
     const all = await runCli(fixture, ["search", "Seat", "--limit", "10", "--json"]);
     expect(JSON.parse(all.stdout).data.matches).toHaveLength(6);
-  });
-});
-
-test("610 a term name shaped like a generated term id is refused and the id row it would have shadowed is untouched", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
-    const hijack = await runCli(fixture, ["term", "add", "t1", "Not a lane"]);
-    expect(hijack.exitCode).not.toBe(0);
-    expect(hijack.stderr).toContain("INVALID_ARGUMENT");
-    expect(hijack.stderr).toContain("t<number>");
-    const byId = await runCli(fixture, ["term", "show", "t1", "--json"]);
-    expect(JSON.parse(byId.stdout).data.term).toMatchObject({ id: "t1", name: "Lane", definition: "A dispatch shape" });
-    expect(JSON.parse((await runCli(fixture, ["term", "list", "--json"])).stdout).data.terms).toHaveLength(1);
   });
 });
 

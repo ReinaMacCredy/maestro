@@ -12,14 +12,11 @@ Both artifacts live in the maestro store, so they sit in the recall path every
 session already reads:
 
 ```
-maestro term add <name> "<definition>" [--work <id>]   # record or redefine a term
 maestro term list | maestro term show <name>            # the glossary
 maestro decision draft "<choice>" --rationale "<why + rejected alternative>" --work <id>
 maestro decision lock <id>                              # the recorded decision
 maestro search "<word>"                                 # terms, decisions, work, bundles
 ```
-
-There is no glossary file to create; the first `term add` is the glossary.
 
 ## During the session
 
@@ -49,10 +46,10 @@ just said partial cancellation is possible. Which is right?"
 
 ### Record terms inline
 
-When a term is resolved, `maestro term add` right there. Do not batch these
+When a term is resolved, state its definition right there. Do not batch these
 up; capture them as they happen. A definition is domain language only: no
-implementation details, no file paths, no decisions. Redefining a term is a
-new `term add` with the same name; say why in the conversation.
+implementation details, no file paths, no decisions. When you redefine a term,
+say why in the conversation.
 
 ### Lock decisions sparingly
 

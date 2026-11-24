@@ -38,13 +38,6 @@ interface WorkStartResult {
 
 type BriefContributor = (sessionId: string) => string | Promise<string>;
 
-interface PromptRecord {
-  created_at: string;
-  id: number;
-  session_id: string;
-  text: string;
-}
-
 interface BriefEntry {
   contributor: BriefContributor;
   events?: string[];
@@ -284,44 +277,6 @@ export const coordinationPlugin: BuiltInPlugin = {
         }
         return next();
       }),
-    );
-
-    context.effect(() =>
-      context.cli.register(
-        "prompt list",
-        (invocation): CliResult => {
-          const session = invocation.options.session;
-          const rows = (
-            typeof session === "string"
-              ? context.store.database
-                  .query<PromptRecord, [string]>(
-                    "SELECT id, session_id, text, created_at FROM prompts WHERE session_id = ? ORDER BY id DESC LIMIT 20",
-                  )
-                  .all(session)
-              : context.store.database
-                  .query<PromptRecord, []>(
-                    "SELECT id, session_id, text, created_at FROM prompts ORDER BY id DESC LIMIT 20",
-                  )
-                  .all()
-          );
-          const lines = rows.map(
-            (row) =>
-              `p${row.id} [${row.session_id}] ${row.text.replaceAll(/\s+/g, " ").slice(0, 200)}`,
-          );
-          return {
-            data: { prompts: rows },
-            text: lines.join("\n") || "no prompts recorded",
-          };
-        },
-        {
-          description: "List recorded user prompts, most recent first (20).",
-          flags: {
-            "--session": { description: "Only prompts from this session.", value: true },
-          },
-          mutates: false,
-          rootDescription: "Recorded user prompts from harness hooks.",
-        },
-      ),
     );
 
     context.effect(() =>

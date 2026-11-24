@@ -243,14 +243,41 @@ test("bundle check passes a bundle with no Units section, active or archived, wi
     expect(final.exitCode).toBe(0);
     expect(final.stdout).toBe("bundle check old-plan: SPEC.md has no ## Units section; nothing to check\n");
 
-    const foreign = join(fixture.repo, "old-bundles", "archived-plan");
-    await mkdir(foreign, { recursive: true });
-    await writeFile(join(foreign, "SPEC.md"), oldSpec);
-    await writeFile(join(foreign, "VERIFY.md"), oldVerify);
-    expect((await runCli(fixture, ["bundle", "save", foreign])).exitCode).toBe(0);
+    const now = new Date().toISOString();
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      database
+        .query(
+          `INSERT INTO bundles (id, state, directory, spec, notes, verify, created_at, updated_at)
+           VALUES ('archived-plan', 'archived', ?, ?, NULL, ?, ?, ?)`,
+        )
+        .run(join(fixture.repo, "old-bundles", "archived-plan"), oldSpec, oldVerify, now, now);
+    } finally {
+      database.close();
+    }
     const archived = await runCli(fixture, ["bundle", "check", "archived-plan"]);
     expect(archived.stderr).toBe("");
     expect(archived.exitCode).toBe(0);
     expect(archived.stdout).toBe("bundle check archived-plan: SPEC.md has no ## Units section; nothing to check\n");
   });
 }, 30_000);
+
+test("a bundle stored as paused still appears in bundle list and bundle show (d889)", async () => {
+  await withFixture(async (fixture) => {
+    expect((await runCli(fixture, ["bundle", "open", "slice"])).exitCode).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      database.run("UPDATE bundles SET paused_at = '2026-01-01T00:00:00.000Z' WHERE id = 'slice'");
+    } finally {
+      database.close();
+    }
+
+    const listed = await runCli(fixture, ["bundle", "list"]);
+    const shown = await runCli(fixture, ["bundle", "show", "slice"]);
+
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).toContain("slice [paused]");
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("slice [paused]");
+  });
+});

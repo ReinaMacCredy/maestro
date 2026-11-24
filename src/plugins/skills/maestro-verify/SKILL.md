@@ -115,7 +115,7 @@ ready. Close procedure:
    Record pending delivery actions and retained authority in the handoff.
 2. Harvest: any mid-flight choice that is hard to reverse, surprising without
    context, and a real trade-off is a locked decision with its rejected
-   alternative; a new domain term is `maestro term add`.
+   alternative.
 3. `maestro bundle close <id>`: snapshots the trio into the store and archives
    the directory.
 

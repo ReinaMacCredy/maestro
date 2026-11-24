@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture } from "./helpers.ts";
+import { idFrom, runCli, withFixture, workEvents } from "./helpers.ts";
 
 test("630 policy-proof blocks a claim without matching proof", async () => {
   await withFixture(async (fixture) => {
@@ -81,9 +81,7 @@ test("427 work done and show round-trip an optional candidate into the completio
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain(`candidate: ${candidate}`);
 
-    const trace = await runCli(fixture, ["trace", work]);
-    expect(trace.exitCode).toBe(0);
-    expect(trace.stdout).toContain(`\"candidate\":\"${candidate}\"`);
+    expect(workEvents(fixture, work)).toContain(`\"candidate\":\"${candidate}\"`);
   });
 });
 

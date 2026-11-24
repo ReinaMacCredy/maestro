@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Cli } from "../src/kernel/cli.ts";
 import { observerMode } from "../src/plugins/observer-mode.ts";
 import { mkdir } from "node:fs/promises";
-import { idFrom, runCli, runCliAt, withFixture } from "./helpers.ts";
+import { idFrom, runCli, runCliAt, seedTerms, withFixture } from "./helpers.ts";
 
 const withoutSession = { MAESTRO_SESSION_NONE: "1" };
 const readOnly = { MAESTRO_READ_ONLY: "1" };
@@ -55,7 +55,6 @@ test("209 every session-attributed write door shares the SESSION_REQUIRED gate",
       ["bundle", "open"],
       ["bundle", "close"],
       ["handoff"],
-      ["bundle", "save"],
       ["hook", "record"],
       ["plugin", "enable"],
       ["plugin", "disable"],
@@ -388,14 +387,11 @@ test("455 read-only attention and brief tolerate pre-decision-lifecycle schemas"
 
 test("581 read-only mode admits term and memory reads and still refuses their writes", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["term", "add", "Lane", "A dispatch shape"])).exitCode).toBe(0);
+    await seedTerms(fixture, [{ id: "t1", name: "Lane", definition: "A dispatch shape" }]);
     const terms = await runCli(fixture, ["term", "list", "--json"], readOnly);
     expect(terms.exitCode).toBe(0);
     expect(JSON.parse(terms.stdout).data.terms).toHaveLength(1);
     expect((await runCli(fixture, ["term", "show", "Lane"], readOnly)).exitCode).toBe(0);
-    const write = await runCli(fixture, ["term", "add", "Seat", "A pane"], readOnly);
-    expect(write.exitCode).toBe(1);
-    expect(write.stderr).toContain("READ_ONLY");
 
     const room = join(fixture.home, "maestro");
     await mkdir(room, { recursive: true });

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -324,6 +325,54 @@ export async function runFixturePluginCliAt(
     cwd,
     { ...env, MAESTRO_TEST_PLUGINS: plugins.join(",") },
   );
+}
+
+export async function seedTerms(
+  fixture: Fixture,
+  terms: Array<{ definition: string; id: string; name: string }>,
+): Promise<void> {
+  await runCli(fixture, ["version"]);
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+  try {
+    const now = new Date().toISOString();
+    for (const term of terms) {
+      database
+        .query(
+          "INSERT INTO terms (id, name, definition, work_id, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+        )
+        .run(term.id, term.name, term.definition, now, now);
+    }
+  } finally {
+    database.close();
+  }
+}
+
+export function recordedPrompts(fixture: Fixture, sessionId?: string): string[] {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+  try {
+    return database
+      .query<{ session_id: string; text: string }, []>("SELECT session_id, text FROM prompts ORDER BY id")
+      .all()
+      .filter((row) => sessionId === undefined || row.session_id === sessionId)
+      .map((row) => row.text);
+  } finally {
+    database.close();
+  }
+}
+
+export function workEvents(fixture: Fixture, id: string): string {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+  try {
+    return database
+      .query<{ id: number; payload: string; type: string }, [string]>(
+        "SELECT id, type, payload FROM event_log WHERE entity_type = 'work' AND entity_id = ? ORDER BY id",
+      )
+      .all(id)
+      .map((event) => `${event.id} ${event.type} ${JSON.stringify(JSON.parse(event.payload))}`)
+      .join("\n");
+  } finally {
+    database.close();
+  }
 }
 
 export function idFrom(result: CliResult): string {

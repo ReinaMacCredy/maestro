@@ -106,7 +106,7 @@ only: no edits, no spawning, no contact with other seats, no council skill.
 After every required seat returns:
 
 1. Audit the run checkout with `git status --short` against the pinned dirty
-   paths, and read `maestro trace <id>` for each seat's work item.
+   paths, and read `maestro work show <id>` for each seat's work item.
 2. A seat that wrote a file, opened work, or contacted another seat is
    `COMPROMISED`: its report is unused and named as such in the verdict
    (Hub d93). Isolation is by profile (Claude `disallowedTools`, Codex

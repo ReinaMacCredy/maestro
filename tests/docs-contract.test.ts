@@ -134,7 +134,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   expect(setup).toContain("~/maestro/SLP.md");
   expect(setup).toContain("<project>/.maestro/SLP.md");
   expect(scenarios).not.toContain("herdr workspace create --cwd ~/Code/rewrite");
-  for (const documented of ["### `term`", "### `memory`", "--local", "HUB_UNAVAILABLE", "`import <dir> [--dry-run]`"]) {
+  for (const documented of ["### `term`", "### `memory`", "--local", "HUB_UNAVAILABLE"]) {
     expect(reference).toContain(documented);
   }
   expect(readOnlyMode).toContain("--local");

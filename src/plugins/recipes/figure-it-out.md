@@ -76,7 +76,7 @@ skill (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    note names this recipe and the current phase. A durable, hard-to-reverse
    choice becomes a decision per
    `~/maestro/WORKFLOW.md#decisions-and-readiness`. The reviewer reads the
-   trail with `maestro trace <id>`. The trail plus the diff is what lets the
+   trail with `maestro work show <id>`. The trail plus the diff is what lets the
    owner come back and trust the work.
 6. Verify and hand back. Check the whole against the step 2 predicate on the
    real product, not only the harness, through the repository's verify-<repo>
@@ -88,5 +88,5 @@ skill (Lauren Tan, MIT; notice in THIRD_PARTY.md).
 ## Reply
 
 The phase list you designed, the rigor level and why, the work id whose
-trail `maestro trace` shows, what is verified against the predicate, and
+trail `maestro work show` shows, what is verified against the predicate, and
 what is still open.

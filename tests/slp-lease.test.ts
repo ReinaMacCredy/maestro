@@ -5,6 +5,7 @@ import {
   idFrom,
   runCli,
   withFixture,
+  workEvents,
 } from "./helpers.ts";
 
 function session(id: string, pid = process.pid): Record<string, string> {
@@ -54,10 +55,10 @@ test("190 a holder releases open work without losing evidence and records the ev
     expect(shown.data.work).toEqual(
       expect.objectContaining({ evidence: "source: retained", heldBy: null, state: "open" }),
     );
-    const trace = await runCli(fixture, ["trace", work]);
-    expect(trace.stdout).toContain("work.release");
-    expect(trace.stdout).toContain(`\"holder\":\"${holder}\"`);
-    expect(trace.stdout).not.toContain("work.done");
+    const trace = workEvents(fixture, work);
+    expect(trace).toContain("work.release");
+    expect(trace).toContain(`\"holder\":\"${holder}\"`);
+    expect(trace).not.toContain("work.done");
   });
 });
 
@@ -77,10 +78,10 @@ test("652 work release --force drops another live session's lease and records wh
       data: { work: { heldBy: string | null; state: string } };
     };
     expect(shown.data.work).toEqual(expect.objectContaining({ heldBy: null, state: "open" }));
-    const trace = await runCli(fixture, ["trace", work]);
-    expect(trace.stdout).toContain("work.release");
-    expect(trace.stdout).toContain(`\"holder\":\"${holder}\"`);
-    expect(trace.stdout).toContain(`\"forcedBy\":\"${forcer}\"`);
+    const trace = workEvents(fixture, work);
+    expect(trace).toContain("work.release");
+    expect(trace).toContain(`\"holder\":\"${holder}\"`);
+    expect(trace).toContain(`\"forcedBy\":\"${forcer}\"`);
 
     const nothing = await runCli(fixture, ["work", "release", work, "--force"], session(forcer));
     expect(nothing.exitCode).not.toBe(0);
@@ -148,12 +149,12 @@ test("192 work reclaim records both sessions and the reason without completing w
     expect((await runCli(fixture, ["work", "show", work])).stdout).toContain(
       `reclaim reason: ${reason}`,
     );
-    const trace = await runCli(fixture, ["trace", work]);
-    expect(trace.stdout).toContain("work.reclaim");
-    expect(trace.stdout).toContain(`\"previousHolder\":\"${previousHolder}\"`);
-    expect(trace.stdout).toContain(`\"newHolder\":\"${newHolder}\"`);
-    expect(trace.stdout).toContain(`\"reason\":\"${reason}\"`);
-    expect(trace.stdout).not.toContain("work.done");
+    const trace = workEvents(fixture, work);
+    expect(trace).toContain("work.reclaim");
+    expect(trace).toContain(`\"previousHolder\":\"${previousHolder}\"`);
+    expect(trace).toContain(`\"newHolder\":\"${newHolder}\"`);
+    expect(trace).toContain(`\"reason\":\"${reason}\"`);
+    expect(trace).not.toContain("work.done");
   });
 });
 

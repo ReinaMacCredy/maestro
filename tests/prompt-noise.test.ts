@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { runCli, withFixture } from "./helpers.ts";
+import { recordedPrompts, runCli, withFixture } from "./helpers.ts";
 
 test("619 UserPromptSubmit ignores task-notification harness envelopes", async () => {
   await withFixture(async (fixture) => {
@@ -17,11 +17,10 @@ test("619 UserPromptSubmit ignores task-notification harness envelopes", async (
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM prompts")
       .get()?.count;
     database.close();
-    const listed = await runCli(fixture, ["prompt", "list"]);
     const searched = await runCli(fixture, ["search", marker]);
 
     expect(submitted.exitCode).toBe(0);
-    expect(listed.stdout).toBe("no prompts recorded\n");
+    expect(recordedPrompts(fixture)).toEqual([]);
     expect(searched.stdout).toBe("");
     expect(promptCount).toBe(0);
   });
@@ -50,7 +49,6 @@ test("519 prompt migration drops task-notification rows and their search entries
       .run("harness-session", noisePrompt, new Date().toISOString());
     seeded.close();
 
-    const listed = await runCli(fixture, ["prompt", "list"]);
     const noiseSearch = await runCli(fixture, ["search", "harnesspromptmarker"]);
     const realSearch = await runCli(fixture, ["search", "genuinepromptmarker"]);
     const migrated = new Database(path);
@@ -70,8 +68,6 @@ test("519 prompt migration drops task-notification rows and their search entries
       .all();
     migrated.close();
 
-    expect(listed.stdout).toContain(realPrompt);
-    expect(listed.stdout).not.toContain("<task-notification>");
     expect(noiseSearch.stdout).toBe("");
     expect(realSearch.stdout).toContain(realPrompt);
     expect(prompts).toEqual([realPrompt]);

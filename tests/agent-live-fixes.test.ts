@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import { hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture, workEvents } from "./helpers.ts";
 
 test("91 empty ready points at work add", async () => {
   await withFixture(async (fixture) => {
@@ -326,16 +326,6 @@ test("104 a cancelled child does not satisfy the breakdown gate", async () => {
   });
 });
 
-test("105 trace on an unknown id fails NOT_FOUND instead of empty success", async () => {
-  await withFixture(async (fixture) => {
-    const missing = await runCli(fixture, ["trace", "w99"]);
-    expect(missing.exitCode).not.toBe(0);
-    const error = (JSON.parse(missing.stderr) as { error: Record<string, unknown> }).error;
-    expect(error.code).toBe("NOT_FOUND");
-    expect(error.command).toBe("maestro work list");
-  });
-});
-
 test("106 empty ready with held work points at finishing it", async () => {
   await withFixture(async (fixture) => {
     const id = idFrom(
@@ -493,7 +483,6 @@ test("111 work show renders recorded notes", async () => {
 test("112 help documents --json on every command, read and write alike", async () => {
   await withFixture(async (fixture) => {
     const supported = [
-      ["trace"],
       ["decision", "lock"],
       ["status"],
       ["ready"],
@@ -707,8 +696,7 @@ test("118 explicit blockers prevent start and stay visible in ready --all", asyn
     const human = await runCli(fixture, ["ready", "--all"]);
     expect(human.stdout).toContain(`${implementation} implementation [gated by work-blockers:`);
     expect(human.stdout).toContain(`${verification} verification [gated by work-blockers:`);
-    const trace = await runCli(fixture, ["trace", implementation]);
-    expect(trace.stdout).not.toContain("work.start");
+    expect(workEvents(fixture, implementation)).not.toContain("work.start");
   });
 });
 

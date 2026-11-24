@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, writeConfig, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, withFixture, writeConfig, type Fixture, workEvents } from "./helpers.ts";
 
 interface JsonRpcResponse {
   id: number;
@@ -408,8 +408,7 @@ test("637 work block and unblock edit blockers after creation with work add's ch
     expect((await runCli(fixture, ["work", "show", second])).stdout).toContain(
       `blocker: ${first} [open] first`,
     );
-    const trace = await runCli(fixture, ["trace", second]);
-    expect(trace.stdout).toContain("work.block");
+    expect(workEvents(fixture, second)).toContain("work.block");
 
     const notBlocked = await runCli(fixture, ["work", "unblock", first, "--by", second]);
     expect(notBlocked.exitCode).not.toBe(0);

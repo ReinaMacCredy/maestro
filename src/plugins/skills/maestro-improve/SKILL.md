@@ -38,7 +38,7 @@ like any other.
 **Session harvest.** Run it after a session whose corrections nobody marked.
 Skip a trivial session, or one that followed its doctrine correctly. A one-off
 is not a lesson. The source is the session's record, not a transcript file.
-That record is `maestro trace <id>` for each work item the session touched,
+That record is `maestro work show <id>` for each work item the session touched,
 its `failed:` notes, its rework marks, the decisions it recorded with
 `--replaces`, and a short digest of the conversation written by the session
 itself. Hand the record to three read-only subagents in parallel, one lens

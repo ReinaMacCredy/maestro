@@ -29,26 +29,6 @@ test("16 search JSON binds unique work, decision, and note tokens to explicit re
   });
 });
 
-test("17 trace reconstructs ordered start, note, done, and evidence history", async () => {
-  await withFixture(async (fixture) => {
-    const work = idFrom(await runCli(fixture, ["work", "add", "traceable", "--kind", "idea"]));
-    expect((await runCli(fixture, ["work", "start", work])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "note", work, "middle note"])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "done", work, "--evidence", "final evidence"])).exitCode).toBe(0);
-
-    const result = await runCli(fixture, ["trace", work]);
-
-    expect(result.exitCode).toBe(0);
-    const start = result.stdout.indexOf("work.start");
-    const note = result.stdout.indexOf("work.note");
-    const done = result.stdout.indexOf("work.done");
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(note).toBeGreaterThan(start);
-    expect(done).toBeGreaterThan(note);
-    expect(result.stdout).toContain("final evidence");
-  });
-});
-
 test("19 locked decisions reject edits while superseding links and child visibility remain", async () => {
   await withFixture(async (fixture) => {
     const parent = idFrom(await runCli(fixture, ["decision", "draft", "parent choice"]));

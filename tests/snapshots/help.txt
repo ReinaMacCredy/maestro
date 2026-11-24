@@ -16,7 +16,6 @@ verbs:
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
-  prompt     Recorded user prompts from harness hooks. *
   ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
@@ -24,9 +23,8 @@ verbs:
   slp        Maestro's Herdr plugin entrypoints and the runtime readout.
   status     Show sessions, live peers, and held work. *
   team       Run the simplified supervised-team lifecycle.
-  term       Record or redefine one glossary term. *
+  term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
-  trace      Reconstruct one work item's event history. *
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
   update     Fast-forward the recorded source checkout and resync the runtime.
   version    Show the installed or source Maestro version. *
@@ -54,34 +52,20 @@ usage: maestro brief
 ### maestro bundle --help
 bundle  Durable design bundles: scaffold, snapshot, recall.
 subverbs:
-  check   Lint SPEC units and VERIFY rows for missing cells; --final adds the verify-time checks. *
+  check  Lint SPEC units and VERIFY rows for missing cells; --final adds the verify-time checks. *
     usage: maestro bundle check <id>
     --final  Also require every unit, live and perf cell to hold evidence or an n/a with its reason, and a filled Commit cell.
     --json   Emit one compact JSON success envelope.
-  close   Snapshot the trio text into the store and archive the bundle.
+  close  Snapshot the trio text into the store and archive the bundle.
     usage: maestro bundle close <id>
     --json  Emit one compact JSON success envelope.
-  import  Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.
-    usage: maestro bundle import <directory>
-    --dry-run  Report the mapping without writing.
-    --json     Emit one compact JSON success envelope.
-  list    List bundles and their states. *
+  list   List bundles and their states. *
     --json  Emit one compact JSON success envelope.
-  open    Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
+  open   Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
     usage: maestro bundle open <id>
     --json                       Emit one compact JSON success envelope.
     --work <value> (repeatable)  Link a work item to this bundle.
-  pause   Pause an active bundle: it stays open but out of the way.
-    usage: maestro bundle pause <id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Why the bundle pauses.
-  resume  Resume a paused bundle.
-    usage: maestro bundle resume <id>
-    --json  Emit one compact JSON success envelope.
-  save    Ingest a foreign SPEC/NOTES/VERIFY dir straight to archived.
-    usage: maestro bundle save <directory>
-    --json  Emit one compact JSON success envelope.
-  show    Compose one bundle: trio text, linked work, decisions. *
+  show   Compose one bundle: trio text, linked work, decisions. *
     usage: maestro bundle show <id>
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
@@ -98,12 +82,6 @@ bundle close  Snapshot the trio text into the store and archive the bundle.
 usage: maestro bundle close <id>
     --json  Emit one compact JSON success envelope.
 
-### maestro bundle import --help
-bundle import  Import a .waymark/ tree: active and paused bundles copied, archives snapshotted, MEMORY.md and adr/ to decisions, CONTEXT.md to terms; every source item reported.
-usage: maestro bundle import <directory>
-    --dry-run  Report the mapping without writing.
-    --json     Emit one compact JSON success envelope.
-
 ### maestro bundle list --help
 bundle list  List bundles and their states. *
 usage: maestro bundle list
@@ -115,22 +93,6 @@ bundle open  Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
 usage: maestro bundle open <id>
     --json                       Emit one compact JSON success envelope.
     --work <value> (repeatable)  Link a work item to this bundle.
-
-### maestro bundle pause --help
-bundle pause  Pause an active bundle: it stays open but out of the way.
-usage: maestro bundle pause <id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Why the bundle pauses.
-
-### maestro bundle resume --help
-bundle resume  Resume a paused bundle.
-usage: maestro bundle resume <id>
-    --json  Emit one compact JSON success envelope.
-
-### maestro bundle save --help
-bundle save  Ingest a foreign SPEC/NOTES/VERIFY dir straight to archived.
-usage: maestro bundle save <directory>
-    --json  Emit one compact JSON success envelope.
 
 ### maestro bundle show --help
 bundle show  Compose one bundle: trio text, linked work, decisions. *
@@ -252,7 +214,6 @@ verbs:
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
-  prompt     Recorded user prompts from harness hooks. *
   ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
@@ -260,9 +221,8 @@ verbs:
   slp        Maestro's Herdr plugin entrypoints and the runtime readout.
   status     Show sessions, live peers, and held work. *
   team       Run the simplified supervised-team lifecycle.
-  term       Record or redefine one glossary term. *
+  term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
-  trace      Reconstruct one work item's event history. *
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
   update     Fast-forward the recorded source checkout and resync the runtime.
   version    Show the installed or source Maestro version. *
@@ -479,21 +439,6 @@ usage: maestro plugin list
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
-### maestro prompt --help
-prompt  Recorded user prompts from harness hooks.
-subverbs:
-  list  List recorded user prompts, most recent first (20). *
-    --json             Emit one compact JSON success envelope.
-    --session <value>  Only prompts from this session.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro prompt list --help
-prompt list  List recorded user prompts, most recent first (20). *
-usage: maestro prompt list
-    --json             Emit one compact JSON success envelope.
-    --session <value>  Only prompts from this session.
-* runs under MAESTRO_READ_ONLY=1
-
 ### maestro ready --help
 ready  List ready work and gated items with their blockers. *
 usage: maestro ready
@@ -625,24 +570,14 @@ usage: maestro team stop <team-id>
     --reason <value>  Team Supervisor, or the Hub for a lead-only team (w722): the closing report shown on the Hub ledger. Hub with --emergency: why unfinished work is abandoned.
 
 ### maestro term --help
-term  Record or redefine one glossary term.
+term  List glossary terms.
 subverbs:
-  add   Record or redefine one glossary term.
-    usage: maestro term add <name> <definition>
-    --json          Emit one compact JSON success envelope.
-    --work <value>  Link the term to a work item.
   list  List glossary terms. *
     --json  Emit one compact JSON success envelope.
   show  Show one glossary term. *
     usage: maestro term show <name>
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
-
-### maestro term add --help
-term add  Record or redefine one glossary term.
-usage: maestro term add <name> <definition>
-    --json          Emit one compact JSON success envelope.
-    --work <value>  Link the term to a work item.
 
 ### maestro term list --help
 term list  List glossary terms. *
@@ -674,12 +609,6 @@ usage: maestro topic list
 topic path  Create the folder for a topic and print its absolute path.
 usage: maestro topic path <slug>
     --json  Emit one compact JSON success envelope.
-
-### maestro trace --help
-trace  Reconstruct one work item's event history. *
-usage: maestro trace <id>
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
 
 ### maestro uninstall --help
 uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
