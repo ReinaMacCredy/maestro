@@ -42,25 +42,3 @@ export async function acquireProcessLock(lockPath: string, label: string): Promi
   }
   throw new Error(`${label} already running for this team generation`);
 }
-
-export async function runSlpProcess(
-  args: string[],
-  cwd: string,
-  env: Record<string, string | undefined>,
-): Promise<string> {
-  const child = Bun.spawn(args, {
-    cwd,
-    env: { ...process.env, ...env },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (exitCode !== 0) {
-    throw new Error(`${args.slice(0, 3).join(" ")} failed (${exitCode}): ${stderr.trim()}`);
-  }
-  return stdout;
-}

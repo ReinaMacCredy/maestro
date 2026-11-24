@@ -21,8 +21,8 @@ import { acquireProcessLock, slpRuntimeDirectory } from "./slp-process.ts";
 // every event against the store deterministically; no model judges attention
 // (A3). It writes the store in-process as the reserved actor `runtime`.
 
-export const runtimeActor = "runtime";
-export const runtimeEnvironment = {
+const runtimeActor = "runtime";
+const runtimeEnvironment = {
   generation: "MAESTRO_SLP_GENERATION",
   team: "MAESTRO_SLP_TEAM",
 } as const;
@@ -112,7 +112,7 @@ interface UnreachableLine {
   subject: string;
 }
 
-export interface RuntimeState {
+interface RuntimeState {
   // Last successful delivery per target: the turn it causes is the runtime's
   // own prompt, not the seat finishing its work (same reading as F15).
   delivered: Record<string, number>;
@@ -127,7 +127,7 @@ export interface RuntimeState {
   unreachable: UnreachableLine[];
 }
 
-export interface SlpRuntimeConfig {
+interface SlpRuntimeConfig {
   environment?: Record<string, string | undefined>;
   generation: number;
   projectPath: string;
@@ -142,7 +142,7 @@ function statePath(directory: string): string {
   return join(directory, "state.json");
 }
 
-export async function readRuntimeState(directory: string): Promise<RuntimeState | null> {
+async function readRuntimeState(directory: string): Promise<RuntimeState | null> {
   const path = statePath(directory);
   if (!existsSync(path)) return null;
   try {
@@ -165,7 +165,7 @@ async function writeRuntimeState(directory: string, state: RuntimeState): Promis
   await rename(pending, statePath(directory));
 }
 
-export async function runtimeLockHolder(directory: string): Promise<number | null> {
+async function runtimeLockHolder(directory: string): Promise<number | null> {
   const holder = Number((await readFile(join(directory, "runtime.lock"), "utf8").catch(() => "")).trim());
   if (!Number.isInteger(holder) || holder <= 0) return null;
   try {
@@ -441,7 +441,7 @@ function stallCopyLine(workId: string, kind: StallKind, evidence: string, holder
   return `[from ${runtimeActor}][${workId} copy] ${kind} ${evidence}; ${holder} holds ${workId} and has been nudged; read: maestro status ${workId}`;
 }
 
-export class AttentionRuntime {
+class AttentionRuntime {
   readonly directory: string;
   private state: RuntimeState = emptyState();
   private statuses = new Map<string, string>();
@@ -942,7 +942,7 @@ export function runtimeConfigFromEnvironment(
 
 // Every project the Hub registry lists; the plugin hooks run from the plugin
 // directory and find running generations through it.
-export async function registeredProjects(home = resolveHomeDirectory()): Promise<string[]> {
+async function registeredProjects(home = resolveHomeDirectory()): Promise<string[]> {
   const registry = join(home, "maestro", "registry");
   if (!existsSync(registry)) return [];
   return (await readFile(registry, "utf8")).split(/\r?\n/).filter((line) => line.trim() !== "");
@@ -954,7 +954,7 @@ interface RunningGeneration {
   team: TeamRow;
 }
 
-export function runningGenerations(projectPath: string): RunningGeneration[] {
+function runningGenerations(projectPath: string): RunningGeneration[] {
   const location = resolveStoreLocation(projectPath);
   if (!existsSync(location.path)) return [];
   const store = new Store(location.path, { readonly: true });
@@ -974,10 +974,6 @@ export function runningGenerations(projectPath: string): RunningGeneration[] {
   } finally {
     store.close();
   }
-}
-
-export interface RuntimePaneOpening {
-  paneId: string | null;
 }
 
 // Item 3: the pane command is static; team and generation arrive as env

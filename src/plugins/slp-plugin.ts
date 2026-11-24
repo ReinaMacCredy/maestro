@@ -24,22 +24,22 @@ import {
 export const herdrPluginId = "maestro";
 const manifestSource = join(import.meta.dir, "resources", "herdr-plugin", "herdr-plugin.toml");
 
-export function herdrPluginDirectory(home: string): string {
+function herdrPluginDirectory(home: string): string {
   return join(home, "maestro");
 }
 
-export function herdrPluginManifestPath(home: string): string {
+function herdrPluginManifestPath(home: string): string {
   return join(herdrPluginDirectory(home), "herdr-plugin.toml");
 }
 
-export async function renderHerdrPluginManifest(binary: string, version: string): Promise<string> {
+async function renderHerdrPluginManifest(binary: string, version: string): Promise<string> {
   const template = await readFile(manifestSource, "utf8");
   return template
     .replace(/^version = ".*"$/m, `version = ${JSON.stringify(version)}`)
     .replaceAll('command = ["maestro",', `command = [${JSON.stringify(binary)},`);
 }
 
-export interface HerdrPluginLink {
+interface HerdrPluginLink {
   directory: string;
   status: "linked" | "present" | "unreachable";
   warning: string | null;
@@ -54,7 +54,7 @@ async function samePlace(left: string | undefined, right: string): Promise<boole
   }
 }
 
-export async function linkHerdrPlugin(
+async function linkHerdrPlugin(
   home: string,
   binary: string,
   version: string,
@@ -84,7 +84,7 @@ export async function linkHerdrPlugin(
   }
 }
 
-export async function unlinkHerdrPlugin(
+async function unlinkHerdrPlugin(
   home: string,
   environment: Record<string, string | undefined> = process.env,
 ): Promise<string[]> {

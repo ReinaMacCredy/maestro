@@ -164,17 +164,12 @@ interface SlpLifecycleRow {
   workspace_id: string | null;
 }
 
-const packSource = join(import.meta.dir, "resources", "SLP.md");
-
 const nonTeamVerbs = new Map<string, string>([
   ["attention", "status"],
   ["brief", "status"],
   ["decision", "decide"],
   ["decision list", "status"],
   ["decision show", "status <decision-id>"],
-  ["dispatch", "work add, work take, or work return"],
-  ["handback", "work return or work accept"],
-  ["ready", "status"],
   ["work done", "work return then work accept"],
   ["work list", "status"],
   ["work reclaim", "work take"],
@@ -216,10 +211,6 @@ function paneGuard(store: Store, cwd = process.cwd()): CliGuard {
       }
     },
   };
-}
-
-export async function defaultSlpPack(): Promise<Uint8Array> {
-  return new Uint8Array(await readFile(packSource));
 }
 
 function migrateRoom(store: Store): void {
@@ -345,10 +336,6 @@ function provisionalDecisions(store: Store): ProvisionalDecision[] {
       teamId: row.team_id,
       workId: row.work_id,
     }));
-}
-
-export function roomOwnerLine(_context: PluginContext): string {
-  return "";
 }
 
 // A Hub pane not named `supervisor` never receives the BLOCKED push, so a standing escalation has to show in the store.
@@ -1616,7 +1603,7 @@ async function startTeam(
   }
 }
 
-export interface ActiveLocalTeam {
+interface ActiveLocalTeam {
   configuration_json: string;
   generation: number;
   pack_digest: string;
@@ -2551,11 +2538,9 @@ async function pushOneSeatUp(
   );
 }
 
-// w740 (room d153, d898): opening a Full-tier bundle on an item is the store's
-// signal that a design phase has begun, and the seat it must reach is the
-// reviewer above the one designing - the Hub for the Lead, the Lead for a
-// Peer - because
-// d153 puts the question-back pass in the reviewer's hands, not the designer's.
+// w740 (d898): opening a Full-tier bundle on an item is the store's signal
+// that a design phase has begun, and it reaches the reviewer above the one
+// designing - the Hub for the Lead, the Lead for a Peer.
 // Every failure here is silent: a bundle open outside a running team, from a
 // pane with no role, or on an id no SLP item holds, is an ordinary bundle open.
 async function pushDesignOpened(

@@ -7,9 +7,9 @@ import { retiredSkillNames } from "./skills.ts";
 
 export const seatNames = ["lead", "peer"] as const;
 export type SeatName = (typeof seatNames)[number];
-export type SeatHarness = "claude" | "codex";
+type SeatHarness = "claude" | "codex";
 
-export interface SeatConfig {
+interface SeatConfig {
   autocompact?: number;
   description: string;
   disallowed_tools?: string[];
@@ -242,7 +242,7 @@ function seatSettingsBase(home: string, token: string | null): Record<string, un
   };
 }
 
-export function mergeSettings(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
+function mergeSettings(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
     if (value === null) {

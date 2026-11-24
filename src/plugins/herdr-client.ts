@@ -49,7 +49,7 @@ export class SlpRuntimeError extends CliError {
   }
 }
 
-export type HerdrAgentStatus = "blocked" | "done" | "idle" | "unknown" | "working";
+type HerdrAgentStatus = "blocked" | "done" | "idle" | "unknown" | "working";
 
 export interface HerdrWorkspace {
   cwd?: string | null;
@@ -167,7 +167,7 @@ export class HerdrClient {
   private protocolChecked = false;
 
   constructor(
-    private readonly environment: Record<string, string | undefined> = process.env,
+    environment: Record<string, string | undefined> = process.env,
     private readonly timeoutMs = 15_000,
   ) {
     this.socketPath = herdrSocketPath(environment);

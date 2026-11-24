@@ -15,7 +15,6 @@ import { resolveHomeDirectory } from "./home.ts";
 import { readSeatToken, seatDirectory, seatLaunchPath, seatTokenPath } from "./slp-seats.ts";
 import { slpRuntimeDirectory } from "./slp-process.ts";
 
-export { SlpRuntimeError };
 
 // d755: the acknowledgement is polled inside a fixed window with non-scrolling
 // reads; d756: a blocked pane is classified from its own text.
@@ -87,7 +86,7 @@ export interface SlpRuntimeStart {
   workspaceId: string;
 }
 
-export interface SlpRuntimePeer {
+interface SlpRuntimePeer {
   createdTabId: string | null;
   // true when the pane was already acknowledged and left alone (Hub d101:
   // the only pane --fresh resets).
@@ -99,7 +98,7 @@ export interface SlpRuntimePeer {
 // Hub d101: the harness's new-conversation slash command. Claude Code /clear
 // is what the owner sends by hand; Codex /new is read off the installed codex
 // 0.153.3 binary ("start a new chat during a conversation"), not yet run live.
-export const newConversationCommands: Record<SeatLaunch["harness"], string> = {
+const newConversationCommands: Record<SeatLaunch["harness"], string> = {
   claude: "/clear",
   codex: "/new",
 };
@@ -114,7 +113,7 @@ const sessionProvenResets: Record<SeatLaunch["harness"], boolean> = {
   codex: false,
 };
 
-export interface SlpRuntimeInspection {
+interface SlpRuntimeInspection {
   missingPanes: string[];
   runtime: "available";
   runtimePane: boolean;
@@ -205,7 +204,7 @@ export function buildSlpTeamPlan(input: {
 }
 
 // F10, room d128: autocompact and the model ride the launch line, so the seat file and its pinned digest never change.
-export function launchArguments(
+function launchArguments(
   role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "role">,
 ): string[] {
   const args = role.kind === "codex"
