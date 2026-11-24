@@ -2,7 +2,7 @@ import { builtInPlugins } from "../plugins/index.ts";
 import { Cli, type CliOptions } from "./cli.ts";
 import { Events } from "./events.ts";
 import { Loader } from "./loader.ts";
-import type { BuiltInPlugin, LoaderOptions } from "./loader.ts";
+import type { BuiltInPlugin } from "./loader.ts";
 import { EventLog } from "./log.ts";
 import { Ready } from "./ready.ts";
 import { Sessions } from "./sessions.ts";
@@ -11,9 +11,7 @@ import { resolveStoreLocation, Store } from "./store.ts";
 export interface RunOptions {
   allowBuiltIn?: (plugin: BuiltInPlugin) => boolean;
   cli?: CliOptions;
-  loadExternalPlugins?: boolean;
   readOnly?: boolean;
-  trustExternalPlugin?: LoaderOptions["trustExternalPlugin"];
 }
 
 export async function run(args: string[], options: RunOptions = {}): Promise<number> {
@@ -34,9 +32,6 @@ export async function run(args: string[], options: RunOptions = {}): Promise<num
     ready,
     sessions,
     store,
-  }, {
-    loadExternalPlugins: options.loadExternalPlugins,
-    trustExternalPlugin: options.trustExternalPlugin,
   });
 
   try {

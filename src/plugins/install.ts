@@ -18,7 +18,6 @@ import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
-import { grandfatherHomePlugins } from "./plugin-trust.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
 import { formatProfileSync, materializeProfiles, seatConfigRoot, seatTokenPath, writeSecretFile } from "./profiles.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
@@ -656,7 +655,6 @@ export const installPlugin: BuiltInPlugin = {
         const repo = process.cwd();
         const home = resolveHomeDirectory();
         if (invocation.options["seat-token"] === true) await writeSeatToken(home, await Bun.stdin.text());
-        await grandfatherHomePlugins(home);
         const existingSourceRecord = sourceRecordPath(home);
         if (existsSync(existingSourceRecord)) {
           await chmod(dirname(existingSourceRecord), 0o700);

@@ -15,7 +15,7 @@ verbs:
   mcp        Expose Maestro through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
-  plugin     Manage built-in, global, and repository plugins. *
+  plugin     Manage built-in plugins. *
   prompt     Recorded user prompts from harness hooks. *
   ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
@@ -251,7 +251,7 @@ verbs:
   mcp        Expose Maestro through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
-  plugin     Manage built-in, global, and repository plugins. *
+  plugin     Manage built-in plugins. *
   prompt     Recorded user prompts from harness hooks. *
   ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
@@ -451,37 +451,17 @@ usage: maestro owner [here|away]
     --json  Emit one compact JSON success envelope.
 
 ### maestro plugin --help
-plugin  Manage built-in, global, and repository plugins.
+plugin  Manage built-in plugins.
 subverbs:
-  add      Clone and enable a plugin from a Git URL.
-    usage: maestro plugin add <url>
-    --json  Emit one compact JSON success envelope.
   disable  Disable a plugin and unwind its effects.
     usage: maestro plugin disable <name>
     --json  Emit one compact JSON success envelope.
   enable   Enable an installed plugin.
     usage: maestro plugin enable <name>
     --json  Emit one compact JSON success envelope.
-  list     List built-in, global, and repository plugins. *
-    --json  Emit one compact JSON success envelope.
-  new      Scaffold a repository-local plugin.
-    usage: maestro plugin new <name>
-    --json  Emit one compact JSON success envelope.
-  remove   Remove a managed plugin and its files.
-    usage: maestro plugin remove <name>
-    --json  Emit one compact JSON success envelope.
-  trust    Trust an external plugin's current source so it may load.
-    usage: maestro plugin trust <name>
-    --json  Emit one compact JSON success envelope.
-  untrust  Withdraw an external plugin's trust so it stops loading.
-    usage: maestro plugin untrust <name>
+  list     List built-in plugins. *
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
-
-### maestro plugin add --help
-plugin add  Clone and enable a plugin from a Git URL.
-usage: maestro plugin add <url>
-    --json  Emit one compact JSON success envelope.
 
 ### maestro plugin disable --help
 plugin disable  Disable a plugin and unwind its effects.
@@ -494,30 +474,10 @@ usage: maestro plugin enable <name>
     --json  Emit one compact JSON success envelope.
 
 ### maestro plugin list --help
-plugin list  List built-in, global, and repository plugins. *
+plugin list  List built-in plugins. *
 usage: maestro plugin list
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
-
-### maestro plugin new --help
-plugin new  Scaffold a repository-local plugin.
-usage: maestro plugin new <name>
-    --json  Emit one compact JSON success envelope.
-
-### maestro plugin remove --help
-plugin remove  Remove a managed plugin and its files.
-usage: maestro plugin remove <name>
-    --json  Emit one compact JSON success envelope.
-
-### maestro plugin trust --help
-plugin trust  Trust an external plugin's current source so it may load.
-usage: maestro plugin trust <name>
-    --json  Emit one compact JSON success envelope.
-
-### maestro plugin untrust --help
-plugin untrust  Withdraw an external plugin's trust so it stops loading.
-usage: maestro plugin untrust <name>
-    --json  Emit one compact JSON success envelope.
 
 ### maestro prompt --help
 prompt  Recorded user prompts from harness hooks.

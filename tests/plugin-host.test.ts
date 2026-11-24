@@ -1,162 +1,132 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
-import {
-  helloPlugin,
-  idFrom,
-  runCli,
-  runTool,
-  setPlugin,
-  withFixture,
-  writeConfig,
-  writePlugin,
-} from "./helpers.ts";
+import { join } from "node:path";
+import { Cli, CliError } from "../src/kernel/cli.ts";
+import { Events } from "../src/kernel/events.ts";
+import { Loader, type BuiltInPlugin } from "../src/kernel/loader.ts";
+import { EventLog } from "../src/kernel/log.ts";
+import { Ready } from "../src/kernel/ready.ts";
+import { Sessions } from "../src/kernel/sessions.ts";
+import { resolveStoreLocation, Store } from "../src/kernel/store.ts";
+import { pluginManagerPlugin } from "../src/plugins/plugin-manager.ts";
+import { runCli, setPlugin, withFixture, writeConfig, type Fixture } from "./helpers.ts";
+
+const helloPlugin: BuiltInPlugin = {
+  name: "hello",
+  apply(context) {
+    context.effect(() => context.cli.register("hello", async () => "hello from effect"));
+  },
+};
+
+async function withLoader<T>(
+  fixture: Fixture,
+  plugins: BuiltInPlugin[],
+  run: (kernel: { cli: Cli; events: Events; loader: Loader }) => Promise<T>,
+): Promise<T> {
+  const location = resolveStoreLocation(fixture.repo);
+  const store = new Store(location.path);
+  const cli = new Cli();
+  const events = new Events();
+  const loader = new Loader(fixture.repo, fixture.home, plugins, {
+    cli,
+    events,
+    log: new EventLog(store),
+    ready: new Ready(),
+    sessions: new Sessions(store, location.root),
+    store,
+  });
+  try {
+    await loader.loadAll();
+    return await run({ cli, events, loader });
+  } finally {
+    await loader.unloadAll();
+    store.close();
+  }
+}
+
+async function unknownVerb(cli: Cli, args: string[]): Promise<string | undefined> {
+  try {
+    await cli.execute(args);
+    return undefined;
+  } catch (error) {
+    return error instanceof CliError ? error.code : String(error);
+  }
+}
 
 test("1 plugin-registered effect dispatches its verb on the next invocation", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(fixture, "global", "hello", helloPlugin);
-
-    const result = await runCli(fixture, ["hello"]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("hello from effect");
+    await withLoader(fixture, [helloPlugin], async ({ cli }) => {
+      expect((await cli.execute(["hello"])).text).toContain("hello from effect");
+    });
   });
 });
 
 test("2 a disabled plugin contributes neither verbs nor gates", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(
-      fixture,
-      "repo",
-      "stopper",
-      `
-export default {
-  name: "stopper",
-  apply(ctx) {
-    ctx.effect(() => ctx.cli.register("hello", async () => "should not run"));
-    ctx.effect(() => ctx.events.on("work.start", async () => ({
-      blocked: true,
-      origin: "stopper",
-      reason: "should not run",
-    })));
-  },
-};
-`,
-    );
+    const stopper: BuiltInPlugin = {
+      name: "stopper",
+      apply(context) {
+        context.effect(() => context.cli.register("hello", async () => "should not run"));
+        context.effect(() => context.events.on("work.start", async () => ({
+          blocked: true,
+          origin: "stopper",
+          reason: "should not run",
+        })));
+      },
+    };
     await writeConfig(fixture, [{ name: "stopper", disabled: true }]);
 
-    const unknown = await runCli(fixture, ["hello"]);
-    const added = await runCli(fixture, ["work", "add", "read only", "--kind", "idea"]);
-    const started = await runCli(fixture, ["work", "start", idFrom(added)]);
-
-    expect(unknown.exitCode).not.toBe(0);
-    expect(unknown.stderr).toContain("unknown verb");
-    expect(started.exitCode).toBe(0);
-    expect(started.stderr).not.toContain("stopper");
-  });
-});
-
-test("3 a repo-local TypeScript plugin loads without build or install", async () => {
-  await withFixture(async (fixture) => {
-    await writePlugin(fixture, "repo", "hello", helloPlugin);
-
-    const result = await runCli(fixture, ["hello"]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("hello from effect");
+    await withLoader(fixture, [stopper], async ({ cli, events, loader }) => {
+      expect(await unknownVerb(cli, ["hello"])).toBe("UNKNOWN_VERB");
+      expect(await events.serial("work.start", {})).toEqual([]);
+      expect(loader.records).toEqual([
+        { name: "stopper", source: "built-in", status: "disabled", requires: undefined },
+      ]);
+    });
   });
 });
 
 test("4 a missing injected service isolates that plugin and reports the dependency", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(
-      fixture,
-      "repo",
-      "broken",
-      `
-export default {
-  name: "broken",
-  inject: ["nosuch"],
-  apply() {
-    throw new Error("must not apply");
-  },
-};
-`,
-    );
-    await writePlugin(fixture, "repo", "hello", helloPlugin);
+    const broken: BuiltInPlugin = {
+      name: "broken",
+      inject: ["nosuch"],
+      apply() {
+        throw new Error("must not apply");
+      },
+    };
 
-    const listed = await runCli(fixture, ["plugin", "list"]);
-    const healthy = await runCli(fixture, ["hello"]);
+    await withLoader(fixture, [pluginManagerPlugin, broken, helloPlugin], async ({ cli }) => {
+      const listed = await cli.execute(["plugin", "list"]);
+      const healthy = await cli.execute(["hello"]);
 
-    expect(listed.exitCode).toBe(0);
-    expect(listed.stdout).toContain("broken");
-    expect(listed.stdout).toContain("nosuch");
-    expect(healthy.exitCode).toBe(0);
+      expect(listed.text).toContain("broken");
+      expect(listed.text).toContain("nosuch");
+      expect(healthy.text).toContain("hello from effect");
+    });
   });
 });
 
 test("5 disabling an enabled plugin unwinds all of its effects", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(fixture, "repo", "hello", helloPlugin);
-    await setPlugin(fixture, "hello", true);
+    await withLoader(fixture, [helloPlugin], async ({ cli, loader }) => {
+      expect((await cli.execute(["hello"])).text).toContain("hello from effect");
+      await loader.unload("hello");
+      expect(await unknownVerb(cli, ["hello"])).toBe("UNKNOWN_VERB");
+    });
 
-    const enabled = await runCli(fixture, ["plugin", "enable", "hello"]);
-    const present = await runCli(fixture, ["hello"]);
-    const disabled = await runCli(fixture, ["plugin", "disable", "hello"]);
-    const absent = await runCli(fixture, ["hello"]);
+    await setPlugin(fixture, "topic", true);
+    const enabled = await runCli(fixture, ["plugin", "enable", "topic"]);
+    const present = await runCli(fixture, ["topic", "list"]);
+    const disabled = await runCli(fixture, ["plugin", "disable", "topic"]);
+    const absent = await runCli(fixture, ["topic", "list"]);
 
     expect(enabled.exitCode).toBe(0);
     expect(present.exitCode).toBe(0);
     expect(disabled.exitCode).toBe(0);
     expect(absent.exitCode).not.toBe(0);
     expect(absent.stderr).toContain("unknown verb");
-  });
-});
-
-test("6 plugin new and plugin add appear with repo and global source tiers", async () => {
-  await withFixture(async (fixture) => {
-    const remote = join(fixture.root, "remote-gate");
-    await mkdir(remote, { recursive: true });
-    await writeFile(
-      join(remote, "index.ts"),
-      `export default { name: "remote-gate", apply() {} };\n`,
-    );
-    expect((await runTool(["git", "init", "-q"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.email", "test@example.invalid"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.name", "Stage One"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "add", "index.ts"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "commit", "-qm", "init"], remote)).exitCode).toBe(0);
-
-    const created = await runCli(fixture, ["plugin", "new", "my-gate"]);
-    const added = await runCli(fixture, ["plugin", "add", remote]);
-    const listed = await runCli(fixture, ["plugin", "list"]);
-
-    expect(created.exitCode).toBe(0);
-    expect(added.exitCode).toBe(0);
-    expect(listed.exitCode).toBe(0);
-    expect(listed.stdout).toContain("my-gate");
-    expect(listed.stdout).toContain("repo");
-    expect(listed.stdout).toContain(basename(remote));
-    expect(listed.stdout).toContain("global");
-
-    // A scaffold is authored, not vouched for: plugin new says so, and the
-    // digest it would be trusted against changes with the author's first edit.
-    expect(created.stdout).toContain("maestro plugin trust my-gate");
-    expect(await runCli(fixture, ["my-gate"])).toMatchObject({ exitCode: 2 });
-
-    await writePlugin(
-      fixture,
-      "repo",
-      "index",
-      `export default { name: "index-local", apply() {} };\n`,
-    );
-    const removed = await runCli(fixture, ["plugin", "remove", "index-local"]);
-    const trusted = await runCli(fixture, ["plugin", "trust", "my-gate"]);
-    const scaffoldLoads = await runCli(fixture, ["my-gate"]);
-    expect(removed.exitCode).toBe(0);
-    expect(trusted.exitCode).toBe(0);
-    expect(scaffoldLoads.exitCode).toBe(0);
   });
 });
 
@@ -174,90 +144,41 @@ test("26 plugin enable refuses an unresolvable source without changing config", 
   });
 });
 
-test("27 plugin add rejects missing entrypoints and immediately lists loadable clones", async () => {
+test("d888 a stored config naming plugins that no longer exist loads quietly and loads nothing from disk", async () => {
   await withFixture(async (fixture) => {
-    const invalid = join(fixture.root, "invalid-plugin");
-    await mkdir(invalid, { recursive: true });
-    await writeFile(join(invalid, "README.md"), "no TypeScript entrypoint\n");
-    expect((await runTool(["git", "init", "-q"], invalid)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.email", "test@example.invalid"], invalid)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.name", "Stage One"], invalid)).exitCode).toBe(0);
-    expect((await runTool(["git", "add", "README.md"], invalid)).exitCode).toBe(0);
-    expect((await runTool(["git", "commit", "-qm", "invalid"], invalid)).exitCode).toBe(0);
-
-    const rejected = await runCli(fixture, ["plugin", "add", invalid]);
-    const rejectedClone = join(fixture.home, ".maestro", "plugins", basename(invalid));
-
-    expect(rejected.exitCode).not.toBe(0);
-    expect(rejected.stderr).toContain("entrypoint");
-    expect(existsSync(rejectedClone)).toBe(false);
-
-    const valid = join(fixture.root, "valid-plugin");
-    await mkdir(valid, { recursive: true });
+    const marker = join(fixture.repo, "leftover-plugin-loaded");
+    await mkdir(join(fixture.repo, ".maestro", "plugins"), { recursive: true });
     await writeFile(
-      join(valid, "index.ts"),
-      `export default { name: "valid-plugin", apply() {} };\n`,
+      join(fixture.repo, ".maestro", "plugins", "leftover.ts"),
+      `import { writeFileSync } from "node:fs";
+writeFileSync(${JSON.stringify(marker)}, "loaded");
+export default {
+  name: "leftover",
+  apply(ctx) {
+    ctx.effect(() => ctx.cli.register("leftover", async () => "leftover ran"));
+  },
+};
+`,
     );
-    expect((await runTool(["git", "init", "-q"], valid)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.email", "test@example.invalid"], valid)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.name", "Stage One"], valid)).exitCode).toBe(0);
-    expect((await runTool(["git", "add", "index.ts"], valid)).exitCode).toBe(0);
-    expect((await runTool(["git", "commit", "-qm", "valid"], valid)).exitCode).toBe(0);
+    await writeConfig(fixture, [
+      { name: "import-rust" },
+      { name: "plugin-trust", disabled: true },
+      { name: "leftover" },
+    ]);
 
-    const added = await runCli(fixture, ["plugin", "add", valid]);
     const listed = await runCli(fixture, ["plugin", "list"]);
-    const trust = JSON.parse(await readFile(join(fixture.home, ".maestro", "trust.json"), "utf8")) as {
-      plugins: Array<{ digest: string; path: string }>;
-    };
+    const work = await runCli(fixture, ["work", "list"]);
+    const leftover = await runCli(fixture, ["leftover"]);
 
-    expect(added.exitCode).toBe(0);
     expect(listed.exitCode).toBe(0);
-    expect(listed.stdout).toContain("valid-plugin");
-    expect(listed.stdout).toContain("global");
-    expect(listed.stdout).toContain("active");
-    // add no longer writes a name-keyed config entry: it cannot learn the
-    // declared name without importing the clone, which is what it stopped
-    // doing. The grant it does write covers the cloned bytes.
-    expect(trust.plugins.map((grant) => basename(grant.path))).toContain("valid-plugin");
-    expect(trust.plugins[0]?.digest).toStartWith("sha256:");
-  });
-});
-
-test("28 plugin remove deletes scaffolded and added artifacts plus config entries", async () => {
-  await withFixture(async (fixture) => {
-    const localName = "remove-local";
-    const localPath = join(fixture.repo, ".maestro", "plugins", `${localName}.ts`);
-    expect((await runCli(fixture, ["plugin", "new", localName])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["plugin", "disable", localName])).exitCode).toBe(0);
-
-    const remote = join(fixture.root, "remove-global");
-    await mkdir(remote, { recursive: true });
-    await writeFile(
-      join(remote, "index.ts"),
-      `export default { name: "remove-global", apply() {} };\n`,
-    );
-    expect((await runTool(["git", "init", "-q"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.email", "test@example.invalid"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "config", "user.name", "Stage One"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "add", "index.ts"], remote)).exitCode).toBe(0);
-    expect((await runTool(["git", "commit", "-qm", "remove"], remote)).exitCode).toBe(0);
-    expect((await runCli(fixture, ["plugin", "add", remote])).exitCode).toBe(0);
-
-    const globalPath = join(fixture.home, ".maestro", "plugins", "remove-global");
-    expect(existsSync(localPath)).toBe(true);
-    expect(existsSync(globalPath)).toBe(true);
-
-    const removedLocal = await runCli(fixture, ["plugin", "remove", localName]);
-    const removedGlobal = await runCli(fixture, ["plugin", "remove", "remove-global"]);
-    const config = JSON.parse(await readFile(join(fixture.repo, ".maestro", "config"), "utf8")) as {
-      plugins: Array<{ name: string }>;
-    };
-
-    expect(removedLocal.exitCode).toBe(0);
-    expect(removedGlobal.exitCode).toBe(0);
-    expect(existsSync(localPath)).toBe(false);
-    expect(existsSync(globalPath)).toBe(false);
-    expect(config.plugins.map((entry) => entry.name)).not.toContain(localName);
-    expect(config.plugins.map((entry) => entry.name)).not.toContain("remove-global");
+    expect(listed.stderr).toBe("");
+    for (const name of ["import-rust", "plugin-trust", "leftover"]) {
+      expect(listed.stdout).not.toContain(name);
+    }
+    expect(work.exitCode).toBe(0);
+    expect(work.stderr).toBe("");
+    expect(leftover.exitCode).toBe(2);
+    expect(leftover.stderr).toContain("unknown verb");
+    expect(existsSync(marker)).toBe(false);
   });
 });

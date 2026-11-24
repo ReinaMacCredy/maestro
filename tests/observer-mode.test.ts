@@ -1,10 +1,11 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Cli } from "../src/kernel/cli.ts";
 import { observerMode } from "../src/plugins/observer-mode.ts";
 import { mkdir } from "node:fs/promises";
-import { idFrom, runCli, runCliAt, withFixture, writeConfig, writePlugin } from "./helpers.ts";
+import { idFrom, runCli, runCliAt, withFixture } from "./helpers.ts";
 
 const withoutSession = { MAESTRO_SESSION_NONE: "1" };
 const readOnly = { MAESTRO_READ_ONLY: "1" };
@@ -58,9 +59,6 @@ test("209 every session-attributed write door shares the SESSION_REQUIRED gate",
       ["hook", "record"],
       ["plugin", "enable"],
       ["plugin", "disable"],
-      ["plugin", "new"],
-      ["plugin", "add"],
-      ["plugin", "remove"],
       ["install"],
     ];
 
@@ -215,28 +213,11 @@ test("214 read-only mode rejects a durable command before it writes", async () =
   });
 });
 
-test("215 read-only mode rejects future plugin commands by default", async () => {
+test("215 read-only mode rejects commands of plugins outside the observer set", async () => {
   await withFixture(async (fixture) => {
-    const marker = join(fixture.repo, "external-plugin-loaded");
-    await writePlugin(
-      fixture,
-      "repo",
-      "future-observer",
-      `import { writeFileSync } from "node:fs";
-writeFileSync(${JSON.stringify(marker)}, "loaded");
-export default {
-  name: "future-observer",
-  apply(context) {
-    context.effect(() => context.cli.register("future inspect", () => "future"));
-  },
-};\n`,
-    );
-    await writeConfig(fixture, [{ name: "future-observer" }]);
-
-    const result = await runCli(fixture, ["future", "inspect"], readOnly);
+    const result = await runCli(fixture, ["topic", "list"], readOnly);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('"code":"READ_ONLY"');
-    expect(await Bun.file(marker).exists()).toBe(false);
   });
 });
 
@@ -286,12 +267,11 @@ test("216 read-only startup does not repair persisted indexes", async () => {
 
 test("217 read-only mode blocks file-first commands before filesystem effects", async () => {
   await withFixture(async (fixture) => {
-    const result = await runCli(fixture, ["plugin", "new", "blocked-plugin"], readOnly);
+    const result = await runCli(fixture, ["bundle", "open", "blocked-bundle"], readOnly);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('"code":"READ_ONLY"');
-    expect(await Bun.file(join(fixture.repo, ".maestro", "plugins", "blocked-plugin.ts")).exists())
-      .toBe(false);
+    expect(existsSync(join(fixture.repo, ".maestro", "bundle", "blocked-bundle"))).toBe(false);
   });
 });
 

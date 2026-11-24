@@ -1,14 +1,11 @@
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Cli } from "./cli.ts";
 import type { Disposer, Events } from "./events.ts";
 import type { EventLog } from "./log.ts";
 import type { Ready } from "./ready.ts";
 import type { Sessions } from "./sessions.ts";
 import type { Store } from "./store.ts";
-
-export type PluginSource = "built-in" | "global" | "repo";
 
 export interface Plugin {
   name: string;
@@ -22,13 +19,10 @@ export interface BuiltInPlugin extends Plugin {
 }
 
 export interface PluginRecord {
-  artifact?: "directory" | "file";
   name: string;
-  source: PluginSource;
-  status: "active" | "disabled" | "error" | "unloaded" | "untrusted";
+  source: "built-in";
+  status: "active" | "disabled" | "error" | "unloaded";
   diagnostic?: string;
-  path?: string;
-  root?: string;
   requires?: string;
 }
 
@@ -55,99 +49,6 @@ interface ConfigFile {
   plugins?: PluginEntry[];
 }
 
-interface Candidate {
-  artifact?: "directory" | "file";
-  plugin: Plugin;
-  source: PluginSource;
-  path?: string;
-  root?: string;
-  defaultDisabled?: boolean;
-}
-
-export interface LoaderOptions {
-  loadExternalPlugins?: boolean;
-  trustExternalPlugin?: (artifact: {
-    root: string;
-    source: PluginSource;
-  }) => boolean | Promise<boolean>;
-}
-
-export function resolvePluginEntrypoint(directory: string): string | null {
-  const index = join(directory, "index.ts");
-  if (existsSync(index)) return index;
-  const rootTypeScriptFiles = readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-    .map((entry) => join(directory, entry.name));
-  return rootTypeScriptFiles.length === 1 ? (rootTypeScriptFiles[0] ?? null) : null;
-}
-
-// The trust digest covers the artifact's own files, so an import that resolves
-// outside the root would run code no grant ever vouched for. Bun's resolver is
-// process-global and cannot be unregistered, so a single registration reads a
-// set that grows as artifacts are imported, and nothing is registered at all
-// until the first external plugin is about to load. Every path is canonicalised
-// because the roots are built from $HOME and the repo, either of which can be
-// reached through a symlink (/var vs /private/var on macOS).
-const artifactRoots = new Set<string>();
-let boundaryRegistered = false;
-
-function canonical(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return path;
-  }
-}
-
-function within(root: string, file: string): boolean {
-  const rel = relative(root, file);
-  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
-}
-
-function containingRoot(file: string): string | undefined {
-  for (const root of artifactRoots) {
-    if (within(root, file)) return root;
-  }
-  return undefined;
-}
-
-export function guardArtifactBoundary(root: string): void {
-  artifactRoots.add(canonical(root));
-  if (boundaryRegistered) return;
-  boundaryRegistered = true;
-  Bun.plugin({
-    name: "maestro-artifact-boundary",
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        // A bare specifier (node:fs, bun:sqlite, an npm package) is not the
-        // artifact's own code; only a path leaving the root is refused.
-        if (!args.importer) return undefined;
-        if (!args.path.startsWith(".") && !isAbsolute(args.path)) return undefined;
-        const importer = canonical(args.importer);
-        const root = containingRoot(importer);
-        if (!root) return undefined;
-        if (within(root, canonical(resolve(dirname(importer), args.path)))) return undefined;
-        throw new Error(
-          `import leaves the trusted artifact: ${args.importer} imports "${args.path}"; ` +
-            `trust covers only ${root}`,
-        );
-      });
-    },
-  });
-}
-
-export async function importPluginEntrypoint(path: string): Promise<Plugin> {
-  const module = (await import(pathToFileURL(path).href)) as {
-    default?: Plugin;
-    plugin?: Plugin;
-  };
-  const plugin = module.default ?? module.plugin;
-  if (!plugin?.name || typeof plugin.apply !== "function") {
-    throw new Error("module must export { name, apply }");
-  }
-  return plugin;
-}
-
 export class Loader {
   readonly records: PluginRecord[] = [];
   readonly context: PluginContext;
@@ -168,7 +69,6 @@ export class Loader {
       sessions: Sessions;
       store: Store;
     },
-    private readonly options: LoaderOptions = {},
   ) {
     const base = {
       ...services,
@@ -183,69 +83,45 @@ export class Loader {
   }
 
   async loadAll(): Promise<void> {
-    const candidates = await this.discover();
-    const chosen = new Map<string, Candidate>();
-    for (const candidate of candidates) chosen.set(candidate.plugin.name, candidate);
-
-    const pending: Candidate[] = [];
-    for (const candidate of chosen.values()) {
-      const entry = this.config.get(candidate.plugin.name);
-      if (entry?.disabled ?? candidate.defaultDisabled ?? false) {
+    const pending: BuiltInPlugin[] = [];
+    for (const plugin of this.builtIns) {
+      const entry = this.config.get(plugin.name);
+      if (entry?.disabled ?? plugin.defaultDisabled ?? false) {
         this.records.push({
-          artifact: candidate.artifact,
-          name: candidate.plugin.name,
-          source: candidate.source,
+          name: plugin.name,
+          source: "built-in",
           status: "disabled",
-          path: candidate.path,
-          root: candidate.root,
-          requires: candidate.plugin.requires,
+          requires: plugin.requires,
         });
       } else {
-        pending.push(candidate);
+        pending.push(plugin);
       }
     }
 
     while (pending.length > 0) {
       let progressed = false;
       for (let index = 0; index < pending.length; ) {
-        const candidate = pending[index] as Candidate;
-        const missing = (candidate.plugin.inject ?? []).filter((name) => !this.services.has(name));
+        const plugin = pending[index] as BuiltInPlugin;
+        const missing = (plugin.inject ?? []).filter((name) => !this.services.has(name));
         if (missing.length > 0) {
           index += 1;
           continue;
         }
         pending.splice(index, 1);
         progressed = true;
-        await this.load(candidate);
+        await this.load(plugin);
       }
       if (progressed) continue;
-      for (const candidate of pending.splice(0)) {
-        const missing = (candidate.plugin.inject ?? []).filter((name) => !this.services.has(name));
+      for (const plugin of pending.splice(0)) {
+        const missing = (plugin.inject ?? []).filter((name) => !this.services.has(name));
         this.records.push({
-          artifact: candidate.artifact,
-          name: candidate.plugin.name,
-          source: candidate.source,
+          name: plugin.name,
+          source: "built-in",
           status: "unloaded",
-          path: candidate.path,
-          root: candidate.root,
           diagnostic: `missing service: ${missing.join(", ")}`,
-          requires: candidate.plugin.requires,
+          requires: plugin.requires,
         });
       }
-    }
-
-    for (const entry of this.config.values()) {
-      if (chosen.has(entry.name)) continue;
-      // An untrusted artifact never becomes a candidate, but its source is on
-      // disk; reporting it as missing too would send the reader hunting for a
-      // file that is right there.
-      if (this.records.some((record) => record.name === entry.name)) continue;
-      this.records.push({
-        name: entry.name,
-        source: "repo",
-        status: entry.disabled ? "disabled" : "unloaded",
-        diagnostic: "plugin source not found",
-      });
     }
   }
 
@@ -280,31 +156,25 @@ export class Loader {
     };
   }
 
-  private async load(candidate: Candidate): Promise<void> {
-    this.currentPlugin = candidate.plugin.name;
-    this.context.cli.owner = candidate.plugin.name;
+  private async load(plugin: BuiltInPlugin): Promise<void> {
+    this.currentPlugin = plugin.name;
+    this.context.cli.owner = plugin.name;
     try {
-      await candidate.plugin.apply(this.context, this.config.get(candidate.plugin.name)?.config);
+      await plugin.apply(this.context, this.config.get(plugin.name)?.config);
       this.records.push({
-        artifact: candidate.artifact,
-        name: candidate.plugin.name,
-        source: candidate.source,
+        name: plugin.name,
+        source: "built-in",
         status: "active",
-        path: candidate.path,
-        root: candidate.root,
-        requires: candidate.plugin.requires,
+        requires: plugin.requires,
       });
     } catch (error) {
-      await this.unload(candidate.plugin.name);
+      await this.unload(plugin.name);
       this.records.push({
-        artifact: candidate.artifact,
-        name: candidate.plugin.name,
-        source: candidate.source,
+        name: plugin.name,
+        source: "built-in",
         status: "error",
-        path: candidate.path,
-        root: candidate.root,
         diagnostic: error instanceof Error ? error.message : String(error),
-        requires: candidate.plugin.requires,
+        requires: plugin.requires,
       });
     } finally {
       this.currentPlugin = null;
@@ -328,69 +198,5 @@ export class Loader {
         `invalid plugin config ${path}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-  }
-
-  private async discover(): Promise<Candidate[]> {
-    const candidates: Candidate[] = this.builtIns.map((plugin) => ({
-      plugin,
-      source: "built-in" as const,
-      defaultDisabled: plugin.defaultDisabled,
-    }));
-    if (this.options.loadExternalPlugins ?? true) {
-      candidates.push(...(await this.discoverDirectory(join(this.home, ".maestro", "plugins"), "global")));
-      candidates.push(...(await this.discoverDirectory(join(this.repo, ".maestro", "plugins"), "repo")));
-    }
-    return candidates;
-  }
-
-  private async discoverDirectory(directory: string, source: PluginSource): Promise<Candidate[]> {
-    if (!existsSync(directory)) return [];
-    const candidates: Candidate[] = [];
-    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const path = entry.isDirectory()
-        ? resolvePluginEntrypoint(join(directory, entry.name))
-        : entry.isFile() && entry.name.endsWith(".ts")
-          ? join(directory, entry.name)
-          : null;
-      if (!path || !existsSync(path)) continue;
-      const root = entry.isDirectory() ? join(directory, entry.name) : path;
-      const name = entry.name.replace(/\.ts$/, "");
-      // The gate sits before the import, not before apply(): a plugin's module
-      // scope runs the moment it is imported, and the disabled flag is not read
-      // until loadAll(), long after discovery would already have executed it.
-      if (!(await (this.options.trustExternalPlugin?.({ root, source }) ?? true))) {
-        this.records.push({
-          artifact: entry.isDirectory() ? "directory" : "file",
-          name,
-          source,
-          status: "untrusted",
-          path,
-          root,
-        });
-        continue;
-      }
-      try {
-        guardArtifactBoundary(root);
-        const plugin = await importPluginEntrypoint(path);
-        candidates.push({
-          artifact: entry.isDirectory() ? "directory" : "file",
-          plugin,
-          source,
-          path,
-          root,
-        });
-      } catch (error) {
-        this.records.push({
-          artifact: entry.isDirectory() ? "directory" : "file",
-          name,
-          source,
-          status: "error",
-          path,
-          root,
-          diagnostic: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-    return candidates;
   }
 }

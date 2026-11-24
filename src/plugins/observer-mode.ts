@@ -12,7 +12,6 @@ const observerPlugins = new Set([
   "memory",
   "observability",
   "plugin-host",
-  "plugin-trust",
   "policy-breakdown",
   "policy-lifecycle",
   "policy-proof",
@@ -34,7 +33,6 @@ export interface ObserverMode {
   allowBuiltIn: (name: string) => boolean;
   cli: CliOptions;
   enabled: boolean;
-  loadExternalPlugins: boolean;
 }
 
 export function observerMode(): ObserverMode {
@@ -42,7 +40,6 @@ export function observerMode(): ObserverMode {
   return {
     allowBuiltIn: (name) => !enabled || observerPlugins.has(name),
     enabled,
-    loadExternalPlugins: !enabled,
     cli: {
       helpFooter,
       readOnlyAdmits: (owner, mutates) => !mutates && owner !== null && observerPlugins.has(owner),

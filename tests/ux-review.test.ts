@@ -3,7 +3,7 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { formatDecision, type DecisionRecord } from "../src/plugins/decision.ts";
-import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, writeUntrustedPlugin, type Fixture } from "./helpers.ts";
+import { idFrom, initializeGitRepository, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 setDefaultTimeout(20_000);
 
@@ -328,12 +328,8 @@ test("644 a forwarded memory failure keeps its code and details behind stderr no
   await withFixture(async (fixture) => {
     const room = await hub(fixture);
     expect((await runCliAt(fixture, room, ["memory", "list"])).exitCode).toBe(0);
-    // An untrusted plugin makes every process print a warning line on stderr
-    // before any JSON envelope; the child's envelope must still be found.
-    await writeUntrustedPlugin(fixture, "global", "noise", "export default { name: 'noise', apply() {} };");
     const missing = await runCli(fixture, ["memory", "retract", "nope", "--reason", "x"], session);
     expect(missing.exitCode).toBe(1);
-    expect(missing.stderr).toContain("untrusted plugin");
     const envelope = JSON.parse(missing.stderr.trim().split("\n").at(-1) ?? "{}");
     expect(envelope.error).toMatchObject({ code: "NOT_FOUND", key: "nope" });
     expect(envelope.error.room).toBe(room);

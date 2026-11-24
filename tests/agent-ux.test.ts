@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, writeConfig, writePlugin, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, withFixture, writeConfig, type Fixture } from "./helpers.ts";
 
 interface JsonRpcResponse {
   id: number;
@@ -11,12 +11,14 @@ interface JsonRpcResponse {
 
 const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
 
-function startMcp(fixture: Fixture) {
-  const child = Bun.spawn([process.execPath, cli, "mcp", "serve"], {
+function startMcp(fixture: Fixture, plugins: string[] = []) {
+  const entry = plugins.length > 0 ? join(import.meta.dir, "fixture-plugins.ts") : cli;
+  const child = Bun.spawn([process.execPath, entry, "mcp", "serve"], {
     cwd: fixture.repo,
     env: {
       ...process.env,
       HOME: fixture.home,
+      MAESTRO_TEST_PLUGINS: plugins.join(","),
       MAESTRO_SESSION_ID: "test-session",
       MAESTRO_SESSION_PID: String(process.pid),
     },
@@ -228,37 +230,7 @@ test("56 work done takes an unheld lease and names the holder that lost it (w548
 
 test("57 maestro_find tokenizes, ranks, caps, and hints after zero hits", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(
-      fixture,
-      "repo",
-      "find-load",
-      `
-export default {
-  name: "find-load",
-  inject: ["recipe"],
-  apply(ctx) {
-    for (let index = 0; index < 12; index += 1) {
-      const suffix = String(index).padStart(2, "0");
-      ctx.effect(() => ctx.cli.register(
-        \`task \${suffix}\`,
-        () => "ok",
-        { description: "Track a task through a loaded verb." },
-      ));
-    }
-    for (let index = 0; index < 7; index += 1) {
-      const suffix = String(index).padStart(2, "0");
-      ctx.effect(() => ctx.recipe.register({
-        name: \`task-recipe-\${suffix}\`,
-        description: "Track a task through a loaded recipe.",
-        body: "# Loaded",
-      }));
-    }
-  },
-};
-`,
-    );
-    await writeConfig(fixture, [{ name: "find-load" }]);
-    const mcp = startMcp(fixture);
+    const mcp = startMcp(fixture, ["find-load"]);
     await initialize(mcp);
 
     const matched = await mcp.request(2, "tools/call", {

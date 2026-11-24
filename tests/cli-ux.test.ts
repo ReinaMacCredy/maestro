@@ -15,7 +15,7 @@ import { Ready } from "../src/kernel/ready.ts";
 import { Sessions } from "../src/kernel/sessions.ts";
 import { resolveStoreLocation, Store } from "../src/kernel/store.ts";
 import { builtInPlugins } from "../src/plugins/index.ts";
-import { runCli, type Fixture, withFixture, writePlugin } from "./helpers.ts";
+import { runCli, runFixturePluginCliAt, type Fixture, withFixture } from "./helpers.ts";
 
 async function describeFixtureCommands(fixture: Fixture): Promise<CliCommandDescriptor[]> {
   const location = resolveStoreLocation(fixture.repo);
@@ -30,7 +30,6 @@ async function describeFixtureCommands(fixture: Fixture): Promise<CliCommandDesc
     fixture.home,
     builtInPlugins,
     { cli, events, log, ready, sessions, store },
-    { loadExternalPlugins: false },
   );
   try {
     await loader.loadAll();
@@ -89,27 +88,6 @@ test("25 bare and help invocations list verbs while unknown verbs suggest the ne
 test("34 [lint] per-verb help is registry-driven for built-in and plugin verbs", async () => {
   await withFixture(async (fixture) => {
     // Proves help metadata rendering, not handler parsing or command effects.
-    await writePlugin(
-      fixture,
-      "repo",
-      "greet",
-      `
-export default {
-  name: "greet",
-  apply(ctx) {
-    ctx.effect(() => ctx.cli.register(
-      "greet wave",
-      async () => "hello",
-      {
-        description: "Wave hello to the current user.",
-        flags: { "--enthusiasm": { value: true, description: "Set the greeting intensity." } },
-      },
-    ));
-  },
-};
-`,
-    );
-
     const helpWork = await runCli(fixture, ["help", "work"]);
     const flagWork = await runCli(fixture, ["work", "--help"]);
 
@@ -133,7 +111,7 @@ export default {
     expect(helpWork.stdout).toContain("Record proof paired with a claim.");
     expect(helpWork.stdout).toContain("Record opaque completion evidence.");
 
-    const pluginHelp = await runCli(fixture, ["help", "greet"]);
+    const pluginHelp = await runFixturePluginCliAt(fixture, fixture.repo, ["greet"], ["help", "greet"]);
     expect(pluginHelp.exitCode).toBe(0);
     expect(pluginHelp.stdout).toContain("wave");
     expect(pluginHelp.stdout).toContain("Wave hello to the current user.");

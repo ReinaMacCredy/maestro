@@ -1,14 +1,13 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { grantTrust } from "../src/plugins/plugin-trust.ts";
 import {
   addLinkedWorktree,
   idFrom,
   initializeGitRepository,
   runCli,
   runCliAt,
+  runFixturePluginCliAt,
   withFixture,
 } from "./helpers.ts";
 
@@ -72,26 +71,6 @@ test("290 concurrent starts preserve the single lease winner and its audit event
     const worktree = join(fixture.root, "lease-worktree");
     await addLinkedWorktree(fixture.repo, worktree);
     const parent = idFrom(await runCli(fixture, ["work", "add", "lease parent"]));
-    const delayPlugin = `
-export default {
-  name: "start-delay",
-  apply(context) {
-    context.effect(() => context.events.on("work.start", async (input, next) => {
-      await Bun.sleep(300);
-      return next(input);
-    }));
-  },
-};
-`;
-    for (const checkout of [fixture.repo, worktree]) {
-      const plugins = join(checkout, ".maestro", "plugins");
-      await mkdir(plugins, { recursive: true });
-      const path = join(plugins, "start-delay.ts");
-      await writeFile(path, delayPlugin);
-      // The plugin is the instrument this test measures with; without a grant
-      // it never loads and the race it stages never happens.
-      await grantTrust(fixture.home, { root: path, source: "repo" });
-    }
 
     for (let trial = 0; trial < 6; trial += 1) {
       const target = idFrom(
@@ -99,10 +78,17 @@ export default {
       );
       const contenders = [`lease-${trial}-a`, `lease-${trial}-b`];
       const results = await Promise.all([
-        runCli(fixture, ["work", "start", target], sessionEnvironment(contenders[0] as string)),
-        runCliAt(
+        runFixturePluginCliAt(
+          fixture,
+          fixture.repo,
+          ["start-delay"],
+          ["work", "start", target],
+          sessionEnvironment(contenders[0] as string),
+        ),
+        runFixturePluginCliAt(
           fixture,
           worktree,
+          ["start-delay"],
           ["work", "start", target],
           sessionEnvironment(contenders[1] as string),
         ),
@@ -185,28 +171,13 @@ test("291 concurrent decision allocation stays serialized", async () => {
 
 test("292 delayed work transitions cannot commit after their authorizing state changes", async () => {
   await withFixture(async (fixture) => {
-    const delayPlugin = `
-export default {
-  name: "transition-delay",
-  apply(context) {
-    for (const event of ["work.start", "work.done", "work.cancel"]) {
-      context.effect(() => context.events.on(event, async (input, next) => {
-        if (process.env.MAESTRO_TEST_DELAY_EVENT === event) await Bun.sleep(300);
-        return next(input);
-      }));
-    }
-  },
-};
-`;
-    const delayPath = join(fixture.repo, ".maestro", "plugins", "transition-delay.ts");
-    await writeFile(delayPath, delayPlugin);
-    await grantTrust(fixture.home, { root: delayPath, source: "repo" });
-
     const startThenCancel = idFrom(
       await runCli(fixture, ["work", "add", "start then cancel", "--atomic-reason", "fixture"]),
     );
-    const delayedStart = runCli(
+    const delayedStart = runFixturePluginCliAt(
       fixture,
+      fixture.repo,
+      ["transition-delay"],
       ["work", "start", startThenCancel],
       { ...sessionEnvironment("start-lane"), MAESTRO_TEST_DELAY_EVENT: "work.start" },
     );
@@ -227,8 +198,10 @@ export default {
     const cancelThenStart = idFrom(
       await runCli(fixture, ["work", "add", "cancel then start", "--atomic-reason", "fixture"]),
     );
-    const delayedCancel = runCli(
+    const delayedCancel = runFixturePluginCliAt(
       fixture,
+      fixture.repo,
+      ["transition-delay"],
       ["work", "cancel", cancelThenStart, "--reason", "cancelled during start"],
       { ...sessionEnvironment("cancel-lane"), MAESTRO_TEST_DELAY_EVENT: "work.cancel" },
     );
@@ -260,8 +233,10 @@ export default {
         )
       ).exitCode,
     ).toBe(0);
-    const delayedDone = runCli(
+    const delayedDone = runFixturePluginCliAt(
       fixture,
+      fixture.repo,
+      ["transition-delay"],
       [
         "work",
         "done",

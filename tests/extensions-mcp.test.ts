@@ -6,7 +6,6 @@ import {
   runCli,
   withFixture,
   writeConfig,
-  writePlugin,
   type Fixture,
 } from "./helpers.ts";
 
@@ -19,12 +18,14 @@ interface JsonRpcResponse {
 
 const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
 
-function startMcp(fixture: Fixture) {
-  const child = Bun.spawn([process.execPath, cli, "mcp", "serve"], {
+function startMcp(fixture: Fixture, plugins: string[] = []) {
+  const entry = plugins.length > 0 ? join(import.meta.dir, "fixture-plugins.ts") : cli;
+  const child = Bun.spawn([process.execPath, entry, "mcp", "serve"], {
     cwd: fixture.repo,
     env: {
       ...process.env,
       HOME: fixture.home,
+      MAESTRO_TEST_PLUGINS: plugins.join(","),
       MAESTRO_SESSION_ID: "test-session",
       MAESTRO_SESSION_PID: String(process.pid),
     },
@@ -106,40 +107,8 @@ test("42 MCP initialize carries the dynamic brief and lists exactly two meta-too
 
 test("43 maestro_find reads the live registry and recipes while maestro_run uses normal dispatch", async () => {
   await withFixture(async (fixture) => {
-    await writePlugin(
-      fixture,
-      "repo",
-      "moon-tools",
-      `
-export default {
-  name: "moon-tools",
-  apply(ctx) {
-    ctx.effect(() => ctx.cli.register(
-      "moon launch",
-      () => ({ data: { launched: true }, text: "launched" }),
-      {
-        description: "Launch moon work through a plugin verb.",
-        flags: { "--target": { description: "Choose the launch target.", value: true } },
-      },
-    ));
-  },
-};
-`,
-    );
-    await writePlugin(
-      fixture,
-      "repo",
-      "moon-disabled",
-      `export default {
-  name: "moon-disabled",
-  apply(ctx) {
-    ctx.effect(() => ctx.cli.register("moon secret", () => "hidden"));
-  },
-};
-`,
-    );
     await writeConfig(fixture, [{ name: "moon-disabled", disabled: true }]);
-    const mcp = startMcp(fixture);
+    const mcp = startMcp(fixture, ["moon-tools", "moon-disabled"]);
     await initialize(mcp);
 
     const pluginFind = await mcp.request(2, "tools/call", {
