@@ -167,7 +167,7 @@ export class Sessions {
   liveness(id: string): SessionLiveness {
     const row = this.row(id);
     return row
-      ? this.rowLiveness(this.downgradeSharedPid(row))
+      ? this.rowLiveness(this.settleAnchor(row))
       : { live: false, reason: `session ${id} is not recorded` };
   }
 
@@ -233,7 +233,7 @@ export class Sessions {
   }
 
   private fromRow(row: SessionRow): SessionRecord {
-    const current = this.downgradeSharedPid(row);
+    const current = this.settleAnchor(row);
     return {
       anchor: current.anchor,
       harness: current.harness,
@@ -260,6 +260,10 @@ export class Sessions {
     };
   }
 
+  private settleAnchor(row: SessionRow): SessionRow {
+    return this.downgradeReusedPid(this.downgradeSharedPid(row));
+  }
+
   private downgradeSharedPid(row: SessionRow): SessionRow {
     if (row.anchor !== "pid" || !this.sharedPids().has(row.pid)) return row;
     // A shared pid stops proving life, but a dead pid still proves death, so only
@@ -284,6 +288,34 @@ export class Sessions {
           .run(row.id, row.pid);
     if (result.changes > 0) return this.row(row.id) ?? downgraded;
     return this.row(row.id) ?? row;
+  }
+
+  // The OS hands a dead session's pid to a later process, which then vouches
+  // for the session forever; a process started after the session was last seen
+  // is not its host.
+  private downgradeReusedPid(row: SessionRow): SessionRow {
+    if (row.anchor !== "pid") return row;
+    const lastSeen = Date.parse(row.last_seen);
+    if (!Number.isFinite(lastSeen) || Date.now() - lastSeen <= sessionTtlMs) return row;
+    if (!this.isPidAlive(row.pid)) return row;
+    const started = this.processStart(row.pid);
+    if (started === null || started <= lastSeen) return row;
+    if (!this.store.readOnly) {
+      this.store.database
+        .query("UPDATE sessions SET anchor = 'ttl' WHERE id = ? AND pid = ? AND anchor = 'pid'")
+        .run(row.id, row.pid);
+    }
+    return { ...row, anchor: "ttl" };
+  }
+
+  private processStart(pid: number): number | null {
+    const listed = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], {
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", LC_ALL: "C" },
+      stderr: "ignore",
+    });
+    if (listed.exitCode !== 0) return null;
+    const started = Date.parse(listed.stdout.toString().trim());
+    return Number.isFinite(started) ? started : null;
   }
 
   private sharedPids(): Set<number> {
