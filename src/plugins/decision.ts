@@ -1,6 +1,7 @@
 import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { tableExists } from "../kernel/store.ts";
+import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
@@ -26,17 +27,20 @@ export interface DecisionRecord {
 function storedSlpRuling(context: PluginContext, id: string): DecisionSection | null {
   if (!tableExists(context.store, "slp_decisions")) return null;
   const row = context.store.database
-    .query<{ actor: string; choice: string; scope: string; why: string; work_id: string | null }, [string]>(
-      "SELECT actor, choice, scope, why, work_id FROM slp_decisions WHERE id = ?",
-    )
+    .query<{
+      actor: string; choice: string; provisional?: number; replaces_id: string | null; scope: string; why: string; work_id: string | null;
+    }, [string]>("SELECT * FROM slp_decisions WHERE id = ?")
     .get(id);
   if (!row) return null;
+  const store = isRoom(context.store.database) ? "hub" : "project";
   return {
-    data: { slpDecisions: [{ actor: row.actor, choice: row.choice, id, scope: row.scope, why: row.why, workId: row.work_id }] },
+    data: { slpDecisions: [{ actor: row.actor, choice: row.choice, id, replaces: row.replaces_id, scope: row.scope, store, why: row.why, workId: row.work_id }] },
     label: "SLP rulings",
     text: [
-      `${id} [${row.scope}] by ${row.actor}`,
-      ...(row.work_id ? [`work: ${row.work_id}`] : []),
+      `${id} [${row.scope}] by ${row.actor} (${store} store)`,
+      `work: ${row.work_id ?? "none"}`,
+      ...(row.provisional ? ["provisional: yes"] : []),
+      ...(row.replaces_id ? [`replaces: ${row.replaces_id}`] : []),
       `choice: ${row.choice}`,
       `why: ${row.why}`,
       "the slp plugin that recorded this is off; its full view: maestro plugin enable slp",

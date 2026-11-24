@@ -170,7 +170,7 @@ test("d894 a store whose ledgers already share ids shows them as before, and ope
     const pluginOff = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
     expect(pluginOff.exitCode).toBe(0);
     expect(pluginOff.stdout).toContain("plain decision");
-    expect(pluginOff.stdout).toContain(`${decision} [team] by lead\nchoice: slp ruling\nwhy: why`);
+    expect(pluginOff.stdout).toContain(`${decision} [team] by lead (project store)\nwork: none\nchoice: slp ruling\nwhy: why`);
     expect(pluginOff.stdout).toContain("maestro plugin enable slp");
     await enableSlp(fixture);
     const observedDecision = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
