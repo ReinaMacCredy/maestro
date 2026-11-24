@@ -59,7 +59,7 @@ test("602 work show states what done will require while the work is open", async
     const id = idFrom(added);
     const open = await runCli(fixture, ["work", "show", id]);
     expect(open.stdout).toContain('gate: policy-proof gates work done: requires --check "<command>", --evidence "<evidence>" or paired --claim "<claim>" --proof "<proof>"');
-    expect(open.stdout).toContain("gate: policy-breakdown gates work start/ready/done");
+    expect(open.stdout).toContain("gate: policy-breakdown gates work start/list/done");
     expect((await runCli(fixture, ["work", "done", id, "--evidence", "checked"], session)).exitCode).toBe(0);
     const done = await runCli(fixture, ["work", "show", id]);
     expect(done.stdout).not.toContain("gate:");

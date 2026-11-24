@@ -51,7 +51,7 @@ export const policyBreakdownPlugin: BuiltInPlugin = {
   name: "policy-breakdown",
   inject: ["work"],
   requires:
-    "gates work start/ready/done: open write-like children block their parent",
+    "gates work start/list/done: open write-like children block their parent",
   apply(context) {
     for (const event of ["work.start", "work.ready", "work.done"] as const) {
       context.effect(() =>
