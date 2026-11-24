@@ -63,7 +63,7 @@ Each anti-goal gets a matching VERIFY.md check.
 
 ## Decisions
 
-Ids only: record via \`maestro decision draft "<text>" --rationale "<why>"\`, lock, and list the ids here; a decision taken in the Hub store is listed as \`hub:<id>\`. \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
+Ids only: record via \`maestro decision add "<text>" --rationale "<why>"\` and list the ids here; a decision taken in the Hub store is listed as \`hub:<id>\`. \`maestro bundle show ${id}\` renders each with its ruling and rejected alternative.
 
 ## Units
 
@@ -738,7 +738,7 @@ export const bundlePlugin: BuiltInPlugin = {
           const workIds = linkedWorkIds(context, id);
           const decisions = decisionsForWork(context, workIds);
           const hint = decisions.length === 0
-            ? 'hint: no decisions link this bundle\'s work; record them via maestro decision draft "<text>" --rationale "<why>" --work <id>'
+            ? 'hint: no decisions link this bundle\'s work; record them via maestro decision add "<text>" --rationale "<why>" --work <id>'
             : null;
           return {
             data: { bundle: archived },
