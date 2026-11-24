@@ -1,7 +1,7 @@
 import { afterEach } from "bun:test";
 import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
+import { materializeSeats, seatTokenPath } from "../src/plugins/slp/seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import { enableSlp, type Fixture } from "./helpers.ts";
 

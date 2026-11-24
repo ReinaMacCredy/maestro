@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HerdrClient, SlpRuntimeError } from "./herdr-client.ts";
-import { retireAgentFiles, type InstallEvent } from "./install.ts";
+import { retireAgentFiles, type InstallEvent } from "../install.ts";
 import {
   formatSeatSync,
   materializeSeats,
@@ -13,7 +13,7 @@ import {
   seatNames,
   seatTokenPath,
   type SeatSync,
-} from "./slp-seats.ts";
+} from "./seats.ts";
 
 // Hub d96: maestro ships a Herdr plugin manifest; install renders it with the
 // installed binary and links it over the socket, uninstall unlinks it. Every
@@ -22,7 +22,7 @@ import {
 // kernel refuses a cwd under .maestro, so the room is where the hooks run.
 
 export const herdrPluginId = "maestro";
-const manifestSource = join(import.meta.dir, "resources", "herdr-plugin", "herdr-plugin.toml");
+const manifestSource = join(import.meta.dir, "..", "resources", "herdr-plugin", "herdr-plugin.toml");
 
 function herdrPluginDirectory(home: string): string {
   return join(home, "maestro");

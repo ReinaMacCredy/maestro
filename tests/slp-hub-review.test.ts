@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp/process.ts";
 import {
   fakeHerdrCommands,
   installFakeHerdr,

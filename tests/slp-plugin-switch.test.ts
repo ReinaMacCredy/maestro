@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { seatLaunchPath, seatTokenPath } from "../src/plugins/slp-seats.ts";
+import { seatLaunchPath, seatTokenPath } from "../src/plugins/slp/seats.ts";
 import { fakeHerdrCommands, installFakeHerdr, readFakeHerdrState } from "./helpers-herdr.ts";
 import { enableSlp, prepareInstallFixture, runCli, runCliAt, withFixture } from "./helpers.ts";
 import { envelope, phaseFree } from "./helpers-slp.ts";

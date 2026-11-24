@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 const root = join(import.meta.dir, "..");
 
-// The SLP modules: the descriptor src/plugins/slp.ts, every other src/plugins/slp-*.ts, and src/plugins/herdr-client.ts.
+// The SLP modules: the descriptor src/plugins/slp.ts and every file under src/plugins/slp/, herdr-client.ts among them.
 function isSlpModule(path: string): boolean {
-  return dirname(path) === join(root, "src", "plugins") && /^(slp(-[a-z0-9-]+)?|herdr-client)\.ts$/.test(basename(path));
+  return path === join(root, "src", "plugins", "slp.ts") || path.startsWith(join(root, "src", "plugins", "slp") + sep);
 }
 
 test("d879 [lint] outside the SLP modules only src/plugins/index.ts imports one, the descriptor, and bin/maestro.ts imports none", async () => {

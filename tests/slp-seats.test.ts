@@ -9,7 +9,7 @@ import {
   seatLaunchPath,
   seatTokenPath,
   type SeatName,
-} from "../src/plugins/slp-seats.ts";
+} from "../src/plugins/slp/seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import { enableSlp, prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 

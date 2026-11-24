@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { CliError } from "../kernel/cli.ts";
-import { resolveHomeDirectory } from "./home.ts";
+import { CliError } from "../../kernel/cli.ts";
+import { resolveHomeDirectory } from "../home.ts";
 
 // Hub d96: SLP reaches Herdr over its socket API, newline JSON over
 // HERDR_SOCKET_PATH, one request per connection, events.subscribe kept open.

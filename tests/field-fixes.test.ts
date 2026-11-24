@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { seatLaunchPath } from "../src/plugins/slp-seats.ts";
+import { seatLaunchPath } from "../src/plugins/slp/seats.ts";
 import { enableSlp, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const OWNER = { MAESTRO_SESSION_ID: "eperm-owner", MAESTRO_SESSION_PID: "1" };

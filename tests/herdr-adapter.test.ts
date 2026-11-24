@@ -3,11 +3,11 @@ import { expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { HerdrClient, SlpRuntimeError, herdrProtocol } from "../src/plugins/herdr-client.ts";
-import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
+import { HerdrClient, SlpRuntimeError, herdrProtocol } from "../src/plugins/slp/herdr-client.ts";
+import { materializeSeats, seatTokenPath } from "../src/plugins/slp/seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp/process.ts";
 import { enableSlp, runCli, runCliAt, withFixture } from "./helpers.ts";
 import {
   editFakeHerdrState,

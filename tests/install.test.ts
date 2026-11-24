@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { seatConfigRoot, seatLaunchPath, seatTokenPath, writeSecretFile } from "../src/plugins/slp-seats.ts";
+import { seatConfigRoot, seatLaunchPath, seatTokenPath, writeSecretFile } from "../src/plugins/slp/seats.ts";
 import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, storedSessions, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";

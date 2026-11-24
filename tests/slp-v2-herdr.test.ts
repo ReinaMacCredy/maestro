@@ -5,9 +5,9 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { seatConfigRoot, seatTokenPath } from "../src/plugins/slp-seats.ts";
+import { seatConfigRoot, seatTokenPath } from "../src/plugins/slp/seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
+import { slpRuntimeDirectory } from "../src/plugins/slp/process.ts";
 import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, setFakeHerdrBehavior, tripwireInvocations } from "./helpers-herdr.ts";
 import {
   assertNoLiveHerdrSocket,

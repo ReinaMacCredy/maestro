@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseSeatFile, resolveSeat, seatDigest, seatLaunchPath, type SeatName } from "../src/plugins/slp-seats.ts";
+import { parseSeatFile, resolveSeat, seatDigest, seatLaunchPath, type SeatName } from "../src/plugins/slp/seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { enableSlp, prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";

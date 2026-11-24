@@ -38,7 +38,7 @@ function enabledForMachine(home: string): boolean {
 
 async function removeStale(home: string, verb: string): Promise<string> {
   if (enabledForMachine(home)) return "";
-  const { removeStaleMachineFiles } = await import("./slp-plugin.ts");
+  const { removeStaleMachineFiles } = await import("./slp/plugin.ts");
   const removed = await removeStaleMachineFiles(home);
   return removed.length > 0
     ? `the slp plugin is off, so ${verb} removed what an earlier install wrote for it: ${removed.join(", ")}; to turn it on: ${enable}`
@@ -49,7 +49,7 @@ export const slpPlugin: BuiltInPlugin = {
   name: "slp",
   defaultDisabled: true,
   async apply(context: PluginContext) {
-    const { applySlp } = await import("./slp-v2.ts");
+    const { applySlp } = await import("./slp/apply.ts");
     applySlp(context);
   },
   applyDisabled(context: PluginContext) {
@@ -58,7 +58,7 @@ export const slpPlugin: BuiltInPlugin = {
     context.effect(() => context.events.on<{ home: string }, string>("update", ({ home }) => removeStale(home, "update")));
     context.effect(() =>
       context.events.on<{ home: string }, string[]>("uninstall", async ({ home }) =>
-        (await import("./slp-plugin.ts")).removeMachineFiles(home)
+        (await import("./slp/plugin.ts")).removeMachineFiles(home)
       )
     );
   },

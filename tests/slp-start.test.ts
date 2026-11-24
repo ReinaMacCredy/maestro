@@ -5,7 +5,8 @@ import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
-import { buildSlpTeamPlan, HerdrSlpRuntime } from "../src/plugins/slp-runtime.ts";
+import { buildSlpTeamPlan } from "../src/plugins/slp/runtime-plan.ts";
+import { HerdrSlpRuntime } from "../src/plugins/slp/runtime.ts";
 import {
   fakeHerdrCommands,
   installFakeHerdr,

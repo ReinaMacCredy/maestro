@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, readdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
-import { CliError } from "../kernel/cli.ts";
-import { retiredSkillNames } from "./skills.ts";
+import { CliError } from "../../kernel/cli.ts";
+import { retiredSkillNames } from "../skills.ts";
 
 export const seatNames = ["lead", "peer"] as const;
 export type SeatName = (typeof seatNames)[number];
@@ -29,8 +29,8 @@ export interface Seat {
   source: Uint8Array;
 }
 
-const shippedSeats = join(import.meta.dir, "resources", "slp");
-const shippedPack = join(import.meta.dir, "resources", "SLP.md");
+const shippedSeats = join(import.meta.dir, "..", "resources", "slp");
+const shippedPack = join(import.meta.dir, "..", "resources", "SLP.md");
 const efforts = ["low", "medium", "high", "xhigh"];
 const knownKeys = new Set([
   "autocompact",

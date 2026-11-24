@@ -5,7 +5,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseSeatFile, seatLaunchPath, type SeatName } from "../src/plugins/slp-seats.ts";
+import { parseSeatFile, seatLaunchPath, type SeatName } from "../src/plugins/slp/seats.ts";
 import { enableSlp, prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const shippedRoot = join(import.meta.dir, "..", "src", "plugins", "resources");

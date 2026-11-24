@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import type { SlpRoleContract } from "../src/plugins/slp-runtime.ts";
+import type { SlpRoleContract } from "../src/plugins/slp/runtime-plan.ts";
 
 export function envelope<T>(stdout: string): T {
   return (JSON.parse(stdout) as { data: T }).data;
