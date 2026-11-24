@@ -15,8 +15,8 @@ This recipe is for the focused-to-medium change.
 
 ## Steps
 
-1. Pin the behavior contract first. Run `maestro recipe show how` over the
-   affected subsystem to learn the contract.
+1. Pin the behavior contract first. Read the affected subsystem and trace its
+   current behavior, citing file:line, to learn the contract.
    - Write each behavior the change must preserve as a guard, "the system
      SHALL CONTINUE TO <existing behavior>", so preserved behavior is a
      checkable claim, not an assumption.
@@ -36,8 +36,8 @@ This recipe is for the focused-to-medium change.
 3. Name the target shape. State what the module layout, types, and call graph
    should be if built today, per **Foundational Thinking** and **Redesign from
    First Principles** (PRINCIPLES.md). If the target crosses a function
-   boundary, run `maestro recipe show architect` for parallel design
-   exploration of the shape before the move.
+   boundary, sketch at least two candidate shapes as types and signatures and
+   pick one before the move.
 4. Subtract before you add. Delete dead code, collapse one-caller wrappers,
    drop redundant validators, and remove orphan references before introducing
    the new shape, per **Subtract Before You Add** (PRINCIPLES.md). The smallest
@@ -55,8 +55,9 @@ This recipe is for the focused-to-medium change.
      specific scope (file paths, the names being moved, the guards to hold).
    - Review its diff yourself before anything else, and write your own
      summary rather than passing its report through.
-   - A trivial mechanical edit may go to one delegate. Independent edits fan
-     out per `maestro recipe show fan-out`.
+   - A trivial mechanical edit may go to one delegate. Independent edits go
+     to parallel delegates on disjoint paths, one writer per worktree, and you
+     review every diff before it lands.
    - A fix round or a retry goes to a fresh delegate with consolidated scope
      (the original brief, every later directive, the prior report and branch).
 6. Prove behavior is unchanged on the real artifact, not "it compiles", per

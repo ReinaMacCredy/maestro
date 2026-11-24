@@ -7,8 +7,8 @@ away from and wants to trust later, even when a narrower recipe such as
 feature fits. Before any code, the deliverable is the workflow itself. It is
 a phase list that scales rigor to the task, runs a hypothesis loop, and
 leaves a decision trail the owner can audit after stepping away. This recipe
-designs one bespoke run; a standing program of many units runs under
-`maestro recipe show fan-out` inside SLP. Ported from pstack's figure-it-out
+designs one bespoke run; a standing program of many units runs as an SLP
+team. Ported from pstack's figure-it-out
 skill (Lauren Tan, MIT; notice in THIRD_PARTY.md).
 
 ## Steps
@@ -37,14 +37,16 @@ skill (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    - Build the verification harness before the work, with the baseline
      captured from the pre-change state, so each check reads as old value
      against new value.
-   - For a one-way-door design decision, run `maestro recipe show architect`,
-     which runs arena. Skip it for mechanical work whose shape is already
-     concrete. A second arena over a settled design is over-engineering, per
+   - For a one-way-door design decision, sketch at least two structurally
+     different shapes as types and signatures and pick one before any code.
+     Skip it for mechanical work whose shape is already concrete. A second
+     sketch round over a settled design is over-engineering, per
      **Laziness Protocol** (PRINCIPLES.md).
    - Decide what fans out. Parallelize only across seams, with each writer in
      its own worktree or branch, per
-     **Separate Before Serializing Shared State** (PRINCIPLES.md), and follow
-     `maestro recipe show fan-out`. Do not over-fan.
+     **Separate Before Serializing Shared State** (PRINCIPLES.md), give each
+     sub-agent a standalone brief, and review every diff before it lands. Do
+     not over-fan.
    - Write the phase list down. That list is what the owner reviews. When the
      work meets a Full trigger (`~/maestro/WORKFLOW.md#tiers`), the phase list
      becomes the bundle's SPEC `## Units` through

@@ -30,8 +30,9 @@ The smallest change the evidence justifies ships, nothing more.
    - No reproduction means stop and say so. Do not guess from symptoms.
 3. Binary-search the cause. Form the candidate hypotheses, then rule them out
    until one survives.
-   - Seed them with `maestro recipe show how` over the affected subsystem and
-     `maestro recipe show why` for regression history.
+   - Seed them by tracing the affected code path with file:line citations and
+     by reading its history (`git log -p`, `git blame`, the PRs behind it) for
+     a regression.
    - Write each hypothesis down before its probe ("I believe X causes this
      because Y"), then run the smallest check that can falsify it. No
      hypothesis, no probe.
@@ -59,23 +60,25 @@ The smallest change the evidence justifies ships, nothing more.
      harnesses live outside production paths or are reverted before this
      record.
    - A diagnosis-only request stops here and replies with the cause.
-5. Plan the fix. If it crosses a function boundary, run
-   `maestro recipe show architect` first. Delegate the edit to a subagent under
+5. Plan the fix. If it crosses a function boundary, sketch the new types and
+   signatures before any body is written. Delegate the edit to a subagent under
    the `delegate` profile with a brief in maestro-work's dispatch envelope
    (Objective, Owned scope, Excluded scope, Mutation, Stop condition, Evidence
    required) and a specific scope.
    - Review its diff yourself before anything else, and write your own
      summary rather than passing its report through.
-   - A trivial mechanical edit may go to one delegate. Independent edits fan
-     out per `maestro recipe show fan-out`.
+   - A trivial mechanical edit may go to one delegate. Independent edits go
+     to parallel delegates on disjoint paths, one writer per worktree, and you
+     review every diff before it lands.
    - A fix round or a retry goes to a fresh delegate with consolidated scope
      (the original brief, every later directive, the prior report and branch).
 6. Verify on the same product through the verify-<repo> skill. The original
    repro now passes. "Inconclusive" or a run against a different product than
    the repro is not a pass. Flag it. Unit tests show branch behavior, not bug
    absence. Name the evidence layer the proof reached (maestro-verify's
-   evidence layers). A number you measured goes through
-   `maestro recipe show benchmark-checklist` before you report or act on it.
+   evidence layers). Before you report or act on a number you measured, run
+   each side at least five times alternating, count errors, confirm the work
+   ran, and name what limits it.
 7. Stage the commits so the failing repro lands before the fix in git history.
    When the bug has a cheap local test path, land the focused regression check
    first and any sibling coverage after it. Skip a new test when it would be

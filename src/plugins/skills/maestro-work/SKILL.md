@@ -183,4 +183,6 @@ Concrete smells and fixes: [references/tdd-antipatterns.md](references/tdd-antip
 ## Coordination
 
 Isolated lanes and worktrees: `maestro recipe show worktree`. Contested files
-or overlapping sessions: `maestro recipe show conflict-handoff`.
+or overlapping sessions: name the contested paths, stop overlapping writes
+until one owner is explicit, and let that owner merge with ordinary git and
+rerun the affected checks.

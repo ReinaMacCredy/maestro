@@ -62,12 +62,11 @@ approach away and try another.
    sketch runs inside the product. For a behavioral or timing decision, observe
    the thing you are deciding by logging the timing, printing the output, or
    watching the render. The observation is the test here, not an assertion. A
-   timing or perf number goes through `maestro recipe show benchmark-checklist`
-   before it decides anything.
+   timing or perf number decides nothing until each side ran at least five
+   times alternating, with errors counted and the limiter named.
 6. Present alternatives, tradeoffs, and a recommendation. The output is the
    decision plus the throwaway artifact, not shippable code. Hand the chosen
-   direction to `maestro recipe show feature`, or to
-   `maestro recipe show architect` for the shape, for the real build.
+   direction to `maestro recipe show feature` for the real build.
    - A verdict that settles a durable choice is recorded with
      `maestro decision draft "<choice>" --rationale "<observed evidence and prototype path>" --work <id>`,
      then `maestro decision lock <id>`.

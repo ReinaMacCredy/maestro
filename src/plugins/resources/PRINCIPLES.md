@@ -271,7 +271,7 @@ of obvious edits you can see at a glance.
 - When you fan work out to subagents, write the lever as the one brief they
   all read, holding the recipe, the verification contract, and the
   do-not-touch fences. In maestro that is the dispatch envelope and its
-  standing orders (`maestro recipe show fan-out`). Keep it outside the
+  standing orders. Keep it outside the
   delegates' write scope so they cannot quietly edit the contract.
 - Applying this principle produces a file. If you cited it and there is no
   codemod, script, generator, or delegate brief in the work, you did not apply
@@ -611,8 +611,9 @@ think.
   the limiter in a work note (`maestro work note <id> "..."`) or a linked
   artifact.
 
-For a performance number, run the full procedure in
-`maestro recipe show benchmark-checklist`. For an eval result, ask the same of
+For a performance number, run each side at least five times alternating
+under production settings, count errors, confirm the work ran, and name the
+limiter. For an eval result, ask the same of
 the trials. Did every run do the task, does the gap hold across trials and
 models, and does the scenario matter?
 

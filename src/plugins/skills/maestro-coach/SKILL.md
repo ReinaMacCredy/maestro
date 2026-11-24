@@ -37,11 +37,10 @@ The user hands over a decision id, a lesson, a work note, or a bundle.
 1. Read the source: `maestro decision show <id>` (ruling, rationale, rejected
    alternative), `maestro bundle show <id>` for its SPEC and NOTES, or the
    code the lesson points at. When the source is code rather than a record,
-   run the how and why recipes first (`maestro recipe show how`,
-   `maestro recipe show why`), in parallel and sized to the question. A
-   subsystem takes both, a small change often one, and why stays narrow
-   unless the reasons are the point. Keep why's confidence language intact;
-   its hedges are findings, not style.
+   trace how it runs with file:line citations and, when the reasons are the
+   point, read its history (`git log -p`, `git blame`, the PRs behind it).
+   Keep what an author stated apart from what you infer; a hedge there is a
+   finding, not style.
 2. Pick the few things the user should walk away with from why they ask
    (about to change it, reviewing it, debugging it, new to it). Read that
    from the conversation; never quiz it out of them. Skip what they plainly
@@ -59,8 +58,9 @@ The user hands over a decision id, a lesson, a work note, or a bundle.
    live human, deliver it whole and put the offer at the end.
 
 The reply is the explanation itself, never a report about what you did.
-Write it through `maestro recipe show unslop`. State the concrete mechanism,
-not a metaphor or a preview of what is coming, and print no framing labels.
+Write it without filler, praise, hedging or em dashes. State the concrete
+mechanism, not a metaphor or a preview of what is coming, and print no
+framing labels.
 
 Either mode: draw when a picture lands faster than words, and build it up one
 part at a time. For three or more moving parts, draw a short series in which

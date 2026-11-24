@@ -71,11 +71,11 @@ re-runs, proceed without asking.
 
 ## Title and body
 
-Write every PR title, PR body and commit body per
-`maestro recipe show technical-writing`. Every layer applies except
-Diátaxis. Apply its STE vocabulary rules. Use one word per action, keep the
-articles, and use a plain verb over an `-ing` form where one works. Then
-apply `maestro recipe show unslop`.
+Write every PR title, PR body and commit body for a tired engineer reading
+once: short everyday words, one thought per sentence, the real symbol and
+file names. Use one word per action, keep the articles, and use a plain verb
+over an `-ing` form where one works. Cut filler, praise, hedging, em dashes
+and AI vocabulary.
 
 ### Title
 

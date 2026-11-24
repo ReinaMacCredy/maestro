@@ -82,16 +82,17 @@ words for this stack do.
 A queue is a set of PRs built at once, one PR owner per PR, under a delivery
 grant. A PR owner is an agent; the owner is the human whose words gate a
 merge. The root is the SLP Lead or the main chat that dispatched the PR
-owners. Fan-out discipline (brief with standing orders, rolling window,
-retry by failure mode, pilot unit) is `maestro recipe show fan-out`.
+owners. Every PR owner gets a standalone brief with the same standing
+orders, the first PR runs as the pilot, and a failed owner is retried by its
+failure mode.
 
 - The owner's gates come first. Landing any queue PR still needs the
   owner's words for that queue (step 1). Items the owner names as theirs and
   PRs outside the queue stop at merge-ready. A request to state the plan is
   not a go.
 - Each PR owner is an SLP Peer seat (`maestro recipe show slp`) whose brief
-  carries the grant; it delegates code edits like any seat
-  (`maestro recipe show fan-out`). It builds, opens its PR per
+  carries the grant; it delegates code edits to sub-agents and reviews each
+  diff. It builds, opens its PR per
   `maestro recipe show opening-a-pr`, proves the change on the running
   product, and babysits to green per `maestro recipe show babysit`. Each
   branch has one writer. The root never pushes a fix itself; it replaces a

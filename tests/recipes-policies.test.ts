@@ -19,24 +19,11 @@ const recipeNames = [
   "opening-a-pr",
   "babysit",
   "shipping",
-  "how",
-  "why",
-  "architect",
-  "arena",
-  "fan-out",
   "figure-it-out",
-  "unslop",
-  "technical-writing",
-  "benchmark-checklist",
   "no-comments",
-  "design",
-  "audit",
-  "ship",
   "verification-skill",
   "unattended",
-  "learning",
   "worktree",
-  "conflict-handoff",
   "slp",
   "style-cpp",
   "style-csharp",
@@ -85,18 +72,16 @@ test("621 recipe list prints the shipped catalog with one-line descriptions", as
   });
 });
 
-test("622 recipe show serves design markdown byte-identically across repos", async () => {
+test("622 recipe show serves investigation markdown byte-identically across repos", async () => {
   await withFixture(async (first) => {
     await withFixture(async (second) => {
-      const firstResult = await runCli(first, ["recipe", "show", "design"]);
-      const secondResult = await runCli(second, ["recipe", "show", "design"]);
+      const firstResult = await runCli(first, ["recipe", "show", "investigation"]);
+      const secondResult = await runCli(second, ["recipe", "show", "investigation"]);
 
       expect(firstResult.exitCode).toBe(0);
-      expect(firstResult.stdout).toContain("# Design");
-      expect(firstResult.stdout).toContain("## Loop anatomy");
-      for (const phase of ["Perceive", "Choose", "Act", "Observe", "Learn", "Continue"]) {
-        expect(firstResult.stdout).toContain(`### ${phase}`);
-      }
+      expect(firstResult.stdout).toContain("# Investigation");
+      expect(firstResult.stdout).toContain("## Steps");
+      expect(firstResult.stdout).toContain("## Reply");
       expect(secondResult.stdout).toBe(firstResult.stdout);
     });
   });

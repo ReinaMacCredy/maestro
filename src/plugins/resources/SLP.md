@@ -190,7 +190,7 @@ through recorded work notes and returns; those push lines are its wake-ups and
 its seat denies `herdr`. Work that has an owner, returns or is accepted runs
 in a Herdr pane through the SLP operations and leaves a store row. Inside its
 seat, the Lead or Peer that holds an item delegates code edits to harness
-sub-agents under maestro profiles (`maestro recipe show fan-out`), reviews
+sub-agents under maestro profiles, reviews
 every sub-agent diff itself, and stays the one that returns and is accepted;
 a sub-agent holds no lease and files no handback. The Lead and the Team
 Supervisor may add a hand-typed
@@ -247,7 +247,7 @@ were given says to; report plainly, leading with the outcome and naming what
 you did not verify.
 
 You own the work in this workspace and answer for it. You may delegate code
-edits to sub-agents under maestro profiles (`maestro recipe show fan-out`)
+edits to sub-agents under maestro profiles
 and review every diff yourself, but the item stays yours, and there is no
 dialog to ask a question through; everything you need to say is
 written down with the commands below.

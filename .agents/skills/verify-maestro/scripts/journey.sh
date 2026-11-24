@@ -28,7 +28,7 @@ run maestro work done "$ID"
 run maestro work done "$ID" --evidence "probe drove add/start/done (journey)"
 
 echo "## drive: playbooks, principles and skills"
-run maestro recipe list | grep -cE '^(investigation|bug-fix|feature|refactoring|prototype|perf-issue|hillclimb|forensics|eval|authoring-a-skill|visual-parity|multi-phase-plan|opening-a-pr|babysit|shipping|how|why|architect|arena|fan-out|figure-it-out|unslop|technical-writing|benchmark-checklist|no-comments)\b'
+run maestro recipe list | grep -cE '^(investigation|bug-fix|feature|refactoring|prototype|perf-issue|hillclimb|forensics|eval|authoring-a-skill|visual-parity|multi-phase-plan|opening-a-pr|babysit|shipping|figure-it-out|no-comments)\b'
 run maestro recipe show bug-fix | grep -E '^[0-9]+\. ' | head -3
 run maestro recipe show work | tail -1
 grep -c '^## ' "$ROOT/home/maestro/PRINCIPLES.md"

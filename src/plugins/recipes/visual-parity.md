@@ -18,7 +18,7 @@ decides equivalence, not your eye. Ported from pstack's visual-parity playbook
    adapters). Never edit it.
 3. Migrate one component at a time. Shared components migrate first, as a
    blocking phase. After that, parallelize across worktrees with one owner per
-   component (`maestro recipe show worktree`, `maestro recipe show fan-out`),
+   component (`maestro recipe show worktree`),
    per **Separate Before Serializing Shared State** (PRINCIPLES.md). A
    subagent under the `delegate` profile writes each migration, and you review
    its diff.

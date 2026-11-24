@@ -128,7 +128,7 @@ depth; the playbook sets the steps.
 
 Program-scale work (multi-day, many units, several writers) runs as an SLP
 team (`maestro recipe show slp`); each seat runs these playbooks and fans out
-with `maestro recipe show fan-out`.
+to sub-agents.
 
 Skills load by bare name in every tool and serve steps inside a playbook:
 
@@ -170,7 +170,6 @@ written directly.
   `arena-judge`, and the review nodes judge. Writing and judgment roles run
   Opus, read-only bulk roles run Sonnet, and panels pair Opus with Codex.
   A role is overridden in `~/maestro/profiles/<name>.md`.
-- Parallel or repeated work follows `maestro recipe show fan-out`.
 - Work that needs a durable seat (multi-day, owner-visible, cross-harness,
   or accepted by someone other than the main chat) runs in a Herdr pane
   through the SLP operations and leaves a store row; the seat delegates the
@@ -393,7 +392,7 @@ what the user asks to keep as documentation moves into `docs/`.
 Every playbook ends with a reply written this way, a PR linked as its full
 `https://github.com/<owner>/<repo>/pull/<number>` URL; each playbook's Reply
 section names only what is unique to it. Write the reply clean as you draft
-it (`maestro recipe show unslop`); a cleanup pass afterwards does not remove
+it; a cleanup pass afterwards does not remove
 these patterns.
 
 - Short declarative sentences, one thought each, ended with a period.

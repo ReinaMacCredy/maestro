@@ -26,7 +26,7 @@ pstack's multi-phase-plan playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    table.
 5. Write SPEC.md. Fill the bundle contract's sections, then `## Units`.
    - Open `## Units` with one sentence on how the units run. They run in
-     sequence from one session, as fan-out (`maestro recipe show fan-out`), or
+     sequence from one session, as parallel sub-agents on disjoint paths, or
      as an SLP team for a standing program (`maestro recipe show slp`). The
      same sentence names the review-gated units. Merge stays the owner's gate.
    - Write one `### U<n>: <task as a verb phrase>` block per unit, in
@@ -70,11 +70,11 @@ pstack's multi-phase-plan playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
      and set an absolute budget for it and for the end state the user waits
      for. Never claim a ratio between unlike scenarios. The cell names the
      metric, the interleaved probe, the base value measured first, and the
-     rule with the number that fails. Call
-     `maestro recipe show benchmark-checklist` before any number is reported.
+     rule with the number that fails. Before any number is reported, run each
+     side at least five times alternating, count errors, and name the limiter.
      A unit with no runtime cost writes `n/a: <reason>`.
-7. Write the plan under `maestro recipe show technical-writing`, then
-   `maestro recipe show unslop`. The body is a how-to, and each heading states
+7. Write the plan in short, plain sentences with real symbol and file names,
+   no filler and no em dashes. The body is a how-to, and each heading states
    the task or the finding.
 8. Run `maestro bundle check <id>` and fix every line it prints, per
    **Encode Lessons in Structure** (PRINCIPLES.md).

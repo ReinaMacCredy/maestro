@@ -10,8 +10,11 @@ the lead.
 
 ## Steps
 
-1. Run `maestro recipe show how` over the affected subsystem.
-2. Run `maestro recipe show architect` for parallel design exploration.
+1. Read the affected subsystem and trace how it runs today, citing file:line
+   for each step.
+2. Sketch at least two structurally different shapes as types and signatures
+   with unimplemented bodies, and pick the one whose smaller interface hides
+   more.
 3. Write the throughput checkpoint as four plan-list items. A dimension that
    does not apply (single file, no fan-out) keeps its item with
    `n/a: <reason>` rather than being dropped.
@@ -31,12 +34,13 @@ the lead.
    over branching, and a typed model over repeated shape assumptions.
    - Review its diff yourself before anything else, and write your own
      summary rather than passing its report through.
-   - A trivial mechanical edit may go to one delegate. Independent edits fan
-     out per `maestro recipe show fan-out`.
+   - A trivial mechanical edit may go to one delegate. Independent edits go
+     to parallel delegates on disjoint paths, one writer per worktree, and you
+     review every diff before it lands.
    - When the implementation admits several valid shapes (error handling,
-     abstraction layer, test structure), delegate through
-     `maestro recipe show arena` instead, so the runners bring out the
-     alternatives and the cross-judge guards the pick.
+     abstraction layer, test structure), have two or more delegates build it
+     from the same brief in separate worktrees, score each against criteria
+     you wrote before they started, and keep the best as the base.
    - This delegation is mandatory. There is no skip-with-reason escape, and
      the **Laziness Protocol** (PRINCIPLES.md) does not override it. The gain
      is review separation, not lines saved. A subagent forbidden to spawn

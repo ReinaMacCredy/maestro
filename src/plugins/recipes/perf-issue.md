@@ -12,11 +12,12 @@ THIRD_PARTY.md).
 
 1. Capture a baseline trace on the path the user waits on, through the
    repository's verify-<repo> skill (`maestro recipe show verification-skill`).
-   Save the artifact in the topic folder (`maestro topic path <slug>`). Call
-   `maestro recipe show benchmark-checklist` before any number is reported or
-   acted on. That covers the baseline before you plan from it and every
-   number after it.
-2. Ground the hypotheses with `maestro recipe show how`. Do not claim a perf
+   Save the artifact in the topic folder (`maestro topic path <slug>`).
+   Before any number is reported or acted on, the baseline included, run each
+   side at least five times alternating under production settings, count
+   errors, confirm the work ran, and name the limiter.
+2. Ground the hypotheses by tracing the slow path in the code, citing
+   file:line for each step. Do not claim a perf
    ceiling you have not run. Try the performance mantras in order, cheapest
    first, and stop at the first one that meets the target:
    1. Don't do it. Stop work whose result nothing uses rather than cheapening it.
@@ -26,8 +27,8 @@ THIRD_PARTY.md).
    5. Do it when they're not looking.
    6. Do it concurrently.
    7. Do it cheaper.
-3. Plan the fix from the trace. If it crosses a function boundary, run
-   `maestro recipe show architect` first. Hand the implementation to a subagent
+3. Plan the fix from the trace. If it crosses a function boundary, sketch the
+   new types and signatures first. Hand the implementation to a subagent
    under the `delegate` profile, with a brief in maestro-work's dispatch
    envelope that names the files, the mechanism the trace names and the target
    number. Review its diff yourself. Capture a post-fix trace the same way as

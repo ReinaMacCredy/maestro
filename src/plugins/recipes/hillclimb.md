@@ -14,8 +14,8 @@ untested changes, and never claim a win from code inspection, per
 
 ## Steps
 
-1. Ground the workload and the architecture before you choose the metric. Run
-   `maestro recipe show how` over the target. Name the realistic workload
+1. Ground the workload and the architecture before you choose the metric.
+   Trace how the target runs, citing file:line for each step. Name the realistic workload
    dimensions that can move the result (data size, history, state,
    concurrency) and pick a case that reproduces the user's complaint. If no
    case reproduces it, fix the repro instead of climbing. Then fix one metric,
@@ -30,8 +30,9 @@ untested changes, and never claim a win from code inspection, per
    writes the harness. Run contrasting realistic workloads and confirm that the
    target case reproduces the symptom while easier cases separate as expected.
    If the harness cannot tell them apart, revise the workload or the metric.
-   Call `maestro recipe show benchmark-checklist` before you freeze the harness
-   and before any number is reported. Make the harness print its error count
+   Before you freeze the harness and before any number is reported, run each
+   side at least five times alternating, count errors, confirm the work ran,
+   and name the limiter. Make the harness print its error count
    and a count of the work done. Once frozen, one repeatable command emits the
    metric, sampled enough to clear the noise. It reports the median of N runs,
    never a single run. Record the baseline metric and a green run of the
