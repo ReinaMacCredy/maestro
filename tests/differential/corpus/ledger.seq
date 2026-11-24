@@ -1,0 +1,30 @@
+work add "Evidence for the lesson" --kind research
+lesson file "The agent skipped the red test" --expected "a failing test first" --why "an unseen failure proves little" --target "maestro-work" --evidence w1
+lesson file "The agent closed without running the change" --expected "a run before done" --why "text proves nothing" --target "WORKFLOW.md" --evidence w1
+lesson list
+lesson show l1
+lesson list --all
+lesson process l1 --answer "not a doctrine gap"
+lesson process l2 --commit abc1234
+lesson list
+lesson list --all
+term list
+term show missing
+recipe list
+recipe show bug-fix
+recipe show feature
+recipe show investigation
+recipe show no-comments
+recipe show verification-skill
+recipe show missing
+memory list
+memory --help
+version
+doctor
+plugin list
+brief
+brief --session
+hook record --event SessionStart --source startup
+hook record --event UserPromptSubmit
+attention
+attention --json

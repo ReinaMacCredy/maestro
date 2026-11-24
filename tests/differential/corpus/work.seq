@@ -1,0 +1,33 @@
+work add "Probe the parser" --kind feature --acceptance "parser test passes"
+work add "Split the reader" --kind task --parent w1
+work add "Fix the off-by-one" --kind bug --parent w1 --acceptance "regression test passes"
+work add "Wait for the reader" --kind task --parent w1 --blocked-by w2 --acceptance "reader lands first"
+work add --help
+work list
+work list --json
+work start w2
+work note w2 "found the seam in reader.ts"
+work show w2
+work done w2 --claim "reader split" --proof "bun test reader: 12 pass"
+work show w2 --json
+work start w3
+work done w3 --evidence "bun test: 40 pass, 0 fail"
+work start w4
+work done w4 --evidence "bun test: 41 pass" --candidate abc1234
+work done w1 --evidence "children done; build green"
+work start w1
+work done w1 --evidence "children done; build green"
+work list
+work show w1
+work done --help
+work start --help
+work add "Standalone chore" --kind chore
+work start w5
+work cancel w5 --reason "not needed"
+work show w99
+work start w99
+work done w3 --evidence "again"
+work add
+work note w1
+search reader --local
+search "off-by-one" --local --json

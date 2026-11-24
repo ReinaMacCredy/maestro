@@ -1,0 +1,24 @@
+work add "Shared item" --kind task --atomic-reason "one change"
+work add "Second item" --kind task --atomic-reason "one change"
+@a work start w1
+@b work start w1
+@b work start w2
+@a status
+@b status --json
+@a ready
+@a ready --all
+@b work done w1 --evidence "not mine"
+@a work note w1 "handing over"
+@a work release w1
+@b work start w1
+@b work done w1 --evidence "bun test: 3 pass"
+@b work done w2 --evidence "bun test: 4 pass"
+@a work reclaim w2 --reason "check"
+@a work list
+@a trace w1
+@a trace w1 --json
+@a work add "Parent feature" --kind feature
+@a work add "Child task" --kind task --parent w3
+@b work start w4
+@a work start w3
+@a work done w3 --evidence "too early"

@@ -1,0 +1,7 @@
+work add "Build the exporter" --kind feature --acceptance "export runs"
+work add "Write the encoder" --kind task --parent w1
+bundle open exporter --work w2
+work start w2
+work done w2 --evidence "bun test encoder: 9 pass"
+bundle list
+bundle show exporter

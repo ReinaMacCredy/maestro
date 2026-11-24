@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2.2.0
         with:
@@ -22,9 +24,23 @@ jobs:
       - name: Install zsh and ripgrep for the shellrc tests and the anti-goal gates
         run: sudo apt-get install -y zsh ripgrep
       - name: Test
-        run: bun test
+        run: bun scripts/test-shards.ts
       - name: Type-check
         run: bunx tsc --noEmit
+      - name: Differential oracle checks itself
+        run: bun scripts/differential.ts --self-test
+      # The runner, the approved list and the pin come from the base ref, so a
+      # change cannot approve itself. A base without the oracle is the bootstrap.
+      - name: Differential against the pinned old version
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if git cat-file -e "$BASE:scripts/differential.ts" 2>/dev/null; then
+            git show "$BASE:scripts/differential.ts" > "$RUNNER_TEMP/differential.ts"
+            bun "$RUNNER_TEMP/differential.ts" --root "$PWD" --base "$BASE"
+          else
+            bun scripts/differential.ts
+          fi
       - name: A1 no daemon or scheduler
         run: |
           command -v rg >/dev/null

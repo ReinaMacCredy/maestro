@@ -1,0 +1,99 @@
+# Approved differences between the pinned old maestro (old-commit) and the tree under test.
+# scripts/differential.ts reads this file from the base ref, never from the change itself.
+# A new line is its own commit, made on the owner's word, and cites the decision behind it.
+#
+# <kind> <command prefix, * for one word> [<--flag> [value] | /regex/] [when /regex on old output/] [in <file>.seq] # d<id>: reason
+#   gone       the command is refused by the new tree
+#   flag-gone  the flag is removed; the new tree is run without it and must otherwise agree
+#   output     the text may differ, the exit code may not
+#   any        the text and the exit code may differ
+#   drop-line  lines matching the regex are left out of both sides before comparing
+
+output * --help # d876: help follows every approved surface change below
+output * * --help # d876: help follows every approved surface change below
+output help # d876: the verb list follows every approved surface change below
+
+flag-gone work add --atomic-reason value # d880: the atomic-reason half of the breakdown gate is removed
+flag-gone work start --atomic-reason value # d880: the atomic-reason half of the breakdown gate is removed
+flag-gone work done --atomic-reason value # d880: the atomic-reason half of the breakdown gate is removed
+any work start when /requires a child breakdown/ # d880: a parentless item starts without a breakdown or a reason
+drop-line work show /^atomic reason: / # d880: new items carry no atomic reason
+drop-line work show /^gate: policy-(breakdown|dispatch) / # d880, d885: the breakdown gate text shrinks and the dispatch gate is gone
+output work show * --json # d880, d883: the envelope loses the atomic reason of new items and gains the check record
+
+output attention # d882, d892: three detectors remain
+flag-gone decision draft --review-at value # d892: scheduled review is removed
+flag-gone decision lock --review-at value # d892: scheduled review is removed
+drop-line decision draft /^review at: / # d892: scheduled review is removed
+drop-line decision lock /^review at: / # d892: scheduled review is removed
+
+gone dispatch # d885: dispatch is deleted
+gone handback # d885: handback is deleted
+gone plugin enable policy-dispatch # d885: policy-dispatch is deleted
+gone plugin disable policy-dispatch # d885: policy-dispatch is deleted
+gone graph # d886: the graph engine is deleted
+gone import # d887: the Rust importer is deleted
+gone plugin new # d888: external plugins are deleted
+gone plugin add # d888: external plugins are deleted
+gone plugin remove # d888: external plugins are deleted
+gone plugin trust # d888: external plugins are deleted
+gone plugin untrust # d888: external plugins are deleted
+gone bundle import # d889: deleted
+gone bundle pause # d889: deleted
+gone bundle resume # d889: deleted
+gone bundle save # d889: deleted
+gone prompt # d889: prompt list is deleted
+gone lesson render # d890: the improver pipeline is deleted
+gone status # d896: status is deleted from core
+gone ready # d896: ready is deleted from core
+gone slp event # d897: the orphan auto-stop hook is deleted
+gone decision confirm # d899: provisional rulings are deleted
+gone owner # d899: owner presence is deleted
+gone plugin enable policy-tdd # d902: the text gate is deleted
+gone plugin enable policy-layer # d902: the text gate is deleted
+gone plugin enable policy-witness # d902: the text gate is deleted
+gone plugin enable policy-qa # d902: the text gate is deleted
+gone plugin enable policy-research # d902: the text gate is deleted
+gone plugin enable policy-lifecycle # d902: the text gate is deleted
+gone term add # d909: terms are read-only
+gone trace # d910: trace is deleted
+gone recipe show why # d916: recipe deleted
+gone recipe show how # d916: recipe deleted
+gone recipe show architect # d916: recipe deleted
+gone recipe show technical-writing # d916: recipe deleted
+gone recipe show unslop # d916: recipe deleted
+gone recipe show benchmark-checklist # d916: recipe deleted
+gone recipe show fan-out # d916: recipe deleted
+gone recipe show design # d916: recipe deleted
+gone recipe show ship # d916: recipe deleted
+gone recipe show audit # d916: recipe deleted
+gone recipe show learning # d916: recipe deleted
+gone recipe show conflict-handoff # d916: recipe deleted
+gone recipe show arena # d916: recipe deleted
+
+any team # d879: SLP is a built-in plugin that is disabled by default
+any slp # d879: SLP is a built-in plugin that is disabled by default
+any decide # d879: SLP is a built-in plugin that is disabled by default
+any work accept # d879: SLP is a built-in plugin that is disabled by default
+any work return # d879: SLP is a built-in plugin that is disabled by default
+any work take # d879: SLP is a built-in plugin that is disabled by default
+any recipe show slp # d879, d916: the slp recipe moves with the plugin
+
+output work list # d893, d896: open and active items with a count line, holder and blockers
+output decision list # d893: the twenty most recent with a total
+output bundle list # d895: active bundles only, most recent first
+output work done in archive.seq # d895: closing the last linked card archives its bundle
+output bundle show in archive.seq # d895: closing the last linked card archives its bundle
+any bundle check # d903: two rules remain
+output plugin list # d885, d888, d902: deleted plugins leave the list
+output recipe list # d916, d904: thirteen recipes leave and the review recipe arrives
+output recipe show missing # d916: the not-found message lists the recipes
+output recipe show investigation # d916: rewritten in place
+output recipe show feature # d916: rewritten in place
+output recipe show bug-fix # d916: rewritten in place
+output recipe show refactoring # d916: rewritten in place
+output recipe show multi-phase-plan # d916: rewritten in place
+output brief # d911, d890: the brief is rewritten short
+output hook record # d911, d896: the brief is rewritten short and names no deleted verb
+output work start when /maestro (status|ready)/ # d896: hints stop naming deleted verbs
+output work done when /maestro (status|ready)/ # d896: hints stop naming deleted verbs

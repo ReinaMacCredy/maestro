@@ -1,0 +1,68 @@
+work add "Lane work" --kind task --atomic-reason "one change"
+dispatch list
+dispatch --help
+dispatch show x1
+handback list
+handback --help
+graph list
+graph show review-gate
+graph --help
+import rust
+import --help
+legacy show c1
+plugin new sample
+plugin add https://example.invalid/plugin.git
+plugin remove sample
+plugin trust sample
+plugin untrust sample
+plugin enable policy-tdd
+plugin enable policy-layer
+plugin enable policy-witness
+plugin enable policy-qa
+plugin enable policy-research
+plugin enable policy-lifecycle
+plugin enable policy-dispatch
+plugin disable policy-dispatch
+plugin list
+bundle import ./missing
+bundle save ./missing
+prompt list
+trace w1
+status
+ready
+lesson render
+term add lease "A session's claim on one work item"
+term add shard "One parallel slice of the test files"
+recipe show why
+recipe show how
+recipe show architect
+recipe show technical-writing
+recipe show unslop
+recipe show benchmark-checklist
+recipe show fan-out
+recipe show design
+recipe show ship
+recipe show audit
+recipe show learning
+recipe show conflict-handoff
+recipe show arena
+recipe show slp
+recipe show multi-phase-plan
+recipe show refactoring
+recipe list
+decision confirm d1
+owner
+team --help
+team start
+team stop
+slp --help
+slp status
+slp event
+decide --help
+decide "Keep the lane narrow" --why "one writer"
+work accept w1
+work return w1
+work take w1
+mcp --help
+room --help
+help

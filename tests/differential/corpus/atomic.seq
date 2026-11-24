@@ -1,0 +1,17 @@
+plugin enable policy-breakdown
+work add "Atomic fix" --kind task --atomic-reason "one-line change"
+work add "Parentless feature" --kind feature --acceptance "works"
+work start w1
+work start w2
+work start w2 --atomic-reason "really one change"
+work done w2 --evidence "ran it: exit 0"
+work add "Third" --kind task
+work done w3 --evidence "closed without start" --atomic-reason "tiny"
+work add "Parent" --kind feature
+work add "Child" --kind task --parent w4
+work start w4
+work done w4 --evidence "too early"
+work start w5
+work done w5 --evidence "child ran: 3 pass"
+work done w4 --evidence "children done"
+work list

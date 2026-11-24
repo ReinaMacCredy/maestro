@@ -1,0 +1,23 @@
+work add "Choose the store" --kind research
+decision draft "Use sqlite for the store" --rationale "one file, no server" --work w1
+decision draft "Keep JSON output compact" --rationale "agents read it"
+decision list
+decision show d1
+decision lock d1
+decision lock d2 --dissent "pretty output reads better for humans"
+decision draft "Use WAL mode" --rationale "concurrent readers" --supersedes d1
+decision lock d3
+decision show d1
+decision show d3 --json
+decision draft "Ask the owner about retention" --needs-owner --rationale "policy call"
+decision draft "Throwaway" --rationale "to withdraw"
+decision withdraw d5 --reason "superseded before lock"
+decision list
+decision list --json
+decision --help
+decision draft --help
+decision lock --help
+decision lock d99
+decision draft "Revisit later" --rationale "time-boxed" --review-at 2030-01-01
+decision lock d6 --review-at 2030-02-01
+search sqlite --local
