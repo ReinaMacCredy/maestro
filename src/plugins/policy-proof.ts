@@ -2,6 +2,7 @@ import type { BuiltInPlugin } from "../kernel/loader.ts";
 import type { WorkRecord } from "./work.ts";
 
 interface CompletionInput {
+  check: string | null;
   claims: string[];
   evidence: string;
   proofs: string[];
@@ -45,7 +46,7 @@ export const policyProofPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.events.on<CompletionInput, CompletionResult>("work.done", async (input, next) => {
         if (input.claims.length === 0 && input.proofs.length === 0) {
-          if (input.evidence.length > 0) return next();
+          if (input.evidence.length > 0 || input.check !== null) return next();
           return {
             blocked: true,
             origin: "policy-proof",

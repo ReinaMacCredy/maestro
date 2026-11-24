@@ -631,6 +631,7 @@ subverbs:
   done     Complete work with policy-checked evidence, taking an unheld lease.
     usage: maestro work done <id>
     --candidate <value>           Record an opaque commit or digest.
+    --check <value>               Run this shell command in the repository root and record its exit code, duration, commit and tree state; a failing check is recorded and the card still closes.
     --claim <value> (repeatable)  Record a completion claim.
     --evidence <value>            Record opaque completion evidence.
     --json                        Emit one compact JSON success envelope.
@@ -709,6 +710,7 @@ usage: maestro work cancel <id>
 work done  Complete work with policy-checked evidence, taking an unheld lease.
 usage: maestro work done <id>
     --candidate <value>           Record an opaque commit or digest.
+    --check <value>               Run this shell command in the repository root and record its exit code, duration, commit and tree state; a failing check is recorded and the card still closes.
     --claim <value> (repeatable)  Record a completion claim.
     --evidence <value>            Record opaque completion evidence.
     --json                        Emit one compact JSON success envelope.

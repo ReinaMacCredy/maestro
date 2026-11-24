@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { realpathSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, workEvents } from "./helpers.ts";
+import { idFrom, initializeGitRepository, runCli, runTool, withFixture, workEvents, type Fixture } from "./helpers.ts";
 
 test("630 policy-proof blocks a claim without matching proof", async () => {
   await withFixture(async (fixture) => {
@@ -405,5 +407,95 @@ test("work add --start refuses like work start and leaves no card behind (d919)"
     expect(JSON.parse(sessionless.stderr).error.code).toBe("SESSION_REQUIRED");
     const listed = JSON.parse((await runCli(fixture, ["work", "list", "--all", "--json"])).stdout);
     expect(listed.data.works.map((work: { id: string }) => work.id)).toEqual([blocker]);
+  });
+});
+
+async function cleanGitRepository(fixture: Fixture): Promise<string> {
+  await initializeGitRepository(fixture.repo);
+  await writeFile(join(fixture.repo, ".gitignore"), ".maestro/\n");
+  for (const command of [
+    ["git", "add", ".gitignore"],
+    ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-m", "ignore"],
+  ]) expect((await runTool(command, fixture.repo)).exitCode).toBe(0);
+  return (await runTool(["git", "rev-parse", "HEAD"], fixture.repo)).stdout.trim();
+}
+
+type ShownProof = { clean?: boolean | null; command?: string; commit?: string | null; durationMs?: number; exitCode?: number; kind: string };
+
+async function shownProof(fixture: Fixture, id: string): Promise<ShownProof> {
+  return JSON.parse((await runCli(fixture, ["work", "show", id, "--json"])).stdout).data.proof;
+}
+
+test("work done --check runs the command in the repository root and records it; --json stays one envelope (d883)", async () => {
+  await withFixture(async (fixture) => {
+    const head = await cleanGitRepository(fixture);
+    const id = idFrom(await runCli(fixture, ["work", "add", "checked"]));
+    const done = await runCli(fixture, ["work", "done", id, "--check", "echo check-output; pwd -P", "--json"]);
+    expect(done.exitCode).toBe(0);
+    expect(done.stderr).toContain(`check-output\n${realpathSync(fixture.repo)}\n`);
+    const envelope = JSON.parse(done.stdout);
+    expect(envelope.data.work.state).toBe("done");
+    const proof = await shownProof(fixture, id);
+    expect(proof).toEqual({
+      kind: "check",
+      command: "echo check-output; pwd -P",
+      exitCode: 0,
+      durationMs: expect.any(Number),
+      commit: head,
+      clean: true,
+    });
+    const shown = (await runCli(fixture, ["work", "show", id])).stdout;
+    expect(shown).toContain("proof kind: check\ncheck: echo check-output; pwd -P (exit 0, ");
+    expect(shown).toContain(`commit ${head}, clean tree)`);
+  });
+});
+
+test("work done --check records a failing check on a dirty tree and still closes the card (d883)", async () => {
+  await withFixture(async (fixture) => {
+    await cleanGitRepository(fixture);
+    await writeFile(join(fixture.repo, "scratch.txt"), "dirty\n");
+    const id = idFrom(await runCli(fixture, ["work", "add", "failing"]));
+    const done = await runCli(fixture, ["work", "done", id, "--check", "exit 3"]);
+    expect(done.exitCode).toBe(0);
+    expect(done.stdout).toContain(`${id} done`);
+    expect(done.stdout).toContain("check failed: exit 3 exited 3");
+    expect(await shownProof(fixture, id)).toEqual(expect.objectContaining({ kind: "check", exitCode: 3, clean: false }));
+    expect((await runCli(fixture, ["work", "show", id])).stdout).toContain(`${id} [done] failing`);
+  });
+});
+
+test("work done with text only is stamped as text, and a refused close never runs the check (d883)", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "texted"]));
+    expect((await runCli(fixture, ["work", "done", id, "--evidence", "read it"])).exitCode).toBe(0);
+    expect(await shownProof(fixture, id)).toEqual({ kind: "text" });
+    expect((await runCli(fixture, ["work", "show", id])).stdout).toContain("proof kind: text");
+
+    const parent = idFrom(await runCli(fixture, ["work", "add", "parent", "--kind", "feature"]));
+    await runCli(fixture, ["work", "add", "child", "--parent", parent]);
+    const refused = await runCli(fixture, ["work", "done", parent, "--check", "touch ran"]);
+    expect(JSON.parse(refused.stderr).error.origin).toBe("policy-breakdown");
+    expect(await Bun.file(join(fixture.repo, "ran")).exists()).toBe(false);
+  });
+});
+
+test("work done --check runs outside the store write lock, so the check may write the store itself (d883)", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "self noting"]));
+    const note = `${process.execPath} ${join(import.meta.dir, "..", "bin", "maestro.ts")} work note ${id} inner`;
+    expect((await runCli(fixture, ["work", "done", id, "--check", note])).exitCode).toBe(0);
+    expect(await shownProof(fixture, id)).toEqual(expect.objectContaining({ exitCode: 0 }));
+    expect((await runCli(fixture, ["work", "show", id])).stdout).toContain("note: inner");
+    const killed = idFrom(await runCli(fixture, ["work", "add", "killed"]));
+    await runCli(fixture, ["work", "done", killed, "--check", "kill -9 $$"]);
+    expect(await shownProof(fixture, killed)).toEqual(expect.objectContaining({ exitCode: 137 }));
+  });
+});
+
+test("work done --check outside a git repository records no commit and no tree state (d883)", async () => {
+  await withFixture(async (fixture) => {
+    const id = idFrom(await runCli(fixture, ["work", "add", "loose"]));
+    expect((await runCli(fixture, ["work", "done", id, "--check", "true"])).exitCode).toBe(0);
+    expect(await shownProof(fixture, id)).toEqual(expect.objectContaining({ kind: "check", exitCode: 0, commit: null, clean: null }));
   });
 });

@@ -15,3 +15,4 @@ kind: task
 acceptance: README install line matches scripts/install.sh
 evidence: claim: docs: README names install.sh
 proof: source: rg -n 'install.sh' README.md
+proof kind: text

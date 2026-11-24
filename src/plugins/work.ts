@@ -8,7 +8,9 @@ import {
 } from "../kernel/cli.ts";
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
+import { constants } from "node:os";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { resolveStoreLocation } from "../kernel/store.ts";
 import type { DecisionService } from "./decision.ts";
 import { modifiedTrackedFiles, namesCommit } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -290,6 +292,50 @@ function formatWork(work: WorkRecord): string {
     work.candidate !== null ? `candidate: ${work.candidate}` : null,
   ];
   return fields.filter((field): field is string => field !== null).join("\n");
+}
+
+interface CheckRecord {
+  command: string;
+  exitCode: number;
+  durationMs: number;
+  commit: string | null;
+  clean: boolean | null;
+}
+
+function gitOutput(root: string, args: string[]): string | null {
+  const result = Bun.spawnSync(["git", ...args], { cwd: root, stderr: "ignore", stdout: "pipe" });
+  return result.exitCode === 0 ? result.stdout.toString() : null;
+}
+
+// The check's stdout joins stderr so a --json caller still reads one envelope on stdout.
+function runCheck(command: string, root: string): CheckRecord {
+  const started = performance.now();
+  const result = Bun.spawnSync(["sh", "-c", command], { cwd: root, stdio: ["ignore", 2, 2] });
+  const durationMs = Math.round(performance.now() - started);
+  const status = gitOutput(root, ["status", "--porcelain"]);
+  return {
+    command,
+    exitCode: result.exitCode ?? 128 + (constants.signals[result.signalCode as keyof typeof constants.signals] ?? 0),
+    durationMs,
+    commit: gitOutput(root, ["rev-parse", "HEAD"])?.trim() ?? null,
+    clean: status === null ? null : status.trim() === "",
+  };
+}
+
+type ProofRecord = { kind: "text" } | ({ kind: "check" } & CheckRecord);
+
+function latestProof(context: PluginContext, id: string): ProofRecord | null {
+  const done = context.log.list("work", id).filter((event) => event.type === "work.done").at(-1);
+  return (done?.payload as { proof?: ProofRecord } | undefined)?.proof ?? null;
+}
+
+function formatProof(proof: ProofRecord): string[] {
+  if (proof.kind === "text") return ["proof kind: text"];
+  const tree = proof.clean === null ? "no tree" : proof.clean ? "clean tree" : "dirty tree";
+  return [
+    "proof kind: check",
+    `check: ${proof.command} (exit ${proof.exitCode}, ${proof.durationMs} ms, commit ${proof.commit ?? "none"}, ${tree})`,
+  ];
 }
 
 function blockIfNeeded(result: GateResult): void {
@@ -844,8 +890,13 @@ export const workPlugin: BuiltInPlugin = {
           const candidate = stringOption(invocation, "candidate") ?? null;
           const claims = stringOptions(invocation, "claim");
           const proofs = stringOptions(invocation, "proof");
+          const check = stringOption(invocation, "check") ?? null;
+          if (check !== null && check.trim() === "") {
+            throw new CliError("INVALID_VALUE", "--check needs a command to run");
+          }
           const result = await context.events.waterfall<
             {
+              check: string | null;
               children: WorkRecord[];
               claims: string[];
               evidence: string;
@@ -858,6 +909,7 @@ export const workPlugin: BuiltInPlugin = {
             "work.done",
             {
               work,
+              check,
               children: service.children(id),
               evidence,
               claims,
@@ -868,6 +920,9 @@ export const workPlugin: BuiltInPlugin = {
           );
           blockIfNeeded(result);
           const recordedEvidence = result.evidence ?? evidence;
+          const proof: ProofRecord = check === null
+            ? { kind: "text" }
+            : { kind: "check", ...runCheck(check, resolveStoreLocation(process.cwd()).root) };
           const complete = context.store.database.transaction(() => {
             const current = requireWork(context, id);
             if (current.state === "cancelled") {
@@ -922,6 +977,7 @@ export const workPlugin: BuiltInPlugin = {
                 evidence: recordedEvidence,
                 claims,
                 proofs,
+                proof,
               },
             });
             return service.get(id);
@@ -936,8 +992,12 @@ export const workPlugin: BuiltInPlugin = {
           const unlanded = modified > 0
             ? `\nwarning: ${modified} tracked files are modified and the evidence names no commit; a deliverable that only lives in the working tree is not landed`
             : "";
+          const checked = proof.kind === "check"
+            ? `\ncheck ${proof.exitCode === 0 ? "passed" : "failed"}: ${proof.command} exited ${proof.exitCode} in ${proof.durationMs} ms` +
+              (proof.exitCode === 0 ? "" : "; recorded, and the card closed (observe mode)")
+            : "";
           const reactions = (await context.events.serial("work.completed", completed)).filter((line) => typeof line === "string");
-          return { data: { work: completed }, text: [`${id} done${lostLease}${unlanded}`, ...reactions].join("\n") };
+          return { data: { work: completed, proof }, text: [`${id} done${lostLease}${checked}${unlanded}`, ...reactions].join("\n") };
         },
         {
           description: "Complete work with policy-checked evidence, taking an unheld lease.",
@@ -948,6 +1008,10 @@ export const workPlugin: BuiltInPlugin = {
             },
             "--candidate": {
               description: "Record an opaque commit or digest.",
+              value: true,
+            },
+            "--check": {
+              description: "Run this shell command in the repository root and record its exit code, duration, commit and tree state; a failing check is recorded and the card still closes.",
               value: true,
             },
           },
@@ -1264,10 +1328,12 @@ export const workPlugin: BuiltInPlugin = {
                   /^gates [^:]*\bdone\b/.test(record.requires ?? ""),
               )
               .map((record) => ({ policy: record.name, requires: record.requires ?? "" }));
+        const proof = work.state === "done" ? latestProof(context, work.id) : null;
         return {
-          data: { work, children, blockers, notes, noteCount: allNotes.length, decisions, gates },
+          data: { work, proof, children, blockers, notes, noteCount: allNotes.length, decisions, gates },
           text: [
             formatWork(work),
+            ...(proof ? formatProof(proof) : []),
             ...gates.map((gate) => `gate: ${gate.policy} ${gate.requires}`),
             ...blockerLines,
             ...childLines,
