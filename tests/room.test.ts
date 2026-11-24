@@ -181,7 +181,7 @@ test("268 first install seeds a neutral OWNER.md", async () => {
     expect(owner).toContain("maestro team start --peer-profile <name>");
     expect(owner).toContain("--lead-model");
     expect(owner).toContain("--peer-model");
-    expect(owner).toContain("--supervisor-model");
+    expect(owner).not.toContain("--supervisor-model");
     expect(owner).toContain("maestro work add --to <peer> --model");
     expect(owner).toContain("do not keep a model table here");
     expect(owner).not.toMatch(/~\/|\/Users\/|macOS|Windows|Linux|Vietnamese|English/);

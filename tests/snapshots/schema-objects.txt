@@ -20,7 +20,6 @@ table slp_local_roles
 table slp_local_teams
 table slp_owner_presence
 table slp_rework_grants
-table slp_stop_grants
 table slp_team_roles
 table slp_teams
 table slp_work

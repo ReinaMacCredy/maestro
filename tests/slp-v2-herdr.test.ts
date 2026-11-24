@@ -249,7 +249,7 @@ async function driveWorkToDone(
   fixture: Fixture,
   projectDatabasePath: string,
   work: { assignee: string; id: string },
-  reviewer: string,
+  reviewer: string | null,
   body: { note?: string; result: string },
 ): Promise<void> {
   const steps: ScriptedStep[] = [
@@ -266,8 +266,10 @@ async function driveWorkToDone(
   }
   steps.push(
     { actor: work.assignee, args: ["work", "return", work.id, body.result, "--json"], assignee: work.assignee, from: "ACTIVE", workId: work.id },
-    { actor: reviewer, args: ["work", "accept", work.id, "--json"], assignee: work.assignee, from: "RETURNED", workId: work.id },
   );
+  if (reviewer !== null) {
+    steps.push({ actor: reviewer, args: ["work", "accept", work.id, "--json"], assignee: work.assignee, from: "RETURNED", workId: work.id });
+  }
   for (const step of steps) await runScriptedStep(fixture, projectDatabasePath, step);
 }
 
@@ -381,9 +383,8 @@ test.skipIf(!liveJourneyEnabled())(
         }>(startResult);
         teamId = started.team.teamId;
         const lead = started.team.roles.find((role) => role.role === "lead")!;
-        const supervisor = started.team.roles.find((role) => role.role === "team-supervisor")!;
         const projectDatabasePath = join(fixture.repo, ".maestro", "maestro.db");
-        // Hub d96: team start opened the runtime pane beside the Supervisor.
+        // Hub d96: team start opened the runtime pane.
         expect(started.team.runtimePaneId).toMatch(herdrPaneIdShape);
         for (const malformed of ["", "w2G", "p3", "w2G:p", "w2G:t2", "workspace:pane"]) {
           expect(malformed).not.toMatch(herdrPaneIdShape);
@@ -394,9 +395,10 @@ test.skipIf(!liveJourneyEnabled())(
           fixture,
           projectDatabasePath,
           { assignee: lead.name, id: started.work.id },
-          supervisor.name,
+          null,
           { result: "result: initial objective complete; proof: live Lead pane" },
         );
+        envelope(await runCliAt(fixture, room, ["work", "accept", started.work.id, "--json"], liveEnvironment));
 
         for (const target of ["peer-real-one", "peer-real-two"]) {
           await promptAgent(fixture, lead.name, [
@@ -465,20 +467,14 @@ test.skipIf(!liveJourneyEnabled())(
           peerWork[0]!.id,
           "--json",
         ]);
-        await promptAgent(fixture, supervisor.name, [
-          "work",
-          "note",
-          peerWork[0]!.id,
-          "Team Supervisor reviewed the live Peer handoff",
-          "--json",
-        ]);
-        await promptAgent(fixture, supervisor.name, [
-          "decide",
-          "The team journey is ready to close",
-          "--why",
-          "Every work item is accepted",
-          "--json",
-        ]);
+        envelope(
+          await runCliAt(
+            fixture,
+            room,
+            ["work", "note", peerWork[0]!.id, "Hub reviewed the live Peer handoff", "--json"],
+            liveEnvironment,
+          ),
+        );
         envelope(
           await runCliAt(
             fixture,
@@ -518,7 +514,7 @@ test.skipIf(!liveJourneyEnabled())(
             )
             .all()
             .map((row) => row.actor),
-        ).toEqual([lead.name, supervisor.name].sort());
+        ).toEqual([lead.name]);
         durable.close();
         const hubDurable = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
         expect(
@@ -539,12 +535,7 @@ test.skipIf(!liveJourneyEnabled())(
           expect.objectContaining({ missingPanes: [], runtimePane: "on", teamId }),
         );
 
-        await promptAgent(
-          fixture,
-          supervisor.name,
-          ["team", "stop", teamId, "--json"],
-          false,
-        );
+        envelope(await runCliAt(fixture, room, ["team", "stop", teamId, "--json"], liveEnvironment));
         await waitFor(() => {
           const current = new Database(projectDatabasePath, { readonly: true });
           try {
@@ -554,7 +545,7 @@ test.skipIf(!liveJourneyEnabled())(
           } finally {
             current.close();
           }
-        }, "live Team Supervisor did not commit STOPPED");
+        }, "the Hub's team stop did not commit STOPPED");
         await waitFor(async () => {
           const status = envelope<{
             teams: Array<{ runtime: string; state: string; teamId: string }>;
@@ -715,7 +706,6 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
     const data = envelope<{ team: { roles: Array<{ name: string; paneId: string; role: string }>; teamId: string } }>(started);
     const prefix = `slp:${data.team.teamId}:g1`;
     let creates = tabCreates(await fakeHerdrCommands(fake));
-    expect(creates.get(`${prefix}:team-supervisor`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "team-supervisor")}`);
     expect(creates.get(`${prefix}:lead`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "lead")}`);
     expect(creates.get(`${prefix}:lead`)).toContain("--env");
 
@@ -800,35 +790,29 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
     await writeFile(seatJson("peer"), peerText);
     const creates = async () => (await fakeHerdrCommands(fake)).filter((command) => command[0] === "tab" && command[1] === "create");
 
-    // The team-supervisor launches first and its agent.start blocks on the
-    // trust dialog: the start rolls back, its pane was the only tab.create,
-    // and its file already carries the key; the lead never reached tab.create.
+    // The lead's agent.start blocks on the trust dialog: the start rolls back,
+    // its pane was the only tab.create, and its project entry already carries
+    // the key beside allowedTools.
     const blocked = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust", "--json"], fake.env);
     expect(blocked.exitCode).toBe(1);
     expect(failure(phaseFree(blocked.stderr)).code).toBe("TRUST_DIALOG");
     const first = await creates();
     expect(first.length).toBe(1);
     expect(first[0]![first[0]!.indexOf("--cwd") + 1]).toBe(projectKey);
-    expect(await readSeat("team-supervisor")).toEqual({
-      hasCompletedOnboarding: true,
-      mcpServers: {},
-      projects: { [projectKey]: { hasTrustDialogAccepted: true } },
-    });
-    const supervisorText = await readFile(seatJson("team-supervisor"), "utf8");
-    expect(await readFile(seatJson("lead"), "utf8")).toBe(leadText);
-
-    // A clean start launches the team-supervisor pane again (byte-identical
-    // file) and the lead (its project entry gains the key beside allowedTools).
-    await setFakeHerdrBehavior(fake, { trustDialog: undefined });
-    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust", "--json"], fake.env);
-    expect(phaseFree(started.stderr)).toBe("");
-    expect(started.exitCode).toBe(0);
-    expect((await creates()).length).toBe(3);
-    expect(await readFile(seatJson("team-supervisor"), "utf8")).toBe(supervisorText);
     expect(await readSeat("lead")).toEqual({
       ...leadBefore,
       projects: { ...leadBefore.projects, [projectKey]: { allowedTools: ["Bash(git:*)"], hasTrustDialogAccepted: true } },
     });
+    const seededLeadText = await readFile(seatJson("lead"), "utf8");
+    expect(seededLeadText).not.toBe(leadText);
+
+    // A clean start launches the lead pane again and leaves its file byte-identical.
+    await setFakeHerdrBehavior(fake, { trustDialog: undefined });
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust", "--json"], fake.env);
+    expect(phaseFree(started.stderr)).toBe("");
+    expect(started.exitCode).toBe(0);
+    expect((await creates()).length).toBe(2);
+    expect(await readFile(seatJson("lead"), "utf8")).toBe(seededLeadText);
     expect(await readFile(seatJson("peer"), "utf8")).toBe(peerText);
 
     // work add --to a Claude peer seeds the peer dir the same way.
@@ -840,12 +824,12 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
     expect(await readSeat("peer")).toEqual({ ...peerBefore, projects: { [projectKey]: { hasTrustDialogAccepted: true } } });
 
     // A Codex peer has no Claude seat dir: no seat file changes.
-    const snapshot = async () => Promise.all(["lead", "peer", "team-supervisor"].map((seat) => readFile(seatJson(seat), "utf8")));
+    const snapshot = async () => Promise.all(["lead", "peer"].map((seat) => readFile(seatJson(seat), "utf8")));
     const before = await snapshot();
     const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], leadEnvironment);
     expect(phaseFree(codex.stderr)).toBe("");
     expect(codex.exitCode).toBe(0);
-    expect((await creates()).length).toBe(5);
+    expect((await creates()).length).toBe(4);
     expect(await snapshot()).toEqual(before);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
@@ -875,7 +859,7 @@ test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* rema
     const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Seat trust atomic", "--json"], fake.env);
     expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
-    for (const seat of ["lead", "team-supervisor"]) {
+    for (const seat of ["lead"]) {
       const entries = (await readdir(join(seatRoot, seat))).filter((entry) => entry.startsWith(".claude.json."));
       expect({ seat, entries }).toEqual({ seat, entries: [] });
       expect({ seat, mode: (await stat(seatJson(seat))).mode & 0o777 }).toEqual({ seat, mode: 0o600 });

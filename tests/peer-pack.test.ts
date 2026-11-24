@@ -54,7 +54,6 @@ test("peer-pack-render: install renders maestro-peer from the SLP.md peer block 
     const leadBody = parseProfile("lead.md", await readFile(join(shippedRoot, "profiles", "lead.md"), "utf8")).body;
     expect(await renderedBody(fixture, "peer")).toBe(`\n${sharedPeer}\n\n${peerBody}\n`);
     expect(await renderedBody(fixture, "lead")).toBe(`\n${sharedDefault}\n\n${leadBody}\n`);
-    expect(await renderedBody(fixture, "team-supervisor")).toContain(sharedDefault);
   });
 }, 30_000);
 

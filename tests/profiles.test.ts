@@ -114,7 +114,7 @@ test("profile-no-question-tool: every shipped profile renders disallowedTools: A
     const names = (await readdir(shipped)).filter((entry) => entry.endsWith(".md")).map((entry) => entry.slice(0, -3));
     expect(names.length).toBeGreaterThan(0);
     for (const name of names) {
-      const renderedNames = name.startsWith("peer-") || ["team-supervisor", "lead", "peer"].includes(name)
+      const renderedNames = name.startsWith("peer-") || ["lead", "peer"].includes(name)
         ? [name]
         : [name, `peer-${name}`];
       for (const renderedName of renderedNames) {
@@ -191,7 +191,7 @@ test("seat-dirs-keys: parseProfile accepts skills and settings, refuses settings
 // seat-config-dirs R2 (d845, A5): seats and every peer-* render live in the
 // seat dirs, bare nodes stay in ~/.claude/agents, the old seat files there are
 // removed on materialize, and uninstall removes the whole seat root.
-test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and peer-* under <home>/.maestro/claude/<seat>/agents and bare nodes under <home>/.claude/agents; materializeProfiles removes a stale <home>/.claude/agents/maestro-lead.md; removeRenderedProfiles removes <home>/.maestro/claude (R2)", async () => {
+test("seat-dirs-targets: planProfileRenders puts lead, peer and peer-* under <home>/.maestro/claude/<seat>/agents and bare nodes under <home>/.claude/agents; materializeProfiles removes a stale <home>/.claude/agents/maestro-lead.md; removeRenderedProfiles removes <home>/.maestro/claude (R2)", async () => {
   await withFixture(async (fixture) => {
     const claudeAgents = join(fixture.home, ".claude", "agents");
     const seatRoot = join(fixture.home, ".maestro", "claude");
@@ -203,7 +203,6 @@ test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and
     const byName = new Map(claudePaths.map((path) => [/^maestro-(.+)\.md$/.exec(basename(path))?.[1] ?? path, path]));
     expect(byName.get("lead")).toBe(join(seatRoot, "lead", "agents", "maestro-lead.md"));
     expect(byName.get("peer")).toBe(join(seatRoot, "peer", "agents", "maestro-peer.md"));
-    expect(byName.get("team-supervisor")).toBe(join(seatRoot, "team-supervisor", "agents", "maestro-team-supervisor.md"));
     expect(byName.get("peer-opus")).toBe(join(seatRoot, "peer", "agents", "maestro-peer-opus.md"));
     expect(byName.get("peer-refuter")).toBe(join(seatRoot, "peer", "agents", "maestro-peer-refuter.md"));
     expect(byName.get("peer-reviewer-security")).toBe(join(seatRoot, "peer", "agents", "maestro-peer-reviewer-security.md"));
@@ -212,7 +211,7 @@ test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and
     }
     for (const [name, path] of byName) {
       const inSeatDir = path.startsWith(seatRoot);
-      const isSeat = ["lead", "peer", "team-supervisor"].includes(name) || name.startsWith("peer-");
+      const isSeat = ["lead", "peer"].includes(name) || name.startsWith("peer-");
       expect({ name, inSeatDir }).toEqual({ name, inSeatDir: isSeat });
     }
     expect(renderedProfilePath(fixture.home, "claude", "lead")).toBe(byName.get("lead")!);
@@ -232,7 +231,7 @@ test("seat-dirs-targets: planProfileRenders puts lead, peer, team-supervisor and
     expect(await readFile(custom, "utf8")).toBe("---\nname: custom\n---\nhand written\n");
     expect(existsSync(join(seatRoot, "lead", "agents", "maestro-lead.md"))).toBe(true);
     expect(existsSync(join(claudeAgents, "maestro-refuter.md"))).toBe(true);
-    const staleNames = (await readdir(claudeAgents)).filter((entry) => /^maestro-(lead|peer|team-supervisor|peer-.+)\.md$/.test(entry));
+    const staleNames = (await readdir(claudeAgents)).filter((entry) => /^maestro-(lead|peer|peer-.+)\.md$/.test(entry));
     expect(staleNames).toEqual([]);
 
     const removed = await removeRenderedProfiles(fixture.home);
@@ -291,8 +290,8 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
     expect((await stat(seatDirectory(fixture.home, "lead"))).mode & 0o777).toBe(0o700);
     expect((await stat(seatRoot)).mode & 0o777).toBe(0o700);
 
-    // The peer and team-supervisor dirs carry the base alone.
-    for (const seat of ["peer", "team-supervisor"] as const) {
+    // The peer dir carries the base alone.
+    for (const seat of ["peer"] as const) {
       const text = await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8");
       const parsed = JSON.parse(text) as Record<string, unknown>;
       expect({ seat, text }).toEqual({ seat, text: expect.not.stringContaining("cleanupPeriodDays") });
@@ -318,11 +317,8 @@ test("seat-dirs-settings: rendered seat settings.json is base merged with the ov
       }
     }
     expect(await denyLine("peer-reviewer-security")).toContain("Write");
-    for (const tool of common) expect(await denyLine("team-supervisor")).toContain(tool);
     const peerDeny = (JSON.parse(await readFile(join(seatDirectory(fixture.home, "peer"), "settings.json"), "utf8")) as { permissions: { deny: string[] } }).permissions.deny;
     for (const tool of ["Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)"]) expect(peerDeny).toContain(tool);
-    const supervisorDeny = (JSON.parse(await readFile(join(seatDirectory(fixture.home, "team-supervisor"), "settings.json"), "utf8")) as { permissions: { deny: string[] } }).permissions.deny;
-    expect(supervisorDeny).toEqual(["Bash(claude:*)", "Bash(npx claude:*)"]);
     expect(await denyLine("refuter")).not.toContain("Bash(herdr:*)");
     expect(await denyLine("lead")).toBe("disallowedTools: Agent, LSP");
   });
@@ -336,7 +332,7 @@ test("seat-dirs-claudemd-excludes: every rendered seat settings.json carries cla
   await withFixture(async (fixture) => {
     await materializeSkills(fixture.home, "dev");
     await materializeProfiles(fixture.home, fixture.repo);
-    for (const seat of ["lead", "peer", "team-supervisor"] as const) {
+    for (const seat of ["lead", "peer"] as const) {
       const text = await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8");
       const parsed = JSON.parse(text) as Record<string, unknown>;
       expect({ seat, claudeMdExcludes: parsed.claudeMdExcludes }).toEqual({
@@ -358,12 +354,12 @@ test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries
     await materializeSkills(fixture.home, "dev");
     await writeProfile(
       join(fixture.home, "maestro", "profiles"),
-      "team-supervisor",
-      "---\nharness: claude\nmodel: opus\nskills: [maestro-work]\ndisallowed_tools: [Agent, \"Bash(claude:*)\"]\nsettings:\n  permissions:\n    deny: [\"WebFetch\"]\n---\nRole: fixture supervisor.\n",
+      "peer",
+      "---\nharness: claude\nmodel: opus\nskills: [maestro-work]\ndisallowed_tools: [Agent, \"Bash(claude:*)\"]\nsettings:\n  permissions:\n    deny: [\"WebFetch\"]\n---\nRole: fixture peer.\n",
     );
     await materializeProfiles(fixture.home, fixture.repo);
 
-    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+    const denyOf = async (seat: "lead" | "peer") => {
       const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
       return parsed.permissions.deny;
     };
@@ -376,16 +372,16 @@ test("seat-dirs-deny-split: the rendered lead agent disallowedTools line carries
     expect(await denyOf("peer")).toContain("Bash(herdr:*)");
     // d855: the shipped patterns are the floor, so the shadow's single pattern
     // no longer narrows the list (R14).
-    expect(await denyOf("team-supervisor")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)", "WebFetch"]);
-    const supervisorText = await readFile(renderedProfilePath(fixture.home, "claude", "team-supervisor"), "utf8");
-    expect(supervisorText.slice(0, supervisorText.indexOf("\n---\n", 4)).split("\n")).toContain("disallowedTools: Agent");
+    expect(await denyOf("peer")).toEqual(["Bash(claude:*)", "Bash(npx claude:*)", "Bash(herdr:*)", "WebFetch"]);
+    const peerText = await readFile(renderedProfilePath(fixture.home, "claude", "peer"), "utf8");
+    expect(peerText.slice(0, peerText.indexOf("\n---\n", 4)).split("\n")).toContain("disallowedTools: Agent");
   });
 });
 
 // seat-config-dirs R12 (d847): the deny list is exact per seat, so the shipped
 // render is pinned as the whole string and the whole array, never a subset;
 // no fixture shadow, the shipped profiles alone.
-test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders carry exactly the d847 disallowedTools line and settings permissions.deny array; a composed peer-node with only AskUserQuestion of its own carries the peer set (R12, d847)", async () => {
+test("seat-dirs-exact-deny: the shipped lead and peer renders carry exactly the d847 disallowedTools line and settings permissions.deny array; a composed peer-node with only AskUserQuestion of its own carries the peer set (R12, d847)", async () => {
   await withFixture(async (fixture) => {
     await materializeSkills(fixture.home, "dev");
     await materializeProfiles(fixture.home, fixture.repo);
@@ -394,11 +390,10 @@ test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders c
       const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
       return text.slice(0, text.indexOf("\n---\n", 4)).split("\n").find((line) => line.startsWith("disallowedTools: ")) ?? "";
     };
-    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+    const denyOf = async (seat: "lead" | "peer") => {
       const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
       return parsed.permissions.deny;
     };
-    const nine = "Agent, Task, Workflow, SlashCommand, WebSearch, TodoWrite, EnterPlanMode, ExitPlanMode, AskUserQuestion";
     // the pstack port (d875) lets the working seats delegate and keep a plan list.
     const five = "SlashCommand, WebSearch, EnterPlanMode, ExitPlanMode, AskUserQuestion";
     const twoBash = ["Bash(claude:*)", "Bash(npx claude:*)"];
@@ -407,8 +402,6 @@ test("seat-dirs-exact-deny: the shipped lead, peer and team-supervisor renders c
     expect(await denyOf("lead")).toEqual(twoBash);
     expect(await lineOf("peer")).toBe(`disallowedTools: ${five}`);
     expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)"]);
-    expect(await lineOf("team-supervisor")).toBe(`disallowedTools: ${nine}`);
-    expect(await denyOf("team-supervisor")).toEqual(twoBash);
 
     // d851 union puts the node's own names first, so the composed line is the
     // peer set in a different order and nothing more.
@@ -502,20 +495,19 @@ test("seat-dirs-owner-only-keys: a <repo>/.maestro/profiles profile with setting
 // seat-config-dirs R14 (d855 rule 3): a shadow that drops the shipped Bash(...)
 // patterns at the source rendered deny [] (SEC-1), so the shipped seat's
 // patterns seed every seat deny and a shadow can only add to them.
-test("seat-dirs-deny-floor: a ~/maestro/profiles lead shadow that drops every Bash(...) entry still renders the lead settings permissions.deny as the shipped two patterns, a peer shadow keeps Bash(herdr:*), and a team-supervisor shadow that adds a pattern widens the list (R14, d855)", async () => {
+test("seat-dirs-deny-floor: a ~/maestro/profiles lead shadow that drops every Bash(...) entry still renders the lead settings permissions.deny as the shipped two patterns, a peer shadow keeps Bash(herdr:*), and a pattern the peer shadow adds widens the list (R14, d855)", async () => {
   await withFixture(async (fixture) => {
     await materializeSkills(fixture.home, "dev");
     const homeProfiles = join(fixture.home, "maestro", "profiles");
     await writeProfile(homeProfiles, "lead", "---\nharness: claude\nmodel: opus\ndisallowed_tools: [Agent, LSP]\n---\nRole: narrowed lead.\n");
-    await writeProfile(homeProfiles, "peer", "---\nharness: claude\nmodel: opus\n---\nRole: narrowed peer.\n");
     await writeProfile(
       homeProfiles,
-      "team-supervisor",
-      "---\nharness: claude\nmodel: opus\ndisallowed_tools: [Agent, \"Bash(git push:*)\"]\n---\nRole: widened supervisor.\n",
+      "peer",
+      "---\nharness: claude\nmodel: opus\ndisallowed_tools: [Agent, \"Bash(git push:*)\"]\n---\nRole: narrowed and widened peer.\n",
     );
     await materializeProfiles(fixture.home, fixture.repo);
 
-    const denyOf = async (seat: "lead" | "peer" | "team-supervisor") => {
+    const denyOf = async (seat: "lead" | "peer") => {
       const parsed = JSON.parse(await readFile(join(seatDirectory(fixture.home, seat), "settings.json"), "utf8")) as { permissions: { deny?: string[] } };
       return parsed.permissions.deny;
     };
@@ -526,8 +518,7 @@ test("seat-dirs-deny-floor: a ~/maestro/profiles lead shadow that drops every Ba
     const twoBash = ["Bash(claude:*)", "Bash(npx claude:*)"];
     expect(await denyOf("lead")).toEqual(twoBash);
     expect(await lineOf("lead")).toBe("disallowedTools: Agent, LSP");
-    expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)"]);
-    expect(await denyOf("team-supervisor")).toEqual([...twoBash, "Bash(git push:*)"]);
-    expect(await lineOf("team-supervisor")).toBe("disallowedTools: Agent");
+    expect(await denyOf("peer")).toEqual([...twoBash, "Bash(herdr:*)", "Bash(git push:*)"]);
+    expect(await lineOf("peer")).toBe("disallowedTools: Agent");
   });
 });

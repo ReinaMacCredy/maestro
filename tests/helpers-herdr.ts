@@ -12,7 +12,7 @@ import type { Fixture } from "./helpers.ts";
 // the tripwire: the CLI must never be spawned once SLP speaks the socket.
 
 export interface FakeHerdrBehavior {
-  acknowledgementPrefixes?: Partial<Record<"team-supervisor" | "lead" | "peer", string>>;
+  acknowledgementPrefixes?: Partial<Record<"lead" | "peer", string>>;
   acknowledgementDelayReads?: number;
   // A started agent stays off agent.list, and prompts to it fail with
   // agent_not_ready, for this many list reads: the socket start answered
@@ -103,7 +103,7 @@ class FakeHerdrError extends Error {
 // w722: a live Herdr answers tab.list and pane.list scoped to a workspace it
 // no longer has with workspace_not_found (herdr-server.log 2026-09-15), never
 // with an empty list; a fake that answered [] hid the non-atomic stop of a
-// lead-only team whose workspace auto-closed with its last tab.
+// team whose workspace auto-closed with its last tab.
 function requireWorkspace(state: Params, workspaceId: unknown): void {
   if (workspaceId === undefined || workspaceId === null) return;
   if (!state.workspaces.some((candidate: Params) => candidate.workspace_id === workspaceId)) {
@@ -521,45 +521,13 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
         return { type: "ok" };
       }
       const words = String(params.text ?? "").split(" ");
-      if (words[0] === "/usr/bin/env" && words.some((word) => word.startsWith("MAESTRO_SLP_STOP_GRANT="))) {
-        const extraEnvironment: Record<string, string> = {};
-        let commandIndex = 1;
-        while (commandIndex < words.length && (words[commandIndex] as string).includes("=")) {
-          const assignment = words[commandIndex] as string;
-          const separator = assignment.indexOf("=");
-          extraEnvironment[assignment.slice(0, separator)] = assignment.slice(separator + 1);
-          commandIndex += 1;
-        }
-        const environment: Record<string, string | undefined> = { ...process.env };
-        for (const key of Object.keys(environment)) if (key.startsWith("HERDR_")) delete environment[key];
-        const child = Bun.spawn(words.slice(commandIndex), {
-          cwd: target.cwd,
-          env: {
-            ...environment,
-            ...extraEnvironment,
-            HERDR_PANE_ID: paneId,
-            HERDR_SOCKET_PATH: join(server.fixture.root, "herdr.sock"),
-            HERDR_WORKSPACE_ID: target.workspace_id,
-            HOME: server.fixture.home,
-          },
-          stderr: "pipe",
-          stdout: "pipe",
-        });
-        server.children.set(`helper:${paneId}`, child);
-        child.exited.then(async () => {
-          server.children.delete(`helper:${paneId}`);
-          const stderr = await new Response(child.stderr as ReadableStream<Uint8Array>).text().catch(() => "");
-          state.helper_exits.push({ code: child.exitCode, pane_id: paneId, stderr });
-        });
-      } else {
-        state.processes[paneId] = {
-          pane_id: paneId,
-          cwd: target.cwd,
-          shell_pid: 1000 + state.sequence,
-          foreground_process_group_id: 2000 + state.sequence,
-          foreground_processes: [{ pid: 2000 + state.sequence, name: words[0], command: words.join(" "), args: words }],
-        };
-      }
+      state.processes[paneId] = {
+        pane_id: paneId,
+        cwd: target.cwd,
+        shell_pid: 1000 + state.sequence,
+        foreground_process_group_id: 2000 + state.sequence,
+        foreground_processes: [{ pid: 2000 + state.sequence, name: words[0], command: words.join(" "), args: words }],
+      };
       return { type: "ok" };
     }
     case "agent.list": {
@@ -657,7 +625,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       // d90: the post-open prompt is one line; the seat knows its role from its
       // rendered profile, which the fake reads off the agent name prefix.
       const opened = /^slp team (\S+) generation (\d+) instance \S+; reply ([0-9a-f]{32})$/.exec(body);
-      const role = target.startsWith("supervisor-") ? "team-supervisor" : target.startsWith("lead-") ? "lead" : "peer";
+      const role = target.startsWith("lead-") ? "lead" : "peer";
       if (opened) {
         const [, team, generation, challenge] = opened as unknown as [string, string, string, string];
         const challengeLeft = challenge.slice(0, 16);
@@ -846,7 +814,6 @@ export async function installFakeHerdr(
       agents: [],
       behavior,
       history: [],
-      helper_exits: [],
       outputs: {},
       panes: [],
       pending_resets: {},

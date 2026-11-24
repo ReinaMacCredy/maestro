@@ -58,7 +58,7 @@ export interface ProfileSync {
   shadows: ProfileShadowReport[];
 }
 
-export const seatProfileNames = ["team-supervisor", "lead", "peer"] as const;
+export const seatProfileNames = ["lead", "peer"] as const;
 export type SeatProfileName = (typeof seatProfileNames)[number];
 
 // d845: one CLAUDE_CONFIG_DIR per seat kind; a seat name renders into its own

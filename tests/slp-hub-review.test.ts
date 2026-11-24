@@ -13,14 +13,10 @@ import {
 } from "./helpers-herdr.ts";
 import { runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
-// room d117 (store at ~/maestro): `maestro team start` gains a lead-only shape
-// that opens exactly one Lead pane plus the team runtime pane and no Team
-// Supervisor, and in that shape the Hub Supervisor is the Lead's reviewer - it
-// receives the RETURNED push, may read the item, and runs work accept or
-// work note --rework. d72's "Team Supervisor accepts Lead work" and "Hub
-// Supervisor never manages Lead directly" continue to govern every team that
-// HAS a Team Supervisor, so both shapes are asserted here side by side: the
-// change must not loosen the supervised boundary it is carving an exception to.
+// room d117 (store at ~/maestro): `maestro team start` opens exactly one Lead
+// pane plus the team runtime pane, and the Hub Supervisor is the Lead's
+// reviewer - it receives the RETURNED push, may read the item, and runs work
+// accept or work note --rework.
 
 interface StartedTeam {
   team: {
@@ -53,27 +49,23 @@ interface Started {
   room: string;
 }
 
-async function startTeam(fixture: Fixture, leadOnly: boolean): Promise<Started> {
+async function startTeam(fixture: Fixture): Promise<Started> {
   const room = await markedRoom(fixture);
   const fake = await installFakeHerdr(fixture, { runtimePane: "spawn" });
-  const argv = ["team", "start", fixture.repo, "Shape check", "--json"];
-  if (leadOnly) argv.splice(4, 0, "--lead-only");
-  const started = await runCliAt(fixture, room, argv, fake.env);
+  const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Shape check", "--json"], fake.env);
   expect(started.stderr).not.toContain("error");
   expect(started.exitCode).toBe(0);
   return { data: envelope<StartedTeam>(started.stdout), fake, room };
 }
 
-test("lead-only: team start --lead-only opens one Lead pane and the runtime pane and no Team Supervisor, while the default shape still opens both seats (room d117)", async () => {
+test("hub-review: team start opens one Lead pane and the runtime pane and no other seat (room d117)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake } = await startTeam(fixture, true);
+    const { data, fake } = await startTeam(fixture);
     const roles = data.team.roles.map((role) => role.role);
-    expect(roles).toContain("lead");
-    expect(roles).not.toContain("team-supervisor");
-    expect(roles.filter((role) => role === "lead")).toHaveLength(1);
+    expect(roles).toEqual(["lead"]);
 
-    // d97: the runtime pane is the model-free attention layer and stays in
-    // both shapes; a lead-only team without it would have no stall detection.
+    // d97: the runtime pane is the model-free attention layer; a team without
+    // it would have no stall detection.
     expect(data.team.runtimePaneId).not.toBe("");
 
     // The Herdr side agrees: no supervisor agent was ever spawned.
@@ -86,24 +78,9 @@ test("lead-only: team start --lead-only opens one Lead pane and the runtime pane
   });
 });
 
-test("lead-only: the default shape is unchanged and still opens a Team Supervisor alongside the Lead (d72)", async () => {
+test("hub-review: a Lead's returned work waits on hub-supervisor, the Hub reads it and accepts it, and no seat inside the team can accept it (room d117)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake } = await startTeam(fixture, false);
-    const roles = data.team.roles.map((role) => role.role);
-    expect(roles).toContain("lead");
-    expect(roles).toContain("team-supervisor");
-
-    const agents = (await readFakeHerdrState(fake)).agents as Array<
-      { name: string; workspace_id: string }
-    >;
-    const inTeam = agents.filter((agent) => agent.workspace_id === data.team.workspaceId);
-    expect(inTeam.some((agent) => agent.name === `supervisor-${data.team.teamId}`)).toBe(true);
-  });
-});
-
-test("lead-only: a Lead's returned work waits on hub-supervisor, the Hub reads it and accepts it, and no seat inside the team can accept it (room d117)", async () => {
-  await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -119,8 +96,7 @@ test("lead-only: a Lead's returned work waits on hub-supervisor, the Hub reads i
     );
     expect(returned.exitCode).toBe(0);
 
-    // The Lead's own status names the Hub as the reviewer it is waiting on -
-    // not a team-supervisor pane, which does not exist in this shape.
+    // The Lead's own status names the Hub as the reviewer it is waiting on.
     const leadStatus = await runCliAt(fixture, fixture.repo, ["status", workId], leadEnvironment);
     expect(leadStatus.exitCode).toBe(0);
     expect(leadStatus.stdout).toContain("waiting on hub-supervisor");
@@ -129,9 +105,9 @@ test("lead-only: a Lead's returned work waits on hub-supervisor, the Hub reads i
     // Lead boundary, it has simply moved up to the Hub.
     const selfAccept = await runCliAt(fixture, fixture.repo, ["work", "accept", workId], leadEnvironment);
     expect(selfAccept.exitCode).not.toBe(0);
-    expect(`${selfAccept.stdout}${selfAccept.stderr}`).toContain("lead-only");
+    expect(`${selfAccept.stdout}${selfAccept.stderr}`).toContain("the Hub Supervisor reviews the Lead's work");
 
-    // The Hub reads the item from ~/maestro, which d72 alone would refuse.
+    // The Hub reads the item from ~/maestro.
     const hubRead = await runCliAt(fixture, room, ["status", workId], fake.env);
     expect(hubRead.exitCode).toBe(0);
     expect(hubRead.stdout).toContain(workId);
@@ -146,9 +122,9 @@ test("lead-only: a Lead's returned work waits on hub-supervisor, the Hub reads i
   });
 });
 
-test("lead-only: the Hub grants rework on a lead-only team's returned work, and the Lead may retake it once (room d117)", async () => {
+test("hub-review: the Hub grants rework on the Lead's returned work, and the Lead may retake it once (room d117)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -175,44 +151,9 @@ test("lead-only: the Hub grants rework on a lead-only team's returned work, and 
   });
 });
 
-test("lead-only: a supervised team still refuses the Hub Supervisor and is still accepted by its Team Supervisor (d72 survives room d117)", async () => {
+test("hub-review: a Lead's blocked note escalates to the Hub (d761 under room d117)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, false);
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const workId = data.work.id;
-
-    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode)
-      .toBe(0);
-    expect(
-      (await runCliAt(fixture, fixture.repo, ["work", "return", workId, "done"], leadEnvironment)).exitCode,
-    ).toBe(0);
-
-    // The exception room d117 carves is exactly one shape wide.
-    const hubAccept = await runCliAt(fixture, room, ["work", "accept", workId], fake.env);
-    expect(hubAccept.exitCode).not.toBe(0);
-    expect(`${hubAccept.stdout}${hubAccept.stderr}`).toContain("Team Supervisor");
-
-    const hubRead = await runCliAt(fixture, room, ["status", workId], fake.env);
-    expect(hubRead.exitCode).not.toBe(0);
-
-    const accepted = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "accept", workId, "--json"],
-      { ...fake.env, HERDR_PANE_ID: supervisor.paneId },
-    );
-    expect(accepted.exitCode).toBe(0);
-    const after = envelope<{ work: { acceptedBy: string; state: string } }>(accepted.stdout);
-    expect(after.work.state).toBe("DONE");
-    expect(after.work.acceptedBy).toBe(supervisor.name);
-  });
-});
-
-test("lead-only: a Lead's blocked note escalates to the Hub rather than to a Team Supervisor pane that does not exist (d761 under room d117)", async () => {
-  await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -236,62 +177,9 @@ test("lead-only: a Lead's blocked note escalates to the Hub rather than to a Tea
   });
 });
 
-test("lead-only: the shape is pinned for the generation, so re-running team start without the flag does not reshape a live lead-only team (room d117)", async () => {
+test("hub-review: room d117 moves only the boundary above the Lead - a Peer's work is still reviewed by the Lead, and the Hub is refused (room d117)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
-
-    const again = await runCliAt(
-      fixture,
-      room,
-      ["team", "start", fixture.repo, "Shape check", "--json"],
-      fake.env,
-    );
-    expect(again.exitCode).toBe(0);
-    const restored = envelope<StartedTeam>(again.stdout);
-    expect(restored.team.generation).toBe(data.team.generation);
-    expect(restored.team.roles.map((role) => role.role)).not.toContain("team-supervisor");
-
-    const agents = (await readFakeHerdrState(fake)).agents as Array<
-      { name: string; workspace_id: string }
-    >;
-    expect(
-      agents
-        .filter((agent) => agent.workspace_id === data.team.workspaceId)
-        .some((agent) => agent.name === `supervisor-${data.team.teamId}`),
-    ).toBe(false);
-  });
-});
-
-test("lead-only: the pinned shape is readable from the generation's own configuration and defaults to supervised for a row written before the shape existed (room d117)", async () => {
-  await withFixture(async (fixture) => {
-    const { data } = await startTeam(fixture, true);
-    const { Database } = await import("bun:sqlite");
-    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
-    try {
-      const row = database
-        .query<{ configuration_json: string }, [string, number]>(
-          `SELECT configuration_json FROM slp_local_teams WHERE team_id = ? AND generation = ?`,
-        )
-        .get(data.team.teamId, data.team.generation);
-      expect(row).not.toBeNull();
-      const configuration = JSON.parse(row!.configuration_json) as {
-        profileDigests: Record<string, string>;
-        shape?: string;
-      };
-      expect(configuration.shape).toBe("lead-only");
-      // A lead-only generation never launches the Team Supervisor, so it must
-      // not pin that profile's bytes either - otherwise an edit to a profile
-      // this team never uses would trip requireProfilesUnchanged on it.
-      expect(Object.keys(configuration.profileDigests)).not.toContain("team-supervisor");
-    } finally {
-      database.close();
-    }
-  });
-});
-
-test("lead-only: room d117 moves only the boundary above the Lead - a Peer's work in a lead-only team is still reviewed by the Lead, and the Hub is refused without being told the team has a Team Supervisor it does not have (room d117)", async () => {
-  await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
 
@@ -318,10 +206,8 @@ test("lead-only: room d117 moves only the boundary above the Lead - a Peer's wor
     expect(hubAccept.exitCode).not.toBe(0);
     const refusal = `${hubAccept.stdout}${hubAccept.stderr}`;
     expect(refusal).toContain("lead");
-    // The old message asserted a Team Supervisor exists; in this shape none does.
-    expect(refusal).not.toContain("this generation has a Team Supervisor");
 
-    // The Lead still accepts its Peer's work, exactly as in a supervised team.
+    // The Lead accepts its Peer's work.
     const accepted = await runCliAt(
       fixture,
       fixture.repo,
@@ -333,12 +219,8 @@ test("lead-only: room d117 moves only the boundary above the Lead - a Peer's wor
   });
 });
 
-// w722 DEFECT 1: a lead-only generation has no Team Supervisor, so nothing
-// could run the normal stop; the Hub Supervisor, which room d117 makes the
-// seat above the Lead, was left with --emergency as its only way to close a
-// finished team. From ~/maestro, `team stop <id>` without --emergency now
-// performs the Team Supervisor's normal stop for that shape: the same phases,
-// the same non-emergency STOPPED recording, refused while work is unfinished.
+// w722: from ~/maestro, `team stop <id>` without --emergency is the normal
+// stop: the non-emergency STOPPED recording, refused while work is unfinished.
 
 async function finishLeadWork(
   fixture: Fixture,
@@ -377,9 +259,9 @@ function localTeamState(fixture: Fixture, teamId: string, generation: number): s
   }
 }
 
-test("lead-only: the Hub Supervisor closes a finished lead-only team with a normal team stop, committed STOPPED without emergency and with the supervisor's closing-report semantics (w722, room d117)", async () => {
+test("hub-review: the Hub Supervisor closes a finished team with a normal team stop, committed STOPPED without emergency and with the supervisor's closing-report semantics (w722, room d117)", async () => {
   await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, true);
+    const started = await startTeam(fixture);
     const { data, fake, room } = started;
     await finishLeadWork(fixture, started);
     expect((await runCliAt(fixture, room, ["work", "accept", data.work.id], fake.env)).exitCode).toBe(0);
@@ -398,8 +280,7 @@ test("lead-only: the Hub Supervisor closes a finished lead-only team with a norm
     expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("STOPPED");
 
     // The committed STOP row is the normal one: the Hub Supervisor as actor,
-    // emergency 0, the closing report as its reason - what a Team Supervisor's
-    // normal stop records in a supervised team, less the seat that is absent.
+    // emergency 0, the closing report as its reason.
     const hub = openReadonly(join(room, ".maestro", "maestro.db"));
     try {
       expect(
@@ -443,9 +324,9 @@ test("lead-only: the Hub Supervisor closes a finished lead-only team with a norm
   });
 });
 
-test("lead-only: the Hub's normal stop is refused while the team holds unfinished work, exactly as the supervised normal stop is, and --emergency keeps its meaning (w722)", async () => {
+test("hub-review: the Hub's normal stop is refused while the team holds unfinished work, and --emergency keeps its meaning (w722)", async () => {
   await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, true);
+    const started = await startTeam(fixture);
     const { data, fake, room } = started;
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
@@ -510,48 +391,17 @@ test("lead-only: the Hub's normal stop is refused while the team holds unfinishe
   });
 });
 
-test("lead-only: a supervised team's Hub stop stays --emergency only, even once its work is DONE (d72 survives w722)", async () => {
-  await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, false);
-    const { data, fake, room } = started;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    await finishLeadWork(fixture, started);
-    expect(
-      (await runCliAt(fixture, fixture.repo, ["work", "accept", data.work.id], {
-        ...fake.env,
-        HERDR_PANE_ID: supervisor.paneId,
-      })).exitCode,
-    ).toBe(0);
-
-    const refused = await runCliAt(fixture, room, ["team", "stop", data.team.teamId, "--json"], fake.env);
-    expect(refused.exitCode).toBe(1);
-    expect(refused.stderr).toContain("ROLE_FORBIDDEN");
-    expect(refused.stderr).toContain("Team Supervisor");
-    expect(localTeamState(fixture, data.team.teamId, data.team.generation)).toBe("RUNNING");
-
-    // --reason without --emergency is still not the Hub's option in this shape.
-    const reasoned = await runCliAt(
-      fixture,
-      room,
-      ["team", "stop", data.team.teamId, "--reason", "not the Hub's call", "--json"],
-      fake.env,
-    );
-    expect(reasoned.exitCode).toBe(1);
-    expect(reasoned.stderr).toContain("INVALID_OPTION");
-  });
-});
-
-// w722 DEFECT 2: in a lead-only team no Team Supervisor pane keeps the
-// workspace alive, so Herdr auto-closes it when the last seat tab closes
+// w722 DEFECT 2: no pane outlives the seats to keep the workspace alive, so
+// Herdr auto-closes it when the last seat tab closes
 // (herdr-server.log 2026-09-15T17:24:23: three tab.close, then
 // workspace.close), and the remaining-pane check that follows saw
 // workspace_not_found before the store commit. The panes were dead, the store
 // still said RUNNING, and status recommended the very command that had just
 // failed. A workspace that disappears during teardown is a workspace that is
 // torn down: the stop proceeds to its commit on the first call.
-test("lead-only: a workspace that auto-closes with its last tab lets team stop commit STOPPED on the first call, transcript cleaned (w722)", async () => {
+test("hub-review: a workspace that auto-closes with its last tab lets team stop commit STOPPED on the first call, transcript cleaned (w722)", async () => {
   await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, true);
+    const started = await startTeam(fixture);
     const { data, fake, room } = started;
     await finishLeadWork(fixture, started);
     expect((await runCliAt(fixture, room, ["work", "accept", data.work.id], fake.env)).exitCode).toBe(0);
@@ -593,11 +443,10 @@ test("lead-only: a workspace that auto-closes with its last tab lets team stop c
 // `work add` and no --to. The row is the same one team start writes for Lead
 // work - the Lead is its own assignee, no Peer pane is opened, nothing is
 // pushed because there is no counterpart to wake - so its reviewer falls out
-// of the existing boundary: the Hub in this shape, the Team Supervisor in the
-// supervised one (asserted in tests/slp-v2.test.ts).
-test("lead-only: a Lead opens its own item with work add and no --to, takes it, and the Hub reviews it; a Peer still cannot add work (room d118, w725)", async () => {
+// of the existing boundary: the Hub.
+test("hub-review: a Lead opens its own item with work add and no --to, takes it, and the Hub reviews it; a Peer still cannot add work (room d118, w725)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const promptsBefore = (await fakeHerdrCommands(fake))
@@ -665,7 +514,7 @@ test("lead-only: a Lead opens its own item with work add and no --to, takes it, 
 // return must state the lesson it filed or why none applies.
 test("665 a rework grant marks its item as carrying a lesson candidate, and status reminds the holder and the reviewer (room d129 point 4)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -713,7 +562,7 @@ test("665 a rework grant marks its item as carrying a lesson candidate, and stat
 
 test("666 a team decision with --replaces and --work marks that item, and one without --work marks nothing (room d129 point 4)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake } = await startTeam(fixture, true);
+    const { data, fake } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -769,9 +618,9 @@ test("666 a team decision with --replaces and --work marks that item, and one wi
 // room d129 point 4, the Hub half: a Hub ruling is recorded in the Hub store,
 // but the item it corrects lives in the project store, so the mark is written
 // there or it reaches nobody.
-test("667 a Hub decision with --replaces on a lead-only team's work marks that item in the project store (room d129 point 4)", async () => {
+test("667 a Hub decision with --replaces on a team's work marks that item in the project store (room d129 point 4)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, room } = await startTeam(fixture, true);
+    const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const workId = data.work.id;
@@ -825,7 +674,7 @@ test("667 a Hub decision with --replaces on a lead-only team's work marks that i
 // not exist.
 test("w736 a stopped generation's work is still readable from the Hub, while every write verb refuses it by naming the team's state", async () => {
   await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, true);
+    const started = await startTeam(fixture);
     const { data, fake, room } = started;
     const workId = data.work.id;
     await finishLeadWork(fixture, started);
@@ -900,15 +749,15 @@ test("w736 a stopped generation's work is still readable from the Hub, while eve
   });
 });
 
-// w736 F1: the Hub is the reviewer of a lead-only team's Lead item, and a
+// w736 F1: the Hub is the reviewer of a team's Lead item, and a
 // reviewer answer is not always a ruling. A fact, a commit hash, a pointer to
 // a decision has no `maestro decide` shape, and the Hub holds no other channel
 // down into the team. `maestro work note <id> "<text>"` from the room answered
 // NOT_FOUND from the non-SLP table, which sent the reader to `maestro work
 // list` and the wrong store entirely.
-test("w736 the Hub records a plain note on a lead-only team's Lead item, wakes the Lead with it, and is still refused --blocked and --owner", async () => {
+test("w736 the Hub records a plain note on a team's Lead item, wakes the Lead with it, and is still refused --blocked and --owner", async () => {
   await withFixture(async (fixture) => {
-    const started = await startTeam(fixture, true);
+    const started = await startTeam(fixture);
     const { data, fake, room } = started;
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
@@ -1000,37 +849,27 @@ test("w736 the Hub records a plain note on a lead-only team's Lead item, wakes t
   });
 });
 
-test("hub-escalation: the Hub's status lists every blocked note that climbed to the Hub until a Hub ruling answers it, in both shapes", async () => {
-  for (const leadOnly of [false, true]) {
-    await withFixture(async (fixture) => {
-      const { data, fake, room } = await startTeam(fixture, leadOnly);
-      const lead = data.team.roles.find((role) => role.role === "lead")!;
-      const supervisor = data.team.roles.find((role) => role.role === "team-supervisor");
-      const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-      const workId = data.work.id;
-      const qualified = `${data.team.teamId}:${workId}`;
-      expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode).toBe(0);
-      expect(
-        (await runCliAt(fixture, fixture.repo, ["work", "note", workId, "the owner goal contradicts the tests", "--blocked"], leadEnvironment)).exitCode,
-      ).toBe(0);
-      if (supervisor) {
-        const beforeClimb = await runCliAt(fixture, room, ["status"], fake.env);
-        expect(beforeClimb.stdout).not.toContain("blocked for the Hub");
-        expect(
-          (await runCliAt(fixture, fixture.repo, ["work", "note", workId, "owner question: which constraint relaxes?", "--blocked"], { ...fake.env, HERDR_PANE_ID: supervisor.paneId })).exitCode,
-        ).toBe(0);
-      }
-      const waiting = await runCliAt(fixture, room, ["status"], fake.env);
-      expect(waiting.exitCode).toBe(0);
-      expect(waiting.stdout).toContain(`blocked for the Hub: ${qualified}`);
-      expect(waiting.stdout).toContain(supervisor ? "owner question: which constraint relaxes?" : "the owner goal contradicts the tests");
-      expect(waiting.stdout).toContain(`--work ${qualified}`);
+test("hub-escalation: the Hub's status lists every blocked note that climbed to the Hub until a Hub ruling answers it", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, room } = await startTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const workId = data.work.id;
+    const qualified = `${data.team.teamId}:${workId}`;
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", workId], leadEnvironment)).exitCode).toBe(0);
+    expect(
+      (await runCliAt(fixture, fixture.repo, ["work", "note", workId, "the owner goal contradicts the tests", "--blocked"], leadEnvironment)).exitCode,
+    ).toBe(0);
+    const waiting = await runCliAt(fixture, room, ["status"], fake.env);
+    expect(waiting.exitCode).toBe(0);
+    expect(waiting.stdout).toContain(`blocked for the Hub: ${qualified}`);
+    expect(waiting.stdout).toContain("the owner goal contradicts the tests");
+    expect(waiting.stdout).toContain(`--work ${qualified}`);
 
-      expect(
-        (await runCliAt(fixture, room, ["decide", "relax the test constraint", "--why", "fixture", "--work", qualified], fake.env)).exitCode,
-      ).toBe(0);
-      const answered = await runCliAt(fixture, room, ["status"], fake.env);
-      expect(answered.stdout).not.toContain("blocked for the Hub");
-    });
-  }
+    expect(
+      (await runCliAt(fixture, room, ["decide", "relax the test constraint", "--why", "fixture", "--work", qualified], fake.env)).exitCode,
+    ).toBe(0);
+    const answered = await runCliAt(fixture, room, ["status"], fake.env);
+    expect(answered.stdout).not.toContain("blocked for the Hub");
+  });
 }, 60_000);

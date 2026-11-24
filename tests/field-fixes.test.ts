@@ -217,9 +217,10 @@ test("289 [lint] recipe and installed Hub expose the same simplified SLP roles",
     const { path } = await prepareInstallFixture(fixture);
     const recipe = await runCli(fixture, ["recipe", "show", "slp"]);
     expect(recipe.exitCode).toBe(0);
-    for (const heading of ["### Hub Supervisor", "### Team Supervisor", "### Lead", "### Peer"]) {
+    for (const heading of ["### Hub Supervisor", "### Lead", "### Peer"]) {
       expect(recipe.stdout).toContain(heading);
     }
+    expect(recipe.stdout).not.toContain("### Team Supervisor");
     expect(recipe.stdout).toContain("OPEN -> ACTIVE -> RETURNED -> DONE");
     expect(recipe.stdout).toContain("~/maestro/SLP.md");
     expect(recipe.stdout).not.toContain("advisor-<team>");
@@ -234,10 +235,11 @@ test("289 [lint] recipe and installed Hub expose the same simplified SLP roles",
     // Hub d91/d98: pack version 3 names profiles; the seat mandate lives in
     // the rendered profile, not in the pack.
     expect(pack).toContain("<!-- slp:version=3 -->");
-    expect(pack).toContain("<!-- slp:profile:team-supervisor=team-supervisor -->");
+    expect(pack).toContain("<!-- slp:profile:lead=lead -->");
+    expect(pack).not.toContain("slp:profile:team-supervisor");
     expect(pack).not.toContain("## Team Supervisor");
     expect(
-      await readFile(renderedProfilePath(fixture.home, "claude", "team-supervisor"), "utf8"),
-    ).toContain("Role: Team Supervisor.");
+      await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8"),
+    ).toContain("Role: Lead.");
   });
 });

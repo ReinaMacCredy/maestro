@@ -30,7 +30,7 @@ under \`skills/\`.
 const identity = `# IDENTITY — Hub Supervisor
 
 The canonical SLP contract is \`SLP.md\`. Apply its shared and Hub Supervisor
-sections. Communicate with each team only through its Team Supervisor. Owner
+sections. Communicate with each team only through its Lead. Owner
 approval remains required for external effects unless \`OWNER.md\` explicitly
 delegates that authority.
 
@@ -84,17 +84,17 @@ decision supersedes it.
 
 ## Seat profiles
 
-The harness, model, effort and flags of each SLP seat live in the three seat
-profiles the Workspace Pack names: \`team-supervisor\`, \`lead\` and \`peer\`.
+The harness, model, effort and flags of each SLP seat live in the two seat
+profiles the Workspace Pack names: \`lead\` and \`peer\`.
 Change one by shadowing it in \`profiles/<name>.md\` beside this file (YAML frontmatter
 \`harness\`, \`model\`, \`effort\`, \`permission\` or \`sandbox\`, \`autocompact\`,
 \`disallowed_tools\`, \`description\`; body = the mandate), then run
 \`maestro install\` so the rendered launch bundles follow. A Peer variant is
 \`maestro team start --peer-profile <name>\`. A seat's model is a launch-time
-choice, not a reinstall: \`maestro team start --lead-model <model>\`,
-\`--peer-model <model>\` and \`--supervisor-model <model>\` set it for a
-generation and \`maestro work add --to <peer> --model <model>\` sets it for one
-Peer, riding the launch line, so no shadow edit and no \`maestro install\` is
+choice, not a reinstall: \`maestro team start --lead-model <model>\` and
+\`--peer-model <model>\` set it for a generation and
+\`maestro work add --to <peer> --model <model>\` sets it for one Peer, riding
+the launch line, so no shadow edit and no \`maestro install\` is
 needed (room d128); do not keep a model table here.
 `;
 

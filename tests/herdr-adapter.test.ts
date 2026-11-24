@@ -256,10 +256,9 @@ test("team-start-socket: team start issues tab.create, agent.start, agent.prompt
     expect(kinds).toContain("agent prompt");
     const opened = commands.filter((command) => command[0] === "plugin" && command[1] === "pane" && command[2] === "open");
     expect(opened).toHaveLength(1);
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     expect(opened[0]).toEqual([
-      "plugin", "pane", "open", "--plugin", "maestro", "--entrypoint", "runtime", "--placement", "split",
-      "--target-pane", supervisor.paneId, "--cwd", realpathSync.native(fixture.repo),
+      "plugin", "pane", "open", "--plugin", "maestro", "--entrypoint", "runtime", "--placement", "tab",
+      "--workspace", data.team.workspaceId, "--cwd", realpathSync.native(fixture.repo),
       "--env", `MAESTRO_SLP_GENERATION=${data.team.generation}`, "--env", `MAESTRO_SLP_TEAM=${data.team.teamId}`,
       "--no-focus",
     ]);
@@ -375,12 +374,26 @@ async function attentionPrompts(fake: Awaited<ReturnType<typeof installFakeHerdr
   return (await prompts(fake)).filter((command) => /^\[(attention|from runtime)\]/.test(command[3] ?? ""));
 }
 
+const hubPane = "hub:p1";
+
+function seedHubPane(fixture: { home: string }) {
+  return async (fake: Awaited<ReturnType<typeof installFakeHerdr>>): Promise<Record<string, string>> => {
+    await editFakeHerdrState(fake, (state) => {
+      state.workspaces.push({ workspace_id: "hub", cwd: fixture.home, label: "maestro" });
+      state.tabs.push({ tab_id: "hub:t1", workspace_id: "hub", root_pane_id: hubPane, label: "1" });
+      state.panes.push({ pane_id: hubPane, workspace_id: "hub", tab_id: "hub:t1", cwd: fixture.home, label: "maestro" });
+      state.agents.push({ name: "hub-claude", pane_id: hubPane, workspace_id: "hub", agent_status: "idle", kind: "claude" });
+    });
+    return { HERDR_PANE_ID: hubPane };
+  };
+}
+
 // A team whose runtime pane is a real `maestro slp runtime` child subscribed
 // to the fake; resolves once the subscription covers every role pane.
 async function startLiveTeam(
   fixture: { home: string; repo: string; root: string },
   behavior: Parameters<typeof installFakeHerdr>[1] = {},
-  prepare: (fake: Awaited<ReturnType<typeof installFakeHerdr>>) => Promise<Record<string, string>> = async () => ({}),
+  prepare: (fake: Awaited<ReturnType<typeof installFakeHerdr>>) => Promise<Record<string, string>> = seedHubPane(fixture),
 ): Promise<{ data: StartedTeam; fake: Awaited<ReturnType<typeof installFakeHerdr>>; room: string; subscribed(): Promise<void> }> {
   const room = await markedRoom(fixture);
   const fake = await installFakeHerdr(fixture, { runtimePane: "spawn", ...behavior });
@@ -411,11 +424,10 @@ async function startLiveTeam(
   return { data, fake, room, subscribed };
 }
 
-test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by actor runtime and nudges the Lead and the Team Supervisor with the d763 line (red 4)", async () => {
+test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by actor runtime and nudges the Lead and the Hub with the d763 line (red 4)", async () => {
   await withFixture(async (fixture) => {
     const { data, fake } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     // room d137: the runtime may name the compact count in the evidence of a
     // nudge it already sends. It is not a nudge kind and fires nothing by
     // itself: the entry below exists because the pane went blocked.
@@ -442,12 +454,12 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
     const evidence = entry?.body.replace(/^dialog: /, "");
     const line = `[from runtime][${data.work.id}] dialog ${evidence}; stop and run: maestro work note ${data.work.id} "<what you need>" --blocked`;
     // w708: the copy is about someone else's item, so it ends at a read and never
-    // tells the Team Supervisor to record a blocker on an item it does not hold.
+    // tells the Hub to record a blocker on an item it does not hold.
     const copy = `[from runtime][${data.work.id} copy] dialog ${evidence}; ${lead.name} holds ${data.work.id} and has been nudged; read: maestro status ${data.work.id}`;
     await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === 2, 5_000, "two nudges");
     expect(await attentionPrompts(fake)).toEqual([
       ["agent", "prompt", lead.name, line],
-      ["agent", "prompt", supervisor.name, copy],
+      ["agent", "prompt", hubPane, copy],
     ]);
     expect(copy).not.toContain("--blocked");
     // The same event again changes nothing until the store moves (d763).
@@ -456,7 +468,7 @@ test("runtime-blocked: a blocked Lead pane records one stall:dialog entry by act
     await Bun.sleep(300);
     expect(runtimeEntries(fixture)).toHaveLength(1);
     expect(await attentionPrompts(fake)).toHaveLength(2);
-    const shown = await runCliAt(fixture, fixture.repo, ["status", data.work.id], { ...fake.env, HERDR_PANE_ID: supervisor.paneId });
+    const shown = await runCliAt(fixture, fixture.repo, ["status", data.work.id], { ...fake.env, HERDR_PANE_ID: lead.paneId });
     expect(shown.stdout).toContain(`note [stall:dialog] by runtime: dialog: ${lead.name} pane ${lead.paneId}`);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
@@ -487,7 +499,6 @@ test("runtime-silence: idle while holding ACTIVE work stalls once until the stor
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture, { promptEvents: true });
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer item", "--to", "peer-quiet", "--json"], leadEnvironment);
     expect(added.exitCode).toBe(0);
@@ -501,7 +512,7 @@ test("runtime-silence: idle while holding ACTIVE work stalls once until the stor
     await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:silence"), 5_000, "the silence entry");
     await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === before + 2, 5_000, "the silence nudge and its copy");
     const nudges = (await attentionPrompts(fake)).slice(before);
-    expect(nudges.map((command) => command[2])).toEqual([peer.role.name, supervisor.name]);
+    expect(nudges.map((command) => command[2])).toEqual([peer.role.name, hubPane]);
     expect(nudges[0]?.[3]).toMatch(new RegExp(`^\\[from runtime\\]\\[${peer.work.id}\\] silence ${peer.role.name} pane \\S+ agent_status idle while ${peer.work.id} ACTIVE owned by ${peer.role.name}`));
     // A6: the nudge itself turned the Peer working then idle (promptEvents);
     // that second idle is not a second stall.
@@ -593,20 +604,18 @@ function ownEntries(fixture: { repo: string }, workId: string, actor: string): A
   }
 }
 
-test("runtime-records-are-life: a decision against the held item is evidence of life - it suppresses the silence stall while fresh and is named in the evidence instead of 'no entries' - and only the holder's own records re-arm the once-rule, never a supervisor writing on the item (w708, d867)", async () => {
+test("runtime-records-are-life: a decision against the held item is evidence of life - it suppresses the silence stall while fresh and is named in the evidence instead of 'no entries' - and only the holder's own records re-arm the once-rule, never the Hub writing on the item (w708, d867)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake } = await startLiveTeam(fixture, { promptEvents: true });
+    const { data, fake, room } = await startLiveTeam(fixture, { promptEvents: true });
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
-    const run = async (args: string[], environment: Record<string, string>) => {
-      const result = await runCliAt(fixture, fixture.repo, args, environment);
+    const run = async (args: string[], environment: Record<string, string>, cwd = fixture.repo) => {
+      const result = await runCliAt(fixture, cwd, args, environment);
       expect({ code: result.exitCode, stderr: result.stderr }).toMatchObject({ code: 0 });
       return result;
     };
     // A delivery item the Lead holds: d834 leaves the team card out of this stall.
-    const added = await run(["work", "add", "Lead delivery item", "--json"], supervisorEnvironment);
+    const added = await run(["work", "add", "Lead delivery item", "--json"], leadEnvironment);
     const item = envelope<{ work: { id: string } }>(added.stdout).work.id;
     await run(["work", "take", item, "--json"], leadEnvironment);
     const silence = () => runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence" && entry.work_id === item);
@@ -628,7 +637,7 @@ test("runtime-records-are-life: a decision against the held item is evidence of 
     expect(silence()[0]?.body).not.toContain("no entries");
 
     // Supervision does not re-arm the alarm against the seat being supervised.
-    await run(["work", "note", item, "carry on, this is a correction not a gap", "--json"], supervisorEnvironment);
+    await run(["work", "note", item, "carry on, this is a correction not a gap", "--json"], fake.env, room);
     await Bun.sleep(5_100);
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
     await Bun.sleep(400);
@@ -674,17 +683,15 @@ test("runtime-records-are-life: a decision against the held item is evidence of 
 
 test("runtime-blocked-holder: the d761 exemption is the holder's own declaration, so neither a decision on the item nor another seat's note masks a standing --blocked, and the holder's own later record still releases it (w708 rework, d761)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake } = await startLiveTeam(fixture, { promptEvents: true });
+    const { data, fake, room } = await startLiveTeam(fixture, { promptEvents: true });
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
-    const run = async (args: string[], environment: Record<string, string>) => {
-      const result = await runCliAt(fixture, fixture.repo, args, environment);
+    const run = async (args: string[], environment: Record<string, string>, cwd = fixture.repo) => {
+      const result = await runCliAt(fixture, cwd, args, environment);
       expect({ code: result.exitCode, stderr: result.stderr }).toMatchObject({ code: 0 });
       return result;
     };
-    const added = await run(["work", "add", "Lead delivery item", "--json"], supervisorEnvironment);
+    const added = await run(["work", "add", "Lead delivery item", "--json"], leadEnvironment);
     const item = envelope<{ work: { id: string } }>(added.stdout).work.id;
     await run(["work", "take", item, "--json"], leadEnvironment);
     const silence = () => runtimeEntries(fixture).filter((entry) => entry.flag === "stall:silence" && entry.work_id === item);
@@ -710,7 +717,7 @@ test("runtime-blocked-holder: the d761 exemption is the holder's own declaration
 
     // Nor is another seat's note this seat's declaration: being written about
     // does not unblock a seat that is still waiting.
-    await run(["work", "note", item, "acknowledged, the owner has it", "--json"], supervisorEnvironment);
+    await run(["work", "note", item, "acknowledged, the owner has it", "--json"], fake.env, room);
     await Bun.sleep(5_100);
     await idle();
     expect(silence()).toEqual([]);
@@ -726,11 +733,10 @@ test("runtime-blocked-holder: the d761 exemption is the holder's own declaration
   });
 }, 60_000);
 
-test("runtime-stale-wake: a stall queued for a busy target is checked against the store when it finally flushes, and a nudge about an item that has since moved on is dropped rather than delivered (w708, d867)", async () => {
+test("runtime-stale-wake: a stall nudge left queued is checked against the store when it finally flushes, and a nudge about an item that has since moved on is dropped rather than delivered (w708, d867)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, subscribed } = await startLiveTeam(fixture, { promptEvents: true });
+    const { data, fake, subscribed } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer item", "--to", "peer-busy", "--json"], leadEnvironment);
     expect(added.exitCode).toBe(0);
@@ -739,41 +745,43 @@ test("runtime-stale-wake: a stall queued for a busy target is checked against th
     await subscribed();
     expect((await runCliAt(fixture, fixture.repo, ["work", "take", peer.work.id, "--json"], peerEnvironment)).exitCode).toBe(0);
 
-    // The seat above is mid-turn, so its copy queues instead of being delivered.
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "working" } });
-    await Bun.sleep(200);
-    const before = await attentionPrompts(fake);
+    await setFakeHerdrBehavior(fake, { prompts: false });
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "idle" } });
     await waitForFakeHerdr(
       () => runtimeEntries(fixture).some((entry) => entry.flag === "stall:silence" && entry.work_id === peer.work.id),
       5_000,
       "the silence entry",
     );
-    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === before.length + 1, 5_000, "the holder's nudge");
-    const queued = await attentionPrompts(fake);
-    expect(queued.map((command) => command[2])).not.toContain(supervisor.name);
+    const pendingFor = async (target: string) =>
+      envelope<{ pending: Array<{ line: string; target: string }> }>(
+        (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
+      ).pending.filter((line) => line.target === target && line.line.includes(`[${peer.work.id}] silence`));
+    await waitForFakeHerdr(async () => (await pendingFor(peer.role.name)).length === 1, 5_000, "the queued nudge");
+    const nudgesToHolder = async () =>
+      (await attentionPrompts(fake)).filter((command) => command[2] === peer.role.name && (command[3] ?? "").includes(`[${peer.work.id}] silence`));
+    const attempted = (await nudgesToHolder()).length;
 
-    // The item moves on while the copy sits in the queue.
     expect((await runCliAt(fixture, fixture.repo, ["work", "return", peer.work.id, "result: done", "--json"], peerEnvironment)).exitCode).toBe(0);
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "idle" } });
-    await Bun.sleep(600);
-    const delivered = await attentionPrompts(fake);
-    expect(delivered.filter((command) => (command[3] ?? "").includes(`${peer.work.id} copy`))).toEqual([]);
-    expect(delivered.filter((command) => command[2] === supervisor.name && (command[3] ?? "").includes(peer.work.id))).toEqual([]);
+    await setFakeHerdrBehavior(fake, { prompts: true });
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(async () => (await pendingFor(peer.role.name)).length === 0, 5_000, "the stale nudge leaving the queue");
+    expect((await nudgesToHolder()).length).toBe(attempted);
+    const log = await readFile(join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log"), "utf8");
+    expect(log).toContain(`stale wake about ${peer.work.id} silence dropped: ${peer.work.id} is RETURNED`);
   });
 }, 60_000);
 
 test("runtime-queue: a wake for a working target waits for its idle, a failed prompt stays queued and slp status lists it, identical events within 5 s deliver once (red 6)", async () => {
   await withFixture(async (fixture) => {
-    const { data, fake, subscribed } = await startLiveTeam(fixture);
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const { fake, subscribed } = await startLiveTeam(fixture);
+    const lead = (await readFakeHerdrState(fake)).agents.find((agent: { name: string }) => agent.name.startsWith("lead-")) as { name: string; pane_id: string };
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.pane_id };
     const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Cancelled item", "--to", "peer-wait", "--json"], leadEnvironment);
     const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
     await subscribed();
     expect((await runCliAt(fixture, fixture.repo, ["work", "accept", peer.work.id, "--outcome", "cancelled", "--json"], leadEnvironment)).exitCode).toBe(0);
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "working" } });
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.pane_id, agent_status: "working" } });
     await Bun.sleep(200);
     const before = (await attentionPrompts(fake)).length;
     await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: peer.role.paneId, agent_status: "idle" } });
@@ -788,58 +796,44 @@ test("runtime-queue: a wake for a working target waits for its idle, a failed pr
     expect(queued.runtime.state).toBe("running");
     expect(queued.pending).toEqual([{ line: `[attention] ${peer.role.name} idle`, queuedAt: expect.any(String), subject: `${peer.role.name} idle`, target: lead.name }]);
     expect((await attentionPrompts(fake)).length).toBe(before);
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.pane_id, agent_status: "idle" } });
     await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === before + 1, 5_000, "the flushed wake");
     expect((await attentionPrompts(fake)).at(-1)).toEqual(["agent", "prompt", lead.name, `[attention] ${peer.role.name} idle`]);
     const text = (await runCliAt(fixture, fixture.repo, ["slp", "status"], leadEnvironment)).stdout;
     expect(text).toContain("pending: none");
 
     // A failed prompt stays queued until the target's next idle.
+    const second = await runCliAt(fixture, fixture.repo, ["work", "add", "Second cancelled item", "--to", "peer-wait-again", "--json"], leadEnvironment);
+    const again = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(second.stdout);
+    await subscribed();
+    expect((await runCliAt(fixture, fixture.repo, ["work", "accept", again.work.id, "--outcome", "cancelled", "--json"], leadEnvironment)).exitCode).toBe(0);
     await setFakeHerdrBehavior(fake, { prompts: false });
-    await emitFakeHerdrEvent(fake, { event: "pane_exited", data: { pane_id: peer.role.paneId, workspace_id: data.team.workspaceId } });
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: again.role.paneId, agent_status: "idle" } });
     await waitForFakeHerdr(async () => {
       const status = await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment);
-      return envelope<{ pending: Array<{ target: string }> }>(status.stdout).pending.some((line) => line.target === supervisor.name);
+      return envelope<{ pending: Array<{ line: string; target: string }> }>(status.stdout).pending
+        .some((line) => line.target === lead.name && line.line === `[attention] ${again.role.name} idle`);
     }, 5_000, "the queued failed wake");
     await setFakeHerdrBehavior(fake, { prompts: true });
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "idle" } });
-    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).some((command) => command[2] === supervisor.name && command[3] === `[attention] ${peer.role.name} pane exited`), 5_000, "the retried wake");
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.pane_id, agent_status: "idle" } });
+    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).some((command) => command[2] === lead.name && command[3] === `[attention] ${again.role.name} idle`), 5_000, "the retried wake");
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
 
-// Live row 17 (lab g18): the Team Supervisor's idle wake targeted the literal
-// Herdr agent `supervisor`, which nothing had recorded, and stayed pending
-// forever with agent_not_found. team start records the Hub pane that ran it.
-test("runtime-hub: a Team Supervisor idle wakes the Hub pane recorded at team start; with no recorded pane and no supervisor agent the wake is dropped with a logged reason and slp status lists it as unreachable, not pending", async () => {
-  await withFixture(async (fixture) => {
-    const hubPane = "hub:p1";
-    const { data, fake } = await startLiveTeam(fixture, {}, async (seeded) => {
-      await editFakeHerdrState(seeded, (state) => {
-        state.workspaces.push({ workspace_id: "hub", cwd: fixture.home, label: "maestro" });
-        state.tabs.push({ tab_id: "hub:t1", workspace_id: "hub", root_pane_id: hubPane, label: "1" });
-        state.panes.push({ pane_id: hubPane, workspace_id: "hub", tab_id: "hub:t1", cwd: fixture.home, label: "maestro" });
-        state.agents.push({ name: "hub-claude", pane_id: hubPane, workspace_id: "hub", agent_status: "idle", kind: "claude" });
-      });
-      return { HERDR_PANE_ID: hubPane };
-    });
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: data.team.roles.find((role) => role.role === "lead")!.paneId };
-    const status = envelope<{ supervisorPaneId: string | null }>(
-      (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
-    );
-    expect(status.supervisorPaneId).toBe(hubPane);
-    const before = (await attentionPrompts(fake)).length;
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "idle" } });
-    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === before + 1, 5_000, "the hub wake");
-    expect((await attentionPrompts(fake)).at(-1)).toEqual(["agent", "prompt", hubPane, `[attention] ${supervisor.name} idle`]);
-    expect(await tripwireInvocations(fake)).toEqual([]);
-  });
-
+// Live row 17 (lab g18): a wake for the Hub targeted the literal Herdr agent
+// `supervisor`, which nothing had recorded, and stayed pending forever with
+// agent_not_found. team start records the Hub pane that ran it.
+test("runtime-hub: team start records the Hub pane that ran it; with no recorded pane and no supervisor agent a wake for the Hub is dropped with a logged reason and slp status lists it as unreachable, not pending", async () => {
   await withFixture(async (fixture) => {
     const { data, fake } = await startLiveTeam(fixture);
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: data.team.roles.find((role) => role.role === "lead")!.paneId };
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const recorded = envelope<{ supervisorPaneId: string | null }>(
+      (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
+    );
+    expect(recorded.supervisorPaneId).toBe(hubPane);
     // The suite may itself run inside a Herdr pane (d770 ancestor walk): the
     // recorded fact is cleared so this half tests the no-pane case.
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
@@ -849,31 +843,86 @@ test("runtime-hub: a Team Supervisor idle wakes the Hub pane recorded at team st
       database.close();
     }
     const before = (await attentionPrompts(fake)).length;
-    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: supervisor.paneId, agent_status: "idle" } });
+    await emitFakeHerdrEvent(fake, { event: "pane_exited", data: { pane_id: lead.paneId, workspace_id: data.team.workspaceId } });
     const logPath = join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log");
     await waitForFakeHerdr(async () => (await readFile(logPath, "utf8")).includes("unreachable"), 5_000, "the dropped wake");
     const dropped = (await readFile(logPath, "utf8")).split("\n").find((line) => line.includes("unreachable"))!;
-    expect(dropped).toContain(`${supervisor.name} idle`);
+    expect(dropped).toContain(`${lead.name} pane exited`);
     expect(dropped).toContain("no Hub Supervisor pane recorded");
     expect(dropped).toContain("supervisor");
     const status = envelope<{ pending: unknown[]; unreachable: Array<{ droppedAt: string; line: string; reason: string; subject: string }> }>(
       (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
     );
     expect(status.pending).toEqual([]);
-    expect(status.unreachable).toEqual([{ line: `[attention] ${supervisor.name} idle`, droppedAt: expect.any(String), reason: expect.stringContaining("no Hub Supervisor pane recorded"), subject: `${supervisor.name} idle` }]);
+    expect(status.unreachable).toEqual([{ line: `[attention] ${lead.name} pane exited`, droppedAt: expect.any(String), reason: expect.stringContaining("no Hub Supervisor pane recorded"), subject: `${lead.name} pane exited` }]);
     const text = (await runCliAt(fixture, fixture.repo, ["slp", "status"], leadEnvironment)).stdout;
-    expect(text).toContain(`unreachable ${supervisor.name} idle:`);
+    expect(text).toContain(`unreachable ${lead.name} pane exited:`);
     expect(text).not.toContain("pending supervisor");
     expect((await attentionPrompts(fake)).length).toBe(before);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
 
-test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the Team Supervisor (red 7)", async () => {
+// d898: the Hub reviews the Lead, so every wake about the Lead - the copy of
+// its stall nudge, its pane loss and its idle with nothing to do - reaches the
+// Hub pane recorded at team start instead of being dropped as unreachable.
+test("runtime-lead-wakes-hub: a Lead's stall copy, pane loss and idle wake each reach the Hub pane (d898)", async () => {
+  await withFixture(async (fixture) => {
+    const hubPane = "hub:p1";
+    const { data, fake, subscribed } = await startLiveTeam(fixture, {}, async (seeded) => {
+      await editFakeHerdrState(seeded, (state) => {
+        state.workspaces.push({ workspace_id: "hub", cwd: fixture.home, label: "maestro" });
+        state.tabs.push({ tab_id: "hub:t1", workspace_id: "hub", root_pane_id: hubPane, label: "1" });
+        state.panes.push({ pane_id: hubPane, workspace_id: "hub", tab_id: "hub:t1", cwd: fixture.home, label: "maestro" });
+        state.agents.push({ name: "hub-claude", pane_id: hubPane, workspace_id: "hub", agent_status: "idle", kind: "claude" });
+      });
+      return { HERDR_PANE_ID: hubPane };
+    });
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const hubPrompts = async () => (await attentionPrompts(fake)).filter((command) => command[2] === hubPane);
+
+    // Idle with nothing to do: the Lead's item waits on the Hub's review, and its
+    // own return is old enough not to count as the push that just woke someone.
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", data.work.id], leadEnvironment)).exitCode).toBe(0);
+    expect((await runCliAt(fixture, fixture.repo, ["work", "return", data.work.id, "done"], leadEnvironment)).exitCode).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      database.query("UPDATE slp_activity SET created_at = ? WHERE actor = ?").run(new Date(Date.now() - 300_000).toISOString(), lead.name);
+    } finally {
+      database.close();
+    }
+    await subscribed();
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(async () => (await hubPrompts()).length === 1, 5_000, "the Lead idle wake at the Hub");
+    expect((await hubPrompts())[0]).toEqual(["agent", "prompt", hubPane, `[attention] ${lead.name} idle`]);
+
+    // Silence: the Lead holds an item of its own ACTIVE and goes idle; it is
+    // nudged and the Hub gets the copy.
+    const own = await runCliAt(fixture, fixture.repo, ["work", "add", "Own item", "--json"], leadEnvironment);
+    expect(own.exitCode).toBe(0);
+    const ownId = envelope<{ work: { id: string } }>(own.stdout).work.id;
+    expect((await runCliAt(fixture, fixture.repo, ["work", "take", ownId], leadEnvironment)).exitCode).toBe(0);
+    await Bun.sleep(5_100);
+    await emitFakeHerdrEvent(fake, { event: "pane_agent_status_changed", data: { pane_id: lead.paneId, agent_status: "idle" } });
+    await waitForFakeHerdr(async () => (await hubPrompts()).length === 2, 5_000, "the Lead stall copy at the Hub");
+    expect((await hubPrompts())[1]?.[3]).toStartWith(`[from runtime][${ownId} copy] silence ${lead.name} pane`);
+    expect((await attentionPrompts(fake)).some((command) =>
+      command[2] === lead.name && (command[3] ?? "").startsWith(`[from runtime][${ownId}] silence`)
+    )).toBe(true);
+
+    // Pane loss.
+    await emitFakeHerdrEvent(fake, { event: "pane_exited", data: { pane_id: lead.paneId, workspace_id: data.team.workspaceId } });
+    await waitForFakeHerdr(async () => (await hubPrompts()).length === 3, 5_000, "the Lead pane loss at the Hub");
+    expect((await hubPrompts())[2]).toEqual(["agent", "prompt", hubPane, `[attention] ${lead.name} pane exited`]);
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);
+
+test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the Hub (red 7)", async () => {
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Peer item", "--to", "peer-gone", "--json"], leadEnvironment);
     const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
@@ -882,8 +931,8 @@ test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the 
     await waitForFakeHerdr(() => runtimeEntries(fixture).length === 1, 5_000, "the loss entry");
     expect(runtimeEntries(fixture)[0]).toMatchObject({ flag: "pane:exited", work_id: data.work.id });
     expect(runtimeEntries(fixture)[0]?.body).toContain(`exited: ${peer.role.name} pane ${peer.role.paneId}`);
-    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === 1, 5_000, "the supervisor wake");
-    expect((await attentionPrompts(fake))[0]).toEqual(["agent", "prompt", supervisor.name, `[attention] ${peer.role.name} pane exited`]);
+    await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === 1, 5_000, "the Hub wake");
+    expect((await attentionPrompts(fake))[0]).toEqual(["agent", "prompt", hubPane, `[attention] ${peer.role.name} pane exited`]);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
@@ -980,13 +1029,12 @@ test("start-before-active: a start whose agent is not yet listed as active waits
     const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Prompt before active", "--json"], fake.env);
     expect(started.exitCode).toBe(0);
     const data = envelope<StartedTeam>(started.stdout);
-    expect(data.team.roles.map((role) => role.role)).toEqual(["team-supervisor", "lead"]);
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
+    expect(data.team.roles.map((role) => role.role)).toEqual(["lead"]);
     const contractPrompts = (await prompts(fake)).filter((command) => /^slp team /.test(command[3] ?? ""));
-    // The Supervisor's first prompt failed and was retried; the Lead's landed once.
-    expect(contractPrompts.map((command) => command[2])).toEqual([supervisor.name, supervisor.name, `lead-${data.team.teamId}`]);
+    // The Lead's first prompt failed and was retried.
+    expect(contractPrompts.map((command) => command[2])).toEqual([`lead-${data.team.teamId}`, `lead-${data.team.teamId}`]);
     const state = await readFakeHerdrState(fake);
-    expect(state.agents.map((agent: { agent_status: string }) => agent.agent_status)).toEqual(["idle", "idle"]);
+    expect(state.agents.map((agent: { agent_status: string }) => agent.agent_status)).toEqual(["idle"]);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 30_000);
@@ -995,7 +1043,6 @@ test("peer-after-subscribe: a Peer opened by work add --to after the runtime sub
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     const added = await runCliAt(fixture, fixture.repo, ["work", "add", "Late peer item", "--to", "peer-late", "--json"], leadEnvironment);
     expect(added.exitCode).toBe(0);
@@ -1015,7 +1062,7 @@ test("peer-after-subscribe: a Peer opened by work add --to after the runtime sub
     expect(entries[0]?.body).toContain(`${peer.role.name} pane ${peer.role.paneId} agent_status blocked; store: ${peer.work.id} ACTIVE owned by ${peer.role.name}`);
     await waitForFakeHerdr(async () => (await dialogPrompts()).length === 2, 8_000, "the nudge and its copy");
     const nudges = await dialogPrompts();
-    expect(nudges.map((command) => command[2])).toEqual([peer.role.name, supervisor.name]);
+    expect(nudges.map((command) => command[2])).toEqual([peer.role.name, hubPane]);
     expect(nudges[0]?.[3]).toMatch(new RegExp(`^\\[from runtime\\]\\[${peer.work.id}\\] dialog .*; stop and run: maestro work note ${peer.work.id} "<what you need>" --blocked$`));
     // The runtime resubscribed with the late Peer's pane after discarding the replay.
     const log = await readFile(join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log"), "utf8");
@@ -1030,7 +1077,6 @@ test("live-event-names: a live pane.agent_status_changed with the dotted wire na
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
     // The fake pushes every live event under its dotted name, as Herdr does.
     const client = new HerdrClient({ ...process.env, ...fake.env, HOME: fixture.home });
@@ -1055,7 +1101,7 @@ test("live-event-names: a live pane.agent_status_changed with the dotted wire na
     await waitForFakeHerdr(() => runtimeEntries(fixture).some((entry) => entry.flag === "stall:dialog" && entry.work_id === peer.work.id), 8_000, "the stall from the live-shaped event");
     const dialogPrompts = async () => (await attentionPrompts(fake)).filter((command) => (command[3] ?? "").includes("] dialog "));
     await waitForFakeHerdr(async () => (await dialogPrompts()).length === 2, 8_000, "the nudge and its copy");
-    expect((await dialogPrompts()).map((command) => command[2])).toEqual([peer.role.name, supervisor.name]);
+    expect((await dialogPrompts()).map((command) => command[2])).toEqual([peer.role.name, hubPane]);
 
     // The other four dotted kinds: exited and closed record the loss, created
     // and detected are watched.

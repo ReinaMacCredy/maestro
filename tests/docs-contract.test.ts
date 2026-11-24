@@ -348,11 +348,13 @@ test("651 [lint] maestro-council: a short Lead-only procedure with the d94 unani
   expect(work).toContain("COUNCIL_REQUEST");
 });
 
-test("docs-contract: pack v3 markers, no Observer, --peer-profile and the room d128 model flags named, no --lead-profile, OWNER.md template names the three seat profiles (red 11, item 9)", async () => {
+test("docs-contract: pack v3 markers, no Observer, --peer-profile and the room d128 model flags named, no --lead-profile, OWNER.md template names the two seat profiles (red 11, item 9)", async () => {
   const root = join(import.meta.dir, "..");
   const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
   expect(pack).toContain("<!-- slp:version=3 -->");
-  for (const seat of ["team-supervisor", "lead", "peer"]) {
+  expect(pack).not.toContain("slp:profile:team-supervisor");
+  expect(await Bun.file(join(root, "src", "plugins", "resources", "profiles", "team-supervisor.md")).exists()).toBe(false);
+  for (const seat of ["lead", "peer"]) {
     expect(pack).toContain(`<!-- slp:profile:${seat}=${seat} -->`);
     expect(await Bun.file(join(root, "src", "plugins", "resources", "profiles", `${seat}.md`)).exists()).toBe(true);
   }
@@ -380,20 +382,22 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile and the room d
   expect(cli).not.toContain("--stall repeat");
   // room d128 (w728): a seat's model is a launch-time choice. The Hub
   // Supervisor section of the pack, the README and the CLI reference name
-  // the three team start flags and say they change the model only, never
+  // the team start model flags and say they change the model only, never
   // the mandate or the pinned digest; the retired-flag refusal is gone.
   const hub = /<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "";
   for (const surface of [hub, readme, cli]) {
-    for (const flag of ["--lead-model", "--peer-model", "--supervisor-model"]) expect(surface).toContain(flag);
+    for (const flag of ["--lead-model", "--peer-model"]) expect(surface).toContain(flag);
     expect(surface).not.toContain("RETIRED_FLAG");
   }
+  expect(hub).not.toContain("--supervisor-model");
   expect(hub).toContain("never its mandate or the pinned profile digest");
   expect(cli).toContain('maestro work add "<objective>" --to <peer-name> --model <model>');
 
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     const owner = await Bun.file(join(room, "OWNER.md")).text();
-    for (const seat of ["`team-supervisor`", "`lead`", "`peer`"]) expect(owner).toContain(seat);
+    for (const seat of ["`lead`", "`peer`"]) expect(owner).toContain(seat);
+    expect(owner).not.toContain("`team-supervisor`");
     expect(owner).toContain("profiles/<name>.md");
     expect(owner).not.toContain("| rung |");
   });
@@ -401,9 +405,9 @@ test("docs-contract: pack v3 markers, no Observer, --peer-profile and the room d
 
 // seat-config-dirs R8 (d847): a Peer reaches the Lead and other Peers only
 // through recorded notes and returns; the shipped shared contract and peer
-// mandate no longer tell it to prompt panes by hand, while the Lead and the
-// Team Supervisor keep the hand-typed ask.
-test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop the Peer's direct hand-prompt wording; the Lead and Team Supervisor keep theirs (R8, d847)", async () => {
+// mandate no longer tell it to prompt panes by hand, while the Lead keeps the
+// hand-typed ask.
+test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop the Peer's direct hand-prompt wording; the Lead keeps its own (R8, d847)", async () => {
   const root = join(import.meta.dir, "..");
   const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
@@ -412,7 +416,7 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(shared).not.toContain("When you prompt a pane by hand");
   expect(shared).not.toContain("Hand-typed asks are allowed");
   expect(shared).toContain("A Peer reaches the Lead and other Peers only through recorded work notes and returns");
-  expect(shared).toContain("The Lead and the Team Supervisor may add a hand-typed ask");
+  expect(shared).toContain("The Lead may add a hand-typed ask");
   expect(shared).toContain("herdr agent prompt");
 
   const profiles = join(root, "src", "plugins", "resources", "profiles");
@@ -422,8 +426,7 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
   expect(peer).not.toContain("herdr agent prompt");
   expect(peer).toContain("record `maestro work note <work-id> \"<the premise, the evidence, and what the request would become>\" --blocked`");
   expect(unwrap(block(pack, "shared:peer"))).toContain("the item stays yours, and there is no dialog to ask a question through");
-  expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with the Team Supervisor and every Peer");
-  expect(unwrap(await Bun.file(join(profiles, "team-supervisor.md")).text())).toContain("Communicate directly with the Hub Supervisor, the Lead, and every Peer");
+  expect(unwrap(await Bun.file(join(profiles, "lead.md")).text())).toContain("Communicate directly with every Peer");
 
   const recipe = unwrap(await Bun.file(join(root, "src", "plugins", "recipes", "slp.md")).text());
   expect(recipe).not.toContain("The Team Supervisor, Lead, and Peers may talk directly");
@@ -433,9 +436,9 @@ test("seat-dirs-doctrine: the shipped SLP.md shared contract and peer.md drop th
 // room d118: the Lead self-works its items by default and opens a Peer the way
 // a harness opens a sub-agent; the Lead-must-not-implement rule is replaced by
 // "may implement its own items and any item not already assigned to a Peer".
-// room d117: a generation may run lead-only, where the Hub Supervisor is the
-// Lead's reviewer; the supervised shape stays the default.
-test("slp-doctrine: the shipped Lead mandate makes self-work the default and Peers sub-agent-shaped, and the pack carries the lead-only shape in the shared contract and the Hub Supervisor section (room d117, room d118)", async () => {
+// room d117, d898: a team is one Lead under the Hub Supervisor, which is the
+// Lead's reviewer.
+test("slp-doctrine: the shipped Lead mandate makes self-work the default and Peers sub-agent-shaped, and the pack carries the one team shape in the shared contract and the Hub Supervisor section (room d117, room d118, d898)", async () => {
   const root = join(import.meta.dir, "..");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const lead = unwrap(await Bun.file(join(root, "src", "plugins", "resources", "profiles", "lead.md")).text());
@@ -455,19 +458,23 @@ test("slp-doctrine: the shipped Lead mandate makes self-work the default and Pee
 
   const pack = await Bun.file(join(root, "src", "plugins", "resources", "SLP.md")).text();
   const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
-  expect(shared).toContain("The supervised shape is the default");
-  expect(shared).toContain("lead-only shape (`maestro team start --lead-only`): one Lead plus the runtime pane and no Team Supervisor");
-  expect(shared).toContain("the Lead's reviewer is the Hub Supervisor");
+  expect(shared).toContain("A team is one Lead plus the runtime pane, and the Peers the Lead opens");
+  expect(shared).toContain("The Lead's reviewer is the Hub Supervisor");
   expect(shared).toContain("the Lead's `--blocked` note escalates to the Hub");
-  expect(shared).toContain("a Peer's reviewer is still its Lead in either shape");
+  expect(shared).toContain("a Peer's reviewer is its Lead");
+  for (const gone of ["Team Supervisor", "lead-only", "supervised shape", "--lead-only"]) {
+    expect({ gone, shared }).toEqual({ gone, shared: expect.not.stringContaining(gone) });
+  }
 
   const hub = unwrap(/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "");
-  expect(hub).toContain("you are the Lead's reviewer");
+  expect(hub).toContain("You are the Lead's reviewer");
   expect(hub).toContain("accept it or grant `--rework` on it");
-  expect(hub).toContain("That reach covers a lead-only team's Lead only");
-  expect(hub).toContain("in a supervised team you still go through the Team Supervisor");
+  expect(hub).toContain("You never manage Peers directly");
+  for (const gone of ["Team Supervisor", "lead-only", "supervised team"]) {
+    expect({ gone, hub }).toEqual({ gone, hub: expect.not.stringContaining(gone) });
+  }
 
-  // The shape is doctrine text only: the locked surface and pack version stand.
+  // The locked surface and pack version stand.
   expect(pack).toContain("<!-- slp:version=3 -->");
   const publicSurface = (
     pack.match(/The public SLP surface is exactly:\n\n```text\n([\s\S]*?)\n```/)?.[1] ?? ""
@@ -489,14 +496,12 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   const shared = unwrap(/<!-- slp:shared:begin -->([\s\S]*?)<!-- slp:shared:end -->/.exec(pack)?.[1] ?? "");
   const hub = unwrap(/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/.exec(pack)?.[1] ?? "");
 
-  // d122: one seat at a time, every seat filters, the Team Supervisor embodies
-  // the owner, the Hub takes its part in a lead-only generation.
+  // d122: one seat at a time, every seat filters, the Hub embodies the owner
+  // above the team.
   expect(shared).toContain("A `--blocked` fork climbs one seat at a time and every seat filters");
   expect(shared).toContain("a technical question is answered by the seat that owns it (a Lead decides)");
-  expect(shared).toContain("The Team Supervisor is the owner's embodiment inside its team");
-  expect(shared).toContain("asks the Hub with its own `--blocked` note only when it cannot");
-  expect(shared).toContain("The Hub decides what a Hub Supervisor may decide and puts to the owner only what is hers");
-  expect(shared).toContain("in a lead-only generation the Hub takes the Team Supervisor's part for its Lead");
+  expect(shared).toContain("The Hub is the owner's embodiment above the team");
+  expect(shared).toContain("decides what a Hub Supervisor may decide and puts to the owner only what is hers");
   // d123: the walk-in note.
   expect(shared).toContain('record it first as `maestro work note <id> "owner asked: <what>" --owner`');
   expect(shared).toContain("a provenance flag exclusive with `--blocked` and `--rework` that stops nobody, sets no blocked flag");
@@ -513,8 +518,7 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   expect(hub).toContain('`maestro decide "<choice>" --why "<reason>" --work <id> --provisional`');
   expect(hub).toContain("`maestro status` lists every provisional ruling until she confirms it with `maestro decision confirm <id>` or supersedes it with a decision that `--replaces` it");
   expect(hub).toContain("`away` never grants commit, push, tag, release, install mid-generation, or any destructive change");
-  expect(hub).toContain("You also run the normal stop of a lead-only team, `maestro team stop <team-id> --reason \"<closing report>\"`");
-  expect(hub).toContain("a supervised team you stop with `--emergency` only");
+  expect(hub).toContain("You also run the normal stop of a team, `maestro team stop <team-id> --reason \"<closing report>\"`, once its work is DONE");
 
   // Every seat profile knows the walk-in and its place on the ladder.
   const lead = unwrap(await read("profiles", "lead.md"));
@@ -522,11 +526,6 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   expect(lead).toContain("outside it open new work");
   expect(lead).toContain("never widen the item");
   expect(lead).toContain("a technical fork you own you decide");
-  const supervisor = unwrap(await read("profiles", "team-supervisor.md"));
-  expect(supervisor).toContain("You are the owner's embodiment inside the team");
-  expect(supervisor).toContain("by your own judgment or through advisor");
-  expect(supervisor).toContain("only what you cannot resolve");
-  expect(supervisor).toContain('`maestro work note <id> "owner asked: <what>" --owner`');
   // room d134: the walk-in reaches the Peer through the pack's Peer block, and
   // it names no seat that opens the follow-up work.
   const peerBlock = unwrap(block(pack, "shared:peer"));
@@ -536,7 +535,7 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
 
   // Byte-unchanged: version, marker lines, and the locked surface.
   expect(pack).toContain("<!-- slp:version=3 -->");
-  expect(pack).toContain("<!-- slp:profile:team-supervisor=team-supervisor -->\n<!-- slp:profile:lead=lead -->\n<!-- slp:profile:peer=peer -->");
+  expect(pack).toContain("<!-- slp:version=3 -->\n<!-- slp:profile:lead=lead -->\n<!-- slp:profile:peer=peer -->");
   const publicSurface = (
     pack.match(/The public SLP surface is exactly:\n\n```text\n([\s\S]*?)\n```/)?.[1] ?? ""
   ).split("\n");
@@ -799,17 +798,17 @@ test("674 [lint] ANTI_PATTERN.md carries the eight patterns in order and WORKFLO
   expect(workflow).toContain("a lesson names the anti-pattern it shows when one fits");
 });
 
-// w736 F1: the Hub's plain note down into a lead-only team is a new line in
+// w736 F1: the Hub's plain note down to the Lead is a new line in
 // the protocol, so the Hub section is where it is written and this is the lint
 // that keeps it written. The Hub hand-copies from this section; a sentence it
 // cannot quote is a sentence it does not have.
-test("w736 [lint] the Hub section carries the plain note down into a lead-only team, its push line, and the two flags that stay refused", async () => {
+test("w736 [lint] the Hub section carries the plain note down to the Lead, its push line, and the two flags that stay refused", async () => {
   const pack = await Bun.file(
     join(import.meta.dir, "..", "src", "plugins", "resources", "SLP.md"),
   ).text();
   const hub = (/<!-- slp:role:hub-supervisor:begin -->([\s\S]*?)<!-- slp:role:hub-supervisor:end -->/
     .exec(pack)?.[1] ?? "").replaceAll(/\s+/g, " ");
-  expect(hub).toContain('you may also record a plain `maestro work note <id> "<text>"` on the Lead\'s item');
+  expect(hub).toContain('You may also record a plain `maestro work note <id> "<text>"` on the Lead\'s item');
   expect(hub).toContain("the reviewer answer that is a fact or a pointer and not a ruling");
   expect(hub).toContain("it reaches the Lead's pane as `[from hub-supervisor][<id> NOTE]`");
   expect(hub).toContain("it is the only plain note in SLP that wakes anyone");
@@ -825,12 +824,12 @@ test("w736 [lint] the Hub section carries the plain note down into a lead-only t
   expect(shared).toContain("never on a plain note");
 });
 
-// w740 (room d151-d155): the question-back seat is written in four places and
-// nowhere else - the shared contract every seat reads, the two mandates that
-// act on it, and the design skill that holds the designer's obligation. The
+// w740 (room d151-d155): the question-back seat is written in three places and
+// nowhere else - the shared contract every seat reads, the Lead mandate that
+// acts on it, and the design skill that holds the designer's obligation. The
 // Hub hand-copies the SLP.md sentences into ~/maestro/SLP.md; a sentence it
 // cannot quote is a sentence it does not have.
-test("w740 [lint] the question-back seat's sentences are in the pack, the two mandates and the design skill", async () => {
+test("w740 [lint] the question-back seat's sentences are in the pack, the Lead mandate and the design skill", async () => {
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const resources = join(import.meta.dir, "..", "src", "plugins", "resources");
   const flat = async (...parts: string[]) =>
@@ -851,15 +850,12 @@ test("w740 [lint] the question-back seat's sentences are in the pack, the two ma
   );
   expect(pack).toContain("once, on the open that creates the bundle and never on a resume");
   expect(pack).toContain("nothing at all outside a running team");
-  // d902/d154: who opens it in each shape.
+  // d154: who opens it.
   expect(pack).toContain(
-    "a Team Supervisor does so with its own `maestro work add --to peer-questioner`, " +
-      "which is the one Peer its `work add` may name",
+    "the Hub, which manages no Peer, records `maestro decide --work <work-id>` " +
+      "and the Lead executes that ruling with `maestro work add --to peer-questioner`",
   );
-  expect(pack).toContain(
-    "the Hub, which manages no Peer, records `maestro decide --work <work-id>` instead " +
-      "and the Lead executes that ruling with the same `work add`",
-  );
+  expect(pack).not.toContain("a Team Supervisor does so");
   // d152/d900: what it produces and what the designer owes it.
   expect(pack).toContain("its questions arrive as its own return");
   expect(pack).toContain(
@@ -873,12 +869,6 @@ test("w740 [lint] the question-back seat's sentences are in the pack, the two ma
   expect(lead).toContain(
     "before `maestro decide` locks a point one of them doubts, answer that question",
   );
-
-  const supervisor = await flat("profiles", "team-supervisor.md");
-  expect(supervisor).toContain("`maestro work add` to the Lead or to `peer-questioner`");
-  expect(supervisor).toContain("[from lead][<work-id> DESIGN] design bundle <id>");
-  expect(supervisor).toContain("It is the one Peer your `work add` may name");
-  expect(supervisor).toContain("You do not open it on every item or every return");
 
   // d904/d155: the profile's frontmatter is the read-only contract, and the
   // model stays a launch-time choice (room d128).
@@ -914,9 +904,8 @@ test("w740 [lint] the question-back seat's sentences are in the pack, the two ma
 // project lesson l8 (w739, d896): an evidence command with its stderr thrown
 // away reported a clean negative it could not have reported anything else from,
 // and that silence became a plank under the claim that a Peer had delivered
-// nothing. The rule lands in the shared testing discipline and again in the one
-// mandate that verifies another seat's claim.
-test("l8 [lint] WORKFLOW.md and the Team Supervisor mandate falsify an evidence command before believing its negative", async () => {
+// nothing. The rule lands in the shared testing discipline.
+test("l8 [lint] WORKFLOW.md falsifies an evidence command before believing its negative", async () => {
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const resources = join(import.meta.dir, "..", "src", "plugins", "resources");
   const flat = async (...parts: string[]) => unwrap(await Bun.file(join(resources, ...parts)).text());
@@ -928,11 +917,6 @@ test("l8 [lint] WORKFLOW.md and the Team Supervisor mandate falsify an evidence 
   );
   expect(workflow).toContain("Where the claim is that nothing happened, falsify the check first");
   expect(workflow).toContain("An empty result and a broken command are the same text on stdout");
-
-  const supervisor = await flat("profiles", "team-supervisor.md");
-  expect(supervisor).toContain("show that command's stderr");
-  expect(supervisor).toContain("believe a negative from it only after it has produced a positive on a case you know is positive");
-  expect(supervisor).toContain("An empty result and a broken command print the same nothing");
 });
 
 // project lesson l7 (w732, w733, d880, d889): a SPEC locked an 11-module split

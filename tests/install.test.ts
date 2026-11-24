@@ -639,7 +639,7 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
       expect(await readFile(file, "utf8")).not.toMatch(/^model[ :]/m);
     }
 
-    const seatAgents = ["lead", "peer", "team-supervisor"].map((seat) => join(seatConfigRoot(fixture.home), seat, "agents"));
+    const seatAgents = ["lead", "peer"].map((seat) => join(seatConfigRoot(fixture.home), seat, "agents"));
     const snapshot = async () => {
       const files = new Map<string, string>();
       for (const directory of [claudeAgents, ...seatAgents, codexHome, codexAgents]) {
@@ -718,9 +718,8 @@ test("seat-dirs-links: install renders skills/ as the union across the dir's pro
     expect(existsSync(join(peerDir, "skills", "maestro-work", "SKILL.md"))).toBe(true);
     const leadLinks = (await readdir(join(seatConfigRoot(fixture.home), "lead", "skills"))).sort();
     expect(leadLinks).toEqual(["maestro-council", "maestro-design", "maestro-work"]);
-    expect(await readdir(join(seatConfigRoot(fixture.home), "team-supervisor", "skills"))).toEqual(["maestro-work"]);
 
-    for (const seat of ["lead", "peer", "team-supervisor"]) {
+    for (const seat of ["lead", "peer"]) {
       const directory = join(seatConfigRoot(fixture.home), seat);
       expect(await readlink(join(directory, "projects"))).toBe(join(fixture.home, ".claude", "projects"));
       expect(await readlink(join(directory, "plugins"))).toBe(join(fixture.home, ".claude", "plugins"));
@@ -781,7 +780,7 @@ test("seat-dirs-token: install --seat-token from stdin writes the 0600 token fil
     expect(installed.stdout).not.toContain("--seat-token");
     expect(await readFile(seatTokenPath(fixture.home), "utf8")).toBe(token);
     expect((await stat(seatTokenPath(fixture.home))).mode & 0o777).toBe(0o600);
-    for (const seat of ["lead", "peer", "team-supervisor"]) {
+    for (const seat of ["lead", "peer"]) {
       const settings = JSON.parse(await readFile(join(seatConfigRoot(fixture.home), seat, "settings.json"), "utf8")) as { env: Record<string, string>; hooks: unknown };
       expect({ seat, token: settings.env.CLAUDE_CODE_OAUTH_TOKEN }).toEqual({ seat, token });
       // A6: the owner's own herdr hook group is the one carried, the other group is not.
@@ -825,7 +824,7 @@ test("seat-dirs-modes: under umask 022 install --seat-token leaves the token fil
       expect(installed.exitCode).toBe(0);
       expect(await mode(seatTokenPath(fixture.home))).toBe(0o600);
       expect(await mode(seatConfigRoot(fixture.home))).toBe(0o700);
-      for (const seat of ["lead", "peer", "team-supervisor"]) {
+      for (const seat of ["lead", "peer"]) {
         const directory = join(seatConfigRoot(fixture.home), seat);
         expect({ seat, mode: await mode(directory) }).toEqual({ seat, mode: 0o700 });
         expect({ seat, file: "settings.json", mode: await mode(join(directory, "settings.json")) }).toEqual({ seat, file: "settings.json", mode: 0o600 });

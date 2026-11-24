@@ -48,7 +48,7 @@ const replayQuietMs = 1_000;
 const replayMaxMs = 60_000;
 const watchLines = 40;
 
-type SlpRole = "team-supervisor" | "lead" | "peer";
+type SlpRole = "lead" | "peer";
 type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
 type StallKind = "dialog" | "silence";
 
@@ -196,7 +196,7 @@ function roleRows(store: Store, teamId: string, generation: number): RoleRow[] {
     .query<RoleRow, [string, number]>(
       `SELECT name, role, pane_id, workspace_id FROM slp_local_roles
        WHERE team_id = ? AND generation = ?
-       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
+       ORDER BY CASE role WHEN 'lead' THEN 0 ELSE 1 END, name`,
     )
     .all(teamId, generation);
 }
@@ -369,8 +369,7 @@ function reworkGrantOpen(store: Store, work: WorkRow): boolean {
 // item waits on nobody else, so the seat may act on it.
 function waitsOnSeat(seat: RoleRow, roles: RoleRow[], work: WorkRow, grantOpen: boolean): boolean {
   const assigneeRole = roles.find((role) => role.name === work.assigned_to)?.role ?? "peer";
-  const reviewerRole: SlpRole = assigneeRole === "lead" ? "team-supervisor" : "lead";
-  const reviewing = seat.role === reviewerRole && seat.name !== work.assigned_to;
+  const reviewing = assigneeRole !== "lead" && seat.role === "lead" && seat.name !== work.assigned_to;
   const mine = work.assigned_to === seat.name;
   switch (work.state) {
     case "OPEN":
@@ -392,7 +391,6 @@ function seatHasStar(store: Store, team: TeamRow, seat: RoleRow, roles: RoleRow[
     )
     .all(team.team_id, team.generation)
     .filter((work) => {
-      if (seat.role === "team-supervisor") return work.state === "ACTIVE" || work.state === "RETURNED";
       if (seat.role === "peer") return work.assigned_to === seat.name;
       return work.assigned_to === seat.name || work.created_by === seat.name;
     });
@@ -447,7 +445,7 @@ function stallLine(workId: string, kind: StallKind, evidence: string): string {
 
 // w708 (d867): the copy is information about someone else's item, so it ends
 // where the d753 push lines end - at a read. It carried the holder's imperative
-// verbatim, and a Team Supervisor came within one step of recording a false
+// verbatim, and a reviewing seat came within one step of recording a false
 // blocker on an ACTIVE item it does not hold.
 function stallCopyLine(workId: string, kind: StallKind, evidence: string, holder: string): string {
   return `[from ${runtimeActor}][${workId} copy] ${kind} ${evidence}; ${holder} holds ${workId} and has been nudged; read: maestro status ${workId}`;
@@ -563,13 +561,8 @@ export class AttentionRuntime {
   }
 
   private seatAbove(seat: RoleRow, team: TeamRow): Promise<WakeTarget> {
-    if (seat.role === "team-supervisor") return this.hubTarget(team);
-    return Promise.resolve(roleTarget(this.roles, seat.role === "lead" ? "team-supervisor" : "lead"));
-  }
-
-  private supervisorTarget(seat: RoleRow, team: TeamRow): Promise<WakeTarget> {
-    if (seat.role === "team-supervisor") return this.hubTarget(team);
-    return Promise.resolve(roleTarget(this.roles, "team-supervisor"));
+    if (seat.role === "lead") return this.hubTarget(team);
+    return Promise.resolve(roleTarget(this.roles, "lead"));
   }
 
   private async deliver(
@@ -603,7 +596,7 @@ export class AttentionRuntime {
       return;
     }
     // w708 (d867): a queued line waits for its target's own idle, which can be
-    // much later - a copy queued for a busy Team Supervisor was first delivered
+    // much later - a copy queued for a busy reviewing seat was first delivered
     // forty minutes on, about an item returned, accepted and committed since.
     // A stall speaks about the present, so it is checked against the store at
     // delivery and dropped rather than sent stale.
@@ -674,7 +667,7 @@ export class AttentionRuntime {
     const key = `${work.id}:${kind}`;
     const holder = work.owner ?? work.assigned_to;
     // w708 (d867): the mark is the holder's own latest record. An entry written by
-    // another seat - a supervisor's correction on an item it does not hold - no
+    // another seat - a reviewer's correction on an item it does not hold - no
     // longer releases the rule and re-arms the alarm against the holder.
     const own = latestRecord(store, work.id, holder);
     const mark = own?.mark ?? "none";
@@ -686,7 +679,7 @@ export class AttentionRuntime {
     // l3 (w712): a holder that recorded after the stall entry has answered this
     // nudge. The once-rule read that record as a store change and re-armed, so the
     // next idle sample past pushWindowMs sent the same nudge and the same
-    // supervisor copy again - the seat was nudged for complying. Its account is
+    // copy again - the seat was nudged for complying. Its account is
     // the strongest evidence the store has about a quiet pane, so it quiets the
     // same nudge for silenceAnsweredMs measured from itself. d96/d97 are
     // untouched: this withholds a nudge, it gates nothing.
@@ -709,7 +702,7 @@ export class AttentionRuntime {
     const line = stallLine(work.id, kind, evidence);
     const about = { holder, state: work.state, workId: work.id };
     await this.deliver({ target: seat.name }, `${work.id} ${kind}`, line, about);
-    const copy = await this.supervisorTarget(seat, team);
+    const copy = await this.hubTarget(team);
     if (copy.target !== seat.name) {
       await this.deliver(copy, `${work.id} ${kind} copy`, stallCopyLine(work.id, kind, evidence, holder), about);
     }
@@ -759,7 +752,7 @@ export class AttentionRuntime {
         const card = teamCard(store, team.team_id, team.generation);
         const evidence = `${loss}: ${seat.name} pane ${paneId} (${event.event}); store: ${seat.role} of ${team.team_id} g${team.generation}`;
         if (card) recordEntry(store, team, card.id, evidence, `pane:${loss}`, "pane.lost");
-        await this.deliver(await this.supervisorTarget(seat, team), `${seat.name} pane ${loss}`, `[attention] ${seat.name} pane ${loss}`);
+        await this.deliver(await this.hubTarget(team), `${seat.name} pane ${loss}`, `[attention] ${seat.name} pane ${loss}`);
         return changed;
       }
       if (event.event !== "pane_agent_status_changed") return changed;
@@ -1121,8 +1114,7 @@ export async function runSlpRestore(
         restored.push({ generation: label, outcome: "running" });
         continue;
       }
-      const supervisor = alive.find((role) => role.role === "team-supervisor") ?? alive[0] ?? null;
-      const paneId = await openRuntimePane(client, generation.team, supervisor?.pane_id ?? null);
+      const paneId = await openRuntimePane(client, generation.team, alive[0]?.pane_id ?? null);
       recordRuntimePane(projectPath, generation.team.team_id, generation.team.generation, paneId);
       lines.push(`${label}: runtime pane reopened as ${paneId} (${alive.length}/${generation.roles.length} role panes alive)`);
       restored.push({ generation: label, outcome: "reopened", paneId });

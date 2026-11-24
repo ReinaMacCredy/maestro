@@ -26,7 +26,7 @@ const paneTailLines = 15;
 const trustDialogPattern =
   /Do you trust the contents of this directory|Quick safety check: Is this a project you created or one you trust|Yes, I trust this folder/;
 
-export type SlpRole = "team-supervisor" | "lead" | "peer";
+export type SlpRole = "lead" | "peer";
 
 // Hub d90/d98: a seat is launched as a rendered native profile; the harness
 // and every launch flag come from the profile, never from the plan.
@@ -125,14 +125,6 @@ export interface SlpRuntimeInspection {
   workspace: boolean;
 }
 
-export const slpStopEnvironment = {
-  closeWorkspace: "MAESTRO_SLP_STOP_CLOSE_WORKSPACE",
-  helperTab: "MAESTRO_SLP_STOP_HELPER_TAB",
-  helperWorkspace: "MAESTRO_SLP_STOP_HELPER_WORKSPACE",
-  project: "MAESTRO_SLP_STOP_PROJECT",
-  token: "MAESTRO_SLP_STOP_GRANT",
-} as const;
-
 function cleanPaneLines(output: string): string[] {
   return output
     .replaceAll(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
@@ -188,35 +180,19 @@ function herdrErrorCode(error: unknown): string | null {
   return error instanceof SlpRuntimeError ? error.herdrCode : null;
 }
 
-// room d117: a lead-only generation passes teamSupervisor: null, which drops
-// that seat from the plan entirely. Every consumer already iterates plan.roles,
-// so nothing downstream needs to know which shape produced the list. The
-// runtime pane is created outside this plan and stays in both shapes (d97).
+// The runtime pane is created outside this plan (d97).
 export function buildSlpTeamPlan(input: {
   generation: number;
   lead: SeatLaunch;
   projectPath: string;
   teamId: string;
-  teamSupervisor: SeatLaunch | null;
 }): SlpTeamPlan {
   const projectPath = resolve(input.projectPath);
   const prefix = `slp:${input.teamId}:g${input.generation}`;
-  const teamSupervisor = input.teamSupervisor;
   return {
     generation: input.generation,
     projectPath,
     roles: [
-      ...(teamSupervisor
-        ? [{
-          autocompact: teamSupervisor.autocompact ?? null,
-          kind: teamSupervisor.harness,
-          label: `${prefix}:team-supervisor`,
-          model: teamSupervisor.model ?? null,
-          name: `supervisor-${input.teamId}`,
-          profile: teamSupervisor.profile,
-          role: "team-supervisor" as const,
-        }]
-        : []),
       {
         autocompact: input.lead.autocompact ?? null,
         kind: input.lead.harness,
@@ -985,106 +961,6 @@ export class HerdrSlpRuntime {
     }
   }
 
-  async delegateStop(
-    plan: SlpTeamPlan,
-    roomPath: string,
-    token: string,
-    cliEntry: string,
-  ): Promise<void> {
-    const sharedHub = (await this.workspaces()).filter(
-      (workspace) =>
-        workspace.label === "maestro" &&
-        typeof workspace.cwd === "string" &&
-        resolve(workspace.cwd) === resolve(roomPath),
-    );
-    if (sharedHub.length > 1) {
-      throw new SlpRuntimeError(
-        `expected at most one Hub workspace; found ${sharedHub.length}`,
-        ["workspace", "list"],
-      );
-    }
-
-    const helperLabel = `slp-stop:${plan.teamId}:g${plan.generation}`;
-    const ephemeralLabel = `maestro-${helperLabel}`;
-    let closeWorkspace = false;
-    let workspaceId = sharedHub[0]?.workspace_id ?? null;
-    if (!workspaceId) {
-      const existing = (await this.workspaces()).filter(
-        (workspace) => workspace.label === ephemeralLabel,
-      );
-      if (existing.length > 1) {
-        throw new SlpRuntimeError(
-          `expected at most one stop helper workspace ${ephemeralLabel}; found ${existing.length}`,
-          ["workspace", "list"],
-        );
-      }
-      workspaceId = existing[0]?.workspace_id ?? null;
-      closeWorkspace = true;
-      if (!workspaceId) {
-        const created = await this.client.workspaceCreate({ cwd: roomPath, label: ephemeralLabel });
-        workspaceId = created.workspace?.workspace_id ?? null;
-      }
-    }
-    if (!workspaceId) {
-      throw new SlpRuntimeError("stop helper workspace was not created", ["workspace", "create"]);
-    }
-
-    if (!closeWorkspace) {
-      for (const stale of (await this.tabs(workspaceId)).filter(
-        (tab) => tab.label === helperLabel,
-      )) {
-        if (stale.tab_id) await this.client.tabClose(stale.tab_id);
-      }
-    }
-
-    let helperTabId: string | null = null;
-    try {
-      const created = await this.client.tabCreate({
-        cwd: roomPath,
-        label: helperLabel,
-        workspace_id: workspaceId,
-      });
-      helperTabId = created.tab?.tab_id ?? null;
-      const helperPaneId = created.root_pane?.pane_id ?? null;
-      if (!helperTabId || !helperPaneId) {
-        throw new SlpRuntimeError("stop helper pane was not created", ["tab", "create"]);
-      }
-      await this.client.paneSendInput(
-        helperPaneId,
-        [
-          "/usr/bin/env",
-          `${slpStopEnvironment.token}=${token}`,
-          `${slpStopEnvironment.project}=${plan.projectPath}`,
-          `${slpStopEnvironment.helperTab}=${helperTabId}`,
-          `${slpStopEnvironment.helperWorkspace}=${workspaceId}`,
-          `${slpStopEnvironment.closeWorkspace}=${closeWorkspace ? "1" : "0"}`,
-          process.execPath,
-          cliEntry,
-          "team",
-          "stop",
-          plan.teamId,
-          "--json",
-        ].join(" "),
-      );
-    } catch (error) {
-      try {
-        if (closeWorkspace) await this.client.workspaceClose(workspaceId);
-        else if (helperTabId) await this.client.tabClose(helperTabId);
-      } catch {}
-      throw error;
-    }
-  }
-
-  async closeStopHelper(
-    _roomPath: string,
-    helperTabId: string,
-    helperWorkspaceId: string,
-    closeWorkspace: boolean,
-  ): Promise<void> {
-    if (closeWorkspace) await this.client.workspaceClose(helperWorkspaceId);
-    else await this.client.tabClose(helperTabId);
-  }
-
   async paneAlive(paneId: string): Promise<boolean> {
     try {
       return foreground(await this.processInfo(paneId));
@@ -1166,8 +1042,8 @@ export class HerdrSlpRuntime {
     }
     const workspaceId = matchingWorkspaces[0].workspace_id;
     // w722: Herdr closes a workspace on its own when its last tab closes, and
-    // a lead-only generation has no Team Supervisor tab to outlive the Lead
-    // and runtime panes, so the workspace can vanish under this teardown at
+    // no tab outlives the Lead and runtime panes, so the workspace can vanish
+    // under this teardown at
     // any step after the first tab.close (herdr-server.log 2026-09-15: three
     // tab.close, then workspace.close). A vanished workspace is a torn-down
     // one: every Herdr call below that finds it gone, and workspace.list
@@ -1268,26 +1144,18 @@ export class HerdrSlpRuntime {
       );
     }
 
-    const supervisorPanes = new Set(
-      expectedRoles
-        .filter((role) => role.role === "team-supervisor")
-        .map((role) => role.paneId),
-    );
     // The transcript is already gone above; a workspace that closed with its
     // last seat tab has nothing left to check or shut down.
     const remaining = await unlessVanished(() => this.panes(workspaceId));
     if (remaining === null) return;
-    const preFinalRemainder = remaining.filter(
-      (pane) => pane.pane_id && !supervisorPanes.has(pane.pane_id),
-    );
+    const preFinalRemainder = remaining.filter((pane) => pane.pane_id);
     if (preFinalRemainder.length > 0) {
       throw new SlpRuntimeError(
-        `non-Supervisor panes remain before final shutdown: ${preFinalRemainder.map((pane) => pane.pane_id).join(", ")}`,
+        `panes remain before final shutdown: ${preFinalRemainder.map((pane) => pane.pane_id).join(", ")}`,
         ["pane", "list", "--workspace", workspaceId],
       );
     }
 
-    await closeRole("team-supervisor");
     await this.closeWorkspace(workspaceId, plan.workspaceLabel, "shutdown");
   }
 

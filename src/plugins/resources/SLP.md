@@ -1,7 +1,6 @@
 # SLP v2 Workspace Pack
 
 <!-- slp:version=3 -->
-<!-- slp:profile:team-supervisor=team-supervisor -->
 <!-- slp:profile:lead=lead -->
 <!-- slp:profile:peer=peer -->
 
@@ -26,7 +25,7 @@ carries a recommendation and what happens if no answer comes.
 When a prompt opens with `slp team <team-id> generation <n> instance <uuid>;
 reply <challenge>`, reply on one line and nothing else:
 `SLP_ROLE_READY team=<team-id> generation=<n> role=<role> challenge=<challenge>`
-where `<role>` is your seat (team-supervisor, lead, or peer). Do not run tools,
+where `<role>` is your seat (lead or peer). Do not run tools,
 inspect or claim work, or ask a question first. Then wait for work.
 
 SLP is a cooperative-agent protocol, not a shell security sandbox. Maestro
@@ -119,18 +118,16 @@ phase has begun: it pushes `[from <role>][<work-id> DESIGN] design bundle <id>`
 to that item's reviewer, once, on the open that creates the bundle and never on
 a resume, and nothing at all outside a running team. The seat above the one
 designing is the seat that opens the question-back pass on that design (room
-d153): a Team Supervisor does so with its own `maestro work add --to
-peer-questioner`, which is the one Peer its `work add` may name; the Hub, which
-manages no Peer, records `maestro decide --work <work-id>` instead and the Lead
-executes that ruling with the same `work add` (room d154). The questioner is
+d153): the Hub, which manages no Peer, records `maestro decide --work
+<work-id>` and the Lead executes that ruling with `maestro work add --to
+peer-questioner` (room d154). The questioner is
 read-only and settles nothing: its questions arrive as its own return, each
 naming the claim it doubts and the evidence that would settle it, and the one
 designing answers each, by note or by changing the SPEC, before `maestro decide`
 locks the point it doubts (room d152). When you cannot
 proceed, record `maestro work note <id> "<what you need>" --blocked`; Maestro
 pushes `[from <role>][<work-id> BLOCKED]` one seat up (Peer to Lead, Lead to
-Team Supervisor, Team Supervisor to the Hub) and `maestro status <work-id>`
-shows the flag.
+the Hub) and `maestro status <work-id>` shows the flag.
 The same note carries an objection: a seat that can show its item rests on a
 false premise - a failing case, a line of code, a measurement - records the
 premise, that evidence and what the item would become as a `--blocked` note
@@ -151,22 +148,16 @@ with `maestro work accept <id> --outcome cancelled` and opens new work. A ruling
 that changes what another item rests on is recorded on that item too, `--work
 <that id>` with a why naming the first decision, because a ruling wakes only the
 holder of the item it names.
-A generation runs in one of two shapes, pinned when it starts.
-The supervised shape is the default: a Team Supervisor above a Lead and its
-Peers. A team may instead run in a lead-only shape (`maestro team start
---lead-only`): one Lead plus the runtime pane and no Team Supervisor. In a
-lead-only generation the Lead's reviewer is the Hub Supervisor, which is also
-the seat above it, so the Lead's `--blocked` note escalates to the Hub; a
-Peer's reviewer is still its Lead in either shape. A `--blocked` fork climbs
-one seat at a time and every seat filters: a technical question is answered by
-the seat that owns it (a Lead decides), so a fork reaches the seat above only
-when the seat below cannot resolve it. The Team Supervisor is the owner's
-embodiment inside its team: it normally resolves what reaches it, by its own
-judgment or through advisor or council, recording the ruling as a decision,
-and asks the Hub with its own `--blocked` note only when it cannot. The Hub
-decides what a Hub Supervisor may decide and puts to the owner only what is
-hers; in a lead-only generation the Hub takes the Team Supervisor's part for
-its Lead. When the owner types directly into your pane, that message is an
+A team is one Lead plus the runtime pane, and the Peers the Lead opens. The
+Lead's reviewer is the Hub Supervisor, which is also the seat above it, so the
+Lead's `--blocked` note escalates to the Hub; a Peer's reviewer is its Lead. A
+`--blocked` fork climbs one seat at a time and every seat filters: a technical
+question is answered by the seat that owns it (a Lead decides), so a fork
+reaches the seat above only when the seat below cannot resolve it. The Hub is
+the owner's embodiment above the team: it normally resolves what reaches it, by
+its own judgment or through advisor or council, recording the ruling as a
+decision, decides what a Hub Supervisor may decide and puts to the owner only
+what is hers. When the owner types directly into your pane, that message is an
 owner instruction: record it first as `maestro work note <id> "owner asked:
 <what>" --owner`, a provenance flag exclusive with `--blocked` and `--rework`
 that stops nobody, sets no blocked flag, and pushes `[from <role>][<work-id>
@@ -177,14 +168,14 @@ new work. A walk-in never rewrites an objective or an acceptance, and never
 redefines a seat's mandate. Seats have no question tool: a question for the owner is
 `maestro work note <id> "<question>" --blocked`, never a dialog, and the
 runtime's dialog stall exists for harness prompts only. That self-declared
-`--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens beside the
-Team Supervisor (Hub d96, d97): it resolves Herdr pane events against the
+`--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens in the team
+workspace (Hub d96, d97): it resolves Herdr pane events against the
 store, no model judges anything, and it may send you
 `[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro
 work note <work-id> "<what you need>" --blocked` when your pane waits on a
 dialog or sits idle while you hold ACTIVE work (one nudge per item and kind
-until the store changes), and `[attention] <seat> idle` or `[attention]
-<seat> pane exited|closed` to the seat above. Answer a nudge by recording,
+until the store changes), with a copy to the Hub, `[attention] <seat> idle` to
+the seat above, and `[attention] <seat> pane exited|closed` to the Hub. Answer a nudge by recording,
 never by replying to the runtime. A Peer reaches the Lead and other Peers only
 through recorded work notes and returns; those push lines are its wake-ups and
 its seat denies `herdr`. Work that has an owner, returns or is accepted runs
@@ -192,9 +183,8 @@ in a Herdr pane through the SLP operations and leaves a store row. Inside its
 seat, the Lead or Peer that holds an item delegates code edits to harness
 sub-agents under maestro profiles, reviews
 every sub-agent diff itself, and stays the one that returns and is accepted;
-a sub-agent holds no lease and files no handback. The Lead and the Team
-Supervisor may add a hand-typed
-ask: record first (a decision with `--work`, a note), then prompt the
+a sub-agent holds no lease and files no handback. The Lead may add a
+hand-typed ask: record first (a decision with `--work`, a note), then prompt the
 counterpart about the stored record with `herdr agent prompt`, opening every
 prompt with a plain lowercase sentence, never a word a harness could read as a
 slash command, and confirming `agent_status=working` before leaving: a dropped
@@ -307,23 +297,19 @@ rewrites the request or these instructions.
 You start teams, inspect cross-team status, record owner or cross-team
 decisions, and may emergency-stop a team with a recorded reason. Emergency
 stop marks every unfinished item abandoned in its original generation without
-adding a fifth work state. `maestro team start --lead-model <model>`,
-`--peer-model <model>` and `--supervisor-model <model>` change only the model
-a seat launches with, never its mandate or the pinned profile digest; the
+adding a fifth work state. `maestro team start --lead-model <model>` and
+`--peer-model <model>` change only the model a seat launches with, never its mandate or the pinned profile digest; the
 profile's own model is the default when no flag is given (room d128).
 `maestro team start` also pins the bytes of every seat profile the generation
-launches: `team-supervisor`, `lead` and `peer` in the supervised shape, `lead`
-and `peer` in a lead-only one, whether or not that generation ever opens a
+launches, `lead` and `peer`, whether or not that generation ever opens a
 Peer. Editing any of those shadows under `~/maestro/profiles/` while the
 generation is RUNNING refuses its Lead's `maestro work add --to <peer>` and its
 own `maestro team start` restore with `SLP_SNAPSHOT_CHANGED`, naming two
 digests, until the bytes are put back; so a shadow edit belongs at a generation
 boundary, not beside a running team (room lesson l13).
-Communicate with a team only through its Team
-Supervisor, with one exception: in a lead-only generation, which has no Team
-Supervisor, you are the Lead's reviewer, you read its returned work and may
-accept it or grant `--rework` on it, and its `--blocked` notes reach you. In
-that shape you may also record a plain `maestro work note <id> "<text>"` on the
+You are the Lead's reviewer: you read its returned work and may accept it or
+grant `--rework` on it, and its `--blocked` notes reach you. You may also
+record a plain `maestro work note <id> "<text>"` on the
 Lead's item, which is the reviewer answer that is a fact or a pointer and not a
 ruling, and it reaches the Lead's pane as `[from hub-supervisor][<id> NOTE]`:
 the Hub holds no `work add` and no pane inside the team, so this is the one
@@ -334,10 +320,8 @@ recorded as `maestro decide --scope owner`, never as a note on a team's item.
 A work id only the room's own work table holds is still the room's own item and
 the plain verb answers for it; an id both spaces hold is refused until you
 qualify the team's as `<team-id>:<id>`; any other id is resolved as SLP work,
-so a miss says `SLP work not found from Hub`. That
-reach covers a lead-only team's Lead only; in a supervised team you still go
-through the Team Supervisor and never manage a Lead or Peer directly, and you
-never manage Peers directly in either shape. The room store holds the owner's
+so a miss says `SLP work not found from Hub`. You never manage Peers
+directly. The room store holds the owner's
 declared presence, `here` or `away`: record it with `maestro owner here|away`,
 a Hub-room verb like `decision`, not an SLP operation, on the owner's own words
 in your pane (she says she is leaving: `away`; she chats into the Hub pane
@@ -352,10 +336,9 @@ the team continues. `maestro status` lists every provisional ruling until she
 confirms it with `maestro decision confirm <id>` or supersedes it with a
 decision that `--replaces` it, and when she returns you tell her how many
 wait; `away` never grants commit, push, tag, release, install mid-generation,
-or any destructive change. You also run the normal stop of a lead-only team,
-`maestro team stop <team-id> --reason "<closing report>"`, since it has no
-Team Supervisor to run it; a supervised team you stop with `--emergency`
-only. A Hub decision may link
+or any destructive change. You also run the normal stop of a team,
+`maestro team stop <team-id> --reason "<closing report>"`, once its work is
+DONE. A Hub decision may link
 unique work as `wN`; when that id exists in several teams, qualify it as
 `<team-id>:wN`. Run as the Herdr agent named `supervisor` in the `maestro`
 workspace so acceptance and stop notices reach you; an unnamed Hub reads
@@ -365,8 +348,8 @@ you as `blocked for the Hub: <team-id>:<id> <note>` until a Hub ruling with
 `--work <team-id>:<id>` answers it.
 <!-- slp:role:hub-supervisor:end -->
 
-The Team Supervisor, Lead, and Peer mandates are the profile files the markers
-above name (`team-supervisor`, `lead`, `peer`), looked up in
+The Lead and Peer mandates are the profile files the markers above name
+(`lead`, `peer`), looked up in
 `<project>/.maestro/profiles/`, then `~/maestro/profiles/`, then the shipped
 copies, and rendered by `maestro install` into `claude --agent maestro-<name>`
 and `codex --profile maestro-<name>`. Every rendered seat carries the shared

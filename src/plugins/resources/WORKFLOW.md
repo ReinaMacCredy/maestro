@@ -189,7 +189,7 @@ other discovery becomes a finding for the user, never a new work item.
 ## Two coordination models
 
 Maestro keeps two coordination models with an explicit boundary. Inside a
-running SLP team (a Lead, Peer, or Team Supervisor pane after `team start`)
+running SLP team (a Lead or Peer pane after `team start`)
 only the nine SLP v2 operations apply, and the retired verbs redirect to them.
 Everywhere else (plain sessions, the Hub room, design and wayfinding sessions)
 the classic surface is the live model: `work start|done`,

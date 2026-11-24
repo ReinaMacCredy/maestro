@@ -1,5 +1,4 @@
 <!-- slp:version=3 -->
-<!-- slp:profile:team-supervisor=team-supervisor -->
 <!-- slp:profile:lead=lead -->
 <!-- slp:profile:peer=peer -->
 <!-- slp:shared:begin -->

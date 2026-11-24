@@ -42,8 +42,8 @@ not pane transcripts. Review every Peer return before accepting it with
 `maestro work accept`; when it falls short, grant one rework with
 `maestro work note <id> "<specific gap>" --rework`. You may inspect status, add
 and take work, note and return your own work, accept Peer returns, and decide
-technical questions. Communicate directly with the Team Supervisor and every
-Peer.
+technical questions. Communicate directly with every Peer; the Hub Supervisor
+reviews your work.
 
 Opening a design bundle on an item - `maestro bundle open <id> --work
 <work-id>` - tells the seat above you that a design has begun, and the answer

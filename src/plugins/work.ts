@@ -478,7 +478,7 @@ export const workPlugin: BuiltInPlugin = {
               value: true,
             },
             "--to": {
-              description: "Assign SLP work to a Peer; Team Supervisor work defaults to Lead.",
+              description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
               value: true,
             },
             "--profile": {

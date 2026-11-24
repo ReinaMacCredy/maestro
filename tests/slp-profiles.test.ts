@@ -85,7 +85,7 @@ test("profile-seat-body: maestro-peer renders the Peer block + peer body, the Le
   });
 }, 30_000);
 
-test("pack-v3-markers: a version-2 pack is refused naming slp:profile, an unknown profile is refused by name, the fixture pack resolves three seats to three profiles (red 4)", async () => {
+test("pack-v3-markers: a version-2 pack is refused naming slp:profile, an unknown profile is refused by name, the fixture pack resolves the lead and peer seats to their profiles (red 4)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     const fake = await installFakeHerdr(fixture);
@@ -110,14 +110,13 @@ test("pack-v3-markers: a version-2 pack is refused naming slp:profile, an unknow
     expect((await fakeHerdrCommands(fake)).filter((command) => command[0] === "agent" && command[1] === "start")).toEqual([]);
 
     await writeFile(packPath, shipped);
-    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Three seats", "--json"], fake.env);
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Two seats", "--json"], fake.env);
     expect(phaseFree(started.stderr)).toBe("");
     expect(started.exitCode).toBe(0);
     const data = envelope<{
       team: { roles: Array<{ name: string; paneId: string; profile: string; role: string }>; teamId: string };
     }>(started.stdout);
     expect(data.team.roles.map((role) => [role.role, role.profile])).toEqual([
-      ["team-supervisor", "team-supervisor"],
       ["lead", "lead"],
     ]);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
@@ -132,7 +131,6 @@ test("pack-v3-markers: a version-2 pack is refused naming slp:profile, an unknow
       (await runCliAt(fixture, fixture.repo, ["status", "--json"], { ...fake.env, HERDR_PANE_ID: lead.paneId })).stdout,
     );
     expect(status.roles.map((role) => [role.role, role.profile])).toEqual([
-      ["team-supervisor", "team-supervisor"],
       ["lead", "lead"],
       ["peer", "peer"],
     ]);
@@ -168,15 +166,14 @@ test("team-start-launch-args: --agent/--profile with autocompact and no --model 
     const room = await markedRoom(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
     await writeFile(
-      join(fixture.home, "maestro", "profiles", "team-supervisor.md"),
-      "---\nharness: claude\nmodel: default\nautocompact: 250000\ndescription: shadowed supervisor\n---\nRole: Team Supervisor (shadow).\n",
+      join(fixture.home, "maestro", "profiles", "peer-opus.md"),
+      "---\nharness: claude\nmodel: default\nautocompact: 250000\ndescription: shadowed peer-opus\n---\nRole: Peer (shadow).\n",
     );
     const fake = await installFakeHerdr(fixture);
 
     const data = await startTeam(fixture, room, fake.env, ["--peer-profile", "peer-opus"]);
     const commands = await fakeHerdrCommands(fake);
     const starts = startsOf(commands);
-    expect(starts.get(`supervisor-${data.team.teamId}`)).toEqual(["--agent", "maestro-team-supervisor", "--autocompact", "250000"]);
     expect(starts.get(`lead-${data.team.teamId}`)).toEqual(["--profile", "maestro-lead"]);
     for (const command of commands) expect(command).not.toContain("--model");
     // Contract prompts only; the w696 wake-up for the initial item rides along.
@@ -184,7 +181,7 @@ test("team-start-launch-args: --agent/--profile with autocompact and no --model 
       (command) =>
         command[0] === "agent" && command[1] === "prompt" && (command[3] ?? "").startsWith("slp team "),
     );
-    expect(prompts).toHaveLength(2);
+    expect(prompts).toHaveLength(1);
     for (const prompt of prompts) {
       expect(prompt[3]).toMatch(/^slp team \S+ generation 1 instance [0-9a-f-]{36}; reply [0-9a-f]{32}$/);
       expect(prompt[3]).not.toContain("Shared contract");
@@ -198,21 +195,23 @@ test("team-start-launch-args: --agent/--profile with autocompact and no --model 
     expect(added.exitCode).toBe(0);
     const peer = envelope<{ role: { name: string; profile: string } }>(added.stdout).role;
     expect(peer.profile).toBe("peer-opus");
-    expect(startsOf(await fakeHerdrCommands(fake)).get(peer.name)).toEqual(["--agent", "maestro-peer-opus"]);
+    expect(startsOf(await fakeHerdrCommands(fake)).get(peer.name)).toEqual(["--agent", "maestro-peer-opus", "--autocompact", "250000"]);
+    for (const command of await fakeHerdrCommands(fake)) expect(command).not.toContain("--model");
     const hub = envelope<{ teams: Array<{ roles: Array<{ profile: string; role: string }> }> }>(
       (await runCliAt(fixture, room, ["status", "--json"], fake.env)).stdout,
     );
-    expect(hub.teams[0]?.roles.map((role) => role.profile)).toEqual(["team-supervisor", "lead", "peer-opus"]);
+    expect(hub.teams[0]?.roles.map((role) => role.profile)).toEqual(["lead", "peer-opus"]);
 
     // room d128: --lead-model is a live launch-time choice again (see
-    // slp-seat-model.test.ts); only the profile flags for the two upper seats
-    // stay unknown, since the mandate changes through a shadowing file only.
+    // slp-seat-model.test.ts); only the Lead's profile flag stays unknown,
+    // since the mandate changes through a shadowing file only.
     const unknown = await runCliAt(fixture, room, ["team", "start", fixture.repo, "x", "--lead-profile", "lead", "--json"], fake.env);
     expect(unknown.exitCode).toBe(2);
     expect(failure(unknown.stderr).code).toBe("UNKNOWN_FLAG");
     const help = (await runCliAt(fixture, room, ["help", "team"], fake.env)).stdout;
-    for (const flag of ["--lead-model", "--peer-model", "--supervisor-model"]) expect(help).toContain(flag);
+    for (const flag of ["--lead-model", "--peer-model"]) expect(help).toContain(flag);
     expect(help).not.toContain("--lead-profile");
+    expect(help).not.toContain("--supervisor-model");
   });
 }, 30_000);
 
@@ -220,13 +219,13 @@ test("launch-refuses-uninstalled: a missing render fails team start with PROFILE
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     const fake = await installFakeHerdr(fixture);
-    await rm(renderedProfilePath(fixture.home, "claude", "team-supervisor"));
+    await rm(renderedProfilePath(fixture.home, "codex", "lead"));
 
     const refused = await runCliAt(fixture, room, ["team", "start", fixture.repo, "No render", "--json"], fake.env);
     expect(refused.exitCode).toBe(1);
     expect(failure(refused.stderr).code).toBe("PROFILE_NOT_INSTALLED");
     expect(failure(refused.stderr).message).toContain("maestro install");
-    expect(failure(refused.stderr).message).toContain("maestro-team-supervisor");
+    expect(failure(refused.stderr).message).toContain("maestro-lead");
     const commands = await fakeHerdrCommands(fake);
     expect(commands.filter((command) => command[0] === "agent" && command[1] === "start")).toEqual([]);
     expect(commands.filter((command) => command[1] === "create")).toEqual([]);
@@ -527,7 +526,7 @@ test("profile-shadow-composed: a frontmatter-only peer shadow leaves the compose
   });
 }, 40_000);
 
-test("lead-mandate-rendered: the installed maestro-lead seat carries room d118's self-work default and room d117's lead-only reviewer line from the shared contract", async () => {
+test("lead-mandate-rendered: the installed maestro-lead seat carries room d118's self-work default and room d117's Hub reviewer line from the shared contract", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
@@ -537,7 +536,7 @@ test("lead-mandate-rendered: the installed maestro-lead seat carries room d118's
     const rendered = unwrap((await claudeRender(fixture, "lead")).body);
     expect(rendered).toContain("Working your own items is the default path");
     expect(rendered).toContain("Open a Peer the way a harness opens a sub-agent");
-    expect(rendered).toContain("the Lead's reviewer is the Hub Supervisor");
+    expect(rendered).toContain("The Lead's reviewer is the Hub Supervisor");
     expect(rendered).not.toContain("never implement a Peer's item yourself");
 
     const codexSeat = unwrap(await readFile(join(fixture.home, ".codex", "maestro-lead.config.toml"), "utf8"));

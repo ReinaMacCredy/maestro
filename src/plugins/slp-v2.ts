@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import {
   CliError,
   requiredPosition,
@@ -24,7 +24,6 @@ import { isRoom } from "./room.ts";
 import {
   buildSlpTeamPlan,
   HerdrSlpRuntime,
-  slpStopEnvironment,
   type SeatLaunch,
   type SlpAcknowledgedRole,
   type SlpRole,
@@ -52,15 +51,7 @@ type LifecyclePhase = "RESERVED" | "RUNTIME_READY" | "COMMITTED";
 interface PackProfiles {
   lead: string;
   peer: string;
-  teamSupervisor: string;
 }
-
-// room d117: the team shape is fixed for the life of a generation. It rides in
-// configuration_json rather than a column because every path that rebuilds a
-// plan - start, runtime repair, restore, status, stop - already carries the
-// configuration, and a generation started before this existed has no shape
-// field, which reads back as "supervised" and keeps behaving exactly as before.
-type SlpTeamShape = "supervised" | "lead-only";
 
 // room d128: the models chosen at team start, one per seat, recorded beside
 // the profiles so restore and a later work add read them back. Absent means
@@ -68,7 +59,6 @@ type SlpTeamShape = "supervised" | "lead-only";
 interface PackModels {
   lead?: string;
   peer?: string;
-  teamSupervisor?: string;
 }
 
 // d91: a generation pins the pack plus the source bytes of every profile it
@@ -77,14 +67,13 @@ interface PackConfiguration {
   models?: PackModels;
   profileDigests: Record<string, string>;
   profiles: PackProfiles;
-  shape: SlpTeamShape;
 }
 
 function packModels(value: unknown): PackModels | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
   const models: PackModels = {};
-  for (const seat of ["lead", "peer", "teamSupervisor"] as const) {
+  for (const seat of ["lead", "peer"] as const) {
     const model = raw[seat];
     if (typeof model === "string" && model.trim() !== "") models[seat] = model;
   }
@@ -103,16 +92,8 @@ function packConfiguration(json: string): PackConfiguration {
     profiles: {
       lead: profiles?.lead ?? "lead",
       peer: profiles?.peer ?? "peer",
-      teamSupervisor: profiles?.teamSupervisor ?? "team-supervisor",
     },
-    // Only the exact token switches shape; anything else, including a value a
-    // newer maestro wrote and this one does not know, reads as supervised.
-    shape: parsed.shape === "lead-only" ? "lead-only" : "supervised",
   };
-}
-
-function teamShape(configurationJson: string): SlpTeamShape {
-  return packConfiguration(configurationJson).shape;
 }
 
 function seatLaunch(profile: Profile, model: string | undefined): SeatLaunch {
@@ -144,34 +125,20 @@ async function requireProfile(name: string, projectPath: string, marker: string)
 interface ResolvedSeats {
   lead: SeatLaunch;
   profileDigests: Record<string, string>;
-  teamSupervisor: SeatLaunch | null;
 }
 
-// room d117: a lead-only generation never opens a Team Supervisor, so it must
-// not require that profile to exist and must not pin its bytes - pinning a
-// profile the team never launches would make an unrelated edit to it trip
-// requireProfilesUnchanged on a team that does not use it.
 async function resolveSeats(
   profiles: PackProfiles,
   projectPath: string,
-  shape: SlpTeamShape = "supervised",
   models: PackModels = {},
 ): Promise<ResolvedSeats> {
-  const teamSupervisor = shape === "lead-only" ? null : await requireProfile(
-    profiles.teamSupervisor,
-    projectPath,
-    "the team-supervisor marker",
-  );
   const lead = await requireProfile(profiles.lead, projectPath, "the lead marker");
   const peer = await requireProfile(profiles.peer, projectPath, "the peer marker or --peer-profile");
   const profileDigests: Record<string, string> = {};
-  for (const profile of [teamSupervisor, lead, peer]) {
-    if (profile) profileDigests[profile.name] = profileDigest(profile);
-  }
+  for (const profile of [lead, peer]) profileDigests[profile.name] = profileDigest(profile);
   return {
     lead: seatLaunch(lead, models.lead),
     profileDigests,
-    teamSupervisor: teamSupervisor ? seatLaunch(teamSupervisor, models.teamSupervisor) : null,
   };
 }
 
@@ -188,15 +155,12 @@ async function planForTeam(team: {
   project_path: string;
   team_id: string;
 }): Promise<SlpTeamPlan> {
-  const { models = {}, profiles, shape } = packConfiguration(team.configuration_json);
+  const { models = {}, profiles } = packConfiguration(team.configuration_json);
   return buildSlpTeamPlan({
     generation: team.generation,
     lead: await seatLaunchOrDefault(profiles.lead, team.project_path, models.lead),
     projectPath: team.project_path,
     teamId: team.team_id,
-    teamSupervisor: shape === "lead-only"
-      ? null
-      : await seatLaunchOrDefault(profiles.teamSupervisor, team.project_path, models.teamSupervisor),
   });
 }
 
@@ -267,12 +231,6 @@ interface SlpLifecycleRow {
 }
 
 const packSource = join(import.meta.dir, "resources", "SLP.md");
-
-// room d155 (w740): the shipped question-back profile. It is named here
-// because one rule turns on it - the single Peer a Team Supervisor may open
-// (room d154) - and a literal spread across that check and its message is a
-// rename waiting to go half-done.
-const questionerProfile = "questioner";
 
 const retiredSlpOperations = new Map<string, string>([
   ["attention", "status"],
@@ -396,7 +354,7 @@ function migrateRoom(store: Store): void {
     CREATE TABLE IF NOT EXISTS slp_team_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
+      role TEXT NOT NULL CHECK(role IN ('lead', 'peer', 'observer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -636,8 +594,7 @@ function blockedForHub(
   team: { generation: number; team_id: string },
   roles: ReadonlyArray<{ name: string; role: string }>,
 ): Array<{ body: string; workId: string }> {
-  const escalator = roles.find((role) => role.role === "team-supervisor") ??
-    roles.find((role) => role.role === "lead");
+  const escalator = roles.find((role) => role.role === "lead");
   if (!escalator || !tableExists(project, "slp_work_entries")) return [];
   if (!project.hasColumn("slp_work_entries", "flag")) return [];
   const notes = project.database
@@ -770,7 +727,7 @@ function migrateProject(store: Store): void {
     CREATE TABLE IF NOT EXISTS slp_local_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
+      role TEXT NOT NULL CHECK(role IN ('lead', 'peer', 'observer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -845,16 +802,6 @@ function migrateProject(store: Store): void {
       target_id TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS slp_stop_grants (
-      token TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      generation INTEGER NOT NULL,
-      requested_by TEXT NOT NULL,
-      owner_pid INTEGER,
-      reason TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      UNIQUE(team_id, generation)
-    );
     CREATE TABLE IF NOT EXISTS slp_lifecycle_operations (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
@@ -909,16 +856,6 @@ function migrateProject(store: Store): void {
     "slp_lifecycle_operations",
     "reason",
     "ALTER TABLE slp_lifecycle_operations ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_stop_grants",
-    "owner_pid",
-    "ALTER TABLE slp_stop_grants ADD COLUMN owner_pid INTEGER",
-  );
-  store.ensureColumn(
-    "slp_stop_grants",
-    "reason",
-    "ALTER TABLE slp_stop_grants ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
   );
   store.ensureColumn(
     "slp_local_roles",
@@ -1001,7 +938,7 @@ function requirePackV3(pack: string): string {
   if (version !== "3" || /<!-- slp:model:/.test(pack)) {
     throw new CliError(
       "INVALID_SLP_PACK",
-      `SLP.md is version ${version}; version 3 replaces every <!-- slp:model:<seat>=<harness>:<model> --> marker with <!-- slp:profile:<seat>=<name> --> for team-supervisor, lead and peer and moves the seat sections into profile files; maestro install rewrites the shipped copy under ~/.maestro/runtime, then migrate the Hub copy by hand`,
+      `SLP.md is version ${version}; version 3 replaces every <!-- slp:model:<seat>=<harness>:<model> --> marker with <!-- slp:profile:<seat>=<name> --> for lead and peer and moves the seat sections into profile files; maestro install rewrites the shipped copy under ~/.maestro/runtime, then migrate the Hub copy by hand`,
       { version },
     );
   }
@@ -1049,7 +986,6 @@ function roleContracts(
     return { acknowledgement, body, briefDigest, instanceId, packDigest, readyChallenge };
   };
   return new Map<SlpRole, SlpRoleContract>([
-    ["team-supervisor", contract("team-supervisor")],
     ["lead", contract("lead")],
     ["peer", contract("peer")],
   ]);
@@ -1364,7 +1300,7 @@ type StartReservation =
   | { kind: "wait" };
 
 // d98: the per-generation seat override is --peer-profile; room d128 adds the
-// three model flags. A start that names a different peer profile or a
+// two model flags. A start that names a different peer profile or a
 // different model set than the pinned one is a configuration change, refused
 // on a running or pending generation exactly as an objective change is.
 function changedConfiguration(
@@ -1373,7 +1309,7 @@ function changedConfiguration(
 ): boolean {
   if (input.peerProfile !== undefined && input.peerProfile !== configuration.profiles.peer) return true;
   const pinned = configuration.models ?? {};
-  return (["lead", "peer", "teamSupervisor"] as const).some((seat) => (input.models[seat] ?? null) !== (pinned[seat] ?? null));
+  return (["lead", "peer"] as const).some((seat) => (input.models[seat] ?? null) !== (pinned[seat] ?? null));
 }
 
 function reserveStart(
@@ -1426,23 +1362,6 @@ function reserveStart(
             projectPath: running.project_path,
           },
         );
-      }
-      const stopGrant = store.database
-        .query<{ owner_pid: number | null; token: string }, [string, number]>(
-          `SELECT token, owner_pid FROM slp_stop_grants
-           WHERE team_id = ? AND generation = ?`,
-        )
-        .get(running.team_id, running.generation);
-      if (stopGrant && lifecycleOwnerIsAlive(stopGrant.owner_pid)) {
-        throw new CliError(
-          "TEAM_STOP_IN_PROGRESS",
-          `${running.team_id}:g${running.generation} is shutting down; runtime repair is fenced`,
-        );
-      }
-      if (stopGrant) {
-        store.database
-          .query("DELETE FROM slp_stop_grants WHERE token = ?")
-          .run(stopGrant.token);
       }
       const stopping = lifecycleRow(store, running.team_id, running.generation, "STOP");
       if (
@@ -1811,13 +1730,11 @@ function finalizeStart(
 async function ensureRuntimePane(
   runtime: HerdrSlpRuntime,
   team: { generation: number; project_path: string; runtime_pane_id: string; team_id: string; workspace_id: string },
-  roles: readonly SlpRuntimeRole[],
 ): Promise<string> {
   if (team.runtime_pane_id && await runtime.paneAlive(team.runtime_pane_id)) return team.runtime_pane_id;
-  const supervisor = roles.find((role) => role.role === "team-supervisor") ?? null;
   let paneId: string;
   try {
-    paneId = await openRuntimePane(runtime.client, team, supervisor?.paneId ?? null);
+    paneId = await openRuntimePane(runtime.client, team, null);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new CliError(
@@ -1855,19 +1772,11 @@ async function startTeam(
   projectInput: string,
   objective: string,
   peerProfileOverride: string | undefined,
-  // room d117: chosen once, at start, and pinned for the generation's life.
-  shape: SlpTeamShape = "supervised",
-  // room d128: the seat models chosen at start, pinned with the shape.
+  // room d128: the seat models chosen at start, pinned for the generation's life.
   models: PackModels = {},
 ): Promise<CliResult> {
   if (!isRoom(context.store.database)) {
     throw new CliError("ROLE_FORBIDDEN", "team start is Hub Supervisor authority and must run from ~/maestro");
-  }
-  if (shape === "lead-only" && models.teamSupervisor !== undefined) {
-    throw new CliError(
-      "INVALID_OPTION",
-      "--supervisor-model has no seat to apply to in a --lead-only team; drop it or start a supervised team",
-    );
   }
   const resolvedProjectPath = resolve(projectInput);
   const projectStat = await stat(resolvedProjectPath).catch(() => null);
@@ -1898,14 +1807,12 @@ async function startTeam(
     const hubProfiles: PackProfiles = {
       lead: packProfile(hubPack, "lead"),
       peer: peerProfileOverride ?? packProfile(hubPack, "peer"),
-      teamSupervisor: packProfile(hubPack, "team-supervisor"),
     };
-    const hubSeats = await resolveSeats(hubProfiles, projectPath, shape, models);
+    const hubSeats = await resolveSeats(hubProfiles, projectPath, models);
     const hubConfiguration: PackConfiguration = {
       ...(Object.keys(models).length > 0 ? { models } : {}),
       profileDigests: hubSeats.profileDigests,
       profiles: hubProfiles,
-      shape,
     };
     await archivePack(roomRoot, hubPackBytes, hubDigest);
     const ownerToken = randomUUID();
@@ -1943,7 +1850,6 @@ async function startTeam(
       const chosen = [
         launchModels.lead ? `lead model: ${launchModels.lead}` : null,
         launchModels.peer ? `peer model: ${launchModels.peer}` : null,
-        launchModels.teamSupervisor ? `supervisor model: ${launchModels.teamSupervisor}` : null,
       ].filter((part) => part !== null);
       process.stderr.write(`${chosen.join("; ")}\n`);
     }
@@ -1969,13 +1875,12 @@ async function startTeam(
         }
         await requireProfilesUnchanged(configuration, running);
         await archivePack(roomRoot, snapshotBytes, running.pack_digest);
-        const seats = await resolveSeats(configuration.profiles, projectPath, configuration.shape, configuration.models);
+        const seats = await resolveSeats(configuration.profiles, projectPath, configuration.models);
         const plan = buildSlpTeamPlan({
           generation: running.generation,
           lead: seats.lead,
           projectPath,
           teamId: running.team_id,
-          teamSupervisor: seats.teamSupervisor,
         });
         const recorded = projectStore.database
           .query<{
@@ -1989,7 +1894,7 @@ async function startTeam(
             `SELECT role, pane_id, instance_id, pack_digest, brief_digest, ready_challenge
              FROM slp_local_roles
              WHERE team_id = ? AND generation = ? AND instance_id <> ''
-               AND role IN ('team-supervisor', 'lead')`,
+               AND role = 'lead'`,
           )
           .all(running.team_id, running.generation);
         const existingInstances = Object.fromEntries(
@@ -2065,7 +1970,6 @@ async function startTeam(
               team_id: running.team_id,
               workspace_id: started.workspaceId,
             },
-            started.roles,
           );
           await pushInitialWorkNotice(projectPath, work);
           context.sessions.record("team.start");
@@ -2119,13 +2023,12 @@ async function startTeam(
         );
       }
       const configuration = packConfiguration(operation.configuration_json);
-      const seats = await resolveSeats(configuration.profiles, projectPath, configuration.shape, configuration.models);
+      const seats = await resolveSeats(configuration.profiles, projectPath, configuration.models);
       const plan = buildSlpTeamPlan({
         generation: operation.generation,
         lead: seats.lead,
         projectPath,
         teamId: operation.team_id,
-        teamSupervisor: seats.teamSupervisor,
       });
       await mkdir(join(projectPath, ".maestro"), { recursive: true });
       await writeFile(snapshotPath, packBytes);
@@ -2165,7 +2068,6 @@ async function startTeam(
           team_id: operation.team_id,
           workspace_id: workspaceId,
         },
-        roles,
       );
       await pushInitialWorkNotice(projectPath, work);
       context.sessions.record("team.start");
@@ -2225,8 +2127,8 @@ interface SlpActor {
   team: ActiveLocalTeam;
 }
 
-// room d117: the reviewer of a lead-only team's work is the Hub Supervisor,
-// which holds no seat in that team and so is not an SlpActor. The reviewer
+// room d117: the reviewer of the Lead's work is the Hub Supervisor, which
+// holds no seat in the team and so is not an SlpActor. The reviewer
 // operations - accept, rework, and the status read behind them - are widened
 // to this type, which every SlpActor already satisfies; nothing else in the
 // protocol accepts it, so a hub actor can never take, return or note work.
@@ -2371,25 +2273,9 @@ function requireRunningState(store: Store, team: ActiveLocalTeam): void {
   }
 }
 
-function requireRunningGeneration(
-  store: Store,
-  team: ActiveLocalTeam,
-  allowedStopToken: string | null = null,
-): void {
+function requireRunningGeneration(store: Store, team: ActiveLocalTeam): void {
   requireRunningState(store, team);
-  if (!tableExists(store, "slp_stop_grants")) return;
-  const grant = store.database
-    .query<{ token: string }, [string, number]>(
-      "SELECT token FROM slp_stop_grants WHERE team_id = ? AND generation = ?",
-    )
-    .get(team.team_id, team.generation);
-  if (grant && grant.token !== allowedStopToken) {
-    throw new CliError(
-      "TEAM_STOP_IN_PROGRESS",
-      `${team.team_id}:g${team.generation} is shutting down; retry after team stop finishes`,
-    );
-  }
-  if (allowedStopToken === null && tableExists(store, "slp_lifecycle_operations")) {
+  if (tableExists(store, "slp_lifecycle_operations")) {
     const stopping = store.database
       .query<{ present: number }, [string, number]>(
         `SELECT 1 AS present FROM slp_lifecycle_operations
@@ -2428,13 +2314,11 @@ function workData(work: SlpWorkRow): Record<string, unknown> {
   };
 }
 
-// room d117: the reviewer of a Lead's work is the Team Supervisor in a
-// supervised team and the Hub Supervisor in a lead-only one. A Peer's reviewer
-// is the Lead in both shapes - the shape only ever moves the boundary ABOVE the
-// Lead, never the one below it.
+// room d117: the reviewer of a Lead's work is the Hub Supervisor; a Peer's
+// reviewer is the Lead.
 type WorkReviewer =
   | { kind: "hub" }
-  | { kind: "role"; role: "team-supervisor" | "lead" };
+  | { kind: "role"; role: "lead" };
 
 const hubReviewerName = "hub-supervisor";
 
@@ -2459,10 +2343,7 @@ function expectedReviewer(
       `assignee role is missing for ${work.assigned_to}`,
     );
   }
-  if (assignee.role !== "lead") return { kind: "role", role: "lead" };
-  return teamShape(actor.team.configuration_json) === "lead-only"
-    ? { kind: "hub" }
-    : { kind: "role", role: "team-supervisor" };
+  return assignee.role === "lead" ? { kind: "hub" } : { kind: "role", role: "lead" };
 }
 
 function requireWorkReviewer(
@@ -2472,15 +2353,14 @@ function requireWorkReviewer(
   operation: "accept" | "grant rework",
 ): void {
   const reviewer = expectedReviewer(context, actor, work);
-  // The Hub holds this boundary only where room d117 puts it; a hub actor
-  // reaching into a supervised team is refused just as firmly as a seat
-  // reaching for a lead-only team's Lead review.
+  // The Hub reviews the Lead and nothing below it; a hub actor reaching for a
+  // Peer's item is refused just as firmly as a seat reaching for the Lead's.
   if ((reviewer.kind === "hub") !== (actor.role === hubReviewerName)) {
     throw new CliError(
       "ROLE_FORBIDDEN",
       reviewer.kind === "hub"
         ? `${actor.role} cannot ${operation} for work assigned to ${work.assigned_to};` +
-          ` this is a lead-only generation, so the Hub Supervisor reviews it from ~/maestro`
+          ` the Hub Supervisor reviews the Lead's work from ~/maestro`
         : `the Hub Supervisor cannot ${operation} for work assigned to ${work.assigned_to};` +
           ` its reviewer is the ${reviewer.role} (d72)`,
       { actor: actor.name, expectedReviewer: reviewerLabel(reviewer) },
@@ -2507,7 +2387,7 @@ function stopSuffix(stop: { emergency: boolean; reason: string } | null): string
 // generation. Nothing here stops anything.
 function orphanedSuffix(team: Record<string, unknown>): string {
   if (team.orphaned !== true) return "";
-  return `; ORPHANED? no lead or team-supervisor pane - a Herdr that is down reads the same from here;` +
+  return `; ORPHANED? no lead pane - a Herdr that is down reads the same from here;` +
     ` if it is real, close it with: maestro team stop ${String(team.teamId)} --emergency`;
 }
 
@@ -2567,10 +2447,10 @@ function rolePaneName(
     .get(actor.team.team_id, actor.team.generation, role)?.name ?? null;
 }
 
-// room d117: the RETURNED push follows the reviewer. In a supervised team that
-// is the Team Supervisor's pane; in a lead-only one it is the Hub Supervisor's
-// pane, recorded at team start, which is the same target work accept already
-// uses to report a hub-created item back to the room.
+// room d117: the RETURNED push follows the reviewer. For the Lead's work that
+// is the Hub Supervisor's pane, recorded at team start, which is the same
+// target work accept already uses to report a hub-created item back to the
+// room.
 function reviewerPushTarget(
   context: PluginContext,
   actor: SlpActor,
@@ -2677,11 +2557,11 @@ export async function maybeHandleSlpWorkAdd(
   if (isRoom(context.store.database) && invocation.options.to !== undefined) {
     throw new CliError(
       "ROLE_FORBIDDEN",
-      "Hub Supervisor cannot assign team work directly; communicate through Team Supervisor",
+      "Hub Supervisor cannot assign team work directly; communicate through the Lead",
     );
   }
   if (!requireActiveOrLegacy(context)) return null;
-  const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
+  const actor = requireSlpActor(context, ["lead"]);
   requireRunningGeneration(context.store, actor.team);
   refuseDiscardedWorkAddOptions(invocation);
   const objective = requiredPosition(invocation, 0, "work objective");
@@ -2717,38 +2597,7 @@ export async function maybeHandleSlpWorkAdd(
   let plan: SlpTeamPlan | null = null;
   let pinnedProfile: { digest: string; name: string } | null = null;
   const runtime = new HerdrSlpRuntime();
-  // w740 (room d154, d902): the one Peer a Team Supervisor may open is the
-  // question-back seat, because d153 puts that seat in the reviewer's hands and
-  // the reviewer of a Lead in a supervised team is the Team Supervisor. It is a
-  // narrowing by profile name and nothing else: --profile cannot smuggle a
-  // different lens in under this name, every other --to is refused as before,
-  // and the item it creates is an ordinary Peer item whose reviewer is still
-  // the Lead, since expectedReviewer keys off the assignee's role.
-  const openingQuestioner = actor.role === "team-supervisor" &&
-    requestedTarget === composedPeerName(questionerProfile) &&
-    (await resolveProfile(questionerProfile, seatDirectories(actor.team.project_path))) !== null;
-  if (openingQuestioner && profileOption !== undefined) {
-    throw new CliError(
-      "INVALID_OPTION",
-      `--profile does not apply to ${composedPeerName(questionerProfile)}; the name is the profile`,
-    );
-  }
-  if (actor.role === "team-supervisor" && !openingQuestioner) {
-    if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
-    if (requestedTarget && requestedTarget !== "lead" && requestedTarget !== assignee.name) {
-      throw new CliError(
-        "ROLE_FORBIDDEN",
-        `Team Supervisor work is assigned to the Lead, or to ${composedPeerName(questionerProfile)} (room d154)`,
-      );
-    }
-    if (profileOption !== undefined) {
-      throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
-    }
-    if (modelOption !== undefined) {
-      throw new CliError("INVALID_OPTION", "--model applies to Lead work add --to <peer>");
-    }
-    if (fresh) throw new CliError("INVALID_OPTION", "--fresh applies to Lead work add --to <peer>");
-  } else if (!requestedTarget) {
+  if (!requestedTarget) {
     // room d118 (w725): a Lead opens its own item with no --to. The row is the
     // one team start writes for Lead work - the Lead is its own assignee - so
     // no Peer pane is opened, no wake line goes out, and its reviewer is the
@@ -2906,11 +2755,6 @@ export async function maybeHandleSlpWorkAdd(
     };
   }
   if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "work assignee is unavailable");
-  // w740 (d902): the Peer's role rows are written because a Peer pane was
-  // opened, not because of who opened it. Keyed on the actor being a Lead,
-  // a Team Supervisor opening the question-back seat wrote the work row and
-  // no role row, and every later read of that item died on
-  // SLP_BINDING_MISSING - the reviewer lookup starts from the assignee row.
   const opensPeer = assignee.role === "peer";
 
   const now = new Date().toISOString();
@@ -3035,7 +2879,7 @@ export async function maybeHandleSlpWorkNote(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
-  // room d117: the Hub grants rework on a lead-only team's Lead work. It is a
+  // room d117: the Hub grants rework on the Lead's work. It is a
   // reviewer here and nothing more - a Hub --blocked note would be the Hub
   // escalating to itself, so it is refused rather than quietly recorded.
   // w736 F1: the plain note joins the grant. A reviewer answer is not always a
@@ -3099,7 +2943,7 @@ export async function maybeHandleSlpWorkNote(
   }
   if (!requireActiveOrLegacy(context)) return null;
   migrateProject(context.store);
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const actor = requireSlpActor(context, ["lead", "peer"]);
   return noteWorkAs(context, actor, invocation);
 }
 
@@ -3114,7 +2958,7 @@ function roomHoldsLocalWork(store: Store, id: string): boolean {
 }
 
 // room d117: reviewer-shaped like acceptWorkAs, so the Hub's --rework grant is
-// the same grant a Team Supervisor records, not a parallel implementation.
+// the same grant the Lead records, not a parallel implementation.
 async function noteWorkAs(
   context: PluginContext,
   actor: SlpReviewerActor,
@@ -3233,11 +3077,8 @@ async function noteWorkAs(
     );
   }
   // d761: the blocked note wakes the seat above the actor, never the reviewer
-  // of the item, because the one who is stuck is the one escalating.
-  // room d117: in a lead-only generation the seat above the Lead IS the Hub,
-  // so a Lead's blocked note escalates there. Before this, that note resolved
-  // to a team-supervisor pane that does not exist in such a team and the
-  // escalation - the only question channel a seat has - was dropped silently.
+  // of the item, because the one who is stuck is the one escalating; the seat
+  // above the Lead is the Hub (room d117).
   // room d123: the owner walk-in rides the same path with its own subject; it
   // is one line up for the record, never a stall and never the blocked flag.
   if (blocked || owner) {
@@ -3253,10 +3094,9 @@ async function noteWorkAs(
   };
 }
 
-// The one upward push a seat has: Peer to Lead, Lead to Team Supervisor, Team
-// Supervisor to the Hub pane, and a lead-only Lead straight to the Hub (room
-// d117). The Hub cannot read a supervised team's items, so its line carries the
-// team and points at the room's own status.
+// The one upward push a seat has: Peer to Lead, and the Lead to the Hub pane
+// (room d117). The Hub's line carries the team and points at the room's own
+// status, because the Hub cannot read a team item by bare id.
 async function pushOneSeatUp(
   context: PluginContext,
   actor: SlpReviewerActor,
@@ -3267,24 +3107,21 @@ async function pushOneSeatUp(
   // The Hub reviewer never notes --blocked or --owner (refused at the room
   // path), and it has no seat above to push to.
   if (actor.role === hubReviewerName) return;
-  const toHub = actor.role === "team-supervisor" ||
-    (actor.role === "lead" && teamShape(actor.team.configuration_json) === "lead-only");
+  const toHub = actor.role === "lead";
   await pushNotice(
     actor.team.project_path,
     actor.role,
-    toHub
-      ? hubSupervisorTarget(actor.team)
-      : rolePaneName(context, actor, actor.role === "lead" ? "team-supervisor" : "lead"),
+    toHub ? hubSupervisorTarget(actor.team) : rolePaneName(context, actor, "lead"),
     `${id} ${subject}`,
-    toHub ? `${body} in ${actor.team.team_id} g${actor.team.generation}` : body,
+    toHub ? `${noticeSummary(body)} in ${actor.team.team_id} g${actor.team.generation}` : body,
     toHub ? "maestro status" : `maestro status ${id}`,
   );
 }
 
 // w740 (room d153, d898): opening a Full-tier bundle on an item is the store's
 // signal that a design phase has begun, and the seat it must reach is the
-// reviewer above the one designing - the Team Supervisor for a Lead in a
-// supervised team, the Hub for a lead-only Lead, the Lead for a Peer - because
+// reviewer above the one designing - the Hub for the Lead, the Lead for a
+// Peer - because
 // d153 puts the question-back pass in the reviewer's hands, not the designer's.
 // Every failure here is silent: a bundle open outside a running team, from a
 // pane with no role, or on an id no SLP item holds, is an ordinary bundle open.
@@ -3296,7 +3133,7 @@ async function pushDesignOpened(
   if (workIds.length === 0) return;
   let actor: SlpActor;
   try {
-    actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+    actor = requireSlpActor(context, ["lead", "peer"]);
   } catch {
     return;
   }
@@ -3324,7 +3161,7 @@ async function pushDesignOpened(
 // w740 (room d154, d899): decide is the fifth waking operation. A ruling on an
 // item is an instruction to the seat holding it, so the line goes to the
 // assignee and not to the reviewer; that is what carries the Hub's order down
-// to a lead-only Lead, which d154 relies on and no code sent before. A ruling
+// to the Lead, which d154 relies on and no code sent before. A ruling
 // with no item, or one a seat makes on its own item, wakes nobody.
 async function pushDecision(
   store: Store,
@@ -3480,8 +3317,8 @@ async function returnWork(context: PluginContext, id: string, body: string): Pro
 }
 
 async function acceptWork(context: PluginContext, id: string, outcome: string): Promise<CliResult> {
-  // room d117: from the Hub room this is the reviewer boundary of a lead-only
-  // team; from a team workspace it is the seat boundary it has always been.
+  // room d117: from the Hub room this is the reviewer boundary of the Lead's
+  // work; from a team workspace it is the seat boundary it has always been.
   if (isRoom(context.store.database)) {
     const bound = bindHubReviewer(context, id);
     try {
@@ -3491,14 +3328,14 @@ async function acceptWork(context: PluginContext, id: string, outcome: string): 
     }
   }
   migrateProject(context.store);
-  const actor = requireSlpActor(context, ["team-supervisor", "lead"]);
+  const actor = requireSlpActor(context, ["lead"]);
   return acceptWorkAs(context, actor, id, outcome);
 }
 
 // room d117: the body below is reviewer-shaped rather than seat-shaped, so the
-// Hub Supervisor runs exactly the same transition, entry and activity row a
-// Team Supervisor does - one accept path, two callers, no second code path to
-// drift. `context.store` is the PROJECT store in both cases.
+// Hub Supervisor runs exactly the same transition, entry and activity row the
+// Lead does - one accept path, two callers, no second code path to drift.
+// `context.store` is the PROJECT store in both cases.
 async function acceptWorkAs(
   context: PluginContext,
   actor: SlpReviewerActor,
@@ -3707,13 +3544,11 @@ function resolveHubWorkTarget(
   );
 }
 
-// room d117: the Hub Supervisor reviews a lead-only team's work from ~/maestro.
-// It has no pane in that team, so it cannot go through requireSlpActor; instead
-// the work id is resolved to its team, the PROJECT store is opened, and a
-// reviewer actor named `hub-supervisor` is handed to the same accept and rework
-// bodies the seats use. The shape check is the gate: a supervised team still
-// refuses the Hub outright, which is d72's "Hub Supervisor never manages Lead
-// directly" surviving intact everywhere room d117 did not displace it.
+// room d117: the Hub Supervisor reviews the Lead's work from ~/maestro. It has
+// no pane in the team, so it cannot go through requireSlpActor; instead the
+// work id is resolved to its team, the PROJECT store is opened, and a reviewer
+// actor named `hub-supervisor` is handed to the same accept and rework bodies
+// the seats use.
 interface HubReviewerBinding {
   actor: SlpReviewerActor;
   close: () => void;
@@ -3751,15 +3586,6 @@ function bindHubReviewer(
       throw new CliError(
         "NO_ACTIVE_TEAM",
         `${target.teamId}:g${target.generation} is no longer running`,
-      );
-    }
-    if (teamShape(team.configuration_json) !== "lead-only") {
-      throw new CliError(
-        "ROLE_FORBIDDEN",
-        `${target.teamId}:g${target.generation} has a Team Supervisor, which reviews the Lead's` +
-          ` work (d72); the Hub Supervisor reviews directly only in a lead-only generation` +
-          ` (room d117)`,
-        { expectedReviewer: "team-supervisor", work: target.workId },
       );
     }
     return {
@@ -3909,16 +3735,16 @@ async function decide(context: PluginContext, invocation: CliInvocation): Promis
   let actorRole: SlpRole = "lead";
   let teamId: string;
   let generation: number;
-  let defaultScope: "technical" | "team" | "owner";
+  let defaultScope: "technical" | "owner";
   let allowedScopes: readonly string[];
   if (local) {
-    const role = requireSlpActor(context, ["team-supervisor", "lead"]);
+    const role = requireSlpActor(context, ["lead"]);
     requireRunningGeneration(context.store, role.team);
     actor = role.name;
     actorRole = role.role;
     teamId = role.team.team_id;
     generation = role.team.generation;
-    defaultScope = role.role === "lead" ? "technical" : "team";
+    defaultScope = "technical";
     allowedScopes = [defaultScope];
   } else if (isRoom(context.store.database)) {
     actor = "hub-supervisor";
@@ -4071,55 +3897,6 @@ function unfinishedWork(store: Store, team: ActiveLocalTeam): Array<{ id: string
     .all(team.team_id, team.generation);
 }
 
-interface StopProxyEnvironment {
-  closeWorkspace: boolean;
-  helperTabId: string;
-  helperWorkspaceId: string;
-  projectPath: string;
-  token: string;
-}
-
-function stopProxyEnvironment(): StopProxyEnvironment | null {
-  const token = process.env[slpStopEnvironment.token];
-  if (!token) return null;
-  const projectPath = process.env[slpStopEnvironment.project];
-  const helperTabId = process.env[slpStopEnvironment.helperTab];
-  const helperWorkspaceId = process.env[slpStopEnvironment.helperWorkspace];
-  const closeWorkspace = process.env[slpStopEnvironment.closeWorkspace];
-  if (
-    !projectPath ||
-    !helperTabId ||
-    !helperWorkspaceId ||
-    (closeWorkspace !== "0" && closeWorkspace !== "1")
-  ) {
-    throw new CliError("INVALID_STOP_GRANT", "incomplete SLP stop helper authority");
-  }
-  return {
-    closeWorkspace: closeWorkspace === "1",
-    helperTabId,
-    helperWorkspaceId,
-    projectPath,
-    token,
-  };
-}
-
-function localTeamState(store: Store, team: ActiveLocalTeam): "RUNNING" | "STOPPED" | null {
-  return store.database
-    .query<{ state: "RUNNING" | "STOPPED" }, [string, number]>(
-      "SELECT state FROM slp_local_teams WHERE team_id = ? AND generation = ?",
-    )
-    .get(team.team_id, team.generation)?.state ?? null;
-}
-
-function clearStopGrant(store: Store, team: ActiveLocalTeam, token: string): void {
-  if (!tableExists(store, "slp_stop_grants")) return;
-  store.database
-    .query(
-      "DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ? AND token = ?",
-    )
-    .run(team.team_id, team.generation, token);
-}
-
 function stopResult(team: ActiveLocalTeam, emergency: boolean): CliResult {
   return {
     data: {
@@ -4133,133 +3910,6 @@ function stopResult(team: ActiveLocalTeam, emergency: boolean): CliResult {
     },
     text: `${team.team_id} generation ${team.generation} STOPPED${emergency ? " (emergency)" : ""}`,
   };
-}
-
-function issueStopGrant(
-  store: Store,
-  team: ActiveLocalTeam,
-  actor: string,
-  reason: string,
-): string {
-  migrateProject(store);
-  const token = randomUUID();
-  store.database.exec("BEGIN IMMEDIATE");
-  try {
-    requireRunningState(store, team);
-    const unfinished = unfinishedWork(store, team);
-    if (unfinished.length > 0) {
-      throw new CliError(
-        "TEAM_UNFINISHED",
-        `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
-        { unfinished },
-      );
-    }
-    const existing = store.database
-      .query<{ owner_pid: number | null; requested_by: string; token: string }, [string, number]>(
-        `SELECT token, requested_by, owner_pid FROM slp_stop_grants
-         WHERE team_id = ? AND generation = ?`,
-      )
-      .get(team.team_id, team.generation);
-    if (existing && lifecycleOwnerIsAlive(existing.owner_pid)) {
-      throw new CliError(
-        "TEAM_STOP_IN_PROGRESS",
-        `${team.team_id}:g${team.generation} is already being stopped by ${existing.requested_by}`,
-      );
-    }
-    store.database
-      .query("DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ?")
-      .run(team.team_id, team.generation);
-    store.database
-      .query(
-        `INSERT INTO slp_stop_grants
-          (token, team_id, generation, requested_by, owner_pid, reason, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        token,
-        team.team_id,
-        team.generation,
-        actor,
-        process.pid,
-        reason,
-        new Date().toISOString(),
-      );
-    store.database.exec("COMMIT");
-    return token;
-  } catch (error) {
-    try {
-      store.database.exec("ROLLBACK");
-    } catch {}
-    throw error;
-  }
-}
-
-async function waitForStopped(
-  store: Store,
-  team: ActiveLocalTeam,
-  token: string,
-): Promise<void> {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    if (localTeamState(store, team) === "STOPPED") return;
-    const grant = store.database
-      .query<{ token: string }, [string, number]>(
-        "SELECT token FROM slp_stop_grants WHERE team_id = ? AND generation = ?",
-      )
-      .get(team.team_id, team.generation);
-    if (!grant || grant.token !== token) {
-      throw new CliError(
-        "TEAM_STOP_INCOMPLETE",
-        `${team.team_id}:g${team.generation} remains RUNNING; inspect status and retry team stop`,
-      );
-    }
-    await Bun.sleep(50);
-  }
-  throw new CliError(
-    "TEAM_STOP_PENDING",
-    `${team.team_id}:g${team.generation} remains RUNNING while its stop helper finishes; inspect status before retrying`,
-  );
-}
-
-async function requestNormalStop(
-  context: PluginContext,
-  runtime: HerdrSlpRuntime,
-  actor: SlpActor,
-  reason: string,
-): Promise<CliResult> {
-  const team = actor.team;
-  const token = issueStopGrant(context.store, team, actor.name, reason);
-  const cliEntry = process.argv[1];
-  if (!cliEntry) {
-    clearStopGrant(context.store, team, token);
-    throw new CliError("RUNTIME_UNAVAILABLE", "cannot locate the running Maestro entrypoint");
-  }
-  try {
-    await runtime.delegateStop(
-      await stopPlan(team),
-      dirname(dirname(team.room_store_path)),
-      token,
-      resolve(cliEntry),
-    );
-    await waitForStopped(context.store, team, token);
-    await pushNotice(
-      team.project_path,
-      "team-supervisor",
-      hubSupervisorTarget(team),
-      `${team.team_id} g${team.generation} STOPPED`,
-      reason || "normal stop",
-      "maestro status",
-    );
-    return stopResult(team, false);
-  } catch (error) {
-    if (localTeamState(context.store, team) === "STOPPED") return stopResult(team, false);
-    if (!(error instanceof CliError && error.code === "TEAM_STOP_PENDING")) {
-      try {
-        clearStopGrant(context.store, team, token);
-      } catch {}
-    }
-    throw error;
-  }
 }
 
 interface RoomTeamRow {
@@ -4286,7 +3936,6 @@ function reserveStop(
   input: {
     emergency: boolean;
     ownerToken: string;
-    proxyToken: string | null;
     reason: string;
   },
 ): StopReservation {
@@ -4341,19 +3990,11 @@ function reserveStop(
       }
     }
 
-    let actor = "hub-supervisor";
-    let reason = input.reason;
-    if (input.proxyToken) {
-      requireRunningGeneration(store, team, input.proxyToken);
-      const grant = store.database
-        .query<{ reason: string; requested_by: string }, [string, number, string]>(
-          `SELECT requested_by, reason FROM slp_stop_grants
-           WHERE team_id = ? AND generation = ? AND token = ?`,
-        )
-        .get(team.team_id, team.generation, input.proxyToken);
-      if (!grant) throw new CliError("INVALID_STOP_GRANT", "stop helper authority expired");
-      actor = grant.requested_by;
-      reason = grant.reason;
+    const actor = "hub-supervisor";
+    const reason = input.reason;
+    requireRunningState(store, team);
+    // w722: a normal stop never abandons work.
+    if (!input.emergency) {
       const unfinished = unfinishedWork(store, team);
       if (unfinished.length > 0) {
         throw new CliError(
@@ -4361,20 +4002,6 @@ function reserveStop(
           `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
           { unfinished },
         );
-      }
-    } else {
-      requireRunningState(store, team);
-      // w722: a normal stop never abandons work, whoever runs it - the Hub
-      // Supervisor's lead-only stop is refused here as the helper's is above.
-      if (!input.emergency) {
-        const unfinished = unfinishedWork(store, team);
-        if (unfinished.length > 0) {
-          throw new CliError(
-            "TEAM_UNFINISHED",
-            `${team.team_id} has unfinished work: ${unfinished.map((work) => `${work.id} [${work.state}]`).join(", ")}`,
-            { unfinished },
-          );
-        }
       }
     }
 
@@ -4578,9 +4205,6 @@ function finalizeStop(
         );
     recordActivity("slp_activity");
     recordActivity("slp_room.slp_activity");
-    store.database
-      .query("DELETE FROM slp_stop_grants WHERE team_id = ? AND generation = ?")
-      .run(current.team_id, current.generation);
     const commitLifecycle = (table: string) =>
       store.database
         .query(
@@ -4615,37 +4239,13 @@ async function stopTeam(
   const requestedReason = stringOption(invocation, "reason");
   // Under --emergency the reason says why unfinished work is abandoned; on a
   // normal stop it is the closing report (stopSuffix reads it back as
-  // "(supervisor): ..."), which w722 lets the Hub Supervisor file for a
-  // lead-only generation exactly as a Team Supervisor files it.
+  // "(supervisor): ...").
   const stopReason = emergency
     ? requestedReason ?? "Hub Supervisor emergency stop"
     : requestedReason ?? "";
-  const proxy = stopProxyEnvironment();
   if (!isRoom(context.store.database)) {
-    if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper must run from its Hub");
-    if (emergency) {
-      throw new CliError(
-        "ROLE_FORBIDDEN",
-        "--emergency is Hub Supervisor authority and must run from ~/maestro",
-      );
-    }
-    const actor = requireSlpActor(context, ["team-supervisor"]);
-    if (requestedTeam !== actor.team.team_id) {
-      throw new CliError(
-        "ROLE_FORBIDDEN",
-        `${actor.name} cannot stop ${requestedTeam}; current team is ${actor.team.team_id}`,
-      );
-    }
-    return requestNormalStop(context, runtime, actor, requestedReason ?? "");
+    throw new CliError("ROLE_FORBIDDEN", "team stop is Hub Supervisor authority and must run from ~/maestro");
   }
-
-  if (emergency && proxy) {
-    throw new CliError("INVALID_STOP_GRANT", "stop helper cannot claim emergency authority");
-  }
-  // A Hub `team stop` with neither --emergency nor a helper grant is the
-  // normal stop; whether the Hub may run it depends on the shape of the team
-  // it names, which is read below.
-  const hubNormalStop = !emergency && !proxy;
   migrateRoom(context.store);
   if (!tableExists(context.store, "slp_teams")) {
     throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
@@ -4659,26 +4259,6 @@ async function stopTeam(
     )
     .get(requestedTeam);
   if (!roomTeam) throw new CliError("NOT_FOUND", `SLP team not found: ${requestedTeam}`);
-  // w722, room d117: a lead-only generation has no Team Supervisor to run the
-  // normal stop, and the Hub Supervisor is the seat above its Lead, so from
-  // ~/maestro that seat performs the normal stop itself - the same phases and
-  // the same non-emergency STOPPED record a Team Supervisor's stop commits,
-  // refused on unfinished work by reserveStop exactly as that stop is. A
-  // supervised team keeps d72's boundary: the Hub stops it with --emergency
-  // only, and --reason without --emergency stays the Team Supervisor's option.
-  const hubLeadOnlyStop = hubNormalStop && teamShape(roomTeam.configuration_json) === "lead-only";
-  if (requestedReason !== undefined && !emergency && !hubLeadOnlyStop) {
-    throw new CliError("INVALID_OPTION", "--reason requires --emergency");
-  }
-  if (hubNormalStop && !hubLeadOnlyStop) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      "Hub Supervisor may stop a team only with --emergency; normal stop belongs to Team Supervisor",
-    );
-  }
-  if (proxy && canonicalCheckoutRoot(proxy.projectPath) !== roomTeam.project_path) {
-    throw new CliError("INVALID_STOP_GRANT", "stop helper project does not match its Hub team");
-  }
 
   const projectStore = new Store(resolveStoreLocation(roomTeam.project_path).path);
   migrateProject(projectStore);
@@ -4705,7 +4285,6 @@ async function stopTeam(
   let attachedRoom = false;
   try {
     if (roomTeam.state === "STOPPED") {
-      if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
       await runtime.stop(await stopPlan(team), stopRoles(projectStore, team));
       context.sessions.record(emergency ? "team.stop.emergency" : "team.stop");
       return {
@@ -4731,7 +4310,6 @@ async function stopTeam(
       reservation = reserveStop(projectStore, team, roomTeam, {
         emergency,
         ownerToken,
-        proxyToken: proxy?.token ?? null,
         reason: stopReason,
       });
       if (reservation.kind !== "wait") break;
@@ -4744,7 +4322,6 @@ async function stopTeam(
       await Bun.sleep(50);
     }
     if (reservation.kind === "stopped") {
-      if (proxy) throw new CliError("INVALID_STOP_GRANT", "stop helper generation is already stopped");
       await runtime.stop(await stopPlan(team), stopRoles(projectStore, team));
       return stopResult(team, emergency);
     }
@@ -4758,11 +4335,6 @@ async function stopTeam(
       try {
         releaseLifecycleOwner(projectStore, operation, ownerToken);
       } catch {}
-      if (proxy) {
-        try {
-          clearStopGrant(projectStore, team, proxy.token);
-        } catch {}
-      }
       throw error;
     }
     const committedEmergency = operation.emergency === 1;
@@ -4771,16 +4343,6 @@ async function stopTeam(
   } finally {
     if (attachedRoom) projectStore.database.exec("DETACH DATABASE slp_room");
     projectStore.close();
-    if (proxy) {
-      try {
-        await runtime.closeStopHelper(
-          dirname(dirname(context.store.path)),
-          proxy.helperTabId,
-          proxy.helperWorkspaceId,
-          proxy.closeWorkspace,
-        );
-      } catch {}
-    }
   }
 }
 
@@ -4813,7 +4375,7 @@ function roleRows(store: Store, teamId: string, generation: number, local: boole
       `SELECT name, pane_id, role, workspace_id, instance_id, pack_digest,
               brief_digest, ready_challenge, profile FROM ${table}
        WHERE team_id = ? AND generation = ?
-       ORDER BY CASE role WHEN 'team-supervisor' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END, name`,
+       ORDER BY CASE role WHEN 'lead' THEN 0 ELSE 1 END, name`,
     )
     .all(teamId, generation);
 }
@@ -4888,19 +4450,17 @@ function nextStep(
   grantOpen: boolean,
 ): SlpNextStep {
   const assigneeRole = roles.find((role) => role.name === work.assigned_to)?.role ?? "peer";
-  // room d117: in a lead-only team the Lead's reviewer is the Hub, which holds
-  // no seat here - so no seat is ever "reviewing" such an item, the waiting-on
-  // line names the Hub rather than a pane that does not exist, and the Hub
-  // itself reads the accept and rework lines when it is the one asking.
-  const hubReviews = assigneeRole === "lead" &&
-    teamShape(actor.team.configuration_json) === "lead-only";
-  const reviewerRole: SlpRole = assigneeRole === "lead" ? "team-supervisor" : "lead";
+  // room d117: the Lead's reviewer is the Hub, which holds no seat here - so
+  // no seat is ever "reviewing" such an item, the waiting-on line names the
+  // Hub, and the Hub itself reads the accept and rework lines when it is the
+  // one asking.
+  const hubReviews = assigneeRole === "lead";
   const reviewerName = hubReviews
     ? hubReviewerName
-    : roles.find((role) => role.role === reviewerRole)?.name ?? reviewerRole;
+    : roles.find((role) => role.role === "lead")?.name ?? "lead";
   const reviewing = hubReviews
     ? actor.role === hubReviewerName
-    : actor.role === reviewerRole && actor.name !== work.assigned_to;
+    : actor.role === "lead" && actor.name !== work.assigned_to;
   const mine = work.assigned_to === actor.name;
   switch (work.state) {
     case "OPEN":
@@ -5152,8 +4712,8 @@ function readSlpDecision(context: PluginContext, actor: SlpActor, id: string): C
 }
 
 // room d117: one work-detail read, shared by the seats and by the Hub Supervisor
-// reviewing a lead-only team. Extracted verbatim from maybeHandleSlpStatus so
-// the Hub sees exactly what a Team Supervisor sees - same entries, same merged
+// reviewing the Lead's work. Extracted verbatim from maybeHandleSlpStatus so
+// the Hub sees exactly what a seat sees - same entries, same merged
 // decisions, same next: line - rather than a second, drifting renderer.
 async function readWorkDetail(
   context: PluginContext,
@@ -5170,16 +4730,7 @@ async function readWorkDetail(
     work.assigned_to !== actor.name &&
     work.created_by !== actor.name
   ) {
-    // w740 (d902): a Lead reviews every Peer return in its team, and until now
-    // it could read only what it was assigned or had opened itself. A Team
-    // Supervisor opening the question-back seat is the first item that is
-    // neither, and the Lead is still its reviewer - so the rule the read
-    // follows is the one review already follows: you may read what you must
-    // review. For every item a Lead opened this changes nothing.
-    const reviewer = expectedReviewer(context, actor, work);
-    if (reviewer.kind !== "role" || reviewer.role !== "lead") {
-      throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${workId}`);
-    }
+    throw new CliError("ROLE_FORBIDDEN", `${actor.name} cannot inspect ${workId}`);
   }
   const entries = context.store.database
     .query<{
@@ -5320,10 +4871,7 @@ export async function maybeHandleSlpStatus(
           requestedWork,
         );
       }
-      // room d117: the Hub reads the work it reviews. bindHubReviewer refuses
-      // anything that is not a lead-only generation, so a supervised team's
-      // work still answers with d72's refusal and the Hub still cannot read
-      // work it holds no boundary over.
+      // room d117: the Hub reads the work it reviews.
       const bound = bindHubReviewer(context, requestedWork, "read");
       try {
         const roles = roleRows(
@@ -5423,27 +4971,19 @@ export async function maybeHandleSlpStatus(
         projectStore.close();
       }
       // d870's third clause (d873): a REPORT-ONLY orphaned verdict. A RUNNING
-      // generation whose lead and team-supervisor are both missing has no
-      // seat left that can reach `maestro team stop`, so the Hub is told, and
-      // told the one command that closes it by hand. It is deliberately not
-      // certainty and deliberately not a second detection point: this branch
-      // reads through HerdrSlpRuntime.inspect, whose zero-workspace path
-      // reports EVERY role missing, so a Herdr that is down or has not
-      // restored its workspace is indistinguishable from a real orphan here.
-      // That is exactly why it is wired to no commit. A status read mutates
-      // nothing.
-      // room d117: a lead-only generation HAS no team-supervisor row, so the
-      // old `every(["lead","team-supervisor"])` could never be true for it and
-      // a dead lead-only team would have gone unreported forever. The test is
-      // now over the supervising seats this generation actually has, and the
-      // non-empty guard keeps a generation with no rows at all from reading as
-      // orphaned rather than as unknown.
-      const supervisingSeats = roles.filter((role) =>
-        role.role === "lead" || role.role === "team-supervisor"
-      );
+      // generation whose Lead is missing has no seat left to report on it, so
+      // the Hub is told, and told the one command that closes it by hand. It
+      // is deliberately not certainty: this branch reads through
+      // HerdrSlpRuntime.inspect, whose zero-workspace path reports EVERY role
+      // missing, so a Herdr that is down or has not restored its workspace is
+      // indistinguishable from a real orphan here. That is exactly why it is
+      // wired to no commit. A status read mutates nothing. The non-empty
+      // guard keeps a generation with no rows at all from reading as orphaned
+      // rather than as unknown.
+      const leads = roles.filter((role) => role.role === "lead");
       const orphaned = row.state === "RUNNING" &&
-        supervisingSeats.length > 0 &&
-        supervisingSeats.every((role) => missingPanes.includes(role.name));
+        leads.length > 0 &&
+        leads.every((role) => missingPanes.includes(role.name));
       const stopRecord = tableExists(context.store, "slp_lifecycle_operations")
         ? context.store.database
           .query<{ actor: string; emergency: number; reason: string }, [string, number]>(
@@ -5504,7 +5044,7 @@ export async function maybeHandleSlpStatus(
   }
 
   if (!requireActiveOrLegacy(context)) return null;
-  const actor = requireSlpActor(context, ["team-supervisor", "lead", "peer"]);
+  const actor = requireSlpActor(context, ["lead", "peer"]);
   const roles = roleRows(context.store, actor.team.team_id, actor.team.generation, true);
   if (requestedWork && decisionIdPattern.test(requestedWork)) {
     return readSlpDecision(context, actor, requestedWork);
@@ -5519,7 +5059,6 @@ export async function maybeHandleSlpStatus(
     )
     .all(actor.team.team_id, actor.team.generation);
   const scoped = allWork.filter((work) => {
-    if (actor.role === "team-supervisor") return work.state === "ACTIVE" || work.state === "RETURNED";
     if (actor.role === "peer") return work.assigned_to === actor.name && work.state !== "DONE";
     return (
       work.assigned_to === actor.name || work.created_by === actor.name
@@ -5623,7 +5162,6 @@ export const slpV2Plugin: BuiltInPlugin = {
           for (const [flag, seat] of [
             ["lead-model", "lead"],
             ["peer-model", "peer"],
-            ["supervisor-model", "teamSupervisor"],
           ] as const) {
             const value = stringOption(invocation, flag);
             if (value === undefined) continue;
@@ -5638,24 +5176,15 @@ export const slpV2Plugin: BuiltInPlugin = {
             requiredPosition(invocation, 0, "project"),
             requiredPosition(invocation, 1, "objective"),
             stringOption(invocation, "peer-profile"),
-            // room d117: the shape is a start-time choice. A restore of an
-            // already-RUNNING generation ignores this and uses the pinned
-            // shape, so re-running team start without the flag cannot
-            // silently reshape a live team.
-            invocation.options["lead-only"] === true ? "lead-only" : "supervised",
             models,
           );
         },
         {
-          description: "Start or restore one SLP team generation, supervised or lead-only.",
+          description: "Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).",
           flags: {
             "--peer-profile": {
               description: "Override the Workspace Pack peer profile for this generation (recorded on the team row).",
               value: true,
-            },
-            "--lead-only": {
-              description: "Open one Lead pane plus the runtime pane and no Team Supervisor; the Hub Supervisor reviews the Lead's work (room d117).",
-              value: false,
             },
             "--lead-model": {
               description: "Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).",
@@ -5663,10 +5192,6 @@ export const slpV2Plugin: BuiltInPlugin = {
             },
             "--peer-model": {
               description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.",
-              value: true,
-            },
-            "--supervisor-model": {
-              description: "Launch the Team Supervisor with this model; refused with --lead-only (room d128).",
               value: true,
             },
           },
@@ -5689,7 +5214,7 @@ export const slpV2Plugin: BuiltInPlugin = {
             "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
             "--reason": {
               description:
-                "Team Supervisor, or the Hub for a lead-only team (w722): the closing report shown on the Hub ledger. Hub with --emergency: why unfinished work is abandoned.",
+                "The closing report shown on the Hub ledger (w722); with --emergency, why unfinished work is abandoned.",
               value: true,
             },
           },

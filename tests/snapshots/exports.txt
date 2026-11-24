@@ -211,7 +211,6 @@ skillNames
 slpDecisionResult
 slpRuntimeDirectory
 slpRuntimeStatus
-slpStopEnvironment
 slpV2CliOptions
 slpV2Plugin
 sourceFor

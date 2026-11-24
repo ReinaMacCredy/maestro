@@ -55,13 +55,11 @@ interface Started {
   room: string;
 }
 
-async function startTeam(fixture: Fixture, leadOnly = false): Promise<Started> {
+async function startTeam(fixture: Fixture): Promise<Started> {
   const room = await markedRoom(fixture);
   const fake = await installFakeHerdr(fixture);
   const hubEnvironment = { ...fake.env, HERDR_PANE_ID: "hub:p0" };
-  const argv = ["team", "start", fixture.repo, "Owner layer", "--json"];
-  if (leadOnly) argv.splice(4, 0, "--lead-only");
-  const started = await runCliAt(fixture, room, argv, hubEnvironment);
+  const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Owner layer", "--json"], hubEnvironment);
   expect(phaseFree(started.stderr)).toBe("");
   expect(started.exitCode).toBe(0);
   return { data: envelope<StartedTeam>(started.stdout), fake, hubEnvironment, room };
@@ -78,9 +76,7 @@ test("d123: work note --owner records the walk-in with an owner flag, pushes one
   await withFixture(async (fixture) => {
     const { data, fake, room } = await startTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const supervisorEnvironment = { ...fake.env, HERDR_PANE_ID: supervisor.paneId };
     const id = data.work.id;
     const before = (await pushes(fake)).length;
 
@@ -99,7 +95,8 @@ test("d123: work note --owner records the walk-in with an owner flag, pushes one
     }
     expect((await pushes(fake)).length).toBe(before);
 
-    // The Lead records the walk-in; the Team Supervisor is the seat above.
+    // The Lead records the walk-in; the Hub is the seat above, and its line
+    // names the team because the Hub reads the room.
     const noted = await runCliAt(
       fixture,
       fixture.repo,
@@ -115,37 +112,20 @@ test("d123: work note --owner records the walk-in with an owner flag, pushes one
       [
         "agent",
         "prompt",
-        supervisor.name,
-        `[from lead][${id} OWNER] owner asked: ship the CSV export too; read: maestro status ${id}`,
+        "hub:p0",
+        `[from lead][${id} OWNER] owner asked: ship the CSV export too in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
       ],
     ]);
 
     // The store shows the provenance; nothing reads as blocked.
-    const shown = await runCliAt(fixture, fixture.repo, ["status", id], supervisorEnvironment);
+    const shown = await runCliAt(fixture, fixture.repo, ["status", id], leadEnvironment);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain(`note [owner] by ${lead.name}: owner asked: ship the CSV export too`);
     expect(shown.stdout).not.toContain("blocked");
     const shownJson = envelope<{ notes: Array<{ flag: string | null }> }>(
-      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], supervisorEnvironment)).stdout,
+      (await runCliAt(fixture, fixture.repo, ["status", id, "--json"], leadEnvironment)).stdout,
     );
     expect(shownJson.notes.map((entry) => entry.flag)).toEqual(["owner"]);
-
-    // The Team Supervisor's walk-in climbs to the Hub pane the same way its
-    // --blocked note does, with the team named because the Hub reads the room.
-    const supervisorNote = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "note", id, "owner asked: stop after this item", "--owner", "--json"],
-      supervisorEnvironment,
-    );
-    expect(phaseFree(supervisorNote.stderr)).toBe("");
-    expect(supervisorNote.exitCode).toBe(0);
-    expect((await pushes(fake)).at(-1)).toEqual([
-      "agent",
-      "prompt",
-      "hub:p0",
-      `[from team-supervisor][${id} OWNER] owner asked: stop after this item in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
-    ]);
 
     // A Peer's walk-in reaches its Lead.
     const peerWork = await runCliAt(
@@ -183,30 +163,6 @@ test("d123: work note --owner records the walk-in with an owner flag, pushes one
     expect(hubNote.stderr).toContain("maestro decide --scope owner");
   });
 }, 40_000);
-
-test("d123: in a lead-only generation the Lead's --owner note climbs to the Hub pane, as its --blocked note does", async () => {
-  await withFixture(async (fixture) => {
-    const { data, fake } = await startTeam(fixture, true);
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const id = data.work.id;
-    expect((await runCliAt(fixture, fixture.repo, ["work", "take", id], leadEnvironment)).exitCode).toBe(0);
-    const noted = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "note", id, "owner asked: rename the flag", "--owner", "--json"],
-      leadEnvironment,
-    );
-    expect(phaseFree(noted.stderr)).toBe("");
-    expect(noted.exitCode).toBe(0);
-    expect((await pushes(fake)).at(-1)).toEqual([
-      "agent",
-      "prompt",
-      "hub:p0",
-      `[from lead][${id} OWNER] owner asked: rename the flag in ${data.team.teamId} g${data.team.generation}; read: maestro status`,
-    ]);
-  });
-}, 30_000);
 
 test("d124: maestro owner here|away is the Hub's declared presence, default here, refused outside the room, printed on the Hub prompt hook line and by maestro status", async () => {
   await withFixture(async (fixture) => {
