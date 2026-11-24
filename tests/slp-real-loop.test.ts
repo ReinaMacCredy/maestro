@@ -23,12 +23,17 @@ async function recreatePreAnchorSessionStore(
       harness TEXT
     );
   `);
-  const lastSeen = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  // A live row needs a host that was running when it was last seen: pid 1,
+  // seen two hours ago or just after boot on a machine younger than that.
+  const booted = Date.parse(
+    Bun.spawnSync(["ps", "-o", "lstart=", "-p", "1"], { env: { LC_ALL: "C" } }).stdout.toString().trim(),
+  );
+  const lastSeen = new Date(Math.max(booted + 1000, Date.now() - 2 * 60 * 60_000)).toISOString();
   database
     .query(
       "INSERT INTO sessions (id, pid, last_event, last_seen, harness) VALUES (?, ?, 'SessionStart', ?, 'codex')",
     )
-    .run("legacy-live", process.pid, lastSeen);
+    .run("legacy-live", 1, lastSeen);
   database
     .query(
       "INSERT INTO sessions (id, pid, last_event, last_seen, harness) VALUES (?, ?, 'SessionStart', ?, 'codex')",

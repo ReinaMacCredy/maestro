@@ -94,7 +94,7 @@ test("154 a stale-to-current search backfill runs once and then preserves curren
     try {
       database.query("UPDATE search_index_state SET version = 0").run();
       database
-        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'remove', 'remove sentinel')")
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('log', 'remove', 'remove sentinel')")
         .run();
     } finally {
       database.close();
@@ -106,7 +106,7 @@ test("154 a stale-to-current search backfill runs once and then preserves curren
       expect(
         afterRebuild
           .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'remove'",
+            "SELECT count(*) AS count FROM search_index WHERE surface = 'log' AND entity_id = 'remove'",
           )
           .get()?.count,
       ).toBe(0);
@@ -116,7 +116,7 @@ test("154 a stale-to-current search backfill runs once and then preserves curren
           .get()?.version,
       ).toBe(1);
       afterRebuild
-        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'keep', 'keep sentinel')")
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('log', 'keep', 'keep sentinel')")
         .run();
     } finally {
       afterRebuild.close();
@@ -128,7 +128,7 @@ test("154 a stale-to-current search backfill runs once and then preserves curren
       expect(
         stable
           .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'keep'",
+            "SELECT count(*) AS count FROM search_index WHERE surface = 'log' AND entity_id = 'keep'",
           )
           .get()?.count,
       ).toBe(1);
@@ -145,7 +145,7 @@ test("155 a stale search backfill version rebuilds exactly the next boot", async
     try {
       database.query("UPDATE search_index_state SET version = 0").run();
       database
-        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'once', 'rebuild once')")
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('log', 'once', 'rebuild once')")
         .run();
     } finally {
       database.close();
@@ -157,7 +157,7 @@ test("155 a stale search backfill version rebuilds exactly the next boot", async
       expect(
         afterRebuild
           .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'once'",
+            "SELECT count(*) AS count FROM search_index WHERE surface = 'log' AND entity_id = 'once'",
           )
           .get()?.count,
       ).toBe(0);
@@ -166,7 +166,7 @@ test("155 a stale search backfill version rebuilds exactly the next boot", async
           ?.version,
       ).toBe(1);
       afterRebuild
-        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('sentinel', 'once', 'rebuild once')")
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('log', 'once', 'rebuild once')")
         .run();
     } finally {
       afterRebuild.close();
@@ -178,7 +178,7 @@ test("155 a stale search backfill version rebuilds exactly the next boot", async
       expect(
         stable
           .query<{ count: number }, []>(
-            "SELECT count(*) AS count FROM search_index WHERE surface = 'sentinel' AND entity_id = 'once'",
+            "SELECT count(*) AS count FROM search_index WHERE surface = 'log' AND entity_id = 'once'",
           )
           .get()?.count,
       ).toBe(1);

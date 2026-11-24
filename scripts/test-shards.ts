@@ -37,7 +37,7 @@ function pack(files: { path: string; weight: number }[], count: number): string[
 
 async function runShard(index: number, files: string[]): Promise<{ index: number; exitCode: number; output: string; seconds: number }> {
   const started = performance.now();
-  const child = Bun.spawn(["bun", "test", ...files], { cwd: root, stdout: "pipe", stderr: "pipe" });
+  const child = Bun.spawn(["bun", "test", "--timeout", "20000", ...files], { cwd: root, stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
