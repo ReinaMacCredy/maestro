@@ -50,7 +50,7 @@ Residual risks: None
   existing tests, necessary new checks, readbacks, or baselines to VERIFY.md.
   A missing behavior check is a gap; the absence of a newly written test is not.
 - Run every VERIFY.md scenario against its work item's acceptance/claims and
-  fill its unit, live, and perf cells with evidence or `n/a: <reason>`; run
+  record its evidence in the row; run
   each anti-goal check (grep, diff, readback). Stamp each row with its
   commit and the pass with its date, then run
   `maestro bundle check <id> --final`. Results hold this run only: a

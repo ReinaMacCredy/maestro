@@ -134,67 +134,29 @@ function problems(stderr: string): string[] {
   return (JSON.parse(stderr) as { error: { problems: string[] } }).error.problems;
 }
 
-test("bundle check names a scaffolded unit missing its You will see line (d866)", async () => {
+test("bundle check fails only on a SPEC unit with no VERIFY row, matching the whole unit id (d903)", async () => {
   await withFixture(async (fixture) => {
-    const directory = await openPlan(fixture, "fresh-plan");
-    const spec = await Bun.file(join(directory, "SPEC.md")).text();
-    const verify = await Bun.file(join(directory, "VERIFY.md")).text();
-    expect(spec.indexOf("## Decisions")).toBeLessThan(spec.indexOf("## Units"));
-    expect(spec.indexOf("## Units")).toBeLessThan(spec.indexOf("## Derived artifacts"));
-    const specLines = spec.split("\n");
-    for (const line of ["### U1: <title>", "Depends on:", "Files:", "Build:", "You will see:"]) {
-      expect(specLines).toContain(line);
-    }
-    expect(verify.split("\n")).toContain("| # | Scenario | unit | live | perf | Commit |");
-    expect(verify).toContain("n/a: <reason>");
+    const looseSpec = planSpec.replace(/\nDepends on: none\n/, "\n").replace(/\nFiles: [^\n]*\n/, "\n");
+    const looseVerify = `# VERIFY plan
 
-    await writeFile(
-      join(directory, "SPEC.md"),
-      spec
-        .replace("\nDepends on:\n", "\nDepends on: none\n")
-        .replace("\nFiles:\n", "\nFiles: edit src/plugins/bundle.ts\n")
-        .replace("\nBuild:\n", "\nBuild: add the check verb\n"),
-    );
-    const youWillSee = specLines.indexOf("You will see:") + 1;
-    const checked = await runCli(fixture, ["bundle", "check", "fresh-plan"]);
-    expect(checked.exitCode).toBe(1);
-    expect(problems(checked.stderr)).toEqual([
-      `${join(directory, "SPEC.md")}:${youWillSee} U1 is missing "You will see:"`,
-    ]);
-  });
-}, 30_000);
-
-test("bundle check names a unit with no VERIFY row, matching the whole unit id (d866)", async () => {
-  await withFixture(async (fixture) => {
-    const directory = await openPlan(
-      fixture,
-      "plan",
-      planSpec,
-      planVerify.replace("| U2 old skill gone |", "| U21 old skill gone |"),
-    );
+| Scenario | Result |
+|----------|--------|
+| U1 routing table | n/a |
+| U21 old skill gone | |
+`;
+    const directory = await openPlan(fixture, "plan", looseSpec, looseVerify);
     const checked = await runCli(fixture, ["bundle", "check", "plan"]);
     expect(checked.exitCode).toBe(1);
-    expect(problems(checked.stderr)).toEqual([`${join(directory, "VERIFY.md")}:3 U2 is missing a row`]);
+    expect(problems(checked.stderr)).toEqual([`${join(directory, "VERIFY.md")} U2 is missing a row`]);
+
+    await writeFile(join(directory, "VERIFY.md"), looseVerify.replace("U21", "U2"));
+    const passed = await runCli(fixture, ["bundle", "check", "plan"]);
+    expect(passed.stderr).toBe("");
+    expect(passed.stdout).toBe("bundle check plan: OK (2 units, 2 VERIFY rows)\n");
   });
 }, 30_000);
 
-test("bundle check names a bare n/a cell (d866)", async () => {
-  await withFixture(async (fixture) => {
-    const directory = await openPlan(
-      fixture,
-      "plan",
-      planSpec,
-      planVerify.replace("| n/a: no hot path |", "| n/a |"),
-    );
-    const checked = await runCli(fixture, ["bundle", "check", "plan"]);
-    expect(checked.exitCode).toBe(1);
-    expect(problems(checked.stderr)).toEqual([
-      `${join(directory, "VERIFY.md")}:6 perf cell n/a is missing its reason`,
-    ]);
-  });
-}, 30_000);
-
-test("bundle check --final names empty evidence and Commit cells the default mode accepts (d866)", async () => {
+test("bundle check --final also fails a VERIFY row with no result (d903)", async () => {
   await withFixture(async (fixture) => {
     const directory = await openPlan(
       fixture,
@@ -209,10 +171,7 @@ test("bundle check --final names empty evidence and Commit cells the default mod
     expect(plan.exitCode).toBe(0);
     const final = await runCli(fixture, ["bundle", "check", "plan", "--final"]);
     expect(final.exitCode).toBe(1);
-    expect(problems(final.stderr)).toEqual([
-      `${join(directory, "VERIFY.md")}:5 live cell is missing evidence or n/a: <reason>`,
-      `${join(directory, "VERIFY.md")}:7 Commit cell is missing a commit`,
-    ]);
+    expect(problems(final.stderr)).toEqual([`${join(directory, "VERIFY.md")}:7 row has no result`]);
   });
 }, 30_000);
 
@@ -227,38 +186,6 @@ test("bundle check prints one OK line for a clean plan, before and after verify 
     expect(final.stderr).toBe("");
     expect(final.exitCode).toBe(0);
     expect(final.stdout).toBe("bundle check plan --final: OK (2 units, 3 VERIFY rows)\n");
-  });
-}, 30_000);
-
-test("bundle check passes a bundle with no Units section, active or archived, with or without --final (d866)", async () => {
-  await withFixture(async (fixture) => {
-    const oldSpec = "# SPEC old\n\n## Problem\n\n## Decisions\n";
-    const oldVerify = "# VERIFY old\n\n| # | Scenario | Work / acceptance | Result |\n|---|----------|-------------------|--------|\n";
-    await openPlan(fixture, "old-plan", oldSpec, oldVerify);
-    const plan = await runCli(fixture, ["bundle", "check", "old-plan"]);
-    expect(plan.stderr).toBe("");
-    expect(plan.exitCode).toBe(0);
-    expect(plan.stdout).toBe("bundle check old-plan: SPEC.md has no ## Units section; nothing to check\n");
-    const final = await runCli(fixture, ["bundle", "check", "old-plan", "--final"]);
-    expect(final.exitCode).toBe(0);
-    expect(final.stdout).toBe("bundle check old-plan: SPEC.md has no ## Units section; nothing to check\n");
-
-    const now = new Date().toISOString();
-    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-    try {
-      database
-        .query(
-          `INSERT INTO bundles (id, state, directory, spec, notes, verify, created_at, updated_at)
-           VALUES ('archived-plan', 'archived', ?, ?, NULL, ?, ?, ?)`,
-        )
-        .run(join(fixture.repo, "old-bundles", "archived-plan"), oldSpec, oldVerify, now, now);
-    } finally {
-      database.close();
-    }
-    const archived = await runCli(fixture, ["bundle", "check", "archived-plan"]);
-    expect(archived.stderr).toBe("");
-    expect(archived.exitCode).toBe(0);
-    expect(archived.stdout).toBe("bundle check archived-plan: SPEC.md has no ## Units section; nothing to check\n");
   });
 }, 30_000);
 

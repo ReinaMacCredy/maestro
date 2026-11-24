@@ -49,8 +49,8 @@ pstack's multi-phase-plan playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
      heading, with the unit it lands in and what the owner watches.
 6. Write VERIFY.md, one row per unit with its Scenario naming the unit id, plus
    one row per anti-goal. Tests alone are not sufficient verification. A unit
-   is verified only when its unit, live and perf cells each hold evidence or
-   `n/a: <reason>`, and its Commit cell holds the commit.
+   is verified only when its row holds the evidence and its Commit cell holds
+   the commit.
    - The unit cell names the test file, the case it gains, and the command
      that runs it.
    - The live cell holds lanes sized by risk, not a fixed count, each driven
@@ -82,8 +82,8 @@ pstack's multi-phase-plan playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
    starts only on the owner's explicit go
    (`~/maestro/WORKFLOW.md#authorization-boundaries`). Each unit then runs
    through its own recipe and ends in that recipe's deliver step. At verify,
-   `maestro bundle check <id> --final` lints the filled table before
-   maestro-verify closes the bundle.
+   `maestro bundle check <id> --final` confirms every row has a result before
+   the bundle closes.
 
 ## Reply
 
