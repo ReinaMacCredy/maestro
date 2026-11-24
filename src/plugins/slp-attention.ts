@@ -50,7 +50,7 @@ const watchLines = 40;
 
 type SlpRole = "lead" | "peer";
 type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
-type StallKind = "dialog" | "silence";
+type StallKind = "silence";
 
 interface RoleRow {
   name: string;
@@ -217,16 +217,6 @@ function teamCard(store: Store, teamId: string, generation: number): WorkRow | n
        WHERE team_id = ? AND generation = ? ORDER BY created_at, id LIMIT 1`,
     )
     .get(teamId, generation) ?? null;
-}
-
-function latestAssigned(store: Store, teamId: string, generation: number, name: string): WorkRow | null {
-  return store.database
-    .query<WorkRow, [string, number, string]>(
-      `SELECT id, state, owner, assigned_to, created_by, return_revision FROM slp_work
-       WHERE team_id = ? AND generation = ? AND assigned_to = ?
-       ORDER BY updated_at DESC, id DESC LIMIT 1`,
-    )
-    .get(teamId, generation, name) ?? null;
 }
 
 function heldActive(
@@ -535,7 +525,7 @@ export class AttentionRuntime {
     let resubscribe = false;
     for (const role of this.roles) {
       const status = this.statuses.get(role.pane_id);
-      if (status !== "blocked" && status !== "idle" && status !== "done") continue;
+      if (status !== "idle" && status !== "done") continue;
       resubscribe = (await this.handle({
         data: { agent_status: status, pane_id: role.pane_id, workspace_id: role.workspace_id },
         event: "pane_agent_status_changed",
@@ -673,9 +663,7 @@ export class AttentionRuntime {
     const mark = own?.mark ?? "none";
     if (this.state.stalls[key] === mark) return;
     // A seat that recorded on this item a moment ago is working, not silent; the
-    // same window Advisor F15 uses for a push, for the same reason. Silence only:
-    // a blocked pane is a fact about the present, not an inference from quiet, so
-    // a recent record must not hide it.
+    // same window Advisor F15 uses for a push, for the same reason.
     // l3 (w712): a holder that recorded after the stall entry has answered this
     // nudge. The once-rule read that record as a store change and re-armed, so the
     // next idle sample past pushWindowMs sent the same nudge and the same
@@ -683,8 +671,8 @@ export class AttentionRuntime {
     // the strongest evidence the store has about a quiet pane, so it quiets the
     // same nudge for silenceAnsweredMs measured from itself. d96/d97 are
     // untouched: this withholds a nudge, it gates nothing.
-    const answered = kind === "silence" && own !== null && answersStall(store, work.id, kind, own);
-    if (kind === "silence" && own && Date.now() - Date.parse(own.at) < (answered ? silenceAnsweredMs : pushWindowMs)) {
+    const answered = own !== null && answersStall(store, work.id, kind, own);
+    if (own && Date.now() - Date.parse(own.at) < (answered ? silenceAnsweredMs : pushWindowMs)) {
       // The mark is deliberately not consumed here: withholding is about how long
       // ago the seat wrote, not about having answered for this record. A seat that
       // records and then goes quiet for good is still nudged once, later.
@@ -764,18 +752,6 @@ export class AttentionRuntime {
         await this.persist();
         return changed;
       }
-      if (status === "blocked") {
-        const held = heldActive(store, team.team_id, team.generation, seat.name) ??
-          latestAssigned(store, team.team_id, team.generation, seat.name) ??
-          teamCard(store, team.team_id, team.generation);
-        if (!held) return changed;
-        const latest = latestRecord(store, held.id);
-        const evidence = `${seat.name} pane ${paneId} agent_status blocked; store: ${held.id} ${held.state}` +
-          `${held.owner ? ` owned by ${held.owner}` : ` assigned to ${held.assigned_to}`}` +
-          recordEvidence(latest, ",") + compactEvidence(store, paneId);
-        await this.stall(store, team, seat, "dialog", held, evidence);
-        return changed;
-      }
       if (status !== "idle" && status !== "done") {
         await this.persist();
         return changed;
@@ -802,7 +778,7 @@ export class AttentionRuntime {
         // were template literals restating heldActive's where clause, so the two
         // words a reader uses to sanity-check a nudge were the two that carried no
         // measurement - which is what let a late line read as a fresh one. They are
-        // read from the row here, as the dialog branch already does.
+        // read from the row here.
         const evidence = `${seat.name} pane ${paneId} agent_status ${status} while ${held.id} ${held.state}` +
           ` owned by ${held.owner ?? held.assigned_to}` + recordEvidence(latest, ";") +
           compactEvidence(store, paneId);

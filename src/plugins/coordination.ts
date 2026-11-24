@@ -233,8 +233,6 @@ export const coordinationPlugin: BuiltInPlugin = {
         { events: ["SessionStart", "UserPromptSubmit"] },
       ),
     );
-    // room d124: the Hub prompt line carries the owner's declared presence and,
-    // while she is away, how many provisional rulings wait for her.
     context.effect(() =>
       brief.register(() => roomOwnerLine(context), { events: ["SessionStart", "UserPromptSubmit"] }),
     );

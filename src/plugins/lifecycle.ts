@@ -311,7 +311,6 @@ async function update(): Promise<CliResult> {
         { currentCommit, oldCommit, recoveryCommand, resetStderr: reset.stderr },
       );
     }
-    if (error instanceof CliError && error.code === "SLP_V1_TEAM_RUNNING") throw error;
     throw new CliError(
       "UPDATE_RESYNC_FAILED",
       `source fast-forward was rolled back because runtime resync failed: ${error instanceof Error ? error.message : String(error)}; fix the runtime path, then run maestro update`,

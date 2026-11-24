@@ -115,7 +115,7 @@ test("SLP v2 enforces the locked operation authority matrix without forbidden mu
   });
 }, 25_000);
 
-test("SLP v2 hard cut rejects old verbs and leaves legacy records read-only", async () => {
+test("SLP v2 team panes refuse the classic verbs SLP replaces and leave legacy records read-only", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -151,8 +151,6 @@ test("SLP v2 hard cut rejects old verbs and leaves legacy records read-only", as
     const leadPane = data.team.roles.find((role) => role.role === "lead")?.paneId;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: leadPane };
     for (const attempt of [
-      { args: ["team", "open", data.team.teamId, "--json"], cwd: room, env: fake.env, replacement: "team start" },
-      { args: ["team", "health", data.team.teamId, "--json"], cwd: room, env: fake.env, replacement: "status" },
       { args: ["dispatch", "open", data.work.id, "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "work add" },
       { args: ["handback", "file", "x1", "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "work return" },
       { args: ["decision", "draft", "old decision", "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "decide" },
@@ -528,43 +526,6 @@ test("SLP v2 work note --blocked flags the note and pushes one line to the seat 
     expect(plain.exitCode).toBe(0);
     expect(noteFlag(plain.stdout)).toBeNull();
     expect((await notices()).length - beforeNotices).toBe(1);
-  });
-}, 30_000);
-
-test("SLP v2 work add migrates a project store whose slp_local_teams predates the pane columns", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCliAt(fixture, fixture.repo, ["status", "--json"])).exitCode).toBe(0);
-    const projectPath = join(fixture.repo, ".maestro", "maestro.db");
-    const projectDatabase = new Database(projectPath);
-    projectDatabase.exec(
-      `DROP TABLE IF EXISTS slp_local_teams;
-       CREATE TABLE slp_local_teams (
-         team_id TEXT NOT NULL,
-         generation INTEGER NOT NULL,
-         room_store_path TEXT NOT NULL,
-         project_path TEXT NOT NULL,
-         configuration_json TEXT NOT NULL,
-         pack_version TEXT NOT NULL,
-         pack_digest TEXT NOT NULL,
-         state TEXT NOT NULL CHECK(state IN ('RUNNING', 'STOPPED')),
-         workspace_id TEXT NOT NULL,
-         bound_at TEXT NOT NULL,
-         PRIMARY KEY(team_id, generation)
-       );`,
-    );
-    projectDatabase.close();
-
-    const added = await runCliAt(fixture, fixture.repo, ["work", "add", "pre-pane store", "--json"]);
-    expect(added.exitCode).toBe(0);
-
-    const migrated = new Database(projectPath, { readonly: true });
-    const columns = migrated
-      .query<{ name: string }, []>("PRAGMA table_info(slp_local_teams)")
-      .all()
-      .map((entry) => entry.name);
-    migrated.close();
-    expect(columns).toContain("runtime_pane_id");
-    expect(columns).toContain("supervisor_pane_id");
   });
 }, 30_000);
 

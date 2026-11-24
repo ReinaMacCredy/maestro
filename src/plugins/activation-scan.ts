@@ -1,9 +1,6 @@
-import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { CliError } from "../kernel/cli.ts";
-import { resolveStoreLocation } from "../kernel/store.ts";
 
 interface StatusEnvelope {
   data?: {
@@ -16,7 +13,6 @@ interface StatusEnvelope {
 
 interface RepoActivationScan {
   holders: number;
-  legacyTeams: string[];
   repo: string;
   unsafe: boolean;
 }
@@ -53,62 +49,27 @@ async function readRepoJson(repo: string, args: string[]): Promise<unknown | nul
   }
 }
 
-function liveLegacyTeams(repo: string): string[] | null {
-  let path: string;
-  try {
-    path = resolveStoreLocation(repo).path;
-  } catch {
-    return null;
-  }
-  if (!existsSync(path)) return [];
-  let database: Database;
-  try {
-    database = new Database(path, { create: false, readonly: true, strict: true });
-  } catch {
-    return null;
-  }
-  try {
-    const table = database
-      .query<{ present: number }, []>(
-        "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'team_lifecycle'",
-      )
-      .get();
-    if (!table) return [];
-    return database
-      .query<{ generation: number; team_id: string }, []>(
-        "SELECT team_id, generation FROM team_lifecycle WHERE stage <> 'STOPPED' ORDER BY team_id",
-      )
-      .all()
-      .map((team) => `${team.team_id}:g${team.generation}`);
-  } catch {
-    return null;
-  } finally {
-    database.close();
-  }
-}
-
 async function scanRepo(repo: string, caller: string): Promise<RepoActivationScan> {
   try {
     const [repoStat, storeStat] = await Promise.all([stat(repo), stat(join(repo, ".maestro"))]);
     if (!repoStat.isDirectory() || !storeStat.isDirectory()) {
-      return { holders: 0, legacyTeams: [], repo, unsafe: true };
+      return { holders: 0, repo, unsafe: true };
     }
   } catch {
-    return { holders: 0, legacyTeams: [], repo, unsafe: true };
+    return { holders: 0, repo, unsafe: true };
   }
-  const legacyTeams = liveLegacyTeams(repo);
   const status = await readRepoJson(repo, ["status", "--live", "--json"]) as StatusEnvelope | null;
   // status --live excludes dead sessions; under MAESTRO_READ_ONLY the caller
   // is not the child's current session, so it is excluded here.
   const peers = status?.data?.livePeers;
   if (!Array.isArray(peers)) {
-    return { holders: 0, legacyTeams: legacyTeams ?? [], repo, unsafe: true };
+    return { holders: 0, repo, unsafe: true };
   }
   const holders = peers.filter((peer) => {
     if (typeof peer?.id !== "string" || peer.id === caller) return false;
     return Array.isArray(peer.heldWork) && peer.heldWork.length > 0;
   }).length;
-  return { holders, legacyTeams: legacyTeams ?? [], repo, unsafe: legacyTeams === null };
+  return { holders, repo, unsafe: false };
 }
 
 export async function warnBeforeRuntimeActivation(
@@ -122,16 +83,6 @@ export async function warnBeforeRuntimeActivation(
   }
   const caller = process.env.MAESTRO_SESSION_ID ?? "";
   const results = await Promise.all(repos.map((repo) => scanRepo(repo, caller)));
-  const liveLegacy = results.flatMap((result) =>
-    result.legacyTeams.map((team) => ({ repo: result.repo, team }))
-  );
-  if (liveLegacy.length > 0) {
-    throw new CliError(
-      "SLP_V1_TEAM_RUNNING",
-      `stop every SLP v1 team before maestro ${action}: ${liveLegacy.map(({ repo, team }) => `${team} in ${repo}`).join(", ")}; run the old runtime's maestro team stop first`,
-      { action, teams: liveLegacy },
-    );
-  }
   const holders = results.reduce((count, result) => count + result.holders, 0);
   const holderRepos = results.filter((result) => result.holders > 0).map((result) => result.repo);
   if (holders > 0) {

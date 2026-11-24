@@ -42,12 +42,11 @@ Attention has two layers. The first is the self-declared `maestro work note
 second is the team runtime pane (Hub d96, d97): `maestro team start` opens
 it in the team workspace through Maestro's Herdr plugin; it holds the
 generation's one Herdr event subscription and resolves every pane event
-against the store, with no model judging. A `blocked` pane becomes a
-`stall:dialog` entry on the item the seat holds, an idle pane holding ACTIVE
-work becomes `stall:silence`, both recorded by the actor `runtime` and pushed
-as `[from runtime][<id>] <kind> <evidence>; stop and run: maestro work note
-<id> "<what you need>" --blocked` to the stuck pane with a copy to the Hub
-Supervisor, once per item and kind until the store changes. An idle seat with
+against the store, with no model judging. An idle pane holding ACTIVE work
+becomes a `stall:silence` entry on that item, recorded by the actor `runtime`
+and pushed as `[from runtime][<id>] silence <evidence>; stop and run: maestro
+work note <id> "<what you need>" --blocked` to the stuck pane with a copy to
+the Hub Supervisor, once per item until the store changes. An idle seat with
 nothing to do wakes the seat above with `[attention] <seat> idle`; a role pane
 that exits or closes is noted on the team card and wakes the Hub Supervisor.
 There is no Observer, Advisor, sensor, scheduler, review, or reconcile role
@@ -203,8 +202,8 @@ The project pack snapshot and durable stores remain after stop. Chat and raw
 transcript do not become authority. Record context with `maestro work note`,
 settled choices with `maestro decide`, and changed contracts as new work.
 
-## Retired verbs and legacy rows
+## Replaced verbs and legacy rows
 
-Retired SLP verbs fail with `SLP_V2_CUTOVER` naming the replacement
-operation. Rows written before SLP v2 stay readable as legacy history and
+Inside a running team's role pane, a classic verb that an SLP operation
+replaces fails with `SLP_V2_CUTOVER` naming that operation. Rows written before SLP v2 stay readable as legacy history and
 never enter the four-state work model.

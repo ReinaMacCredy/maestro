@@ -483,12 +483,9 @@ test("slp-doctrine: the shipped Lead mandate makes self-work the default and Pee
 });
 
 // room d122-d126: the collaboration and autonomy layer is doctrine text plus
-// three small mechanisms (work note --owner, maestro owner, decide
-// --provisional / decision confirm). The pack version, marker lines and the
-// nine-operation surface stay byte-unchanged: `maestro owner` and
-// `maestro decision confirm` are Hub-room verbs like `decision`, not SLP
-// operations.
-test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner walk-in, presence and provisional rulings, and every profile knows its part (room d122-d126)", async () => {
+// one small mechanism, work note --owner. The pack version, marker lines and
+// the nine-operation surface stay byte-unchanged.
+test("slp-doctrine: the shipped pack carries the --blocked ladder and the owner walk-in, drops presence and provisional rulings, and every profile knows its part (room d122-d126, d899)", async () => {
   const root = join(import.meta.dir, "..");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const read = async (...parts: string[]) => Bun.file(join(root, "src", "plugins", "resources", ...parts)).text();
@@ -509,15 +506,12 @@ test("slp-doctrine: the shipped pack carries the --blocked ladder, the owner wal
   expect(shared).toContain("Inside the item's objective act at once; outside it, record the `--owner` note and do not widen the item: the Lead reads the push and opens new work");
   expect(shared).toContain("A walk-in never rewrites an objective or an acceptance, and never redefines a seat's mandate");
 
-  // d124, d125 and the two w722 leftovers live in the Hub Supervisor section.
-  expect(hub).toContain("`maestro owner here|away`, a Hub-room verb like `decision`, not an SLP operation");
-  expect(hub).toContain("no hook and no other seat infers it, and a `[from <role>]` push line never counts as the owner");
-  expect(hub).toContain("`maestro owner` prints it, and the Hub prompt line and `maestro status` carry `owner: here|away`");
-  expect(hub).toContain("Presence changes only who answers an owner-scope `--blocked` note that has reached you");
-  expect(hub).toContain("`here`, you wait for the owner; `away`, you resolve it at once through advisor");
-  expect(hub).toContain('`maestro decide "<choice>" --why "<reason>" --work <id> --provisional`');
-  expect(hub).toContain("`maestro status` lists every provisional ruling until she confirms it with `maestro decision confirm <id>` or supersedes it with a decision that `--replaces` it");
-  expect(hub).toContain("`away` never grants commit, push, tag, release, install mid-generation, or any destructive change");
+  // The Hub section teaches no presence and no provisional ruling; one an
+  // older store holds is still listed.
+  for (const gone of ["maestro owner", "owner: here|away", "--provisional", "decision confirm", "away`"]) {
+    expect({ gone, hub }).toEqual({ gone, hub: expect.not.stringContaining(gone) });
+  }
+  expect(hub).toContain("A provisional ruling an older store still holds stays listed by `maestro status`.");
   expect(hub).toContain("You also run the normal stop of a team, `maestro team stop <team-id> --reason \"<closing report>\"`, once its work is DONE");
 
   // Every seat profile knows the walk-in and its place on the ladder.

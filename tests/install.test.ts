@@ -92,42 +92,6 @@ test("439 install warns about a live work holder and still completes", async () 
   });
 });
 
-test("SLP v2 install refuses runtime replacement while a v1 team is live", async () => {
-  await withFixture(async (fixture) => {
-    await mkdir(join(fixture.home, "maestro"), { recursive: true });
-    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
-    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-    database.exec(`
-      CREATE TABLE team_lifecycle (
-        team_id TEXT PRIMARY KEY,
-        generation INTEGER NOT NULL,
-        stage TEXT NOT NULL
-      );
-      INSERT INTO team_lifecycle (team_id, generation, stage)
-      VALUES ('legacy-live', 7, 'ACTIVE');
-    `);
-    database.close();
-    const { path } = await prepareInstallFixture(fixture);
-    const runtimeCli = join(fixture.home, ".maestro", "runtime", "bin", "maestro.ts");
-    await mkdir(dirname(runtimeCli), { recursive: true });
-    await writeFile(runtimeCli, "old runtime bytes\n");
-
-    const blocked = await runCli(fixture, ["install"], { PATH: path });
-
-    expect(blocked.exitCode).toBe(1);
-    expect(blocked.stderr).toContain('"code":"SLP_V1_TEAM_RUNNING"');
-    expect(blocked.stderr).toContain("legacy-live:g7");
-    expect(await readFile(runtimeCli, "utf8")).toBe("old runtime bytes\n");
-
-    const stopped = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-    stopped.query("UPDATE team_lifecycle SET stage = 'STOPPED'").run();
-    stopped.close();
-    const installed = await runCli(fixture, ["install"], { PATH: path });
-    expect(installed.exitCode).toBe(0);
-    expect(await readFile(runtimeCli, "utf8")).not.toBe("old runtime bytes\n");
-  });
-}, 30_000);
-
 test("A5 / B3.9 install preserves rollback and writes harness-specific adapters", async () => {
   await withFixture(async (fixture) => {
     const legacySource = "#!/bin/sh\necho legacy-maestro\n";

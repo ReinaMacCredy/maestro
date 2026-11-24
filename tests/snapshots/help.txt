@@ -14,7 +14,6 @@ verbs:
   lesson     Record corrections that doctrine edits answer. *
   mcp        Deliver the session brief through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
-  owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
@@ -103,7 +102,6 @@ usage: maestro bundle show <id>
 decide  Record one immutable settled decision.
 usage: maestro decide <choice>
     --json              Emit one compact JSON success envelope.
-    --provisional       Hub only: an away ruling that stands until the owner confirms or supersedes it (room d125); --work links the fork it resolves when one exists.
     --replaces <value>  Link the decision it replaces.
     --scope <value>     Select owner or cross-team scope when acting as Hub Supervisor.
     --why <value>       Record why this choice is settled.
@@ -120,9 +118,6 @@ subverbs:
     --rationale <value>   Record why this decision was made.
     --supersedes <value>  Supersede a locked decision with this one.
     --work <value>        Link this decision to a work item.
-  confirm   Hub only: confirm a provisional decision recorded while the owner was away (room d125).
-    usage: maestro decision confirm <decision-id>
-    --json  Emit one compact JSON success envelope.
   draft     Create or edit a draft that waits on the owner; the usual decision is recorded and locked in one step by decision add.
     usage: maestro decision draft <text-or-id> [replacement]
     --dissent <value>     Record the dissenting view.
@@ -159,11 +154,6 @@ usage: maestro decision add <text>
     --rationale <value>   Record why this decision was made.
     --supersedes <value>  Supersede a locked decision with this one.
     --work <value>        Link this decision to a work item.
-
-### maestro decision confirm --help
-decision confirm  Hub only: confirm a provisional decision recorded while the owner was away (room d125).
-usage: maestro decision confirm <decision-id>
-    --json  Emit one compact JSON success envelope.
 
 ### maestro decision draft --help
 decision draft  Create or edit a draft that waits on the owner; the usual decision is recorded and locked in one step by decision add.
@@ -229,7 +219,6 @@ verbs:
   lesson     Record corrections that doctrine edits answer. *
   mcp        Deliver the session brief through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
-  owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
@@ -413,11 +402,6 @@ memory show  Show one Hub memory fact with its body and links, from any cwd. *
 usage: maestro memory show <fact>
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
-
-### maestro owner --help
-owner  Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
-usage: maestro owner [here|away]
-    --json  Emit one compact JSON success envelope.
 
 ### maestro plugin --help
 plugin  Manage built-in plugins.

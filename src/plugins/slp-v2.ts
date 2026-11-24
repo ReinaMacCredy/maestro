@@ -232,7 +232,7 @@ interface SlpLifecycleRow {
 
 const packSource = join(import.meta.dir, "resources", "SLP.md");
 
-const retiredSlpOperations = new Map<string, string>([
+const nonTeamVerbs = new Map<string, string>([
   ["attention", "status"],
   ["brief", "status"],
   ["decision", "decide"],
@@ -241,20 +241,10 @@ const retiredSlpOperations = new Map<string, string>([
   ["dispatch", "work add, work take, or work return"],
   ["handback", "work return or work accept"],
   ["ready", "status"],
-  ["team advise", "decide"],
-  ["team await-ready", "status"],
-  ["team bind", "team start"],
-  ["team health", "status"],
-  ["team open", "team start"],
-  ["team reconcile", "status or team start"],
-  ["team review", "work note or work accept"],
-  ["team status", "status"],
   ["work done", "work return then work accept"],
   ["work list", "status"],
   ["work reclaim", "work take"],
   ["work release", "work return"],
-  ["work reopen", "work take"],
-  ["work repair", "work note"],
   ["work show", "status <work-id>"],
   ["work start", "work take"],
 ]);
@@ -263,43 +253,13 @@ function canonicalCheckoutRoot(cwd: string): string {
   return realpathSync.native(resolveStoreLocation(cwd).root);
 }
 
-function adoptedSlpProjectAt(cwd: string): boolean {
-  const location = resolveStoreLocation(cwd);
-  const path = location.path;
-  if (!existsSync(path)) return false;
-  const store = new Store(path, { readonly: true });
-  try {
-    return tableExists(store, "slp_local_teams") &&
-      store.database
-        .query<{ present: number }, [string]>(
-          "SELECT 1 AS present FROM slp_local_teams WHERE project_path = ? LIMIT 1",
-        )
-        .get(canonicalCheckoutRoot(cwd))?.present === 1;
-  } finally {
-    store.close();
-  }
-}
-
-function retiredReplacement(command: string): string | null {
-  const matches = [...retiredSlpOperations.entries()]
-    .filter(([retired]) => command === retired || command.startsWith(`${retired} `))
-    .sort(([left], [right]) => right.length - left.length);
-  return matches[0]?.[1] ?? null;
-}
-
-function rejectRetiredSlp(command: string, replacement: string): never {
-  throw new CliError(
-    "SLP_V2_CUTOVER",
-    `${command} was retired by SLP v2; use maestro ${replacement}`,
-    { command, replacement },
-  );
-}
-
 export function slpV2CliOptions(cwd = process.cwd()): CliOptions {
   return {
     beforeInvoke(command) {
-      const replacement = retiredReplacement(command);
-      if (!replacement || !adoptedSlpProjectAt(cwd)) return;
+      const replacement = [...nonTeamVerbs.entries()]
+        .filter(([verb]) => command === verb || command.startsWith(`${verb} `))
+        .sort(([left], [right]) => right.length - left.length)[0]?.[1];
+      if (!replacement) return;
       const location = resolveStoreLocation(cwd);
       if (!existsSync(location.path)) return;
       const paneId = currentPaneId();
@@ -317,15 +277,16 @@ export function slpV2CliOptions(cwd = process.cwd()): CliOptions {
              LIMIT 1`,
           )
           .get(canonicalCheckoutRoot(cwd), paneId);
-        if (activeRole) rejectRetiredSlp(command, replacement);
+        if (activeRole) {
+          throw new CliError(
+            "SLP_V2_CUTOVER",
+            `${command} was retired by SLP v2; use maestro ${replacement}`,
+            { command, replacement },
+          );
+        }
       } finally {
         store.close();
       }
-    },
-    beforeUnknown(args) {
-      const command = args.slice(0, 3).join(" ");
-      const replacement = retiredReplacement(command);
-      if (replacement) rejectRetiredSlp(command, replacement);
     },
   };
 }
@@ -354,7 +315,7 @@ function migrateRoom(store: Store): void {
     CREATE TABLE IF NOT EXISTS slp_team_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('lead', 'peer', 'observer')),
+      role TEXT NOT NULL CHECK(role IN ('lead', 'peer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -411,64 +372,10 @@ function migrateRoom(store: Store): void {
       work_id TEXT,
       replaces_id TEXT,
       actor TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      provisional INTEGER NOT NULL DEFAULT 0
     );
   `);
-  store.ensureColumn(
-    "slp_team_roles",
-    "instance_id",
-    "ALTER TABLE slp_team_roles ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_lifecycle_operations",
-    "reason",
-    "ALTER TABLE slp_lifecycle_operations ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_team_roles",
-    "pack_digest",
-    "ALTER TABLE slp_team_roles ADD COLUMN pack_digest TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_team_roles",
-    "brief_digest",
-    "ALTER TABLE slp_team_roles ADD COLUMN brief_digest TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_team_roles",
-    "ready_challenge",
-    "ALTER TABLE slp_team_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_team_roles",
-    "profile",
-    "ALTER TABLE slp_team_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
-  );
-  widenRoleCheck(store, "slp_team_roles");
-  // room d124: one declared presence row; no row reads as here.
-  store.migrate(`
-    CREATE TABLE IF NOT EXISTS slp_owner_presence (
-      id INTEGER PRIMARY KEY CHECK(id = 1),
-      presence TEXT NOT NULL CHECK(presence IN ('here', 'away')),
-      updated_at TEXT NOT NULL,
-      set_by TEXT NOT NULL
-    );
-  `);
-  // room d125: a Hub ruling made while the owner is away stands provisional
-  // until she confirms or supersedes it.
-  store.ensureColumn(
-    "slp_decisions",
-    "provisional",
-    "ALTER TABLE slp_decisions ADD COLUMN provisional INTEGER NOT NULL DEFAULT 0",
-  );
-}
-
-type OwnerPresence = "here" | "away";
-
-interface OwnerPresenceRow {
-  presence: OwnerPresence;
-  setBy: string | null;
-  updatedAt: string | null;
 }
 
 interface ProvisionalDecision {
@@ -478,22 +385,6 @@ interface ProvisionalDecision {
   id: string;
   teamId: string;
   workId: string | null;
-}
-
-// room d124: presence is a declared fact in the room store, never inferred
-// (d705). A store that predates the table, or holds no row, reads as here.
-function readOwnerPresence(store: Store): OwnerPresenceRow {
-  if (!tableExists(store, "slp_owner_presence")) {
-    return { presence: "here", setBy: null, updatedAt: null };
-  }
-  const row = store.database
-    .query<{ presence: OwnerPresence; set_by: string; updated_at: string }, []>(
-      "SELECT presence, set_by, updated_at FROM slp_owner_presence WHERE id = 1",
-    )
-    .get();
-  return row
-    ? { presence: row.presence, setBy: row.set_by, updatedAt: row.updated_at }
-    : { presence: "here", setBy: null, updatedAt: null };
 }
 
 // The column may be missing on a room store no Hub command has migrated since
@@ -529,62 +420,8 @@ function provisionalDecisions(store: Store): ProvisionalDecision[] {
     }));
 }
 
-function ownerPresenceLine(presence: OwnerPresence, waiting: number): string {
-  if (presence === "here") return "owner: here";
-  return `owner: away; ${waiting} provisional decision${waiting === 1 ? "" : "s"} waiting`;
-}
-
-// The Hub prompt hook line and `maestro status` from the room print the same
-// presence line (room d124); anywhere else it is empty.
-export function roomOwnerLine(context: PluginContext): string {
-  if (!isRoom(context.store.database)) return "";
-  return ownerPresenceLine(
-    readOwnerPresence(context.store).presence,
-    provisionalDecisions(context.store).length,
-  );
-}
-
-function requireRoom(context: PluginContext, verb: string): void {
-  if (!isRoom(context.store.database)) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      `${verb} is a Hub-room verb; run it from the Hub at ~/maestro`,
-    );
-  }
-}
-
-function ownerPresence(context: PluginContext, invocation: CliInvocation): CliResult {
-  requireRoom(context, "maestro owner");
-  const requested = invocation.positionals[0];
-  if (requested !== undefined) {
-    if (requested !== "here" && requested !== "away") {
-      throw new CliError(
-        "INVALID_ARGUMENT",
-        `maestro owner takes here or away, not ${requested}`,
-        { presence: requested },
-      );
-    }
-    if (context.store.readOnly) {
-      throw new CliError("READ_ONLY", "maestro owner here|away writes the room store");
-    }
-    migrateRoom(context.store);
-    const now = new Date().toISOString();
-    context.store.database
-      .query(
-        `INSERT INTO slp_owner_presence (id, presence, updated_at, set_by)
-         VALUES (1, ?, ?, 'hub-supervisor')
-         ON CONFLICT(id) DO UPDATE SET presence = excluded.presence,
-           updated_at = excluded.updated_at, set_by = excluded.set_by`,
-      )
-      .run(requested, now);
-    context.sessions.record("owner");
-  }
-  const owner = readOwnerPresence(context.store);
-  const waiting = provisionalDecisions(context.store);
-  return {
-    data: { owner, provisionalDecisions: waiting },
-    text: ownerPresenceLine(owner.presence, waiting.length),
-  };
+export function roomOwnerLine(_context: PluginContext): string {
+  return "";
 }
 
 // A Hub pane not named `supervisor` never receives the BLOCKED push, so a standing escalation has to show in the store.
@@ -621,94 +458,6 @@ function provisionalLines(decisions: ProvisionalDecision[]): string[] {
   );
 }
 
-// room d125: confirmation clears the provisional flag; the choice, why and
-// links are immutable and stay as recorded.
-function confirmDecision(context: PluginContext, id: string): CliResult {
-  requireRoom(context, "maestro decision confirm");
-  migrateRoom(context.store);
-  const row = context.store.database
-    .query<SlpDecisionRow, [string]>(
-      `SELECT id, team_id, generation, choice, why, scope, work_id, replaces_id, actor,
-              created_at, provisional
-       FROM slp_decisions WHERE id = ?`,
-    )
-    .get(id);
-  if (!row) throw new CliError("NOT_FOUND", `SLP decision not found: ${id}`);
-  if (row.provisional !== 1) {
-    throw new CliError("INVALID_STATE", `${id} is not provisional; nothing to confirm`);
-  }
-  const now = new Date().toISOString();
-  context.store.database.exec("BEGIN IMMEDIATE");
-  try {
-    const cleared = context.store.database
-      .query("UPDATE slp_decisions SET provisional = 0 WHERE id = ? AND provisional = 1")
-      .run(id);
-    if (cleared.changes !== 1) {
-      throw new CliError("INVALID_STATE", `${id} changed before it could be confirmed`);
-    }
-    context.store.database
-      .query(
-        `INSERT INTO slp_activity
-          (team_id, generation, actor, operation, target_type, target_id, created_at)
-         VALUES (?, ?, 'hub-supervisor', 'decision confirm', 'decision', ?, ?)`,
-      )
-      .run(row.team_id, row.generation, id, now);
-    context.store.database.exec("COMMIT");
-  } catch (error) {
-    try {
-      context.store.database.exec("ROLLBACK");
-    } catch {}
-    throw error;
-  }
-  context.sessions.record("decision.confirm");
-  const decision = decisionData({ ...row, provisional: 0 }, "hub");
-  return { data: { decision }, text: `${id} confirmed: ${row.choice}` };
-}
-
-const ROLE_TABLE_COLUMNS = [
-  "team_id", "generation", "role", "name", "pane_id", "workspace_id", "instance_id",
-  "pack_digest", "brief_digest", "ready_challenge", "profile", "created_at",
-].join(", ");
-
-// d762 widened the role CHECK to admit 'observer'; the seat is gone (Hub d97,
-// d98) but the constraint stays so rows from those generations still load.
-// Tables created before the widening are rebuilt once, after ensureColumn has
-// brought the old table up to the full column set.
-function widenRoleCheck(store: Store, table: "slp_team_roles" | "slp_local_roles"): void {
-  const sql = store.database
-    .query<{ sql: string }, [string]>(
-      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get(table)?.sql ?? "";
-  if (sql === "" || sql.includes("'observer'")) return;
-  const foreignKey = table === "slp_team_roles"
-    ? ",\n      FOREIGN KEY(team_id, generation) REFERENCES slp_teams(team_id, generation)"
-    : "";
-  store.migrate(`
-    BEGIN IMMEDIATE;
-    ALTER TABLE ${table} RENAME TO ${table}_legacy;
-    CREATE TABLE ${table} (
-      team_id TEXT NOT NULL,
-      generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('team-supervisor', 'lead', 'peer', 'observer')),
-      name TEXT NOT NULL,
-      pane_id TEXT NOT NULL,
-      workspace_id TEXT NOT NULL,
-      instance_id TEXT NOT NULL,
-      pack_digest TEXT NOT NULL,
-      brief_digest TEXT NOT NULL,
-      ready_challenge TEXT NOT NULL,
-      profile TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      PRIMARY KEY(team_id, generation, name)${foreignKey}
-    );
-    INSERT INTO ${table} (${ROLE_TABLE_COLUMNS})
-      SELECT ${ROLE_TABLE_COLUMNS} FROM ${table}_legacy;
-    DROP TABLE ${table}_legacy;
-    COMMIT;
-  `);
-}
-
 function migrateProject(store: Store): void {
   store.migrate(`
     CREATE TABLE IF NOT EXISTS slp_local_teams (
@@ -722,12 +471,14 @@ function migrateProject(store: Store): void {
       state TEXT NOT NULL CHECK(state IN ('RUNNING', 'STOPPED')),
       workspace_id TEXT NOT NULL,
       bound_at TEXT NOT NULL,
+      runtime_pane_id TEXT NOT NULL DEFAULT '',
+      supervisor_pane_id TEXT NOT NULL DEFAULT '',
       PRIMARY KEY(team_id, generation)
     );
     CREATE TABLE IF NOT EXISTS slp_local_roles (
       team_id TEXT NOT NULL,
       generation INTEGER NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('lead', 'peer', 'observer')),
+      role TEXT NOT NULL CHECK(role IN ('lead', 'peer')),
       name TEXT NOT NULL,
       pane_id TEXT NOT NULL,
       workspace_id TEXT NOT NULL,
@@ -764,7 +515,8 @@ function migrateProject(store: Store): void {
       kind TEXT NOT NULL CHECK(kind IN ('NOTE', 'RETURN', 'ACCEPTANCE')),
       actor TEXT NOT NULL,
       body TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      flag TEXT
     );
     CREATE TABLE IF NOT EXISTS slp_rework_grants (
       work_id TEXT NOT NULL REFERENCES slp_work(id),
@@ -827,89 +579,6 @@ function migrateProject(store: Store): void {
       UNIQUE(project_path, generation, operation)
     );
   `);
-  store.ensureColumn(
-    "slp_local_teams",
-    "configuration_json",
-    "ALTER TABLE slp_local_teams ADD COLUMN configuration_json TEXT NOT NULL DEFAULT '{}'",
-  );
-  store.ensureColumn(
-    "slp_work",
-    "return_revision",
-    "ALTER TABLE slp_work ADD COLUMN return_revision INTEGER NOT NULL DEFAULT 0",
-  );
-  store.ensureColumn(
-    "slp_work",
-    "abandoned_at",
-    "ALTER TABLE slp_work ADD COLUMN abandoned_at TEXT",
-  );
-  store.ensureColumn(
-    "slp_work",
-    "abandoned_by",
-    "ALTER TABLE slp_work ADD COLUMN abandoned_by TEXT",
-  );
-  store.ensureColumn(
-    "slp_work",
-    "abandonment_reason",
-    "ALTER TABLE slp_work ADD COLUMN abandonment_reason TEXT",
-  );
-  store.ensureColumn(
-    "slp_lifecycle_operations",
-    "reason",
-    "ALTER TABLE slp_lifecycle_operations ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_local_roles",
-    "instance_id",
-    "ALTER TABLE slp_local_roles ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_local_roles",
-    "pack_digest",
-    "ALTER TABLE slp_local_roles ADD COLUMN pack_digest TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_local_roles",
-    "brief_digest",
-    "ALTER TABLE slp_local_roles ADD COLUMN brief_digest TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_local_roles",
-    "ready_challenge",
-    "ALTER TABLE slp_local_roles ADD COLUMN ready_challenge TEXT NOT NULL DEFAULT ''",
-  );
-  store.ensureColumn(
-    "slp_work_entries",
-    "flag",
-    "ALTER TABLE slp_work_entries ADD COLUMN flag TEXT",
-  );
-  store.ensureColumn(
-    "slp_local_roles",
-    "profile",
-    "ALTER TABLE slp_local_roles ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
-  );
-  localTeamPaneColumns(store);
-  widenRoleCheck(store, "slp_local_roles");
-}
-
-// A project store written before the pane columns existed still carries the
-// table, so `tableExists` is not enough to prove its shape: every reader past
-// that gate brings the columns up to date first. Returns false only when the
-// store cannot be written (observer mode), where the reader degrades instead.
-function localTeamPaneColumns(store: Store): boolean {
-  store.ensureColumn(
-    "slp_local_teams",
-    "runtime_pane_id",
-    "ALTER TABLE slp_local_teams ADD COLUMN runtime_pane_id TEXT NOT NULL DEFAULT ''",
-  );
-  // Live row 17 (g18): the Hub Supervisor's pane is a recorded fact, never
-  // the literal Herdr agent name `supervisor` that nothing owned.
-  store.ensureColumn(
-    "slp_local_teams",
-    "supervisor_pane_id",
-    "ALTER TABLE slp_local_teams ADD COLUMN supervisor_pane_id TEXT NOT NULL DEFAULT ''",
-  );
-  return store.hasColumn("slp_local_teams", "runtime_pane_id") &&
-    store.hasColumn("slp_local_teams", "supervisor_pane_id");
 }
 
 function slug(value: string): string {
@@ -928,26 +597,6 @@ function teamIdForProject(projectPath: string): string {
 function packVersion(pack: string): string {
   const version = /<!-- slp:version=([^\s]+) -->/.exec(pack)?.[1];
   if (!version) throw new CliError("INVALID_SLP_PACK", "SLP.md is missing its version marker");
-  return version;
-}
-
-// d91/d98: pack version 3 names one profile per seat; the version-2 model
-// markers and the Observer are refused by name so a migration is one message.
-function requirePackV3(pack: string): string {
-  const version = packVersion(pack);
-  if (version !== "3" || /<!-- slp:model:/.test(pack)) {
-    throw new CliError(
-      "INVALID_SLP_PACK",
-      `SLP.md is version ${version}; version 3 replaces every <!-- slp:model:<seat>=<harness>:<model> --> marker with <!-- slp:profile:<seat>=<name> --> for lead and peer and moves the seat sections into profile files; maestro install rewrites the shipped copy under ~/.maestro/runtime, then migrate the Hub copy by hand`,
-      { version },
-    );
-  }
-  if (/<!-- slp:(?:profile|model):observer=|<!-- slp:role:observer:begin -->/.test(pack)) {
-    throw new CliError(
-      "INVALID_SLP_PACK",
-      "SLP.md still carries an Observer marker or section; the Observer seat was removed (Hub d97, d98), delete it",
-    );
-  }
   return version;
 }
 
@@ -1802,7 +1451,7 @@ async function startTeam(
     attachedRoom = true;
     projectStore.database.exec("PRAGMA busy_timeout = 300000");
     const hubPack = new TextDecoder().decode(hubPackBytes);
-    const hubVersion = requirePackV3(hubPack);
+    const hubVersion = packVersion(hubPack);
     const hubDigest = createHash("sha256").update(hubPackBytes).digest("hex");
     const hubProfiles: PackProfiles = {
       lead: packProfile(hubPack, "lead"),
@@ -2160,7 +1809,6 @@ interface SlpWorkRow {
 
 function activeLocalTeam(context: PluginContext): ActiveLocalTeam | null {
   if (!tableExists(context.store, "slp_local_teams")) return null;
-  if (!localTeamPaneColumns(context.store)) return null;
   return context.store.database
     .query<ActiveLocalTeam, [string]>(
       `SELECT team_id, generation, room_store_path, project_path,
@@ -3604,7 +3252,6 @@ async function decideHubWork(
   context: PluginContext,
   input: {
     choice: string;
-    provisional: boolean;
     replaces: string | null;
     scope: string;
     target: HubWorkTarget;
@@ -3644,8 +3291,8 @@ async function decideHubWork(
     const insertDecision = context.store.database.query(
       `INSERT INTO slp_decisions
         (id, team_id, generation, choice, why, scope, work_id, replaces_id,
-         actor, created_at, provisional)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'hub-supervisor', ?, ?)`,
+         actor, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'hub-supervisor', ?)`,
     );
     const values = [
       id,
@@ -3657,7 +3304,6 @@ async function decideHubWork(
       input.target.workId,
       input.replaces,
       now,
-      input.provisional ? 1 : 0,
     ] as const;
     insertDecision.run(...values);
     if (input.replaces) clearProvisional(context.store, input.replaces);
@@ -3706,7 +3352,6 @@ async function decideHubWork(
     choice: input.choice,
     createdAt: now,
     id,
-    provisional: input.provisional,
     replaces: input.replaces,
     scope: input.scope,
     why: input.why,
@@ -3714,7 +3359,7 @@ async function decideHubWork(
   };
   return {
     data: { decision },
-    text: `${id} [${input.scope}]${input.provisional ? " provisional" : ""} ${input.choice}`,
+    text: `${id} [${input.scope}] ${input.choice}`,
   };
 }
 
@@ -3764,24 +3409,9 @@ async function decide(context: PluginContext, invocation: CliInvocation): Promis
   }
   const workId = stringOption(invocation, "work") ?? null;
   const replaces = stringOption(invocation, "replaces") ?? null;
-  // room d125: only the Hub rules provisionally, and the flag says the ruling
-  // stands until the owner confirms or supersedes it.
-  // w736 F2: it no longer requires --work. An owner-scope ruling an away Hub
-  // makes before any item exists - a SPEC lock, an amendment to a brief - is
-  // exactly as unconfirmed as one that resolves a fork a seat raised, and
-  // refusing the flag there left the Hub recording it as final or hanging it
-  // on an unrelated item. A ruling with no item simply pushes to nobody.
-  const provisional = invocation.options.provisional === true;
-  if (provisional && local) {
-    throw new CliError(
-      "ROLE_FORBIDDEN",
-      `${actor} cannot decide provisionally; --provisional is the Hub Supervisor's away ruling (room d125)`,
-    );
-  }
   if (workId && !local) {
     return await decideHubWork(context, {
       choice,
-      provisional,
       replaces,
       scope,
       target: resolveHubWorkTarget(context, workId),
@@ -3818,30 +3448,14 @@ async function decide(context: PluginContext, invocation: CliInvocation): Promis
   try {
     if (local) requireRunningGeneration(context.store, local);
     id = nextDecisionId(context.store);
-    // Only the room store carries the provisional column (migrateRoom), and
-    // only the Hub can set it, so the team insert keeps the shape it had.
-    if (local) {
-      context.store.database
-        .query(
-          `INSERT INTO slp_decisions
-            (id, team_id, generation, choice, why, scope, work_id, replaces_id,
-             actor, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
-    } else {
-      context.store.database
-        .query(
-          `INSERT INTO slp_decisions
-            (id, team_id, generation, choice, why, scope, work_id, replaces_id,
-             actor, created_at, provisional)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          id, teamId, generation, choice, why, scope, workId, replaces, actor, now,
-          provisional ? 1 : 0,
-        );
-    }
+    context.store.database
+      .query(
+        `INSERT INTO slp_decisions
+          (id, team_id, generation, choice, why, scope, work_id, replaces_id,
+           actor, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, teamId, generation, choice, why, scope, workId, replaces, actor, now);
     if (replaces && workId && local) {
       markLessonCandidate(context.store, workId, `decision ${id}`, now);
     }
@@ -3864,9 +3478,8 @@ async function decide(context: PluginContext, invocation: CliInvocation): Promis
     await pushDecision(context.store, local.project_path, actorRole, actor, workId, choice);
   }
   context.sessions.record("decide");
-  const ruled = provisional && !local;
-  const decision = { actor, choice, createdAt: now, id, provisional: ruled, replaces, scope, why, workId };
-  return { data: { decision }, text: `${id} [${scope}]${ruled ? " provisional" : ""} ${choice}` };
+  const decision = { actor, choice, createdAt: now, id, replaces, scope, why, workId };
+  return { data: { decision }, text: `${id} [${scope}] ${choice}` };
 }
 
 function stopPlan(team: ActiveLocalTeam): Promise<SlpTeamPlan> {
@@ -5022,14 +4635,10 @@ export async function maybeHandleSlpStatus(
         workspaceId: row.workspace_id,
       });
     }
-    // room d124, d125: the room's status opens with the owner's presence and
-    // closes with every provisional ruling still waiting on her.
-    const owner = readOwnerPresence(context.store);
     const waiting = provisionalDecisions(context.store);
     return {
-      data: { owner, provisionalDecisions: waiting, teams },
+      data: { provisionalDecisions: waiting, teams },
       text: [
-        ownerPresenceLine(owner.presence, waiting.length),
         ...(teams.length === 0
           ? ["no SLP teams"]
           : teams.flatMap((team) => [
@@ -5313,31 +4922,6 @@ export const slpV2Plugin: BuiltInPlugin = {
         { description: "Read the runtime's pending wakes for the running generation.", mutates: false },
       ),
     );
-    // room d124: presence is declared by the Hub on the owner's own words and
-    // read by anyone in the room; it is a Hub-room verb, not an SLP operation.
-    context.effect(() =>
-      context.cli.register(
-        "owner",
-        (invocation): CliResult => ownerPresence(context, invocation),
-        {
-          description: "Hub only: print the owner's declared presence, or record here|away on her own words (room d124).",
-          positionals: [{ name: "here|away", required: false }],
-        },
-      ),
-    );
-    // room d125: the owner confirms a provisional ruling from the Hub pane.
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "decision confirm",
-        (invocation): CliResult =>
-          confirmDecision(context, requiredPosition(invocation, 0, "decision id")),
-        {
-          description: "Hub only: confirm a provisional decision recorded while the owner was away (room d125).",
-          positionals: [{ name: "decision-id", required: true }],
-        },
-      ),
-    );
     // w740 (d898): bundle open says a design has begun; the SLP plugin owns
     // the push, so the bundle plugin only announces the event.
     context.effect(() =>
@@ -5353,9 +4937,6 @@ export const slpV2Plugin: BuiltInPlugin = {
       registerSessionCommand(context, "decide", (invocation): Promise<CliResult> => decide(context, invocation), {
         description: "Record one immutable settled decision.",
         flags: {
-          "--provisional": {
-            description: "Hub only: an away ruling that stands until the owner confirms or supersedes it (room d125); --work links the fork it resolves when one exists.",
-          },
           "--replaces": { description: "Link the decision it replaces.", value: true },
           "--scope": {
             description: "Select owner or cross-team scope when acting as Hub Supervisor.",

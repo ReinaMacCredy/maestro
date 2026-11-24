@@ -85,22 +85,12 @@ test("profile-seat-body: maestro-peer renders the Peer block + peer body, the Le
   });
 }, 30_000);
 
-test("pack-v3-markers: a version-2 pack is refused naming slp:profile, an unknown profile is refused by name, the fixture pack resolves the lead and peer seats to their profiles (red 4)", async () => {
+test("pack-v3-markers: an unknown profile is refused by name, the fixture pack resolves the lead and peer seats to their profiles (red 4)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     const fake = await installFakeHerdr(fixture);
     const shipped = await readFile(join(shippedRoot, "SLP.md"), "utf8");
     const packPath = join(room, "SLP.md");
-
-    const v2 = shipped
-      .replace("<!-- slp:version=3 -->", "<!-- slp:version=2 -->")
-      .replace(/<!-- slp:profile:(team-supervisor|lead|peer)=[a-z-]+ -->/g, "<!-- slp:model:$1=codex:default -->");
-    await writeFile(packPath, v2);
-    const refusedV2 = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Old pack", "--json"], fake.env);
-    expect(refusedV2.exitCode).toBe(1);
-    expect(failure(refusedV2.stderr).code).toBe("INVALID_SLP_PACK");
-    expect(failure(refusedV2.stderr).message).toContain("slp:profile");
-    expect(failure(refusedV2.stderr).message).toContain("maestro install");
 
     await writeFile(packPath, shipped.replace("<!-- slp:profile:lead=lead -->", "<!-- slp:profile:lead=ghost -->"));
     const refusedGhost = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Ghost lead", "--json"], fake.env);

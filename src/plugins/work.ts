@@ -385,7 +385,7 @@ export const workPlugin: BuiltInPlugin = {
           if (invocation.options.mode !== undefined) {
             throw new CliError(
               "INVALID_OPTION",
-              "--mode is not an option (room d126): items carry no collaboration tag; the owner's presence (maestro owner) decides who answers an owner-scope fork, and a fork is always raised with work note --blocked",
+              "--mode is not an option (room d126): items carry no collaboration tag, and a fork is always raised with work note --blocked",
             );
           }
           const slp = await maybeHandleSlpWorkAdd(context, invocation);
@@ -725,14 +725,6 @@ export const workPlugin: BuiltInPlugin = {
           if (!existsSync(file)) throw new CliError("NOT_FOUND", `note file not found: ${file}`, { file });
           invocation.positionals[1] = readFileSync(file, "utf8").trimEnd();
         }
-        // Hub d97/d98: the Observer's --stall is refused for every pane until
-        // the team runtime records stalls itself.
-        if (invocation.options.stall !== undefined) {
-          throw new CliError(
-            "STALL_RETIRED",
-            "--stall was retired with the Observer seat (Hub d97, d98); attention is the self-declared work note --blocked until the team runtime records stalls",
-          );
-        }
         const slp = await maybeHandleSlpWorkNote(context, invocation);
         if (slp) return slp;
         if (invocation.options.rework === true) {
@@ -775,7 +767,6 @@ export const workPlugin: BuiltInPlugin = {
           "--rework": {
             description: "Grant the current SLP return revision one reviewer-authorized retake.",
           },
-          "--stall": { hidden: true, value: true },
         },
         positionals: [
           { name: "id", required: true },

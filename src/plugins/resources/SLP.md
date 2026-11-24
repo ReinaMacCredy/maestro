@@ -166,15 +166,14 @@ owner. Inside the item's objective act at once; outside it, record the
 `--owner` note and do not widen the item: the Lead reads the push and opens
 new work. A walk-in never rewrites an objective or an acceptance, and never
 redefines a seat's mandate. Seats have no question tool: a question for the owner is
-`maestro work note <id> "<question>" --blocked`, never a dialog, and the
-runtime's dialog stall exists for harness prompts only. That self-declared
+`maestro work note <id> "<question>" --blocked`, never a dialog. That self-declared
 `--blocked` note is the team's first attention layer. The second is the team runtime pane Maestro opens in the team
 workspace (Hub d96, d97): it resolves Herdr pane events against the
 store, no model judges anything, and it may send you
-`[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro
-work note <work-id> "<what you need>" --blocked` when your pane waits on a
-dialog or sits idle while you hold ACTIVE work (one nudge per item and kind
-until the store changes), with a copy to the Hub, `[attention] <seat> idle` to
+`[from runtime][<work-id>] silence <evidence>; stop and run: maestro
+work note <work-id> "<what you need>" --blocked` when your pane sits idle
+while you hold ACTIVE work (one nudge per item until the store changes), with
+a copy to the Hub, `[attention] <seat> idle` to
 the seat above, and `[attention] <seat> pane exited|closed` to the Hub. Answer a nudge by recording,
 never by replying to the runtime. A Peer reaches the Lead and other Peers only
 through recorded work notes and returns; those push lines are its wake-ups and
@@ -278,9 +277,9 @@ what says you are no longer waiting.
 Lines that arrive in your pane are wake-ups, not the record. A line shaped
 `[from <sender>][<work-id> <STATE>] <summary>; read: maestro status <work-id>`
 means that item moved, so read the item. A line shaped
-`[from runtime][<work-id>] <dialog|silence> <evidence>; stop and run: maestro
-work note <work-id> "<what you need>" --blocked` means your pane has been stuck
-or silent while holding that item; answer it by recording, never by replying to
+`[from runtime][<work-id>] silence <evidence>; stop and run: maestro
+work note <work-id> "<what you need>" --blocked` means your pane has been
+silent while holding that item; answer it by recording, never by replying to
 it. Nothing seen in a pane is a record until `maestro status <work-id>` shows
 it.
 
@@ -321,22 +320,8 @@ A work id only the room's own work table holds is still the room's own item and
 the plain verb answers for it; an id both spaces hold is refused until you
 qualify the team's as `<team-id>:<id>`; any other id is resolved as SLP work,
 so a miss says `SLP work not found from Hub`. You never manage Peers
-directly. The room store holds the owner's
-declared presence, `here` or `away`: record it with `maestro owner here|away`,
-a Hub-room verb like `decision`, not an SLP operation, on the owner's own words
-in your pane (she says she is leaving: `away`; she chats into the Hub pane
-again: `here`, before you answer); no hook and no other seat infers it, and a
-`[from <role>]` push line never counts as the owner. `maestro owner` prints
-it, and the Hub prompt line and `maestro status` carry `owner: here|away`.
-Presence changes only who answers an owner-scope `--blocked` note that has
-reached you, never what a seat may do: `here`, you wait for the owner; `away`,
-you resolve it at once through advisor, record the ruling as `maestro decide
-"<choice>" --why "<reason>" --work <id> --provisional`, and push it down so
-the team continues. `maestro status` lists every provisional ruling until she
-confirms it with `maestro decision confirm <id>` or supersedes it with a
-decision that `--replaces` it, and when she returns you tell her how many
-wait; `away` never grants commit, push, tag, release, install mid-generation,
-or any destructive change. You also run the normal stop of a team,
+directly. A provisional ruling an older store still holds stays listed by
+`maestro status`. You also run the normal stop of a team,
 `maestro team stop <team-id> --reason "<closing report>"`, once its work is
 DONE. A Hub decision may link
 unique work as `wN`; when that id exists in several teams, qualify it as
