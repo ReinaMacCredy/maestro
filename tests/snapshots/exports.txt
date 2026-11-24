@@ -129,6 +129,7 @@ legacyPlugin
 lessonPlugin
 lifecyclePlugin
 linkHerdrPlugin
+materializeProfiles
 materializeSeats
 materializeSkills
 maybeHandleSlpStatus
