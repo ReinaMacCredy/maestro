@@ -312,7 +312,7 @@ export class Cli {
           argument: unexpected,
         });
       }
-      const help = this.helpText(args.slice(0, helpIndex).join(" ") || undefined);
+      const help = this.helpText(this.helpTarget(args.slice(0, helpIndex)).target);
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     const found = this.findCommand(args);

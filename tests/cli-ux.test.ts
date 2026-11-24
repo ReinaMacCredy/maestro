@@ -170,3 +170,14 @@ test("35 top-level help roots match describeCommands and every registration is d
     }
   });
 });
+
+test("--help after a verb's arguments prints that verb's help", async () => {
+  await withFixture(async (fixture) => {
+    const plain = await runCli(fixture, ["work", "done", "--help"]);
+    for (const args of [["work", "done", "w1", "--help"], ["work", "done", "w1", "--evidence", "ran it", "--help"]]) {
+      const result = await runCli(fixture, args);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(plain.stdout);
+    }
+  });
+});
