@@ -288,7 +288,7 @@ function formatWork(work: WorkRecord): string {
     work.acceptance ? `acceptance: ${work.acceptance}` : null,
     work.atomicReason ? `atomic reason: ${work.atomicReason}` : null,
     work.cancelReason ? `cancel reason: ${work.cancelReason}` : null,
-    work.evidence !== null ? `evidence: ${work.evidence}` : null,
+    work.evidence ? `evidence: ${work.evidence}` : null,
     work.candidate !== null ? `candidate: ${work.candidate}` : null,
   ];
   return fields.filter((field): field is string => field !== null).join("\n");

@@ -2186,6 +2186,9 @@ function appendPinnedProfile(
 // stored blocker nothing enforces would read as a gate that is not one. Both flags
 // keep working unchanged on the Hub path below this branch.
 function refuseDiscardedWorkAddOptions(invocation: CliInvocation): void {
+  if (invocation.options.start !== undefined) {
+    throw new CliError("INVALID_OPTION", "--start does not apply to SLP work add; the assignee takes the item with maestro work take <id>");
+  }
   const discarded = ["acceptance", "blocked-by"].filter(
     (flag) => invocation.options[flag] !== undefined,
   );

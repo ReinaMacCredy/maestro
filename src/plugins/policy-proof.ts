@@ -27,7 +27,7 @@ export const policyProofPlugin: BuiltInPlugin = {
   name: "policy-proof",
   inject: ["work"],
   requires:
-    'gates work done: requires --evidence "<evidence>" or paired --claim "<claim>" --proof "<proof>"',
+    'gates work done: requires --check "<command>", --evidence "<evidence>" or paired --claim "<claim>" --proof "<proof>"',
   apply(context) {
     context.effect(() =>
       context.cli.registerFlag("work done", "--claim", {
@@ -52,8 +52,8 @@ export const policyProofPlugin: BuiltInPlugin = {
             origin: "policy-proof",
             reason:
               `completion evidence is required; run: maestro work done ${input.work.id} ` +
-              `--evidence "<evidence>", or maestro work done ${input.work.id} ` +
-              `--claim "<claim>" --proof "<proof>"`,
+              `--check "<command>" to have maestro run and record the check, or ` +
+              `--evidence "<evidence>", or --claim "<claim>" --proof "<proof>"`,
           };
         }
         if (input.claims.length === 0) {
