@@ -108,10 +108,9 @@ Smallest new information needed: <next fact that would change the approach>
   keep ordinary command output out of notes.
 - `maestro work done <id>` with `--claim`/`--proof` naming the real
   falsifier (the check that would have failed if the claim were wrong).
-  `--evidence` records one opaque blob; paired claims are preferred when a
-  pair-checking gate is enabled, with the gate's tag prefix (`test:`, `qa:`)
-  on the claim. Report pending delivery approval separately from completion. In a
-  bundle, run `maestro handoff <bundle-id>` before releasing the work item:
+  `--evidence` records one opaque blob. Report pending delivery approval
+  separately from completion. In a bundle, run
+  `maestro handoff <bundle-id>` before releasing the work item:
   it renders NOTES.md from the store (work, decisions, `failed:`
   and `checkpoint:` notes, base commit); hand-edit only Authority and
   whatever the store cannot derive, never the rendered sections.

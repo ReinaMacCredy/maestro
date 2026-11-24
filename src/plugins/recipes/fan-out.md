@@ -160,7 +160,7 @@ Standing orders: <the standing-orders file, pasted verbatim>
 - The ledger is work notes on the program's work item, one per verdict, keyed
   by unit and head SHA, written as
   `maestro work note <id> "ledger: <unit> <head-sha> <verdict> <method>"`.
-- A verdict names the evidence layer it reached in policy-layer's words
+- A verdict names the evidence layer it reached
   (`source`, `artifact`, `installed`, `live`, `journey`), or it is
   `verifier-blocked` or `verifier-failed`.
 - CI green is an input to a verdict, not a verdict. Behavioral work needs

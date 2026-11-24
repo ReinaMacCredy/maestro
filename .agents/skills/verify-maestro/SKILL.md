@@ -36,7 +36,8 @@ Add one block to `scripts/journey.sh` per journey the change touches, invoking
 - brief and grant: the SessionStart `method:` line routes by playbook; the
   `delivery grant:` line appears only while `policy-auto-pr` is enabled.
 - bundle check: a fresh bundle's U1 skeleton is reported and exits 1.
-- a policy gate: `plugin enable`, `work add|start|done` blocked, then passing.
+- the proof gate: `plugin enable policy-proof`, then `work done` without
+  evidence is refused and `work done --evidence` passes.
 - reinstall: a second install keeps the repository's policy choices.
 
 ## Capture

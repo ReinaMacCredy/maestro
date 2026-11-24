@@ -277,20 +277,6 @@ test("131 an unstamped legacy skill dir is preserved while the room copy is inst
   });
 });
 
-test("132 policy-lifecycle ships dark: disabled by default with an honest requires string", async () => {
-  await withFixture(async (fixture) => {
-    const { path } = await prepareInstallFixture(fixture);
-    await runCli(fixture, ["install"], { PATH: path });
-    const config = JSON.parse(
-      await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
-    ) as { plugins: Array<{ disabled: boolean; name: string }> };
-    expect(config.plugins).toContainEqual({ name: "policy-lifecycle", disabled: true });
-    const listed = await runCli(fixture, ["plugin", "list"]);
-    expect(listed.stdout).toContain("policy-lifecycle\tbuilt-in\tdisabled");
-    expect(listed.stdout).toContain("reserved");
-  });
-});
-
 test("634 the brief routes to canonical tiers after recon, without making a session change a Full trigger", async () => {
   const skill = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-bundle", "SKILL.md"),

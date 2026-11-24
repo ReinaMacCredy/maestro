@@ -147,9 +147,6 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
     ) as { plugins: Array<{ disabled: boolean; name: string }> };
     expect(config.plugins).toContainEqual({ name: "policy-proof", disabled: false });
     expect(config.plugins).toContainEqual({ name: "policy-breakdown", disabled: false });
-    expect(config.plugins).toContainEqual({ name: "policy-tdd", disabled: true });
-    expect(config.plugins).toContainEqual({ name: "policy-qa", disabled: true });
-    expect(config.plugins).toContainEqual({ name: "policy-research", disabled: true });
 
     const codexHooks = JSON.parse(
       await readFile(join(fixture.repo, ".codex", "hooks.json"), "utf8"),

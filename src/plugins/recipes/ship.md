@@ -19,8 +19,7 @@ whose authority differs.
 
 ### Act
 
-Run the accepted verification and complete the work with any required `qa:` or
-`witness:` evidence. When a commit is authorized, stage task-owned paths only
+Run the accepted verification and complete the work with its evidence. When a commit is authorized, stage task-owned paths only
 and inspect the staged diff. A verified implementation can finish without
 delivery when delivery is not part of its acceptance; record the pending gate.
 Push and PRs follow `maestro recipe show opening-a-pr`; reversible external

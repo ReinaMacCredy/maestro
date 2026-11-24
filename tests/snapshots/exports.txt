@@ -171,14 +171,7 @@ pluginManagerPlugin
 policyAutoPrPlugin
 policyBreakdownPlugin
 policyCardBudgetPlugin
-policyLayerPlugin
-policyLifecyclePlugin
 policyProofPlugin
-policyQaPlugin
-policyResearchPlugin
-policyTddPlugin
-policyWitnessPlugin
-prefixedCompletionGateReason
 profileDigest
 profileDirectories
 readGitHeadCommit

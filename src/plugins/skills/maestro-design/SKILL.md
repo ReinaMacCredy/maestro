@@ -124,9 +124,9 @@ Then exit by [Tiers](~/maestro/WORKFLOW.md#tiers):
   scope notes under a parent and never hold it open. The why lives in the
   title or acceptance; when it needs a paragraph, add
   `maestro work note <id> "why: <paragraph>"`, and record findings from the
-  research mode as `research: <finding>` notes (what `policy-research` reads
-  when enabled). No SPEC is required; the work is verified inline by
-  its playbook (`maestro recipe show <name>`). A quickfix never reaches design.
+  research mode as `research: <finding>` notes. No SPEC is required; the
+  work is verified inline by its playbook (`maestro recipe show <name>`). A
+  quickfix never reaches design.
 - Full: `maestro bundle open <id> --work <workId>`, opened in the
   store whose checkout will change (a walk run in the Hub room still opens
   its bundle where the code lives; note the bundle on the Hub map and the map

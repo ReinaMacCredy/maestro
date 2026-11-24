@@ -128,11 +128,9 @@ test("96 [lint] public docs name the stderr JSON failure envelope", async () => 
   }
 });
 
-test("97 [lint] maestro-work disambiguates claim tagging and evidence forms", async () => {
-  // Documentation lint: proves the shared contract contains both terms, not that their surrounding syntax is unambiguous.
+test("97 [lint] maestro-work names the opaque evidence form", async () => {
   const skill = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md")).text();
   const unwrapped = skill.replaceAll(/\s+/g, " ");
-  expect(unwrapped).toContain("tag prefix (`test:`, `qa:`) on the claim");
   expect(unwrapped).toContain("opaque");
 });
 
@@ -296,12 +294,10 @@ test("103 plugin list states what each policy requires", async () => {
     expect(requiresFor("policy-proof")).toContain("--evidence");
     expect(requiresFor("policy-proof")).toContain("--claim");
     expect(requiresFor("policy-breakdown")).toContain("--atomic-reason");
-    expect(requiresFor("policy-tdd")).toContain("test:");
-    expect(requiresFor("policy-qa")).toContain("qa:");
 
     const text = await runCli(fixture, ["plugin", "list"]);
     expect(text.stdout).toContain("--atomic-reason");
-    expect(text.stdout).toContain("test:");
+    expect(text.stdout).toContain("--evidence");
   });
 });
 

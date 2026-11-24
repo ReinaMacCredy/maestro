@@ -13,13 +13,7 @@ import { pluginManagerPlugin } from "./plugin-manager.ts";
 import { policyAutoPrPlugin } from "./policy-auto-pr.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
 import { policyCardBudgetPlugin } from "./policy-card-budget.ts";
-import { policyLayerPlugin } from "./policy-layer.ts";
-import { policyLifecyclePlugin } from "./policy-lifecycle.ts";
 import { policyProofPlugin } from "./policy-proof.ts";
-import { policyQaPlugin } from "./policy-qa.ts";
-import { policyResearchPlugin } from "./policy-research.ts";
-import { policyTddPlugin } from "./policy-tdd.ts";
-import { policyWitnessPlugin } from "./policy-witness.ts";
 import { recipePlugin } from "./recipe.ts";
 import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
@@ -40,12 +34,6 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyProofPlugin,
   policyBreakdownPlugin,
   policyCardBudgetPlugin,
-  policyTddPlugin,
-  policyQaPlugin,
-  policyResearchPlugin,
-  policyWitnessPlugin,
-  policyLayerPlugin,
-  policyLifecyclePlugin,
   policyAutoPrPlugin,
   recipePlugin,
   observabilityPlugin,

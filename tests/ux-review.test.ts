@@ -113,7 +113,7 @@ test("606 brief --session prints the SessionStart brief the hook delivers", asyn
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toBe(hook.stdout);
     expect(brief.stdout).toContain("method: before the first step, name the task's playbook");
-    expect(brief.stdout).toContain("enabled policies: policy-breakdown, policy-lifecycle, policy-proof\n  see or change: maestro plugin list|enable|disable <name>\n");
+    expect(brief.stdout).toContain("enabled policies: policy-breakdown, policy-proof\n  see or change: maestro plugin list|enable|disable <name>\n");
     const prompt = await runCli(fixture, ["hook", "record", "--event", "UserPromptSubmit"], session);
     expect(prompt.stdout).not.toContain("see or change");
   });

@@ -66,12 +66,14 @@ interface PackageJson {
 const policyDefaults: PluginEntry[] = [
   { name: "policy-proof", disabled: false },
   { name: "policy-breakdown", disabled: false },
-  { name: "policy-tdd", disabled: true },
-  { name: "policy-qa", disabled: true },
-  { name: "policy-research", disabled: true },
-  { name: "policy-witness", disabled: true },
-  { name: "policy-layer", disabled: true },
-  { name: "policy-lifecycle", disabled: true },
+];
+const retiredPolicyNames = [
+  "policy-tdd",
+  "policy-qa",
+  "policy-research",
+  "policy-witness",
+  "policy-layer",
+  "policy-lifecycle",
 ];
 
 const managedIgnoreBegin = "# maestro-ts:begin";
@@ -117,6 +119,7 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 
 async function writePolicyConfig(path: string): Promise<void> {
   const config = await readJson<PluginConfig>(path, { plugins: [] });
+  config.plugins = config.plugins.filter((entry) => !retiredPolicyNames.includes(entry.name));
   const present = new Set(config.plugins.map((entry) => entry.name));
   config.plugins = [...config.plugins, ...policyDefaults.filter((entry) => !present.has(entry.name))];
   await mkdir(dirname(path), { recursive: true });
@@ -364,7 +367,7 @@ async function removeManagedPolicyConfig(path: string): Promise<boolean> {
   if (!existsSync(path)) return false;
   const config = await readJson<Record<string, unknown> & { plugins?: PluginEntry[] }>(path, {});
   const plugins = Array.isArray(config.plugins) ? config.plugins : [];
-  const managed = new Set(policyDefaults.map((entry) => entry.name));
+  const managed = new Set([...policyDefaults.map((entry) => entry.name), ...retiredPolicyNames]);
   const retained = plugins.filter((entry) => !managed.has(entry.name));
   if (retained.length === plugins.length) return false;
   if (retained.length > 0) {

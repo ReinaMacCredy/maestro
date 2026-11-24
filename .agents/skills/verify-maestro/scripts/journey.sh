@@ -19,13 +19,12 @@ echo "## drive: recipe catalog"
 run maestro recipe list | grep -E 'verification-skill|exit'
 run maestro recipe show verification-skill | head -3
 
-echo "## drive: policy-layer on a bug"
-run maestro plugin enable policy-layer
+echo "## drive: policy-proof on a bug"
+run maestro plugin enable policy-proof
 ID=$(env -i HOME="$ROOT/home" PATH="$ROOT/home/.local/bin:$BUNDIR:/usr/bin:/bin" "${SESSION[@]}" maestro work add "journey probe" --kind bug --atomic-reason probe --json | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 echo "id=$ID"
 run maestro work start "$ID" | tail -1
-run maestro work done "$ID" --evidence "tests pass"
-run maestro work done "$ID" --evidence "suite green (source)"
+run maestro work done "$ID"
 run maestro work done "$ID" --evidence "probe drove add/start/done (journey)"
 
 echo "## drive: playbooks, principles and skills"

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import { idFrom, prepareInstallFixture, runCli, withFixture, writeConfig } from "./helpers.ts";
 
 const recipeNames = [
   "investigation",
@@ -74,12 +74,6 @@ async function snapshotTree(root: string): Promise<Map<string, string>> {
   return snapshot;
 }
 
-function errorMessage(result: { stderr: string }): string {
-  const parsed = JSON.parse(result.stderr) as { error?: { message?: unknown } };
-  if (typeof parsed.error?.message !== "string") throw new Error("missing CLI error message");
-  return parsed.error.message;
-}
-
 test("621 recipe list prints the shipped catalog with one-line descriptions", async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(fixture, ["recipe", "list"]);
@@ -142,381 +136,66 @@ test("625 the recipe plugin contributes and removes its brief pointer with enabl
   });
 });
 
-test("626 policy-tdd blocks untagged write completion and passes a test-tagged pair", async () => {
+test("d902 a checkout config that still names a deleted policy loads quietly", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-tdd"])).exitCode).toBe(0);
+    const deleted = [
+      "policy-tdd",
+      "policy-layer",
+      "policy-witness",
+      "policy-qa",
+      "policy-research",
+      "policy-lifecycle",
+    ];
+    await writeConfig(fixture, deleted.map((name) => ({ name, disabled: false })));
+    const parent = idFrom(await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]));
     const id = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "write regression",
-        "--kind",
-        "bug",
-        "--atomic-reason",
-        "small fix",
-      ]),
+      await runCli(fixture, ["work", "add", "plain fix", "--kind", "bug", "--parent", parent]),
     );
-    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
+    const results = [
+      await runCli(fixture, ["work", "start", id]),
+      await runCli(fixture, ["work", "done", id, "--evidence", "suite green"]),
+      await runCli(fixture, ["work", "start", parent]),
+      await runCli(fixture, ["work", "done", parent, "--evidence", "child closed"]),
+      await runCli(fixture, ["hook", "record", "--event", "SessionStart"]),
+      await runCli(fixture, ["work", "list"]),
+    ];
+    const listed = await runCli(fixture, ["plugin", "list"]);
 
-    const blocked = await runCli(fixture, [
-      "work",
-      "done",
-      id,
-      "--claim",
-      "regression covered",
-      "--proof",
-      "bun test passes",
-    ]);
-    const passed = await runCli(fixture, [
-      "work",
-      "done",
-      id,
-      "--claim",
-      "test: regression covered",
-      "--proof",
-      "bun test passes",
-    ]);
-    const shown = await runCli(fixture, ["work", "show", id]);
-    const blockedMessage = errorMessage(blocked);
-
-    expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain("policy-tdd");
-    expect(blockedMessage).toContain(`maestro work done ${id}`);
-    expect(blockedMessage).toContain('--claim "test:');
-    expect(passed.exitCode).toBe(0);
-    expect(shown.stdout).toContain("claim: test: regression covered");
-    expect(shown.stdout).toContain("proof: bun test passes");
+    for (const result of results) {
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+      for (const name of deleted) expect(result.stdout).not.toContain(name);
+    }
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stderr).toBe("");
   });
 });
 
-test("policy-layer requires a proven evidence layer and names the first untested one", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-layer"])).exitCode).toBe(0);
-    const id = idFrom(
-      await runCli(fixture, ["work", "add", "layered fix", "--kind", "bug", "--atomic-reason", "small fix"]),
-    );
-    expect((await runCli(fixture, ["work", "start", id])).exitCode).toBe(0);
-
-    const untagged = await runCli(fixture, ["work", "done", id, "--evidence", "tests pass"]);
-    const unbounded = await runCli(fixture, [
-      "work", "done", id, "--evidence", "suite 135 pass @ a52bd4a7 (source)",
-    ]);
-    const passed = await runCli(fixture, [
-      "work",
-      "done",
-      id,
-      "--claim",
-      "fix holds",
-      "--proof",
-      "suite 135 pass @ a52bd4a7 (source); runtime stamp readback a52bd4a7 (installed); live: NOT TESTED",
-    ]);
-
-    expect(untagged.exitCode).not.toBe(0);
-    expect(untagged.stderr).toContain("policy-layer");
-    expect(errorMessage(untagged)).toContain("(source)");
-    expect(unbounded.exitCode).not.toBe(0);
-    expect(errorMessage(unbounded)).toContain("artifact: NOT TESTED");
-    expect(passed.exitCode).toBe(0);
-  });
-});
-
-test("policy-layer accepts a journey proof and leaves non-write work alone", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-layer"])).exitCode).toBe(0);
-    const bug = idFrom(
-      await runCli(fixture, ["work", "add", "journey fix", "--kind", "bug", "--atomic-reason", "small fix"]),
-    );
-    const idea = idFrom(await runCli(fixture, ["work", "add", "think", "--kind", "idea"]));
-    expect((await runCli(fixture, ["work", "start", bug])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "start", idea])).exitCode).toBe(0);
-
-    const journey = await runCli(fixture, [
-      "work", "done", bug, "--evidence", "drove add -> start -> done in a fresh repo (journey)",
-    ]);
-    const plain = await runCli(fixture, ["work", "done", idea, "--evidence", "notes written"]);
-
-    expect(journey.exitCode).toBe(0);
-    expect(plain.exitCode).toBe(0);
-  });
-});
-
-test("7 policy-qa blocks an untagged parent close and passes a qa-tagged pair", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-qa"])).exitCode).toBe(0);
-    const parent = idFrom(
-      await runCli(fixture, ["work", "add", "release slice", "--kind", "feature"]),
-    );
-    idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "implemented child",
-        "--kind",
-        "idea",
-        "--parent",
-        parent,
-      ]),
-    );
-    expect((await runCli(fixture, ["work", "start", parent])).exitCode).toBe(0);
-
-    const blocked = await runCli(fixture, [
-      "work",
-      "done",
-      parent,
-      "--claim",
-      "manual path checked",
-      "--proof",
-      "observed expected output",
-    ]);
-    const passed = await runCli(fixture, [
-      "work",
-      "done",
-      parent,
-      "--claim",
-      "qa: manual path checked",
-      "--proof",
-      "observed expected output",
-    ]);
-    const blockedMessage = errorMessage(blocked);
-
-    expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain("policy-qa");
-    expect(blockedMessage).toContain(`maestro work done ${parent}`);
-    expect(blockedMessage).toContain('--claim "qa:');
-    expect(passed.exitCode).toBe(0);
-  });
-});
-
-test("8 policy-research blocks a fresh feature and passes after a research note", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-research"])).exitCode).toBe(0);
-    const id = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "new capability",
-        "--kind",
-        "feature",
-        "--atomic-reason",
-        "single boundary",
-      ]),
-    );
-
-    const blocked = await runCli(fixture, ["work", "start", id]);
-    const noted = await runCli(fixture, ["work", "note", id, "research: precedent inspected"]);
-    const passed = await runCli(fixture, ["work", "start", id]);
-    const blockedMessage = errorMessage(blocked);
-
-    expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain("policy-research");
-    expect(blockedMessage).toContain(`maestro work note ${id}`);
-    expect(blockedMessage).toContain('"research:');
-    expect(noted.exitCode).toBe(0);
-    expect(passed.exitCode).toBe(0);
-  });
-});
-
-test("9 policy-witness requires a witness note from a different session", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-witness"])).exitCode).toBe(0);
-    const parent = idFrom(
-      await runCli(fixture, ["work", "add", "independent close", "--kind", "feature"]),
-    );
-    idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "child scope",
-        "--kind",
-        "idea",
-        "--parent",
-        parent,
-      ]),
-    );
-    const ownerEnv = {
-      MAESTRO_SESSION_ID: "owner-session",
-      MAESTRO_SESSION_PID: String(process.pid),
-    };
-    expect((await runCli(fixture, ["work", "start", parent], ownerEnv)).exitCode).toBe(0);
-
-    const selfWitness = await runCli(
-      fixture,
-      ["work", "note", parent, "witness: owner self-review"],
-      ownerEnv,
-    );
-    const blocked = await runCli(
-      fixture,
-      ["work", "done", parent, "--evidence", "owner verification"],
-      ownerEnv,
-    );
-    const witnessed = await runCli(
-      fixture,
-      ["work", "note", parent, "witness: independent review passed"],
-      {
-        MAESTRO_SESSION_ID: "witness-session",
-        MAESTRO_SESSION_PID: String(process.pid),
-      },
-    );
-    const passed = await runCli(
-      fixture,
-      ["work", "done", parent, "--evidence", "owner verification"],
-      ownerEnv,
-    );
-    const blockedMessage = errorMessage(blocked);
-
-    expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain("policy-witness");
-    expect(blockedMessage).toContain(`maestro work note ${parent}`);
-    expect(blockedMessage).toContain('"witness:');
-    expect(blockedMessage).toContain("different session");
-    expect(selfWitness.exitCode).toBe(0);
-    expect(witnessed.exitCode).toBe(0);
-    expect(passed.exitCode).toBe(0);
-  });
-});
-
-test("10 fresh install ships five disabled policies and honest enable activates tdd", async () => {
+test("10 install keeps a policy choice once and drops the entries of deleted policies", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
+    await writeConfig(fixture, [
+      { name: "policy-proof", disabled: true },
+      { name: "policy-tdd", disabled: false },
+      { name: "policy-lifecycle", disabled: true },
+    ]);
 
-    const installed = await runCli(fixture, ["install"], {
-      PATH: path,
-    });
+    const installed = await runCli(fixture, ["install"], { PATH: path });
+    const reinstalled = await runCli(fixture, ["install"], { PATH: path });
     const config = JSON.parse(
       await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
     ) as { plugins: Array<{ disabled: boolean; name: string }> };
-    const listed = await runCli(fixture, ["plugin", "list"]);
-    for (const name of ["policy-tdd", "policy-qa", "policy-research", "policy-witness", "policy-layer"]) {
-      expect(config.plugins).toContainEqual({ name, disabled: true });
-      expect(listed.stdout).toContain(`${name}\tbuilt-in\tdisabled`);
-      expect(
-        await Bun.file(join(fixture.home, ".maestro", "runtime", "src", "plugins", `${name}.ts`)).exists(),
-      ).toBe(true);
-    }
-
-    const parent = idFrom(
-      await runCli(fixture, ["work", "add", "disabled gates", "--kind", "feature"]),
-    );
-    idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "child",
-        "--kind",
-        "idea",
-        "--parent",
-        parent,
-      ]),
-    );
-    const disabledStart = await runCli(fixture, ["work", "start", parent]);
-    const disabledDone = await runCli(fixture, [
-      "work",
-      "done",
-      parent,
-      "--claim",
-      "untagged close",
-      "--proof",
-      "still allowed",
-    ]);
-
-    const tddWork = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "enabled tdd",
-        "--kind",
-        "bug",
-        "--atomic-reason",
-        "small fix",
-      ]),
-    );
-    expect((await runCli(fixture, ["work", "start", tddWork])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["plugin", "enable", "policy-tdd"])).exitCode).toBe(0);
-    const enabledBlock = await runCli(fixture, [
-      "work",
-      "done",
-      tddWork,
-      "--claim",
-      "untagged test",
-      "--proof",
-      "must now block",
-    ]);
+    const names = config.plugins.map((entry) => entry.name);
 
     expect(installed.exitCode).toBe(0);
-    expect(disabledStart.exitCode).toBe(0);
-    expect(disabledDone.exitCode).toBe(0);
-    expect(enabledBlock.exitCode).not.toBe(0);
-    expect(enabledBlock.stderr).toContain("policy-tdd");
-
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-    const reinstalled = JSON.parse(
-      await readFile(join(fixture.repo, ".maestro", "config"), "utf8"),
-    ) as { plugins: Array<{ disabled: boolean; name: string }> };
-    expect(reinstalled.plugins).toContainEqual({ name: "policy-tdd", disabled: false });
-    expect(reinstalled.plugins.filter((entry) => entry.name === "policy-tdd")).toHaveLength(1);
+    expect(reinstalled.exitCode).toBe(0);
+    expect(config.plugins).toContainEqual({ name: "policy-proof", disabled: true });
+    expect(config.plugins).toContainEqual({ name: "policy-breakdown", disabled: false });
+    expect(names.filter((name) => name === "policy-proof")).toHaveLength(1);
+    expect(names).not.toContain("policy-tdd");
+    expect(names).not.toContain("policy-lifecycle");
   });
 }, 30_000);
-
-test("36 stacked prefixed gates explain one-invocation claim and proof pairs", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["plugin", "enable", "policy-tdd"])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["plugin", "enable", "policy-qa"])).exitCode).toBe(0);
-    const parent = idFrom(
-      await runCli(fixture, ["work", "add", "stacked gates", "--kind", "feature"]),
-    );
-    idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "implemented child",
-        "--kind",
-        "idea",
-        "--parent",
-        parent,
-      ]),
-    );
-    expect((await runCli(fixture, ["work", "start", parent])).exitCode).toBe(0);
-
-    const tddBlocked = await runCli(fixture, [
-      "work",
-      "done",
-      parent,
-      "--claim",
-      "qa: manual path checked",
-      "--proof",
-      "observed expected output",
-    ]);
-    const qaBlocked = await runCli(fixture, [
-      "work",
-      "done",
-      parent,
-      "--claim",
-      "test: regression covered",
-      "--proof",
-      "bun test passes",
-    ]);
-    const combined =
-      `maestro work done ${parent} ` +
-      `--claim "test: <test claim>" --proof "<test output>" ` +
-      `--claim "qa: <checked behavior>" --proof "<QA evidence>"`;
-
-    for (const [result, origin] of [
-      [tddBlocked, "policy-tdd"],
-      [qaBlocked, "policy-qa"],
-    ] as const) {
-      const error = JSON.parse(result.stderr).error as {
-        code: string;
-        message: string;
-        origin: string;
-      };
-      expect(result.exitCode).not.toBe(0);
-      expect(error.code).toBe("GATE_BLOCKED");
-      expect(error.origin).toBe(origin);
-      expect(error.message).toContain("multiple --claim/--proof pairs");
-      expect(error.message).toContain(combined);
-    }
-  });
-});
 
 test("559 [lint] the site carries the self-improvement loop end to end and links both ways", async () => {
   const docs = join(import.meta.dir, "..", "site", "src", "content", "docs");
