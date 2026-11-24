@@ -182,9 +182,8 @@ every event, records stalls and pane loss in-process as the actor `runtime`,
 and queues a wake for a seat that is still working until that seat turns
 idle. `maestro slp status` reads its pending wakes; a repeated `maestro team start`
 reopens it when it is gone; `maestro slp restore`, the plugin's startup hook,
-re-attaches it after a Herdr restart; `maestro slp event`, the plugin's
-`pane.exited` and `pane.closed` hook, records a role pane loss when no runtime
-is subscribed. Its lock and state live in a temporary directory that team
+re-attaches it after a Herdr restart. A team whose pane died is stopped by
+hand with `maestro team stop <team-id> --emergency`. Its lock and state live in a temporary directory that team
 stop deletes. It never takes, returns, accepts, or decides.
 
 ## Lifecycle

@@ -39,7 +39,6 @@ import { compactLine, compactsForPane } from "./session-telemetry.ts";
 import {
   openRuntimePane,
   recordRuntimePane,
-  runSlpEvent,
   runSlpRestore,
   runSlpRuntime,
   runtimeConfigFromEnvironment,
@@ -2520,7 +2519,7 @@ function noticeSummary(body: string): string {
 // d753/d760: the store is the truth; the pushed line is only the wake-up.
 async function pushNotice(
   projectPath: string,
-  fromRole: SlpRole | "hub-supervisor" | typeof orphanStopActor,
+  fromRole: SlpRole | "hub-supervisor",
   target: string | null,
   subject: string,
   summary: string,
@@ -4285,15 +4284,6 @@ function reserveStop(
   team: ActiveLocalTeam,
   roomTeam: RoomTeamRow,
   input: {
-    // d875: the AUTOMATIC stop sets this and aborts on any committed START
-    // repair row that still carries an owner_token, dead owner included. An
-    // interactive `team stop` leaves it unset and keeps clearing a dead
-    // claim, which is right when a human has decided; see the guard below.
-    abortOnRepairClaim?: boolean;
-    // w713: the auto-closer names itself here so the Hub stop readout and
-    // every abandonment_reason say what killed the generation. Absent, the
-    // Hub Supervisor owns the stop, as it does for `team stop --emergency`.
-    actor?: string;
     emergency: boolean;
     ownerToken: string;
     proxyToken: string | null;
@@ -4325,15 +4315,8 @@ function reserveStop(
     if (
       startRepair?.phase === "COMMITTED" &&
       startRepair.owner_token &&
-      (input.abortOnRepairClaim === true || lifecycleOwnerIsAlive(startRepair.owner_pid))
+      lifecycleOwnerIsAlive(startRepair.owner_pid)
     ) {
-      // d875: pid liveness is the whole difference between "orphaned" and
-      // "mid-repair, and the repairer died", because runtime.start closes
-      // and recreates each seat pane in turn, so a repair passes through a
-      // window where both supervising seats are legitimately absent from
-      // agent.list. d873 established there is no second observation to
-      // break the tie. An automatic stop must not rest on that one signal:
-      // it waits, and the next `team start` recovers the generation.
       return { kind: "wait" };
     }
     if (startRepair?.phase === "COMMITTED" && startRepair.owner_token) {
@@ -4358,7 +4341,7 @@ function reserveStop(
       }
     }
 
-    let actor = input.actor ?? "hub-supervisor";
+    let actor = "hub-supervisor";
     let reason = input.reason;
     if (input.proxyToken) {
       requireRunningGeneration(store, team, input.proxyToken);
@@ -4529,15 +4512,11 @@ function recordStopRuntimeReady(
   });
 }
 
-// d875 F5: returns the number of work rows this call actually stamped as
-// abandoned, which is not the same as the generation's unfinished count -
-// the UPDATE below skips rows an earlier partial stop already stamped, and
-// the orphan notice to the Hub reported the larger number.
 function finalizeStop(
   store: Store,
   row: SlpLifecycleRow,
   ownerToken: string,
-): { abandoned: number; row: SlpLifecycleRow } {
+): SlpLifecycleRow {
   return withImmediateTransaction(store, () => {
     const current = lifecycleRow(store, row.team_id, row.generation, "STOP");
     if (!current || current.owner_token !== ownerToken || current.phase !== "RUNTIME_READY") {
@@ -4547,9 +4526,8 @@ function finalizeStop(
       );
     }
     const now = new Date().toISOString();
-    let abandoned = 0;
     if (current.emergency === 1) {
-      abandoned = store.database
+      store.database
         .query(
           `UPDATE slp_work
            SET abandoned_at = ?, abandoned_by = ?, abandonment_reason = ?
@@ -4562,7 +4540,7 @@ function finalizeStop(
           current.reason,
           current.team_id,
           current.generation,
-        ).changes;
+        );
     }
     const localTransition = store.database
       .query(
@@ -4623,7 +4601,7 @@ function finalizeStop(
     }
     const committed = lifecycleRow(store, current.team_id, current.generation, "STOP");
     if (!committed) throw new Error("committed SLP stop disappeared");
-    return { abandoned, row: committed };
+    return committed;
   });
 }
 
@@ -4775,7 +4753,7 @@ async function stopTeam(
       const roles = stopRoles(projectStore, team);
       await runtime.stop(await stopPlan(team), roles);
       operation = recordStopRuntimeReady(projectStore, operation, ownerToken);
-      operation = finalizeStop(projectStore, operation, ownerToken).row;
+      operation = finalizeStop(projectStore, operation, ownerToken);
     } catch (error) {
       try {
         releaseLifecycleOwner(projectStore, operation, ownerToken);
@@ -4803,124 +4781,6 @@ async function stopTeam(
         );
       } catch {}
     }
-  }
-}
-
-// w713, d869/d870/d872: orphan auto-close. A generation whose Lead and Team
-// Supervisor panes are both gone has no seat left that can reach `maestro
-// team stop` - normal stop is Team Supervisor authority and a Peer seat
-// denies herdr - so the Herdr [[events]] hook commits the STOP on its behalf.
-// The caller owns the decision (d874's predicate, read from one successful
-// agent.list); this owns only the commit, and it reuses `team stop`'s phases
-// in `team stop`'s order rather than restating them.
-export const orphanStopActor = "runtime-orphan";
-
-export interface OrphanStopOutcome {
-  abandonedWorkCount: number;
-  // committed: this call stopped the generation. stopped: it was already
-  // stopped, or the Hub no longer reads it RUNNING - a no-op, deliberately
-  // WITHOUT the runtime cleanup `team stop` does on that branch, because this
-  // hook must not close workspaces for a generation it did not reserve.
-  // wait: a runtime repair (any owner_token on a committed START row, per
-  // d875) or another stop owns the lifecycle row right now.
-  // pinned: an emergency stop is already pending under a different reason, so
-  // someone else has already decided how this generation dies; d875 F4 folds
-  // that reserveStop throw into this vocabulary instead of letting a CliError
-  // escape a per-event hook.
-  // missing: no Hub row to stop.
-  // Every value but `committed` means NOTHING was written - d875: every
-  // ambiguity on this path resolves to abort, never to stop.
-  outcome: "committed" | "missing" | "pinned" | "stopped" | "wait";
-}
-
-export async function commitOrphanStop(
-  team: ActiveLocalTeam,
-  reason: string,
-  deadSeats: readonly string[],
-): Promise<OrphanStopOutcome> {
-  const runtime = new HerdrSlpRuntime();
-  const projectStore = new Store(resolveStoreLocation(team.project_path).path);
-  let attachedRoom = false;
-  try {
-    migrateProject(projectStore);
-    projectStore.database.query("ATTACH DATABASE ? AS slp_room").run(team.room_store_path);
-    attachedRoom = true;
-    projectStore.database.exec("PRAGMA busy_timeout = 300000");
-    const roomTeam = projectStore.database
-      .query<RoomTeamRow, [string, number]>(
-        `SELECT team_id, generation, project_path, configuration_json,
-                objective, pack_version, pack_digest, state, workspace_id
-         FROM slp_room.slp_teams WHERE team_id = ? AND generation = ?`,
-      )
-      .get(team.team_id, team.generation);
-    if (!roomTeam) return { abandonedWorkCount: 0, outcome: "missing" };
-    // d874: the Hub must read RUNNING too. Checked here rather than left to
-    // reserveStop so a divergent pair is a quiet no-op in a hook instead of
-    // an INVALID_STATE throw.
-    if (roomTeam.state !== "RUNNING") return { abandonedWorkCount: 0, outcome: "stopped" };
-    const ownerToken = randomUUID();
-    // One shot. `team stop` retries `wait` for 30s (a human is waiting on it);
-    // a per-event hook must never spin, so `wait` aborts with nothing written.
-    // d875: abortOnRepairClaim makes any repair claim on the START row a
-    // wait, a dead owner_pid included - the strictness is this path's alone.
-    let reservation: StopReservation;
-    try {
-      reservation = reserveStop(projectStore, team, roomTeam, {
-        abortOnRepairClaim: true,
-        actor: orphanStopActor,
-        emergency: true,
-        ownerToken,
-        proxyToken: null,
-        reason,
-      });
-    } catch (error) {
-      // d875 F4: an emergency stop already pinned under another reason is a
-      // decision someone else made; the hook reports it and writes nothing
-      // rather than exiting non-zero into Herdr with a code its caller has
-      // no vocabulary for. Every other CliError still escapes - this folds
-      // one known outcome in, it does not swallow the unknown ones.
-      if (error instanceof CliError && error.code === "EMERGENCY_REASON_CHANGED") {
-        return { abandonedWorkCount: 0, outcome: "pinned" };
-      }
-      throw error;
-    }
-    if (reservation.kind === "wait") return { abandonedWorkCount: 0, outcome: "wait" };
-    if (reservation.kind === "stopped") return { abandonedWorkCount: 0, outcome: "stopped" };
-    let operation = reservation.row;
-    // d875 F5: the count comes from what finalizeStop actually stamped, not
-    // from the generation's unfinished work - an item an earlier partial stop
-    // already abandoned is skipped by that UPDATE and must not be re-counted
-    // into the notice the Hub Supervisor reads.
-    let abandonedWorkCount = 0;
-    try {
-      const roles = stopRoles(projectStore, team);
-      await runtime.stop(await stopPlan(team), roles);
-      operation = recordStopRuntimeReady(projectStore, operation, ownerToken);
-      const finalized = finalizeStop(projectStore, operation, ownerToken);
-      operation = finalized.row;
-      abandonedWorkCount = finalized.abandoned;
-    } catch (error) {
-      try {
-        releaseLifecycleOwner(projectStore, operation, ownerToken);
-      } catch {}
-      throw error;
-    }
-    // d872: the seat that would normally report the stop is the one that
-    // died, so the Hub is told directly. A failed push only warns: the store
-    // is the truth and the generation is already STOPPED.
-    await pushNotice(
-      team.project_path,
-      orphanStopActor,
-      hubSupervisorTarget(team),
-      `${team.team_id} g${team.generation} STOPPED`,
-      `orphan auto-close by ${orphanStopActor}: ${deadSeats.join(" and ")} gone; ` +
-        `${abandonedWorkCount} unfinished work item${abandonedWorkCount === 1 ? "" : "s"} abandoned`,
-      "maestro status",
-    );
-    return { abandonedWorkCount, outcome: "committed" };
-  } finally {
-    if (attachedRoom) projectStore.database.exec("DETACH DATABASE slp_room");
-    projectStore.close();
   }
 }
 
@@ -5570,9 +5430,8 @@ export async function maybeHandleSlpStatus(
       // reads through HerdrSlpRuntime.inspect, whose zero-workspace path
       // reports EVERY role missing, so a Herdr that is down or has not
       // restored its workspace is indistinguishable from a real orphan here.
-      // That is exactly why it is wired to no commit - the auto-close lives
-      // on the events hook, where a real pane death is the trigger. A status
-      // read mutates nothing.
+      // That is exactly why it is wired to no commit. A status read mutates
+      // nothing.
       // room d117: a lead-only generation HAS no team-supervisor row, so the
       // old `every(["lead","team-supervisor"])` could never be true for it and
       // a dead lead-only team would have gone unreported forever. The test is
@@ -5896,7 +5755,7 @@ export const slpV2Plugin: BuiltInPlugin = {
       ),
     );
     // Hub d96/d97: the plugin entrypoints and the runtime's own readout. None
-    // is an SLP operation; Herdr launches the first three from the manifest.
+    // is an SLP operation; Herdr launches the first two from the manifest.
     context.effect(() =>
       context.cli.register(
         "slp runtime",
@@ -5916,13 +5775,6 @@ export const slpV2Plugin: BuiltInPlugin = {
         "slp restore",
         (): Promise<CliResult> => runSlpRestore(),
         { description: "Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived." },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "slp event",
-        (): Promise<CliResult> => runSlpEvent(),
-        { description: "Herdr event hook: record a role pane loss when no runtime is subscribed." },
       ),
     );
     context.effect(() =>

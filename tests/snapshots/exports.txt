@@ -49,7 +49,6 @@ Loader
 LogEvent
 MemoryFact
 ObserverMode
-OrphanStopOutcome
 Plugin
 PluginContext
 PluginRecord
@@ -65,7 +64,6 @@ RecipeEntry
 RecipeService
 RenderedProfile
 RunOptions
-RunningTeamRow
 RuntimePaneOpening
 RuntimeState
 SeatDirectoryPlan
@@ -104,7 +102,6 @@ buildSlpTeamPlan
 builtInPlugins
 bundlePlugin
 codexHookTrustRecorded
-commitOrphanStop
 compactLine
 compactsForPane
 composedPeerName
@@ -156,7 +153,6 @@ normalizeCliError
 observabilityPlugin
 observerMode
 openRuntimePane
-orphanStopActor
 parseProfile
 planProfileRenders
 planProfiles
@@ -194,7 +190,6 @@ retiredSkillNames
 roomOwnerLine
 run
 runLifecycleCommand
-runSlpEvent
 runSlpProcess
 runSlpRestore
 runSlpRuntime

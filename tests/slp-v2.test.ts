@@ -17,6 +17,7 @@ import {
   installFakeHerdr,
   readFakeHerdrState,
   setFakeHerdrBehavior,
+  tripwireInvocations,
   waitForFakeHerdr,
   type FakeHerdrFixture,
 } from "./helpers-herdr.ts";
@@ -6930,3 +6931,86 @@ test("SLP v2 reads the compact count back beside the assignee seat and prints no
       .toBe(0);
   });
 }, 30_000);
+
+test("orphan-status-verdict: Hub status reports a RUNNING generation with neither a lead nor a team-supervisor pane as ORPHANED? and names maestro team stop --emergency, reports a healthy one and a lead-only loss as not orphaned, and commits nothing on any of those reads (w715, d870, d873)", async () => {
+  await withFixture(async (fixture) => {
+    const room = await scaffoldRoom(fixture.home);
+    expect(
+      (await runCliAt(fixture, room, ["room", "mark"], { MAESTRO_ROOM_SCAFFOLD: "1", MAESTRO_SESSION_NONE: "1" }))
+        .exitCode,
+    ).toBe(0);
+    const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Status verdict", "--json"], fake.env);
+    expect(started.exitCode).toBe(0);
+    const team = envelope<{
+      team: { generation: number; roles: Array<{ name: string; paneId: string; role: string }>; teamId: string };
+    }>(started.stdout).team;
+    const lead = team.roles.find((role) => role.role === "lead")!;
+    const supervisor = team.roles.find((role) => role.role === "team-supervisor")!;
+    const dropPanes = (paneIds: string[]) =>
+      editFakeHerdrState(fake, (state) => {
+        state.agents = state.agents.filter((agent: { pane_id: string }) => !paneIds.includes(agent.pane_id));
+        state.panes = state.panes.filter((pane: { pane_id: string }) => !paneIds.includes(pane.pane_id));
+        for (const paneId of paneIds) delete state.processes[paneId];
+      });
+    // The verdict has to land in both renderings: --json carries the data the
+    // brief asks for, the plain read is what a person actually sees.
+    const hubStatus = async () => {
+      const shown = await runCliAt(fixture, room, ["status", "--json"], fake.env);
+      expect(shown.exitCode).toBe(0);
+      const plain = await runCliAt(fixture, room, ["status"], fake.env);
+      expect(plain.exitCode).toBe(0);
+      return {
+        team: envelope<{ teams: Array<{ missingPanes: string[]; orphaned: boolean; teamId: string }> }>(shown.stdout).teams[0]!,
+        text: plain.stdout,
+      };
+    };
+
+    const healthy = await hubStatus();
+    expect(healthy.team.orphaned).toBe(false);
+    expect(healthy.text).not.toContain("ORPHANED?");
+
+    // Only the Lead is gone: the Team Supervisor can still stop the team, so
+    // this is degraded, not orphaned.
+    await dropPanes([lead.paneId]);
+    const leadGone = await hubStatus();
+    expect(leadGone.team.missingPanes).toEqual([lead.name]);
+    expect(leadGone.team.orphaned).toBe(false);
+    expect(leadGone.text).not.toContain("ORPHANED?");
+
+    // Both supervising seats gone: the verdict, as a question, with the
+    // command that closes it by hand.
+    await dropPanes([supervisor.paneId]);
+    const orphaned = await hubStatus();
+    expect(orphaned.team.orphaned).toBe(true);
+    expect(orphaned.team.missingPanes.sort()).toEqual([lead.name, supervisor.name].sort());
+    expect(orphaned.text).toContain("ORPHANED?");
+    expect(orphaned.text).toContain("no lead or team-supervisor pane");
+    expect(orphaned.text).toContain(`maestro team stop ${team.teamId} --emergency`);
+    // Not presented as certainty: the read cannot tell a downed Herdr apart.
+    expect(orphaned.text).toContain("a Herdr that is down reads the same from here");
+
+    // d870: a status read never stops anything.
+    const project = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+    const hub = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });
+    try {
+      const state = (database: Database, table: string) =>
+        database
+          .query<{ state: string }, [string, number]>(`SELECT state FROM ${table} WHERE team_id = ? AND generation = ?`)
+          .get(team.teamId, team.generation)?.state;
+      expect(state(project, "slp_local_teams")).toBe("RUNNING");
+      expect(state(hub, "slp_teams")).toBe("RUNNING");
+      const count = (database: Database, sql: string) =>
+        database.query<{ count: number }, [string, number]>(sql).get(team.teamId, team.generation)?.count;
+      expect(count(project, "SELECT COUNT(*) AS count FROM slp_lifecycle_operations WHERE team_id = ? AND generation = ? AND operation = 'STOP'")).toBe(0);
+      expect(count(project, "SELECT COUNT(*) AS count FROM slp_work WHERE team_id = ? AND generation = ? AND abandoned_at IS NOT NULL")).toBe(0);
+      for (const database of [project, hub]) {
+        expect(count(database, "SELECT COUNT(*) AS count FROM slp_activity WHERE team_id = ? AND generation = ? AND operation = 'team.stop.emergency'")).toBe(0);
+      }
+    } finally {
+      project.close();
+      hub.close();
+    }
+    expect(await tripwireInvocations(fake)).toEqual([]);
+  });
+}, 60_000);

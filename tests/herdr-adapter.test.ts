@@ -73,8 +73,8 @@ test("herdr-client-request: one line per connection resolved by id, Herdr error 
   });
 });
 
-// w712, d871: the orphan predicate turns on telling a successful empty
-// agent.list apart from an outage, so the fixture must be able to fail one
+// w712, d871: a caller of agent.list must tell a successful empty answer
+// apart from an outage, so the fixture must be able to fail one
 // named method while the server stays up and the socket stays in place.
 // stopFakeHerdrServers cannot stand in for this: it kills spawned children
 // and unlinks the socket the CLI still needs.
@@ -107,6 +107,17 @@ test("herdr-fail-methods: a named method answered with a Herdr error makes agent
 
     // Unset restores the successful answer on the same client.
     await setFakeHerdrBehavior(fake, { failMethods: [] });
+    expect((await client.agentList()).map((agent) => agent.name)).toEqual(["lead-probe"]);
+
+    // d875: a successful answer with no agents array, or with one that is not
+    // an array, is a protocol violation and throws rather than reading as [].
+    for (const result of [{}, { agents: "none" }]) {
+      await setFakeHerdrBehavior(fake, { malformedResults: { "agent.list": result } });
+      const malformed = await client.agentList().catch((error: unknown) => error);
+      expect(malformed).toBeInstanceOf(SlpRuntimeError);
+      expect((malformed as SlpRuntimeError).code).toBe("HERDR_MALFORMED_RESPONSE");
+    }
+    await setFakeHerdrBehavior(fake, { malformedResults: {} });
     expect((await client.agentList()).map((agent) => agent.name)).toEqual(["lead-probe"]);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
@@ -144,7 +155,7 @@ test("herdr-client-subscribe: pushed events arrive over one open connection unti
   });
 });
 
-test("plugin-manifest: install renders the manifest with the binary path and links it once, a second install is a no-op, uninstall unlinks, the TOML names startup, panes, events and no actions, and only the maestro plugin changes (red 9, A4)", async () => {
+test("plugin-manifest: install renders the manifest with the binary path and links it once, a second install is a no-op, uninstall unlinks, the TOML names startup and panes and no events or actions, and only the maestro plugin changes (red 9, A4)", async () => {
   await withFixture(async (fixture) => {
     const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
     await editFakeHerdrState(fake, (state) => {
@@ -165,10 +176,7 @@ test("plugin-manifest: install renders the manifest with the binary path and lin
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(manifest.startup).toEqual([{ command: [binary, "slp", "restore"] }]);
     expect(manifest.panes).toEqual([{ id: "runtime", title: "SLP runtime", placement: "split", command: [binary, "slp", "runtime"] }]);
-    expect(manifest.events).toEqual([
-      { on: "pane.exited", command: [binary, "slp", "event"] },
-      { on: "pane.closed", command: [binary, "slp", "event"] },
-    ]);
+    expect(manifest.events).toBeUndefined();
     expect(manifest.actions).toBeUndefined();
     const links = async () => (await fakeHerdrCommands(fake)).filter((command) => command[0] === "plugin" && command[1] !== "list");
     expect(await links()).toEqual([["plugin", "unlink", "maestro"], ["plugin", "link", directory]]);
@@ -861,7 +869,7 @@ test("runtime-hub: a Team Supervisor idle wakes the Hub pane recorded at team st
   });
 }, 60_000);
 
-test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the Team Supervisor; the [[events]] command path does the same with no runtime (red 7)", async () => {
+test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the Team Supervisor (red 7)", async () => {
   await withFixture(async (fixture) => {
     const { data, fake, subscribed } = await startLiveTeam(fixture);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
@@ -876,35 +884,6 @@ test("runtime-exit: a Peer pane exit is recorded on the team card and wakes the 
     expect(runtimeEntries(fixture)[0]?.body).toContain(`exited: ${peer.role.name} pane ${peer.role.paneId}`);
     await waitForFakeHerdr(async () => (await attentionPrompts(fake)).length === 1, 5_000, "the supervisor wake");
     expect((await attentionPrompts(fake))[0]).toEqual(["agent", "prompt", supervisor.name, `[attention] ${peer.role.name} pane exited`]);
-    expect(await tripwireInvocations(fake)).toEqual([]);
-  });
-
-  // The safety net: no runtime subscribed, Herdr runs `maestro slp event`.
-  await withFixture(async (fixture) => {
-    const room = await markedRoom(fixture);
-    const fake = await installFakeHerdr(fixture, { runtimePane: "record" });
-    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Hook path", "--json"], fake.env);
-    expect(started.exitCode).toBe(0);
-    const data = envelope<StartedTeam>(started.stdout);
-    const lead = data.team.roles.find((role) => role.role === "lead")!;
-    const supervisor = data.team.roles.find((role) => role.role === "team-supervisor")!;
-    await mkdir(join(fixture.home, "maestro"), { recursive: true });
-    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
-    const hooked = await runCliAt(fixture, room, ["slp", "event", "--json"], {
-      ...fake.env,
-      HERDR_PLUGIN_EVENT: "pane.closed",
-      HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "pane_closed", data: { pane_id: lead.paneId, workspace_id: data.team.workspaceId } }),
-    });
-    expect(hooked.exitCode).toBe(0);
-    expect(envelope<{ handled: boolean; seat: string }>(hooked.stdout)).toEqual({ handled: true, seat: lead.name });
-    expect(runtimeEntries(fixture)).toEqual([expect.objectContaining({ flag: "pane:closed", work_id: data.work.id })]);
-    expect(await attentionPrompts(fake)).toEqual([["agent", "prompt", supervisor.name, `[attention] ${lead.name} pane closed`]]);
-    const unknown = await runCliAt(fixture, room, ["slp", "event", "--json"], {
-      ...fake.env,
-      HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "pane_closed", data: { pane_id: "w9:p9", workspace_id: "w9" } }),
-    });
-    expect(unknown.exitCode).toBe(0);
-    expect(envelope<{ handled: boolean }>(unknown.stdout).handled).toBe(false);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
@@ -968,8 +947,7 @@ test("restore: a RUNNING generation with live role panes gets its runtime pane r
     // w713, d870: restore NEVER commits, however total the loss looks. At
     // Herdr startup an agent.list that answers successfully but empty is
     // indistinguishable from genuine loss, so restore records and stops
-    // there; only the event hook, triggered by a real pane death, may stop a
-    // generation. Every seat is gone here and the generation is still
+    // there. Every seat is gone here and the generation is still
     // RUNNING with no STOP row at all.
     const projectAfterRestore = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
     const roomAfterRestore = new Database(join(room, ".maestro", "maestro.db"), { readonly: true });

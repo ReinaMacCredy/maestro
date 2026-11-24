@@ -6,7 +6,7 @@ id = "maestro"
 name = "Maestro"
 version = "0.0.0"
 min_herdr_version = "0.8.2"
-description = "SLP team runtime: attention on Herdr events, restore after a Herdr restart, pane loss recorded when no runtime is up."
+description = "SLP team runtime: attention on Herdr events and restore after a Herdr restart."
 platforms = ["macos", "linux"]
 
 [[startup]]
@@ -17,11 +17,3 @@ id = "runtime"
 title = "SLP runtime"
 placement = "split"
 command = ["maestro", "slp", "runtime"]
-
-[[events]]
-on = "pane.exited"
-command = ["maestro", "slp", "event"]
-
-[[events]]
-on = "pane.closed"
-command = ["maestro", "slp", "event"]

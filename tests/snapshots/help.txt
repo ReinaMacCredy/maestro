@@ -500,18 +500,11 @@ usage: maestro search <query>
 ### maestro slp --help
 slp  Maestro's Herdr plugin entrypoints and the runtime readout.
 subverbs:
-  event    Herdr event hook: record a role pane loss when no runtime is subscribed.
-    --json  Emit one compact JSON success envelope.
   restore  Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived.
     --json  Emit one compact JSON success envelope.
   runtime  Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).
     --json  Emit one compact JSON success envelope.
   status   Read the runtime's pending wakes for the running generation.
-    --json  Emit one compact JSON success envelope.
-
-### maestro slp event --help
-slp event  Herdr event hook: record a role pane loss when no runtime is subscribed.
-usage: maestro slp event
     --json  Emit one compact JSON success envelope.
 
 ### maestro slp restore --help

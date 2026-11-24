@@ -440,10 +440,9 @@ export class HerdrClient {
   // rather than at one caller because it is a violation for every caller.
   // `Array.isArray(result.agents) ? result.agents : []` made "Herdr answered
   // in a shape this maestro does not understand" indistinguishable from
-  // "Herdr knows of no agents"; the orphan auto-close reads that difference
-  // as the death of a whole team and emergency-abandons its work, and the
-  // protocol check only warns on a version mismatch, so drift arrives here
-  // unfenced. A real empty array stays a legitimate empty list.
+  // "Herdr knows of no agents", and the protocol check only warns on a
+  // version mismatch, so drift arrives here unfenced. A real empty array
+  // stays a legitimate empty list.
   async agentList(timeoutMs?: number): Promise<HerdrAgent[]> {
     const result = await this.request<{ agents?: HerdrAgent[] }>("agent.list", {}, timeoutMs);
     if (!Array.isArray(result.agents)) {
