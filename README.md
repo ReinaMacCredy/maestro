@@ -1,7 +1,7 @@
 # maestro
 
 Maestro is a local-first coordination system for human and agent work. It keeps
-durable work, decisions, sessions, evidence, dispatches, and handbacks in each
+durable work, decisions, sessions, and evidence in each
 repository's shared Git root. It is written in TypeScript, runs on Bun, and does
 not require a background service.
 
@@ -184,9 +184,6 @@ setup at [SLP setup and storage](https://maestro.maccredyreina.me/getting-starte
 - Cross-role decisions are drafted in the store before a Herdr prompt names the
   sender role and decision id. The answer is the locked or superseding record;
   non-decision questions and answers are work notes.
-- `maestro dispatch` stores lane contracts and council state;
-  `maestro handback` stores shape-checked return packets, including explicit
-  dependency, council, challenge, reopen, unknown, and failure outcomes.
 - `maestro search` searches native work, decisions, notes, terms, memory facts,
   events, bundles, and imported Rust records, in this store and in the Hub room
   at `~/maestro`; `--local` stays in this store.
@@ -216,8 +213,6 @@ missing identities or targets.
   `confirm` clears a provisional Hub ruling.
 - `maestro owner` reads the Hub room's declared owner presence, or records it
   as here or away.
-- `maestro dispatch open|accept|show|list` stores lane contracts, while
-  `maestro handback file|show` stores and reads return packets.
 - `maestro attention` scans the current repository and `maestro brief`
   summarizes every registered repository.
 - `maestro term add|list|show` keeps the glossary; `maestro memory
@@ -236,8 +231,7 @@ missing identities or targets.
 ## Attention and brief
 
 `maestro attention` computes current attention packets at read time. It detects
-stalled leases, repeated failures, stale decisions, scope collisions,
-unreturned dispatches, and returned handbacks that have not been reviewed. It
+stalled leases, repeated failures, stale decisions, and scope collisions. It
 records no mailbox message and runs no daemon.
 
 `maestro brief` reads the registry in `~/maestro/registry`, opens each project
@@ -263,7 +257,7 @@ index cannot be refreshed rather than returning stale results as current.
 the managed hook entries. `SessionStart` and `UserPromptSubmit` record the
 session and print its current brief. Small managed blocks in `CLAUDE.md` and
 `AGENTS.md` point agents to status, ready work, and recipes. No hook sends
-mail, pushes a dispatch into another session, or delivers PostToolUse packets.
+mail, pushes work into another session, or delivers PostToolUse packets.
 
 ## Recipes, skills, and plugins
 
