@@ -11,7 +11,6 @@ import {
 import { Events } from "../src/kernel/events.ts";
 import { Loader } from "../src/kernel/loader.ts";
 import { EventLog } from "../src/kernel/log.ts";
-import { Ready } from "../src/kernel/ready.ts";
 import { Sessions } from "../src/kernel/sessions.ts";
 import { resolveStoreLocation, Store } from "../src/kernel/store.ts";
 import { builtInPlugins } from "../src/plugins/index.ts";
@@ -23,13 +22,12 @@ async function describeFixtureCommands(fixture: Fixture): Promise<CliCommandDesc
   const cli = new Cli();
   const events = new Events();
   const log = new EventLog(store);
-  const ready = new Ready();
   const sessions = new Sessions(store, location.root);
   const loader = new Loader(
     fixture.repo,
     fixture.home,
     builtInPlugins,
-    { cli, events, log, ready, sessions, store },
+    { cli, events, log, sessions, store },
   );
   try {
     await loader.loadAll();

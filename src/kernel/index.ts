@@ -4,7 +4,6 @@ import { Events } from "./events.ts";
 import { Loader } from "./loader.ts";
 import type { BuiltInPlugin } from "./loader.ts";
 import { EventLog } from "./log.ts";
-import { Ready } from "./ready.ts";
 import { Sessions } from "./sessions.ts";
 import { resolveStoreLocation, Store } from "./store.ts";
 
@@ -22,14 +21,12 @@ export async function run(args: string[], options: RunOptions = {}): Promise<num
   const cli = new Cli(options.cli);
   const events = new Events();
   const log = new EventLog(store);
-  const ready = new Ready();
   const sessions = new Sessions(store, storeLocation.root);
   const plugins = options.allowBuiltIn ? builtInPlugins.filter(options.allowBuiltIn) : builtInPlugins;
   const loader = new Loader(repo, home, plugins, {
     cli,
     events,
     log,
-    ready,
     sessions,
     store,
   });

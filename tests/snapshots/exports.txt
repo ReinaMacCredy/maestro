@@ -61,8 +61,6 @@ ProfileHarness
 ProfilePlan
 ProfileShadowReport
 ProfileSync
-ReadinessItem
-Ready
 RecipeEntry
 RecipeService
 RenderedProfile

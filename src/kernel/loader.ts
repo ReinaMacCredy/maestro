@@ -3,7 +3,6 @@ import { join } from "node:path";
 import type { Cli } from "./cli.ts";
 import type { Disposer, Events } from "./events.ts";
 import type { EventLog } from "./log.ts";
-import type { Ready } from "./ready.ts";
 import type { Sessions } from "./sessions.ts";
 import type { Store } from "./store.ts";
 
@@ -34,7 +33,6 @@ export interface PluginContext {
   loader: Loader;
   log: EventLog;
   provide(name: string, value: unknown): Disposer;
-  ready: Ready;
   sessions: Sessions;
   store: Store;
 }
@@ -65,7 +63,6 @@ export class Loader {
       cli: Cli;
       events: Events;
       log: EventLog;
-      ready: Ready;
       sessions: Sessions;
       store: Store;
     },

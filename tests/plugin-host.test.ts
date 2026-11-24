@@ -6,7 +6,6 @@ import { Cli, CliError } from "../src/kernel/cli.ts";
 import { Events } from "../src/kernel/events.ts";
 import { Loader, type BuiltInPlugin } from "../src/kernel/loader.ts";
 import { EventLog } from "../src/kernel/log.ts";
-import { Ready } from "../src/kernel/ready.ts";
 import { Sessions } from "../src/kernel/sessions.ts";
 import { resolveStoreLocation, Store } from "../src/kernel/store.ts";
 import { pluginManagerPlugin } from "../src/plugins/plugin-manager.ts";
@@ -32,7 +31,6 @@ async function withLoader<T>(
     cli,
     events,
     log: new EventLog(store),
-    ready: new Ready(),
     sessions: new Sessions(store, location.root),
     store,
   });
