@@ -180,7 +180,7 @@ fn snapshot_repo(bin: &Path, repo: &Path) -> RepoSnapshot {
         let attention = scope.spawn(|| run_verb(bin, repo, &["attention", "--json"]));
         let work = scope.spawn(|| run_verb(bin, repo, &["work", "list", "--json"]));
         // The bounded default keeps the 20 most recently updated, so an old draft would drop out of the cards.
-        let decision = scope.spawn(|| run_verb(bin, repo, &["decision", "list", "--all", "--json"]));
+        let decision = scope.spawn(|| run_verb(bin, repo, &["decision", "list", "--json"]));
         (
             attention
                 .join()
