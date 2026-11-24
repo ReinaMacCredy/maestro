@@ -7,7 +7,6 @@ verbs:
   decision   Record durable decisions and their lifecycle. *
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
-  graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
   handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *
@@ -325,73 +324,6 @@ doctor  Diagnose the machine runtime and current repository wiring read-only.
 usage: maestro doctor
     --json  Emit one compact JSON success envelope.
 
-### maestro graph --help
-graph  Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
-subverbs:
-  list    List graphs across repo, room and shipped locations with shadowing.
-    --json  Emit one compact JSON success envelope.
-  next    Advance a run: execute ready function, router, join and foreach nodes and return the agent and human nodes to spawn.
-    usage: maestro graph next <run>
-    --json  Emit one compact JSON success envelope.
-  result  Record an agent or human node's result (validated against its schema when one is declared).
-    usage: maestro graph result <run> <node>
-    --file <value>                Read the result from this file.
-    --files <value> (repeatable)  Files the node changed, comma separated.
-    --json                        Emit one compact JSON success envelope.
-    --text <value>                The result as inline text.
-    --work <value>                Team-executor (Lead only): bind the node to the SLP work item opened for it; next resolves it with the item's returned body once it is DONE.
-  run     Start a graph run (by name or --file) and return its first pull envelope.
-    usage: maestro graph run [name]
-    --executor <value>            subagent: the harness spawns each agent node; team: nodes bind to SLP work items; default by environment.
-    --file <value>                Run an uninstalled graph markdown file (- for stdin) instead of a named one.
-    --json                        Emit one compact JSON success envelope.
-    --limit <value> (repeatable)  Override a structural limit for this run: nodes=N, loops=N or fanout=N.
-  show    Show one graph file from the nearest location.
-    usage: maestro graph show <name>
-    --json  Emit one compact JSON success envelope.
-  trust   Trust a repo graph's current file so its function nodes may execute.
-    usage: maestro graph trust [name]
-    --file <value>  Trust an uninstalled graph file under the repo instead of a named one.
-    --json          Emit one compact JSON success envelope.
-
-### maestro graph list --help
-graph list  List graphs across repo, room and shipped locations with shadowing.
-usage: maestro graph list
-    --json  Emit one compact JSON success envelope.
-
-### maestro graph next --help
-graph next  Advance a run: execute ready function, router, join and foreach nodes and return the agent and human nodes to spawn.
-usage: maestro graph next <run>
-    --json  Emit one compact JSON success envelope.
-
-### maestro graph result --help
-graph result  Record an agent or human node's result (validated against its schema when one is declared).
-usage: maestro graph result <run> <node>
-    --file <value>                Read the result from this file.
-    --files <value> (repeatable)  Files the node changed, comma separated.
-    --json                        Emit one compact JSON success envelope.
-    --text <value>                The result as inline text.
-    --work <value>                Team-executor (Lead only): bind the node to the SLP work item opened for it; next resolves it with the item's returned body once it is DONE.
-
-### maestro graph run --help
-graph run  Start a graph run (by name or --file) and return its first pull envelope.
-usage: maestro graph run [name]
-    --executor <value>            subagent: the harness spawns each agent node; team: nodes bind to SLP work items; default by environment.
-    --file <value>                Run an uninstalled graph markdown file (- for stdin) instead of a named one.
-    --json                        Emit one compact JSON success envelope.
-    --limit <value> (repeatable)  Override a structural limit for this run: nodes=N, loops=N or fanout=N.
-
-### maestro graph show --help
-graph show  Show one graph file from the nearest location.
-usage: maestro graph show <name>
-    --json  Emit one compact JSON success envelope.
-
-### maestro graph trust --help
-graph trust  Trust a repo graph's current file so its function nodes may execute.
-usage: maestro graph trust [name]
-    --file <value>  Trust an uninstalled graph file under the repo instead of a named one.
-    --json          Emit one compact JSON success envelope.
-
 ### maestro handback --help
 handback  Return packets for lane contracts outside a running SLP team: file, list, review.
 subverbs:
@@ -465,7 +397,6 @@ verbs:
   decision   Record durable decisions and their lifecycle. *
   dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
-  graph      Run pre-known multi-agent paths as passive graphs both harnesses drive identically.
   handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *

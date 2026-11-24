@@ -55,9 +55,8 @@ the lead.
 6. Build, verify, and land each small unit before the next, per **Sequence
    Work into Verifiable Units** (PRINCIPLES.md), as small ordered commits
    with follow-ups stacked. Commits happen only under a commit grant (`maestro recipe show opening-a-pr`, The grant); without one, shape the same units in the working tree.
-7. If the design is contested, run the review gate before delivery. Run the
-   `review-gate` graph through the maestro-graph skill
-   (`maestro graph run review-gate range=<git range> tier=<light|full>`).
+7. If the design is contested, run the review gate before delivery: the
+   holder asks one reviewer agent to review the diff.
 8. Deliver: `maestro recipe show opening-a-pr`.
 
 Code-coupled work (one feature, one migration) goes to a single delegate with

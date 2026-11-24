@@ -349,7 +349,6 @@ test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guar
   expect(council).not.toContain("model-routing.md");
 
   const run = sectionOf(council, "## Run");
-  expect(run).toContain("graph run council");
   expect(run).toContain("work add");
   expect(run).toContain("--to peer-<seat>");
   expect(run).toContain("subagent_type: maestro-<seat>");
@@ -760,7 +759,7 @@ test("669 [lint] the shared contract says pane text is not a push and a state ex
 // writing profile, but it holds no lease and files no handback, so the seat or
 // main chat that holds the item reviews every diff and stays the one that
 // returns and is accepted; a result another seat must accept still needs a pane.
-test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say the holder delegates writes to sub-agents and reviews every diff (d860)", async () => {
+test("673 [lint] the shared contract and WORKFLOW.md say the holder delegates writes to sub-agents and reviews every diff (d860)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
@@ -783,13 +782,6 @@ test("673 [lint] the shared contract, WORKFLOW.md and maestro-graph say the hold
   expect(workflow).toContain("Inside a playbook the main chat never writes code.");
   expect(workflow).toContain("A quickfix outside any playbook is written directly.");
   expect(workflow).not.toContain("only read-only scouting");
-  const graph = await Bun.file(join(root, "skills", "maestro-graph", "SKILL.md")).text();
-  const description = /^description:.*$/m.exec(graph)?.[0] ?? "";
-  expect(description).toContain("A sub-agent node reads or writes as its profile allows");
-  expect(description).toContain("a node whose result another seat must accept is opened as a pane");
-  const body = unwrap(graph);
-  expect(body).toContain("Review every diff a writing node leaves before the next node reads the tree.");
-  expect(body).toContain("kind agent -> spawn a sub-agent with the node's profile and brief");
 });
 
 // room d138: the anti-pattern vocabulary ships as one file beside SLP.md and

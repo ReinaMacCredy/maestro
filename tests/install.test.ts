@@ -750,7 +750,7 @@ test("seat-dirs-links: install renders skills/ as the union across the dir's pro
     expect(await readlink(join(peerDir, "skills", "owner-skill"))).toBe(ownerSkill);
     expect(existsSync(join(peerDir, "skills", "maestro-work", "SKILL.md"))).toBe(true);
     const leadLinks = (await readdir(join(seatConfigRoot(fixture.home), "lead", "skills"))).sort();
-    expect(leadLinks).toEqual(["maestro-council", "maestro-design", "maestro-graph", "maestro-work"]);
+    expect(leadLinks).toEqual(["maestro-council", "maestro-design", "maestro-work"]);
     expect(await readdir(join(seatConfigRoot(fixture.home), "team-supervisor", "skills"))).toEqual(["maestro-work"]);
 
     for (const seat of ["lead", "peer", "team-supervisor"]) {

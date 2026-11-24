@@ -7,15 +7,14 @@ export const skillNames = [
   "maestro-coach",
   "maestro-council",
   "maestro-design",
-  "maestro-graph",
   "maestro-improve",
   "maestro-questionnaire",
   "maestro-work",
   "maestro-verify",
 ] as const;
 
-// Removed by the pstack port (d863); install deletes only our stamped copies and links to them.
-export const retiredSkillNames = ["maestro-diagnose", "maestro-explore"] as const;
+// Removed by the pstack port (d863) and the graph deletion (d886); install deletes only our stamped copies and links to them.
+export const retiredSkillNames = ["maestro-diagnose", "maestro-explore", "maestro-graph"] as const;
 
 const stampPattern = /<!-- maestro-skill-version: ([0-9a-f]{40}|dev) -->/;
 

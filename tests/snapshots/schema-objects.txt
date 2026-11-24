@@ -6,8 +6,6 @@ table decisions
 table dispatch_councils
 table dispatches
 table event_log
-table graph_nodes
-table graph_runs
 table handback_reviews
 table handbacks
 table legacy_cards

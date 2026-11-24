@@ -23,7 +23,6 @@ import { policyQaPlugin } from "./policy-qa.ts";
 import { policyResearchPlugin } from "./policy-research.ts";
 import { policyTddPlugin } from "./policy-tdd.ts";
 import { policyWitnessPlugin } from "./policy-witness.ts";
-import { graphPlugin } from "./graph.ts";
 import { recipePlugin } from "./recipe.ts";
 import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
@@ -55,7 +54,6 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   policyLifecyclePlugin,
   policyAutoPrPlugin,
   recipePlugin,
-  graphPlugin,
   observabilityPlugin,
   termPlugin,
   topicPlugin,

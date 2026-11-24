@@ -138,7 +138,7 @@ checks on commits that later waves restart. Push back when feedback drifts
 from intent.
 
 A delegate that opens a PR carries the grant in its brief. It runs the
-review gate (`maestro graph run review-gate range=<base>..HEAD tier=<light|full>`),
+review gate (it asks one reviewer agent to review the diff),
 the simplification pass and `maestro recipe show no-comments`, posts the
 URL, and returns without babysitting. The exception is a queue PR owner
 (`maestro recipe show shipping`, Queues). Its brief assigns the babysit loop

@@ -138,7 +138,6 @@ Skills load by bare name in every tool and serve steps inside a playbook:
 - A hard-to-reverse fork with wide blast radius, run by the Lead:
   `maestro-council`.
 - The brief and handback for delegated work: `maestro-work`.
-- A pre-known multi-agent path such as the review gate: `maestro-graph`.
 - Verifying and closing an open bundle: `maestro-verify`.
 - A fork the user does not understand, or a recorded decision they want to
   learn from: `maestro-coach`.
@@ -425,16 +424,11 @@ runs one correctness review of the frozen task-owned diff after verify
 passes, a broader multi-reviewer pass when the diff touches trust boundaries,
 schemas or migrations, or several subsystems, plus a security review when it
 touches auth, secrets, or input handling. Any simplification pass on Full
-runs after green and before verify, so the reviewed diff is final. The
-`review-gate` graph routes those passes in every tool
-(`maestro graph run review-gate range=<range> tier=<light|full> intent=<the acceptance>`).
-At tier full it adds a Codex correctness reviewer and a structure reviewer
-that holds the approval bar as presumptive blockers and may propose
-restructuring beyond the diff, which is never applied. Its findings sort
-into Act on, Consider, Noted, and Dismissed (the synthesizer node sorts;
-the chat running the gate reads every Dismissed reason before it accepts
-the verdict); the gate fails while an Act on
-finding is neither fixed nor justified in writing, and an unconfirmed
+runs after green and before verify, so the reviewed diff is final. For
+each pass the holder asks one reviewer agent to review the diff. Its
+findings sort into Act on, Consider, Noted, and Dismissed (the holder reads
+every Dismissed reason before it accepts the verdict); the gate fails while
+an Act on finding is neither fixed nor justified in writing, and an unconfirmed
 security or correctness finding stays visible as Consider.
 
 - **Claude Code**: skills load from `~/.claude/skills/maestro-*` symlinks

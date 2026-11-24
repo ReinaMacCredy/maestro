@@ -5,8 +5,8 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 import { retiredSkillNames } from "./skills.ts";
 
-// Hub d83/d91/d98: one profile shape for SLP seats, council seats and graph
-// nodes; install renders each into both harnesses' native launch bundles.
+// Hub d83/d91/d98: one profile shape for SLP seats and council seats;
+// install renders each into both harnesses' native launch bundles.
 export type ProfileHarness = "claude" | "codex";
 export type ProfileEffort = "low" | "medium" | "high" | "xhigh";
 

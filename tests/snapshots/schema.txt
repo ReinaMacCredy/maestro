@@ -14,10 +14,6 @@ index sqlite_autoindex_dispatch_councils_1
   (implicit)
 index sqlite_autoindex_dispatches_1
   (implicit)
-index sqlite_autoindex_graph_nodes_1
-  (implicit)
-index sqlite_autoindex_graph_runs_1
-  (implicit)
 index sqlite_autoindex_handback_reviews_1
   (implicit)
 index sqlite_autoindex_handbacks_1
@@ -62,10 +58,6 @@ table dispatches
   CREATE TABLE dispatches ( id TEXT PRIMARY KEY, work_id TEXT NOT NULL REFERENCES work(id), objective TEXT NOT NULL, owned_scope TEXT NOT NULL, excluded_scope TEXT NOT NULL, mutation TEXT NOT NULL, stop_condition TEXT NOT NULL, lane TEXT NOT NULL, evidence_required TEXT NOT NULL, pane TEXT, target_session TEXT, opened_by TEXT, claimed_by TEXT, held_by TEXT, cancelled_at TEXT, cancel_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , generation_anchor TEXT, expected_members INTEGER)
 table event_log
   CREATE TABLE event_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, entity_type TEXT, entity_id TEXT, session_id TEXT, payload TEXT NOT NULL, created_at TEXT NOT NULL )
-table graph_nodes
-  CREATE TABLE graph_nodes ( run_id TEXT NOT NULL REFERENCES work(id), node_id TEXT NOT NULL, instance_key TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending', 'issued', 'done', 'failed', 'skipped')), profile TEXT, prompt TEXT, schema TEXT, inputs TEXT NOT NULL DEFAULT '{}', result TEXT, round INTEGER NOT NULL DEFAULT 1, files TEXT, attempts INTEGER NOT NULL DEFAULT 0, work_id TEXT, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, node_id, instance_key) )
-table graph_runs
-  CREATE TABLE graph_runs ( run_id TEXT PRIMARY KEY REFERENCES work(id), graph TEXT NOT NULL, origin TEXT NOT NULL, path TEXT, source TEXT NOT NULL, input TEXT NOT NULL, limits TEXT NOT NULL, executor TEXT NOT NULL, loops INTEGER NOT NULL DEFAULT 0, issued INTEGER NOT NULL DEFAULT 0, stopped TEXT, verdict TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
 table handback_reviews
   CREATE TABLE handback_reviews ( handback_id TEXT PRIMARY KEY REFERENCES handbacks(id), reviewed_by TEXT NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL )
 table handbacks

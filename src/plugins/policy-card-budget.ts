@@ -11,8 +11,6 @@ function limitFrom(config: unknown): number {
 
 // A card is attended when a live session holds it or a lane has accepted a
 // dispatch on it. An open dispatch nobody accepted is not a worker (d703).
-// A graph run (kind graph, Hub d79) is machine work; one whose driver died
-// would otherwise hold a slot for ever (graph-engine A4, advisor F9).
 function unattended(
   works: WorkRecord[],
   dispatch: DispatchService,
@@ -26,7 +24,6 @@ function unattended(
   );
   return works.filter(
     (work) =>
-      work.kind !== "graph" &&
       (work.state === "open" || work.state === "active") &&
       !(work.heldBy && isAlive(work.heldBy)) &&
       !accepted.has(work.id),

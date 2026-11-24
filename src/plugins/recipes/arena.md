@@ -58,8 +58,7 @@ Tan, MIT; notice in THIRD_PARTY.md).
    candidate caught it and you missed the graft (return to step 5). Do not
    paper over it.
 
-If this flow is ever built as a maestro graph, the judge is one scoring node
-holding the rubric, not a majority-vote judge panel.
+The judge is one scorer holding the rubric, not a majority-vote judge panel.
 
 ## Reply
 

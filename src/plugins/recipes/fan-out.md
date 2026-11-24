@@ -4,11 +4,8 @@ Use this recipe when N parallel subagents cover separate slices, race the
 same brief, or both, and you return one report. It also holds the discipline
 for program-scale work. SLP stays the frame for that work. A Lead or Peer
 seat in a pane fans out inside its own seat, the maestro store holds every
-record, and this recipe never creates a second coordination model. A fixed
-shape you will run again belongs in a maestro graph (`foreach` over the
-slices, `join` to gather, per the maestro-graph skill); ad hoc fan-out
-follows this recipe. Ported from pstack's swarm skill and orchestrate
-playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
+record, and this recipe never creates a second coordination model. Ported from
+pstack's swarm skill and orchestrate playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
 
 Three rules carry the rest.
 

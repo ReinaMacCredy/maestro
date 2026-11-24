@@ -214,7 +214,7 @@ test("pstack-port: install retires the managed maestro-diagnose and maestro-expl
   });
 });
 
-test("129 [lint] install materializes the 9 maestro skills with a version stamp and refs", async () => {
+test("129 [lint] install materializes the 8 maestro skills with a version stamp and refs", async () => {
   await withFixture(async (fixture) => {
     // Proves installed artifact shape, not harness discovery or loading of those skills.
     const { path } = await prepareInstallFixture(fixture);
@@ -226,7 +226,6 @@ test("129 [lint] install materializes the 9 maestro skills with a version stamp 
       "maestro-coach",
       "maestro-council",
       "maestro-design",
-      "maestro-graph",
       "maestro-improve",
       "maestro-questionnaire",
       "maestro-work",
@@ -241,7 +240,6 @@ test("129 [lint] install materializes the 9 maestro skills with a version stamp 
       join("maestro-design", "references", "grilling.md"),
       join("maestro-design", "references", "domain-modeling.md"),
       join("maestro-design", "references", "wayfinder.md"),
-      join("maestro-graph", "references", "authoring.md"),
       join("maestro-work", "references", "tdd-antipatterns.md"),
       join("maestro-verify", "references", "audit.md"),
       join("maestro-verify", "references", "learning.md"),
