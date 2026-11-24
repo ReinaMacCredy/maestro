@@ -21,6 +21,7 @@ const recipeNames = [
   "shipping",
   "figure-it-out",
   "no-comments",
+  "review",
   "verification-skill",
   "unattended",
   "worktree",

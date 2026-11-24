@@ -35,6 +35,7 @@ const catalog = [
   ["shipping", "Verify a green stack per PR and land the contiguous verified run on the owner's word."],
   ["figure-it-out", "Design a bespoke playbook when none fits: predicate, scope, phases, decision trail."],
   ["no-comments", "Strip a diff down to the comments that earn their place before review."],
+  ["review", "Have one reviewer check a frozen diff over several rounds against the repository's REVIEW.md."],
   ["verification-skill", "Create or maintain a repository skill that proves changes on the running product."],
   ["unattended", "Let an external driver advance one safe ready item at a time."],
   ["worktree", "Isolate concurrent work and return a verified branch for merge-back."],
