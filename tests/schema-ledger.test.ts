@@ -106,7 +106,7 @@ async function createdId(fixture: Fixture, args: string[]): Promise<string> {
 }
 
 const addWork = (fixture: Fixture, title: string) =>
-  createdId(fixture, ["work", "add", title, "--atomic-reason", "fixture"]);
+  createdId(fixture, ["work", "add", title]);
 const draftDecision = (fixture: Fixture, text: string) => createdId(fixture, ["decision", "draft", text]);
 
 test("d894 ids count 1, 2, 3 in a fresh store", async () => {
