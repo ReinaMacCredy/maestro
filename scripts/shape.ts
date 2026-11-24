@@ -105,10 +105,10 @@ interface Metrics {
   duplicateCopies: number;
   duplicates: DuplicateFamily[];
   exportedNames: number;
-  readyMedianMs: number | null;
-  readyMinMs: number | null;
-  readyMaxMs: number | null;
-  readyRuns: number;
+  listMedianMs: number | null;
+  listMinMs: number | null;
+  listMaxMs: number | null;
+  listRuns: number;
 }
 
 interface AllowEntry {
@@ -382,7 +382,7 @@ async function measureTree(): Promise<{
 // The hook runs the CLI on every prompt, so the cost that matters is a cold
 // start in a cwd that is not this repo. The first run creates the scratch store
 // and is discarded; the median of the rest is the figure.
-async function measureReady(runs: number): Promise<{
+async function measureList(runs: number): Promise<{
   median: number | null;
   min: number | null;
   max: number | null;
@@ -393,7 +393,7 @@ async function measureReady(runs: number): Promise<{
   try {
     const run = async (): Promise<number> => {
       const started = Bun.nanoseconds();
-      const process_ = Bun.spawn(["bun", entry, "ready"], {
+      const process_ = Bun.spawn(["bun", entry, "work", "list"], {
         cwd: scratch,
         stdout: "ignore",
         stderr: "ignore",
@@ -499,9 +499,9 @@ function renderTable(now: Metrics, before: Metrics | null): string {
     ],
     ["exported names", before ? String(before.exportedNames) : "-", String(now.exportedNames)],
     [
-      "maestro ready (median)",
-      before ? formatMs(before.readyMedianMs) : "-",
-      formatMs(now.readyMedianMs),
+      "maestro work list (median)",
+      before ? formatMs(before.listMedianMs) : "-",
+      formatMs(now.listMedianMs),
     ],
   ];
   const widths = [
@@ -542,7 +542,7 @@ async function main(): Promise<number> {
     .sort((left, right) => right.members.length * right.lines - left.members.length * left.lines);
 
   const timing = withTiming
-    ? await measureReady(timingRuns)
+    ? await measureList(timingRuns)
     : { median: null, min: null, max: null };
 
   const now: Metrics = {
@@ -560,10 +560,10 @@ async function main(): Promise<number> {
     duplicateCopies: duplicates.reduce((total, family) => total + family.members.length - 1, 0),
     duplicates,
     exportedNames: exported.size,
-    readyMedianMs: timing.median,
-    readyMinMs: timing.min,
-    readyMaxMs: timing.max,
-    readyRuns: withTiming ? timingRuns : 0,
+    listMedianMs: timing.median,
+    listMinMs: timing.min,
+    listMaxMs: timing.max,
+    listRuns: withTiming ? timingRuns : 0,
   };
 
   if (emitAllow) {
@@ -622,10 +622,10 @@ async function main(): Promise<number> {
     console.log(renderTable(now, before));
     console.log("");
     console.log(`hash: ${hash || "(unknown)"}`);
-    if (now.readyMedianMs !== null) {
+    if (now.listMedianMs !== null) {
       console.log(
-        `maestro ready: median ${formatMs(now.readyMedianMs)} over ${now.readyRuns} runs ` +
-          `(min ${formatMs(now.readyMinMs)}, max ${formatMs(now.readyMaxMs)})`,
+        `maestro work list: median ${formatMs(now.listMedianMs)} over ${now.listRuns} runs ` +
+          `(min ${formatMs(now.listMinMs)}, max ${formatMs(now.listMaxMs)})`,
       );
     }
     if (now.filesOverCap.length > 0) {
