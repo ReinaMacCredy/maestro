@@ -783,6 +783,7 @@ test("53 a clean install type-checks without runtime dependencies", async () => 
     expect(packageJson.dependencies ?? {}).toEqual({});
     expect(Object.keys(packageJson.devDependencies ?? {}).sort()).toEqual([
       "@types/bun",
+      "fast-check",
       "typescript",
     ]);
     for (const version of Object.values(packageJson.devDependencies ?? {})) {
