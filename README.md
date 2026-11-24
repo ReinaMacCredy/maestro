@@ -48,9 +48,9 @@ rollback executable already exists.
 Install also scaffolds `~/maestro`, the Supervisor room, and registers the
 current repository there, and writes the shared method to
 `~/maestro/WORKFLOW.md`, which routes each kind of task to a playbook
-(`maestro recipe list`). It materializes eight managed skills under
+(`maestro recipe list`). It materializes seven managed skills under
 `~/maestro/skills`: `maestro-bundle`, `maestro-design`, `maestro-work`,
-`maestro-verify`, `maestro-improve`, `maestro-council`, and
+`maestro-verify`, `maestro-council`, and
 the read-only `maestro-coach` and `maestro-questionnaire`. The
 installer links those skills for Claude without overwriting unmanaged skills.
 
