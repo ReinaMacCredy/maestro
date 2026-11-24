@@ -388,6 +388,10 @@ export const workPlugin: BuiltInPlugin = {
               "--mode is not an option (room d126): items carry no collaboration tag, and a fork is always raised with work note --blocked",
             );
           }
+          const start = invocation.options.start === true;
+          if (start && invocation.options.to !== undefined) {
+            throw new CliError("INVALID_OPTION", "--start is not available for SLP work add --to <peer>; the Peer takes its card with work take");
+          }
           const slp = await maybeHandleSlpWorkAdd(context, invocation);
           if (slp) return slp;
           // Hub finding F1 (g7, w734): every option that only a Lead's Peer
@@ -411,9 +415,10 @@ export const workPlugin: BuiltInPlugin = {
           const now = new Date().toISOString();
           const kind = stringOption(invocation, "kind") ?? "task";
           const acceptance = stringOption(invocation, "acceptance") ?? null;
+          const sessionId = context.sessions.current().id;
           const gate = await context.events.waterfall<WorkAddGateInput, GateResult>(
             "work.add",
-            { kind, parentId, sessionId: context.sessions.current().id, title },
+            { kind, parentId, sessionId, title },
             async () => ({ blocked: false }),
           );
           blockIfNeeded(gate);
@@ -441,6 +446,27 @@ export const workPlugin: BuiltInPlugin = {
               "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
             );
             for (const blocker of blockers) insertBlocker.run(id, blocker);
+            if (start) {
+              const unresolved = unresolvedBlockers(context, id);
+              if (unresolved.length > 0) {
+                const details = blockerDetails(context, id, unresolved, sessionId);
+                throw new CliError("BLOCKED", details.reason, {
+                  blockers: details.blockers,
+                  command: details.command,
+                });
+              }
+              blockIfNeeded(
+                await context.events.waterfall<WorkGateInput, GateResult>(
+                  "work.start",
+                  { work: requireWork(context, id), children: [], sessionId },
+                  async () => ({ blocked: false }),
+                ),
+              );
+              context.sessions.record("work.start");
+              context.store.database
+                .query("UPDATE work SET state = 'active', held_by = ?, updated_at = ? WHERE id = ?")
+                .run(sessionId, now, id);
+            }
             context.store.database.exec("COMMIT");
           } catch (error) {
             try {
@@ -452,10 +478,21 @@ export const workPlugin: BuiltInPlugin = {
             type: "work.add",
             entityType: "work",
             entityId: id,
-            sessionId: context.sessions.current().id,
+            sessionId,
             payload: { title, kind, parentId, acceptance, blockers },
           });
-          return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
+          if (!start) return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
+          context.log.append({
+            type: "work.start",
+            entityType: "work",
+            entityId: id,
+            sessionId,
+            payload: { holder: sessionId },
+          });
+          return {
+            data: { work: service.get(id) },
+            text: `${id} added: ${title}\n${id} started by ${sessionId}`,
+          };
         },
         {
           description: "Add a tracked work item.",
@@ -472,6 +509,7 @@ export const workPlugin: BuiltInPlugin = {
               multiple: true,
             },
             "--acceptance": { description: "Record the observable acceptance condition.", value: true },
+            "--start": { description: "Also start the new item, claiming its lease for this session, as work start does." },
             "--to": {
               description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
               value: true,

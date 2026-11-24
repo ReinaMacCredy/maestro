@@ -618,6 +618,7 @@ subverbs:
     --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
     --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
+    --start                            Also start the new item, claiming its lease for this session, as work start does.
     --to <value>                       Assign SLP work to a Peer; without it the Lead opens an item for itself.
   block    Add blocking work IDs to an existing work item.
     usage: maestro work block <id>
@@ -689,6 +690,7 @@ usage: maestro work add <title>
     --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
     --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
+    --start                            Also start the new item, claiming its lease for this session, as work start does.
     --to <value>                       Assign SLP work to a Peer; without it the Lead opens an item for itself.
 
 ### maestro work block --help

@@ -378,3 +378,32 @@ test("30 proof blocks name concrete unblocking commands", async () => {
     expect(proof.stderr).toContain("--proof");
   });
 });
+
+test("work add --start creates the card and holds its lease in one command (d919)", async () => {
+  await withFixture(async (fixture) => {
+    const session = { MAESTRO_SESSION_ID: "starter", MAESTRO_SESSION_PID: String(process.pid) };
+    const added = await runCli(fixture, ["work", "add", "one step", "--start"], session);
+    expect(added.exitCode).toBe(0);
+    expect(added.stdout).toBe("w1 added: one step\nw1 started by starter\n");
+    expect((await runCli(fixture, ["work", "show", "w1"])).stdout).toContain("w1 [active] one step\nkind: task\nheld by: starter");
+    expect(workEvents(fixture, "w1").split("\n").map((line) => line.split(" ")[1])).toEqual(["work.add", "work.start"]);
+    const taken = await runCli(fixture, ["work", "start", "w1"], { MAESTRO_SESSION_ID: "other", MAESTRO_SESSION_PID: String(process.pid) });
+    expect(JSON.parse(taken.stderr).error.code).toBe("LEASE_HELD");
+
+    const plain = await runCli(fixture, ["work", "add", "unheld"]);
+    expect(plain.stdout).toBe("w2 added: unheld\n");
+    expect((await runCli(fixture, ["work", "show", "w2"])).stdout).toContain("w2 [open] unheld");
+  });
+});
+
+test("work add --start refuses like work start and leaves no card behind (d919)", async () => {
+  await withFixture(async (fixture) => {
+    const blocker = idFrom(await runCli(fixture, ["work", "add", "first"]));
+    const blocked = await runCli(fixture, ["work", "add", "second", "--blocked-by", blocker, "--start"]);
+    expect(JSON.parse(blocked.stderr).error.code).toBe("BLOCKED");
+    const sessionless = await runCli(fixture, ["work", "add", "third", "--start"], { MAESTRO_SESSION_NONE: "1" });
+    expect(JSON.parse(sessionless.stderr).error.code).toBe("SESSION_REQUIRED");
+    const listed = JSON.parse((await runCli(fixture, ["work", "list", "--all", "--json"])).stdout);
+    expect(listed.data.works.map((work: { id: string }) => work.id)).toEqual([blocker]);
+  });
+});
