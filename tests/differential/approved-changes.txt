@@ -56,6 +56,7 @@ gone plugin enable policy-qa # d902: the text gate is deleted
 gone plugin enable policy-research # d902: the text gate is deleted
 gone plugin enable policy-lifecycle # d902: the text gate is deleted
 gone term add # d909: terms are read-only
+output term list when /maestro term add/ # d909: the empty list no longer points at term add
 gone trace # d910: trace is deleted
 gone recipe show why # d916: recipe deleted
 gone recipe show how # d916: recipe deleted
