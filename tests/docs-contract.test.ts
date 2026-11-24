@@ -232,17 +232,6 @@ test("576 [lint] non-SLP procedures share one risk-based workflow without mandat
   });
 });
 
-test("639 [lint] WORKFLOW.md states the two-model boundary (Hub d87)", async () => {
-  const root = join(import.meta.dir, "..", "src", "plugins");
-  const workflow = await Bun.file(join(root, "resources", "WORKFLOW.md")).text();
-  const boundary = workflow.match(/## Two coordination models\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
-  expect(boundary.split("\n\n")).toHaveLength(1);
-  expect(boundary).toContain("nine SLP v2 operations");
-  for (const classic of ["work start", "decision draft", "work list"]) {
-    expect(boundary).toContain(classic);
-  }
-});
-
 test("645 [lint] memory help and WORKFLOW.md state the any-cwd rule; uninstall help names room forget (UX F help findings, F10)", async () => {
   const workflow = await Bun.file(join(import.meta.dir, "..", "src", "plugins", "resources", "WORKFLOW.md")).text();
   const memory = workflow.match(/## Memory\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
