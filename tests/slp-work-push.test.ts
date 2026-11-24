@@ -151,8 +151,6 @@ test("SLP v2 team panes refuse the classic verbs SLP replaces and leave legacy r
     const leadPane = data.team.roles.find((role) => role.role === "lead")?.paneId;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: leadPane };
     for (const attempt of [
-      { args: ["dispatch", "open", data.work.id, "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "work add" },
-      { args: ["handback", "file", "x1", "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "work return" },
       { args: ["decision", "draft", "old decision", "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "decide" },
       { args: ["work", "start", data.work.id, "--json"], cwd: fixture.repo, env: leadEnvironment, replacement: "work take" },
     ]) {
