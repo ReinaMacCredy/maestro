@@ -233,7 +233,7 @@ export const decisionPlugin: BuiltInPlugin = {
         requireSupersessionTarget(context, supersedesId);
       }
       const now = new Date().toISOString();
-      const id = context.store.nextPrefixedId("decisions", "d");
+      const id = context.store.nextCountedId("d", ["decisions", "slp_decisions"]);
       context.store.database
         .query(
           `INSERT INTO decisions

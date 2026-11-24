@@ -1,4 +1,6 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
@@ -219,17 +221,29 @@ test("w736 decision show in the room resolves a room ruling, and prints both spa
     expect(shown.stdout).toContain("(hub store)");
     expect(shown.stdout.trim()).toBe(status.stdout.trim());
 
-    // The ledger in the same store runs its own dNNN sequence, so one id can
-    // name a row in each; neither is allowed to hide the other.
+    // d894: new drafts take the next id, but a pre-d894 store can hold one id in each space.
     const drafted = await runCliAt(
       fixture,
       room,
-      ["decision", "draft", "A ledger decision that happens to share an id", "--json"],
+      ["decision", "draft", "A ledger decision drafted after the ruling", "--json"],
       hubEnvironment,
     );
     expect(drafted.exitCode).toBe(0);
-    const ledgerId = envelope<{ decision: { id: string } }>(drafted.stdout).decision.id;
-    expect(ledgerId).toBe(rulingId);
+    const draftedId = envelope<{ decision: { id: string } }>(drafted.stdout).decision.id;
+    expect(Number(draftedId.slice(1))).toBe(Number(rulingId.slice(1)) + 1);
+    const ledgerId = rulingId;
+    const roomStore = new Database(join(room, ".maestro", "maestro.db"));
+    try {
+      roomStore
+        .query(
+          `INSERT INTO decisions (id, text, state, created_at, updated_at)
+           SELECT ?, 'A ledger decision that happens to share an id', state, created_at, updated_at
+           FROM decisions WHERE id = ?`,
+        )
+        .run(ledgerId, draftedId);
+    } finally {
+      roomStore.close();
+    }
 
     const both = await runCliAt(fixture, room, ["decision", "show", ledgerId], hubEnvironment);
     expect(both.exitCode).toBe(0);

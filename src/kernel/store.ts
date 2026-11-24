@@ -111,6 +111,7 @@ export class Store {
       Bun.sleepSync(100);
       this.database.exec("PRAGMA journal_mode = WAL");
     }
+    this.database.exec("CREATE TABLE IF NOT EXISTS id_counters (prefix TEXT PRIMARY KEY, value INTEGER NOT NULL)");
   }
 
   private assertSchemaUnderstood(): void {
@@ -200,6 +201,34 @@ export class Store {
       )
       .get()?.next ?? 1;
     return `${prefix}${next}`;
+  }
+
+  nextCountedId(prefix: string, sources: string[]): string {
+    if (!/^[A-Za-z]$/.test(prefix)) {
+      throw new Error(`invalid ID prefix: ${prefix}`);
+    }
+    let highest = 0;
+    for (const source of sources) {
+      const [table = "", column = "id"] = source.split(".");
+      assertSqliteIdentifier(table);
+      assertSqliteIdentifier(column);
+      if (!tableExists(this, table)) continue;
+      const row = this.database
+        .query<{ highest: number | null }, [string]>(
+          `SELECT MAX(CAST(SUBSTR(${column}, 2) AS INTEGER)) AS highest FROM main.${table}
+           WHERE ${column} GLOB ? AND SUBSTR(${column}, 2) NOT GLOB '*[^0-9]*'`,
+        )
+        .get(`${prefix}[0-9]*`);
+      highest = Math.max(highest, row?.highest ?? 0);
+    }
+    const value = this.database
+      .query<{ value: number }, [string, number]>(
+        `INSERT INTO main.id_counters (prefix, value) VALUES (?, ?)
+         ON CONFLICT(prefix) DO UPDATE SET value = MAX(value + 1, excluded.value)
+         RETURNING value`,
+      )
+      .get(prefix, highest + 1)!.value;
+    return `${prefix}${value}`;
   }
 
   close(): void {

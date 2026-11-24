@@ -3,6 +3,7 @@ table bundle_work
 table bundles
 table decisions
 table event_log
+table id_counters
 table legacy_cards
 table legacy_decisions
 table legacy_files

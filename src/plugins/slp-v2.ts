@@ -665,49 +665,6 @@ async function archivePack(roomRoot: string, bytes: Uint8Array, digest: string):
   return path;
 }
 
-function nextWorkId(store: Store): string {
-  const ids = store.database
-    .query<{ id: string }, []>("SELECT id FROM slp_work")
-    .all()
-    .map((row) => row.id);
-  if (tableExists(store, "slp_lifecycle_operations")) {
-    ids.push(
-      ...store.database
-        .query<{ id: string }, []>(
-          `SELECT work_id AS id FROM slp_lifecycle_operations
-           WHERE operation = 'START' AND work_id <> ''`,
-        )
-        .all()
-        .map((row) => row.id),
-    );
-  }
-  if (tableExists(store, "work")) {
-    ids.push(...store.database.query<{ id: string }, []>("SELECT id FROM work").all().map((row) => row.id));
-  }
-  const maximum = ids.reduce((current, id) => {
-    const value = /^w(\d+)$/.exec(id)?.[1];
-    return value ? Math.max(current, Number(value)) : current;
-  }, 0);
-  return `w${maximum + 1}`;
-}
-
-function nextDecisionId(store: Store): string {
-  const ids = store.database
-    .query<{ id: string }, []>("SELECT id FROM slp_decisions")
-    .all()
-    .map((row) => row.id);
-  if (tableExists(store, "decisions")) {
-    ids.push(
-      ...store.database.query<{ id: string }, []>("SELECT id FROM decisions").all().map((row) => row.id),
-    );
-  }
-  const maximum = ids.reduce((current, id) => {
-    const value = /^d(\d+)$/.exec(id)?.[1];
-    return value ? Math.max(current, Number(value)) : current;
-  }, 0);
-  return `d${maximum + 1}`;
-}
-
 function toWork(row: {
   assigned_to: string;
   created_at: string;
@@ -1094,7 +1051,7 @@ function reserveStart(
          )`,
       )
       .get(input.teamId, input.projectPath, input.teamId, input.projectPath)?.generation ?? 0) + 1;
-    const workId = nextWorkId(store);
+    const workId = store.nextCountedId("w", ["work", "slp_work", "slp_lifecycle_operations.work_id"]);
     const now = new Date().toISOString();
     const values = [
       input.teamId,
@@ -2457,7 +2414,7 @@ export async function maybeHandleSlpWorkAdd(
       }
       if (pinnedProfile) appendPinnedProfile(context.store, actor.team, pinnedProfile);
     }
-    id = nextWorkId(context.store);
+    id = context.store.nextCountedId("w", ["work", "slp_work", "slp_lifecycle_operations.work_id"]);
     context.store.database
       .query(
         `INSERT INTO slp_work
@@ -3290,7 +3247,7 @@ async function decideHubWork(
         throw new CliError("INVALID_SCOPE", `${input.replaces} has scope ${prior.scope}, not ${input.scope}`);
       }
     }
-    id = nextDecisionId(context.store);
+    id = context.store.nextCountedId("d", ["decisions", "slp_decisions"]);
     const insertDecision = context.store.database.query(
       `INSERT INTO slp_decisions
         (id, team_id, generation, choice, why, scope, work_id, replaces_id,
@@ -3450,7 +3407,7 @@ async function decide(context: PluginContext, invocation: CliInvocation): Promis
   context.store.database.exec("BEGIN IMMEDIATE");
   try {
     if (local) requireRunningGeneration(context.store, local);
-    id = nextDecisionId(context.store);
+    id = context.store.nextCountedId("d", ["decisions", "slp_decisions"]);
     context.store.database
       .query(
         `INSERT INTO slp_decisions

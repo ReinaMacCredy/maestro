@@ -88,3 +88,93 @@ test("522 observer mode refuses a newer store and stamps nothing", async () => {
     expect(refused.stderr).toContain("STORE_TOO_NEW");
   });
 });
+
+function withDatabase(path: string, run: (database: Database) => void): void {
+  const database = new Database(path);
+  try {
+    run(database);
+  } finally {
+    database.close();
+  }
+}
+
+async function createdId(fixture: Fixture, args: string[]): Promise<string> {
+  const result = await runCli(fixture, [...args, "--json"]);
+  expect({ code: result.exitCode, stderr: result.stderr }).toMatchObject({ code: 0 });
+  const data = (JSON.parse(result.stdout) as { data: { decision?: { id: string }; work?: { id: string } } }).data;
+  return (data.work ?? data.decision)!.id;
+}
+
+const addWork = (fixture: Fixture, title: string) =>
+  createdId(fixture, ["work", "add", title, "--atomic-reason", "fixture"]);
+const draftDecision = (fixture: Fixture, text: string) => createdId(fixture, ["decision", "draft", text]);
+
+test("d894 ids count 1, 2, 3 in a fresh store", async () => {
+  await withFixture(async (fixture) => {
+    expect([await addWork(fixture, "a"), await addWork(fixture, "b"), await addWork(fixture, "c")])
+      .toEqual(["w1", "w2", "w3"]);
+    expect([await draftDecision(fixture, "a"), await draftDecision(fixture, "b"), await draftDecision(fixture, "c")])
+      .toEqual(["d1", "d2", "d3"]);
+  });
+});
+
+test("d894 plain cards and decisions draw above the SLP ledgers, and the counter never goes back", async () => {
+  await withFixture(async (fixture) => {
+    await addWork(fixture, "plain");
+    const path = storePath(fixture);
+    withDatabase(path, (database) => {
+      database.exec("CREATE TABLE slp_work (id TEXT PRIMARY KEY)");
+      database.exec("CREATE TABLE slp_decisions (id TEXT PRIMARY KEY)");
+      database.exec("INSERT INTO slp_work VALUES ('w7')");
+      database.exec("INSERT INTO slp_decisions VALUES ('d9')");
+    });
+
+    expect(await addWork(fixture, "above slp")).toBe("w8");
+    expect(await draftDecision(fixture, "above slp")).toBe("d10");
+
+    withDatabase(path, (database) => {
+      database.exec("DELETE FROM work WHERE id = 'w8'");
+      database.exec("DELETE FROM slp_work");
+      database.exec("DELETE FROM decisions WHERE id = 'd10'");
+      database.exec("DELETE FROM slp_decisions");
+    });
+    expect(await addWork(fixture, "after delete")).toBe("w9");
+    expect(await draftDecision(fixture, "after delete")).toBe("d11");
+  });
+});
+
+test("d894 a store whose ledgers already share ids shows them as before, and opens read-only without the counter", async () => {
+  await withFixture(async (fixture) => {
+    const work = await addWork(fixture, "plain card");
+    const decision = await draftDecision(fixture, "plain decision");
+    const path = storePath(fixture);
+    withDatabase(path, (database) => {
+      database.exec("CREATE TABLE slp_work (id TEXT PRIMARY KEY)");
+      database.exec(
+        `CREATE TABLE slp_decisions (id TEXT PRIMARY KEY, team_id TEXT, generation INTEGER, choice TEXT,
+          why TEXT, scope TEXT, work_id TEXT, replaces_id TEXT, actor TEXT, created_at TEXT)`,
+      );
+      database.query("INSERT INTO slp_work VALUES (?)").run(work);
+      database
+        .query(
+          "INSERT INTO slp_decisions VALUES (?, 't', 1, 'slp ruling', 'why', 'team', NULL, NULL, 'lead', '2026-01-01T00:00:00Z')",
+        )
+        .run(decision);
+      database.exec("DROP TABLE IF EXISTS id_counters");
+    });
+
+    const observedWork = await runCli(fixture, ["work", "show", work], { MAESTRO_READ_ONLY: "1" });
+    expect(observedWork.exitCode).toBe(0);
+    expect(observedWork.stdout).toContain("plain card");
+    const observedDecision = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
+    expect(observedDecision.exitCode).toBe(0);
+    expect(observedDecision.stdout).toContain("plain decision");
+    expect(observedDecision.stdout).toContain("slp ruling");
+    withDatabase(path, (database) => {
+      expect(database.query("SELECT name FROM sqlite_master WHERE name = 'id_counters'").get()).toBeNull();
+    });
+
+    expect(await addWork(fixture, "next")).toBe("w2");
+    expect(await draftDecision(fixture, "next")).toBe("d2");
+  });
+});

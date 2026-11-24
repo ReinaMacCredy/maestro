@@ -479,7 +479,7 @@ export const workPlugin: BuiltInPlugin = {
                 );
               }
             }
-            id = context.store.nextPrefixedId("work", "w");
+            id = context.store.nextCountedId("w", ["work", "slp_work"]);
             context.sessions.record("work.add");
             context.store.database
               .query(
