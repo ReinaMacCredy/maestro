@@ -96,13 +96,43 @@ test("42 MCP initialize carries the session brief as instructions and lists no t
     expect(initialized.error).toBeUndefined();
     expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version });
     expect(initialized.result?.instructions).toContain("held work:");
-    expect(initialized.result?.instructions).toContain("enabled policies:");
-    expect(initialized.result?.instructions).toContain("recipes:");
+    expect(initialized.result?.instructions).toContain("maestro: tracked work");
+    expect(initialized.result?.instructions).toContain("maestro recipe list");
     expect(initialized.result?.instructions).toBe(brief.stdout.trimEnd());
     expect(listed.result).toEqual({ tools: [] });
     expect(called.result).toBeUndefined();
     expect(called.error?.code).toBe(-32601);
     expect(closed).toEqual({ exitCode: 0, stderr: "" });
+  });
+});
+
+test("the brief's method block reaches one harness process once, whichever of the hook and MCP speaks first (d911)", async () => {
+  const session = { MAESTRO_SESSION_ID: "test-session", MAESTRO_SESSION_PID: String(process.pid) };
+  await withFixture(async (fixture) => {
+    const mcp = startMcp(fixture);
+    const initialized = await initialize(mcp);
+    await mcp.close();
+    expect(initialized.result?.instructions).toContain("maestro: tracked work");
+
+    const hook = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
+    expect(hook.exitCode).toBe(0);
+    expect(hook.stdout).not.toContain("tracked work");
+    expect(hook.stdout).toContain("held work:");
+  });
+  await withFixture(async (fixture) => {
+    const hook = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
+    expect(hook.stdout).toContain("maestro: tracked work");
+
+    const mcp = startMcp(fixture);
+    const initialized = await initialize(mcp);
+    await mcp.close();
+    expect(initialized.result?.instructions).toBe("");
+
+    const other = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {
+      MAESTRO_SESSION_ID: "other-session",
+      MAESTRO_SESSION_PID: String(process.ppid),
+    });
+    expect(other.stdout).toContain("maestro: tracked work");
   });
 });
 

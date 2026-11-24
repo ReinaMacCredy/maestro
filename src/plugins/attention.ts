@@ -318,9 +318,10 @@ export const attentionPlugin: BuiltInPlugin = {
     };
     context.effect(() => context.provide("attention", service));
     context.effect(() =>
-      (context.brief as BriefService).register(() =>
+      (context.brief as BriefService).register((_sessionId, event) =>
         service
           .scan()
+          .filter((finding) => event === "SessionStart" || finding.kind !== "LESSONS_PENDING")
           .map((finding) => finding.packet.split("\n")[0] ?? finding.kind)
           .join("\n")
       )

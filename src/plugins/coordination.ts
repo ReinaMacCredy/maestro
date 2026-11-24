@@ -9,15 +9,7 @@ import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { recordCompaction, relativeAge } from "./session-telemetry.ts";
-import { currentPaneId, maybeHandleSlpStatus, roomOwnerLine } from "./slp-v2.ts";
-
-export const laneVocabulary = [
-  { brief: "scout no-write", name: "scout" },
-  { brief: "decision x2-3", name: "decision" },
-  { brief: "delivery", name: "delivery" },
-  { brief: "challenge", name: "challenge" },
-  { brief: "shadow no-write", name: "shadow" },
-] as const;
+import { currentPaneId, maybeHandleSlpStatus } from "./slp-v2.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -36,11 +28,12 @@ interface WorkStartResult {
   reason?: string;
 }
 
-type BriefContributor = (sessionId: string) => string | Promise<string>;
+type BriefContributor = (sessionId: string, event: string) => string | Promise<string>;
 
 interface BriefEntry {
   contributor: BriefContributor;
   events?: string[];
+  once: boolean;
 }
 
 const harnessPromptPrefix = "<task-notification>";
@@ -79,11 +72,34 @@ function dropHarnessPromptNoise(context: PluginContext): void {
   migration.immediate();
 }
 
+// The hook and the MCP transport are both children of one harness process, so
+// its pid and start time say whether the other channel already spoke (d911).
+export function briefDeliveredBy(
+  context: PluginContext,
+  channel: "hook.record" | "mcp.initialize",
+  session: SessionRecord,
+): boolean {
+  if (session.anchor !== "pid") return false;
+  const started = context.sessions.processStart(session.pid);
+  if (started === null) return false;
+  return context.store.database
+    .query<{ created_at: string; payload: string }, [string]>(
+      "SELECT created_at, payload FROM event_log WHERE type = ? ORDER BY id DESC LIMIT 50",
+    )
+    .all(channel)
+    .some((row) => {
+      const payload = JSON.parse(row.payload) as { event?: string; pid?: number };
+      return payload.pid === session.pid &&
+        (channel === "mcp.initialize" || payload.event === "SessionStart") &&
+        Date.parse(row.created_at) >= started;
+    });
+}
+
 export class BriefService {
   private readonly entries: BriefEntry[] = [];
 
-  register(contributor: BriefContributor, opts?: { events?: string[] }): Disposer {
-    const entry: BriefEntry = { contributor, events: opts?.events };
+  register(contributor: BriefContributor, opts?: { events?: string[]; once?: boolean }): Disposer {
+    const entry: BriefEntry = { contributor, events: opts?.events, once: opts?.once === true };
     this.entries.push(entry);
     return () => {
       const index = this.entries.indexOf(entry);
@@ -91,11 +107,12 @@ export class BriefService {
     };
   }
 
-  async render(sessionId: string, event = "SessionStart"): Promise<string> {
+  async render(sessionId: string, event = "SessionStart", opts?: { skipOnce?: boolean }): Promise<string> {
     const sections: string[] = [];
     for (const entry of this.entries) {
       if (entry.events && !entry.events.includes(event)) continue;
-      const section = await entry.contributor(sessionId);
+      if (entry.once && opts?.skipOnce) continue;
+      const section = await entry.contributor(sessionId, event);
       if (section) sections.push(section);
     }
     return sections.join("\n");
@@ -186,11 +203,13 @@ export const coordinationPlugin: BuiltInPlugin = {
       brief.register(
         () =>
           [
-            "method: before the first step, name the task's playbook from ~/maestro/WORKFLOW.md#routing (a question is investigation, a defect bug-fix, new behavior feature), run maestro recipe show <name>, and copy its numbered steps into your plan list (skip: <reason> for a step you drop); only a quickfix, a one-sentence change, skips this; tracked work: maestro work add|start|done; Full adds a bundle with ~/maestro/skills/maestro-{bundle,verify}/SKILL.md; any tier: maestro-{coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
-            "  read ~/maestro/WORKFLOW.md: recon before tier selection; decision ownership, testing discipline, resume authority, and completion/delivery rules live there, not in this brief",
-            `intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (${laneVocabulary.map(({ brief }) => brief).join(" | ")}); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
+            'maestro: tracked work is maestro work add "<title>" --start, closed by maestro work done <id> --check "<command>"; maestro work list shows what is open',
+            "  files made while discussing or researching go in the folder maestro topic path <slug> prints",
+            "  large, multi-session or risky work gets a bundle: maestro bundle open <id> --work <workId>",
+            "  playbooks are guidance to read when one fits: maestro recipe list; rules: ~/maestro/WORKFLOW.md",
+            "  a finding is a note or a report, never a new card",
           ].join("\n"),
-        { events: ["SessionStart"] },
+        { events: ["SessionStart"], once: true },
       ),
     );
     context.effect(() =>
@@ -233,22 +252,6 @@ export const coordinationPlugin: BuiltInPlugin = {
         { events: ["SessionStart", "UserPromptSubmit"] },
       ),
     );
-    context.effect(() =>
-      brief.register(() => roomOwnerLine(context), { events: ["SessionStart", "UserPromptSubmit"] }),
-    );
-    context.effect(() =>
-      brief.register(() => {
-        const policies = context.loader.records
-          .filter((record) => record.status === "active" && record.name.startsWith("policy-"))
-          .map((record) => record.name)
-          .sort();
-        return `enabled policies: ${policies.join(", ") || "none"}`;
-      }, { events: ["SessionStart"] }),
-    );
-    context.effect(() =>
-      brief.register(() => "  see or change: maestro plugin list|enable|disable <name>", { events: ["SessionStart"] }),
-    );
-    context.effect(() => brief.register(() => "next: maestro work list", { events: ["SessionStart"] }));
     context.effect(() =>
       brief.register(() =>
         driftAdvisory(process.env.HOME ?? process.cwd(), resolve(import.meta.dir, "..", "..")),
@@ -325,7 +328,9 @@ export const coordinationPlugin: BuiltInPlugin = {
                 .run(session.id, prompt, new Date().toISOString());
             }
           }
-          const text = await brief.render(session.id, event);
+          const text = await brief.render(session.id, event, {
+            skipOnce: event === "SessionStart" && briefDeliveredBy(context, "mcp.initialize", session),
+          });
           return { data: { session, brief: text }, text };
         },
         {

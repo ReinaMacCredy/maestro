@@ -97,6 +97,7 @@ WorkRecord
 WorkService
 acquireProcessLock
 attentionPlugin
+briefDeliveredBy
 briefPlugin
 buildSlpTeamPlan
 builtInPlugins
@@ -129,7 +130,6 @@ installInRoomMessage
 installPlugin
 installStampFile
 isRoom
-laneVocabulary
 latestCheckpoints
 launchArguments
 legacyPlugin

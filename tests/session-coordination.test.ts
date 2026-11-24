@@ -16,7 +16,7 @@ test("13 hook record persists a session event reflected by status", async () => 
   });
 });
 
-test("14 SessionStart brief contains held work and enabled policies without mailbox state", async () => {
+test("14 SessionStart brief contains held work and no enabled-policies or next line (d911)", async () => {
   await withFixture(async (fixture) => {
     const id = idFrom(await runCli(fixture, ["work", "add", "held item", "--kind", "idea"]));
     expect(
@@ -34,8 +34,9 @@ test("14 SessionStart brief contains held work and enabled policies without mail
 
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toContain(id);
-    expect(brief.stdout).toContain("policy-proof");
-    expect(brief.stdout).toContain("policy-breakdown");
+    expect(brief.stdout).not.toContain("enabled policies");
+    expect(brief.stdout).not.toContain("next:");
+    expect(brief.stdout).not.toContain("attention");
     expect(brief.stdout).not.toContain("pending message");
   });
 });
@@ -52,11 +53,13 @@ test("14b method map renders on SessionStart only, not on UserPromptSubmit", asy
     });
 
     expect(start.exitCode).toBe(0);
-    expect(start.stdout).toContain("method:");
+    expect(start.stdout).toContain('maestro work done <id> --check "<command>"');
+    expect(start.stdout).toContain("maestro topic path <slug>");
+    expect(start.stdout).toContain("maestro bundle open <id> --work <workId>");
     expect(start.stdout).toContain("rules: ~/maestro/WORKFLOW.md");
-    expect(start.stdout).toContain("recon before tier selection");
+    expect(start.stdout).not.toContain("copy its numbered steps");
     expect(prompt.exitCode).toBe(0);
-    expect(prompt.stdout).not.toContain("method:");
+    expect(prompt.stdout).not.toContain("tracked work");
     expect(prompt.stdout).toContain("held work");
   });
 });

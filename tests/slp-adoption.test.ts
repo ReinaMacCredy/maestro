@@ -205,7 +205,7 @@ test("136 bundle open scaffolds the NOTES handoff packet after Next Action", asy
   });
 });
 
-test("137 SessionStart adds only the intake line and UserPromptSubmit carries session state alone", async () => {
+test("137 SessionStart carries the finding rule and UserPromptSubmit carries session state alone", async () => {
   await withFixture(async (fixture) => {
     const session = {
       MAESTRO_SESSION_ID: "slp-brief",
@@ -214,7 +214,7 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit carries se
     const start = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain(
-      "intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (scout no-write | decision x2-3 | delivery | challenge | shadow no-write); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built\n",
+      "  a finding is a note or a report, never a new card\n",
     );
 
     const prompt = await runCli(

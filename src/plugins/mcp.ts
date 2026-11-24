@@ -1,6 +1,6 @@
 import { failureEnvelope } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { BriefService } from "./coordination.ts";
+import { briefDeliveredBy, type BriefService } from "./coordination.ts";
 import { readPackageVersion } from "./version.ts";
 
 type JsonRpcId = number | string | null;
@@ -33,11 +33,21 @@ async function handleRequest(context: PluginContext, request: JsonRpcRequest): P
   if (request.method === "initialize") {
     const session = context.sessions.record("mcp.initialize");
     const brief = context.brief as BriefService;
+    const spoken = briefDeliveredBy(context, "hook.record", session);
+    if (!spoken && !context.store.readOnly) {
+      context.log.append({
+        type: "mcp.initialize",
+        entityType: "session",
+        entityId: session.id,
+        sessionId: session.id,
+        payload: { pid: session.pid },
+      });
+    }
     writeResponse(id, {
       protocolVersion: "2025-06-18",
       capabilities: { tools: {} },
       serverInfo: { name: "maestro", version: await readPackageVersion() },
-      instructions: await brief.render(session.id),
+      instructions: spoken ? "" : await brief.render(session.id),
     });
     return;
   }

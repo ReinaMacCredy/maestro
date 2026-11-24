@@ -91,7 +91,6 @@ export const recipePlugin: BuiltInPlugin = {
   inject: ["brief"],
   apply(context) {
     const recipes = new Recipes();
-    const brief = context.brief as BriefService;
     context.effect(() => context.provide("recipe", recipes));
     for (const [name, description] of catalog) {
       context.effect(() => recipes.register(shippedRecipe(name, description)));
@@ -134,9 +133,6 @@ export const recipePlugin: BuiltInPlugin = {
           positionals: [{ name: "name", required: true }],
         },
       ),
-    );
-    context.effect(() =>
-      brief.register(() => "recipes: maestro recipe list; maestro recipe show <name>", { events: ["SessionStart"] }),
     );
   },
 };

@@ -308,7 +308,7 @@ export class Sessions {
     return { ...row, anchor: "ttl" };
   }
 
-  private processStart(pid: number): number | null {
+  processStart(pid: number): number | null {
     const listed = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], {
       env: { PATH: process.env.PATH ?? "/usr/bin:/bin", LC_ALL: "C" },
       stderr: "ignore",

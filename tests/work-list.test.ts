@@ -181,7 +181,7 @@ test("work list works under MAESTRO_READ_ONLY=1 and ready is gone (d896)", async
     expect((await runCli(fixture, ["help"])).stdout).not.toMatch(/^ {2}ready /m);
 
     const brief = await runCli(fixture, ["brief", "--session"]);
-    expect(brief.stdout).toContain("next: maestro work list");
+    expect(brief.stdout).toContain("maestro work list shows what is open");
     expect(brief.stdout).not.toContain("maestro ready");
   });
 });

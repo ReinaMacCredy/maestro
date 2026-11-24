@@ -210,7 +210,7 @@ test("350 installed hook configuration executes both current adapters", async ()
       ]);
       expect(exitCode).toBe(0);
       expect(stderr).toBe("");
-      expect(stdout).toContain("enabled policies");
+      expect(stdout).toContain("held work:");
 
       const status = await runInstalledCliAt(fixture, fixture.repo, ["status", "--json"], {
         PATH: path,

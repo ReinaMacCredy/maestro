@@ -164,7 +164,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
       ]);
       expect(stderr).toBe("");
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("enabled policies");
+      expect(stdout).toContain("held work:");
       const status = await runCli(fixture, ["status", "--json"]);
       const envelope = JSON.parse(status.stdout) as {
         data: { sessions: Array<{ harness: string | null; id: string }> };

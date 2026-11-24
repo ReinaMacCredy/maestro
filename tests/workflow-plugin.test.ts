@@ -3,23 +3,9 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { laneVocabulary } from "../src/plugins/coordination.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 setDefaultTimeout(15_000);
-
-test("287 [lint] maestro-work skill lane line matches the brief lane vocabulary", async () => {
-  // Proves source documentation parity, not independent runtime lane acceptance or rejection.
-  const skill = await readFile(
-    join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md"),
-    "utf8",
-  );
-  const laneLine = skill.split("\n").find((line) => line.startsWith("Lane: "));
-  expect(laneLine).toBeDefined();
-  expect(laneLine?.slice("Lane: ".length).split("|").map((name) => name.trim())).toEqual(
-    laneVocabulary.map(({ name }) => name),
-  );
-});
 
 test("288 no legacy .spec-workflow or .waymark tree remains in the repo", async () => {
   // Both lifecycles were imported into the store on 2026-09-04 (maestro-v3, A2/A4);
@@ -283,7 +269,6 @@ test("634 the brief routes to canonical tiers after recon, without making a sess
     });
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain("~/maestro/WORKFLOW.md");
-    expect(start.stdout).toContain("recon before tier selection");
     expect(start.stdout).not.toContain("multi-session, shared scope, high risk, or repeat fix");
     expect(start.stdout).not.toContain("forks: settle before editing");
   });
