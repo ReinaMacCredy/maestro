@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Panel } from "./components/Panel";
 import { Pill } from "./components/Pill";
 import { FIXTURE } from "./fixture";
-import { cards, counts, pillState, sessionIndex, type RepoSnapshot } from "./model";
+import { cards, counts, pillState, type RepoSnapshot } from "./model";
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -38,7 +38,6 @@ export function App() {
 
   const cardList = useMemo(() => cards(repos, now), [repos, now]);
   const c = useMemo(() => counts(repos, cardList), [repos, cardList]);
-  const sessions = useMemo(() => sessionIndex(repos), [repos]);
 
   const togglePin = () => {
     const next = !pinned;
@@ -60,7 +59,7 @@ export function App() {
     <div className={`widget ${open ? "open" : ""} ${pinned ? "pinned" : ""}`}>
       <div className="panelWrap">
         <div className="panelInner">
-          <Panel repos={repos} cards={cardList} counts={c} sessions={sessions} now={now} collapsed={collapsed} configPath={configPath} onToggleRepo={toggleRepo} onCopied={copied} />
+          <Panel repos={repos} cards={cardList} counts={c} now={now} collapsed={collapsed} configPath={configPath} onToggleRepo={toggleRepo} onCopied={copied} />
         </div>
       </div>
       <Pill counts={c} state={pillState(c)} pinned={pinned} expanded={open} onClick={togglePin} />

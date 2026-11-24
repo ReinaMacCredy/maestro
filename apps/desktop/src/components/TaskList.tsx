@@ -1,21 +1,18 @@
-import type { RepoSnapshot, Session } from "../model";
+import type { Holder, RepoSnapshot } from "../model";
 import { progress, shortId, workRows } from "../model";
 import { Icons } from "./icons";
 
 // aicss task-list (TodoList) rendered from a repo snapshot; no demo timers.
-export function Who({ id, sessions }: { id: string; sessions: Map<string, Session> }) {
-  const s = sessions.get(id);
-  return <span className={`who ${s?.harness ?? ""}`}>{s ? `${s.harness} ${shortId(id)}` : shortId(id)}</span>;
+export function Who({ holder }: { holder: Holder }) {
+  return <span className={`who ${holder.harness ?? ""}`}>{holder.harness ? `${holder.harness} ${shortId(holder.id)}` : shortId(holder.id)}</span>;
 }
 
 export function TaskList({
   repo,
-  sessions,
   collapsed,
   onToggle,
 }: {
   repo: RepoSnapshot;
-  sessions: Map<string, Session>;
   collapsed: boolean;
   onToggle: () => void;
 }) {
@@ -46,7 +43,7 @@ export function TaskList({
         <div className="todoInner">
           {repo.error ? (
             <div className="todoIdle">{repo.error}</div>
-          ) : p.total ? (
+          ) : rows.length ? (
             <ul className="todoList">
               {rows.map((r, i) => {
                 const icon =
@@ -61,8 +58,8 @@ export function TaskList({
                     <span className="todoLabel" data-label={r.work.title}>{r.work.title}</span>
                     <span className="todoMeta">
                       <span className="id">{r.work.id}</span>
-                      {r.status === "active" && r.work.heldBy ? <Who id={r.work.heldBy} sessions={sessions} /> : null}
-                      {r.status === "gated" ? <span className="lock">{`chờ ${r.blockers.join(", ")}`}</span> : null}
+                      {r.status === "active" && r.work.holder ? <Who holder={r.work.holder} /> : null}
+                      {r.status === "gated" && r.blockers.length ? <span className="lock">{`chờ ${r.blockers.join(", ")}`}</span> : null}
                     </span>
                   </li>
                 );

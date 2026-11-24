@@ -32,6 +32,15 @@ pub struct ConfigInfo {
     pub repos: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct Counts {
+    pub open: u64,
+    pub active: u64,
+    pub done: u64,
+    pub cancelled: u64,
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoSnapshot {
@@ -39,11 +48,9 @@ pub struct RepoSnapshot {
     pub path: String,
     pub at: String,
     pub works: Vec<Value>,
-    pub ready: Vec<String>,
-    pub gated: Vec<Value>,
+    pub counts: Counts,
     pub decisions: Vec<Value>,
     pub findings: Vec<Value>,
-    pub sessions: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -169,19 +176,12 @@ fn snapshot_repo(bin: &Path, repo: &Path) -> RepoSnapshot {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| repo.display().to_string());
     let mut snap = RepoSnapshot { repo: name, path: repo.display().to_string(), at: now_iso(), ..Default::default() };
-    let (status, ready, attention, work, decision) = std::thread::scope(|scope| {
-        let status = scope.spawn(|| run_verb(bin, repo, &["status", "--json"]));
-        let ready = scope.spawn(|| run_verb(bin, repo, &["ready", "--json"]));
+    let (attention, work, decision) = std::thread::scope(|scope| {
         let attention = scope.spawn(|| run_verb(bin, repo, &["attention", "--json"]));
         let work = scope.spawn(|| run_verb(bin, repo, &["work", "list", "--json"]));
-        let decision = scope.spawn(|| run_verb(bin, repo, &["decision", "list", "--json"]));
+        // The bounded default keeps the 20 most recently updated, so an old draft would drop out of the cards.
+        let decision = scope.spawn(|| run_verb(bin, repo, &["decision", "list", "--all", "--json"]));
         (
-            status
-                .join()
-                .unwrap_or_else(|_| Err("verb thread panicked".into())),
-            ready
-                .join()
-                .unwrap_or_else(|_| Err("verb thread panicked".into())),
             attention
                 .join()
                 .unwrap_or_else(|_| Err("verb thread panicked".into())),
@@ -202,19 +202,12 @@ fn snapshot_repo(bin: &Path, repo: &Path) -> RepoSnapshot {
             }
         }
     };
-    let status = take(status);
-    let ready = take(ready);
     let attention = take(attention);
     let work = take(work);
     let decision = take(decision);
-    snap.sessions = arr(&status, "sessions");
-    snap.ready = arr(&ready, "works")
-        .iter()
-        .filter_map(|w| w.as_str().map(str::to_string).or_else(|| w.get("id").and_then(Value::as_str).map(str::to_string)))
-        .collect();
-    snap.gated = arr(&ready, "gated");
     snap.findings = arr(&attention, "detections");
     snap.works = arr(&work, "works");
+    snap.counts = work.get("counts").and_then(|c| serde_json::from_value(c.clone()).ok()).unwrap_or_default();
     snap.decisions = arr(&decision, "decisions");
     if !errors.is_empty() {
         snap.error = Some(errors.join("; "));

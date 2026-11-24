@@ -1,5 +1,5 @@
-// Read model over maestro CLI JSON envelopes (status, ready, attention, work list,
-// decision list). Pure functions only; the app never mutates the store.
+// Read model over maestro CLI JSON envelopes (attention, work list, decision
+// list). Pure functions only; the app never mutates the store.
 
 export type WorkState = "open" | "active" | "done" | "cancelled";
 
@@ -9,8 +9,30 @@ export interface Work {
   kind: string;
   state: WorkState;
   parentId: string | null;
-  heldBy: string | null;
   updatedAt: string;
+  blockedBy: { id: string; state: string }[];
+  holder: Holder | null;
+  gate: Gate | null;
+}
+
+export interface Holder {
+  id: string;
+  harness: string | null;
+  live: boolean;
+  lastSeen: string | null;
+}
+
+export interface Gate {
+  origin: string;
+  reason: string;
+  command: string | null;
+}
+
+export interface WorkCounts {
+  open: number;
+  active: number;
+  done: number;
+  cancelled: number;
 }
 
 export interface Decision {
@@ -20,15 +42,6 @@ export interface Decision {
   state: string;
   workId: string | null;
   updatedAt: string;
-}
-
-export interface Gated {
-  id: string;
-  title: string;
-  blockers: { id: string; state: string }[];
-  reason: string;
-  command: string;
-  origin: string;
 }
 
 export interface Finding {
@@ -41,23 +54,14 @@ export interface Finding {
   raised: boolean;
 }
 
-export interface Session {
-  id: string;
-  harness: string;
-  live: boolean;
-  lastSeen: string;
-}
-
 export interface RepoSnapshot {
   repo: string;
   path: string;
   at: string;
   works: Work[];
-  ready: string[];
-  gated: Gated[];
+  counts: WorkCounts;
   decisions: Decision[];
   findings: Finding[];
-  sessions: Session[];
   error?: string;
 }
 
@@ -100,7 +104,6 @@ export function ago(iso: string | null, now: Date): string {
 
 /** Depth-first tree order (parents before children), preserving list order. */
 export function workRows(repo: RepoSnapshot): WorkRow[] {
-  const gated = new Map(repo.gated.map((g) => [g.id, g.blockers.map((b) => b.id)]));
   const byParent = new Map<string | null, Work[]>();
   const ids = new Set(repo.works.map((w) => w.id));
   for (const w of repo.works) {
@@ -112,8 +115,8 @@ export function workRows(repo: RepoSnapshot): WorkRow[] {
   const rows: WorkRow[] = [];
   const visit = (parent: string | null, depth: number) => {
     for (const work of byParent.get(parent) ?? []) {
-      const blockers = gated.get(work.id) ?? [];
-      const status: RowStatus = work.state === "open" && blockers.length ? "gated" : work.state;
+      const blockers = work.blockedBy.map((b) => b.id);
+      const status: RowStatus = work.state === "open" && (blockers.length || work.gate) ? "gated" : work.state;
       rows.push({ work, status, depth, blockers });
       visit(work.id, depth + 1);
     }
@@ -123,9 +126,8 @@ export function workRows(repo: RepoSnapshot): WorkRow[] {
 }
 
 export function progress(repo: RepoSnapshot): { done: number; total: number; active: number; pct: number } {
-  const total = repo.works.length;
-  const done = repo.works.filter((w) => w.state === "done").length;
-  const active = repo.works.filter((w) => w.state === "active").length;
+  const { open, active, done, cancelled } = repo.counts;
+  const total = open + active + done + cancelled;
   return { done, total, active, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
@@ -141,7 +143,7 @@ export function cards(repos: RepoSnapshot[], now: Date): Card[] {
         title: `${f.kind} ${subject}`,
         sub: f.subjectSession ? `holder ${shortId(f.subjectSession)}` : "",
         body: f.packet,
-        command: f.subjectWork ? `maestro trace ${f.subjectWork}` : "maestro attention",
+        command: f.subjectWork ? `maestro work show ${f.subjectWork}` : "maestro attention",
         at: f.raisedAt,
         hot: true,
       });
@@ -160,15 +162,16 @@ export function cards(repos: RepoSnapshot[], now: Date): Card[] {
         hot: hours >= DECISION_HOT_HOURS,
       });
     }
-    for (const g of r.gated) {
+    for (const w of r.works) {
+      if (!w.gate) continue;
       out.push({
-        key: `${r.repo}:gated:${g.id}`,
+        key: `${r.repo}:gated:${w.id}`,
         variant: "gated",
         repo: r.repo,
-        title: `${g.id} bị gate`,
-        sub: g.origin,
-        body: g.reason,
-        command: g.command || "maestro ready",
+        title: `${w.id} bị gate`,
+        sub: w.gate.origin,
+        body: w.gate.reason,
+        command: w.gate.command || "maestro work list",
         at: null,
         hot: false,
       });
@@ -185,8 +188,8 @@ export interface Counts {
 
 export function counts(repos: RepoSnapshot[], cardList: Card[]): Counts {
   return {
-    active: repos.reduce((n, r) => n + r.works.filter((w) => w.state === "active").length, 0),
-    ready: repos.reduce((n, r) => n + r.ready.length, 0),
+    active: repos.reduce((n, r) => n + r.counts.active, 0),
+    ready: repos.reduce((n, r) => n + r.works.filter((w) => w.state === "open" && !w.blockedBy.length && !w.gate).length, 0),
     attention: cardList.length,
   };
 }
@@ -195,10 +198,4 @@ export type PillState = "idle" | "working" | "attention";
 
 export function pillState(c: Counts): PillState {
   return c.attention ? "attention" : c.active ? "working" : "idle";
-}
-
-export function sessionIndex(repos: RepoSnapshot[]): Map<string, Session> {
-  const m = new Map<string, Session>();
-  for (const r of repos) for (const s of r.sessions) m.set(s.id, s);
-  return m;
 }

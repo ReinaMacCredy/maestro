@@ -241,7 +241,7 @@
     <button data-t="light" aria-pressed="false">Sáng</button>
     <button data-t="dark" aria-pressed="false">Tối</button>
   </div>
-  <p>Hover pill để bung, click để ghim. Dữ liệu maestro là snapshot <code>work list / ready / decision list --json</code> lúc 2026-08-25; astra, synara và packet STALLED_LEASE là giả để xem bố cục.</p>
+  <p>Hover pill để bung, click để ghim. Dữ liệu maestro là snapshot <code>work list / decision list --json</code> lúc 2026-08-25; astra, synara và packet STALLED_LEASE là giả để xem bố cục.</p>
 </aside>
 
 <div class="widget" id="widget">
@@ -397,7 +397,7 @@ function renderCards(repos) {
     for (const a of r.attention) {
       out.push(card("attention", `${a.kind} ${a.subject}`, `<code>${r.repo}</code> · holder ${who(a.session)}`,
         `Lease còn active nhưng session chưa tick <b>${a.minutes} phút</b> (ngưỡng 30). Không ai khác có thể start ${a.subject} cho tới khi lease hết hạn hoặc holder done.`,
-        `maestro trace ${a.subject}`, `${a.minutes}m`, true, i++));
+        `maestro work show ${a.subject}`, `${a.minutes}m`, true, i++));
     }
     for (const m of r.msgs) {
       out.push(card("msg", `Tin từ ${short(m.from)}`, `<code>${r.repo}</code> · ${who(m.from)} → bạn`, esc(m.text),
@@ -411,7 +411,7 @@ function renderCards(repos) {
     for (const w of r.works.filter(w => w.gated)) {
       out.push(card("gated", `${w.id} bị gate`, `<code>${r.repo}</code> · policy-breakdown`,
         `Còn con chưa xong: <b>${w.gated.map(g => `${g.id} [${g.state}]`).join(", ")}</b>. ${w.id} chỉ done được khi các con đóng.`,
-        `maestro ready`, "", false, i++));
+        `maestro work list`, "", false, i++));
     }
   }
   return out;

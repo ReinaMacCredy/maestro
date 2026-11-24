@@ -1,4 +1,4 @@
-import type { Card, Counts, RepoSnapshot, Session } from "../model";
+import type { Card, Counts, RepoSnapshot } from "../model";
 import { ago } from "../model";
 import { ApprovalCard } from "./ApprovalCard";
 import { Icons } from "./icons";
@@ -8,7 +8,6 @@ export function Panel({
   repos,
   cards,
   counts,
-  sessions,
   now,
   collapsed,
   configPath,
@@ -18,7 +17,6 @@ export function Panel({
   repos: RepoSnapshot[];
   cards: Card[];
   counts: Counts;
-  sessions: Map<string, Session>;
   now: Date;
   collapsed: Set<string>;
   configPath?: string | null;
@@ -41,7 +39,7 @@ export function Panel({
       </div>
       {repos.length ? (
         repos.map((r) => (
-          <TaskList key={r.repo} repo={r} sessions={sessions} collapsed={collapsed.has(r.repo)} onToggle={() => onToggleRepo(r.repo)} />
+          <TaskList key={r.repo} repo={r} collapsed={collapsed.has(r.repo)} onToggle={() => onToggleRepo(r.repo)} />
         ))
       ) : (
         <div className="allClear">

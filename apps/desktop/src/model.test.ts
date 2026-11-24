@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { ago, cards, counts, pillState, workRows } from "./model";
+import { ago, cards, counts, pillState, progress, workRows } from "./model";
 import { ASTRA, FIXTURE, FIXTURE_NOW, MAESTRO } from "./fixture";
 
 describe("workRows", () => {
   test("orders parents before children and marks gated parents", () => {
     const rows = workRows(MAESTRO);
-    expect(rows.map((r) => r.work.id)).toEqual(["w15", "w16", "w17", "w18", "w19", "w20", "w21"]);
-    expect(rows[0]).toMatchObject({ status: "gated", depth: 0, blockers: ["w21"] });
-    expect(rows[6]).toMatchObject({ status: "active", depth: 1 });
+    expect(rows.map((r) => r.work.id)).toEqual(["w15", "w21"]);
+    expect(rows[0]).toMatchObject({ status: "gated", depth: 0, blockers: [] });
+    expect(rows[1]).toMatchObject({ status: "active", depth: 1 });
+  });
+
+  test("an open item with an open blocker is gated on that blocker", () => {
+    expect(workRows(ASTRA)[2]).toMatchObject({ status: "gated", blockers: ["w3"] });
   });
 });
 
@@ -17,8 +21,8 @@ describe("cards", () => {
     expect(list.map((c) => c.variant)).toEqual(["decision", "gated", "attention"]);
     expect(list.map((c) => c.command)).toEqual([
       "maestro decision lock d10",
-      "maestro status",
-      "maestro trace w3",
+      "maestro work list --parent w15",
+      "maestro work show w3",
     ]);
   });
 
@@ -42,9 +46,13 @@ describe("pill", () => {
     expect(pillState({ active: 0, ready: 0, attention: 0 })).toBe("idle");
   });
 
-  test("ready comes from the ready verb, not from open state", () => {
+  test("ready is an open item with no open blocker and no gate", () => {
     expect(counts([ASTRA], []).ready).toBe(1);
     expect(counts([MAESTRO], []).ready).toBe(0);
+  });
+
+  test("progress counts done work the list no longer carries", () => {
+    expect(progress(MAESTRO)).toEqual({ done: 5, total: 7, active: 1, pct: 71 });
   });
 });
 
