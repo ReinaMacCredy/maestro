@@ -214,7 +214,7 @@ test("137 SessionStart carries the finding rule and UserPromptSubmit carries ses
     const start = await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
     expect(start.exitCode).toBe(0);
     expect(start.stdout).toContain(
-      "  a finding is a note or a report, never a new card\n",
+      "  a finding is a note or a report, never a new card; rules: ~/maestro/WORKFLOW.md\n",
     );
 
     const prompt = await runCli(

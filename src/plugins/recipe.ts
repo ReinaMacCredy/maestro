@@ -92,6 +92,12 @@ export const recipePlugin: BuiltInPlugin = {
   apply(context) {
     const recipes = new Recipes();
     context.effect(() => context.provide("recipe", recipes));
+    context.effect(() =>
+      (context.brief as BriefService).register(
+        () => "playbooks are guidance to read when one fits: maestro recipe list",
+        { events: ["SessionStart"], once: true },
+      ),
+    );
     for (const [name, description] of catalog) {
       context.effect(() => recipes.register(shippedRecipe(name, description)));
     }
