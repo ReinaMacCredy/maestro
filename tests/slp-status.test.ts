@@ -318,6 +318,33 @@ test("SLP v2 in-team status text is structured while JSON keeps its shape (d758)
       "returns",
       "work",
     ]);
+
+    const peerObjective = "Peer status objective";
+    const added = await runCliAt(
+      fixture,
+      fixture.repo,
+      ["work", "add", peerObjective, "--to", "peer-status", "--json"],
+      leadEnvironment,
+    );
+    expect(added.exitCode).toBe(0);
+    const peer = envelope<{ role: { name: string; paneId: string }; work: { id: string } }>(added.stdout);
+    const peerEnvironment = { ...fake.env, HERDR_PANE_ID: peer.role.paneId };
+    const peerId = peer.work.id;
+    expect((await lines(["status"], leadEnvironment))[1]).toBe(
+      `  ${peerId} OPEN ${lead.name} -> ${peer.role.name}: ${peerObjective}`,
+    );
+    await run(["work", "take", peerId, "--json"], peerEnvironment);
+    await run(["work", "return", peerId, "result: peer pass", "--json"], peerEnvironment);
+    expect(await lines(["status"], leadEnvironment)).toEqual([
+      header("lead", lead),
+      `* ${peerId} RETURNED ${lead.name} -> ${peer.role.name}: ${peerObjective}`,
+      "1 DONE (accepted); --all to list",
+      `decisions: d1 (${id})`,
+    ]);
+    await run(["work", "note", peerId, "needs a test", "--rework", "--json"], leadEnvironment);
+    expect((await lines(["status"], leadEnvironment))[1]).toBe(
+      `  ${peerId} RETURNED ${lead.name} -> ${peer.role.name}: ${peerObjective}`,
+    );
   });
 }, 30_000);
 
@@ -502,6 +529,7 @@ test("orphan-status-verdict: Hub status reports a RUNNING generation with no lea
     const healthy = await hubStatus();
     expect(healthy.team.orphaned).toBe(false);
     expect(healthy.text).not.toContain("ORPHANED?");
+    expect(healthy.text).toContain("RUNNING; runtime pane on; missing none");
 
     await dropPanes([lead.paneId]);
     const orphaned = await hubStatus();

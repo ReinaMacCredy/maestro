@@ -203,9 +203,14 @@ test("seat-model: an empty model and work add --model without --to (the Lead's o
     expect(failure(empty.stderr).message).toContain("--lead-model");
     expect((await fakeHerdrCommands(fake)).filter((command) => command[0] === "agent" && command[1] === "start")).toEqual([]);
 
-    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Refusals", "--json"], fake.env);
+    const started = await runCliAt(fixture, room, ["team", "start", fixture.repo, "Refusals", "--lead-model", "gpt-5.6-sol", "--json"], fake.env);
     expect(started.exitCode).toBe(0);
     const data = envelope<StartedTeam>(started.stdout);
+    const leadStart = (await fakeHerdrCommands(fake)).find(
+      (command) => command[0] === "agent" && command[1] === "start" && command[2] === `lead-${data.team.teamId}`,
+    )!;
+    expect(leadStart[leadStart.indexOf("--kind") + 1]).toBe("codex");
+    expect(leadStart.slice(leadStart.indexOf("--model"))).toEqual(["--model", "gpt-5.6-sol"]);
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const ownItem = await runCliAt(fixture, fixture.repo, ["work", "add", "mine", "--model", "fable", "--json"], {
       ...fake.env,

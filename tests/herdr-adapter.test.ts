@@ -735,9 +735,17 @@ test("runtime-stale-wake: a stall nudge left queued is checked against the store
         (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
       ).pending.filter((line) => line.target === target && line.line.includes(`[${peer.work.id}] silence`));
     await waitForFakeHerdr(async () => (await pendingFor(peer.role.name)).length === 1, 5_000, "the queued nudge");
+    const copyPending = async () =>
+      envelope<{ pending: Array<{ line: string; target: string }> }>(
+        (await runCliAt(fixture, fixture.repo, ["slp", "status", "--json"], leadEnvironment)).stdout,
+      ).pending.filter((line) => line.target === hubPane && line.line.includes(`[${peer.work.id} copy]`));
+    await waitForFakeHerdr(async () => (await copyPending()).length === 1, 5_000, "the queued Hub copy");
     const nudgesToHolder = async () =>
       (await attentionPrompts(fake)).filter((command) => command[2] === peer.role.name && (command[3] ?? "").includes(`[${peer.work.id}] silence`));
     const attempted = (await nudgesToHolder()).length;
+    const copiesToHub = async () =>
+      (await attentionPrompts(fake)).filter((command) => command[2] === hubPane && (command[3] ?? "").includes(`${peer.work.id} copy`));
+    const copiesAttempted = (await copiesToHub()).length;
 
     expect((await runCliAt(fixture, fixture.repo, ["work", "return", peer.work.id, "result: done", "--json"], peerEnvironment)).exitCode).toBe(0);
     await setFakeHerdrBehavior(fake, { prompts: true });
@@ -747,6 +755,18 @@ test("runtime-stale-wake: a stall nudge left queued is checked against the store
     expect((await nudgesToHolder()).length).toBe(attempted);
     const log = await readFile(join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log"), "utf8");
     expect(log).toContain(`stale wake about ${peer.work.id} silence dropped: ${peer.work.id} is RETURNED`);
+
+    // Only a new wake to the Hub flushes the Hub's queue, so a pane loss carries the copy to its delivery check.
+    await emitFakeHerdrEvent(fake, { event: "pane_exited", data: { pane_id: peer.role.paneId, workspace_id: data.team.workspaceId } });
+    await waitForFakeHerdr(
+      async () => (await attentionPrompts(fake)).some((command) => command[2] === hubPane && command[3] === `[attention] ${peer.role.name} pane exited`),
+      5_000,
+      "the pane-loss wake to the Hub",
+    );
+    await waitForFakeHerdr(async () => (await copyPending()).length === 0, 5_000, "the stale copy leaving the queue");
+    expect((await copiesToHub()).length).toBe(copiesAttempted);
+    const flushedLog = await readFile(join(slpRuntimeDirectory(fixture.repo, data.team.teamId, data.team.generation), "runtime.log"), "utf8");
+    expect(flushedLog).toContain(`stale wake about ${peer.work.id} silence copy dropped: ${peer.work.id} is RETURNED`);
   });
 }, 60_000);
 

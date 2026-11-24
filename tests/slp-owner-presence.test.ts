@@ -308,6 +308,68 @@ test("l4 decision show inside a project checkout reads that store's SLP rulings 
   });
 }, 40_000);
 
+// No verb writes a provisional row any more; a room store from before the removal still holds them.
+test("d125: a stored provisional ruling stays listed by the room's status and flagged in the decision view until a --replaces decision clears it", async () => {
+  await withFixture(async (fixture) => {
+    const { data, fake, hubEnvironment, room } = await startTeam(fixture);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
+    const id = data.work.id;
+
+    const database = new Database(join(room, ".maestro", "maestro.db"));
+    try {
+      const insert = database.query(
+        `INSERT INTO slp_decisions
+          (id, team_id, generation, choice, why, scope, work_id, replaces_id, actor, created_at, provisional)
+         VALUES (?, ?, ?, ?, ?, 'owner', ?, NULL, 'hub-supervisor', ?, 1)`,
+      );
+      insert.run("d1", "hub", 0, "Lock SPEC section 4 as written", "advisor; no item exists yet", null, "2026-01-01T00:00:00.000Z");
+      insert.run("d2", data.team.teamId, data.team.generation, "Use vendor A", "advisor: A is already licensed", id, "2026-01-01T00:00:01.000Z");
+    } finally {
+      database.close();
+    }
+
+    const listed = await runCliAt(fixture, room, ["status"], hubEnvironment);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout.split("\n")).toContain("provisional: d1 none Lock SPEC section 4 as written");
+    expect(listed.stdout.split("\n")).toContain(`provisional: d2 ${id} Use vendor A`);
+    const listedJson = envelope<{ provisionalDecisions: Array<{ id: string }> }>(
+      (await runCliAt(fixture, room, ["status", "--json"], hubEnvironment)).stdout,
+    );
+    expect(listedJson.provisionalDecisions.map((decision) => decision.id)).toEqual(["d1", "d2"]);
+    expect((await runCliAt(fixture, room, ["status", "d2"], hubEnvironment)).stdout).toContain("provisional: yes");
+    expect((await runCliAt(fixture, fixture.repo, ["status", "d2"], leadEnvironment)).stdout).toContain("provisional: yes");
+
+    const linked = await runCliAt(
+      fixture,
+      room,
+      ["decide", "Use vendor A after all", "--why", "owner's word", "--work", id, "--replaces", "d2", "--json"],
+      hubEnvironment,
+    );
+    expect(phaseFree(linked.stderr)).toBe("");
+    expect(linked.exitCode).toBe(0);
+    expect((await runCliAt(fixture, room, ["status", "d2"], hubEnvironment)).stdout).not.toContain("provisional");
+    const afterLinked = await runCliAt(fixture, room, ["status"], hubEnvironment);
+    expect(afterLinked.stdout).not.toContain("provisional: d2");
+    expect(afterLinked.stdout.split("\n")).toContain("provisional: d1 none Lock SPEC section 4 as written");
+
+    const unlinked = await runCliAt(
+      fixture,
+      room,
+      ["decide", "Lock SPEC section 4 with the owner's edits", "--why", "owner's word", "--replaces", "d1", "--json"],
+      hubEnvironment,
+    );
+    expect(phaseFree(unlinked.stderr)).toBe("");
+    expect(unlinked.exitCode).toBe(0);
+    expect((await runCliAt(fixture, room, ["status", "d1"], hubEnvironment)).stdout).not.toContain("provisional");
+    expect((await runCliAt(fixture, room, ["status"], hubEnvironment)).stdout).not.toContain("provisional:");
+    expect(
+      envelope<{ provisionalDecisions: unknown[] }>((await runCliAt(fixture, room, ["status", "--json"], hubEnvironment)).stdout)
+        .provisionalDecisions,
+    ).toEqual([]);
+  });
+}, 40_000);
+
 // Outside the room there is one decision space and `decision show` keeps
 // exactly the behaviour it had.
 test("w736 decision show outside the room is unchanged: the project ledger answers and an unknown id is NOT_FOUND", async () => {

@@ -80,26 +80,29 @@ test("SLP v2 enforces the locked operation authority matrix without forbidden mu
 
     const forbidden: Array<{
       args: string[];
+      code: string;
       cwd: string;
       env: Record<string, string | undefined>;
       role: string;
     }> = [
-      { args: ["work", "add", "Hub team work", "--to", lead.name, "--json"], cwd: room, env: fake.env, role: "Hub Supervisor" },
-      { args: ["work", "take", data.work.id, "--json"], cwd: room, env: fake.env, role: "Hub Supervisor" },
-      { args: ["work", "return", data.work.id, "hub return", "--json"], cwd: room, env: fake.env, role: "Hub Supervisor" },
-      { args: ["work", "accept", data.work.id, "--json"], cwd: room, env: fake.env, role: "Hub Supervisor" },
-      { args: ["team", "stop", data.team.teamId, "--json"], cwd: room, env: fake.env, role: "Hub Supervisor" },
-      { args: ["team", "start", fixture.repo, "Lead cannot start", "--json"], cwd: fixture.repo, env: leadEnvironment, role: "Lead" },
-      { args: ["team", "stop", data.team.teamId, "--json"], cwd: fixture.repo, env: leadEnvironment, role: "Lead" },
-      { args: ["team", "start", fixture.repo, "Peer cannot start", "--json"], cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
-      { args: ["team", "stop", data.team.teamId, "--json"], cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
-      { args: ["work", "add", "Peer cannot add", "--to", "peer-other", "--json"], cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
-      { args: ["work", "accept", peerData.work.id, "--json"], cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
-      { args: ["decide", "Peer cannot decide", "--why", "no authority", "--json"], cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
+      { args: ["work", "add", "Hub team work", "--to", lead.name, "--json"], code: "ROLE_FORBIDDEN", cwd: room, env: fake.env, role: "Hub Supervisor" },
+      { args: ["work", "take", data.work.id, "--json"], code: "NO_ACTIVE_TEAM", cwd: room, env: fake.env, role: "Hub Supervisor" },
+      { args: ["work", "return", data.work.id, "hub return", "--json"], code: "NO_ACTIVE_TEAM", cwd: room, env: fake.env, role: "Hub Supervisor" },
+      // The Hub reviews the Lead and may stop the team, so these two are refused on the item's state, not on role.
+      { args: ["work", "accept", data.work.id, "--json"], code: "INVALID_STATE", cwd: room, env: fake.env, role: "Hub Supervisor" },
+      { args: ["team", "stop", data.team.teamId, "--json"], code: "TEAM_UNFINISHED", cwd: room, env: fake.env, role: "Hub Supervisor" },
+      { args: ["team", "start", fixture.repo, "Lead cannot start", "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: leadEnvironment, role: "Lead" },
+      { args: ["team", "stop", data.team.teamId, "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: leadEnvironment, role: "Lead" },
+      { args: ["team", "start", fixture.repo, "Peer cannot start", "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
+      { args: ["team", "stop", data.team.teamId, "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
+      { args: ["work", "add", "Peer cannot add", "--to", "peer-other", "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
+      { args: ["work", "accept", peerData.work.id, "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
+      { args: ["decide", "Peer cannot decide", "--why", "no authority", "--json"], code: "ROLE_FORBIDDEN", cwd: fixture.repo, env: peerEnvironment, role: "Peer" },
     ];
     for (const attempt of forbidden) {
       const result = await runCliAt(fixture, attempt.cwd, attempt.args, attempt.env);
       expect(result.exitCode, `${attempt.role}: ${attempt.args.join(" ")}`).toBe(1);
+      expect(failureEnvelope(result.stderr).error.code, `${attempt.role}: ${attempt.args.join(" ")}`).toBe(attempt.code);
     }
 
     const projectAfter = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
