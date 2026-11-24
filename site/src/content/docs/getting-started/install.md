@@ -29,9 +29,10 @@ bun bin/maestro.ts install
 ```
 
 Installation copies the runtime into `~/.maestro/runtime`, writes the shim at
-`~/.local/bin/maestro`, records the source in `~/.maestro/source.json`, wires
-the current repository, and scaffolds the Supervisor room at `~/maestro`. The
-room includes the canonical SLP Workspace Pack at `~/maestro/SLP.md`.
+`~/.local/bin/maestro`, records the source in `~/.maestro/source.json`, and
+wires the current repository. It also creates the Hub room at `~/maestro`: a
+folder with the shared method `WORKFLOW.md`, the registry of repositories that
+`maestro brief` reads, and the seven managed skills under `~/maestro/skills`.
 
 ## Verify
 
@@ -43,9 +44,8 @@ maestro doctor
 ```
 
 `maestro doctor` checks the shim, runtime stamp, recorded source, repository
-wiring, permissions, the Claude seat token, and store access. It exits zero
-when the report is healthy and names the repair command when the fix is
-mechanical.
+wiring, permissions, and store access. It exits zero when the report is
+healthy and names the repair command when the fix is mechanical.
 
 ## Update
 
@@ -63,21 +63,23 @@ without partially updating the runtime.
 maestro uninstall
 ```
 
-Uninstall removes Maestro-managed hooks, settings keys, and mirror blocks from
-the current repository, the rendered `maestro-*` profile files and the Claude
-seat config dirs under `~/.maestro/claude/`. It does not delete repository
-data, the machine runtime, the shim, or the Supervisor room.
+Uninstall removes Maestro's hooks and settings keys from the current
+repository, Maestro's entries in `.maestro/config`, the Claude seat config
+dirs under `~/.maestro/claude/`, and the Herdr plugin link. It does not delete
+repository data, the machine runtime, the shim, or the Hub room. To drop a
+repository from the Hub registry only, run `maestro room forget <path>`.
 
-## Install Herdr for SLP
+## Install Herdr for teams
 
-Team Supervisor, Lead, Peer, and the runtime pane require Herdr 0.8.2 or newer. Install
-Herdr separately:
+SLP, the team layer, is an optional plugin that is off by default. You need it
+only to run a Lead and Peers in their own panes. Its seats and its runtime
+pane need Herdr 0.8.2 or newer. Install Herdr separately:
 
 ```sh
 curl -fsSL https://herdr.dev/install.sh | sh
 ```
 
-Maestro remains the durable record. Herdr owns workspace and pane runtime,
-agent lifecycle, prompting, wake-up, and pane closure. Continue with
-[SLP setup and storage](/getting-started/slp-setup/) to start a team and see
-which data belongs to the Hub, project, and runtime.
+Maestro remains the durable record. Herdr owns the workspace, the panes,
+agent launch, prompting, and pane closure. Continue with
+[SLP setup and storage](/getting-started/slp-setup/) to enable the plugin and
+start a team.

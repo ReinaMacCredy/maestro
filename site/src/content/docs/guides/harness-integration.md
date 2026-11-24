@@ -1,14 +1,25 @@
 ---
 title: Harness integration
-description: How install wires Claude Code, Codex, managed instructions, and MCP.
+description: How install wires Claude Code and Codex, and how the session brief reaches an agent.
 ---
 
 ## Claude Code and Codex hooks
 
-`maestro install` writes managed adapters for Claude Code and Codex and merges
-only Maestro-owned hook entries. `SessionStart` and `UserPromptSubmit` record
-the session and print the current brief. No hook sends mail, starts a team,
-prompts another role, or streams pane transcript.
+`maestro install` writes hooks for Claude Code and Codex into the repository
+and merges only Maestro's own entries into each harness's settings.
+`SessionStart` and `UserPromptSubmit` record the session and print the
+current brief. No hook sends mail, starts a team, prompts another seat, or
+streams pane transcript.
+
+The brief is short. It reaches one harness process once, whichever transport
+speaks first. It names how to add and close tracked work
+(`maestro work add "<title>" --start`, `maestro work done <id> --check
+"<command>"`), the work this session holds, any attention findings, and where
+the playbooks are. Print it yourself with:
+
+```sh
+maestro brief --session
+```
 
 If a harness hook did not fire, record the start event explicitly and read the
 brief from stdout:
@@ -17,30 +28,20 @@ brief from stdout:
 maestro hook record --event SessionStart
 ```
 
-## Managed instruction blocks
+## Instruction files
 
-Install maintains a small block between `<!-- maestro:begin -->` and
-`<!-- maestro:end -->` in `AGENTS.md` and `CLAUDE.md`. It points ordinary
-repository sessions to the installed Maestro workflow and current status.
+Install adds nothing to the repository's `AGENTS.md` or `CLAUDE.md`. The shared
+method lives at `~/maestro/WORKFLOW.md`, and the brief points agents there.
 
-SLP role contracts do not live in that managed block. `team start` injects the
-shared section and one role section from the pinned project
-`.maestro/SLP.md`; normal team operation never rewrites `AGENTS.md` or
-`CLAUDE.md`.
-
-Do not edit that managed block by hand. Re-run the source checkout's installer
-when managed wiring needs to be refreshed; unrelated content outside the block
-is preserved.
+An SLP seat does not read those files either: its contract is the pinned
+project `.maestro/SLP.md` plus its seat file, rendered into the seat's own
+config dir.
 
 ## MCP transport
-
-Start the foreground stdio MCP server with:
 
 ```sh
 maestro mcp serve
 ```
 
-The server exposes exactly two meta-tools: `maestro_find` searches live verbs,
-flags, descriptions, and recipes; `maestro_run` executes one Maestro verb line
-through the normal strict command router. It is a foreground JSON-RPC transport,
-not a daemon.
+`mcp serve` is a foreground stdio MCP server that delivers the session brief
+as its initialize instructions. It offers no tools and is not a daemon.

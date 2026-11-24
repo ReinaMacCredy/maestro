@@ -1,6 +1,6 @@
 ---
 title: Recipes, skills, and plugins
-description: Load prompt-first methods and manage repository policy plugins.
+description: Read prompt-first methods and turn built-in plugins on or off.
 ---
 
 ## Recipes
@@ -18,107 +18,88 @@ maestro recipe show bug-fix
 ```
 
 Most recipes are playbooks: the numbered steps for one kind of task.
-`~/maestro/WORKFLOW.md` routes a task to its playbook (investigation,
-bug-fix, feature, refactoring, prototype, perf-issue, hillclimb, forensics,
-eval, authoring-a-skill, visual-parity, multi-phase-plan, opening-a-pr,
-babysit, shipping, unattended, figure-it-out), and the agent copies the steps
-into its plan list. The rest are methods the playbooks call (how, why,
-architect, arena, fan-out, unslop, technical-writing, benchmark-checklist,
-no-comments) and the design, audit, ship, verification-skill, learning,
-worktree, conflict-handoff, slp, and language/style recipes. Recipes are
-source-owned Markdown and are loaded only when requested. The playbooks,
-methods, and `PRINCIPLES.md` are ported from pstack (Lauren Tan, MIT).
+`~/maestro/WORKFLOW.md` names the playbook that fits each kind of task
+(investigation, bug-fix, feature, refactoring, prototype, perf-issue,
+hillclimb, forensics, eval, authoring-a-skill, visual-parity,
+multi-phase-plan, opening-a-pr, babysit, shipping, figure-it-out,
+no-comments, review). A playbook is guidance to read when one fits. The other
+recipes are `verification-skill`, `unattended`, `worktree`, `slp`, and the
+`style-<language>` guides. Recipes are source-owned Markdown and are loaded
+only when requested. The playbooks and `PRINCIPLES.md` are ported from pstack
+(Lauren Tan, MIT).
 
-SLP role behavior is not assembled from recipes or a skills tree. Its
-canonical contract is `~/maestro/SLP.md`, pinned into the project at team
-start.
+The `review` recipe has one reviewer check a frozen diff over several rounds
+against the repository's `REVIEW.md`, which names the rounds, the tags
+`important`, `nit` and `pre-existing`, and a reliability checklist.
+
+SLP seat behavior is not assembled from recipes or skills. Its contract is
+`~/maestro/SLP.md`, pinned into the project at team start.
 
 ## Skills
 
-Install materializes nine managed method skills under `~/maestro/skills/`
-and the shared method at `~/maestro/WORKFLOW.md`, with `PRINCIPLES.md` and
-`ANTI_PATTERN.md` beside it:
+Install writes seven managed skills under `~/maestro/skills/` and the shared
+method at `~/maestro/WORKFLOW.md`, with `PRINCIPLES.md` and `ANTI_PATTERN.md`
+beside it:
 
 - `maestro-bundle` chooses direct work or a durable SPEC/NOTES/VERIFY bundle.
 - `maestro-design` settles one fork at a time and records locked decisions.
 - `maestro-work` holds the contract every playbook shares: the brief a
-  writer receives, its writing rules, the handback, and the store record.
-- `maestro-verify` checks evidence layers and controls close and delivery gates.
-- `maestro-improve` turns filed lessons into the smallest doctrine edit; the
-  loop around it is in [Self-improvement](/guides/self-improvement/).
+  writer receives, its writing rules, what it hands back, and the store
+  record.
+- `maestro-verify` checks evidence layers and controls close and delivery
+  gates.
+- `maestro-council` is a short procedure a leading session (a team's Lead, or
+  a plain session outside a team) runs by hand with ordinary sub-agents on a
+  hard-to-reverse fork. It records one binding verdict with its dissent.
 - `maestro-coach` re-pitches a fork the user did not follow, or teaches the
   concept behind a recorded decision.
 - `maestro-questionnaire` turns a decision someone else owns into a Markdown
   questionnaire for that person.
-- `maestro-council` runs a Lead-only council on a hard-to-reverse fork and
-  records one binding verdict with its dissent.
-- `maestro-graph` drives a pre-known multi-agent path (a review gate, a
-  research sweep, a judge panel) as a graph file both harnesses execute
-  identically, and carries the reference for authoring a new graph.
 
-The installer links these skills for Claude without overwriting an unmanaged
-skill. Team coordination comes from the pinned Workspace Pack and direct role
-topology rather than a coordination skill.
+The installer links these skills for Claude and Codex without overwriting a
+skill Maestro does not manage. Delegation uses the harness's own agent types
+with a written brief and the model named in the call; Maestro ships no agent
+definitions of its own.
 
 ## Plugins
 
 ```sh
 maestro plugin list
+maestro plugin enable <name>
+maestro plugin disable <name>
 ```
 
-Maestro is also a Herdr plugin. `maestro install` renders
-`~/maestro/herdr-plugin.toml` (plugin id `maestro`, the installed binary, the
-`runtime` pane, the `slp restore` startup hook and the `pane.exited` and
-`pane.closed` event hooks) and links the Hub room as that plugin over the
-Herdr socket, once, so Herdr runs the hooks from the room; `maestro uninstall`
-removes the link and the file. A `team start` whose runtime pane does not
-open fails with `RUNTIME_PANE_FAILED` naming `maestro install`.
+Every plugin ships with Maestro. `plugin list` shows each one and whether it
+is active. The policy plugins add gates:
 
-Plugins can be built in, global, or repository-local. The `plugin` verb can add,
-create, trust, enable, disable, or remove managed plugins. Policies remain
-plugins so their gates can be removed without changing the mechanism kernel.
+| Plugin | Default | What it does |
+| --- | --- | --- |
+| `policy-proof` | on | `work done` needs `--check`, `--evidence`, or paired `--claim` and `--proof`. |
+| `policy-breakdown` | on | A card whose write-like children are still open cannot be started or finished. |
+| `policy-card-budget` | off | `work add` is refused while the store holds a set number (default 3) of open cards with no live holder. |
+| `policy-auto-pr` | off | Grants delivery: the deliver step commits, pushes the branch and opens a PR. Merge, tag and release stay the owner's. |
 
-### Trust
+SLP, the team layer, is the plugin `slp` and is also off by default. Enabling
+it adds the team verbs and links the Hub room to Herdr as the plugin
+`maestro`. `maestro install` renders `~/maestro/herdr-plugin.toml`, which
+declares the team's `runtime` pane and the `slp restore` startup hook, and
+links it over the Herdr socket; `maestro uninstall` removes the link and the
+file. See [SLP setup and storage](/getting-started/slp-setup/).
 
-Built-in plugins ship with Maestro and always load. A global or
-repository-local plugin is code that arrived from somewhere else, so it executes
-only after you vouch for it:
-
-```sh
-maestro plugin list          # untrusted plugins are named, never imported
-maestro plugin trust <name>  # after reading the source it names
-```
-
-The grant lives in `~/.maestro/trust.json`, which no repository can write, and
-is keyed to the plugin's location and a digest of every file in it. Editing the
-plugin, pulling a change into it, or swapping one of its files revokes the grant
-and Maestro stops loading it until you trust it again. So that the digest covers
-everything the plugin runs, a trusted plugin may only import local paths the
-digest covers; an import reaching outside it is refused and the plugin is listed
-as an error instead of loading. Enabling a plugin is a
-separate statement and never confers trust: a cloned repository can ship its own
-`.maestro/config`, so if `enable` could vouch for code, the repository could
-vouch for itself.
+Use `maestro plugin enable <name>` or `maestro plugin disable <name>` rather
+than editing `.maestro/config` by hand, so the plugin owns its setup and
+teardown.
 
 ## Repository configuration
 
 `.maestro/config` is JSON. Each entry names a plugin and sets its disabled
-state:
+state. `maestro install` writes the two default gates:
 
 ```json
 {
   "plugins": [
     { "name": "policy-proof", "disabled": false },
-    { "name": "policy-breakdown", "disabled": false },
-    { "name": "policy-tdd", "disabled": true },
-    { "name": "policy-qa", "disabled": true },
-    { "name": "policy-research", "disabled": true },
-    { "name": "policy-witness", "disabled": true },
-    { "name": "policy-layer", "disabled": true },
-    { "name": "policy-lifecycle", "disabled": true }
+    { "name": "policy-breakdown", "disabled": false }
   ]
 }
 ```
-
-Use `maestro plugin enable <name>` or `maestro plugin disable <name>` so the
-plugin owns setup and teardown rather than editing generated effects by hand.

@@ -127,7 +127,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   const combined = [setup, guide, roles, lanes, readOnlyMode, scenarios, reference].join("\n");
 
   for (const command of slpOperations) expect(combined).toContain(command);
-  expect(guide).toContain("there is no Observer, Advisor, scheduler, health or reconcile");
+  expect(guide).toContain("No model watches the team.");
   expect(guide).toContain("## Runtime pane");
   expect(guide).toContain("It is not an agent");
   expect(guide).toContain("deleted at stop.");

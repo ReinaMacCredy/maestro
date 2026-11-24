@@ -1,38 +1,39 @@
 ---
 title: Maestro
-description: Durable coordination for direct, supervised AI teams.
+description: A local record of work, decisions, and proof for people and coding agents.
 template: splash
 hero:
-  tagline: One Workspace Pack, four roles, nine operations, and project-owned work.
+  tagline: Track work, record decisions, and close each card with proof, in a store that lives in your repository.
   actions:
     - text: Install Maestro
       link: /getting-started/install/
       icon: right-arrow
-    - text: Set up SLP
-      link: /getting-started/slp-setup/
+    - text: Quick start
+      link: /getting-started/quick-start/
       variant: minimal
 ---
 
-Maestro separates durable coordination from live team conversation. It stores
-work, decisions, lifecycle and minimal activity in each owning store, while
-Herdr provides the running workspace and panes.
+Maestro keeps a small, durable record next to your code. Each repository gets
+a SQLite store under `.maestro/` that holds work items, decisions, sessions,
+and the proof each item was closed with. Agents in Claude Code and Codex read
+and write it through one command, `maestro`.
 
-## SLP v2 at a glance
+## At a glance
 
-- Four roles: Hub Supervisor, Team Supervisor, Lead and Peer.
-- Direct Team Supervisor, Lead and Peer conversation; the supported Hub flow
-  speaks only through Team Supervisor.
-- Nine public SLP operations.
-- One work lifecycle: `OPEN → ACTIVE → RETURNED → DONE`.
-- One canonical `~/maestro/SLP.md`, pinned into each project generation.
-- One runtime pane per generation that turns Herdr pane events into attention, with no model judging.
-- Every seat launches as a native harness profile (`claude --agent
-  maestro-<name>`, `codex --profile maestro-<name>`) rendered by
-  `maestro install`; attention is the seat's own `work note --blocked` plus
-  the runtime pane's nudges.
-- A pre-known multi-agent path (a review gate, a fix loop, a council) is one
-  [graph](/guides/graphs/) file that both harnesses drive identically.
+- A work item (a card) is one bounded task. `maestro work add "<title>"
+  --start` creates and claims it, and `maestro work done <id> --check
+  "<command>"` closes it with the result of a command Maestro runs.
+- `maestro work list` shows what is open, who holds it, and what blocks it.
+- `maestro decision add "<text>" --rationale "<why>"` records a settled
+  choice in one command.
+- A bundle (`SPEC.md`, `NOTES.md`, `VERIFY.md`) carries large or risky work
+  across sessions and archives itself when its last card is done.
+- Recipes and skills are methods in Markdown that agents read on demand.
+- SLP, the optional team layer, runs a Lead and its Peers as separate agent
+  sessions in panes of Herdr, a terminal workspace for agents, under your Hub
+  agent. It is a plugin that is off by default.
 
-Start with [SLP setup and storage](/getting-started/slp-setup/), then read
-[Roles](/concepts/roles/), [Team collaboration](/concepts/lanes/), the
-[SLP scenarios](/guides/slp-scenarios/), and [Graphs](/guides/graphs/).
+Start with [Install](/getting-started/install/) and the
+[Quick start](/getting-started/quick-start/), then read
+[Work, decisions, and evidence](/concepts/work-decisions-evidence/). For
+teams, read [SLP setup and storage](/getting-started/slp-setup/).

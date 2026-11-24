@@ -10,39 +10,27 @@ Repository configuration is JSON with a `plugins` array. Each item has a plugin
 policy defaults; `maestro plugin enable <name>` and `maestro plugin disable
 <name>` own lifecycle changes.
 
-This file lives inside the repository, so it states policy only and can never
-grant trust. Whether an external plugin may execute at all is recorded in
-`~/.maestro/trust.json` by `maestro plugin trust`.
-
 The default policy state is:
 
 | Plugin | State |
 | --- | --- |
 | `policy-proof` | enabled |
 | `policy-breakdown` | enabled |
-| `policy-tdd` | disabled |
-| `policy-qa` | disabled |
-| `policy-research` | disabled |
-| `policy-witness` | disabled |
-| `policy-layer` | disabled |
-| `policy-lifecycle` | disabled |
+| `policy-card-budget` | disabled |
+| `policy-auto-pr` | disabled |
 
-`policy-auto-pr` also ships disabled and install does not write it. Enabling
-it is the repository's delivery grant: the deliver step commits, pushes the
-branch and opens a PR (`maestro recipe show opening-a-pr`); merge, tag and
-release stay the owner's.
+Install writes only the two enabled entries. Enabling `policy-auto-pr` is the
+repository's delivery grant: the deliver step commits, pushes the branch and
+opens a PR (`maestro recipe show opening-a-pr`); merge, tag and release stay
+the owner's. The SLP team plugin, `slp`, is also disabled until you enable it.
 
 Policy also has a machine layer, `~/.maestro/config`, with the same shape.
 The loader reads it before the repository file, and a repository entry wins
 for the same plugin name. `maestro install` never writes the machine layer.
-The Hub room (`~/maestro`) carries no `.maestro/config`, so it runs the
-built-in defaults; those match the table above except `policy-lifecycle`,
-which is enabled there and defines no gates.
 
 ## Environment variables read by `src/`
 
-The source inventory was generated with the repository's required exhaustive
-search:
+The source inventory comes from an exhaustive search:
 
 ```sh
 rg -o 'process\.env\.[A-Z_]+' src/ | sort -u
@@ -50,12 +38,13 @@ rg -o 'process\.env\.[A-Z_]+' src/ | sort -u
 
 | Variable | Runtime use |
 | --- | --- |
-| `HOME` | Resolve user-level runtime, source, plugin, room, and registry paths. |
+| `HOME` | Resolve user-level runtime, source, room, and registry paths. |
 | `PATH` | Locate installed tools and the shim directory. |
 | `SHELL` | Choose `.zshrc` or `.bashrc` for the one managed source line. |
 | `MAESTRO_READ_ONLY` | With value `1`, enable fail-closed read-only mode. |
 | `MAESTRO_AUTO_UPDATE` | With value `0`, suppress the source/runtime drift advisory. |
 | `MAESTRO_INSTALL_REEXEC` | Internal guard for installer re-execution after runtime sync. |
+| `MAESTRO_ROOM_SCAFFOLD` | Internal guard that lets only the installer run `room mark`. |
 | `MAESTRO_SESSION_ID` | Explicit Maestro session identity, highest precedence. |
 | `MAESTRO_SESSION_PID` | Explicit positive host PID for session liveness. |
 | `MAESTRO_SESSION_NONE` | With value `1`, disable session persistence for a process. |
@@ -63,6 +52,7 @@ rg -o 'process\.env\.[A-Z_]+' src/ | sort -u
 | `CLAUDE_CODE_SESSION_ID`, `CLAUDE_SESSION_ID` | Claude session identity candidates. |
 | `CURSOR_SESSION_ID` | Cursor session identity candidate. |
 | `CODEX_CI`, `CODEX_SHELL` | Signals used to classify an otherwise unnamed session as Codex. |
+| `HERDR_PANE_ID` | The Herdr pane an SLP command runs from, read to prove its seat. |
 
 The curl installer also reads `MAESTRO_SOURCE_DIR` and `MAESTRO_REF`; those
 variables live in `scripts/install.sh`, not under `src/`.
@@ -75,23 +65,23 @@ variables live in `scripts/install.sh`, not under `src/`.
 | `~/.maestro/source.json` | Recorded source checkout metadata. |
 | `~/.maestro/runtime/` | Installed TypeScript runtime and install stamp. |
 | `~/.local/bin/maestro` | Bun shim that loads the installed runtime. |
-| `~/maestro/` | Supervisor room. |
-| `~/maestro/SLP.md` | Canonical SLP v2 Workspace Pack and model defaults. |
-| `~/maestro/.maestro/maestro.db` | Supervisor room store. |
+| `~/maestro/` | The Hub room. |
+| `~/maestro/WORKFLOW.md` | The shared method every repository's agents read. |
+| `~/maestro/.maestro/maestro.db` | Hub room store. |
 | `~/maestro/registry` | Registered repository paths read by `maestro brief`. |
-| `~/maestro/skills/` | The four managed Maestro method skills. |
+| `~/maestro/skills/` | The seven managed Maestro skills. |
 | `~/maestro/shellrc` | Maestro-owned shell functions sourced by one managed rc line. |
+| `~/maestro/SLP.md` | The SLP Workspace Pack, used when the `slp` plugin is enabled. |
 | `<git-common-root>/.maestro/maestro.db` | Repository store shared by linked worktrees. |
-| `<project>/.maestro/SLP.md` | Pinned managed Workspace Pack snapshot for the current or most recent team generation. |
+| `<project>/.maestro/SLP.md` | Pinned copy of the Workspace Pack for the current or most recent team generation. |
 
 ## SLP data ownership
 
-The Hub store records team identity, project path, generation, pinned pack
-identity, role bindings, lifecycle and minimal activity. The project store
-records local team binding, work, notes, returns, acceptances, decisions and
-minimal activity.
+With the `slp` plugin enabled, the Hub store records team identity, project
+path, generation, pinned pack identity, seat bindings, lifecycle and minimal
+activity. The project store records the local team binding, work, notes,
+returns, acceptances, decisions and minimal activity.
 
 Herdr owns the live workspace and panes. The runtime pane's lock and queue
-state are temporary and are deleted at team stop; they have no archive or
-evidence location. See
+state are temporary and are deleted at team stop. See
 [SLP setup and storage](/getting-started/slp-setup/) for the complete map.

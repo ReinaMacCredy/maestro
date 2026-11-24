@@ -1,201 +1,180 @@
 ---
 title: SLP scenarios
-description: Eight end-to-end SLP v2 journeys from team start through work, decisions, rework, blocked work, and stop.
+description: Six SLP journeys written from the owner's seat, from enabling the plugin through hand-offs, questions, rework, and stop.
 ---
 
-These scenarios show what each role records. Team conversation itself remains
-natural and direct; commands appear only where material state changes.
+Each scenario starts with what you type to your Hub agent, the agent session
+you run in `~/maestro`. The commands below it are what the agents run and what
+the store then holds. You never have to type them yourself. The scenarios
+follow one team from start to stop.
 
-## 1. Start one project team
+## 1. Turn on teams and start one
 
-From the Hub room, the Hub Supervisor starts the project with one objective:
+You type to your Hub agent:
+
+```text
+enable teams for ~/Code/example and start a team to fix the CSV import that drops the last column, with a regression test
+```
+
+The Hub agent enables the plugin in the room, then starts the team. `team
+start` enables the plugin in the project itself:
 
 ```sh
 cd ~/maestro
-maestro team start ~/Code/example "Ship the validated import fix"
+maestro plugin enable slp
+maestro team start ~/Code/example "Fix the CSV import that drops the last column and add a regression test; done when both pass with the full suite"
 ```
 
-Maestro pins `~/maestro/SLP.md` into the project, opens Team Supervisor and
-Lead, and creates initial `OPEN` work assigned to Lead. There is no second
-readiness sequence.
-
-Read the returned team and work identifiers rather than assuming them:
+Maestro pins `~/maestro/SLP.md` into the project, opens the Lead and the
+runtime pane, and creates the first `OPEN` item, `w1`, for the Lead. The Hub
+agent reads the team and item ids back instead of guessing them:
 
 ```sh
 maestro status
 ```
 
-## 2. Lead executes the initial work
+## 2. The Lead hands a piece to a Peer
 
-In the Lead pane:
+You type:
+
+```text
+how is the CSV team doing?
+```
+
+The Hub agent answers from `maestro status`. Meanwhile the Lead has taken its
+item and opened a Peer for the test, a bounded piece that can run beside its
+own fix:
 
 ```sh
 maestro work take w1
-maestro work note w1 "reproduced: empty CSV loses the final column"
-maestro work return w1 "fixed CSV termination; source: focused test and full suite pass; residual risk: none"
+maestro work add "Add a regression test for a CSV file without a final newline; done when it fails before the fix and passes after" --to peer-csv
 ```
 
-The Team Supervisor reads the current work and accepts it:
-
-```sh
-maestro status w1
-maestro work accept w1
-```
-
-The separation is intentional: Lead owns the technical result; Team
-Supervisor owns acceptance of Lead work.
-
-## 3. Lead assigns bounded work to a Peer
-
-The Lead creates the assignment and names the Peer:
-
-```sh
-maestro work add "Add the missing CSV regression test" --to peer-csv
-```
-
-Maestro reuses `peer-csv` if it already belongs to this generation, otherwise
-it opens the Peer with the generation's pinned Peer contract. The Peer then
-runs only the normal work lifecycle:
+Maestro opens `peer-csv` with the pinned Peer seat file and wakes it. The Peer
+runs the normal cycle, and the Lead reviews and accepts:
 
 ```sh
 maestro work take w2
-maestro work return w2 "added the failing case and verified it passes with the fix; source: focused test"
-```
-
-The Lead reviews and accepts:
-
-```sh
+maestro work return w2 "added the case; proof: fails on the parent commit, passes on 3f2a1c0"
 maestro status w2
 maestro work accept w2
 ```
 
-There is no separate Peer lifecycle, assignment envelope or return packet.
+## 3. The Lead is blocked and asks you
 
-## 4. A Peer is blocked
-
-A blocker is part of the return body, not a fifth state:
-
-```sh
-maestro work return w3 "blocked: fixture format is undecided; proof: both current fixtures are accepted; need: choose canonical format"
-```
-
-The Lead resolves the missing fact through conversation, records the material
-change, and asks the same Peer to continue:
+A question reaches you without your asking. The Lead found a fact it cannot
+settle:
 
 ```sh
-maestro work note w3 "canonical fixture format is UTF-8 CSV with LF endings" --rework
+maestro work note w1 "the fixtures disagree on the canonical format; need: UTF-8 with LF, or keep both" --blocked
 ```
 
-The Peer retakes the returned work:
+The Hub agent's `maestro status` now lists
+`blocked for the Hub: example:w1 ...`. If the choice is one the Hub may make,
+it makes it. If it is yours, the Hub agent asks you, and you type:
+
+```text
+use UTF-8 with LF everywhere
+```
+
+The Hub agent records your answer as a decision on the item, which wakes the
+Lead with a `DECIDED` line:
 
 ```sh
-maestro work take w3
-maestro work return w3 "implemented against the recorded format; source: fixture tests pass"
+maestro decide "Canonical fixture format is UTF-8 with LF" --why "owner ruling" --work example:w1 --scope owner
 ```
 
-## 5. Returned work needs rework
+Had the Lead gone quiet instead of asking, the runtime pane would have recorded
+a `stall:silence` entry on `w1` and pushed a nudge to the Lead's pane telling
+it to record a `--blocked` note, with a copy to the Hub.
 
-The reviewer does not create a reopen state. It records the exact gap:
+## 4. You type straight into the Lead's pane
+
+You type into the Lead's pane rather than the Hub's:
+
+```text
+also log the row count after each import
+```
+
+The Lead records where the instruction came from before acting:
 
 ```sh
-maestro work note w4 "add the Windows line-ending case before acceptance" --rework
+maestro work note w1 "owner asked: log the row count after each import" --owner
 ```
 
-The assignee retakes `RETURNED` work, returns the new result, and the reviewer
-accepts only after the gap is closed.
+The note pushes an `OWNER` line to the Hub. The request is inside the item's
+objective, so the Lead does it at once. A request outside the objective would
+not widen the item; the Lead would open new work for it instead.
+
+## 5. The Lead returns and you ask for one more pass
+
+The Lead returns its item, which wakes the Hub agent:
 
 ```sh
-maestro work take w4
-maestro work return w4 "added CRLF coverage; source: focused matrix passes"
-maestro work accept w4
+maestro work return w1 "fixed CSV termination, logged row counts; proof: focused test and full suite pass on 3f2a1c0; residual risk: CRLF files untested"
 ```
 
-## 6. Blind design with independent Peers
+The Hub agent tells you the item is ready and names the residual risk. You
+type:
 
-Blind design is a collaboration pattern owned by Lead. It adds no council or
-seal state.
+```text
+the fix must also handle Windows line endings before you accept it
+```
+
+The Hub agent records the gap as a rework grant instead of accepting:
 
 ```sh
-maestro work add "Independently design session incarnation identity" --to peer-incarnation
-maestro work add "Independently design session incarnation identity" --to peer-heartbeat
+maestro work note w1 "handle CRLF line endings before acceptance" --rework
 ```
 
-Lead asks both Peers not to share views until both have returned. Each Peer
-takes and returns its own work normally. After both returns are visible, Lead
-compares them and records one settled decision:
+The Lead retakes the same item and returns again, and the Hub agent accepts
+once the gap is closed:
 
 ```sh
-maestro decide "Use a process start-time incarnation with the PID" \
-  --why "It rejects PID reuse without introducing a background writer" \
-  --work w5
+maestro work take w1
+maestro work return w1 "added CRLF handling; proof: focused matrix and full suite pass on 9b04e7d"
+maestro work accept w1
 ```
 
-Implementation is new work after the decision, never a silent extension of a
-design assignment.
+## 6. Stop the team
 
-## 7. The runtime pane, status, and stop
+You type:
 
-`team start` opened one runtime pane beside the Team Supervisor; it renders
-the team's pane output on every Herdr event and records stalls and pane loss
-as the actor `runtime`. It never takes, returns, accepts or decides.
+```text
+the CSV work is finished; stop the team
+```
 
-Use status for authoritative current state:
+The Hub agent checks that every item is `DONE` and stops the team with a
+closing report:
 
 ```sh
 maestro status
-maestro status w5
+maestro team stop example --reason "CSV import fixed with LF fixtures, CRLF handling and a regression test"
 ```
 
-Normal stop succeeds only after all work is `DONE`:
+Maestro closes the Peers, the Lead, the runtime pane and its directory, then
+the workspace. The team is `STOPPED` only once the workspace is gone; a
+partial close stays `RUNNING` and the same command resumes cleanup. The
+project's pack copy and all records remain.
 
-```sh
-maestro team stop example
+If you want to drop the work instead, you type:
+
+```text
+cancel the CSV team, I changed my mind
 ```
 
-Maestro closes Peers, Lead, the runtime pane and its directory, then Team Supervisor.
-A transient foreground non-agent helper pane in the Hub completes the
-self-closing sequence. Only a fully absent team workspace becomes `STOPPED`;
-a partial close stays `RUNNING` and the same stop command resumes cleanup. The
-project Workspace Pack snapshot and durable records remain. Emergency stop is
-Hub authority and explicitly abandons unfinished work in its current state:
+The Hub agent runs an emergency stop, which keeps each unfinished item in its
+current state and marks it abandoned with actor, reason, generation, and time:
 
 ```sh
 cd ~/maestro
 maestro team stop example --emergency --reason "owner cancelled this generation"
 ```
 
-Each unfinished record gains abandonment actor, reason, generation, and time;
-the next generation cannot inherit or mutate it.
-
-## 8. The Lead cannot proceed
-
-The owner started the team, gave the Lead an objective whose first step fails,
-and walked away. The Lead's profile tells it what to do when it cannot
-proceed: declare it, do not loop. The Lead records what it needs:
-
-```sh
-maestro work note w1 "flaky.sh never exits 0 here; need: a reachable mirror or permission to stop retrying" --blocked
-```
-
-The Team Supervisor receives `[from lead][w1 BLOCKED] ...; read: maestro status w1`
-and either settles the fact through conversation and a note, or escalates to
-the Hub with its own `--blocked` note. Had the Lead looped instead of
-declaring, the runtime pane would have caught what it can see (Hub d97): a
-pane waiting on a harness dialog is `blocked` to Herdr and becomes a
-`stall:dialog` entry with the nudge `[from runtime][w1] dialog ...; stop and
-run: maestro work note w1 "<what you need>" --blocked` in the Lead pane and a
-copy in the Team Supervisor pane; a Lead that goes idle while still holding
-w1 gets `stall:silence` the same way, once until the store changes.
-`work note --stall` stays refused for every pane; only the runtime records a
-stall.
-
 ## What not to do
 
-- Do not edit either SQLite store manually.
-- Do not edit `<project>/.maestro/SLP.md` during a running generation.
-- Do not treat chat or transcript as a decision or acceptance record.
-- Do not let a Peer accept its own work.
-- Do not send Hub instructions directly to Lead or Peers; Hub speaks through
-  Team Supervisor.
-- Do not recreate removed lifecycle layers. The compact old-to-new mapping is
-  in the [CLI reference](/reference/cli/).
+- Do not edit either SQLite store by hand.
+- Do not edit `<project>/.maestro/SLP.md` or a seat file while a generation is running.
+- Do not treat chat or a pane transcript as a decision or an acceptance.
+- Do not let anyone accept their own work.
+- Do not send Hub instructions to a Peer; the Hub speaks to the Lead.

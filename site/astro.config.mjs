@@ -73,37 +73,34 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'index' },
             { label: 'Install', slug: 'getting-started/install' },
-            { label: 'SLP setup and storage', slug: 'getting-started/slp-setup' },
             { label: 'Quick start', slug: 'getting-started/quick-start' },
+            { label: 'SLP setup and storage', slug: 'getting-started/slp-setup' },
           ],
         },
         {
           label: 'Concepts',
           items: [
             { label: 'Three layers', slug: 'concepts/three-layers' },
-            { label: 'Roles', slug: 'concepts/roles' },
-            { label: 'Team collaboration', slug: 'concepts/lanes' },
             {
               label: 'Work, decisions, and evidence',
               slug: 'concepts/work-decisions-evidence',
             },
+            { label: 'Roles', slug: 'concepts/roles' },
+            { label: 'Team collaboration', slug: 'concepts/lanes' },
           ],
         },
         {
           label: 'Guides',
           items: [
-            { label: 'SLP scenarios', slug: 'guides/slp-scenarios' },
-            { label: 'Supervised teams', slug: 'guides/supervised-teams' },
-            { label: 'Self-improvement', slug: 'guides/self-improvement' },
-            { label: 'Attention and brief', slug: 'guides/attention-and-brief' },
-            { label: 'Graphs', slug: 'guides/graphs' },
-            { label: 'Read-only mode', slug: 'guides/read-only-mode' },
-            { label: 'Harness integration', slug: 'guides/harness-integration' },
             {
               label: 'Recipes, skills, and plugins',
               slug: 'guides/recipes-skills-plugins',
             },
-            { label: 'Import Rust data', slug: 'guides/import-rust-data' },
+            { label: 'Attention and brief', slug: 'guides/attention-and-brief' },
+            { label: 'Read-only mode', slug: 'guides/read-only-mode' },
+            { label: 'Harness integration', slug: 'guides/harness-integration' },
+            { label: 'Supervised teams', slug: 'guides/supervised-teams' },
+            { label: 'SLP scenarios', slug: 'guides/slp-scenarios' },
           ],
         },
         {
