@@ -237,7 +237,7 @@ test("259 supervisor start is absent and returns the ordinary UNKNOWN_VERB error
   });
 });
 
-test("260 every exported attention kind has an independent read-only detection scenario", async () => {
+test("260 attention raises only its three kinds, even from a store that would have fed the retired five (d882, d892)", async () => {
   await withFixture(async (fixture) => {
     const stalled = await addWork(fixture, "stalled lane");
     await startWork(fixture, stalled, "stalled-holder");
@@ -268,14 +268,11 @@ test("260 every exported attention kind has an independent read-only detection s
     );
 
     const reviewWork = await addWork(fixture, "locked decision due for review");
-    const reviewAt = new Date(Date.now() - 60_000).toISOString();
     const reviewDecision = idFrom(
       await runCli(fixture, [
         "decision",
         "draft",
         "revisit the accepted boundary",
-        "--review-at",
-        reviewAt,
         "--work",
         reviewWork,
       ]),
@@ -317,6 +314,9 @@ test("260 every exported attention kind has an independent read-only detection s
       database
         .query("UPDATE decisions SET created_at = ? WHERE id = ?")
         .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
+      database
+        .query("UPDATE decisions SET review_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 60_000).toISOString(), reviewDecision);
     } finally {
       database.close();
     }
@@ -340,28 +340,18 @@ test("260 every exported attention kind has an independent read-only detection s
       };
     }).data.detections;
     const expectedSubjects = {
-      DECISION_REVIEW_DUE: reviewWork,
-      DECISION_STALE: decisionWork,
       HUMAN_DECISION_REQUIRED: decisionWork,
-      LEAD_COLLISION: stalled,
       REPEATED_FAILURE: repeated,
-      SCOPE_COLLISION: collisionA,
       LESSONS_PENDING: null,
-      STALLED_LEASE: stalled,
     } satisfies Record<AttentionKind, string | null>;
     const expectedPacketHeads = {
-      DECISION_REVIEW_DUE: `attention DECISION_REVIEW_DUE decision ${reviewDecision}`,
-      DECISION_STALE: `attention DECISION_STALE decision ${decision}`,
       HUMAN_DECISION_REQUIRED: `attention HUMAN_DECISION_REQUIRED decision ${decision}`,
-      LEAD_COLLISION: `attention LEAD_COLLISION work ${stalled},${repeated}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
-      SCOPE_COLLISION: `attention SCOPE_COLLISION work ${collisionA},${collisionB}`,
       // room d129 point 2: this kind replaces the "<subject kind> <subject>"
       // tail with the count, the oldest id and its age, plus the action.
       LESSONS_PENDING: "attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days); " +
         "next: open an improver generation on repo at the next generation boundary: " +
         "maestro team start <repo checkout> \"<objective>\" --lead-only",
-      STALLED_LEASE: `attention STALLED_LEASE work ${stalled}`,
     } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();
     const after = openDatabase(fixture);
@@ -371,7 +361,7 @@ test("260 every exported attention kind has an independent read-only detection s
         .get()?.count;
 
       expect(attention.exitCode).toBe(0);
-      expect(observedKinds).toEqual(Object.keys(expectedSubjects).sort());
+      expect(observedKinds).toEqual(["HUMAN_DECISION_REQUIRED", "LESSONS_PENDING", "REPEATED_FAILURE"]);
       for (const [kind, subjectWork] of Object.entries(expectedSubjects)) {
         expect(detections).toContainEqual(expect.objectContaining({ kind, subjectWork }));
         expect(detections.find((detection) => detection.kind === kind)?.packet.split("\n")[0])
@@ -384,6 +374,11 @@ test("260 every exported attention kind has an independent read-only detection s
       expect(attentionRows).toBe(0);
     } finally {
       after.close();
+    }
+    for (const flag of ["--stale", "--decision-stale"]) {
+      const refused = await runCli(fixture, ["attention", flag, "30"]);
+      expect(refused.exitCode).toBe(2);
+      expect(errorFrom(refused).code).toBe("UNKNOWN_FLAG");
     }
   });
 });

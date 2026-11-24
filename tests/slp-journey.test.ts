@@ -1,4 +1,3 @@
-import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -18,17 +17,6 @@ function session(id: string, pid = process.pid): Record<string, string> {
 
 async function addWork(fixture: Fixture, title: string, extra: string[] = []): Promise<string> {
   return idFrom(await runCli(fixture, ["work", "add", title, ...extra]));
-}
-
-function backdateSession(fixture: Fixture, id: string, minutes: number): void {
-  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-  try {
-    database
-      .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
-      .run(new Date(Date.now() - minutes * 60_000).toISOString(), id);
-  } finally {
-    database.close();
-  }
 }
 
 test("160 work start declares an existing item atomic instead of forcing a duplicate", async () => {
@@ -80,57 +68,6 @@ test("162 an atomic reason on start never bypasses the open-children gate", asyn
 
     const shown = await runCli(fixture, ["work", "show", parent]);
     expect(shown.stdout).toContain("[open]");
-  });
-});
-
-test("163 [lint] a stalled-lease packet renders the durable work command", async () => {
-  await withFixture(async (fixture) => {
-    // Proves human rendering text, not structured subject identity or execution of the action.
-    const parent = await addWork(fixture, "parent scope", ["--atomic-reason", "fixture"]);
-    expect((await runCli(fixture, ["work", "start", parent], session("lead-session"))).exitCode)
-      .toBe(0);
-    const child = idFrom(
-      await runCli(fixture, ["work", "add", "child scope", "--parent", parent, "--kind", "task"]),
-    );
-    expect((await runCli(fixture, ["work", "start", child], session("subject-session", 1))).exitCode)
-      .toBe(0);
-    backdateSession(fixture, "subject-session", 45);
-
-    const attention = await runCli(fixture, ["attention"], session("scanner"));
-    expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention STALLED_LEASE work ${child}`);
-    expect(attention.stdout).toContain(`smallest action: maestro work show ${child}`);
-  });
-});
-
-test("164 a scope collision is recorded once after the overlap banner", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "parent scope", ["--atomic-reason", "fixture"]);
-    const first = idFrom(
-      await runCli(fixture, ["work", "add", "first lane", "--parent", parent, "--kind", "task"]),
-    );
-    const second = idFrom(
-      await runCli(fixture, ["work", "add", "second lane", "--parent", parent, "--kind", "task"]),
-    );
-    // The later starter is the one the work-start overlap banner warns; the
-    // earlier holder never learns that a sibling lane opened.
-    expect((await runCli(fixture, ["work", "start", first], session("early-holder"))).exitCode)
-      .toBe(0);
-    const later = await runCli(fixture, ["work", "start", second], session("late-holder"));
-    expect(later.exitCode).toBe(0);
-    expect(later.stderr).toContain("[overlap]");
-
-    const attention = await runCli(fixture, ["attention"], session("scanner"));
-    expect(attention.stdout).toContain(`attention SCOPE_COLLISION work ${first},${second}`);
-
-    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-    try {
-      expect(
-        database.query<{ count: number }, []>("SELECT count(*) AS count FROM attention").get()?.count,
-      ).toBe(1);
-    } finally {
-      database.close();
-    }
   });
 });
 

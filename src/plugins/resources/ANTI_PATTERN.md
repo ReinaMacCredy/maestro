@@ -104,8 +104,8 @@ In maestro: two threads writing the same file.
 
 evidence: the concurrency rule exists because of it - WORKFLOW.md requires that
 "concurrent threads write only disjoint, exclusively owned paths", one work
-item per tracked thread, and `attention.ts` raises a `SCOPE_COLLISION` card
-when two live sessions hold sibling work items. The
+item per tracked thread, and `work start` prints an `[overlap]` banner when
+another session holds a sibling work item. The
 0.107 Rust line shipped the same rule as the warm-file overlap banner with the
 cross-worktree active union (Hub memory,
 `project_same-branch-conflict-prevention-shipped`, 2026-06-17).

@@ -37,9 +37,7 @@ environment:
 ### maestro attention --help
 attention  Scan store state for attention packets without mutating work. *
 usage: maestro attention
-    --decision-stale <value>  Draft decision threshold in hours (default 24).
-    --json                    Emit one compact JSON success envelope.
-    --stale <value>           Stalled lease threshold in minutes (default 30).
+    --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro brief --help
@@ -123,16 +121,14 @@ subverbs:
     --needs-owner         Mark this draft as requiring an owner decision.
     --parent <value>      Attach this draft beneath a parent decision.
     --rationale <value>   Record why this decision was made.
-    --review-at <value>   Schedule review at an ISO date.
     --supersedes <value>  Supersede a locked decision with this draft.
     --work <value>        Link this draft to a work item.
   list      List decisions and their current states. *
     --json  Emit one compact JSON success envelope.
   lock      Lock a draft decision against further edits.
     usage: maestro decision lock <id>
-    --dissent <value>    Record the dissenting view.
-    --json               Emit one compact JSON success envelope.
-    --review-at <value>  Schedule review at an ISO date.
+    --dissent <value>  Record the dissenting view.
+    --json             Emit one compact JSON success envelope.
   show      Show one decision and its links; long fields wrap for a terminal. *
     usage: maestro decision show <id>
     --json  Emit one compact JSON success envelope.
@@ -156,7 +152,6 @@ usage: maestro decision draft <text-or-id> [replacement]
     --needs-owner         Mark this draft as requiring an owner decision.
     --parent <value>      Attach this draft beneath a parent decision.
     --rationale <value>   Record why this decision was made.
-    --review-at <value>   Schedule review at an ISO date.
     --supersedes <value>  Supersede a locked decision with this draft.
     --work <value>        Link this draft to a work item.
 
@@ -169,9 +164,8 @@ usage: maestro decision list
 ### maestro decision lock --help
 decision lock  Lock a draft decision against further edits.
 usage: maestro decision lock <id>
-    --dissent <value>    Record the dissenting view.
-    --json               Emit one compact JSON success envelope.
-    --review-at <value>  Schedule review at an ISO date.
+    --dissent <value>  Record the dissenting view.
+    --json             Emit one compact JSON success envelope.
 
 ### maestro decision show --help
 decision show  Show one decision and its links; long fields wrap for a terminal. *

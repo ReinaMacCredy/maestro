@@ -32,56 +32,46 @@ function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-test("390 REPEATED_FAILURE routes a Lead-held episode to the supervisor", async () => {
+test("390 a third failed pass shows in the session brief of whoever opens the repository (d892)", async () => {
   await withFixture(async (fixture) => {
-    const leadWork = idFrom(
+    const work = idFrom(
       await runCli(fixture, [
         "work",
         "add",
-        "lead failure episode",
+        "failure episode",
         "--atomic-reason",
-        "routing fixture",
+        "brief fixture",
       ]),
     );
-    const lead = session("lead-holder");
-    expect((await runCli(fixture, ["work", "start", leadWork], lead)).exitCode).toBe(0);
-    await addFailedNotes(fixture, leadWork, lead);
+    const holder = session("failing-holder");
+    expect((await runCli(fixture, ["work", "start", work], holder)).exitCode).toBe(0);
+    await addFailedNotes(fixture, work, holder);
 
-    const hook = await runCli(
-      fixture,
-      ["hook", "record", "--event", "SessionStart"],
-      session("lead-viewer"),
-    );
-    expect(hook.exitCode).toBe(0);
-    expect(hook.stdout).not.toContain(`attention REPEATED_FAILURE work ${leadWork}`);
+    for (const viewer of ["failing-holder", "another-session"]) {
+      const hook = await runCli(
+        fixture,
+        ["hook", "record", "--event", "SessionStart"],
+        session(viewer),
+      );
+      expect(hook.exitCode).toBe(0);
+      expect(hook.stdout).toContain(`attention REPEATED_FAILURE work ${work}`);
+    }
 
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
     const room = await runCli(fixture, ["brief"], { MAESTRO_READ_ONLY: "1" });
     expect(room.exitCode).toBe(0);
-    expect(room.stdout).toContain(`attention REPEATED_FAILURE work ${leadWork}`);
+    expect(room.stdout).toContain(`attention REPEATED_FAILURE work ${work}`);
 
     const attention = await runCli(fixture, ["attention", "--json"], session("scanner"));
     expect(attention.exitCode).toBe(0);
-    const findings = (JSON.parse(attention.stdout) as {
-      data: {
-        detections: Array<{
-          holderRole?: string;
-          kind: string;
-          packet: string;
-          route?: string;
-          subjectWork: string | null;
-        }>;
-      };
-    }).data.detections.filter((finding) => finding.kind === "REPEATED_FAILURE");
-    expect(findings).toContainEqual(
-      expect.objectContaining({
-        holderRole: "lead",
-        route: "supervisor",
-        subjectWork: leadWork,
-        packet: expect.stringContaining("holder role: lead"),
-      }),
-    );
+    const finding = (JSON.parse(attention.stdout) as {
+      data: { detections: Array<Record<string, unknown>> };
+    }).data.detections.find((detection) => detection.kind === "REPEATED_FAILURE");
+    expect(finding).toEqual(expect.objectContaining({ subjectWork: work }));
+    expect(finding).not.toHaveProperty("holderRole");
+    expect(finding).not.toHaveProperty("route");
+    expect(finding?.packet).not.toContain("holder role");
   });
 });
 

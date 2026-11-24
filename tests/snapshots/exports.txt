@@ -1,7 +1,6 @@
 ActiveLocalTeam
 AttentionFinding
 AttentionKind
-AttentionOptions
 AttentionRuntime
 AttentionService
 BriefService

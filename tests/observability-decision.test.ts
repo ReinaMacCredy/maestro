@@ -86,10 +86,9 @@ test("417 decision draft --needs-owner round-trips an explicit owner requirement
   });
 });
 
-test("428 decision dissent and review date round-trip through draft and lock", async () => {
+test("428 decision dissent round-trips through draft and lock, and a stored review date stays readable (d892)", async () => {
   await withFixture(async (fixture) => {
-    const draftedReview = "2026-09-01T00:00:00.000Z";
-    const lockedReview = "2027-03-01T00:00:00.000Z";
+    const storedReview = "2026-09-01T00:00:00.000Z";
     const decision = idFrom(
       await runCli(fixture, [
         "decision",
@@ -97,15 +96,28 @@ test("428 decision dissent and review date round-trip through draft and lock", a
         "adopt the reviewable boundary",
         "--dissent",
         "prefer the narrower boundary",
-        "--review-at",
-        draftedReview,
       ]),
     );
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      database.query("UPDATE decisions SET review_at = ? WHERE id = ?").run(storedReview, decision);
+    } finally {
+      database.close();
+    }
 
     const drafted = await runCli(fixture, ["decision", "show", decision]);
     expect(drafted.exitCode).toBe(0);
     expect(drafted.stdout).toContain("dissent: prefer the narrower boundary");
-    expect(drafted.stdout).toContain(`review at: ${draftedReview}`);
+    expect(drafted.stdout).toContain(`review at: ${storedReview}`);
+
+    for (const argv of [
+      ["decision", "draft", "a scheduled review", "--review-at", "2027-03-01"],
+      ["decision", "lock", decision, "--review-at", "2027-03-01"],
+    ]) {
+      const refused = await runCli(fixture, argv);
+      expect(refused.exitCode).toBe(2);
+      expect(refused.stderr).toContain('"code":"UNKNOWN_FLAG"');
+    }
 
     const locked = await runCli(fixture, [
       "decision",
@@ -113,44 +125,14 @@ test("428 decision dissent and review date round-trip through draft and lock", a
       decision,
       "--dissent",
       "retain the narrower alternative as dissent",
-      "--review-at",
-      lockedReview,
     ]);
     expect(locked.exitCode).toBe(0);
     expect(locked.stdout).toContain("dissent: retain the narrower alternative as dissent");
-    expect(locked.stdout).toContain(`review at: ${lockedReview}`);
 
     const shown = await runCli(fixture, ["decision", "show", decision]);
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain("dissent: retain the narrower alternative as dissent");
-    expect(shown.stdout).toContain(`review at: ${lockedReview}`);
-  });
-});
-
-test("429 decision review dates reject non-ISO values on draft and lock", async () => {
-  await withFixture(async (fixture) => {
-    const invalidDraft = await runCli(fixture, [
-      "decision",
-      "draft",
-      "invalid review date",
-      "--review-at",
-      "next Tuesday",
-    ]);
-    expect(invalidDraft.exitCode).not.toBe(0);
-    expect(invalidDraft.stderr).toContain('"code":"INVALID_VALUE"');
-    expect(invalidDraft.stderr).toContain("--review-at must be an ISO date");
-
-    const decision = idFrom(await runCli(fixture, ["decision", "draft", "valid draft"]));
-    const invalidLock = await runCli(fixture, [
-      "decision",
-      "lock",
-      decision,
-      "--review-at",
-      "not-a-date",
-    ]);
-    expect(invalidLock.exitCode).not.toBe(0);
-    expect(invalidLock.stderr).toContain('"code":"INVALID_VALUE"');
-    expect(invalidLock.stderr).toContain("--review-at must be an ISO date");
+    expect(shown.stdout).toContain(`review at: ${storedReview}`);
   });
 });
 
@@ -483,7 +465,7 @@ test("568 decision draft refuses the links an edit would drop (w562)", async () 
     );
     const open = idFrom(await runCli(fixture, ["decision", "draft", "the draft still open"]));
 
-    // The edit UPDATE sets text, rationale, dissent, review_at and needs_owner
+    // The edit UPDATE sets text, rationale, dissent and needs_owner
     // and nothing else, so these three were parsed and discarded in silence.
     for (const flag of [["--supersedes", target], ["--parent", parent], ["--work", work]]) {
       const refused = await runCli(fixture, [

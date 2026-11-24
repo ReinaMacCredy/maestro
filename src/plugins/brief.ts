@@ -15,7 +15,6 @@ interface AttentionEnvelope {
 interface AttentionSummary {
   kind: string;
   packet: string;
-  route?: "lead" | "supervisor";
 }
 
 interface RepoBrief {
@@ -81,14 +80,9 @@ export const briefPlugin: BuiltInPlugin = {
           const repos = await registeredRepos(process.env.HOME ?? process.cwd());
           const results = await Promise.all(repos.map(scanRepo));
           const findingLines = results.flatMap((result) =>
-            result.findings
-              .filter(
-                (finding) =>
-                  finding.kind !== "REPEATED_FAILURE" || finding.route === "supervisor",
-              )
-              .map(
-                (finding) => `${result.repo}: ${finding.packet.split("\n")[0] ?? finding.kind}`,
-              )
+            result.findings.map(
+              (finding) => `${result.repo}: ${finding.packet.split("\n")[0] ?? finding.kind}`,
+            )
           );
           const unavailableLines = results.flatMap((result) =>
             result.missing

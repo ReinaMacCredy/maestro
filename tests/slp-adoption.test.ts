@@ -74,17 +74,6 @@ async function retiredSupervisorSnapshot(fixture: Fixture) {
   };
 }
 
-function backdateSession(fixture: Fixture, id: string, minutes: number): void {
-  const database = openDatabase(fixture);
-  try {
-    database
-      .query("UPDATE sessions SET last_seen = ? WHERE id = ?")
-      .run(new Date(Date.now() - minutes * 60_000).toISOString(), id);
-  } finally {
-    database.close();
-  }
-}
-
 test("133 install materializes the dispatch, handback, dependency, and episode contracts", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
@@ -240,53 +229,6 @@ test("137 SessionStart adds only the intake line and UserPromptSubmit carries se
   });
 });
 
-test("138 attention raises and records a STALLED_LEASE packet at read time", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "parent scope");
-    await startWork(fixture, parent, "lead-session");
-    const child = await addWork(fixture, "stalled child", parent);
-    await startWork(fixture, child, "subject-session", 1);
-    backdateSession(fixture, "subject-session", 45);
-
-    const attention = await runCli(
-      fixture,
-      ["attention", "--stale", "30"],
-      session("scanner-session"),
-    );
-    expect(attention.exitCode).toBe(0);
-    for (const required of [
-      `attention STALLED_LEASE work ${child}`,
-      "  observed:",
-      "  evidence:",
-      "  unknown:",
-      "  question:",
-      `  smallest action: maestro work show ${child}`,
-      "  human decision needed: no",
-    ]) {
-      expect(attention.stdout).toContain(required);
-    }
-
-    const database = openDatabase(fixture);
-    try {
-      const row = database
-        .query<{
-          fingerprint: string;
-          packet: string;
-        }, []>("SELECT fingerprint, packet FROM attention")
-        .get();
-      const start = database
-        .query<{ id: number }, [string]>(
-          "SELECT id FROM event_log WHERE type = 'work.start' AND entity_id = ? ORDER BY id DESC LIMIT 1",
-        )
-        .get(child);
-      expect(row?.fingerprint).toBe(`stalled:${child}:${start?.id}`);
-      expect(row?.packet).toContain("unknown:");
-    } finally {
-      database.close();
-    }
-  });
-});
-
 test("139 attention records findings without delivery targets or mailbox tables", async () => {
   await withFixture(async (fixture) => {
     const retired = openDatabase(fixture);
@@ -297,23 +239,12 @@ test("139 attention records findings without delivery targets or mailbox tables"
     retired.close();
 
     const work = await addWork(fixture, "decision without recipient");
-    const decision = idFrom(
-      await runCli(fixture, ["decision", "draft", "stale without recipient", "--work", work]),
-    );
-    const database = openDatabase(fixture);
-    try {
-      database
-        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
-        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-    } finally {
-      database.close();
-    }
+    expect(
+      (await runCli(fixture, ["decision", "draft", "owner fork without recipient", "--needs-owner", "--work", work]))
+        .exitCode,
+    ).toBe(0);
 
-    const attention = await runCli(
-      fixture,
-      ["attention", "--json", "--decision-stale", "24"],
-      session("scanner-session"),
-    );
+    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
     expect(attention.exitCode).toBe(0);
     const detection = (JSON.parse(attention.stdout) as {
       data: { detections: Array<Record<string, unknown>> };
@@ -338,9 +269,12 @@ test("139 attention records findings without delivery targets or mailbox tables"
 
 test("140 attention fingerprints are one-shot and existing raises stay listed", async () => {
   await withFixture(async (fixture) => {
-    const work = await addWork(fixture, "deduplicated lease");
+    const work = await addWork(fixture, "deduplicated failure");
     await startWork(fixture, work, "subject-session");
-    backdateSession(fixture, "subject-session", 45);
+    for (const text of ["failed: first", "failed: second", "failed: third"]) {
+      expect((await runCli(fixture, ["work", "note", work, text], session("subject-session"))).exitCode)
+        .toBe(0);
+    }
 
     const first = await runCli(fixture, ["attention"], session("scanner-session"));
     const second = await runCli(fixture, ["attention"], session("scanner-session"));
@@ -406,58 +340,6 @@ test("141 attention raises REPEATED_FAILURE only for the third failed note since
   }
 });
 
-test("142 attention raises DECISION_STALE only for old drafts linked to open work", async () => {
-  await withFixture(async (fixture) => {
-    const work = await addWork(fixture, "open decision work");
-    const drafted = await runCli(fixture, ["decision", "draft", "old fork", "--work", work]);
-    const decision = idFrom(drafted);
-    const database = openDatabase(fixture);
-    try {
-      database
-        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
-        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-    } finally {
-      database.close();
-    }
-    const attention = await runCli(
-      fixture,
-      ["attention", "--decision-stale", "24"],
-      session("scanner-session"),
-    );
-    expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention DECISION_STALE decision ${decision}`);
-  });
-
-  for (const terminal of ["locked", "done"] as const) {
-    await withFixture(async (fixture) => {
-      const work = await addWork(fixture, `${terminal} decision work`);
-      const drafted = await runCli(fixture, ["decision", "draft", "old fork", "--work", work]);
-      const decision = idFrom(drafted);
-      if (terminal === "locked") {
-        await runCli(fixture, ["decision", "lock", decision]);
-      }
-      const database = openDatabase(fixture);
-      try {
-        database
-          .query("UPDATE decisions SET created_at = ? WHERE id = ?")
-          .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-        if (terminal === "done") {
-          database.query("UPDATE work SET state = 'done', held_by = NULL WHERE id = ?").run(work);
-        }
-      } finally {
-        database.close();
-      }
-      const attention = await runCli(
-        fixture,
-        ["attention", "--decision-stale", "24"],
-        session("scanner-session"),
-      );
-      expect(attention.exitCode).toBe(0);
-      expect(attention.stdout).not.toContain("DECISION_STALE");
-    });
-  }
-});
-
 test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked drafts", async () => {
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "owner decision needed");
@@ -504,7 +386,6 @@ test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked d
       expect(detections[0]?.packet).toContain(required);
     }
     expect(detections[0]?.packet).not.toContain(ordinary);
-    expect(attention.stdout).not.toContain("DECISION_STALE");
 
     const hook = await runCli(
       fixture,
@@ -516,7 +397,7 @@ test("416 attention raises HUMAN_DECISION_REQUIRED immediately only for marked d
   });
 });
 
-test("453 withdrawn drafts raise neither stale nor human-decision attention", async () => {
+test("453 withdrawn drafts raise no human-decision attention", async () => {
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "withdrawn owner decision");
     const decision = idFrom(
@@ -529,14 +410,6 @@ test("453 withdrawn drafts raise neither stale nor human-decision attention", as
         work,
       ]),
     );
-    const database = openDatabase(fixture);
-    try {
-      database
-        .query("UPDATE decisions SET created_at = ? WHERE id = ?")
-        .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-    } finally {
-      database.close();
-    }
     expect((await runCli(fixture, [
       "decision",
       "withdraw",
@@ -547,307 +420,18 @@ test("453 withdrawn drafts raise neither stale nor human-decision attention", as
 
     const attention = await runCli(
       fixture,
-      ["attention", "--json", "--decision-stale", "24"],
+      ["attention", "--json"],
       session("scanner-session"),
     );
     expect(attention.exitCode).toBe(0);
     const detections = (JSON.parse(attention.stdout) as {
       data: { detections: Array<{ kind: string; packet: string }> };
     }).data.detections;
-    for (const kind of ["DECISION_STALE", "HUMAN_DECISION_REQUIRED"]) {
-      expect(
-        detections.filter((detection) => detection.kind === kind).map((detection) => detection.packet),
-      ).not.toContainEqual(expect.stringContaining(`decision ${decision}`));
-    }
-  });
-});
-
-test("430 attention raises DECISION_REVIEW_DUE only for due locked unsuperseded decisions", async () => {
-  await withFixture(async (fixture) => {
-    const work = await addWork(fixture, "reviewable decision work");
-    const past = new Date(Date.now() - 60_000).toISOString();
-    const future = new Date(Date.now() + 60_000).toISOString();
-    const due = idFrom(
-      await runCli(fixture, [
-        "decision",
-        "draft",
-        "due review",
-        "--review-at",
-        past,
-        "--work",
-        work,
-      ]),
-    );
-    expect((await runCli(fixture, ["decision", "lock", due])).exitCode).toBe(0);
-
-    const futureDecision = idFrom(
-      await runCli(fixture, [
-        "decision",
-        "draft",
-        "future review",
-        "--review-at",
-        future,
-        "--work",
-        work,
-      ]),
-    );
-    expect((await runCli(fixture, ["decision", "lock", futureDecision])).exitCode).toBe(0);
-
-    const draft = idFrom(
-      await runCli(fixture, [
-        "decision",
-        "draft",
-        "draft review",
-        "--review-at",
-        past,
-        "--work",
-        work,
-      ]),
-    );
-    const superseded = idFrom(
-      await runCli(fixture, [
-        "decision",
-        "draft",
-        "superseded review",
-        "--review-at",
-        past,
-        "--work",
-        work,
-      ]),
-    );
-    expect((await runCli(fixture, ["decision", "lock", superseded])).exitCode).toBe(0);
-    const replacement = idFrom(
-      await runCli(fixture, [
-        "decision",
-        "draft",
-        "replacement decision",
-        "--supersedes",
-        superseded,
-        "--work",
-        work,
-      ]),
-    );
-    expect((await runCli(fixture, ["decision", "lock", replacement])).exitCode).toBe(0);
-
-    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
-    expect(attention.exitCode).toBe(0);
-    const detections = (JSON.parse(attention.stdout) as {
-      data: {
-        detections: Array<{
-          fingerprint: string;
-          kind: string;
-          packet: string;
-          subjectWork: string | null;
-        }>;
-      };
-    }).data.detections.filter((detection) => detection.kind === "DECISION_REVIEW_DUE");
-    expect(detections).toHaveLength(1);
-    expect(detections[0]).toEqual(expect.objectContaining({
-      fingerprint: `review:${due}:${past}`,
-      subjectWork: work,
-    }));
-    for (const required of [
-      `attention DECISION_REVIEW_DUE decision ${due}`,
-      "  observed:",
-      "  evidence:",
-      "  unknown:",
-      "  question:",
-      `  smallest action: maestro decision show ${due}`,
-      "  human decision needed: no",
-    ]) {
-      expect(detections[0]?.packet).toContain(required);
-    }
-    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${futureDecision}`);
-    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${draft}`);
-    expect(attention.stdout).not.toContain(`DECISION_REVIEW_DUE decision ${superseded}`);
-  });
-});
-
-test("143 attention raises and records sorted SCOPE_COLLISION", async () => {
-  await withFixture(async (fixture) => {
-    const parent = await addWork(fixture, "shared scope");
-    await startWork(fixture, parent, "lead-session");
-    const first = await addWork(fixture, "first sibling", parent);
-    const second = await addWork(fixture, "second sibling", parent);
-    await startWork(fixture, first, "holder-z");
-    await startWork(fixture, second, "holder-a");
-
-    const attention = await runCli(fixture, ["attention"], session("scanner-session"));
-    expect(attention.exitCode).toBe(0);
-    expect(attention.stdout).toContain(`attention SCOPE_COLLISION work ${first},${second}`);
-
-    const database = openDatabase(fixture);
-    try {
-      const row = database
-        .query<{ fingerprint: string }, []>(
-          "SELECT fingerprint FROM attention WHERE kind = 'SCOPE_COLLISION'",
-        )
-        .get();
-      expect(row?.fingerprint).toBe(`collision:${first}:${second}:holder-a:holder-z`);
-    } finally {
-      database.close();
-    }
-  });
-});
-
-test("414 attention raises LEAD_COLLISION for two live parentless holders", async () => {
-  await withFixture(async (fixture) => {
-    const first = await addWork(fixture, "first Lead scope");
-    const second = await addWork(fixture, "second Lead scope");
-    await startWork(fixture, first, "lead-z");
-    await startWork(fixture, second, "lead-a");
-
-    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
-    expect(attention.exitCode).toBe(0);
-    const detections = (JSON.parse(attention.stdout) as {
-      data: {
-        detections: Array<{
-          fingerprint: string;
-          kind: string;
-          packet: string;
-          subjectSession: string | null;
-          subjectWork: string | null;
-        }>;
-      };
-    }).data.detections.filter((detection) => detection.kind === "LEAD_COLLISION");
-    expect(detections).toHaveLength(1);
-    expect(detections[0]).toEqual(expect.objectContaining({
-      fingerprint: `lead-collision:${first}:${second}:lead-a:lead-z`,
-      subjectSession: "lead-a,lead-z",
-      subjectWork: first,
-    }));
-    for (const required of [
-      `attention LEAD_COLLISION work ${first},${second}`,
-      "  observed:",
-      "  evidence:",
-      "  unknown:",
-      "  question:",
-      "  smallest action: maestro status --live",
-      "  human decision needed: no",
-    ]) {
-      expect(detections[0]?.packet).toContain(required);
-    }
-
-    const hook = await runCli(
-      fixture,
-      ["hook", "record", "--event", "UserPromptSubmit"],
-      session("scanner-session"),
-    );
-    expect(hook.exitCode).toBe(0);
-    expect(hook.stdout).toContain(`attention LEAD_COLLISION work ${first},${second}`);
-  });
-});
-
-function killSession(fixture: Fixture, id: string): void {
-  const database = openDatabase(fixture);
-  try {
-    // A pid-anchored session is dead when its pid is gone. PID 2^22 - 1 is above
-    // every platform's pid_max, so it can never be running.
-    database.query("UPDATE sessions SET pid = ? WHERE id = ?").run(4_194_303, id);
-  } finally {
-    database.close();
-  }
-}
-
-test("525 an active card whose holder session died raises a finding regardless of freshness", async () => {
-  await withFixture(async (fixture) => {
-    // A work lease with a dead holder raised nothing at all, so an abandoned
-    // card sat active forever.
-    const abandoned = await addWork(fixture, "card its holder walked away from");
-    // A distinct pid, so the scanner's own pid does not make this a shared-pid
-    // session and downgrade it to TTL liveness, where the pid no longer decides.
-    await startWork(fixture, abandoned, "gone-session", 1);
-    killSession(fixture, "gone-session");
-
-    // Freshly seen, so only death can be what raises this.
-    const attention = await runCli(
-      fixture,
-      ["attention", "--json", "--stale", "30"],
-      session("scanner-session"),
-    );
-    expect(attention.exitCode).toBe(0);
-    const detections = (JSON.parse(attention.stdout) as {
-      data: { detections: Array<{ kind: string; packet: string; subjectWork: string | null }> };
-    }).data.detections.filter((detection) => detection.subjectWork === abandoned);
-
-    expect(detections).toHaveLength(1);
-    expect(detections[0]?.packet).toContain("is dead");
-  });
-});
-
-test("526 a live holder still decides STALLED_LEASE by freshness alone", async () => {
-  await withFixture(async (fixture) => {
-    const fresh = await addWork(fixture, "held right now");
-    await startWork(fixture, fresh, "busy-session");
-    const stale = await addWork(fixture, "held by someone quiet");
-    await startWork(fixture, stale, "quiet-session");
-    backdateSession(fixture, "quiet-session", 45);
-
-    const attention = await runCli(
-      fixture,
-      ["attention", "--json", "--stale", "30"],
-      session("scanner-session"),
-    );
-    const stalled = (JSON.parse(attention.stdout) as {
-      data: { detections: Array<{ kind: string; subjectWork: string | null }> };
-    }).data.detections.filter((detection) => detection.kind === "STALLED_LEASE");
-
-    expect(stalled.map((detection) => detection.subjectWork)).toEqual([stale]);
-  });
-});
-
-test("523 attention raises LEAD_COLLISION when one holder's card is a child and the other's is not", async () => {
-  await withFixture(async (fixture) => {
-    // The shape that actually occurred on 2026-08-28: a Lead working a child of
-    // its feature while another session held a parentless card. LEAD_COLLISION
-    // dropped the child, SCOPE_COLLISION needs both rows under one parent, and
-    // STALLED_LEASE never compares two rows, so nothing fired at all.
-    const parent = await addWork(fixture, "feature under a Lead");
-    const child = await addWork(fixture, "child of the feature", parent);
-    await startWork(fixture, child, "lead-a");
-    const solo = await addWork(fixture, "parentless card another session took");
-    await startWork(fixture, solo, "lead-b");
-
-    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
-    expect(attention.exitCode).toBe(0);
-    const detections = (JSON.parse(attention.stdout) as {
-      data: {
-        detections: Array<{
-          fingerprint: string;
-          kind: string;
-          packet: string;
-          subjectSession: string | null;
-        }>;
-      };
-    }).data.detections.filter((detection) => detection.kind === "LEAD_COLLISION");
-
-    expect(detections).toHaveLength(1);
-    expect(detections[0]).toEqual(expect.objectContaining({
-      fingerprint: `lead-collision:${child}:${solo}:lead-a:lead-b`,
-      subjectSession: "lead-a,lead-b",
-    }));
-  });
-});
-
-test("524 two children of one parent stay a single SCOPE_COLLISION, not two kinds", async () => {
-  await withFixture(async (fixture) => {
-    // Widening LEAD_COLLISION to child cards makes this pair visible to both
-    // detectors; SCOPE_COLLISION says more about it, so one incident must not
-    // arrive as two packets.
-    const parent = await addWork(fixture, "one parent");
-    const left = await addWork(fixture, "left child", parent);
-    const right = await addWork(fixture, "right child", parent);
-    await startWork(fixture, left, "lead-a");
-    await startWork(fixture, right, "lead-b");
-
-    const attention = await runCli(fixture, ["attention", "--json"], session("scanner-session"));
-    const kinds = (JSON.parse(attention.stdout) as {
-      data: { detections: Array<{ fingerprint: string; kind: string }> };
-    }).data.detections
-      .filter((detection) => detection.fingerprint.endsWith(`${left}:${right}:lead-a:lead-b`))
-      .map((detection) => detection.kind);
-
-    expect(kinds).toEqual(["SCOPE_COLLISION"]);
+    expect(
+      detections
+        .filter((detection) => detection.kind === "HUMAN_DECISION_REQUIRED")
+        .map((detection) => detection.packet),
+    ).not.toContainEqual(expect.stringContaining(`decision ${decision}`));
   });
 });
 

@@ -1,24 +1,17 @@
-import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
+import type { CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { SessionRecord } from "../kernel/sessions.ts";
 import type { BriefService } from "./coordination.ts";
 import { improverNextAction, improverTriggers } from "./lesson.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
-  | "STALLED_LEASE"
   | "REPEATED_FAILURE"
-  | "DECISION_STALE"
-  | "DECISION_REVIEW_DUE"
   | "HUMAN_DECISION_REQUIRED"
-  | "LEAD_COLLISION"
-  | "SCOPE_COLLISION"
   | "LESSONS_PENDING";
 
 interface AttentionWorkRow {
   heldBy: string | null;
   id: string;
-  parentId: string | null;
   state: "open" | "active" | "done" | "cancelled";
 }
 
@@ -40,59 +33,31 @@ interface Detection {
   entityId: string;
   entityType: "decision" | "lesson" | "work";
   fingerprint: string;
-  holderRole?: "lead" | "peer";
   kind: AttentionKind;
   packet: string;
-  route?: "lead" | "supervisor";
   subjectSession: string | null;
   subjectWork: string | null;
 }
 
 export interface AttentionFinding {
   fingerprint: string;
-  holderRole?: "lead" | "peer";
   kind: AttentionKind;
   packet: string;
   raised: boolean;
   raisedAt: string;
-  route?: "lead" | "supervisor";
   subjectSession: string | null;
   subjectWork: string | null;
 }
 
-export interface AttentionOptions {
-  decisionStaleHours: number;
-  staleMinutes: number;
-}
-
 export interface AttentionService {
-  scan(options: AttentionOptions): AttentionFinding[];
+  scan(): AttentionFinding[];
 }
 
 const subjectKind: Record<AttentionKind, "decision" | "lesson" | "work"> = {
-  STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
-  DECISION_STALE: "decision",
-  DECISION_REVIEW_DUE: "decision",
   HUMAN_DECISION_REQUIRED: "decision",
-  LEAD_COLLISION: "work",
-  SCOPE_COLLISION: "work",
   LESSONS_PENDING: "lesson",
 };
-
-function numericOption(
-  invocation: CliInvocation,
-  name: string,
-  fallback: number,
-): number {
-  const value = invocation.options[name];
-  if (value === undefined) return fallback;
-  const parsed = typeof value === "string" ? Number(value) : Number.NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new CliError("INVALID_VALUE", `--${name} must be a positive number`);
-  }
-  return parsed;
-}
 
 function workRows(context: PluginContext): AttentionWorkRow[] {
   return (context.work as WorkService)
@@ -100,7 +65,6 @@ function workRows(context: PluginContext): AttentionWorkRow[] {
     .map((work) => ({
       heldBy: work.heldBy,
       id: work.id,
-      parentId: work.parentId,
       state: work.state,
     }));
 }
@@ -115,10 +79,6 @@ function latestStart(context: PluginContext, workId: string): EventRow | null {
     .get(workId) ?? null;
 }
 
-function minutesSince(iso: string, now: number): number {
-  return Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
-}
-
 function packet(
   kind: AttentionKind,
   subject: string,
@@ -128,7 +88,6 @@ function packet(
     // "<subject kind> <subject>" tail of its headline with what the reader
     // needs, and the packet fields below stay as they are.
     headline?: string;
-    holderRole?: "lead" | "peer";
     humanDecision?: boolean;
     observed: string;
     question: string;
@@ -139,58 +98,12 @@ function packet(
   return [
     `attention ${kind} ${fields.headline ?? `${subjectKind[kind]} ${subject}`}`,
     `  observed: ${fields.observed}`,
-    ...(fields.holderRole ? [`  holder role: ${fields.holderRole}`] : []),
     `  evidence: ${fields.evidence}`,
     `  unknown: ${fields.unknown}`,
     `  question: ${fields.question}`,
     `  smallest action: ${fields.smallestAction}`,
     `  human decision needed: ${fields.humanDecision ? "yes" : "no"}`,
   ].join("\n");
-}
-
-function sessionMap(sessions: SessionRecord[]): Map<string, SessionRecord> {
-  return new Map(sessions.map((session) => [session.id, session]));
-}
-
-function stalledDetections(
-  context: PluginContext,
-  works: AttentionWorkRow[],
-  sessions: Map<string, SessionRecord>,
-  now: number,
-  staleMinutes: number,
-): Detection[] {
-  const cutoff = now - staleMinutes * 60_000;
-  return works.flatMap((work): Detection[] => {
-    if (work.state !== "active" || !work.heldBy) return [];
-    const holder = sessions.get(work.heldBy);
-    if (!holder) return [];
-    // A dead holder is not a slow one, so freshness is not the question: it will
-    // never come back, and the card would otherwise sit active forever.
-    if (holder.live && Date.parse(holder.lastSeen) >= cutoff) return [];
-    const start = latestStart(context, work.id);
-    const startId = start?.id ?? 0;
-    return [{
-      entityId: work.id,
-      entityType: "work",
-      fingerprint: `stalled:${work.id}:${startId}`,
-      kind: "STALLED_LEASE",
-      packet: packet("STALLED_LEASE", work.id, {
-        observed: holder.live
-          ? `held by ${work.heldBy}, last seen ${holder.lastSeen} ` +
-            `(${minutesSince(holder.lastSeen, now)} min)`
-          : `held by ${work.heldBy}, whose session is dead ` +
-            `(last seen ${holder.lastSeen})`,
-        evidence: `work.start #${startId}, sessions.last_seen ${holder.lastSeen}`,
-        unknown: holder.live
-          ? "whether the session is thinking, blocked on a tool, or gone"
-          : "how much of the work the dead session finished before it ended",
-        question: holder.live ? "reclaim, re-scope, or wait?" : "reclaim or cancel?",
-        smallestAction: `maestro work show ${work.id}`,
-      }),
-      subjectSession: work.heldBy,
-      subjectWork: work.id,
-    }];
-  });
 }
 
 function repeatedFailureDetections(
@@ -217,67 +130,18 @@ function repeatedFailureDetections(
           .all(work.id);
     const third = notes[2];
     if (!third) return [];
-    const holderRole = "lead";
-    const route = "supervisor";
     const startEvidence = start ? `work.start #${start.id}` : "no work.start on record";
     return [{
       entityId: work.id,
       entityType: "work",
       fingerprint: `repeat:${work.id}:${third.id}`,
-      holderRole,
       kind: "REPEATED_FAILURE",
       packet: packet("REPEATED_FAILURE", work.id, {
         observed: `${notes.length} failed passes since the latest lease`,
-        holderRole,
         evidence: `${startEvidence}; third failed note #${third.id}`,
         unknown: "whether the failures share one mechanism or need a new decision",
         question: "inspect the episode, re-scope, or revisit the decision?",
         smallestAction: `maestro work show ${work.id}`,
-      }),
-      route,
-      subjectSession: work.heldBy,
-      subjectWork: work.id,
-    }];
-  });
-}
-
-function decisionStaleDetections(
-  context: PluginContext,
-  workById: Map<string, AttentionWorkRow>,
-  now: number,
-  decisionStaleHours: number,
-): Detection[] {
-  const cutoff = new Date(now - decisionStaleHours * 60 * 60_000).toISOString();
-  const activePredicate = context.store.hasColumn("decisions", "withdrawn_at")
-    ? "AND decisions.withdrawn_at IS NULL"
-    : "";
-  const rows = context.store.database
-    .query<{ created_at: string; id: string; work_id: string }, [string]>(
-      `SELECT decisions.id, decisions.created_at, decisions.work_id
-       FROM decisions
-       JOIN work ON work.id = decisions.work_id
-       WHERE decisions.state = 'draft'
-         ${activePredicate}
-         AND decisions.created_at < ?
-         AND work.state != 'done'
-         AND work.cancelled_at IS NULL
-       ORDER BY decisions.id`,
-    )
-    .all(cutoff);
-  return rows.flatMap((decision): Detection[] => {
-    const work = workById.get(decision.work_id);
-    if (!work) return [];
-    return [{
-      entityId: decision.id,
-      entityType: "decision",
-      fingerprint: `decision:${decision.id}`,
-      kind: "DECISION_STALE",
-      packet: packet("DECISION_STALE", decision.id, {
-        observed: `draft linked to ${decision.work_id} remains open`,
-        evidence: `decisions.created_at ${decision.created_at}`,
-        unknown: "whether the fork is still active, blocked, or abandoned",
-        question: "lock, supersede, re-scope, or keep investigating?",
-        smallestAction: `maestro decision show ${decision.id}`,
       }),
       subjectSession: work.heldBy,
       subjectWork: work.id,
@@ -328,131 +192,6 @@ function humanDecisionRequiredDetections(
   });
 }
 
-function decisionReviewDueDetections(
-  context: PluginContext,
-  workById: Map<string, AttentionWorkRow>,
-  now: number,
-): Detection[] {
-  if (!context.store.hasColumn("decisions", "review_at")) return [];
-  const rows = context.store.database
-    .query<{ id: string; review_at: string; work_id: string | null }, []>(
-      `SELECT id, review_at, work_id
-       FROM decisions
-       WHERE state = 'locked'
-         AND superseded_by_id IS NULL
-         AND review_at IS NOT NULL
-       ORDER BY id`,
-    )
-    .all();
-  return rows.flatMap((decision): Detection[] => {
-    if (!(Date.parse(decision.review_at) < now)) return [];
-    const work = decision.work_id ? workById.get(decision.work_id) : null;
-    return [{
-      entityId: decision.id,
-      entityType: "decision",
-      fingerprint: `review:${decision.id}:${decision.review_at}`,
-      kind: "DECISION_REVIEW_DUE",
-      packet: packet("DECISION_REVIEW_DUE", decision.id, {
-        observed: `locked decision reached its review date ${decision.review_at}`,
-        evidence: `decisions.review_at ${decision.review_at}; decisions.superseded_by_id NULL`,
-        unknown: "whether the decision still fits the current evidence",
-        question: "keep, revise, or supersede this decision?",
-        smallestAction: `maestro decision show ${decision.id}`,
-      }),
-      subjectSession: work?.heldBy ?? null,
-      subjectWork: decision.work_id,
-    }];
-  });
-}
-
-function scopeCollisionDetections(
-  context: PluginContext,
-  works: AttentionWorkRow[],
-  sessions: Map<string, SessionRecord>,
-): Detection[] {
-  const active = works.filter(
-    (work) =>
-      work.state === "active" && work.parentId && work.heldBy &&
-      sessions.get(work.heldBy)?.live,
-  );
-  const detections: Detection[] = [];
-  for (let leftIndex = 0; leftIndex < active.length; leftIndex += 1) {
-    const left = active[leftIndex] as AttentionWorkRow;
-    for (let rightIndex = leftIndex + 1; rightIndex < active.length; rightIndex += 1) {
-      const right = active[rightIndex] as AttentionWorkRow;
-      if (left.parentId !== right.parentId || left.heldBy === right.heldBy) continue;
-      const pair = [left, right].sort((a, b) => a.id.localeCompare(b.id));
-      const first = pair[0] as AttentionWorkRow;
-      const second = pair[1] as AttentionWorkRow;
-      const holders = [first.heldBy as string, second.heldBy as string].sort();
-      detections.push({
-        entityId: first.id,
-        entityType: "work",
-        fingerprint: `collision:${first.id}:${second.id}:${holders[0]}:${holders[1]}`,
-        kind: "SCOPE_COLLISION",
-        packet: packet("SCOPE_COLLISION", `${first.id},${second.id}`, {
-          observed: `siblings held by ${first.heldBy} and ${second.heldBy}`,
-          evidence: `parent ${first.parentId}; both work items active; both sessions live`,
-          unknown: "whether the scopes intentionally overlap or compete for the same mutation",
-          question: "keep both lanes, split scope, or release one lease?",
-          smallestAction: `maestro work show ${first.parentId}`,
-        }),
-        subjectSession: holders.join(","),
-        subjectWork: first.id,
-      });
-    }
-  }
-  return detections;
-}
-
-function leadCollisionDetections(
-  context: PluginContext,
-  works: AttentionWorkRow[],
-  sessions: Map<string, SessionRecord>,
-): Detection[] {
-  const active = works
-    .filter(
-      (work) =>
-        work.state === "active" && work.heldBy &&
-        sessions.get(work.heldBy)?.live,
-    )
-    .sort((left, right) => left.id.localeCompare(right.id));
-  const detections: Detection[] = [];
-  for (let leftIndex = 0; leftIndex < active.length; leftIndex += 1) {
-    const first = active[leftIndex] as AttentionWorkRow;
-    for (let rightIndex = leftIndex + 1; rightIndex < active.length; rightIndex += 1) {
-      const second = active[rightIndex] as AttentionWorkRow;
-      if (first.heldBy === second.heldBy) continue;
-      // Two children of one parent are SCOPE_COLLISION's situation, and it says
-      // more about them than this does. Reporting the pair under both kinds
-      // makes one incident look like two.
-      if (first.parentId && first.parentId === second.parentId) continue;
-      const holders = [first.heldBy as string, second.heldBy as string].sort();
-      detections.push({
-        entityId: first.id,
-        entityType: "work",
-        fingerprint:
-          `lead-collision:${first.id}:${second.id}:${holders[0]}:${holders[1]}`,
-        kind: "LEAD_COLLISION",
-        packet: packet("LEAD_COLLISION", `${first.id},${second.id}`, {
-          observed:
-            `parent work ${first.id} held by ${first.heldBy}; ` +
-            `parent work ${second.id} held by ${second.heldBy}`,
-          evidence:
-            "both work items active and parentless; both sessions live",
-          unknown:
-            "whether the work items are independent project dimensions or competing Lead scopes",
-          question: "keep both Leads, split scope, or release one lease?",
-          smallestAction: "maestro status --live",
-        }),
-        subjectSession: holders.join(","),
-        subjectWork: first.id,
-      });
-    }
-  }
-  return detections;
-}
-
 function lessonsPendingDetections(context: PluginContext, now: number): Detection[] {
   return improverTriggers(context, now).map((trigger): Detection => {
     const clock = trigger.lastRun
@@ -491,31 +230,13 @@ function lessonsPendingDetections(context: PluginContext, now: number): Detectio
   });
 }
 
-function detect(context: PluginContext, options: AttentionOptions): Detection[] {
-  const now = Date.now();
+function detect(context: PluginContext): Detection[] {
   const works = workRows(context);
   const workById = new Map(works.map((work) => [work.id, work]));
-  const sessions = sessionMap(context.sessions.list());
   return [
-    ...stalledDetections(
-      context,
-      works,
-      sessions,
-      now,
-      options.staleMinutes,
-    ),
     ...repeatedFailureDetections(context, works),
-    ...decisionStaleDetections(
-      context,
-      workById,
-      now,
-      options.decisionStaleHours,
-    ),
-    ...decisionReviewDueDetections(context, workById, now),
     ...humanDecisionRequiredDetections(context, workById),
-    ...leadCollisionDetections(context, works, sessions),
-    ...scopeCollisionDetections(context, works, sessions),
-    ...lessonsPendingDetections(context, now),
+    ...lessonsPendingDetections(context, Date.now()),
   ];
 }
 
@@ -523,12 +244,10 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
   if (context.store.readOnly) {
     return {
       fingerprint: detection.fingerprint,
-      holderRole: detection.holderRole,
       kind: detection.kind,
       packet: detection.packet,
       raised: false,
       raisedAt: "not recorded (read-only)",
-      route: detection.route,
       subjectSession: detection.subjectSession,
       subjectWork: detection.subjectWork,
     };
@@ -570,12 +289,10 @@ function raise(context: PluginContext, detection: Detection): AttentionFinding {
   const result = transaction.immediate();
   return {
     fingerprint: detection.fingerprint,
-    holderRole: detection.holderRole,
     kind: detection.kind,
     packet: detection.packet,
     raised: result.raised,
     raisedAt: result.raisedAt,
-    route: detection.route,
     subjectSession: detection.subjectSession,
     subjectWork: detection.subjectWork,
   };
@@ -587,24 +304,6 @@ function formatFindings(findings: AttentionFinding[]): string {
     .map((finding) => `${finding.packet}\n  raised ${finding.raisedAt}`)
     .join("\n\n");
 }
-
-function scanFromInvocation(
-  service: AttentionService,
-  invocation: CliInvocation,
-): AttentionFinding[] {
-  return service.scan({
-    staleMinutes: numericOption(invocation, "stale", 30),
-    decisionStaleHours: numericOption(invocation, "decision-stale", 24),
-  });
-}
-
-const attentionFlags = {
-  "--stale": { description: "Stalled lease threshold in minutes (default 30).", value: true },
-  "--decision-stale": {
-    description: "Draft decision threshold in hours (default 24).",
-    value: true,
-  },
-} as const;
 
 export const attentionPlugin: BuiltInPlugin = {
   name: "attention",
@@ -622,14 +321,13 @@ export const attentionPlugin: BuiltInPlugin = {
       );
     `);
     const service: AttentionService = {
-      scan: (options) => detect(context, options).map((detection) => raise(context, detection)),
+      scan: () => detect(context).map((detection) => raise(context, detection)),
     };
     context.effect(() => context.provide("attention", service));
     context.effect(() =>
       (context.brief as BriefService).register(() =>
         service
-          .scan({ staleMinutes: 30, decisionStaleHours: 24 })
-          .filter((finding) => finding.kind !== "REPEATED_FAILURE" || finding.route === "lead")
+          .scan()
           .map((finding) => finding.packet.split("\n")[0] ?? finding.kind)
           .join("\n")
       )
@@ -637,13 +335,12 @@ export const attentionPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "attention",
-        (invocation): CliResult => {
-          const findings = scanFromInvocation(service, invocation);
+        (): CliResult => {
+          const findings = service.scan();
           return { data: { detections: findings }, text: formatFindings(findings) };
         },
         {
           description: "Scan store state for attention packets without mutating work.",
-          flags: attentionFlags,
           mutates: false,
           rootDescription: "Raise one-shot attention packets from store evidence.",
         },

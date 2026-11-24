@@ -94,27 +94,6 @@ function option(invocation: CliInvocation, name: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function reviewAtOption(invocation: CliInvocation): string | null {
-  const value = option(invocation, "review-at");
-  if (value === null) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/.exec(value);
-  const calendar = new Date(0);
-  if (match) {
-    calendar.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    calendar.setUTCHours(0, 0, 0, 0);
-  }
-  if (
-    !match ||
-    Number.isNaN(Date.parse(value)) ||
-    calendar.getUTCFullYear() !== Number(match[1]) ||
-    calendar.getUTCMonth() !== Number(match[2]) - 1 ||
-    calendar.getUTCDate() !== Number(match[3])
-  ) {
-    throw new CliError("INVALID_VALUE", "--review-at must be an ISO date");
-  }
-  return value;
-}
-
 // A ruling can run to a thousand characters; in a pane that is a wall (d823).
 // Wrapping is a terminal courtesy only: piped output stays one line per field
 // so rg and head keep finding whole phrases.
@@ -232,19 +211,17 @@ export const decisionPlugin: BuiltInPlugin = {
           const second = invocation.positionals[1];
           const needsOwner = invocation.options["needs-owner"] === true;
           const suppliedDissent = option(invocation, "dissent");
-          const suppliedReviewAt = reviewAtOption(invocation);
           const suppliedRationale = option(invocation, "rationale");
           // One positional naming an existing decision plus an edit field is an
           // edit that keeps the text; the same shape with no field is the
           // forgotten-replacement case below (w562, w587).
           const fieldEdit = second === undefined &&
-            (suppliedRationale !== null || suppliedDissent !== null ||
-              suppliedReviewAt !== null || needsOwner) &&
+            (suppliedRationale !== null || suppliedDissent !== null || needsOwner) &&
             getDecision(context, first) !== null;
           if (second !== undefined || fieldEdit) {
-            // The edit UPDATE sets text, rationale, dissent, review_at and
-            // needs_owner; these three were parsed and dropped in silence, so
-            // a supersession could be typed, accepted and lost (w562).
+            // The edit UPDATE sets text, rationale, dissent and needs_owner;
+            // these three were parsed and dropped in silence, so a supersession
+            // could be typed, accepted and lost (w562).
             const links = ["supersedes", "parent", "work"].filter((name) =>
               option(invocation, name) !== null
             );
@@ -252,7 +229,7 @@ export const decisionPlugin: BuiltInPlugin = {
               const named = links.map((name) => `--${name}`).join(", ");
               throw new CliError(
                 "INVALID_ARGUMENT",
-                `${named} ${links.length === 1 ? "belongs" : "belong"} to a new draft, not to an edit of ${first}; an edit changes text, rationale, dissent, review date and owner requirement only. Withdraw ${first} and draft the replacement with its links, or edit the text alone`,
+                `${named} ${links.length === 1 ? "belongs" : "belong"} to a new draft, not to an edit of ${first}; an edit changes text, rationale, dissent and owner requirement only. Withdraw ${first} and draft the replacement with its links, or edit the text alone`,
                 { id: first, options: links },
               );
             }
@@ -284,12 +261,11 @@ export const decisionPlugin: BuiltInPlugin = {
               }
               const rationale = suppliedRationale ?? existing.rationale;
               const dissent = suppliedDissent ?? existing.dissent;
-              const reviewAt = suppliedReviewAt ?? existing.reviewAt;
               const updatedAt = new Date().toISOString();
               const updated = context.store.database
                 .query(
                   `UPDATE decisions
-                   SET text = ?, rationale = ?, dissent = ?, review_at = ?, needs_owner = ?, updated_at = ?
+                   SET text = ?, rationale = ?, dissent = ?, needs_owner = ?, updated_at = ?
                    WHERE id = ? AND state = 'draft' AND withdrawn_at IS NULL
                    RETURNING id`,
                 )
@@ -297,7 +273,6 @@ export const decisionPlugin: BuiltInPlugin = {
                   text,
                   rationale,
                   dissent,
-                  reviewAt,
                   needsOwner || existing.needsOwner ? 1 : 0,
                   updatedAt,
                   existing.id,
@@ -374,15 +349,14 @@ export const decisionPlugin: BuiltInPlugin = {
             context.store.database
               .query(
                 `INSERT INTO decisions
-                  (id, text, rationale, dissent, review_at, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+                  (id, text, rationale, dissent, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
               )
               .run(
                 id,
                 text,
                 rationale,
                 suppliedDissent,
-                suppliedReviewAt,
                 needsOwner ? 1 : 0,
                 parentId,
                 workId,
@@ -412,7 +386,6 @@ export const decisionPlugin: BuiltInPlugin = {
           flags: {
             "--rationale": { description: "Record why this decision was made.", value: true },
             "--dissent": { description: "Record the dissenting view.", value: true },
-            "--review-at": { description: "Schedule review at an ISO date.", value: true },
             "--needs-owner": { description: "Mark this draft as requiring an owner decision." },
             "--parent": { description: "Attach this draft beneath a parent decision.", value: true },
             "--work": { description: "Link this draft to a work item.", value: true },
@@ -502,7 +475,6 @@ export const decisionPlugin: BuiltInPlugin = {
       registerSessionCommand(context, "decision lock", (invocation): CliResult => {
         const id = requiredPosition(invocation, 0, "decision id");
         const suppliedDissent = option(invocation, "dissent");
-        const suppliedReviewAt = reviewAtOption(invocation);
         const lock = context.store.database.transaction(() => {
           const decision = requireDecision(context, id);
           if (decision.state !== "draft") {
@@ -551,11 +523,10 @@ export const decisionPlugin: BuiltInPlugin = {
           }
           const locked = context.store.database
             .query(
-              "UPDATE decisions SET state = 'locked', dissent = ?, review_at = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
+              "UPDATE decisions SET state = 'locked', dissent = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
             )
             .run(
               suppliedDissent ?? decision.dissent,
-              suppliedReviewAt ?? decision.reviewAt,
               updatedAt,
               id,
             );
@@ -577,7 +548,6 @@ export const decisionPlugin: BuiltInPlugin = {
         description: "Lock a draft decision against further edits.",
         flags: {
           "--dissent": { description: "Record the dissenting view.", value: true },
-          "--review-at": { description: "Schedule review at an ISO date.", value: true },
         },
         positionals: [{ name: "id", required: true }],
       }),

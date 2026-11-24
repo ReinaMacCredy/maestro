@@ -273,25 +273,20 @@ test("306 concurrent attention scans raise one row and one event", async () => {
     await addLinkedWorktree(fixture.repo, worktree);
     const work = idFrom(await runCli(fixture, ["work", "add", "attention race"]));
     const decision = idFrom(
-      await runCli(fixture, ["decision", "draft", "stale attention race", "--work", work]),
+      await runCli(fixture, ["decision", "draft", "owner attention race", "--needs-owner", "--work", work]),
     );
     const databasePath = join(fixture.repo, ".maestro", "maestro.db");
-    const writable = new Database(databasePath);
-    writable
-      .query("UPDATE decisions SET created_at = ? WHERE id = ?")
-      .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-    writable.close();
 
     const scans = await Promise.all([
       runCli(
         fixture,
-        ["attention", "--json", "--decision-stale", "24"],
+        ["attention", "--json"],
         sessionEnvironment("attention-a"),
       ),
       runCliAt(
         fixture,
         worktree,
-        ["attention", "--json", "--decision-stale", "24"],
+        ["attention", "--json"],
         sessionEnvironment("attention-b"),
       ),
     ]);
@@ -301,7 +296,7 @@ test("306 concurrent attention scans raise one row and one event", async () => {
         data: { detections: Array<{ fingerprint: string; raised: boolean }> };
       };
       return envelope.data.detections.find(
-        (detection) => detection.fingerprint === `decision:${decision}`,
+        (detection) => detection.fingerprint === `human-decision:${decision}`,
       )?.raised;
     });
     expect(raised.sort()).toEqual([false, true]);
@@ -312,7 +307,7 @@ test("306 concurrent attention scans raise one row and one event", async () => {
         .query<{ count: number }, [string]>(
           "SELECT COUNT(*) AS count FROM attention WHERE fingerprint = ?",
         )
-        .get(`decision:${decision}`)?.count,
+        .get(`human-decision:${decision}`)?.count,
     ).toBe(1);
     expect(
       stored
