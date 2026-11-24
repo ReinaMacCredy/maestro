@@ -198,7 +198,7 @@ test("pstack-port: install retires the managed maestro-diagnose and maestro-expl
   });
 });
 
-test("129 [lint] install materializes the 8 maestro skills with a version stamp and refs", async () => {
+test("129 [lint] install materializes the 7 maestro skills with a version stamp and refs", async () => {
   await withFixture(async (fixture) => {
     // Proves installed artifact shape, not harness discovery or loading of those skills.
     const { path } = await prepareInstallFixture(fixture);
@@ -210,7 +210,6 @@ test("129 [lint] install materializes the 8 maestro skills with a version stamp 
       "maestro-coach",
       "maestro-council",
       "maestro-design",
-      "maestro-improve",
       "maestro-questionnaire",
       "maestro-work",
       "maestro-verify",
@@ -224,18 +223,9 @@ test("129 [lint] install materializes the 8 maestro skills with a version stamp 
       join("maestro-design", "references", "grilling.md"),
       join("maestro-design", "references", "domain-modeling.md"),
       join("maestro-design", "references", "wayfinder.md"),
-      join("maestro-work", "references", "tdd-antipatterns.md"),
-      join("maestro-verify", "references", "audit.md"),
-      join("maestro-verify", "references", "learning.md"),
     ]) {
       expect(await Bun.file(join(skillsRoot, reference)).exists()).toBe(true);
     }
-    const antipatterns = await Bun.file(
-      join(skillsRoot, "maestro-work", "references", "tdd-antipatterns.md"),
-    ).text();
-    const entries = antipatterns.split("\n").filter((line) => /^\| .+ \| .+ \| .+ \|$/.test(line));
-    expect(entries.length).toBeGreaterThan(4);
-    expect(entries.length).toBeLessThanOrEqual(21);
   });
 });
 

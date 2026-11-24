@@ -308,7 +308,6 @@ test("172 [lint] the method-skill roster points handoffs at maestro handoff", as
     "maestro-coach",
     "maestro-council",
     "maestro-design",
-    "maestro-improve",
     "maestro-questionnaire",
     "maestro-verify",
     "maestro-work",

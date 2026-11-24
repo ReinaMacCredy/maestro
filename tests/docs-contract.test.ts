@@ -212,7 +212,6 @@ test("576 [lint] non-SLP procedures share one risk-based workflow without mandat
     ...["bundle", "design", "work", "verify"].map((name) => `skills/maestro-${name}/SKILL.md`),
     "skills/maestro-design/references/grilling.md",
     "skills/maestro-design/references/domain-modeling.md",
-    "skills/maestro-work/references/tdd-antipatterns.md",
     "recipes/bug-fix.md",
   ]) {
     const text = await Bun.file(join(root, path)).text();
@@ -308,7 +307,7 @@ test("650 [lint] the design exit and the bundle tier rule open the bundle in the
   }
 });
 
-test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guard and the d94 unanimity sentence; design and work point at it (w625, hub d92-d95)", async () => {
+test("651 [lint] maestro-council: a short Lead-only procedure with the d94 unanimity sentence; design and work point at it (w625, hub d92-d95, d917)", async () => {
   expect(skillNames).toContain("maestro-council");
   const council = await Bun.file(join(skillsRoot, "maestro-council", "SKILL.md")).text();
   expect(council).toMatch(/^---\nname: maestro-council\n/);
@@ -324,22 +323,20 @@ test("651 [lint] maestro-council: tenth shipped skill carries the Lead-only guar
   expect(guard).toMatch(/A seat never opens a\s+council/);
   expect(guard).toContain("No Observer seat exists (Hub d98)");
 
-  // Hub d94: unanimity opens one premise verifier, never a skip.
+  // Hub d94: unanimity opens one premise check, never a skip.
   expect(council).toContain(
-    "Unanimity is not a skip: above lens, when every valid seat agrees, open exactly one Verifier whose single mandate is to name the shared premise in the brief that drives the common conclusion and test it.",
+    "Unanimity is not a skip: when every valid seat agrees, open exactly one more sub-agent whose single mandate is to name the shared premise in the brief that drives the common conclusion and test it.",
   );
   expect(council).toContain("COMPROMISED");
-  expect(council).toContain("never form an ensemble vote");
   expect(council).toContain("CONCEDE | MAINTAIN | NARROW | REVERSE");
   expect(council).toContain("CLEAR | REVISE | STOP");
   expect(council).toContain("maestro decision draft");
+  expect(council).toContain("--dissent");
+  expect(council).toContain("maestro decision lock");
   expect(council).not.toContain("model-routing.md");
-
-  const run = sectionOf(council, "## Run");
-  expect(run).toContain("work add");
-  expect(run).toContain("--to peer-<seat>");
-  expect(run).toContain("subagent_type: maestro-<seat>");
-  expect(run).toContain("spawn_agent");
+  for (const gone of ["maestro graph", "maestro dispatch", "handback", "subagent_type", "maestro-<seat>", "--to peer-"]) {
+    expect(council).not.toContain(gone);
+  }
 
   const design = await Bun.file(join(skillsRoot, "maestro-design", "SKILL.md")).text();
   const designCouncil = sectionOf(design, "## Council");
@@ -681,7 +678,7 @@ test("660 [lint] the shared contract requires an acceptance clause the receiving
 // described remedy for zsh command substitution in a brief recurred, so the
 // remedy is now a shipped shell function and the improver is told to prefer a
 // mechanism over a sentence.
-test("662 [lint] the pack, the recipe and the improver name the waking channel and the file-based brief (l15, l26)", async () => {
+test("662 [lint] the pack and the recipe name the waking channel and the file-based brief (l15, l26)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const pack = await Bun.file(join(root, "resources", "SLP.md")).text();
@@ -697,9 +694,6 @@ test("662 [lint] the pack, the recipe and the improver name the waking channel a
   const recipe = unwrap(await Bun.file(join(root, "recipes", "slp.md")).text());
   expect(recipe).toContain("`mbrief <agent> <file>` from the room's shellrc");
   expect(recipe).toContain("never on a plain note");
-  const skill = unwrap(await Bun.file(join(root, "skills", "maestro-improve", "SKILL.md")).text());
-  expect(skill).toContain("A lesson whose hazard is mechanical is not answered by a sentence");
-  expect(skill).toContain("the return names which mechanism now makes the recurrence impossible");
 });
 
 // room d129 point 4: the two capture points are recorded, and the shared
@@ -775,7 +769,7 @@ test("673 [lint] the shared contract and WORKFLOW.md say the holder delegates wr
 // WORKFLOW.md, the seven named patterns in the order the giáo án walked them and the article's parachute after them, each
 // with the maestro evidence where one exists and "not yet seen here" where
 // none does, so a filed lesson can name the pattern it shows.
-test("674 [lint] ANTI_PATTERN.md carries the eight patterns in order and WORKFLOW.md and the improver point at it (room d138)", async () => {
+test("674 [lint] ANTI_PATTERN.md carries the eight patterns in order and WORKFLOW.md points at it (room d138)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const unwrap = (text: string) => text.replaceAll(/\s+/g, " ");
   const path = join(root, "resources", "ANTI_PATTERN.md");
@@ -804,8 +798,6 @@ test("674 [lint] ANTI_PATTERN.md carries the eight patterns in order and WORKFLO
   const workflow = unwrap(await Bun.file(join(root, "resources", "WORKFLOW.md")).text());
   expect(workflow).toContain("ANTI_PATTERN.md");
   expect(workflow).toContain("a lesson names the anti-pattern it shows when one fits");
-  const skill = unwrap(await Bun.file(join(root, "skills", "maestro-improve", "SKILL.md")).text());
-  expect(skill).toContain("ANTI_PATTERN.md");
 });
 
 // w736 F1: the Hub's plain note down into a lead-only team is a new line in
@@ -944,27 +936,6 @@ test("l8 [lint] WORKFLOW.md and the Team Supervisor mandate falsify an evidence 
   expect(supervisor).toContain("An empty result and a broken command print the same nothing");
 });
 
-// project lesson l5 (w730, w731): eleven doctrine commits passed per-edit gates
-// chosen by the file being edited, and the full suite at the end found two reds
-// those edits had caused in assertions living elsewhere.
-test("l5 [lint] the improver picks its per-edit gate by the output it changes, not by the file", async () => {
-  const skill = (await Bun.file(
-    join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-improve", "SKILL.md"),
-  ).text()).replaceAll(/\s+/g, " ");
-  expect(skill).toContain("The replay is necessary and never sufficient");
-  expect(skill).toContain("most doctrine output is exercised by no scenario at all");
-  expect(skill).toContain(
-    "Choose the rest of the per-edit gate by the output the edit changes, not by the file it changed",
-  );
-  expect(skill).toContain("grep the whole test tree for the string you are changing");
-  expect(skill).toContain("run every suite that asserts it");
-  // w743 F3: one of the two reds l5 cites is a corpus-wide property lint that
-  // quotes no string of the edit's, so a grep alone would still have missed it.
-  expect(skill).toContain("it cannot find a property lint that walks a corpus");
-  expect(skill).toContain("because such a lint names no string of yours");
-  expect(skill).toContain("also run the suite that owns the corpus the edited file belongs to");
-});
-
 // project lesson l7 (w732, w733, d880, d889): a SPEC locked an 11-module split
 // on a hand tally that was never written down; re-deriving it found a real
 // cycle the tally had asserted away and per-module counts off by up to 56 lines.
@@ -1088,14 +1059,6 @@ test("slp-article parachute [lint] ANTI_PATTERN.md names the parachute and pre-s
   expect(text).toContain("https://vhlam.com/article/agent-orchestration-multi-agent-slp");
   expect(text).toContain("a review brief that fixes the hypothesis, the criterion and the answer shape in advance");
   expect(await resourceText("resources", "WORKFLOW.md")).toContain("holds the eight named");
-  expect(await resourceText("skills", "maestro-improve", "SKILL.md")).toContain("one of the eight in `~/maestro/ANTI_PATTERN.md`");
-});
-
-test("slp-article subtraction [lint] the improver may delete and judges a mechanism by the outcomes it changed", async () => {
-  const skill = await resourceText("skills", "maestro-improve", "SKILL.md");
-  expect(skill).toContain("The smallest edit may be a deletion.");
-  expect(skill).toContain("earns its place by the outcomes it changed, not by how often it ran");
-  expect(skill).toContain("remove it rather than add a counterweight");
 });
 
 test("slp-article evidence [lint] a return names the state its evidence was taken on and a reviewer accepts only that state", async () => {

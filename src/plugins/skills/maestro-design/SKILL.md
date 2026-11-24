@@ -100,8 +100,8 @@ re-deriving the argument.
 ## Council
 
 A hard-to-reverse fork with wide blast radius runs the `maestro-council`
-protocol: neutral brief, sealed seats, one premise verifier on unanimity,
-bounded verifiers, one cross-examination round, an audit by tier, and one
+protocol: neutral brief, sealed seats, one premise check on unanimity, one
+cross-examination round, one audit of the draft verdict, and one
 binding verdict recorded with `maestro decision draft --rationale` carrying
 the dissent. The candidate under review stays frozen; a new finding creates
 a new candidate.

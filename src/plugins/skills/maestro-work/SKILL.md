@@ -136,8 +136,6 @@ one, prefer a stable consumer seam so internals stay free to change. Demonstrate
 that a plausible wrong implementation fails it, and derive expectations from
 the accepted behavior rather than current output.
 
-Concrete smells and fixes: [references/tdd-antipatterns.md](references/tdd-antipatterns.md).
-
 ### Hard rules
 
 - Never delete, skip, or weaken a failing test to make the suite pass. A

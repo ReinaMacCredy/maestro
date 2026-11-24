@@ -86,9 +86,6 @@ evidence to the implementation owner. Use the shared recovery rule to choose
 the next action from the cause, not a failure count. Read prior failed notes
 so a new session does not repeat the same uninformative attempt.
 
-Read-only review method: [references/audit.md](references/audit.md). When the
-failure location is unclear, follow [references/triage.md](references/triage.md).
-
 ## Red flags
 
 | The thought | The reality |
@@ -101,8 +98,7 @@ failure location is unclear, follow [references/triage.md](references/triage.md)
 
 ## Learn, then close
 
-Before closing, harvest what outlives the bundle
-([references/learning.md](references/learning.md)): a verified correction or
+Before closing, harvest what outlives the bundle: a verified correction or
 durable constraint becomes a locked decision or a work note - never only chat.
 
 Use [Completion and delivery](~/maestro/WORKFLOW.md#completion-and-delivery)

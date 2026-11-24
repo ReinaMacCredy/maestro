@@ -72,7 +72,7 @@ test("557 every SLP scenario replays to its golden transcript (d43)", async () =
   }
 }, 120_000);
 
-test("558 the replay gate is named where the improver reads it (d43)", async () => {
+test("558 the replay gate is named where a doctrine edit reads it (d43)", async () => {
   const scripts = (await readdir(directory)).filter((name) => name.endsWith(".script"));
   const goldens = new Set((await readdir(directory)).filter((name) => name.endsWith(".golden")));
   for (const name of scripts) {
@@ -84,12 +84,9 @@ test("558 the replay gate is named where the improver reads it (d43)", async () 
   }
 
   const root = join(import.meta.dir, "..");
-  const skill = await readFile(
-    join(root, "src", "plugins", "skills", "maestro-improve", "SKILL.md"),
+  const recipe = await readFile(
+    join(root, "src", "plugins", "recipes", "authoring-a-skill.md"),
     "utf8",
   );
-  expect(skill).toContain("tests/scenario-golden.test.ts");
-  expect(skill).toContain("MAESTRO_GOLDEN_UPDATE=1");
-  expect(skill).toContain("tests/scenarios/<name>.script");
-  expect(skill).not.toContain("<case>");
+  expect(recipe).toContain("tests/scenario-golden.test.ts");
 });

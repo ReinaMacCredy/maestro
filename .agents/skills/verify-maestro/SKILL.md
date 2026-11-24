@@ -32,7 +32,7 @@ Add one block to `scripts/journey.sh` per journey the change touches, invoking
 - recipe catalog: `recipe list` shows the recipe, `recipe show` prints it.
 - playbooks: 17 playbook and method recipes listed, bug-fix's steps shown,
   the retired `work` recipe refused; `~/maestro/PRINCIPLES.md` has 24
-  sections; nine skills; the ten new agent renders; no PreToolUse hook.
+  sections; seven skills; the ten new agent renders; no PreToolUse hook.
 - brief and grant: the SessionStart `method:` line routes by playbook; the
   `delivery grant:` line appears only while `policy-auto-pr` is enabled.
 - bundle check: a fresh bundle's U1 skeleton is reported and exits 1.

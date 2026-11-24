@@ -9,9 +9,10 @@ authoring-a-skill playbook (Lauren Tan, MIT; notice in THIRD_PARTY.md).
 1. Pick the route by the kind of skill.
    - An edit to an existing skill maestro ships (`src/plugins/skills/maestro-*`
      in the maestro repository) is a doctrine edit. File the correction with
-     `maestro lesson file` and make the edit through the maestro-improve
-     skill. Its replay gate and independent challenge apply on top of the
-     checks in step 4.
+     `maestro lesson file`, make the smallest edit that would have prevented
+     it, run `bun test tests/scenario-golden.test.ts` and every suite that
+     asserts the changed text, and have a separate reviewer challenge the
+     edit, on top of the checks in step 4.
    - A repository's verify-<repo> skill follows
      `maestro recipe show verification-skill`.
    - Any other skill, a new maestro skill included, follows the steps below.

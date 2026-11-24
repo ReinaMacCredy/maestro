@@ -310,45 +310,6 @@ test("552 a new team inherits processed lessons as well as pending ones (w552/d4
   });
 });
 
-test("554 install ships maestro-improve beside the other method skills (w553/d42)", async () => {
-  await withFixture(async (fixture) => {
-    const { path } = await prepareInstallFixture(fixture);
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-
-    const skill = join(fixture.home, "maestro", "skills", "maestro-improve", "SKILL.md");
-    expect(await readFile(skill, "utf8")).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
-    expect(await realpath(join(fixture.home, ".claude", "skills", "maestro-improve"))).toBe(
-      await realpath(join(fixture.home, "maestro", "skills", "maestro-improve")),
-    );
-  });
-});
-
-test("555 [lint] the improver skill is one Peer assignment parameterised by target", async () => {
-  const root = join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-improve");
-  const skill = await readFile(join(root, "SKILL.md"), "utf8");
-
-  // One skill, one parameter: the target is what the lane is pointed at.
-  expect(skill).toContain("maestro lesson list");
-  expect(skill).toContain("target");
-  // The smallest edit per group, and the evidence ids travel into the commit.
-  expect(skill).toContain("smallest edit");
-  expect(skill).toContain("evidence ids");
-  // A lesson is closed by pointing at the commit, or answered when it is wrong.
-  expect(skill).toContain("maestro lesson process");
-  expect(skill).toContain("--answer");
-  expect(skill).toContain("never deletes");
-  // Progressive disclosure: the target catalogue is a reference, not the skill.
-  expect(skill).toContain("references/targets.md");
-  const targets = await readFile(join(root, "references", "targets.md"), "utf8");
-  expect(targets).toContain("Workspace Protocol");
-  expect(skill).toContain("Workspace Pack in `src/plugins/resources/SLP.md`");
-  expect(targets).toContain("`src/plugins/resources/SLP.md`");
-  for (const retired of ["`lane.md`", "`lead.md`"]) {
-    expect(skill).not.toContain(retired);
-    expect(targets).not.toContain(retired);
-  }
-});
-
 test("560 lesson render warns before it summarises and names the command that shows why (w558)", async () => {
   await withFixture(async (fixture) => {
     const room = join(fixture.home, "maestro");
@@ -375,16 +336,6 @@ test("560 lesson render warns before it summarises and names the command that sh
     // shows what the child said.
     expect(rendered.stdout).toContain(`cd ${broken} && maestro lesson list --all`);
   });
-});
-
-test("566 [lint] the improver skill returns through the SLP work surface", async () => {
-  const root = join(import.meta.dir, "..", "src", "plugins");
-  const skill = await readFile(join(root, "skills", "maestro-improve", "SKILL.md"), "utf8");
-
-  expect(skill).toContain("maestro work return <work-id>");
-  expect(skill).toContain("lesson in another store is processed by that store's holder");
-  expect(skill).not.toContain("--lessons");
-  expect(skill).not.toContain("File one handback");
 });
 
 // room d129 points 2 and 3: today the hook line prints one lesson id and the

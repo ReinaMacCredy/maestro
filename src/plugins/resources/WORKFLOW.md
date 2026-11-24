@@ -144,7 +144,6 @@ Skills load by bare name in every tool and serve steps inside a playbook:
 - A decision owned by someone not in the conversation:
   `maestro-questionnaire`.
 - Tier, bundle lifecycle, resume, and handoff: `maestro-bundle`.
-- Doctrine edits from filed lessons: `maestro-improve`.
 - Quality review: use Per-tool adapters below. Verify owns "does it meet
   the contract"; review owns "is the code good".
 

@@ -674,7 +674,7 @@ test("241 install moves the four method skills into the room and links only thos
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
     expect(installed.exitCode).toBe(0);
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
       const roomSkill = join(fixture.home, "maestro", "skills", name, "SKILL.md");
       expect(await readFile(roomSkill, "utf8")).toMatch(
         /<!-- maestro-skill-version: [0-9a-f]{40} -->/,
@@ -688,7 +688,7 @@ test("241 install moves the four method skills into the room and links only thos
     expect(await readFile(excludedClaudeSkill, "utf8")).toBe("# excluded Claude skill\n");
     expect(
       await Bun.file(
-        join(fixture.home, "maestro", "skills", "maestro-verify", "references", "audit.md"),
+        join(fixture.home, "maestro", "skills", "maestro-design", "references", "grilling.md"),
       ).exists(),
     ).toBe(true);
   });
@@ -726,7 +726,7 @@ test("442 install preserves review-date frontmatter in every method skill", asyn
     const installed = await runCli(fixture, ["install"], { PATH: path });
 
     expect(installed.exitCode).toBe(0);
-    for (const name of ["maestro-bundle", "maestro-design", "maestro-improve", "maestro-work", "maestro-verify"]) {
+    for (const name of ["maestro-bundle", "maestro-design", "maestro-work", "maestro-verify"]) {
       const skill = await readFile(
         join(fixture.home, "maestro", "skills", name, "SKILL.md"),
         "utf8",

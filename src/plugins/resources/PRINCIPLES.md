@@ -649,9 +649,9 @@ owns which actions still pause for the owner.
 
 Apply when you catch yourself writing the same instruction a second time, or
 notice a recurring correction. Encode the rule as a lint, metadata flag,
-runtime check, or script instead of more text. For doctrine lessons the home
-is the mechanism rule in the maestro-improve skill
-(`~/maestro/skills/maestro-improve/SKILL.md`). If the lesson needs judgment and
+runtime check, or script instead of more text. Answer a doctrine lesson at the
+highest rung that works: architecture, then types, then a lint or check, then
+a test, and doctrine text last. If the lesson needs judgment and
 cannot be encoded, make the instruction more prominent and add an example of
 the failure mode. If the fix is structural, use only the structural fix. The
 instruction is the symptom.

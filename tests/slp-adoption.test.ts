@@ -143,29 +143,6 @@ test("134 install materializes layered proof, failed traces, learning, and triag
       expect(skill).toContain(required);
     }
 
-    const learning = await Bun.file(join(verifyRoot, "references", "learning.md")).text();
-    expect(learning).toContain("canary");
-    expect(learning).toContain("review/delete date");
-
-    const triagePath = join(verifyRoot, "references", "triage.md");
-    expect(await Bun.file(triagePath).exists()).toBe(true);
-    const triage = await Bun.file(triagePath).text();
-    for (const step of [
-      "Problem",
-      "Authority",
-      "Topology",
-      "Attention",
-      "Capability",
-      "State",
-      "Evidence",
-      "Owning layer",
-      "Learning",
-    ]) {
-      expect(triage).toContain(step);
-    }
-
-    const audit = await Bun.file(join(verifyRoot, "references", "audit.md")).text();
-    expect(audit).toContain("triage.md");
   });
 });
 
@@ -194,7 +171,7 @@ test("135 install materializes intake, council reconcile, and handoff doctrine",
     // w625: the eight reconcile axes moved from maestro-design's Council
     // section, now a pointer, into maestro-council's Lead draft.
     const council = await Bun.file(join(skillsRoot, "maestro-council", "SKILL.md")).text();
-    const leadDraft = council.slice(council.indexOf("## Lead draft"), council.indexOf("## Audit"));
+    const leadDraft = council.slice(council.indexOf("7. Draft the verdict"), council.indexOf("8. Audit the draft"));
     for (const axis of [
       "premise",
       "mechanism",
