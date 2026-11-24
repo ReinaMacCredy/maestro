@@ -13,14 +13,8 @@ import {
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory } from "./home.ts";
-import {
-  composedPeerName,
-  profileDigest,
-  profileDirectories,
-  resolveProfile,
-  type Profile,
-} from "./profiles.ts";
 import { isRoom } from "./room.ts";
+import { resolveSeat, seatDigest, seatFileDirectories, seatNames, type Seat } from "./slp-seats.ts";
 import {
   buildSlpTeamPlan,
   HerdrSlpRuntime,
@@ -48,148 +42,83 @@ type WorkState = "OPEN" | "ACTIVE" | "RETURNED" | "DONE";
 type LifecycleOperation = "START" | "STOP";
 type LifecyclePhase = "RESERVED" | "RUNTIME_READY" | "COMMITTED";
 
-interface PackProfiles {
-  lead: string;
-  peer: string;
-}
-
-// room d128: the models chosen at team start, one per seat, recorded beside
-// the profiles so restore and a later work add read them back. Absent means
-// the profile's own frontmatter model, the default when no flag is given.
 interface PackModels {
   lead?: string;
   peer?: string;
 }
 
-// d91: a generation pins the pack plus the source bytes of every profile it
-// referenced; a profile first used by a later work add is appended here.
+// profileDigests keeps its stored name so generations started before d906 still read.
 interface PackConfiguration {
   models?: PackModels;
   profileDigests: Record<string, string>;
-  profiles: PackProfiles;
 }
 
 function packModels(value: unknown): PackModels | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
   const models: PackModels = {};
-  for (const seat of ["lead", "peer"] as const) {
+  for (const seat of seatNames) {
     const model = raw[seat];
     if (typeof model === "string" && model.trim() !== "") models[seat] = model;
   }
   return Object.keys(models).length > 0 ? models : undefined;
 }
 
-// Generations started before pack version 3 stored models, not profiles; they
-// resolve to the shipped seat names so status and stop can still build a plan.
 function packConfiguration(json: string): PackConfiguration {
   const parsed = JSON.parse(json) as Partial<PackConfiguration>;
-  const profiles = parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : null;
   const models = packModels(parsed.models);
   return {
     ...(models ? { models } : {}),
     profileDigests: parsed.profileDigests ?? {},
-    profiles: {
-      lead: profiles?.lead ?? "lead",
-      peer: profiles?.peer ?? "peer",
-    },
   };
 }
 
-function seatLaunch(profile: Profile, model: string | undefined): SeatLaunch {
-  return {
-    autocompact: profile.frontmatter.autocompact ?? null,
-    harness: profile.frontmatter.harness,
-    model: model ?? null,
-    profile: profile.name,
-  };
+function seatLaunch(seat: Seat, model: string | undefined): SeatLaunch {
+  return { autocompact: seat.config.autocompact ?? null, harness: seat.config.harness, model: model ?? null };
 }
 
-function seatDirectories(projectPath: string): string[] {
-  return profileDirectories(projectPath, resolveHomeDirectory());
+async function resolveSeats(projectPath: string, models: PackModels = {}): Promise<{ lead: SeatLaunch; profileDigests: Record<string, string> }> {
+  const home = resolveHomeDirectory();
+  const lead = await resolveSeat("lead", projectPath, home);
+  const peer = await resolveSeat("peer", projectPath, home);
+  return { lead: seatLaunch(lead, models.lead), profileDigests: { lead: seatDigest(lead), peer: seatDigest(peer) } };
 }
 
-async function requireProfile(name: string, projectPath: string, marker: string): Promise<Profile> {
-  const directories = seatDirectories(projectPath);
-  const profile = await resolveProfile(name, directories);
-  if (!profile) {
-    throw new CliError(
-      "PROFILE_NOT_FOUND",
-      `${marker} names profile ${name}, which is not in ${directories.join(", ")}`,
-      { directories, profile: name },
-    );
-  }
-  return profile;
-}
-
-interface ResolvedSeats {
-  lead: SeatLaunch;
-  profileDigests: Record<string, string>;
-}
-
-async function resolveSeats(
-  profiles: PackProfiles,
-  projectPath: string,
-  models: PackModels = {},
-): Promise<ResolvedSeats> {
-  const lead = await requireProfile(profiles.lead, projectPath, "the lead marker");
-  const peer = await requireProfile(profiles.peer, projectPath, "the peer marker or --peer-profile");
-  const profileDigests: Record<string, string> = {};
-  for (const profile of [lead, peer]) profileDigests[profile.name] = profileDigest(profile);
-  return {
-    lead: seatLaunch(lead, models.lead),
-    profileDigests,
-  };
-}
-
-// Status and stop need only names and labels; a profile deleted since the
-// generation started must not stop the team from being inspected or closed.
-async function seatLaunchOrDefault(name: string, projectPath: string, model: string | undefined): Promise<SeatLaunch> {
-  const profile = await resolveProfile(name, seatDirectories(projectPath));
-  return profile ? seatLaunch(profile, model) : { autocompact: null, harness: "codex", model: model ?? null, profile: name };
-}
-
+// A seat file that no longer parses must not stop a team from being inspected or closed.
 async function planForTeam(team: {
   configuration_json: string;
   generation: number;
   project_path: string;
   team_id: string;
 }): Promise<SlpTeamPlan> {
-  const { models = {}, profiles } = packConfiguration(team.configuration_json);
+  const { models = {} } = packConfiguration(team.configuration_json);
+  const lead = await resolveSeat("lead", team.project_path, resolveHomeDirectory())
+    .then((seat) => seatLaunch(seat, models.lead))
+    .catch((): SeatLaunch => ({ autocompact: null, harness: "codex", model: models.lead ?? null }));
   return buildSlpTeamPlan({
     generation: team.generation,
-    lead: await seatLaunchOrDefault(profiles.lead, team.project_path, models.lead),
+    lead,
     projectPath: team.project_path,
     teamId: team.team_id,
   });
 }
 
-// A4: a referenced profile edited mid-generation is refused on the next op
-// with the same error shape as a pack edit, naming the profile.
-async function requireProfilesUnchanged(
+// A pin under a name that is no longer a seat (a peer variant from before d906) has nothing left to compare.
+async function requireSeatsUnchanged(
   configuration: PackConfiguration,
   team: { generation: number; project_path: string; team_id: string },
 ): Promise<void> {
-  const directories = seatDirectories(team.project_path);
-  const stop = `stop the generation with maestro team stop ${team.team_id}`;
-  for (const [name, digest] of Object.entries(configuration.profileDigests)) {
-    const profile = await resolveProfile(name, directories);
-    const actual = profile ? profileDigest(profile) : null;
+  for (const name of seatNames) {
+    const digest = configuration.profileDigests[name];
+    if (digest === undefined) continue;
+    const seat = await resolveSeat(name, team.project_path, resolveHomeDirectory());
+    const actual = seatDigest(seat);
     if (actual === digest) continue;
-    // w705: the digest is of bytes in files, so the refusal names the files. Since
-    // 348f0a2b a frontmatter-only shadow inherits a lower layer's mandate, which
-    // means two paths can decide one profile and the reader has to be told both.
-    // Naming the two exits keeps the refusal from reading as a dead end.
-    const deciding = profile ? [...new Set([profile.path, profile.bodyPath])] : [];
-    const where = deciding.length > 1
-      ? `${deciding[0]} (frontmatter) and ${deciding[1]} (mandate)`
-      : deciding[0];
+    const where = seat.paths.length > 1 ? `${seat.paths[0]} (frontmatter) and ${seat.paths[1]} (mandate)` : seat.paths[0];
     throw new CliError(
       "SLP_SNAPSHOT_CHANGED",
-      profile
-        ? `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name}, whose bytes are decided by ${where}; put those bytes back as they were pinned, or ${stop}`
-        : `running generation ${team.team_id}:g${team.generation} must keep its pinned profile ${name} (now missing from ${directories.join(", ")}); restore it in one of those directories, or ${stop}`,
-      { actual, deciding, expected: digest, profile: name, searched: directories },
+      `running generation ${team.team_id}:g${team.generation} must keep its pinned ${name} seat file, whose bytes are decided by ${where}; put those bytes back as they were pinned, or stop the generation with maestro team stop ${team.team_id}`,
+      { actual, deciding: seat.paths, expected: digest, searched: seatFileDirectories(team.project_path, resolveHomeDirectory()), seat: name },
     );
   }
 }
@@ -600,20 +529,8 @@ function packVersion(pack: string): string {
   return version;
 }
 
-function packProfile(pack: string, role: SlpRole): string {
-  const value = new RegExp(`<!-- slp:profile:${role}=([a-z0-9-]+) -->`).exec(pack)?.[1];
-  if (!value) {
-    throw new CliError(
-      "INVALID_SLP_PACK",
-      `SLP.md is missing the ${role} profile marker <!-- slp:profile:${role}=<name> -->`,
-    );
-  }
-  return value;
-}
-
-// d90: the mandate is the seat's rendered profile, so the post-open prompt
-// carries only team, generation, instance and the ready challenge; the shared
-// contract in every profile tells the seat how to answer it.
+// d90: the mandate lives in the seat file, so the post-open prompt carries only
+// team, generation, instance and the ready challenge.
 function roleContracts(
   teamId: string,
   generation: number,
@@ -905,15 +822,13 @@ type StartReservation =
   | { kind: "running"; operation: SlpLifecycleRow; row: RunningTeamRow }
   | { kind: "wait" };
 
-// d98: the per-generation seat override is --peer-profile; room d128 adds the
-// two model flags. A start that names a different peer profile or a
-// different model set than the pinned one is a configuration change, refused
-// on a running or pending generation exactly as an objective change is.
+// room d128: a start that names a different model set than the pinned one is a
+// configuration change, refused on a running or pending generation exactly as
+// an objective change is.
 function changedConfiguration(
-  input: { models: PackModels; peerProfile: string | undefined },
+  input: { models: PackModels },
   configuration: PackConfiguration,
 ): boolean {
-  if (input.peerProfile !== undefined && input.peerProfile !== configuration.profiles.peer) return true;
   const pinned = configuration.models ?? {};
   return (["lead", "peer"] as const).some((seat) => (input.models[seat] ?? null) !== (pinned[seat] ?? null));
 }
@@ -925,7 +840,6 @@ function reserveStart(
     digest: string;
     models: PackModels;
     objective: string;
-    peerProfile: string | undefined;
     projectPath: string;
     teamId: string;
     version: string;
@@ -1377,7 +1291,6 @@ async function startTeam(
   runtime: HerdrSlpRuntime,
   projectInput: string,
   objective: string,
-  peerProfileOverride: string | undefined,
   // room d128: the seat models chosen at start, pinned for the generation's life.
   models: PackModels = {},
 ): Promise<CliResult> {
@@ -1410,15 +1323,10 @@ async function startTeam(
     const hubPack = new TextDecoder().decode(hubPackBytes);
     const hubVersion = packVersion(hubPack);
     const hubDigest = createHash("sha256").update(hubPackBytes).digest("hex");
-    const hubProfiles: PackProfiles = {
-      lead: packProfile(hubPack, "lead"),
-      peer: peerProfileOverride ?? packProfile(hubPack, "peer"),
-    };
-    const hubSeats = await resolveSeats(hubProfiles, projectPath, models);
+    const hubSeats = await resolveSeats(projectPath, models);
     const hubConfiguration: PackConfiguration = {
       ...(Object.keys(models).length > 0 ? { models } : {}),
       profileDigests: hubSeats.profileDigests,
-      profiles: hubProfiles,
     };
     await archivePack(roomRoot, hubPackBytes, hubDigest);
     const ownerToken = randomUUID();
@@ -1432,7 +1340,6 @@ async function startTeam(
           digest: hubDigest,
           models,
           objective,
-          peerProfile: peerProfileOverride,
           projectPath,
           teamId,
           version: hubVersion,
@@ -1479,9 +1386,9 @@ async function startTeam(
             { actual: snapshotDigest, expected: running.pack_digest },
           );
         }
-        await requireProfilesUnchanged(configuration, running);
+        await requireSeatsUnchanged(configuration, running);
         await archivePack(roomRoot, snapshotBytes, running.pack_digest);
-        const seats = await resolveSeats(configuration.profiles, projectPath, configuration.models);
+        const seats = await resolveSeats(projectPath, configuration.models);
         const plan = buildSlpTeamPlan({
           generation: running.generation,
           lead: seats.lead,
@@ -1629,7 +1536,7 @@ async function startTeam(
         );
       }
       const configuration = packConfiguration(operation.configuration_json);
-      const seats = await resolveSeats(configuration.profiles, projectPath, configuration.models);
+      const seats = await resolveSeats(projectPath, configuration.models);
       const plan = buildSlpTeamPlan({
         generation: operation.generation,
         lead: seats.lead,
@@ -2114,31 +2021,9 @@ function normalizedPeerName(teamId: string, raw: string, existing: readonly stri
   return `peer-${readable}-${identity}`;
 }
 
-// d91: a profile first used by work add joins the generation's pin in both
-// stores, inside the same transaction as the Peer row.
-function appendPinnedProfile(
-  store: Store,
-  team: { generation: number; team_id: string },
-  pinned: { digest: string; name: string },
-): void {
-  for (const table of ["slp_local_teams", "slp_room.slp_teams"]) {
-    const current = store.database
-      .query<{ configuration_json: string }, [string, number]>(
-        `SELECT configuration_json FROM ${table} WHERE team_id = ? AND generation = ?`,
-      )
-      .get(team.team_id, team.generation);
-    if (!current) throw new CliError("NO_ACTIVE_TEAM", `no running SLP team row in ${table}`);
-    const configuration = packConfiguration(current.configuration_json);
-    configuration.profileDigests[pinned.name] = pinned.digest;
-    store.database
-      .query(`UPDATE ${table} SET configuration_json = ? WHERE team_id = ? AND generation = ?`)
-      .run(JSON.stringify(configuration), team.team_id, team.generation);
-  }
-}
-
 // w701 (d859): --acceptance and --blocked-by are declared in the shared work add
 // flag table, so the parser accepts them inside a team and the SLP branch, which
-// reads only --to, --profile and --fresh, then drops them without a word. Refuse
+// reads only --to, --model and --fresh, then drops them without a word. Refuse
 // instead of persisting: SLP has no acceptance column and no gating concept, so a
 // stored blocker nothing enforces would read as a gate that is not one. Both flags
 // keep working unchanged on the Hub path below this branch.
@@ -2174,9 +2059,8 @@ export async function maybeHandleSlpWorkAdd(
   refuseDiscardedWorkAddOptions(invocation);
   const objective = requiredPosition(invocation, 0, "work objective");
   const requestedTarget = stringOption(invocation, "to");
-  const profileOption = stringOption(invocation, "profile");
   // room d128: --model launches this one Peer with that model, over the
-  // generation's --peer-model; refused wherever --profile is refused.
+  // generation's --peer-model.
   const modelOption = stringOption(invocation, "model");
   if (modelOption !== undefined && modelOption.trim() === "") {
     throw new CliError("INVALID_OPTION", "--model needs a model name; the harness validates it, maestro passes it through");
@@ -2203,7 +2087,6 @@ export async function maybeHandleSlpWorkAdd(
   let createdPeerTab: string | null = null;
   let startedPeerPane: string | null = null;
   let plan: SlpTeamPlan | null = null;
-  let pinnedProfile: { digest: string; name: string } | null = null;
   const runtime = new HerdrSlpRuntime();
   if (!requestedTarget) {
     // room d118 (w725): a Lead opens its own item with no --to. The row is the
@@ -2211,9 +2094,6 @@ export async function maybeHandleSlpWorkAdd(
     // no Peer pane is opened, no wake line goes out, and its reviewer is the
     // seat above exactly as for Lead work today.
     if (!assignee) throw new CliError("RUNTIME_INCOMPLETE", "the team has no Lead");
-    if (profileOption !== undefined) {
-      throw new CliError("INVALID_OPTION", "--profile applies to Lead work add --to <peer>");
-    }
     if (modelOption !== undefined) {
       throw new CliError("INVALID_OPTION", "--model applies to Lead work add --to <peer>");
     }
@@ -2234,45 +2114,21 @@ export async function maybeHandleSlpWorkAdd(
         `running generation ${actor.team.team_id}:g${actor.team.generation} must keep its pinned Workspace Pack`,
       );
     }
-    await requireProfilesUnchanged(configuration, actor.team);
-    // d91/d98: --profile wins; a --to of the form peer-<name> naming a profile
-    // uses it; otherwise the generation's peer profile applies.
-    const directories = seatDirectories(actor.team.project_path);
-    let peerProfileName = profileOption ?? configuration.profiles.peer;
-    if (profileOption === undefined && requestedTarget.startsWith("peer-")) {
-      const node = requestedTarget.slice("peer-".length);
-      if (await resolveProfile(node, directories)) peerProfileName = node;
-      else if (await resolveProfile(requestedTarget, directories)) peerProfileName = requestedTarget;
-    }
-    const peerProfile = await requireProfile(
-      peerProfileName,
-      actor.team.project_path,
-      profileOption === undefined ? "the peer profile" : "--profile",
-    );
-    const renderedProfile = peerProfileName === "peer" ? "peer" : composedPeerName(peerProfileName);
+    await requireSeatsUnchanged(configuration, actor.team);
+    const peerSeat = await resolveSeat("peer", actor.team.project_path, resolveHomeDirectory());
     const knownPeer = roles.find((role) => role.name === peerName) ?? null;
-    if (knownPeer && knownPeer.profile !== "" && knownPeer.profile !== renderedProfile) {
-      throw new CliError(
-        "PEER_PROFILE_MISMATCH",
-        `${peerName} already runs profile maestro-${knownPeer.profile}; ${requestedTarget} cannot switch to maestro-${renderedProfile}, pick another Peer name`,
-        { peer: peerName, profile: knownPeer.profile, requested: renderedProfile },
-      );
-    }
     // room d128 (w728 rework): the launch line is the only carrier for the
     // model, and an acknowledged pane is never relaunched by work add - not
     // even by --fresh, whose /clear keeps the process. The role row does not
     // keep the launch model, so nothing could prove a repeated value matches
     // either; any --model on a reused pane is refused before a pane is
-    // ensured and before any store write, like PEER_PROFILE_MISMATCH above.
+    // ensured and before any store write.
     if (modelOption !== undefined && knownPeer && knownPeer.ready_challenge !== "") {
       throw new CliError(
         "INVALID_OPTION",
         `--model rides the launch line only, and ${peerName} is already running in ${knownPeer.pane_id}; drop --model to reuse it as it is, or pick another Peer name to open a new pane with --model ${modelOption}`,
         { model: modelOption, pane: knownPeer.pane_id, peer: peerName },
       );
-    }
-    if (configuration.profileDigests[peerProfileName] === undefined) {
-      pinnedProfile = { digest: profileDigest(peerProfile), name: peerProfileName };
     }
     // Hub d101: a reset mid-item would drop the Peer's working context, so
     // --fresh is refused before anything is written while it holds ACTIVE work.
@@ -2295,12 +2151,12 @@ export async function maybeHandleSlpWorkAdd(
     }
     plan = await planForTeam(actor.team);
     const peerPlan: SlpRolePlan = {
-      autocompact: peerProfile.frontmatter.autocompact ?? null,
-      kind: peerProfile.frontmatter.harness,
+      autocompact: peerSeat.config.autocompact ?? null,
+      kind: peerSeat.config.harness,
       label: `slp:${actor.team.team_id}:g${actor.team.generation}:peer:${peerName}`,
       model: modelOption ?? configuration.models?.peer ?? null,
       name: peerName,
-      profile: renderedProfile,
+      profile: "peer",
       role: "peer",
     };
     const ensured = await runtime.ensurePeer(
@@ -2412,7 +2268,6 @@ export async function maybeHandleSlpWorkAdd(
             now,
           );
       }
-      if (pinnedProfile) appendPinnedProfile(context.store, actor.team, pinnedProfile);
     }
     id = context.store.nextCountedId("w", ["work", "slp_work", "slp_lifecycle_operations.work_id"]);
     context.store.database
@@ -4744,23 +4599,18 @@ export const slpV2Plugin: BuiltInPlugin = {
             runtime,
             requiredPosition(invocation, 0, "project"),
             requiredPosition(invocation, 1, "objective"),
-            stringOption(invocation, "peer-profile"),
             models,
           );
         },
         {
           description: "Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).",
           flags: {
-            "--peer-profile": {
-              description: "Override the Workspace Pack peer profile for this generation (recorded on the team row).",
-              value: true,
-            },
             "--lead-model": {
-              description: "Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).",
+              description: "Launch the Lead with this model (`claude --model` / `codex --model` on its launch line); the lead seat file's model is the default; recorded on the team row (room d128).",
               value: true,
             },
             "--peer-model": {
-              description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.",
+              description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
               value: true,
             },
           },

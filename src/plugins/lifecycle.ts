@@ -11,6 +11,7 @@ import {
   codexHookTrustRecorded,
   forgetRepository,
   readGitHeadCommit,
+  removeSeatFiles,
   gitMainWorktree,
   stampRuntime,
   uninstallRepo,
@@ -19,7 +20,7 @@ import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory, resolveHubRoom } from "./home.ts";
 import { installInRoomMessage, isRoom } from "./room.ts";
 import { skillNames } from "./skills.ts";
-import { readSeatToken, removeRenderedProfiles, seatTokenPath } from "./profiles.ts";
+import { readSeatToken, seatTokenPath } from "./slp-seats.ts";
 import { unlinkHerdrPlugin } from "./slp-plugin.ts";
 import { readSourceRecord } from "./source-record.ts";
 
@@ -355,9 +356,8 @@ async function update(): Promise<CliResult> {
     "-e",
     `const room = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "room.ts")).href)});` +
       `await room.scaffoldRoom(${JSON.stringify(home)});` +
-      // The rendered seat profiles follow the runtime the same way (Hub d83).
-      `const profiles = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "profiles.ts")).href)});` +
-      `await profiles.materializeProfiles(${JSON.stringify(home)}, ${JSON.stringify(resolve(process.cwd()))});`,
+      `const install = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "install.ts")).href)});` +
+      `await install.syncSeatFiles(${JSON.stringify(home)}, ${JSON.stringify(resolve(process.cwd()))});`,
   ]);
   if (scaffolded.exitCode !== 0) {
     throw new CliError(
@@ -764,7 +764,7 @@ async function uninstall(): Promise<CliResult> {
   const repo = resolve(process.cwd());
   refuseRepositoryWiringInRoom(repo);
   const removed = await uninstallRepo(repo);
-  removed.push(...await removeRenderedProfiles(homeDirectory()));
+  removed.push(...await removeSeatFiles(homeDirectory()));
   removed.push(...await unlinkHerdrPlugin(homeDirectory()));
   if (await forgetRepository(homeDirectory(), repo)) removed.push(`${repo} registry line`);
   return {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderedProfilePath } from "../src/plugins/profiles.ts";
+import { seatLaunchPath } from "../src/plugins/slp-seats.ts";
 import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const OWNER = { MAESTRO_SESSION_ID: "eperm-owner", MAESTRO_SESSION_PID: "1" };
@@ -226,14 +226,14 @@ test("289 [lint] recipe and installed Hub expose the same simplified SLP roles",
     const pack = await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8");
     expect(room).toContain("This workspace is the Hub Supervisor.");
     expect(room).toContain("read `SLP.md`");
-    // Hub d91/d98: pack version 3 names profiles; the seat mandate lives in
-    // the rendered profile, not in the pack.
+    // Hub d91/d98: the seat mandate lives in the seat launch file, not in the
+    // pack, whose inert slp:profile marker lines stay for packs already written.
     expect(pack).toContain("<!-- slp:version=3 -->");
     expect(pack).toContain("<!-- slp:profile:lead=lead -->");
     expect(pack).not.toContain("slp:profile:team-supervisor");
     expect(pack).not.toContain("## Team Supervisor");
     expect(
-      await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8"),
+      await readFile(seatLaunchPath(fixture.home, "claude", "lead"), "utf8"),
     ).toContain("Role: Lead.");
   });
 });

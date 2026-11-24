@@ -5,9 +5,11 @@ import {
   copyFile,
   cp,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
@@ -19,7 +21,7 @@ import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
-import { formatProfileSync, materializeProfiles, seatConfigRoot, seatTokenPath, writeSecretFile } from "./profiles.ts";
+import { formatSeatSync, materializeSeats, removeSeatConfig, seatDirectory, seatNames, seatTokenPath, writeSeatToken } from "./slp-seats.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { linkHerdrPlugin } from "./slp-plugin.ts";
@@ -499,21 +501,52 @@ export async function codexHookTrustRecorded(root: string, home: string): Promis
   return missing.size === 0;
 }
 
-// d846: one claude setup-token token for every Claude seat, handed over on
-// stdin so it never rides argv or a shell history line; it lives only in the
-// 0600 token file and each seat's settings env (A2).
-export async function writeSeatToken(home: string, raw: string): Promise<void> {
-  const token = raw.trim();
-  if (token === "") {
-    throw new CliError(
-      "SEAT_TOKEN_EMPTY",
-      "maestro install --seat-token reads the token from stdin and it was empty; run: claude setup-token | maestro install --seat-token",
-    );
+function renderedByMaestro(name: string, text: string): boolean {
+  const stem = /^maestro-([a-z0-9-]+)\.(?:md|toml|config\.toml)$/.exec(name)?.[1];
+  if (!stem) return false;
+  if (name.endsWith(".config.toml")) {
+    return /^(?:model = "[^"\n]*"\n)?(?:model_reasoning_effort = "[^"\n]*"\n)?developer_instructions = """\n[\s\S]*\n"""\n$/.test(text);
   }
-  // d855: private at creation, the chmod covers a pre-existing dir.
-  await mkdir(seatConfigRoot(home), { mode: 0o700, recursive: true });
-  await chmod(seatConfigRoot(home), 0o700);
-  await writeSecretFile(seatTokenPath(home), token);
+  if (name.endsWith(".toml")) {
+    return text.startsWith(`name = "maestro-${stem}"\ndescription = "`) && text.includes('\ndeveloper_instructions = """\n');
+  }
+  return text.startsWith(`---\nname: maestro-${stem}\ndescription: "`);
+}
+
+// d906: a maestro- file without the lines the old renderer wrote is the owner's.
+async function retireAgentFiles(home: string, keep: ReadonlySet<string>): Promise<string[]> {
+  const directories = [
+    join(home, ".claude", "agents"),
+    join(home, ".codex", "agents"),
+    join(home, ".codex"),
+    ...seatNames.map((seat) => join(seatDirectory(home, seat), "agents")),
+  ];
+  const retired: string[] = [];
+  for (const directory of directories) {
+    if (!existsSync(directory)) continue;
+    for (const entry of await readdir(directory)) {
+      const file = join(directory, entry);
+      if (keep.has(file) || !(await stat(file)).isFile()) continue;
+      if (!renderedByMaestro(entry, await readFile(file, "utf8"))) continue;
+      await rm(file, { force: true });
+      retired.push(file);
+    }
+  }
+  return retired;
+}
+
+export async function syncSeatFiles(home: string, repo: string): Promise<{ seatTokenMissing: boolean; text: string }> {
+  const seats = await materializeSeats(home, repo);
+  const retired = await retireAgentFiles(home, new Set(seats.launchFiles));
+  return {
+    seatTokenMissing: seats.seatToken === "missing",
+    text: formatSeatSync(seats, home) +
+      (retired.length > 0 ? `\nretired ${retired.length} maestro agent files an earlier install wrote; maestro ships no sub-agent definitions` : ""),
+  };
+}
+
+export async function removeSeatFiles(home: string): Promise<string[]> {
+  return [...await retireAgentFiles(home, new Set()), ...await removeSeatConfig(home)];
 }
 
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
@@ -762,7 +795,7 @@ export const installPlugin: BuiltInPlugin = {
         await rm(observeShim, { force: true });
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
-        const profileSync = await materializeProfiles(home, repo);
+        const seatSync = await syncSeatFiles(home, repo);
         const pluginLink = await linkHerdrPlugin(home, shim, await readSourceVersion(sourceRoot));
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
@@ -787,7 +820,7 @@ export const installPlugin: BuiltInPlugin = {
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
-            `\n${formatProfileSync(profileSync)}` +
+            `\n${seatSync.text}` +
             `\nherdr plugin: ${pluginLink.status === "unreachable" ? pluginLink.warning : `${pluginLink.status} at ${pluginLink.directory}`}` +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
@@ -795,7 +828,7 @@ export const installPlugin: BuiltInPlugin = {
             (roomCodexHookTrustRecorded
               ? "\nroom Codex hooks: Codex has recorded trust for both hooks (the hash is not verifiable here); re-check with /hooks if they stop firing"
               : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
-            (profileSync.seatToken === "missing"
+            (seatSync.seatTokenMissing
               ? `\nwarning: no seat token at ${seatTokenPath(home)}, so Claude seats cannot log in; run: claude setup-token | maestro install --seat-token`
               : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : "") +

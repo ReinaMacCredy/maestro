@@ -134,7 +134,7 @@ test("SLP v2 starts one ready generation with a pinned pack and initial Lead wor
     expect(prompts.every((command) => command.includes("--wait") && command.includes("--timeout")))
       .toBe(true);
     // d90: the post-open prompt is one line naming team, generation, instance
-    // and the challenge; the mandate lives in the rendered profile.
+    // and the challenge; the mandate lives in the seat file.
     for (const command of prompts) {
       expect(command[3]).toMatch(
         new RegExp(`^slp team ${startData.team.teamId} generation 1 instance [0-9a-f-]{36}; reply [0-9a-f]{32}$`),
@@ -490,11 +490,11 @@ test("SLP v2 gives Herdr agent startup its own bounded readiness window", async 
     const fake = await installFakeHerdr(fixture, { agentStartDelayMs: 1_500 });
     const plan = buildSlpTeamPlan({
       generation: 1,
-      lead: { harness: "codex", profile: "lead" },
+      lead: { harness: "codex" },
       projectPath: fixture.repo,
       teamId: "startup-window",
     });
-    // The fixture's HOME holds the rendered profiles, not the machine's.
+    // The fixture's HOME holds the seat launch files, not the machine's.
     const runtime = new HerdrSlpRuntime(1_000, { ...process.env, ...fake.env, HOME: fixture.home });
 
     const started = await runtime.start(
@@ -512,7 +512,7 @@ test("SLP v2 waits for workspace-close visibility before declaring runtime absen
     const fake = await installFakeHerdr(fixture);
     const plan = buildSlpTeamPlan({
       generation: 1,
-      lead: { harness: "codex", profile: "lead" },
+      lead: { harness: "codex" },
       projectPath: fixture.repo,
       teamId: "close-visibility",
     });
@@ -1083,11 +1083,8 @@ for (const harness of ["claude", "codex"] as const) {
       ).toBe(0);
       const fake = await installFakeHerdr(fixture, { trustDialog: harness });
       if (harness === "claude") {
-        const packPath = join(room, "SLP.md");
-        await writeFile(
-          packPath,
-          (await readFile(packPath, "utf8")).replace("<!-- slp:profile:lead=lead -->", "<!-- slp:profile:lead=peer-opus -->"),
-        );
+        await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+        await writeFile(join(fixture.home, "maestro", "profiles", "lead.md"), "---\nharness: claude\n---\n");
       }
 
       const failed = await runCliAt(

@@ -444,9 +444,6 @@ export const workPlugin: BuiltInPlugin = {
           // add can honour refuses the same way here, before any store write.
           // --model and --fresh used to fall through in silence, so an add
           // outside SLP looked as if it had carried them.
-          if (invocation.options.profile !== undefined) {
-            throw new CliError("INVALID_OPTION", "--profile is available only for SLP work add --to <peer>");
-          }
           if (invocation.options.model !== undefined) {
             throw new CliError("INVALID_OPTION", "--model is available only for SLP work add --to <peer>");
           }
@@ -560,12 +557,8 @@ export const workPlugin: BuiltInPlugin = {
               description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
               value: true,
             },
-            "--profile": {
-              description: "Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).",
-              value: true,
-            },
             "--model": {
-              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.",
+              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the peer seat file's model); passed through unvalidated (room d128), so name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
               value: true,
             },
             "--fresh": {

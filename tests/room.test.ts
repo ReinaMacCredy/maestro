@@ -176,9 +176,10 @@ test("268 first install seeds a neutral OWNER.md", async () => {
     expect(owner).toContain("communication preferences");
     expect(owner).toContain("maestro decide");
     // Hub finding F3 (w734, room d128): a seat's model is a launch-time
-    // choice, so the seat-profile section names the model flags beside
-    // --peer-profile and still refuses to carry a model table.
-    expect(owner).toContain("maestro team start --peer-profile <name>");
+    // choice, so the seats section names the model flags beside the two seat
+    // files and still refuses to carry a model table (d906).
+    expect(owner).toContain("`profiles/peer.md`");
+    expect(owner).not.toContain("--peer-profile");
     expect(owner).toContain("--lead-model");
     expect(owner).toContain("--peer-model");
     expect(owner).not.toContain("--supervisor-model");

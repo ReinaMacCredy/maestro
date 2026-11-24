@@ -1,7 +1,7 @@
 import { afterEach } from "bun:test";
 import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { materializeProfiles, seatTokenPath } from "../src/plugins/profiles.ts";
+import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import type { Fixture } from "./helpers.ts";
 
@@ -623,7 +623,7 @@ async function handle(server: FakeServer, method: string, params: Params, subscr
       const body = params.text ?? "";
       state.prompts.push({ name: target, body });
       // d90: the post-open prompt is one line; the seat knows its role from its
-      // rendered profile, which the fake reads off the agent name prefix.
+      // seat file, which the fake reads off the agent name prefix.
       const opened = /^slp team (\S+) generation (\d+) instance \S+; reply ([0-9a-f]{32})$/.exec(body);
       const role = target.startsWith("lead-") ? "lead" : "peer";
       if (opened) {
@@ -790,14 +790,14 @@ export async function installFakeHerdr(
   const log = join(fixture.root, "fake-herdr-log.jsonl");
   const tripwire = join(fixture.root, "fake-herdr-tripwire.jsonl");
   const socket = join(fixture.root, "herdr.sock");
-  // A seat launches only through its rendered profile (A2), so the fake
+  // A seat launches only through its seat launch file (A2), so the fake
   // machine carries what maestro install would have rendered into this home:
   // the Hub skills the shipped skills: lists name, a seat token (d846) and
   // the seat dirs with their agent files.
   await materializeSkills(fixture.home, "dev");
   await mkdir(dirname(seatTokenPath(fixture.home)), { recursive: true });
   await writeFile(seatTokenPath(fixture.home), "sk-ant-oat01-fake-herdr-fixture\n");
-  await materializeProfiles(fixture.home, fixture.repo);
+  await materializeSeats(fixture.home, fixture.repo);
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "herdr"), tripwireSource(tripwire));
   await chmod(join(bin, "herdr"), 0o755);

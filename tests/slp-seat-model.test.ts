@@ -2,16 +2,16 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { profileDigest, profileDirectories, renderedProfilePath, resolveProfile } from "../src/plugins/profiles.ts";
+import { resolveSeat, seatDigest, seatLaunchPath } from "../src/plugins/slp-seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
 import { runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 // room d128 (w728): a seat's model is a launch-time choice. team start gains
-// --lead-model and --peer-model, recorded on the team row
-// like --peer-profile; work add --to gains --model for one Peer. The model
+// --lead-model and --peer-model, recorded on the team row; work add --to
+// gains --model for one Peer. The model
 // rides the launch line after --agent/--profile the way --autocompact does, so
-// the rendered profile, its digest and the pinned pack are untouched. The
+// the seat file, its digest and the pinned pack are untouched. The
 // frontmatter model stays the default a generation uses when no flag is given.
 
 function envelope<T>(stdout: string): T {
@@ -81,14 +81,11 @@ test("seat-model: team start --lead-model/--peer-model ride the launch line afte
     const fake = await installFakeHerdr(fixture);
     // The shipped peer is codex and the shadowed lead is claude, so one start
     // covers both launch-line shapes.
-    const leadRender = renderedProfilePath(fixture.home, "claude", "lead");
+    const leadRender = seatLaunchPath(fixture.home, "claude", "lead");
     const before = { lead: await readFile(leadRender, "utf8") };
-    const directories = profileDirectories(fixture.repo, fixture.home);
     const expectedDigests: Record<string, string> = {};
-    for (const name of ["lead", "peer"]) {
-      const profile = await resolveProfile(name, directories);
-      expect(profile).not.toBeNull();
-      expectedDigests[name] = profileDigest(profile!);
+    for (const name of ["lead", "peer"] as const) {
+      expectedDigests[name] = seatDigest(await resolveSeat(name, fixture.repo, fixture.home));
     }
 
     const started = await runCliAt(
@@ -108,7 +105,7 @@ test("seat-model: team start --lead-model/--peer-model ride the launch line afte
       "--agent", "maestro-lead", "--autocompact", "250000", "--model", "fable",
     ]);
 
-    // (a): recorded on the team row next to the profiles; (c): the digests and
+    // (a): recorded on the team row next to the digests; (c): the digests and
     // the rendered files are exactly what a start without the flags pins.
     const configuration = teamConfiguration(fixture, data.team.teamId, data.team.generation);
     expect(configuration.models).toEqual({ lead: "fable", peer: "gpt-5.6-luna" });
@@ -132,24 +129,15 @@ test("seat-model: team start --lead-model/--peer-model ride the launch line afte
     );
     expect(overridden.exitCode).toBe(0);
     const beta = envelope<{ role: { name: string } }>(overridden.stdout).role.name;
-    const claudePeer = await runCliAt(
-      fixture,
-      fixture.repo,
-      ["work", "add", "claude peer", "--to", "gamma", "--profile", "peer-opus", "--model", "fable", "--json"],
-      leadEnvironment,
-    );
-    expect(claudePeer.exitCode).toBe(0);
-    const gamma = envelope<{ role: { name: string } }>(claudePeer.stdout).role.name;
     const peerStarts = startsOf(await fakeHerdrCommands(fake));
     expect(peerStarts.get(alpha)).toEqual(["--profile", "maestro-peer", "--model", "gpt-5.6-luna"]);
     expect(peerStarts.get(beta)).toEqual(["--profile", "maestro-peer", "--model", "gpt-5.6-sol"]);
-    expect(peerStarts.get(gamma)).toEqual(["--agent", "maestro-peer-opus", "--model", "fable"]);
     // The override was for that one pane: the team row still says the team's peer model.
     expect(teamConfiguration(fixture, data.team.teamId, data.team.generation).models?.peer).toBe("gpt-5.6-luna");
 
     // Restore: an identical start of the running generation reads the models
     // back from the row (the same line is printed), and a start naming another
-    // model is a configuration change and refused like --peer-profile.
+    // model is a configuration change and refused.
     const restored = await runCliAt(
       fixture,
       room,
@@ -232,7 +220,7 @@ test("seat-model: an empty model and work add --model without --to (the Lead's o
 // Rework on w728 (part b): the launch line is the only carrier for --model, so
 // a Peer pane that is already acknowledged cannot take one, with or without
 // --fresh (a /clear is not a relaunch). Refused before any pane is ensured and
-// before any store write, like PEER_PROFILE_MISMATCH.
+// before any store write.
 test("seat-model: work add --to <peer> --model on an already-acknowledged Peer pane is refused with INVALID_OPTION naming the launch line and the way out, with or without --fresh, and writes nothing (room d128 b, rework)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
@@ -289,11 +277,10 @@ test("seat-model: work add --to <peer> --model on an already-acknowledged Peer p
 }, 30_000);
 
 // Hub finding F1 (g7, w734): outside SLP - a plain checkout or the Hub room,
-// where maybeHandleSlpWorkAdd does not take the add - work add refuses
-// --profile but used to ignore --model and --fresh in silence, so an option
-// that only a Lead's Peer add can honour looked accepted. All three refuse the
-// same way, before any store write.
-test("seat-model: work add outside SLP refuses --profile, --model and --fresh alike and writes nothing (Hub finding F1)", async () => {
+// where maybeHandleSlpWorkAdd does not take the add - work add used to ignore
+// --model and --fresh in silence, so an option that only a Lead's Peer add can
+// honour looked accepted. Both refuse the same way, before any store write.
+test("seat-model: work add outside SLP refuses --model and --fresh alike and writes nothing (Hub finding F1)", async () => {
   await withFixture(async (fixture) => {
     const listIds = async (): Promise<string[]> => {
       const listed = await runCliAt(fixture, fixture.repo, ["work", "list", "--json"]);
@@ -301,7 +288,7 @@ test("seat-model: work add outside SLP refuses --profile, --model and --fresh al
       return envelope<{ works: { id: string }[] }>(listed.stdout).works.map((row) => row.id);
     };
     const before = await listIds();
-    for (const option of [["--profile", "peer-opus"], ["--model", "fable"], ["--fresh"]]) {
+    for (const option of [["--model", "fable"], ["--fresh"]]) {
       const refused = await runCliAt(fixture, fixture.repo, ["work", "add", "plain item", ...option, "--json"]);
       expect(refused.exitCode).toBe(1);
       expect(failure(refused.stderr).code).toBe("INVALID_OPTION");

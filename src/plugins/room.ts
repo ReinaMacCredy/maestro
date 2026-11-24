@@ -82,19 +82,18 @@ actions that always require confirmation. Record a settled SLP decision with
 \`maestro decide "<choice>" --why "<reason>"\`; use \`--replaces\` when a later
 decision supersedes it.
 
-## Seat profiles
+## Seats
 
-The harness, model, effort and flags of each SLP seat live in the two seat
-profiles the Workspace Pack names: \`lead\` and \`peer\`.
-Change one by shadowing it in \`profiles/<name>.md\` beside this file (YAML frontmatter
-\`harness\`, \`model\`, \`effort\`, \`permission\` or \`sandbox\`, \`autocompact\`,
-\`disallowed_tools\`, \`description\`; body = the mandate), then run
-\`maestro install\` so the rendered launch bundles follow. A Peer variant is
-\`maestro team start --peer-profile <name>\`. A seat's model is a launch-time
-choice, not a reinstall: \`maestro team start --lead-model <model>\` and
+The harness, model, effort and flags of the two SLP seats, \`lead\` and \`peer\`,
+live in their seat files. Change one by writing \`profiles/lead.md\` or
+\`profiles/peer.md\` beside this file (YAML frontmatter \`harness\`, \`model\`,
+\`effort\`, \`permission\`, \`autocompact\`, \`disallowed_tools\`, \`description\`,
+\`skills\`, \`settings\`; a body replaces the mandate, no body keeps the
+shipped one), then run \`maestro install\` so the seat launch files follow. A
+seat's model is a launch-time choice, not a reinstall: \`maestro team start --lead-model <model>\` and
 \`--peer-model <model>\` set it for a generation and
 \`maestro work add --to <peer> --model <model>\` sets it for one Peer, riding
-the launch line, so no shadow edit and no \`maestro install\` is
+the launch line, so no seat file edit and no \`maestro install\` is
 needed (room d128); do not keep a model table here.
 `;
 

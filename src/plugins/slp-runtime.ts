@@ -12,7 +12,7 @@ import {
   type HerdrWorkspace,
 } from "./herdr-client.ts";
 import { resolveHomeDirectory } from "./home.ts";
-import { readSeatToken, renderedProfilePath, seatDirectory, seatTokenPath } from "./profiles.ts";
+import { readSeatToken, seatDirectory, seatLaunchPath, seatTokenPath } from "./slp-seats.ts";
 import { slpRuntimeDirectory } from "./slp-process.ts";
 
 export { SlpRuntimeError };
@@ -28,15 +28,11 @@ const trustDialogPattern =
 
 export type SlpRole = "lead" | "peer";
 
-// Hub d90/d98: a seat is launched as a rendered native profile; the harness
-// and every launch flag come from the profile, never from the plan.
 export interface SeatLaunch {
   autocompact?: number | null;
   harness: "claude" | "codex";
-  // room d128: a launch-time model choice; null means the profile's own
-  // frontmatter model is the default the harness uses.
+  // room d128: null leaves the seat file's own model to the harness.
   model?: string | null;
-  profile: string;
 }
 
 export interface SlpRolePlan {
@@ -199,7 +195,7 @@ export function buildSlpTeamPlan(input: {
         label: `${prefix}:lead`,
         model: input.lead.model ?? null,
         name: `lead-${input.teamId}`,
-        profile: input.lead.profile,
+        profile: "lead",
         role: "lead",
       },
     ],
@@ -208,18 +204,13 @@ export function buildSlpTeamPlan(input: {
   };
 }
 
-// d90: the harness flag names the rendered profile and nothing else; the
-// agent file has no carrier for autocompact, so it rides the launch line (F10).
-// room d128: a launch-time model rides the same way, after the profile flag,
-// so the rendered file and its digest never change to switch a seat's model;
-// the launch-line --model beats the frontmatter model in both harnesses, and
-// maestro validates nothing about the value (the harness does).
+// F10, room d128: autocompact and the model ride the launch line, so the seat file and its pinned digest never change.
 export function launchArguments(
-  role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "profile">,
+  role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "role">,
 ): string[] {
   const args = role.kind === "codex"
-    ? ["--profile", `maestro-${role.profile}`]
-    : ["--agent", `maestro-${role.profile}`];
+    ? ["--profile", `maestro-${role.role}`]
+    : ["--agent", `maestro-${role.role}`];
   if (role.kind === "claude" && role.autocompact) args.push("--autocompact", String(role.autocompact));
   if (role.model) args.push("--model", role.model);
   return args;
@@ -336,15 +327,15 @@ export class HerdrSlpRuntime {
 
   // A2: a missing render fails before any Herdr call, never as a pane with a
   // harness error dialog (d98: work add renders nothing on demand).
-  private requireRenderedProfile(role: Pick<SlpRolePlan, "kind" | "name" | "profile">): void {
+  private requireSeatFile(role: Pick<SlpRolePlan, "kind" | "name" | "role">): void {
     const home = resolveHomeDirectory({ environmentHome: this.environment.HOME });
-    const path = renderedProfilePath(home, role.kind, role.profile);
+    const path = seatLaunchPath(home, role.kind, role.role);
     if (existsSync(path)) return;
     throw new SlpRuntimeError(
-      `${role.name} launches with profile maestro-${role.profile} but ${path} is not rendered; run maestro install`,
+      `${role.name} launches as maestro-${role.role} but ${path} is not written; run maestro install`,
       ["agent", "start", role.name],
       undefined,
-      { code: "PROFILE_NOT_INSTALLED", harness: role.kind },
+      { code: "SEAT_NOT_INSTALLED", harness: role.kind },
     );
   }
 
@@ -479,7 +470,7 @@ export class HerdrSlpRuntime {
 
   private async startAgent(
     plan: SlpTeamPlan,
-    role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "name" | "profile">,
+    role: Pick<SlpRolePlan, "autocompact" | "kind" | "model" | "name" | "role">,
     paneId: string,
   ): Promise<void> {
     const launch = launchArguments(role);
@@ -638,7 +629,7 @@ export class HerdrSlpRuntime {
     const reused = new Map<SlpRole, SlpAcknowledgedRole>();
     let createdWorkspace = false;
     let workspaceId: string | null = null;
-    for (const role of plan.roles) this.requireRenderedProfile(role);
+    for (const role of plan.roles) this.requireSeatFile(role);
     this.requireSeatToken(plan.roles);
     try {
       let matching = (await this.workspaces()).filter(
@@ -781,7 +772,7 @@ export class HerdrSlpRuntime {
     acknowledged: SlpAcknowledgedRole | null = null,
   ): Promise<SlpRuntimePeer> {
     const startedAt = Date.now();
-    this.requireRenderedProfile(peer);
+    this.requireSeatFile(peer);
     this.requireSeatToken([peer]);
     const workspaceId = await this.findWorkspace(plan);
     const globalMatches = (await this.agents()).filter((agent) => agent.name === peer.name);

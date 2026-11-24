@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
-import { renderedProfilePath, seatConfigRoot, seatTokenPath, writeSecretFile } from "../src/plugins/profiles.ts";
+import { seatConfigRoot, seatLaunchPath, seatTokenPath, writeSecretFile } from "../src/plugins/slp-seats.ts";
 import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
@@ -520,7 +520,7 @@ test("313 scripts/install.sh --help prints usage and exits before touching the m
   });
 });
 
-test("profile-render: install renders the three carriers, is byte-stable, and uninstall removes exactly what it wrote while user files stay untouched (red 2, A1)", async () => {
+test("seat-render: install writes each seat's Claude agent file and Codex session file, is byte-stable, and uninstall removes exactly what it wrote while user files stay untouched (A1, d906)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const claudeAgents = join(fixture.home, ".claude", "agents");
@@ -542,64 +542,25 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
 
     const installed = await runCli(fixture, ["install"], { PATH: path });
     expect(installed.exitCode).toBe(0);
-    expect(installed.stdout).toContain("profiles rendered:");
+    expect(installed.stdout).toContain("seat dirs:");
+    expect(installed.stdout).not.toContain("retired");
 
-    // d845: seat and peer-* renders live in the seat dirs, bare nodes stay here.
-    const leadClaude = await readFile(renderedProfilePath(fixture.home, "claude", "lead"), "utf8");
+    const leadClaude = await readFile(seatLaunchPath(fixture.home, "claude", "lead"), "utf8");
     expect(leadClaude.startsWith("---\nname: maestro-lead\ndescription: \"fixture lead\"\nmodel: sonnet\neffort: high\npermissionMode: acceptEdits\n---\n\n")).toBe(true);
     expect(leadClaude).toContain("## Shared contract");
     expect(leadClaude.trimEnd().endsWith("Role: fixture lead.")).toBe(true);
-    const leadSession = await readFile(join(codexHome, "maestro-lead.config.toml"), "utf8");
+    const leadSession = await readFile(seatLaunchPath(fixture.home, "codex", "lead"), "utf8");
     expect(leadSession).toContain('model = "sonnet"\n');
     expect(leadSession).toContain('model_reasoning_effort = "high"\n');
     expect(leadSession).toContain('developer_instructions = """\n');
     expect(leadSession).toContain("Role: fixture lead.");
-    expect(leadSession).not.toContain("sandbox_mode");
-    const leadAgent = await readFile(join(codexAgents, "maestro-lead.toml"), "utf8");
-    expect(leadAgent).toContain('name = "maestro-lead"\n');
-    expect(leadAgent).toContain('model = "sonnet"\n');
-    expect(leadAgent).toContain('model_reasoning_effort = "high"\n');
-    expect(leadAgent).toContain("Role: fixture lead.");
 
-    // d93: sandbox renders into the sub-agent file only.
-    const verifierAgent = await readFile(join(codexAgents, "maestro-verifier.toml"), "utf8");
-    expect(verifierAgent).toContain('sandbox_mode = "read-only"\n');
-    expect(await readFile(join(codexHome, "maestro-verifier.config.toml"), "utf8")).not.toContain("sandbox_mode");
-
-    // graph-engine red 14 (d83, d100): every shipped node preset renders into
-    // both harness agent dirs with the same instruction body.
-    for (const node of [
-      "classifier",
-      "reviewer-simplify",
-      "reviewer-correctness",
-      "reviewer-correctness-codex",
-      "reviewer-structure",
-      "reviewer-regression",
-      "reviewer-contracts",
-      "reviewer-security",
-      "refuter",
-      "fixer",
-      "synthesizer",
-    ]) {
-      const claude = await readFile(join(claudeAgents, `maestro-${node}.md`), "utf8");
-      const codex = await readFile(join(codexAgents, `maestro-${node}.toml`), "utf8");
-      const body = claude.slice(claude.indexOf("\n---\n\n") + "\n---\n\n".length).trimEnd();
-      expect({ node, starts: claude.startsWith(`---\nname: maestro-${node}\n`) }).toEqual({ node, starts: true });
-      expect({ node, starts: body.startsWith("Role: ") }).toEqual({ node, starts: true });
-      expect({ node, codexHasBody: codex.includes(body) }).toEqual({ node, codexHasBody: true });
-      expect(codex).toContain(`name = "maestro-${node}"\n`);
-      expect(await Bun.file(renderedProfilePath(fixture.home, "claude", `peer-${node}`)).exists()).toBe(true);
-    }
-    expect(await readFile(join(codexAgents, "maestro-reviewer-correctness-codex.toml"), "utf8")).toContain('sandbox_mode = "read-only"\n');
-
-    // model: default omits the model line on all three carriers.
-    for (const file of [
-      renderedProfilePath(fixture.home, "claude", "peer"),
-      join(codexHome, "maestro-peer.config.toml"),
-      join(codexAgents, "maestro-peer.toml"),
-    ]) {
+    // model: default omits the model line on both carriers.
+    for (const file of [seatLaunchPath(fixture.home, "claude", "peer"), seatLaunchPath(fixture.home, "codex", "peer")]) {
       expect(await readFile(file, "utf8")).not.toMatch(/^model[ :]/m);
     }
+    expect((await readdir(claudeAgents)).filter((entry) => entry.startsWith("maestro-"))).toEqual([]);
+    expect((await readdir(codexAgents)).filter((entry) => entry.startsWith("maestro-"))).toEqual([]);
 
     const seatAgents = ["lead", "peer"].map((seat) => join(seatConfigRoot(fixture.home), seat, "agents"));
     const snapshot = async () => {
@@ -621,7 +582,7 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
     expect(uninstalled.exitCode).toBe(0);
     const afterUninstall = await snapshot();
     const written = [...afterFirst.keys()].filter((file) => /\/maestro-[^/]+$/.test(file));
-    expect(written.length).toBeGreaterThan(0);
+    expect(written.length).toBe(4);
     for (const file of written) expect(afterUninstall.has(file)).toBe(false);
     for (const [file, content] of afterFirst) {
       if (!written.includes(file)) expect(afterUninstall.get(file)).toBe(content);
@@ -633,11 +594,55 @@ test("profile-render: install renders the three carriers, is byte-stable, and un
   });
 }, 30_000);
 
-// seat-config-dirs R4 (d848, d849): the peer dir's skills/ is the union across
-// every profile rendered into it, resolved in ~/maestro/skills then
-// ~/.claude/skills; a stale link goes; projects and plugins reach ~/.claude;
-// .claude.json marks onboarding done with no MCP servers.
-test("pstack-port: an owner profile that still lists a retired skill installs, and the seat links skip that skill (d863)", async () => {
+// d906: maestro ships no sub-agent definitions, so install removes the ones an
+// earlier install rendered - recognised by the lines the renderer wrote, never
+// by the file name alone.
+test("retire-agent-files: install removes the maestro-* agent files an earlier install rendered, keeps a hand-written maestro- file without the renderer's lines, reports the count once, and a second install says nothing (d906)", async () => {
+  await withFixture(async (fixture) => {
+    const { path } = await prepareInstallFixture(fixture);
+    const claudeAgents = join(fixture.home, ".claude", "agents");
+    const codexHome = join(fixture.home, ".codex");
+    const codexAgents = join(codexHome, "agents");
+    const peerAgents = join(seatConfigRoot(fixture.home), "peer", "agents");
+    for (const directory of [claudeAgents, codexAgents, peerAgents]) await mkdir(directory, { recursive: true });
+    const rendered = new Map([
+      [join(claudeAgents, "maestro-delegate.md"), '---\nname: maestro-delegate\ndescription: "Delegate"\nmodel: opus\n---\n\nRole: Delegate.\n'],
+      [join(claudeAgents, "maestro-lead.md"), '---\nname: maestro-lead\ndescription: "old seat file"\n---\n\nRole: Lead.\n'],
+      [join(codexAgents, "maestro-delegate.toml"), 'name = "maestro-delegate"\ndescription = "Delegate"\nmodel = "opus"\ndeveloper_instructions = """\nRole: Delegate.\n"""\n'],
+      [join(codexAgents, "maestro-peer.toml"), 'name = "maestro-peer"\ndescription = "bounded execution"\ndeveloper_instructions = """\nRole: Peer.\n"""\n'],
+      [join(codexHome, "maestro-peer-delegate.config.toml"), 'model = "opus"\ndeveloper_instructions = """\nRole: Delegate.\n"""\n'],
+      [join(peerAgents, "maestro-peer-delegate.md"), '---\nname: maestro-peer-delegate\ndescription: "Delegate"\n---\n\nRole: Delegate.\n'],
+    ]);
+    const handWritten = new Map([
+      [join(claudeAgents, "maestro-mine.md"), "---\nname: my-own-agent\n---\nhand written\n"],
+      [join(codexAgents, "maestro-mine.toml"), 'name = "Mine"\ndeveloper_instructions = "mine"\n'],
+      [join(codexHome, "maestro-mine.config.toml"), 'model = "gpt-5"\nmodel_provider = "mine"\n'],
+    ]);
+    for (const [file, content] of [...rendered, ...handWritten]) await writeFile(file, content);
+
+    const first = await runCli(fixture, ["install"], { PATH: path });
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout.match(/retired \d+ maestro agent files/g)).toEqual(["retired 6 maestro agent files"]);
+    for (const file of rendered.keys()) expect({ file, exists: existsSync(file) }).toEqual({ file, exists: false });
+    for (const [file, content] of handWritten) expect(await readFile(file, "utf8")).toBe(content);
+    for (const seat of ["lead", "peer"] as const) {
+      for (const harness of ["claude", "codex"] as const) {
+        expect(existsSync(seatLaunchPath(fixture.home, harness, seat))).toBe(true);
+      }
+    }
+
+    const second = await runCli(fixture, ["install"], { PATH: path });
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).not.toContain("retired");
+    for (const [file, content] of handWritten) expect(await readFile(file, "utf8")).toBe(content);
+  });
+}, 30_000);
+
+// seat-config-dirs R4 (d848, d849): a seat dir's skills/ is the seat's skills:
+// list, resolved in ~/maestro/skills then ~/.claude/skills; a stale link goes;
+// projects and plugins reach ~/.claude; .claude.json marks onboarding done with
+// no MCP servers.
+test("pstack-port: an owner seat file that still lists a retired skill installs, and the seat links skip that skill (d863)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -655,7 +660,7 @@ test("pstack-port: an owner profile that still lists a retired skill installs, a
   });
 });
 
-test("seat-dirs-links: install renders skills/ as the union across the dir's profiles, removes a stale link, links projects and plugins to ~/.claude and writes .claude.json with mcpServers {} (R4)", async () => {
+test("seat-dirs-links: install renders skills/ from the seat's skills: list, removes a stale link, links projects and plugins to ~/.claude and writes .claude.json with mcpServers {} (R4)", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);
     const ownerSkill = join(fixture.home, ".claude", "skills", "owner-skill");
@@ -663,8 +668,8 @@ test("seat-dirs-links: install renders skills/ as the union across the dir's pro
     await writeFile(join(ownerSkill, "SKILL.md"), "---\nname: owner-skill\n---\nowner\n");
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
     await writeFile(
-      join(fixture.home, "maestro", "profiles", "refuter.md"),
-      "---\nharness: claude\nmodel: default\nskills: [maestro-bundle, owner-skill]\n---\nRole: Refuter.\n",
+      join(fixture.home, "maestro", "profiles", "peer.md"),
+      "---\nharness: codex\nmodel: default\nskills: [maestro-work, maestro-verify, maestro-bundle, owner-skill]\n---\n",
     );
     const peerDir = join(seatConfigRoot(fixture.home), "peer");
     await mkdir(join(peerDir, "skills"), { recursive: true });

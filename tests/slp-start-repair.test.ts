@@ -143,7 +143,7 @@ test("SLP v2 serializes ten concurrent starts into one generation and rejects co
       runCliAt(
         fixture,
         room,
-        [...args.slice(0, -1), "--peer-profile", "peer-opus", "--json"],
+        [...args.slice(0, -1), "--peer-model", "gpt-5.6-sol", "--json"],
         fake.env,
       ),
     ]);
@@ -621,7 +621,7 @@ test("SLP v2 rolls back every resource and snapshot when start fails after its f
   });
 });
 
-test("SLP v2 lets a retry after a failed start change the objective and peer profile", async () => {
+test("SLP v2 lets a retry after a failed start change the objective and peer model", async () => {
   await withFixture(async (fixture) => {
     const room = await scaffoldRoom(fixture.home);
     expect(
@@ -645,10 +645,10 @@ test("SLP v2 lets a retry after a failed start change the objective and peer pro
     const retried = await runCliAt(
       fixture,
       room,
-      ["team", "start", fixture.repo, "Second objective", "--peer-profile", "peer-opus", "--json"],
+      ["team", "start", fixture.repo, "Second objective", "--peer-model", "gpt-5.6-sol", "--json"],
       fake.env,
     );
-    expect(phaseFree(retried.stderr)).toBe("");
+    expect(phaseFree(retried.stderr)).toBe("peer model: gpt-5.6-sol");
     expect(retried.exitCode).toBe(0);
     const data = envelope<{ team: { generation: number; teamId: string } }>(retried.stdout);
     expect(data.team.generation).toBe(1);
@@ -665,7 +665,7 @@ test("SLP v2 lets a retry after a failed start change the objective and peer pro
           )
           .get()?.configuration_json ?? "{}",
       ),
-    ).toMatchObject({ profiles: { lead: "lead", peer: "peer-opus" } });
+    ).toMatchObject({ models: { peer: "gpt-5.6-sol" } });
     expect(
       database
         .query<{ objective: string; phase: string }, []>(
@@ -698,7 +698,7 @@ test("SLP v2 rejects a changed objective or configuration without mutating the r
 
     for (const changedArgs of [
       ["team", "start", fixture.repo, "Changed objective", "--json"],
-      [...originalArgs.slice(0, -1), "--peer-profile", "peer-opus", "--json"],
+      [...originalArgs.slice(0, -1), "--peer-model", "gpt-5.6-sol", "--json"],
     ]) {
       const rejected = await runCliAt(fixture, room, changedArgs, fake.env);
       expect(rejected.exitCode).toBe(1);
@@ -755,7 +755,7 @@ test("SLP v2 runtime reads fail within their configured deadline", async () => {
     await setFakeHerdrBehavior(fake, { processInfoDelayMs: 500 });
     const plan = buildSlpTeamPlan({
       generation: started.team.generation,
-      lead: { harness: "codex", profile: "lead" },
+      lead: { harness: "codex" },
       projectPath: started.team.projectPath,
       teamId: started.team.teamId,
     });

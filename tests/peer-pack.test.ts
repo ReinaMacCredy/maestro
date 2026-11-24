@@ -5,7 +5,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseProfile, renderedProfilePath } from "../src/plugins/profiles.ts";
+import { parseSeatFile, seatLaunchPath, type SeatName } from "../src/plugins/slp-seats.ts";
 import { prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const shippedRoot = join(import.meta.dir, "..", "src", "plugins", "resources");
@@ -15,8 +15,8 @@ function block(pack: string, marker: string): string {
     .exec(pack)?.[1] ?? "").trim();
 }
 
-async function renderedBody(fixture: Fixture, name: string): Promise<string> {
-  const text = await readFile(renderedProfilePath(fixture.home, "claude", name), "utf8");
+async function renderedBody(fixture: Fixture, name: SeatName): Promise<string> {
+  const text = await readFile(seatLaunchPath(fixture.home, "claude", name), "utf8");
   return text.slice(text.indexOf("\n---\n") + "\n---\n".length);
 }
 
@@ -50,8 +50,8 @@ test("peer-pack-render: install renders maestro-peer from the SLP.md peer block 
     expect(sharedPeer).not.toBe("");
     expect(sharedPeer).not.toBe(sharedDefault);
 
-    const peerBody = parseProfile("peer.md", await readFile(join(shippedRoot, "profiles", "peer.md"), "utf8")).body;
-    const leadBody = parseProfile("lead.md", await readFile(join(shippedRoot, "profiles", "lead.md"), "utf8")).body;
+    const peerBody = parseSeatFile("peer.md", await readFile(join(shippedRoot, "slp", "peer.md"), "utf8"), "shipped").body;
+    const leadBody = parseSeatFile("lead.md", await readFile(join(shippedRoot, "slp", "lead.md"), "utf8"), "shipped").body;
     expect(await renderedBody(fixture, "peer")).toBe(`\n${sharedPeer}\n\n${peerBody}\n`);
     expect(await renderedBody(fixture, "lead")).toBe(`\n${sharedDefault}\n\n${leadBody}\n`);
   });
@@ -73,21 +73,6 @@ test("peer-pack-words: nothing a Peer reads names a seat, a rank or the protocol
     const handshake = /SLP_ROLE_READY|slp team <team-id>|reply <challenge>|role=peer/;
     const withoutHandshake = mandate.split("\n").filter((line) => !handshake.test(line)).join("\n");
     for (const word of seatWords) expect({ word, mandate: withoutHandshake }).toEqual({ word, mandate: expect.not.stringContaining(word) });
-
-    // A composed peer is a Peer seat, so it reads the same block (d892).
-    const refuter = await renderedBody(fixture, "peer-refuter");
-    expect(refuter).toContain(block(await readFile(join(fixture.home, "maestro", "SLP.md"), "utf8"), "shared:peer"));
-
-    // w740 (d904, room d155): the questioner is the first composed peer whose
-    // own body is written to this lint rather than only inheriting the block
-    // above it, so the whole render is measured - block, peer body and lens
-    // body together. The older lens bodies (refuter says "graph node", auditor
-    // says "council seat") are not held to it and are not changed here.
-    const questioner = (await renderedBody(fixture, "peer-questioner"))
-      .split("\n").filter((line) => !handshake.test(line)).join("\n");
-    for (const word of seatWords) {
-      expect({ word, mandate: questioner }).toEqual({ word, mandate: expect.not.stringContaining(word) });
-    }
   });
 }, 30_000);
 

@@ -4,7 +4,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { HerdrClient, SlpRuntimeError, herdrProtocol } from "../src/plugins/herdr-client.ts";
-import { materializeProfiles, seatTokenPath } from "../src/plugins/profiles.ts";
+import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
@@ -332,7 +332,7 @@ test("kernel-no-herdr: with HERDR_SOCKET_PATH pointing at a missing socket the c
     await materializeSkills(fixture.home, "dev");
     await mkdir(dirname(seatTokenPath(fixture.home)), { recursive: true });
     await writeFile(seatTokenPath(fixture.home), "sk-ant-oat01-kernel-fixture");
-    await materializeProfiles(fixture.home, fixture.repo);
+    await materializeSeats(fixture.home, fixture.repo);
     const refused = await runCliAt(fixture, room, ["team", "start", fixture.repo, "No Herdr", "--json"], environment);
     expect(refused.exitCode).toBe(1);
     expect(failure(refused.stderr).code).toBe("HERDR_UNAVAILABLE");

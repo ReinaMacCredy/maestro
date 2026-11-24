@@ -519,10 +519,9 @@ team  Run the simplified supervised-team lifecycle.
 subverbs:
   start  Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).
     usage: maestro team start <project> <objective>
-    --json                  Emit one compact JSON success envelope.
-    --lead-model <value>    Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
-    --peer-model <value>    Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
-    --peer-profile <value>  Override the Workspace Pack peer profile for this generation (recorded on the team row).
+    --json                Emit one compact JSON success envelope.
+    --lead-model <value>  Launch the Lead with this model (`claude --model` / `codex --model` on its launch line); the lead seat file's model is the default; recorded on the team row (room d128).
+    --peer-model <value>  Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the peer seat's harness accepts, or its pane dies on the harness's own error.
   stop   Stop one complete SLP team, or abandon unfinished work from Hub.
     usage: maestro team stop <team-id>
     --emergency       Use Hub owner authority and abandon unfinished work.
@@ -532,10 +531,9 @@ subverbs:
 ### maestro team start --help
 team start  Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).
 usage: maestro team start <project> <objective>
-    --json                  Emit one compact JSON success envelope.
-    --lead-model <value>    Launch the Lead with this model (`claude --model` / `codex --model` after the profile flag); the profile's frontmatter model is the default; recorded on the team row (room d128).
-    --peer-model <value>    Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
-    --peer-profile <value>  Override the Workspace Pack peer profile for this generation (recorded on the team row).
+    --json                Emit one compact JSON success envelope.
+    --lead-model <value>  Launch the Lead with this model (`claude --model` / `codex --model` on its launch line); the lead seat file's model is the default; recorded on the team row (room d128).
+    --peer-model <value>  Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the peer seat's harness accepts, or its pane dies on the harness's own error.
 
 ### maestro team stop --help
 team stop  Stop one complete SLP team, or abandon unfinished work from Hub.
@@ -615,9 +613,8 @@ subverbs:
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
     --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
-    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the peer seat file's model); passed through unvalidated (room d128), so name a model the peer seat's harness accepts, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
-    --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
     --start                            Also start the new item, claiming its lease for this session, as work start does.
     --to <value>                       Assign SLP work to a Peer; without it the Lead opens an item for itself.
   block    Add blocking work IDs to an existing work item.
@@ -688,9 +685,8 @@ usage: maestro work add <title>
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
     --kind <value>                     Set the work kind: feature|task|bug|chore|implement|idea|research (policies key on kind; default task).
-    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the profile's frontmatter model); passed through unvalidated (room d128), so name a model the profile's harness accepts - peer-challenger is a Codex profile and takes a Codex model, or its pane dies on the harness's own error.
+    --model <value>                    Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the peer seat file's model); passed through unvalidated (room d128), so name a model the peer seat's harness accepts, or its pane dies on the harness's own error.
     --parent <value>                   Attach the item beneath a parent work ID.
-    --profile <value>                  Lead only: open or reuse the --to Peer with this profile (default: the generation's peer profile, or the profile a --to peer-<name> names).
     --start                            Also start the new item, claiming its lease for this session, as work start does.
     --to <value>                       Assign SLP work to a Peer; without it the Lead opens an item for itself.
 

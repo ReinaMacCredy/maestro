@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { seatConfigRoot, seatTokenPath } from "../src/plugins/profiles.ts";
+import { seatConfigRoot, seatTokenPath } from "../src/plugins/slp-seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
 import { editFakeHerdrState, fakeHerdrCommands, installFakeHerdr, setFakeHerdrBehavior, tripwireInvocations } from "./helpers-herdr.ts";
@@ -678,7 +678,7 @@ test("journey-race: a scripted step is skipped when its own subject already carr
   });
 });
 
-test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE_CONFIG_DIR=<seat dir> and a Codex peer without env; a matching-label shell tab is closed then recreated with the env (A3); a missing token refuses SEAT_TOKEN_MISSING before any tab.create (R6, R7)", async () => {
+test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE_CONFIG_DIR=<seat dir>; a matching-label shell tab is closed then recreated with the env (A3); a missing token refuses SEAT_TOKEN_MISSING before any tab.create (R6, R7)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -686,6 +686,7 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
       join(fixture.home, "maestro", "profiles", "lead.md"),
       "---\nharness: claude\nmodel: default\ndescription: claude lead\n---\nRole: Lead (claude shadow).\n",
     );
+    await writeFile(join(fixture.home, "maestro", "profiles", "peer.md"), "---\nharness: claude\n---\n");
     const fake = await installFakeHerdr(fixture);
     const seatRoot = seatConfigRoot(fixture.home);
 
@@ -709,21 +710,15 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
     expect(creates.get(`${prefix}:lead`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "lead")}`);
     expect(creates.get(`${prefix}:lead`)).toContain("--env");
 
-    // R7: a Claude peer gets the peer dir; the shipped codex peer gets no env.
+    // R7: a Claude peer gets the peer dir.
     const lead = data.team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "peer-reviewer-security", "--json"], leadEnvironment);
+    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "reviewer", "--json"], leadEnvironment);
     expect(phaseFree(security.stderr)).toBe("");
     expect(security.exitCode).toBe(0);
     const securityRole = envelope<{ role: { name: string } }>(security).role;
-    const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], leadEnvironment);
-    expect(phaseFree(codex.stderr)).toBe("");
-    expect(codex.exitCode).toBe(0);
-    const codexRole = envelope<{ role: { name: string } }>(codex).role;
     creates = tabCreates(await fakeHerdrCommands(fake));
     expect(creates.get(`${prefix}:peer:${securityRole.name}`)).toContain(`CLAUDE_CONFIG_DIR=${join(seatRoot, "peer")}`);
-    expect(creates.get(`${prefix}:peer:${codexRole.name}`)).not.toContain("--env");
-    expect(creates.get(`${prefix}:peer:${codexRole.name}`)).toBeDefined();
 
     // A3: the Lead's pane went back to a shell prompt (agent gone, tab kept);
     // the re-run closes that tab and creates the pane with the env.
@@ -751,7 +746,7 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
     // A Claude peer with the token gone is refused the same way, before tab.create.
     await rename(seatTokenPath(fixture.home), parked);
     const marker = (await fakeHerdrCommands(fake)).length;
-    const peerRefused = await runCliAt(fixture, fixture.repo, ["work", "add", "late", "--to", "peer-refuter", "--json"], { ...fake.env, HERDR_PANE_ID: repairedLead.paneId });
+    const peerRefused = await runCliAt(fixture, fixture.repo, ["work", "add", "late", "--to", "late", "--json"], { ...fake.env, HERDR_PANE_ID: repairedLead.paneId });
     expect(peerRefused.exitCode).toBe(1);
     expect(failure(peerRefused.stderr).code).toBe("SEAT_TOKEN_MISSING");
     expect((await fakeHerdrCommands(fake)).slice(marker).filter((command) => command[1] === "create")).toEqual([]);
@@ -763,7 +758,7 @@ test("seat-dirs-launch: team start creates each Claude seat pane with env CLAUDE
 // so the owner's team start is the trust act: the project's
 // hasTrustDialogAccepted goes into each launched Claude seat's .claude.json
 // before its pane opens, every other key kept, nothing else seeded.
-test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccepted into each launched Claude seat .claude.json before its tab.create (it survives a TRUST_DIALOG rollback), keeps every other key, a second launch leaves the file byte-identical; work add --to seeds the peer dir; a Codex seat writes nothing (R10, d853)", async () => {
+test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccepted into each launched Claude seat .claude.json before its tab.create (it survives a TRUST_DIALOG rollback), keeps every other key, a second launch leaves the file byte-identical; work add --to a Claude peer seeds the peer dir (R10, d853)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -771,6 +766,7 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
       join(fixture.home, "maestro", "profiles", "lead.md"),
       "---\nharness: claude\nmodel: default\ndescription: claude lead\n---\nRole: Lead (claude shadow).\n",
     );
+    await writeFile(join(fixture.home, "maestro", "profiles", "peer.md"), "---\nharness: claude\n---\n");
     const fake = await installFakeHerdr(fixture, { trustDialog: "claude" });
     const seatRoot = seatConfigRoot(fixture.home);
     const seatJson = (seat: string) => join(seatRoot, seat, ".claude.json");
@@ -818,19 +814,11 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
     // work add --to a Claude peer seeds the peer dir the same way.
     const lead = envelope<{ team: { roles: Array<{ paneId: string; role: string }> } }>(started).team.roles.find((role) => role.role === "lead")!;
     const leadEnvironment = { ...fake.env, HERDR_PANE_ID: lead.paneId };
-    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "peer-reviewer-security", "--json"], leadEnvironment);
+    const security = await runCliAt(fixture, fixture.repo, ["work", "add", "review it", "--to", "reviewer", "--json"], leadEnvironment);
     expect(phaseFree(security.stderr)).toBe("");
     expect(security.exitCode).toBe(0);
     expect(await readSeat("peer")).toEqual({ ...peerBefore, projects: { [projectKey]: { hasTrustDialogAccepted: true } } });
-
-    // A Codex peer has no Claude seat dir: no seat file changes.
-    const snapshot = async () => Promise.all(["lead", "peer"].map((seat) => readFile(seatJson(seat), "utf8")));
-    const before = await snapshot();
-    const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], leadEnvironment);
-    expect(phaseFree(codex.stderr)).toBe("");
-    expect(codex.exitCode).toBe(0);
-    expect((await creates()).length).toBe(4);
-    expect(await snapshot()).toEqual(before);
+    expect((await creates()).length).toBe(3);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);
@@ -839,7 +827,7 @@ test("seat-dirs-trust: team start writes projects[<project>].hasTrustDialogAccep
 // read-modify-write shared by every peer's Claude (SEC-4) and left the file at
 // whatever mode it had (SEC-5); it now lands through a 0600 temp file in the
 // seat dir renamed over .claude.json, so a reader never sees a partial file.
-test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* remains in any seat dir and every seeded .claude.json is 0600 even when it was 0644 before, with its content intact (R16, d855)", async () => {
+test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* remains in any seat dir and every seeded .claude.json is 0600 even when it was 0644 before, with its content intact, and the shipped Codex peer opens without env (R16, d855, R7)", async () => {
   await withFixture(async (fixture) => {
     const room = await markedRoom(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
@@ -868,6 +856,19 @@ test("seat-dirs-trust-atomic: after team start no <seat>/.claude.json.tmp-* rema
       ...leadBefore,
       projects: { [projectKey]: { hasTrustDialogAccepted: true } },
     });
+
+    // R7: the shipped Codex peer opens without env and touches no seat file.
+    const data = envelope<{ team: { roles: Array<{ paneId: string; role: string }>; teamId: string } }>(started);
+    const lead = data.team.roles.find((role) => role.role === "lead")!;
+    const leadSeat = await readFile(seatJson("lead"), "utf8");
+    const codex = await runCliAt(fixture, fixture.repo, ["work", "add", "codex item", "--to", "x", "--json"], { ...fake.env, HERDR_PANE_ID: lead.paneId });
+    expect(phaseFree(codex.stderr)).toBe("");
+    expect(codex.exitCode).toBe(0);
+    const codexRole = envelope<{ role: { name: string } }>(codex).role;
+    const codexCreate = tabCreates(await fakeHerdrCommands(fake)).get(`slp:${data.team.teamId}:g1:peer:${codexRole.name}`);
+    expect(codexCreate).toBeDefined();
+    expect(codexCreate).not.toContain("--env");
+    expect(await readFile(seatJson("lead"), "utf8")).toBe(leadSeat);
     expect(await tripwireInvocations(fake)).toEqual([]);
   });
 }, 60_000);

@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import {
@@ -550,6 +551,8 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
       ).exitCode,
     ).toBe(0);
     const fake = await installFakeHerdr(fixture, { sessionResetDelayReads: 2 });
+    await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
+    await writeFile(join(fixture.home, "maestro", "profiles", "peer.md"), "---\nharness: claude\n---\n");
     const started = await runCliAt(
       fixture,
       room,
@@ -589,7 +592,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const first = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "add", "first task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      ["work", "add", "first task", "--to", "alpha", "--fresh", "--json"],
       leadEnvironment,
     );
     expect(phaseFree(first.stderr)).toBe("");
@@ -610,7 +613,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const second = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "add", "second task", "--to", "alpha", "--profile", "peer-opus", "--json"],
+      ["work", "add", "second task", "--to", "alpha", "--json"],
       leadEnvironment,
     );
     expect(phaseFree(second.stderr)).toBe("");
@@ -631,7 +634,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const third = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "add", "third task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      ["work", "add", "third task", "--to", "alpha", "--fresh", "--json"],
       leadEnvironment,
     );
     expect(phaseFree(third.stderr)).toBe("");
@@ -675,7 +678,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const refused = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "add", "fourth task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      ["work", "add", "fourth task", "--to", "alpha", "--fresh", "--json"],
       leadEnvironment,
     );
     expect(refused.exitCode).toBe(1);
@@ -706,7 +709,7 @@ test("SLP v2 work add --to --fresh resets an acknowledged Claude Peer pane befor
     const stuck = await runCliAt(
       fixture,
       fixture.repo,
-      ["work", "add", "fifth task", "--to", "alpha", "--profile", "peer-opus", "--fresh", "--json"],
+      ["work", "add", "fifth task", "--to", "alpha", "--fresh", "--json"],
       leadEnvironment,
     );
     expect(stuck.exitCode).toBe(1);
