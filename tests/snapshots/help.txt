@@ -56,7 +56,8 @@ subverbs:
   close  Snapshot the trio text into the store and archive the bundle.
     usage: maestro bundle close <id>
     --json  Emit one compact JSON success envelope.
-  list   List bundles and their states. *
+  list   List active bundles, most recently updated first; archived ones are counted. *
+    --all   List archived bundles too.
     --json  Emit one compact JSON success envelope.
   open   Scaffold a SPEC/NOTES/VERIFY bundle and record it as active.
     usage: maestro bundle open <id>
@@ -80,8 +81,9 @@ usage: maestro bundle close <id>
     --json  Emit one compact JSON success envelope.
 
 ### maestro bundle list --help
-bundle list  List bundles and their states. *
+bundle list  List active bundles, most recently updated first; archived ones are counted. *
 usage: maestro bundle list
+    --all   List archived bundles too.
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 

@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { installFakeHerdr } from "./helpers-herdr.ts";
-import { type Fixture, initializeGitRepository, runCli, runCliAt, withFixture } from "./helpers.ts";
+import { type Fixture, idFrom, initializeGitRepository, runCli, runCliAt, withFixture } from "./helpers.ts";
 
 // Hub finding F4 (w734): bundle open --work checked the non-SLP work table
 // only, so an id the project store holds as an slp_work row - every id an SLP
@@ -281,3 +281,82 @@ test("a bundle stored as paused still appears in bundle list and bundle show (d8
     expect(shown.stdout).toContain("slice [paused]");
   });
 });
+
+test("work done on the last open linked card archives the bundle; a cancelled card does not count (d895)", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await runCli(fixture, ["work", "add", "feature", "--kind", "feature"]));
+    const ids: string[] = [];
+    for (const title of ["first", "second", "dropped"]) {
+      const added = await runCli(fixture, ["work", "add", title, "--parent", parent]);
+      expect(added.exitCode).toBe(0);
+      ids.push(idFrom(added));
+    }
+    const [w1, w2, w3] = ids as [string, string, string];
+    expect((await runCli(fixture, ["bundle", "open", "plan", "--work", w1, "--work", w2, "--work", w3])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "cancel", w3, "--reason", "not needed"])).exitCode).toBe(0);
+
+    const one = await runCli(fixture, ["work", "done", w1, "--evidence", "first done"]);
+    expect(one.exitCode).toBe(0);
+    expect(one.stdout).toBe(`${w1} done\n`);
+    expect((await runCli(fixture, ["bundle", "list"])).stdout).toContain("plan [active]");
+
+    const last = await runCli(fixture, ["work", "done", w2, "--evidence", "second done"]);
+    expect(last.stderr).toBe("");
+    expect(last.stdout).toBe(`${w2} done\nbundle plan archived; 1 VERIFY row has no result\n`);
+    const shown = await runCli(fixture, ["bundle", "show", "plan"]);
+    const [heading, archive] = shown.stdout.split("\n");
+    expect(heading).toStartWith("plan [archived] ");
+    expect(archive).toBe(`archived when ${w2} was done; 1 VERIFY row had no result`);
+    expect(shown.stdout).toContain("--- VERIFY.md\n# VERIFY");
+  });
+}, 30_000);
+
+test("a filled VERIFY table archives without a count, and bundle close stays the manual path (d895)", async () => {
+  await withFixture(async (fixture) => {
+    const parent = idFrom(await runCli(fixture, ["work", "add", "feature", "--kind", "feature"]));
+    const workId = idFrom(await runCli(fixture, ["work", "add", "only", "--parent", parent]));
+    const opened = await runCli(fixture, ["bundle", "open", "plan", "--work", workId, "--json"]);
+    const directory = envelope<{ bundle: { directory: string } }>(opened.stdout).bundle.directory;
+    await writeFile(join(directory, "VERIFY.md"), planVerify);
+    const done = await runCli(fixture, ["work", "done", workId, "--evidence", "done"]);
+    expect(done.stdout).toBe(`${workId} done\nbundle plan archived\n`);
+    expect((await runCli(fixture, ["bundle", "show", "plan"])).stdout).not.toContain("had no result");
+
+    expect((await runCli(fixture, ["bundle", "open", "manual"])).exitCode).toBe(0);
+    const closed = await runCli(fixture, ["bundle", "close", "manual"]);
+    expect(closed.exitCode).toBe(0);
+    expect(closed.stdout).toContain("manual [archived]");
+  });
+}, 30_000);
+
+test("bundle list shows active bundles, most recently updated first, and counts the archived ones; --all lists every bundle (d895)", async () => {
+  await withFixture(async (fixture) => {
+    for (const id of ["older", "newer", "gone"]) {
+      expect((await runCli(fixture, ["bundle", "open", id])).exitCode).toBe(0);
+    }
+    expect((await runCli(fixture, ["bundle", "close", "gone"])).exitCode).toBe(0);
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    try {
+      database.run("UPDATE bundles SET updated_at = '2026-01-01T00:00:00.000Z' WHERE id = 'older'");
+    } finally {
+      database.close();
+    }
+
+    const listed = await runCli(fixture, ["bundle", "list"]);
+    expect(listed.stdout.split("\n").map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual([
+      "newer [active]",
+      "older [active]",
+      "1 archived",
+      "",
+    ]);
+    expect(listed.stdout).toContain("\n1 archived not shown; maestro bundle list --all\n");
+    const all = await runCli(fixture, ["bundle", "list", "--all"]);
+    expect(all.stdout).toContain("gone [archived]");
+    expect(all.stdout).not.toContain("not shown");
+    const json = envelope<{ bundles: Array<{ id: string }>; hidden: number }>(
+      (await runCli(fixture, ["bundle", "list", "--json"])).stdout,
+    );
+    expect(json.bundles.map((bundle) => bundle.id)).toEqual(["newer", "older"]);
+    expect(json.hidden).toBe(1);
+  });
+}, 30_000);

@@ -22,6 +22,10 @@ renders them. Note the bundle on the Hub map and the map on its work item.
 maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link work
 ```
 
+`maestro work done` on the last open card linked to the bundle snapshots the
+trio and archives the bundle itself; an unfilled VERIFY table does not stop it
+and is reported. `maestro bundle close` stays the manual path.
+
 ## The trio contract
 
 Follow [Bundle contract](~/maestro/WORKFLOW.md#bundle-contract-tier-full).
@@ -36,7 +40,7 @@ Never create root `SPEC-*`, `NOTES-*`, or `VERIFY-*` files.
 ```
 maestro bundle open <id> [--work <id>]  # scaffold + active row
 maestro bundle close <id>               # snapshot trio into the store, archive
-maestro bundle list                     # states: active | paused | archived
+maestro bundle list [--all]             # active bundles, newest first; --all adds archived
 maestro bundle show <id>                # trio + linked work + decisions
 maestro search "<term>"                 # recall: hits labeled (bundle, ...)
 ```

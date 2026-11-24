@@ -929,7 +929,8 @@ export const workPlugin: BuiltInPlugin = {
           const unlanded = modified > 0
             ? `\nwarning: ${modified} tracked files are modified and the evidence names no commit; a deliverable that only lives in the working tree is not landed`
             : "";
-          return { data: { work: completed }, text: `${id} done${lostLease}${unlanded}` };
+          const reactions = (await context.events.serial("work.completed", completed)).filter((line) => typeof line === "string");
+          return { data: { work: completed }, text: [`${id} done${lostLease}${unlanded}`, ...reactions].join("\n") };
         },
         {
           description: "Complete work with policy-checked evidence, taking an unheld lease.",

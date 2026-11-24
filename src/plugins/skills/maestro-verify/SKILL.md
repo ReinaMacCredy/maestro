@@ -112,8 +112,9 @@ ready. Close procedure:
 2. Harvest: any mid-flight choice that is hard to reverse, surprising without
    context, and a real trade-off is a locked decision with its rejected
    alternative.
-3. `maestro bundle close <id>`: snapshots the trio into the store and archives
-   the directory.
+3. `maestro work done` on the last open linked card snapshots the trio into
+   the store and archives the bundle, so steps 1 and 2 come first;
+   `maestro bundle close <id>` does the same for a bundle with no linked work.
 
 The snapshot is the durable memory; after close the directory is disposable
 and `maestro search` still recalls the text.

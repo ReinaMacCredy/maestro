@@ -11,7 +11,7 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { latestCheckpoints, type WorkService } from "./work.ts";
+import { latestCheckpoints, type WorkRecord, type WorkService } from "./work.ts";
 
 export interface BundleRecord {
   id: string;
@@ -259,6 +259,18 @@ function checkPlan(
   return { problems, rows: rows.length, units: unitIds.length };
 }
 
+function verifyRows(verify: string): PlanLine[] {
+  const lines = proseLines(verify);
+  const headerAt = lines.findIndex((line) => line.text.trim().startsWith("|"));
+  if (headerAt === -1) return [];
+  const end = lines.findIndex((line, index) => index > headerAt && !line.text.trim().startsWith("|"));
+  return lines
+    .slice(headerAt + 1, end === -1 ? lines.length : end)
+    .filter((line) => !/^[\s|:-]*-[\s|:-]*$/.test(line.text));
+}
+
+const hasResult = (row: PlanLine): boolean => tableCells(row.text).at(-1) !== "";
+
 function fromRow(row: BundleRow): BundleRecord {
   return {
     id: row.id,
@@ -331,6 +343,27 @@ function indexSnapshot(context: PluginContext, bundle: BundleRecord): void {
   context.store.database
     .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('bundle', ?, ?)")
     .run(bundle.id, snapshotText(bundle));
+}
+
+function archiveBundle(
+  context: PluginContext,
+  bundle: BundleRecord,
+  trio: { spec: string | null; notes: string | null; verify: string | null },
+  payload: Record<string, unknown> = {},
+): BundleRecord {
+  context.store.database
+    .query("UPDATE bundles SET state = 'archived', spec = ?, notes = ?, verify = ?, updated_at = ? WHERE id = ?")
+    .run(trio.spec, trio.notes, trio.verify, new Date().toISOString(), bundle.id);
+  const archived = getBundle(context, bundle.id) as BundleRecord;
+  indexSnapshot(context, archived);
+  context.log.append({
+    type: "bundle.close",
+    entityType: "bundle",
+    entityId: bundle.id,
+    sessionId: context.sessions.current().id,
+    payload: { directory: bundle.directory, ...payload },
+  });
+  return archived;
 }
 
 function decisionsForWork(
@@ -779,22 +812,7 @@ export const bundlePlugin: BuiltInPlugin = {
               { command, id },
             );
           }
-          const now = new Date().toISOString();
-          context.store.database
-            .query(
-              `UPDATE bundles SET state = 'archived', spec = ?, notes = ?, verify = ?,
-                 updated_at = ? WHERE id = ?`,
-            )
-            .run(trio.spec, trio.notes, trio.verify, now, id);
-          const archived = getBundle(context, id) as BundleRecord;
-          indexSnapshot(context, archived);
-          context.log.append({
-            type: "bundle.close",
-            entityType: "bundle",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-            payload: { directory: bundle.directory },
-          });
+          const archived = archiveBundle(context, bundle, trio);
           const workIds = linkedWorkIds(context, id);
           const decisions = decisionsForWork(context, workIds);
           const hint = decisions.length === 0
@@ -812,6 +830,30 @@ export const bundlePlugin: BuiltInPlugin = {
           positionals: [{ name: "id", required: true }],
         },
       ),
+    );
+
+    context.effect(() =>
+      context.events.on<WorkRecord, string | undefined>("work.completed", async (work) => {
+        // A linked id missing from work is an SLP item, which this plugin cannot see close, so it counts as open.
+        const bundles = context.store.database
+          .query<BundleRow, [string]>(
+            `SELECT bundles.* FROM bundles JOIN bundle_work link ON link.bundle_id = bundles.id
+             WHERE link.work_id = ? AND bundles.state = 'active' AND NOT EXISTS (
+               SELECT 1 FROM bundle_work other LEFT JOIN work ON work.id = other.work_id
+               WHERE other.bundle_id = bundles.id
+                 AND (work.id IS NULL OR (work.state != 'done' AND work.cancelled_at IS NULL)))`,
+          )
+          .all(work.id)
+          .map(fromRow);
+        const lines: string[] = [];
+        for (const bundle of bundles) {
+          const trio = await readTrio(bundle.directory);
+          const unfilled = verifyRows(trio.verify ?? "").filter((row) => !hasResult(row)).length;
+          archiveBundle(context, bundle, trio, { unfilled, workId: work.id });
+          lines.push(`bundle ${bundle.id} archived${unfilled > 0 ? `; ${unfilled} VERIFY row${unfilled === 1 ? " has" : "s have"} no result` : ""}`);
+        }
+        return lines.length > 0 ? lines.join("\n") : undefined;
+      }),
     );
 
     context.effect(() =>
@@ -888,19 +930,25 @@ export const bundlePlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "bundle list",
-        (): CliResult => {
-          const bundles = context.store.database
-            .query<BundleRow, []>("SELECT * FROM bundles ORDER BY created_at")
+        (invocation): CliResult => {
+          const every = context.store.database
+            .query<BundleRow, []>("SELECT * FROM bundles ORDER BY updated_at DESC, rowid DESC")
             .all()
             .map(fromRow);
+          const bundles = invocation.options.all === true ? every : every.filter((bundle) => bundle.state === "active");
+          const hidden = every.length - bundles.length;
+          const lines = bundles.map(headline);
+          if (hidden > 0) lines.push(`${hidden} archived not shown; maestro bundle list --all`);
           return {
-            data: { bundles },
-            text: bundles.length > 0
-              ? bundles.map(headline).join("\n")
-              : 'no bundles; run: maestro bundle open "<id>"',
+            data: { bundles, hidden },
+            text: lines.join("\n") || 'no bundles; run: maestro bundle open "<id>"',
           };
         },
-        { description: "List bundles and their states.", mutates: false },
+        {
+          description: "List active bundles, most recently updated first; archived ones are counted.",
+          flags: { "--all": { description: "List archived bundles too." } },
+          mutates: false,
+        },
       ),
     );
 
@@ -935,12 +983,20 @@ export const bundlePlugin: BuiltInPlugin = {
                 : `hub:${decision.id} [${decision.state}] ${decision.text}`
             ),
           ];
-          const sections = trioSections(trio);
+          const archive = bundle.state === "archived"
+            ? context.log.list("bundle", id).filter((event) => event.type === "bundle.close").at(-1)?.payload as
+              | { unfilled?: number; workId?: string }
+              | undefined
+            : undefined;
+          const unfilled = archive?.unfilled ?? 0;
           return {
             data: { bundle, decisions, hubDecisions, workIds },
             text: [
               headline(bundle),
-              ...sections,
+              unfilled > 0
+                ? `archived when ${archive?.workId} was done; ${unfilled} VERIFY row${unfilled === 1 ? "" : "s"} had no result`
+                : null,
+              ...trioSections(trio),
               workLines.length > 0 ? `--- work\n${workLines.join("\n")}` : null,
               decisionLines.length > 0 ? `--- decisions\n${decisionLines.join("\n")}` : null,
             ]
