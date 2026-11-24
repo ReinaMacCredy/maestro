@@ -13,7 +13,7 @@ const readOnly = { MAESTRO_READ_ONLY: "1" };
 test("208 sessionless work start refuses a lease that cannot survive one read", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "trap check", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "trap check"]),
     );
 
     const started = await runCli(fixture, ["work", "start", work], withoutSession);

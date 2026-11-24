@@ -15,17 +15,17 @@ test("91 an empty work list points at work add", async () => {
 test("92 gate envelope carries origin without a duplicated reason; lease keeps command", async () => {
   await withFixture(async (fixture) => {
     const gated = idFrom(await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"]));
-    const blocked = await runCli(fixture, ["work", "start", gated]);
+    const blocked = await runCli(fixture, ["work", "done", gated]);
     expect(blocked.exitCode).not.toBe(0);
     const gateError = (JSON.parse(blocked.stderr) as { error: Record<string, unknown> }).error;
     expect(gateError.code).toBe("GATE_BLOCKED");
-    expect(gateError.origin).toBe("policy-breakdown");
+    expect(gateError.origin).toBe("policy-proof");
     expect(typeof gateError.message).toBe("string");
     expect("reason" in gateError).toBe(false);
     expect("command" in gateError).toBe(false);
 
     const loose = idFrom(
-      await runCli(fixture, ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"]),
+      await runCli(fixture, ["work", "add", "atomic item", "--kind", "task"]),
     );
     const unleased = await runCli(fixture, ["work", "reclaim", loose, "--reason", "nobody holds it"]);
     expect(unleased.exitCode).not.toBe(0);
@@ -78,7 +78,7 @@ test("94 a parent with open children cannot start or complete", async () => {
 
     // Reach the done gate via a parent started before its child existed.
     const grown = idFrom(
-      await runCli(fixture, ["work", "add", "grown scope", "--kind", "task", "--atomic-reason", "spike"]),
+      await runCli(fixture, ["work", "add", "grown scope", "--kind", "task"]),
     );
     expect((await runCli(fixture, ["work", "start", grown])).exitCode).toBe(0);
     const late = idFrom(
@@ -102,7 +102,7 @@ test("94 a parent with open children cannot start or complete", async () => {
 test("95 status reflects completion instead of pinning the last start", async () => {
   await withFixture(async (fixture) => {
     const item = idFrom(
-      await runCli(fixture, ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"]),
+      await runCli(fixture, ["work", "add", "atomic item", "--kind", "task"]),
     );
     expect((await runCli(fixture, ["work", "start", item])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", item, "--evidence", "done"])).exitCode).toBe(0);
@@ -151,13 +151,14 @@ test("98 session lastEvent records what happened, not what was attempted", async
     const gated = idFrom(
       await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"], session),
     );
+    await runCli(fixture, ["work", "add", "open child", "--kind", "task", "--parent", gated], session);
     expect((await runCli(fixture, ["work", "start", gated], session)).exitCode).not.toBe(0);
     expect(await lastEvent()).toBe("work.add");
 
     const item = idFrom(
       await runCli(
         fixture,
-        ["work", "add", "atomic item", "--kind", "task", "--atomic-reason", "spike"],
+        ["work", "add", "atomic item", "--kind", "task"],
         session,
       ),
     );
@@ -181,7 +182,7 @@ test("99 status renders held work per session", async () => {
     const item = idFrom(
       await runCli(
         fixture,
-        ["work", "add", "held item", "--kind", "task", "--atomic-reason", "spike"],
+        ["work", "add", "held item", "--kind", "task"],
         session,
       ),
     );
@@ -201,7 +202,7 @@ test("99 status renders held work per session", async () => {
 test("100 completing already-done work fails INVALID_STATE, not a lease dead-end", async () => {
   await withFixture(async (fixture) => {
     const item = idFrom(
-      await runCli(fixture, ["work", "add", "one shot", "--kind", "task", "--atomic-reason", "spike"]),
+      await runCli(fixture, ["work", "add", "one shot", "--kind", "task"]),
     );
     expect((await runCli(fixture, ["work", "start", item])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", item, "--evidence", "done"])).exitCode).toBe(0);
@@ -292,32 +293,11 @@ test("103 plugin list states what each policy requires", async () => {
       plugins.find((plugin) => plugin.name === name)?.requires ?? "";
     expect(requiresFor("policy-proof")).toContain("--evidence");
     expect(requiresFor("policy-proof")).toContain("--claim");
-    expect(requiresFor("policy-breakdown")).toContain("--atomic-reason");
+    expect(requiresFor("policy-breakdown")).toContain("open write-like children");
 
     const text = await runCli(fixture, ["plugin", "list"]);
-    expect(text.stdout).toContain("--atomic-reason");
+    expect(text.stdout).toContain("open write-like children");
     expect(text.stdout).toContain("--evidence");
-  });
-});
-
-test("104 a cancelled child does not satisfy the breakdown gate", async () => {
-  await withFixture(async (fixture) => {
-    const parent = idFrom(await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]));
-    const child = idFrom(
-      await runCli(fixture, ["work", "add", "throwaway", "--kind", "task", "--parent", parent]),
-    );
-    expect(
-      (await runCli(fixture, ["work", "cancel", child, "--reason", "not doing this"])).exitCode,
-    ).toBe(0);
-
-    const blocked = await runCli(fixture, ["work", "start", parent]);
-    expect(blocked.exitCode).not.toBe(0);
-    const error = (JSON.parse(blocked.stderr) as { error: Record<string, unknown> }).error;
-    expect(error.code).toBe("GATE_BLOCKED");
-    expect(error.origin).toBe("policy-breakdown");
-
-    const listed = await runCli(fixture, ["work", "list"]);
-    expect(listed.stdout).toContain(`${parent} [open] parent feature\n  gated by policy-breakdown:`);
   });
 });
 
@@ -780,8 +760,6 @@ test("121 work show preserves declared blockers after they resolve", async () =>
         "red tests",
         "--kind",
         "task",
-        "--atomic-reason",
-        "focused contract",
       ]),
     );
     const implementation = idFrom(

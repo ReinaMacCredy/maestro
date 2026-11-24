@@ -101,7 +101,6 @@ test("34 [lint] per-verb help is registry-driven for built-in and plugin verbs",
       "--evidence",
       "--parent",
       "--kind",
-      "--atomic-reason",
     ]) {
       expect(helpWork.stdout).toContain(flag);
     }

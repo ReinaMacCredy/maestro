@@ -66,7 +66,7 @@ function content(path: string): string {
 }
 
 async function populate(fixture: Fixture): Promise<void> {
-  await runCli(fixture, ["work", "add", "swept", "--atomic-reason", "fixture"]);
+  await runCli(fixture, ["work", "add", "swept"]);
   await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
   await runCli(fixture, ["decision", "draft", "a settled choice", "--rationale", "because"]);
   // Two sessions on one pid: the shared-pid downgrade is a write that a

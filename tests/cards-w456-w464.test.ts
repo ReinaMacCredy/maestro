@@ -81,7 +81,7 @@ test("405 room forget removes a registry line without uninstalling repository wi
 test("407 attention and briefs prefix work subjects with their kind", async () => {
   await withFixture(async (fixture) => {
     const repeated = idFrom(
-      await runCli(fixture, ["work", "add", "repeated work", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "repeated work"]),
     );
     expect(
       (await runCli(fixture, ["work", "start", repeated], session("repeated-holder"))).exitCode,
@@ -112,7 +112,7 @@ test("407 attention and briefs prefix work subjects with their kind", async () =
 test("409 attention and hook briefs prefix decision subjects with their kind", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "owner decision", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "owner decision"]),
     );
     const decision = idFrom(
       await runCli(fixture, ["decision", "draft", "choose the boundary", "--needs-owner", "--work", work]),

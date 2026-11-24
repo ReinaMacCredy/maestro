@@ -20,8 +20,6 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
         "eperm victim",
         "--acceptance",
         "lease survives foreign reads",
-        "--atomic-reason",
-        "single-step probe",
       ],
       OWNER,
     );
@@ -69,8 +67,6 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
         "dead victim",
         "--acceptance",
         "lease expires",
-        "--atomic-reason",
-        "single-step probe",
       ],
       DEAD,
     );
@@ -96,8 +92,6 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
           title,
           "--acceptance",
           "n/a",
-          "--atomic-reason",
-          "probe",
           ...extra,
         ],
         PEER,

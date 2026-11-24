@@ -78,10 +78,8 @@ The holder of a work item keeps its record; a subagent never does.
   and `research` are scope notes under a parent and never hold it open. A
   parentless item the agent creates carries its why in the title or
   acceptance; a longer why is a `maestro work note <id> "why: <one paragraph>"`.
-- `maestro work start <id>`. With `policy-breakdown` enabled it refuses a
-  parentless write-like item: pass `--atomic-reason "<why this is one
-  unit>"` when it truly is one, otherwise `maestro work add ... --parent
-  <id>` first and start the child; a parent with open children never starts.
+- `maestro work start <id>`. With `policy-breakdown` enabled a parent with
+  open write-like children never starts and is never done.
 - A pass that failed gets exactly one line,
   `maestro work note <id> "failed: <one line>"`; the lowercase `failed: `
   prefix is what `maestro attention` counts. For repeated failures, apply

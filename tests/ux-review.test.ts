@@ -55,7 +55,7 @@ test("601 memory list|show read the Hub from a project cwd; the SessionStart bri
 
 test("602 work show states what done will require while the work is open", async () => {
   await withFixture(async (fixture) => {
-    const added = await runCli(fixture, ["work", "add", "Gate preview", "--atomic-reason", "one edit", "--json"], session);
+    const added = await runCli(fixture, ["work", "add", "Gate preview", "--json"], session);
     const id = idFrom(added);
     const open = await runCli(fixture, ["work", "show", id]);
     expect(open.stdout).toContain('gate: policy-proof gates work done: requires --evidence "<evidence>" or paired --claim "<claim>" --proof "<proof>"');
@@ -95,11 +95,11 @@ test("605 work done warns when tracked files are modified and the evidence names
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     await writeFile(join(fixture.repo, ".maestro", "config"), `${JSON.stringify({ plugins: [] })}\n\n`);
-    const first = idFrom(await runCli(fixture, ["work", "add", "Dirty tree", "--atomic-reason", "one edit", "--json"], session));
+    const first = idFrom(await runCli(fixture, ["work", "add", "Dirty tree", "--json"], session));
     const unlanded = await runCli(fixture, ["work", "done", first, "--evidence", "suite 12/0/0 on 2026-09-05"], session);
     expect(unlanded.exitCode).toBe(0);
     expect(unlanded.stdout).toContain("warning: 1 tracked files are modified and the evidence names no commit");
-    const second = idFrom(await runCli(fixture, ["work", "add", "Landed", "--atomic-reason", "one edit", "--json"], session));
+    const second = idFrom(await runCli(fixture, ["work", "add", "Landed", "--json"], session));
     const landed = await runCli(fixture, ["work", "done", second, "--evidence", "landed as 4842209b on main"], session);
     expect(landed.exitCode).toBe(0);
     expect(landed.stdout).not.toContain("warning:");
@@ -141,23 +141,6 @@ test("607 SessionStart prunes dead sessions older than 30 days that hold nothing
     expect(ids).toEqual(["old-holder", "recent-dead", "ux-review"]);
     const trace = await runCli(fixture, ["status", "--all"], session);
     expect(trace.stdout).not.toContain("old-idle");
-  });
-});
-
-test("609 work done closes an unheld parentless item in one command when it declares the atomic reason", async () => {
-  await withFixture(async (fixture) => {
-    const id = idFrom(await runCli(fixture, ["work", "add", "One command", "--json"], session));
-    const blocked = await runCli(fixture, ["work", "done", id, "--evidence", "checked"], session);
-    expect(blocked.exitCode).toBe(1);
-    expect(blocked.stderr).toContain("GATE_BLOCKED");
-    const done = await runCli(fixture, ["work", "done", id, "--evidence", "checked", "--atomic-reason", "one edit"], session);
-    expect(done.exitCode).toBe(0);
-    const shown = await runCli(fixture, ["work", "show", id]);
-    expect(shown.stdout).toContain("atomic reason: one edit");
-    const held = idFrom(await runCli(fixture, ["work", "add", "Held", "--atomic-reason", "first", "--json"], session));
-    expect((await runCli(fixture, ["work", "start", held], session)).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "done", held, "--evidence", "checked", "--atomic-reason", "revised"], session)).exitCode).toBe(0);
-    expect((await runCli(fixture, ["work", "show", held])).stdout).toContain("atomic reason: revised");
   });
 });
 
@@ -354,7 +337,7 @@ test("646 bundle show renders Hub decisions the SPEC lists as hub:<id>; the scaf
     const room = await hub(fixture);
     const hubDecision = idFrom(await runCliAt(fixture, room, ["decision", "draft", "graph nodes run in-process", "--rationale", "hub-side"]));
     expect((await runCliAt(fixture, room, ["decision", "lock", hubDecision])).exitCode).toBe(0);
-    const workId = idFrom(await runCli(fixture, ["work", "add", "build the graph engine", "--atomic-reason", "test"]));
+    const workId = idFrom(await runCli(fixture, ["work", "add", "build the graph engine"]));
     const local = idFrom(await runCli(fixture, ["decision", "draft", "store the graph in sqlite", "--work", workId]));
     expect((await runCli(fixture, ["bundle", "open", "graph-engine", "--work", workId])).exitCode).toBe(0);
     const spec = join(fixture.repo, ".maestro", "bundle", "graph-engine", "SPEC.md");

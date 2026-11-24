@@ -68,7 +68,7 @@ test("123 decision without rationale stays valid and renders no rationale line",
 
 test("124 bundle open scaffolds the trio, records an active row, and links work", async () => {
   await withFixture(async (fixture) => {
-    const work = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
+    const work = await runCli(fixture, ["work", "add", "wire the amp"]);
     const workId = idFrom(work);
     const opened = await runCli(fixture, ["bundle", "open", "amp-wiring", "--work", workId]);
     expect(opened.exitCode).toBe(0);
@@ -83,8 +83,8 @@ test("124 bundle open scaffolds the trio, records an active row, and links work"
 
 test("124b bundle open links every repeated --work flag, not only the last", async () => {
   await withFixture(async (fixture) => {
-    const first = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
-    const second = await runCli(fixture, ["work", "add", "tune the amp", "--atomic-reason", "test"]);
+    const first = await runCli(fixture, ["work", "add", "wire the amp"]);
+    const second = await runCli(fixture, ["work", "add", "tune the amp"]);
     const firstId = idFrom(first);
     const secondId = idFrom(second);
     const opened = await runCli(fixture, [
@@ -123,7 +123,7 @@ test("125 bundle close snapshots text into the store and search hits it after th
 
 test("126 bundle show composes prose, linked work, and decisions; snapshot survives close", async () => {
   await withFixture(async (fixture) => {
-    const work = await runCli(fixture, ["work", "add", "wire the amp", "--atomic-reason", "test"]);
+    const work = await runCli(fixture, ["work", "add", "wire the amp"]);
     const workId = idFrom(work);
     await runCli(fixture, ["bundle", "open", "amp-wiring", "--work", workId]);
     const decision = await runCli(fixture, [

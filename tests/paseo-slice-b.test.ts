@@ -39,8 +39,6 @@ test("390 a third failed pass shows in the session brief of whoever opens the re
         "work",
         "add",
         "failure episode",
-        "--atomic-reason",
-        "brief fixture",
       ]),
     );
     const holder = session("failing-holder");

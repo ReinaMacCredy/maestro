@@ -68,8 +68,6 @@ test("439 install warns about a live work holder and still completes", async () 
         "work",
         "add",
         "live install work",
-        "--atomic-reason",
-        "fixture",
       ],
       peer,
     );

@@ -52,7 +52,7 @@ test("465 release, a rotated session id, and --parent do not free a slot", async
     await setPlugin(fixture, "policy-card-budget", false);
     const first = idFrom(await add(fixture, "finding 1"));
     // Holding then releasing (lane.md step 5) leaves the card unattended again.
-    expect((await runCli(fixture, ["work", "start", first, "--atomic-reason", "fixture"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "start", first])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "release", first])).exitCode).toBe(0);
     expect((await add(fixture, "finding 2")).exitCode).toBe(0);
     expect((await add(fixture, "finding 3")).exitCode).toBe(0);
@@ -71,10 +71,10 @@ test("466 a live holder and a cancelled card each free a slot; a dead holder doe
   await withFixture(async (fixture) => {
     await setPlugin(fixture, "policy-card-budget", false);
     const held = idFrom(await add(fixture, "held by a live session"));
-    expect((await runCli(fixture, ["work", "start", held, "--atomic-reason", "fixture"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "start", held])).exitCode).toBe(0);
 
     const dead = idFrom(await add(fixture, "held by a dead session"));
-    expect((await runCli(fixture, ["work", "start", dead, "--atomic-reason", "fixture"], {
+    expect((await runCli(fixture, ["work", "start", dead], {
       MAESTRO_SESSION_ID: "gone",
       MAESTRO_SESSION_PID: "999999",
     })).exitCode).toBe(0);

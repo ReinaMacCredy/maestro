@@ -130,7 +130,7 @@ test("B3.7 status hides dead noise but keeps dead work owners", async () => {
       (
         await runCli(
           fixture,
-          ["work", "start", held, "--atomic-reason", "status fixture"],
+          ["work", "start", held],
           sessionEnvironment("dead-holder", process.pid),
         )
       ).exitCode,

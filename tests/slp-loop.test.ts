@@ -14,7 +14,7 @@ function session(id: string, pid = process.pid): Record<string, string> {
 
 async function addWork(fixture: Fixture, title: string): Promise<string> {
   return idFrom(
-    await runCli(fixture, ["work", "add", title, "--atomic-reason", "slp loop fixture"]),
+    await runCli(fixture, ["work", "add", title]),
   );
 }
 
@@ -246,7 +246,7 @@ test("156 legacy search restores missing rows once and preserves existing rowids
 test("157 search still finds fresh native surfaces and a legacy card", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "freshworktoken", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "freshworktoken"]),
     );
     expect((await runCli(fixture, ["work", "note", work, "freshnotetoken"])).exitCode).toBe(0);
     expect(

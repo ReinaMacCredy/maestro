@@ -39,8 +39,6 @@ async function addWork(fixture: Fixture, title: string, parent?: string): Promis
       "work",
       "add",
       title,
-      "--atomic-reason",
-      "phase four fixture",
       ...(parent ? ["--parent", parent] : []),
     ]),
   );

@@ -172,7 +172,7 @@ test("291 concurrent decision allocation stays serialized", async () => {
 test("292 delayed work transitions cannot commit after their authorizing state changes", async () => {
   await withFixture(async (fixture) => {
     const startThenCancel = idFrom(
-      await runCli(fixture, ["work", "add", "start then cancel", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "start then cancel"]),
     );
     const delayedStart = runFixturePluginCliAt(
       fixture,
@@ -196,7 +196,7 @@ test("292 delayed work transitions cannot commit after their authorizing state c
     expect(cancelled.data.work).toEqual(expect.objectContaining({ heldBy: null, state: "cancelled" }));
 
     const cancelThenStart = idFrom(
-      await runCli(fixture, ["work", "add", "cancel then start", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "cancel then start"]),
     );
     const delayedCancel = runFixturePluginCliAt(
       fixture,
@@ -222,7 +222,7 @@ test("292 delayed work transitions cannot commit after their authorizing state c
     );
 
     const doneThenReclaim = idFrom(
-      await runCli(fixture, ["work", "add", "done then reclaim", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "done then reclaim"]),
     );
     expect(
       (

@@ -29,7 +29,7 @@ test("160 work start declares an existing item atomic instead of forcing a dupli
 
     const started = await runCli(
       fixture,
-      ["work", "start", work, "--atomic-reason", "single file, acceptance in one sentence"],
+      ["work", "start", work],
       session("lead"),
     );
     expect(started.exitCode).toBe(0);
@@ -60,7 +60,7 @@ test("162 an atomic reason on start never bypasses the open-children gate", asyn
 
     const blocked = await runCli(
       fixture,
-      ["work", "start", parent, "--atomic-reason", "pretending this is atomic"],
+      ["work", "start", parent],
       session("lead"),
     );
     expect(blocked.exitCode).not.toBe(0);
@@ -133,8 +133,6 @@ test("167 documented failed-pass notes trigger repeated-failure attention", asyn
     expect(loop).toContain('maestro work note <id> "failed: ');
 
     const work = await addWork(fixture, "repeat the failing implementation", [
-      "--atomic-reason",
-      "fixture",
     ]);
     for (const note of [
       "failed: first mechanism",

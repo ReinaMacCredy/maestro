@@ -15,7 +15,7 @@ function session(id: string): Record<string, string> {
 test("182 work list and work show preserve stable work fields while adding decisions", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "read path item", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "read path item"]),
     );
     const listBefore = await runCli(fixture, ["work", "list"], session("lane-reader"));
     const decision = idFrom(
@@ -61,7 +61,7 @@ test("326 a start rejected by a gate leaves atomic_reason untouched", async () =
         .exitCode,
     ).toBe(0);
 
-    const started = await runCli(fixture, ["work", "start", work, "--atomic-reason", "single-file change"]);
+    const started = await runCli(fixture, ["work", "start", work]);
     expect(started.exitCode).not.toBe(0);
     expect(started.stderr).toContain("GATE_BLOCKED");
 

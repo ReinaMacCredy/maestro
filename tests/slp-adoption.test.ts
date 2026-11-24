@@ -17,7 +17,7 @@ function session(id: string, pid = process.pid): Record<string, string> {
 }
 
 async function addWork(fixture: Fixture, title: string, parent?: string): Promise<string> {
-  const args = ["work", "add", title, "--atomic-reason", "slp fixture"];
+  const args = ["work", "add", title];
   if (parent) args.push("--parent", parent);
   return idFrom(await runCli(fixture, args));
 }

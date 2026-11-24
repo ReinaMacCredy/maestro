@@ -461,7 +461,7 @@ test("568 decision draft refuses the links an edit would drop (w562)", async () 
     const target = idFrom(await runCli(fixture, ["decision", "draft", "the ruling retired"]));
     expect((await runCli(fixture, ["decision", "lock", target])).exitCode).toBe(0);
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "the card", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "the card"]),
     );
     const open = idFrom(await runCli(fixture, ["decision", "draft", "the draft still open"]));
 

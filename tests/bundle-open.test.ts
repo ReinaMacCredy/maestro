@@ -46,7 +46,7 @@ test("bundle open --work accepts an SLP work id and still refuses an unknown one
 test("bundle open migrates a legacy bundle_work away from the work(id) foreign key, keeping its rows (Hub finding F4)", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
-    const added = await runCli(fixture, ["work", "add", "plain item", "--atomic-reason", "fixture", "--json"]);
+    const added = await runCli(fixture, ["work", "add", "plain item", "--json"]);
     expect(added.exitCode).toBe(0);
     const workId = envelope<{ work: { id: string } }>(added.stdout).work.id;
     expect((await runCli(fixture, ["bundle", "open", "legacy-link", "--work", workId])).exitCode).toBe(0);

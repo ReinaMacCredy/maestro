@@ -45,7 +45,7 @@ async function addBriefWork(
     await runInstalledCliAt(
       fixture,
       repo,
-      ["work", "add", title, "--atomic-reason", "brief fixture", ...extra],
+      ["work", "add", title, ...extra],
       { PATH: path },
     ),
   );
@@ -617,7 +617,7 @@ test("243 install initializes the room store without turning the room into a git
     const added = await runInstalledCliAt(
       fixture,
       room,
-      ["work", "add", "unassigned owner idea", "--atomic-reason", "room record"],
+      ["work", "add", "unassigned owner idea"],
       { PATH: path },
     );
     expect(added.exitCode).toBe(0);

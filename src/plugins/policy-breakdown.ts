@@ -3,15 +3,6 @@ import type { WorkGateInput, WorkRecord } from "./work.ts";
 
 const writeLikeKinds = new Set(["feature", "task", "bug", "chore", "implement"]);
 
-// Cancelled children are not a breakdown; without this filter two commands
-// (add child, cancel child) would defeat the gate.
-function needsBreakdown(work: WorkRecord, children: WorkRecord[]): boolean {
-  return writeLikeKinds.has(work.kind) &&
-    !work.parentId &&
-    children.filter((child) => child.state !== "cancelled").length === 0 &&
-    !work.atomicReason;
-}
-
 // Only write-like children are execution units; idea-like children are scope
 // notes and never hold their parent open.
 function openChildren(children: WorkRecord[]): WorkRecord[] {
@@ -30,17 +21,6 @@ interface Gate {
   reason: string;
 }
 
-function breakdownGate(work: WorkRecord): Gate {
-  return {
-    blocked: true,
-    origin: "policy-breakdown",
-    reason:
-      `parentless write-like work requires a child breakdown; run: maestro work add ` +
-      `"<child>" --parent ${work.id} --kind task; if ${work.id} is genuinely atomic: ` +
-      `maestro work start ${work.id} --atomic-reason "<reason>"`,
-  };
-}
-
 function openChildrenGate(work: WorkRecord, open: WorkRecord[], sessionId: string): Gate {
   const ids = open.map((child) => child.id);
   const next = open.find(
@@ -49,7 +29,7 @@ function openChildrenGate(work: WorkRecord, open: WorkRecord[], sessionId: strin
   const command = next.state === "active"
     ? next.heldBy === sessionId
       ? `maestro work done ${next.id}`
-      : "maestro status"
+      : `maestro work list --parent ${work.id}`
     : `maestro work start ${next.id}`;
   return {
     blocked: true,
@@ -63,7 +43,6 @@ function openChildrenGate(work: WorkRecord, open: WorkRecord[], sessionId: strin
 }
 
 function gateFor(work: WorkRecord, children: WorkRecord[], sessionId: string): Gate | null {
-  if (needsBreakdown(work, children)) return breakdownGate(work);
   const open = openChildren(children);
   return open.length > 0 ? openChildrenGate(work, open, sessionId) : null;
 }
@@ -72,7 +51,7 @@ export const policyBreakdownPlugin: BuiltInPlugin = {
   name: "policy-breakdown",
   inject: ["work"],
   requires:
-    "gates work start/ready/done: parentless write-like work needs a child breakdown or --atomic-reason; open write-like children block their parent",
+    "gates work start/ready/done: open write-like children block their parent",
   apply(context) {
     for (const event of ["work.start", "work.ready", "work.done"] as const) {
       context.effect(() =>

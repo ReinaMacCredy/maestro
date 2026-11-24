@@ -411,7 +411,6 @@ export const workPlugin: BuiltInPlugin = {
           const now = new Date().toISOString();
           const kind = stringOption(invocation, "kind") ?? "task";
           const acceptance = stringOption(invocation, "acceptance") ?? null;
-          const atomicReason = stringOption(invocation, "atomic-reason") ?? null;
           const gate = await context.events.waterfall<WorkAddGateInput, GateResult>(
             "work.add",
             { kind, parentId, sessionId: context.sessions.current().id, title },
@@ -434,10 +433,10 @@ export const workPlugin: BuiltInPlugin = {
             context.store.database
               .query(
                 `INSERT INTO work
-                  (id, title, kind, state, parent_id, acceptance, atomic_reason, created_at, updated_at)
-                 VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+                  (id, title, kind, state, parent_id, acceptance, created_at, updated_at)
+                 VALUES (?, ?, ?, 'open', ?, ?, ?, ?)`,
               )
-              .run(id, title, kind, parentId, acceptance, atomicReason, now, now);
+              .run(id, title, kind, parentId, acceptance, now, now);
             const insertBlocker = context.store.database.query(
               "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
             );
@@ -454,7 +453,7 @@ export const workPlugin: BuiltInPlugin = {
             entityType: "work",
             entityId: id,
             sessionId: context.sessions.current().id,
-            payload: { title, kind, parentId, acceptance, atomicReason, blockers },
+            payload: { title, kind, parentId, acceptance, blockers },
           });
           return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
         },
@@ -473,10 +472,6 @@ export const workPlugin: BuiltInPlugin = {
               multiple: true,
             },
             "--acceptance": { description: "Record the observable acceptance condition.", value: true },
-            "--atomic-reason": {
-              description: "Explain why parentless work needs no child breakdown.",
-              value: true,
-            },
             "--to": {
               description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
               value: true,
@@ -525,17 +520,13 @@ export const workPlugin: BuiltInPlugin = {
             command: details.command,
           });
         }
-        // Declaring an existing item atomic here is the only way out of a
-        // breakdown gate without filing a duplicate work item.
-        const declaredAtomic = stringOption(invocation, "atomic-reason");
-        const gateWork = declaredAtomic ? { ...work, atomicReason: declaredAtomic } : work;
         const children = service.children(id);
         const result = await context.events.waterfall<
           WorkGateInput,
           GateResult
         >(
           "work.start",
-          { work: { ...gateWork, heldBy: null }, children, sessionId: session.id },
+          { work: { ...work, heldBy: null }, children, sessionId: session.id },
           async () => ({ blocked: false }),
         );
         blockIfNeeded(result);
@@ -565,11 +556,6 @@ export const workPlugin: BuiltInPlugin = {
           }
           context.sessions.record("work.start");
           const now = new Date().toISOString();
-          if (declaredAtomic) {
-            context.store.database
-              .query("UPDATE work SET atomic_reason = ?, updated_at = ? WHERE id = ?")
-              .run(declaredAtomic, now, id);
-          }
           const claimed = context.store.database
             .query(
               `UPDATE work
@@ -597,12 +583,6 @@ export const workPlugin: BuiltInPlugin = {
         return { data: { work: claimed }, text: `${id} started by ${session.id}` };
       }, {
         description: "Start work and claim its live session lease.",
-        flags: {
-          "--atomic-reason": {
-            description: "Declare this item atomic instead of breaking it down.",
-            value: true,
-          },
-        },
         positionals: [{ name: "id", required: true }],
       }),
     );
@@ -796,7 +776,6 @@ export const workPlugin: BuiltInPlugin = {
           // itself. The start gates and blockers run first, so the implicit
           // claim is not a way around anything work start would refuse.
           const claimsLease = work.heldBy !== sessionId;
-          const declaredAtomic = stringOption(invocation, "atomic-reason") ?? null;
           const expired = claimsLease ? latestLeaseExpiration(context, id) : null;
           if (claimsLease) {
             if (work.heldBy) {
@@ -815,7 +794,7 @@ export const workPlugin: BuiltInPlugin = {
             const start = await context.events.waterfall<WorkGateInput, GateResult>(
               "work.start",
               {
-                work: { ...work, heldBy: null, atomicReason: declaredAtomic ?? work.atomicReason },
+                work: { ...work, heldBy: null },
                 children: service.children(id),
                 sessionId,
               },
@@ -840,7 +819,7 @@ export const workPlugin: BuiltInPlugin = {
           >(
             "work.done",
             {
-              work: { ...work, atomicReason: declaredAtomic ?? work.atomicReason },
+              work,
               children: service.children(id),
               evidence,
               claims,
@@ -872,10 +851,10 @@ export const workPlugin: BuiltInPlugin = {
               const claimed = context.store.database
                 .query(
                   `UPDATE work
-                   SET state = 'active', held_by = ?, atomic_reason = COALESCE(?, atomic_reason), updated_at = ?
+                   SET state = 'active', held_by = ?, updated_at = ?
                    WHERE id = ? AND state != 'done' AND cancelled_at IS NULL AND held_by IS NULL`,
                 )
-                .run(sessionId, declaredAtomic, now, id);
+                .run(sessionId, now, id);
               if (claimed.changes === 0) {
                 const refreshed = requireWork(context, id);
                 throw new CliError("LEASE_HELD", `${id} is held by ${refreshed.heldBy}`, {
@@ -886,10 +865,10 @@ export const workPlugin: BuiltInPlugin = {
             const completed = context.store.database
               .query(
                 `UPDATE work
-                 SET state = 'done', evidence = ?, candidate = ?, atomic_reason = COALESCE(?, atomic_reason), held_by = NULL, updated_at = ?
+                 SET state = 'done', evidence = ?, candidate = ?, held_by = NULL, updated_at = ?
                  WHERE id = ? AND state = 'active' AND cancelled_at IS NULL AND held_by = ?`,
               )
-              .run(recordedEvidence, candidate, declaredAtomic, now, id, sessionId);
+              .run(recordedEvidence, candidate, now, id, sessionId);
             if (completed.changes === 0) {
               throw new CliError("INVALID_STATE", `${id} changed while completion was pending`);
             }
@@ -902,7 +881,6 @@ export const workPlugin: BuiltInPlugin = {
               payload: {
                 candidate,
                 ...(claimsLease ? { claimedOnDone: true } : {}),
-                ...(declaredAtomic ? { atomicReason: declaredAtomic } : {}),
                 evidence: recordedEvidence,
                 claims,
                 proofs,
@@ -932,10 +910,6 @@ export const workPlugin: BuiltInPlugin = {
             },
             "--candidate": {
               description: "Record an opaque commit or digest.",
-              value: true,
-            },
-            "--atomic-reason": {
-              description: "Declare an unheld parentless item atomic while done takes its lease.",
               value: true,
             },
           },

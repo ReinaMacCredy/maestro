@@ -322,7 +322,7 @@ test("kernel-no-herdr: with HERDR_SOCKET_PATH pointing at a missing socket the c
   await withFixture(async (fixture) => {
     const socket = join(fixture.root, "missing.sock");
     const environment = { HERDR_SOCKET_PATH: socket, PATH: [dirname(process.execPath), "/usr/bin", "/bin"].join(":") };
-    const added = await runCli(fixture, ["work", "add", "kernel item", "--atomic-reason", "one edit", "--json"], environment);
+    const added = await runCli(fixture, ["work", "add", "kernel item", "--json"], environment);
     expect(added.exitCode).toBe(0);
     const id = envelope<{ work: { id: string } }>(added.stdout).work.id;
     expect((await runCli(fixture, ["work", "start", id, "--json"], environment)).exitCode).toBe(0);

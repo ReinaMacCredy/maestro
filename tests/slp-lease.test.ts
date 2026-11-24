@@ -18,7 +18,7 @@ function session(id: string, pid = process.pid): Record<string, string> {
 test("189 work release refuses a session that does not hold the lease", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "holder-only release", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "holder-only release"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session("release-holder"))).exitCode)
       .toBe(0);
@@ -40,7 +40,7 @@ test("190 a holder releases open work without losing evidence and records the ev
   await withFixture(async (fixture) => {
     const holder = "release-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "voluntary release", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "voluntary release"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
@@ -67,7 +67,7 @@ test("652 work release --force drops another live session's lease and records wh
     const holder = "stuck-holder";
     const forcer = "forcing-session";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "forced release", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "forced release"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
 
@@ -92,7 +92,7 @@ test("652 work release --force drops another live session's lease and records wh
 test("191 work reclaim refuses a missing or blank reason", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "reasoned reclaim", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "reasoned reclaim"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session("previous-holder"))).exitCode)
       .toBe(0);
@@ -114,7 +114,7 @@ test("192 work reclaim records both sessions and the reason without completing w
     const newHolder = "new-holder";
     const reason = "operator confirmed the prior lane stopped";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "take stopped lease", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "take stopped lease"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(previousHolder))).exitCode)
       .toBe(0);
@@ -163,7 +163,7 @@ test("193 a shared-pid holder is stamped once onto TTL, keeps its lease, heartbe
     const sharedPid = 1;
     const holder = "shared-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "shared pid lease", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "shared pid lease"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
       .toBe(0);
@@ -229,7 +229,7 @@ test("194 an exclusive live pid stays pid-anchored even with a cold last_seen", 
   await withFixture(async (fixture) => {
     const holder = "exclusive-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "exclusive pid lease", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "exclusive pid lease"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder, 1))).exitCode).toBe(0);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
@@ -259,7 +259,7 @@ test("195 repeated work reads write a shared-pid downgrade exactly once", async 
     const sharedPid = 1;
     const holder = "one-write-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "one downgrade", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "one downgrade"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
       .toBe(0);
@@ -318,7 +318,7 @@ test("197 a shared pid that is already dead downgrades without inventing livenes
     const deadPid = 99_999_997;
     const holder = "dead-shared-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "dead shared pid lease", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "dead shared pid lease"]),
     );
     // The lease is taken while the host process is alive; the pid dies later.
     expect((await runCli(fixture, ["work", "start", work], session(holder))).exitCode).toBe(0);
@@ -361,7 +361,7 @@ test("295 shared-pid downgrade never decreases a newer persisted heartbeat", asy
     const sharedPid = 1;
     const holder = "monotonic-holder";
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "monotonic downgrade", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "monotonic downgrade"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder, sharedPid))).exitCode)
       .toBe(0);
@@ -397,7 +397,7 @@ test("470 a replacement process reusing a pid gets a fresh session and cannot fi
     // simply expire and the reuse would never be tested.
     const reused = process.pid;
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "pid reuse repro", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "pid reuse repro"]),
     );
     expect(
       (await runCli(
@@ -457,7 +457,7 @@ test("471 the current session id does not depend on which historical row shares 
     };
     const identity = async (title: string): Promise<string> => {
       const work = idFrom(
-        await runCli(fixture, ["work", "add", title, "--atomic-reason", "fixture"], blank),
+        await runCli(fixture, ["work", "add", title], blank),
       );
       const started = await runCli(fixture, ["work", "start", work], blank);
       expect(started.exitCode).toBe(0);
@@ -489,7 +489,7 @@ test("480 work add alone records a live session before attributing its event", a
   await withFixture(async (fixture) => {
     const added = await runCli(
       fixture,
-      ["work", "add", "add-only session", "--atomic-reason", "fixture"],
+      ["work", "add", "add-only session"],
       session("add-only"),
     );
     expect(added.exitCode).toBe(0);
@@ -527,7 +527,7 @@ test("540 work done claims an unheld card and completes it in one command (w548/
     // A relay card is never worked in the delivery sense: it records a handoff
     // and closes when the report arrives, so the start carried no information.
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "relay card", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "relay card"]),
     );
     const done = await runCli(
       fixture,
@@ -563,7 +563,7 @@ test("540 work done claims an unheld card and completes it in one command (w548/
 test("541 work done still refuses a card another live session holds (w548/d720)", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "held card", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "held card"]),
     );
     expect((await runCli(fixture, ["work", "start", work], session("first-holder"))).exitCode).toBe(0);
 
@@ -590,12 +590,12 @@ test("541 work done still refuses a card another live session holds (w548/d720)"
 test("542 the implicit claim on work done answers to blockers (w548/d720)", async () => {
   await withFixture(async (fixture) => {
     const blocker = idFrom(
-      await runCli(fixture, ["work", "add", "blocker", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "blocker"]),
     );
     const blocked = idFrom(
       await runCli(
         fixture,
-        ["work", "add", "blocked card", "--atomic-reason", "fixture", "--blocked-by", blocker],
+        ["work", "add", "blocked card", "--blocked-by", blocker],
       ),
     );
 

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { idFrom, runCli, withFixture, workEvents } from "./helpers.ts";
 
@@ -85,30 +86,19 @@ test("427 work done and show round-trip an optional candidate into the completio
   });
 });
 
-test("632 policy-breakdown blocks only parentless childless write-like work", async () => {
+test("--atomic-reason is an unknown flag and a stored atomic reason still shows (d880)", async () => {
   await withFixture(async (fixture) => {
-    const root = idFrom(
-      await runCli(fixture, ["work", "add", "root implementation", "--kind", "feature"]),
-    );
-
-    const blockedRoot = await runCli(fixture, ["work", "start", root]);
-    const child = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "child implementation",
-        "--kind",
-        "feature",
-        "--parent",
-        root,
-      ]),
-    );
-    const startedChild = await runCli(fixture, ["work", "start", child]);
-
-    expect(blockedRoot.exitCode).not.toBe(0);
-    expect(blockedRoot.stderr).toContain("policy-breakdown");
-    expect(startedChild.exitCode).toBe(0);
-    expect(startedChild.stderr).not.toContain("policy-breakdown");
+    for (const verb of [["work", "add", "late"], ["work", "start", "w1"], ["work", "done", "w1", "--evidence", "x"]]) {
+      const refused = await runCli(fixture, [...verb, "--atomic-reason", "one edit"]);
+      expect(JSON.parse(refused.stderr).error.code).toBe("UNKNOWN_FLAG");
+    }
+    const id = idFrom(await runCli(fixture, ["work", "add", "old card"]));
+    const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
+    database.query("UPDATE work SET atomic_reason = 'one edit' WHERE id = ?").run(id);
+    database.close();
+    expect((await runCli(fixture, ["work", "show", id])).stdout).toContain("atomic reason: one edit");
+    const json = await runCli(fixture, ["work", "show", id, "--json"]);
+    expect(JSON.parse(json.stdout).data.work.atomicReason).toBe("one edit");
   });
 });
 
@@ -153,10 +143,6 @@ test("67 work list separates startable work from policy-breakdown gated work", a
     const startable = idFrom(
       await runCli(fixture, ["work", "add", "startable idea", "--kind", "idea"]),
     );
-    const reason =
-      `parentless write-like work requires a child breakdown; run: maestro work add ` +
-      `"<child>" --parent ${gated} --kind task; if ${gated} is genuinely atomic: ` +
-      `maestro work start ${gated} --atomic-reason "<reason>"`;
     type Listed = { gate: { command: string | null; origin: string; reason: string } | null; id: string };
     const gateOf = async (id: string): Promise<Listed["gate"] | undefined> => {
       const json = await runCli(fixture, ["work", "list", "--json"]);
@@ -165,19 +151,8 @@ test("67 work list separates startable work from policy-breakdown gated work", a
         .find((work) => work.id === id)?.gate;
     };
 
-    const blocked = await runCli(fixture, ["work", "start", gated]);
-    const human = await runCli(fixture, ["work", "list"]);
-
-    expect(blocked.exitCode).not.toBe(0);
-    const blockedError = (JSON.parse(blocked.stderr) as {
-      error: { message: string; origin: string };
-    }).error;
-    expect(blockedError.origin).toBe("policy-breakdown");
-    expect(blockedError.message).toBe(reason);
     expect(await gateOf(startable)).toBeNull();
-    expect(await gateOf(gated)).toEqual({ command: null, origin: "policy-breakdown", reason });
-    expect(human.stdout).toContain(`${gated} [open] gated root\n  gated by policy-breakdown: ${reason}`);
-    expect(human.stdout).toContain(`${startable} [open] startable idea\n`);
+    expect(await gateOf(gated)).toBeNull();
 
     const child = idFrom(
       await runCli(fixture, [
@@ -190,7 +165,7 @@ test("67 work list separates startable work from policy-breakdown gated work", a
         gated,
       ]),
     );
-    // With an OPEN child the parent stays gated (open-children predicate).
+    // With an OPEN child the parent is gated (open-children predicate).
     expect(await gateOf(gated)).not.toBeNull();
 
     expect((await runCli(fixture, ["work", "start", child])).exitCode).toBe(0);
@@ -383,13 +358,8 @@ test("24 unexpected positionals fail with UNKNOWN_ARGUMENT naming the token", as
   });
 });
 
-test("30 breakdown and proof blocks name concrete unblocking commands", async () => {
+test("30 proof blocks name concrete unblocking commands", async () => {
   await withFixture(async (fixture) => {
-    const root = idFrom(
-      await runCli(fixture, ["work", "add", "needs breakdown", "--kind", "feature"]),
-    );
-    const breakdown = await runCli(fixture, ["work", "start", root]);
-
     const proofWork = idFrom(
       await runCli(fixture, ["work", "add", "needs proof", "--kind", "idea"]),
     );
@@ -402,11 +372,6 @@ test("30 breakdown and proof blocks name concrete unblocking commands", async ()
       "tests pass",
     ]);
 
-    expect(breakdown.exitCode).not.toBe(0);
-    expect(breakdown.stderr).toContain("work add");
-    expect(breakdown.stderr).toContain("--parent");
-    expect(breakdown.stderr).toContain(root);
-    expect(breakdown.stderr).toContain("--atomic-reason");
     expect(proof.exitCode).not.toBe(0);
     expect(proof.stderr).toContain("work done");
     expect(proof.stderr).toContain(proofWork);

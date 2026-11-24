@@ -611,7 +611,6 @@ subverbs:
   add      Add a tracked work item.
     usage: maestro work add <title>
     --acceptance <value>               Record the observable acceptance condition.
-    --atomic-reason <value>            Explain why parentless work needs no child breakdown.
     --blocked-by <value> (repeatable)  Add a blocking work ID.
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
@@ -630,7 +629,6 @@ subverbs:
     --reason <value>  Record why this work is cancelled.
   done     Complete work with policy-checked evidence, taking an unheld lease.
     usage: maestro work done <id>
-    --atomic-reason <value>       Declare an unheld parentless item atomic while done takes its lease.
     --candidate <value>           Record an opaque commit or digest.
     --claim <value> (repeatable)  Record a completion claim.
     --evidence <value>            Record opaque completion evidence.
@@ -664,8 +662,7 @@ subverbs:
     --notes <value>  How many notes to print, newest last: an integer or all (default 5).
   start    Start work and claim its live session lease.
     usage: maestro work start <id>
-    --atomic-reason <value>  Declare this item atomic instead of breaking it down.
-    --json                   Emit one compact JSON success envelope.
+    --json  Emit one compact JSON success envelope.
   take     Take assigned OPEN work or reviewer-granted RETURNED SLP work.
     usage: maestro work take <work-id>
     --json  Emit one compact JSON success envelope.
@@ -685,7 +682,6 @@ usage: maestro work accept <work-id>
 work add  Add a tracked work item.
 usage: maestro work add <title>
     --acceptance <value>               Record the observable acceptance condition.
-    --atomic-reason <value>            Explain why parentless work needs no child breakdown.
     --blocked-by <value> (repeatable)  Add a blocking work ID.
     --fresh                            Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.
     --json                             Emit one compact JSON success envelope.
@@ -710,7 +706,6 @@ usage: maestro work cancel <id>
 ### maestro work done --help
 work done  Complete work with policy-checked evidence, taking an unheld lease.
 usage: maestro work done <id>
-    --atomic-reason <value>       Declare an unheld parentless item atomic while done takes its lease.
     --candidate <value>           Record an opaque commit or digest.
     --claim <value> (repeatable)  Record a completion claim.
     --evidence <value>            Record opaque completion evidence.
@@ -761,8 +756,7 @@ usage: maestro work show <id>
 ### maestro work start --help
 work start  Start work and claim its live session lease.
 usage: maestro work start <id>
-    --atomic-reason <value>  Declare this item atomic instead of breaking it down.
-    --json                   Emit one compact JSON success envelope.
+    --json  Emit one compact JSON success envelope.
 
 ### maestro work take --help
 work take  Take assigned OPEN work or reviewer-granted RETURNED SLP work.

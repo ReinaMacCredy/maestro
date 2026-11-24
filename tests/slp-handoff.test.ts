@@ -16,10 +16,10 @@ test("168 handoff renders every store-provable NOTES section", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     const done = idFrom(
-      await runCli(fixture, ["work", "add", "completed packet work", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "completed packet work"]),
     );
     const open = idFrom(
-      await runCli(fixture, ["work", "add", "open packet work", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "open packet work"]),
     );
     expect((await runCli(fixture, ["work", "start", done])).exitCode).toBe(0);
     expect(
@@ -275,7 +275,7 @@ test("462 successor bundle access gates incomplete handoff and resumes a complet
 test("171 handoff rejects work ids and unknown bundles with the next command", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
-      await runCli(fixture, ["work", "add", "not a bundle", "--atomic-reason", "fixture"]),
+      await runCli(fixture, ["work", "add", "not a bundle"]),
     );
     const workTarget = await runCli(fixture, ["handoff", work]);
     expect(workTarget.exitCode).not.toBe(0);

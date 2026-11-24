@@ -370,7 +370,7 @@ test("438 update warns about live holders and still completes", async () => {
     const work = idFrom(
       await runCli(
         fixture,
-        ["work", "add", "live activation work", "--atomic-reason", "fixture"],
+        ["work", "add", "live activation work"],
         holder,
       ),
     );
@@ -378,7 +378,7 @@ test("438 update warns about live holders and still completes", async () => {
     const callerWork = idFrom(
       await runCli(
         fixture,
-        ["work", "add", "caller activation work", "--atomic-reason", "fixture"],
+        ["work", "add", "caller activation work"],
         caller,
       ),
     );

@@ -297,13 +297,13 @@ test("seat-model: work add outside SLP refuses --profile, --model and --fresh al
     };
     const before = await listIds();
     for (const option of [["--profile", "peer-opus"], ["--model", "fable"], ["--fresh"]]) {
-      const refused = await runCliAt(fixture, fixture.repo, ["work", "add", "plain item", ...option, "--atomic-reason", "test", "--json"]);
+      const refused = await runCliAt(fixture, fixture.repo, ["work", "add", "plain item", ...option, "--json"]);
       expect(refused.exitCode).toBe(1);
       expect(failure(refused.stderr).code).toBe("INVALID_OPTION");
       expect(failure(refused.stderr).message).toContain(`${option[0]} is available only for SLP work add --to <peer>`);
       expect(await listIds()).toEqual(before);
     }
-    const plain = await runCliAt(fixture, fixture.repo, ["work", "add", "plain item", "--atomic-reason", "test", "--json"]);
+    const plain = await runCliAt(fixture, fixture.repo, ["work", "add", "plain item", "--json"]);
     expect(plain.exitCode).toBe(0);
     expect((await listIds()).length).toBe(before.length + 1);
   });

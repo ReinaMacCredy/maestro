@@ -34,14 +34,14 @@ test("628 a store records the schema generation that wrote it", async () => {
 
 test("520 an older maestro refuses a store a newer one wrote, rather than writing into it", async () => {
   await withFixture(async (fixture) => {
-    await runCli(fixture, ["work", "add", "before the upgrade", "--atomic-reason", "fixture"]);
+    await runCli(fixture, ["work", "add", "before the upgrade"]);
     const path = storePath(fixture);
     const current = userVersion(path);
     // The store now claims a schema this binary has never heard of, which is
     // what a stale shim or a downgrade sees after someone else upgrades.
     setUserVersion(path, current + 1);
 
-    const write = await runCli(fixture, ["work", "add", "after", "--atomic-reason", "fixture"]);
+    const write = await runCli(fixture, ["work", "add", "after"]);
     const read = await runCli(fixture, ["work", "list"]);
 
     for (const result of [write, read]) {
@@ -56,7 +56,7 @@ test("520 an older maestro refuses a store a newer one wrote, rather than writin
 
 test("521 a store from an older generation is stamped forward and keeps working", async () => {
   await withFixture(async (fixture) => {
-    await runCli(fixture, ["work", "add", "kept", "--atomic-reason", "fixture"]);
+    await runCli(fixture, ["work", "add", "kept"]);
     const path = storePath(fixture);
     const current = userVersion(path);
     // Every store written before the ledger existed reads as 0.
@@ -72,7 +72,7 @@ test("521 a store from an older generation is stamped forward and keeps working"
 
 test("522 observer mode refuses a newer store and stamps nothing", async () => {
   await withFixture(async (fixture) => {
-    await runCli(fixture, ["work", "add", "seed", "--atomic-reason", "fixture"]);
+    await runCli(fixture, ["work", "add", "seed"]);
     const path = storePath(fixture);
     const current = userVersion(path);
     setUserVersion(path, 0);
