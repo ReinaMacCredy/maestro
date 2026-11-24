@@ -328,7 +328,7 @@ test("kernel-no-herdr: with HERDR_SOCKET_PATH pointing at a missing socket the c
     const id = envelope<{ work: { id: string } }>(added.stdout).work.id;
     expect((await runCli(fixture, ["work", "start", id, "--json"], environment)).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", id, "--evidence", "kernel unaffected", "--json"], environment)).exitCode).toBe(0);
-    expect((await runCli(fixture, ["ready", "--json"], environment)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "list", "--json"], environment)).exitCode).toBe(0);
     const room = await markedRoom(fixture);
     await materializeSkills(fixture.home, "dev");
     await mkdir(dirname(seatTokenPath(fixture.home)), { recursive: true });

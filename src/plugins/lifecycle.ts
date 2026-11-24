@@ -508,8 +508,8 @@ async function codexTrustCheck(repo: string, home: string): Promise<string> {
 }
 
 // A repo migrating off the Rust build still carries .maestro/store.sqlite next to
-// the new store. Nothing else mentions it, so a migrating user reads "no ready
-// work" and concludes their history is gone (d35).
+// the new store. Nothing else mentions it, so a migrating user reads an empty
+// work list and concludes their history is gone (d35).
 function legacyStoreCheck(storePath: string): string | null {
   const legacyPath = join(dirname(storePath), "store.sqlite");
   if (!existsSync(legacyPath)) return null;

@@ -595,17 +595,45 @@ export const decisionPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "decision list",
-        (): CliResult => {
-          const decisions = service.list();
-          return {
-            data: { decisions },
-            text: decisions.map((decision) =>
-              `${decision.id} [${decision.state}] ${decision.text}` +
-              (decision.withdrawReason ? ` | withdraw reason: ${decision.withdrawReason}` : "")
-            ).join("\n"),
-          };
+        (invocation): CliResult => {
+          const workId = option(invocation, "work");
+          const database = context.store.database;
+          if (workId && !database.query("SELECT 1 FROM work WHERE id = ?").get(workId)) {
+            throw new CliError("NOT_FOUND", `work not found: ${workId}; run: maestro work list`, {
+              command: "maestro work list",
+              id: workId,
+            });
+          }
+          const total = database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM decisions")
+            .get()?.count ?? 0;
+          const order = "ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)";
+          const rows = workId
+            ? database.query<DecisionRow, [string]>(`SELECT * FROM decisions WHERE work_id = ? ${order}`).all(workId)
+            : invocation.options.all === true
+            ? database.query<DecisionRow, []>(`SELECT * FROM decisions ${order}`).all()
+            : database
+                .query<DecisionRow, []>(
+                  "SELECT * FROM decisions ORDER BY updated_at DESC, CAST(SUBSTR(id, 2) AS INTEGER) DESC LIMIT 20",
+                )
+                .all();
+          const decisions = rows.map(fromRow);
+          const lines = decisions.map((decision) =>
+            `${decision.id} [${decision.state}] ${decision.text}` +
+            (decision.withdrawReason ? ` | withdraw reason: ${decision.withdrawReason}` : "")
+          );
+          if (!workId && invocation.options.all !== true && total > decisions.length) {
+            lines.push(`showing ${decisions.length} of ${total}; maestro decision list --all`);
+          }
+          return { data: { decisions, total }, text: lines.join("\n") };
         },
-        { description: "List decisions and their current states.", mutates: false },
+        {
+          description: "List the 20 most recently updated decisions, newest first, with the total.",
+          flags: {
+            "--all": { description: "List every decision in id order." },
+            "--work": { description: "List the decisions linked to one work ID.", value: true },
+          },
+          mutates: false,
+        },
       ),
     );
   },

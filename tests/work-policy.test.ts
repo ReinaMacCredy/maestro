@@ -112,54 +112,40 @@ test("632 policy-breakdown blocks only parentless childless write-like work", as
   });
 });
 
-test("633 ready excludes blocked work and promotes it after its blocker completes", async () => {
+test("633 work list names the blocker of blocked work and clears it after its blocker completes", async () => {
   await withFixture(async (fixture) => {
     const first = idFrom(await runCli(fixture, ["work", "add", "first", "--kind", "idea"]));
     const second = idFrom(
       await runCli(fixture, ["work", "add", "second", "--kind", "idea", "--blocked-by", first]),
     );
-
-    const before = await runCli(fixture, ["ready", "--json"]);
-    expect(before.exitCode).toBe(0);
-    const beforeData = JSON.parse(before.stdout).data as {
-      gated: Array<{
-        blockers: Array<{ id: string; state: string }>;
-        command?: string;
-        id: string;
-        origin: string;
-        reason: string;
-        title: string;
-      }>;
-      works: Array<{ id: string }>;
+    type Listed = { blockedBy: Array<{ id: string; state: string }>; gate: unknown; id: string };
+    const listed = async (): Promise<Map<string, Listed>> => {
+      const result = await runCli(fixture, ["work", "list", "--json"]);
+      expect(result.exitCode).toBe(0);
+      const works = (JSON.parse(result.stdout).data as { works: Listed[] }).works;
+      return new Map(works.map((work) => [work.id, work]));
     };
-    expect(beforeData.works.map((work) => work.id)).toContain(first);
-    expect(beforeData.works.map((work) => work.id)).not.toContain(second);
-    expect(beforeData.gated).toContainEqual({
-      id: second,
-      origin: "work-blockers",
-      blockers: [{ id: first, state: "open" }],
-      command: `maestro work start ${first}`,
-      reason:
-        `${second} is blocked by unresolved work: ${first} [open]; ` +
-        `run: maestro work start ${first}`,
-      title: "second",
-    });
+
+    const before = await listed();
+    expect(before.get(first)).toEqual(expect.objectContaining({ blockedBy: [], gate: null }));
+    expect(before.get(second)?.blockedBy).toEqual([{ id: first, state: "open" }]);
+    const refused = await runCli(fixture, ["work", "start", second]);
+    expect((JSON.parse(refused.stderr) as { error: { command: string; message: string } }).error)
+      .toEqual(expect.objectContaining({
+        command: `maestro work start ${first}`,
+        message:
+          `${second} is blocked by unresolved work: ${first} [open]; ` +
+          `run: maestro work start ${first}`,
+      }));
 
     expect((await runCli(fixture, ["work", "start", first])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", first, "--evidence", "finished"])).exitCode).toBe(0);
-    const after = await runCli(fixture, ["ready", "--json"]);
-    expect(after.exitCode).toBe(0);
-    const afterData = JSON.parse(after.stdout).data as {
-      gated: unknown[];
-      works: Array<{ id: string }>;
-    };
-
-    expect(afterData.works.map((work) => work.id)).toContain(second);
-    expect(afterData.gated).toEqual([]);
+    const after = await listed();
+    expect(after.get(second)).toEqual(expect.objectContaining({ blockedBy: [], gate: null }));
   });
 });
 
-test("67 ready separates startable work from policy-breakdown gated work", async () => {
+test("67 work list separates startable work from policy-breakdown gated work", async () => {
   await withFixture(async (fixture) => {
     const gated = idFrom(
       await runCli(fixture, ["work", "add", "gated root", "--kind", "feature"]),
@@ -171,21 +157,16 @@ test("67 ready separates startable work from policy-breakdown gated work", async
       `parentless write-like work requires a child breakdown; run: maestro work add ` +
       `"<child>" --parent ${gated} --kind task; if ${gated} is genuinely atomic: ` +
       `maestro work start ${gated} --atomic-reason "<reason>"`;
+    type Listed = { gate: { command: string | null; origin: string; reason: string } | null; id: string };
+    const gateOf = async (id: string): Promise<Listed["gate"] | undefined> => {
+      const json = await runCli(fixture, ["work", "list", "--json"]);
+      expect(json.exitCode).toBe(0);
+      return (JSON.parse(json.stdout).data as { works: Listed[] }).works
+        .find((work) => work.id === id)?.gate;
+    };
 
     const blocked = await runCli(fixture, ["work", "start", gated]);
-    const human = await runCli(fixture, ["ready"]);
-    const json = await runCli(fixture, ["ready", "--json"]);
-    expect(json.exitCode).toBe(0);
-    const data = JSON.parse(json.stdout).data as {
-      gated: Array<{
-        blockers: Array<{ id: string; state: string }>;
-        id: string;
-        origin: string;
-        reason: string;
-        title: string;
-      }>;
-      works: Array<{ id: string }>;
-    };
+    const human = await runCli(fixture, ["work", "list"]);
 
     expect(blocked.exitCode).not.toBe(0);
     const blockedError = (JSON.parse(blocked.stderr) as {
@@ -193,12 +174,10 @@ test("67 ready separates startable work from policy-breakdown gated work", async
     }).error;
     expect(blockedError.origin).toBe("policy-breakdown");
     expect(blockedError.message).toBe(reason);
-    expect(data.works.map((work) => work.id)).toEqual([startable]);
-    expect(data.gated).toEqual([
-      { id: gated, title: "gated root", origin: "policy-breakdown", reason, blockers: [] },
-    ]);
-    expect(human.stdout.indexOf(startable)).toBeLessThan(human.stdout.indexOf(gated));
-    expect(human.stdout).toContain(reason);
+    expect(await gateOf(startable)).toBeNull();
+    expect(await gateOf(gated)).toEqual({ command: null, origin: "policy-breakdown", reason });
+    expect(human.stdout).toContain(`${gated} [open] gated root\n  gated by policy-breakdown: ${reason}`);
+    expect(human.stdout).toContain(`${startable} [open] startable idea\n`);
 
     const child = idFrom(
       await runCli(fixture, [
@@ -212,27 +191,14 @@ test("67 ready separates startable work from policy-breakdown gated work", async
       ]),
     );
     // With an OPEN child the parent stays gated (open-children predicate).
-    const withOpenChild = await runCli(fixture, ["ready", "--json"]);
-    expect(withOpenChild.exitCode).toBe(0);
-    const openChildData = JSON.parse(withOpenChild.stdout).data as {
-      gated: Array<{ id: string }>;
-      works: Array<{ id: string }>;
-    };
-    expect(openChildData.gated.map((work) => work.id)).toContain(gated);
+    expect(await gateOf(gated)).not.toBeNull();
 
     expect((await runCli(fixture, ["work", "start", child])).exitCode).toBe(0);
     expect(
       (await runCli(fixture, ["work", "done", child, "--evidence", "child done"])).exitCode,
     ).toBe(0);
 
-    const after = await runCli(fixture, ["ready", "--json"]);
-    expect(after.exitCode).toBe(0);
-    const afterData = JSON.parse(after.stdout).data as {
-      gated: Array<{ id: string }>;
-      works: Array<{ id: string }>;
-    };
-    expect(afterData.works.map((work) => work.id)).toContain(gated);
-    expect(afterData.gated.map((work) => work.id)).not.toContain(gated);
+    expect(await gateOf(gated)).toBeNull();
     expect((await runCli(fixture, ["work", "start", gated])).exitCode).toBe(0);
   });
 });
@@ -267,11 +233,11 @@ test("11 live leases refuse a second session and dead-session leases expire pass
 
       holder.kill();
       await holder.exited;
-      const passivelyReady = await runCli(fixture, ["ready"], {
+      const passivelyOpen = await runCli(fixture, ["work", "show", id], {
         MAESTRO_SESSION_ID: "session-b",
         MAESTRO_SESSION_PID: String(process.pid),
       });
-      expect(passivelyReady.stdout).toContain(id);
+      expect(passivelyOpen.stdout).toContain(`${id} [open]`);
       const reclaimed = await runCli(fixture, ["work", "start", id], {
         MAESTRO_SESSION_ID: "session-b",
         MAESTRO_SESSION_PID: String(process.pid),

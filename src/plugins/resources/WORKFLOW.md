@@ -193,7 +193,7 @@ running SLP team (a Lead, Peer, or Team Supervisor pane after `team start`)
 only the nine SLP v2 operations apply, and the retired verbs redirect to them.
 Everywhere else (plain sessions, the Hub room, design and wayfinding sessions)
 the classic surface is the live model: `work start|done`,
-`decision draft|lock`, `ready`, councils, and worktree lanes.
+`decision draft|lock`, `work list`, councils, and worktree lanes.
 
 ## Bundle contract (tier Full)
 

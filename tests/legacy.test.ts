@@ -119,26 +119,22 @@ test("39 legacy show prints one card, selects one file, and suggests a near miss
   });
 });
 
-test("41 legacy ids remain unknown to work, ready, and work list", async () => {
+test("41 legacy ids remain unknown to work and work list", async () => {
   await withFixture(async (fixture) => {
     await seedLegacyRows(fixture);
 
     const started = await runCli(fixture, ["work", "start", featureId]);
     const done = await runCli(fixture, ["work", "done", featureId]);
-    const ready = await runCli(fixture, ["ready", "--json"]);
-    expect(ready.exitCode).toBe(0);
-    const readyData = JSON.parse(ready.stdout).data as {
-      gated: Array<{ id: string }>;
-      works: Array<{ id: string }>;
-    };
-    const listed = await runCli(fixture, ["work", "list"]);
+    const json = await runCli(fixture, ["work", "list", "--all", "--json"]);
+    expect(json.exitCode).toBe(0);
+    const works = (JSON.parse(json.stdout).data as { works: Array<{ id: string }> }).works;
+    const listed = await runCli(fixture, ["work", "list", "--all"]);
 
     expect(started.exitCode).not.toBe(0);
     expect(started.stderr).toContain("NOT_FOUND");
     expect(done.exitCode).not.toBe(0);
     expect(done.stderr).toContain("NOT_FOUND");
-    expect(readyData.works.map((work) => work.id)).not.toContain(featureId);
-    expect(readyData.gated.map((work) => work.id)).not.toContain(featureId);
+    expect(works.map((work) => work.id)).not.toContain(featureId);
     expect(listed.stdout).not.toContain(featureId);
   });
 });

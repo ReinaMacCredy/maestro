@@ -127,6 +127,12 @@ interface GateResult {
   reason?: string;
 }
 
+interface ListedWork extends WorkRecord {
+  blockedBy: Array<{ id: string; state: string }>;
+  gate: { command: string | null; origin: string; reason: string } | null;
+  holder: { harness: string | null; id: string; lastSeen: string | null; live: boolean } | null;
+}
+
 function toWork(row: WorkRow): WorkRecord {
   return {
     id: row.id,
@@ -236,11 +242,11 @@ function nextBlockerCommand(
   if (blocker.state === "active") {
     return blocker.heldBy === sessionId
       ? `maestro work done ${blocker.id}`
-      : "maestro status";
+      : "maestro work list";
   }
   return unresolvedBlockers(context, blocker.id).length === 0
     ? `maestro work start ${blocker.id}`
-    : "maestro ready";
+    : "maestro work list";
 }
 
 function blockerDetails(
@@ -1280,145 +1286,147 @@ export const workPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "work list",
-        (): CliResult => {
-          const works = service.list();
-          const known = new Set(works.map((work) => work.id));
-          const childrenByParent = new Map<string, WorkRecord[]>();
-          for (const work of works) {
-            if (!work.parentId || !known.has(work.parentId)) continue;
-            const siblings = childrenByParent.get(work.parentId) ?? [];
-            siblings.push(work);
-            childrenByParent.set(work.parentId, siblings);
-          }
-          const renderTree = (work: WorkRecord, depth: number): string[] => [
-            `${"  ".repeat(depth)}${work.id} [${work.state}] ${work.title}`,
-            ...(childrenByParent.get(work.id) ?? []).flatMap((child) =>
-              renderTree(child, depth + 1)
-            ),
-          ];
-          const roots = works.filter(
-            (work) => !work.parentId || !known.has(work.parentId),
-          );
-          return {
-            data: { works },
-            text: roots.flatMap((work) => renderTree(work, 0)).join("\n"),
-          };
-        },
-        { description: "List tracked work and current states.", mutates: false },
-      ),
-    );
-
-    context.effect(() =>
-      context.cli.register(
-        "ready",
         async (invocation): Promise<CliResult> => {
-          const showBlocked = invocation.options.all === true;
-          const allWorks = service.list();
-          const childrenByParent = new Map<string, WorkRecord[]>();
-          for (const work of allWorks) {
-            if (!work.parentId) continue;
-            const children = childrenByParent.get(work.parentId) ?? [];
-            children.push(work);
-            childrenByParent.set(work.parentId, children);
-          }
-          const items = allWorks.map((work) => {
-            const blockers = blockersFor(context, work.id).map((blocker) => ({
-              heldBy: blocker.heldBy,
-              id: blocker.id,
-              state: blocker.state,
-            }));
-            return { ...work, blockers };
-          });
-          const candidates = context.ready.project(items);
-          const works: typeof items = [];
-          const gated: Array<{
-            blockers: Array<{ id: string; state: string }>;
-            command?: string;
-            id: string;
-            origin: string;
-            reason: string;
-            title: string;
-          }> = [];
-          const sessionId = context.sessions.current().id;
-          for (const work of candidates) {
-            const result = await context.events.waterfall<
-              WorkGateInput,
-              GateResult
-            >(
-              "work.ready",
-              { work, children: childrenByParent.get(work.id) ?? [], sessionId },
-              async () => ({ blocked: false }),
-            );
-            if (result.blocked) {
-              const details = gateDetails(result);
-              gated.push({
-                blockers: result.blockers ?? work.blockers.map((blocker) => ({
-                  id: blocker.id,
-                  state: blocker.state,
-                })),
-                ...(result.command ? { command: result.command } : {}),
-                id: work.id,
-                title: work.title,
-                ...details,
-              });
-            } else {
-              works.push(work);
-            }
-          }
-          for (const work of items) {
-            if (work.state !== "open") continue;
-            const blockers = work.blockers.filter(
-              (blocker) => blocker.state !== "done" && blocker.state !== "cancelled",
-            );
-            if (blockers.length === 0) continue;
-            const fullBlockers = blockers.map((blocker) => requireWork(context, blocker.id));
-            const details = blockerDetails(context, work.id, fullBlockers, sessionId);
-            gated.push({
-              id: work.id,
-              title: work.title,
-              origin: "work-blockers",
-              reason: details.reason,
-              blockers: blockers.map((blocker) => ({ id: blocker.id, state: blocker.state })),
-              command: details.command,
+          const parentId = stringOption(invocation, "parent");
+          const showAll = invocation.options.all === true;
+          const database = context.store.database;
+          if (parentId && !database.query("SELECT 1 FROM work WHERE id = ?").get(parentId)) {
+            throw new CliError("NOT_FOUND", `work not found: ${parentId}; run: maestro work list`, {
+              command: "maestro work list",
+              id: parentId,
             });
           }
-          const listed = showBlocked
-            ? gated
-            : gated.filter((work) => work.origin !== "work-blockers");
-          const hiddenBlocked = gated.length - listed.length;
-          const lines = [
-            ...works.map((work) => `${work.id} ${work.title}`),
-            ...listed.map(
-              (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
-            ),
-          ];
-          if (hiddenBlocked > 0) {
-            lines.push(`${hiddenBlocked} blocked by open work hidden; --all to list`);
+          const order = "ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)";
+          const rows = parentId
+            ? database.query<WorkRow, [string]>(`SELECT * FROM work WHERE parent_id = ? ${order}`).all(parentId)
+            : showAll
+            ? database.query<WorkRow, []>(`SELECT * FROM work ${order}`).all()
+            : database
+                .query<WorkRow, []>(
+                  `SELECT * FROM work WHERE state IN ('open', 'active') AND cancelled_at IS NULL ${order}`,
+                )
+                .all();
+          const counts = { open: 0, active: 0, done: 0, cancelled: 0 };
+          for (const row of database
+            .query<{ count: number; state: keyof typeof counts }, []>(
+              `SELECT CASE WHEN cancelled_at IS NOT NULL THEN 'cancelled' ELSE state END AS state,
+                      COUNT(*) AS count
+               FROM work GROUP BY 1`,
+            )
+            .all()) counts[row.state] = row.count;
+
+          const blockedBy = new Map<string, Array<{ id: string; state: string }>>();
+          for (const edge of database
+            .query<{ id: string; state: string; work_id: string }, []>(
+              `SELECT work_blockers.work_id, blocker.id, blocker.state
+               FROM work_blockers
+               JOIN work AS item ON item.id = work_blockers.work_id
+               JOIN work AS blocker ON blocker.id = work_blockers.blocker_id
+               WHERE item.state != 'done' AND item.cancelled_at IS NULL
+                 AND blocker.state != 'done' AND blocker.cancelled_at IS NULL
+               ORDER BY CAST(SUBSTR(blocker.id, 2) AS INTEGER)`,
+            )
+            .all()) {
+            blockedBy.set(edge.work_id, [
+              ...blockedBy.get(edge.work_id) ?? [],
+              { id: edge.id, state: edge.state },
+            ]);
           }
-          const held = allWorks.filter(
-            (work) => work.state === "active" && work.heldBy === sessionId,
-          );
-          const allTerminal = allWorks.length > 0 && allWorks.every(
-            (work) => work.state === "done" || work.state === "cancelled",
-          );
+
+          const holders = new Map<string, NonNullable<ListedWork["holder"]>>();
+          const holderOf = (id: string): NonNullable<ListedWork["holder"]> => {
+            let holder = holders.get(id);
+            if (!holder) {
+              const session = context.sessions.get(id);
+              holder = {
+                harness: session?.harness ?? null,
+                id,
+                lastSeen: session?.lastSeen ?? null,
+                live: session?.live ?? false,
+              };
+              holders.set(id, holder);
+            }
+            return holder;
+          };
+
+          const childrenOf = new Map<string, WorkRecord[]>();
+          for (const child of database
+            .query<WorkRow, []>(
+              `SELECT * FROM work WHERE parent_id IN (
+                 SELECT id FROM work WHERE state = 'open' AND cancelled_at IS NULL
+               ) ${order}`,
+            )
+            .all()
+            .map(toWork)) {
+            childrenOf.set(child.parentId as string, [...childrenOf.get(child.parentId as string) ?? [], child]);
+          }
+          const sessionId = context.sessions.current().id;
+          const works: ListedWork[] = [];
+          for (const work of rows.map(toWork)) {
+            const blockers = work.state === "open" || work.state === "active"
+              ? blockedBy.get(work.id) ?? []
+              : [];
+            let gate: ListedWork["gate"] = null;
+            if (work.state === "open" && !work.heldBy && blockers.length === 0) {
+              const result = await context.events.waterfall<WorkGateInput, GateResult>(
+                "work.ready",
+                { work, children: childrenOf.get(work.id) ?? [], sessionId },
+                async () => ({ blocked: false }),
+              );
+              if (result.blocked) gate = { ...gateDetails(result), command: result.command ?? null };
+            }
+            works.push({
+              ...work,
+              blockedBy: blockers,
+              holder: work.heldBy ? holderOf(work.heldBy) : null,
+              gate,
+            });
+          }
+
+          const shown = new Set(works.map((work) => work.id));
+          const childrenByParent = new Map<string, ListedWork[]>();
+          for (const work of works) {
+            if (parentId || !work.parentId || !shown.has(work.parentId)) continue;
+            childrenByParent.set(work.parentId, [...childrenByParent.get(work.parentId) ?? [], work]);
+          }
+          const render = (work: ListedWork, depth: number): string[] => {
+            const indent = "  ".repeat(depth);
+            const held = work.holder
+              ? `  held by ${work.holder.id} (${work.holder.live ? "live" : "dead"})`
+              : "";
+            const blocked = work.blockedBy.length > 0
+              ? `  blocked by ${work.blockedBy.map((blocker) => `${blocker.id} [${blocker.state}]`).join(", ")}`
+              : "";
+            return [
+              `${indent}${work.id} [${work.state}] ${work.title}${held}${blocked}`,
+              ...(work.gate ? [`${indent}  gated by ${work.gate.origin}: ${work.gate.reason}`] : []),
+              ...(childrenByParent.get(work.id) ?? []).flatMap((child) => render(child, depth + 1)),
+            ];
+          };
+          const lines = works
+            .filter((work) => parentId || !work.parentId || !shown.has(work.parentId))
+            .flatMap((work) => render(work, 0));
+          if (!parentId && !showAll) {
+            const hidden = [
+              counts.done > 0 ? `${counts.done} done` : null,
+              counts.cancelled > 0 ? `${counts.cancelled} cancelled` : null,
+            ].filter((part): part is string => part !== null);
+            if (hidden.length > 0) lines.push(`${hidden.join(", ")} not shown; maestro work list --all`);
+          }
           return {
-            data: { works, gated },
+            data: { works, counts },
             text: lines.length > 0
               ? lines.join("\n")
-              : held.length > 0
-              ? `no ready work; you hold ${held.map((work) => work.id).join(", ")}; ` +
-                `finish it: maestro work done ${held[0]?.id}`
-              : allTerminal
-              ? "no ready work; all tracked work is closed"
-              : allWorks.length === 0
-              ? 'no ready work; add some: maestro work add "<title>"'
-              : "no ready work; inspect tracked work: maestro work list",
+              : parentId
+              ? `${parentId} has no children; add one: maestro work add "<title>" --parent ${parentId}`
+              : 'no tracked work; add some: maestro work add "<title>"',
           };
         },
         {
-          description: "List ready work and gated items with their blockers.",
+          description: "List open and active work with holders, blockers and gates; done and cancelled work is counted.",
           flags: {
-            "--all": { description: "List blocked work too; --json always carries it under gated." },
+            "--all": { description: "List every item, done and cancelled included." },
+            "--parent": { description: "List the children of one work ID in every state.", value: true },
           },
           mutates: false,
         },

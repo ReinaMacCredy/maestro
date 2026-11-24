@@ -127,21 +127,27 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
     database.close();
 
     const observer = { ...noPs, ...sessionEnvironment("observer") };
-    const ready = await runCli(fixture, ["ready", "--json"], observer);
-    expect(ready.exitCode).toBe(0);
-    const readyData = JSON.parse(ready.stdout).data as {
-      gated: unknown[];
-      works: Array<{ id: string }>;
-    };
+    const listed = await runCli(fixture, ["work", "list", "--json"], observer);
+    expect(listed.exitCode).toBe(0);
+    const listedWorks = (JSON.parse(listed.stdout).data as {
+      works: Array<{ gate: unknown; holder: { live: boolean } | null; id: string }>;
+    }).works;
+    const holderLive = (id: string) => listedWorks.find((work) => work.id === id)?.holder?.live;
+    const stateOf = async (id: string) =>
+      (JSON.parse((await runCli(fixture, ["work", "show", id, "--json"], observer)).stdout).data as {
+        work: { state: string };
+      }).work.state;
     const status = await runCli(fixture, ["status", "--all", "--json"], observer);
     const sessions = (JSON.parse(status.stdout) as {
       data: { sessions: Array<{ id: string; live: boolean }> };
     }).data.sessions;
 
-    expect(readyData.works.map((work) => work.id)).toContain(staleId);
-    expect(readyData.works.map((work) => work.id)).not.toContain(freshId);
-    expect(readyData.works.map((work) => work.id)).toContain(pidId);
-    expect(readyData.gated).toEqual([]);
+    expect(holderLive(staleId)).toBeFalse();
+    expect(holderLive(freshId)).toBeTrue();
+    expect(listedWorks.map((work) => work.gate)).toEqual([null, null, null]);
+    expect(await stateOf(staleId)).toBe("open");
+    expect(await stateOf(freshId)).toBe("active");
+    expect(await stateOf(pidId)).toBe("open");
     expect(sessions.find((session) => session.id === "stale-ttl")?.live).toBeFalse();
     expect(sessions.find((session) => session.id === "fresh-ttl")?.live).toBeTrue();
     expect(sessions.find((session) => session.id === "dead-pid")?.live).toBeFalse();
@@ -338,7 +344,7 @@ test("637 work block and unblock edit blockers after creation with work add's ch
   });
 });
 
-test("638 ready hides blocked work by default and --all lists it with its gate", async () => {
+test("638 work list names the blockers of an open item and the gate that refuses one", async () => {
   await withFixture(async (fixture) => {
     const parent = idFrom(
       await runCli(fixture, ["work", "add", "parent feature", "--kind", "feature"]),
@@ -353,31 +359,39 @@ test("638 ready hides blocked work by default and --all lists it with its gate",
       ]),
     );
 
-    const ready = await runCli(fixture, ["ready"]);
-    expect(ready.exitCode).toBe(0);
-    expect(ready.stdout).toContain(`${tests} red tests`);
-    expect(ready.stdout).toContain(`${parent} parent feature [gated by policy-breakdown`);
-    expect(ready.stdout).not.toContain(`${implementation} implementation`);
-    expect(ready.stdout).toContain("1 blocked by open work hidden; --all to list");
+    const listed = await runCli(fixture, ["work", "list"]);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout.split("\n")).toEqual([
+      `${parent} [open] parent feature`,
+      `  gated by policy-breakdown: ${parent} has open children: ${tests}, ${implementation}; finish them first: maestro work start ${tests}`,
+      `  ${tests} [open] red tests`,
+      `  ${implementation} [open] implementation  blocked by ${tests} [open]`,
+      "",
+    ]);
 
-    const all = await runCli(fixture, ["ready", "--all"]);
-    expect(all.exitCode).toBe(0);
-    expect(all.stdout).toContain(
-      `${implementation} implementation [gated by work-blockers: ${implementation} is blocked by unresolved work: ${tests} [open]`,
-    );
-    expect(all.stdout).not.toContain("hidden");
-
-    const json = JSON.parse((await runCli(fixture, ["ready", "--json"])).stdout) as {
-      data: { gated: Array<{ id: string; origin: string }> };
+    const json = JSON.parse((await runCli(fixture, ["work", "list", "--json"])).stdout) as {
+      data: {
+        works: Array<{
+          blockedBy: Array<{ id: string; state: string }>;
+          gate: { command: string | null; origin: string; reason: string } | null;
+          id: string;
+        }>;
+      };
     };
-    expect(json.data.gated.find((work) => work.id === implementation)?.origin).toBe(
-      "work-blockers",
-    );
+    const byId = new Map(json.data.works.map((work) => [work.id, work]));
+    expect(byId.get(implementation)?.blockedBy).toEqual([{ id: tests, state: "open" }]);
+    expect(byId.get(implementation)?.gate).toBeNull();
+    expect(byId.get(parent)?.gate).toEqual({
+      command: `maestro work start ${tests}`,
+      origin: "policy-breakdown",
+      reason: `${parent} has open children: ${tests}, ${implementation}; finish them first: maestro work start ${tests}`,
+    });
 
     expect((await runCli(fixture, ["work", "start", tests])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", tests, "--evidence", "red"])).exitCode).toBe(0);
-    const after = await runCli(fixture, ["ready"]);
-    expect(after.stdout).toContain(`${implementation} implementation`);
-    expect(after.stdout).not.toContain("hidden");
+    const after = await runCli(fixture, ["work", "list"]);
+    expect(after.stdout).toContain(`${implementation} [open] implementation\n`);
+    expect(after.stdout).not.toContain("blocked by");
+    expect(after.stdout).toContain("1 done not shown; maestro work list --all");
   });
 });

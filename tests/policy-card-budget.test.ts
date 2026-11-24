@@ -182,10 +182,10 @@ test("479 cancelling a parent cascades through mutable descendants and frees the
       cancelReason: "already settled",
     });
 
-    const ready = await runCli(fixture, ["ready"]);
-    expect(ready.exitCode).toBe(0);
+    const listed = await runCli(fixture, ["work", "list"]);
+    expect(listed.exitCode).toBe(0);
     for (const id of [parent, heldChild, openGrandchild, doneChild, cancelledChild]) {
-      expect(ready.stdout).not.toContain(id);
+      expect(listed.stdout).not.toContain(id);
     }
 
     expect((await add(fixture, "freed slot one")).exitCode).toBe(0);

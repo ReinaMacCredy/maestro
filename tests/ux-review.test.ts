@@ -212,12 +212,12 @@ test("640 a read verb whose stdout pipe closes early exits 0 with no EPIPE stack
     for (let index = 0; index < 30; index += 1) {
       expect((await runCli(fixture, ["decision", "draft", `${index} ${long}`])).exitCode).toBe(0);
     }
-    const full = await runCli(fixture, ["decision", "list"]);
+    const full = await runCli(fixture, ["decision", "list", "--all"]);
     expect(full.stdout.length).toBeGreaterThan(65_536);
 
     const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
     const piped = Bun.spawn(
-      ["bash", "-c", `set -o pipefail; "${process.execPath}" "${cli}" decision list | head -1`],
+      ["bash", "-c", `set -o pipefail; "${process.execPath}" "${cli}" decision list --all | head -1`],
       {
         cwd: fixture.repo,
         env: { ...process.env, HOME: fixture.home, ...session },

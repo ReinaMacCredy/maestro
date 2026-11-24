@@ -238,7 +238,7 @@ test("639 [lint] WORKFLOW.md states the two-model boundary (Hub d87)", async () 
   const boundary = workflow.match(/## Two coordination models\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
   expect(boundary.split("\n\n")).toHaveLength(1);
   expect(boundary).toContain("nine SLP v2 operations");
-  for (const classic of ["work start", "decision draft", "ready"]) {
+  for (const classic of ["work start", "decision draft", "work list"]) {
     expect(boundary).toContain(classic);
   }
 });

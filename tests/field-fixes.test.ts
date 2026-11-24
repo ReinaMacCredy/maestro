@@ -32,8 +32,8 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
 
     // pid 1 is alive but unsignalable from an unprivileged checker (EPERM);
     // a peer's read verbs must not expire the lease.
-    const ready = await runCli(fixture, ["ready"], PEER);
-    expect(ready.exitCode).toBe(0);
+    const listed = await runCli(fixture, ["work", "list"], PEER);
+    expect(listed.exitCode).toBe(0);
     const status = await runCli(fixture, ["status"], PEER);
     expect(status.stdout).toContain("eperm-owner");
     expect(status.stdout).not.toContain("eperm-owner [dead]");
@@ -50,7 +50,7 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
         "--claim",
         "lease held across foreign reads",
         "--proof",
-        "peer ready/status ran between start and done",
+        "peer work list/status ran between start and done",
       ],
       OWNER,
     );
@@ -78,7 +78,7 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
     const started2 = await runCli(fixture, ["work", "start", "w2"], DEAD);
     expect(started2.exitCode).toBe(0);
 
-    await runCli(fixture, ["ready"], PEER);
+    await runCli(fixture, ["work", "list"], PEER);
     const shown2 = await runCli(fixture, ["work", "show", "w2"], PEER);
     expect(shown2.stdout).toContain("open");
     expect(shown2.stdout).not.toContain("active");
@@ -119,20 +119,20 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     );
     expect(cancelled.exitCode).toBe(0);
 
-    const list = await runCli(fixture, ["work", "list"], PEER);
+    const list = await runCli(fixture, ["work", "list", "--all"], PEER);
     expect(list.stdout).toContain("[cancelled] orphan stub");
 
-    const ready = await runCli(fixture, ["ready", "--json"], PEER);
-    expect(ready.exitCode).toBe(0);
-    const readyData = JSON.parse(ready.stdout).data as {
-      gated: Array<{ id: string; origin: string }>;
-      works: Array<{ title: string }>;
+    type Listed = { blockedBy: Array<{ id: string; state: string }>; gate: unknown; id: string; title: string };
+    const listed = async (): Promise<Listed[]> => {
+      const result = await runCli(fixture, ["work", "list", "--json"], PEER);
+      expect(result.exitCode).toBe(0);
+      return (JSON.parse(result.stdout).data as { works: Listed[] }).works;
     };
-    expect(readyData.works.map((work) => work.title)).not.toContain("orphan stub");
-    expect(readyData.gated).toContainEqual(expect.objectContaining({
-      id: "w3",
-      origin: "work-blockers",
-    }));
+    const startable = (works: Listed[]) =>
+      works.filter((work) => work.blockedBy.length === 0 && work.gate === null).map((work) => work.title);
+    const openWork = await listed();
+    expect(startable(openWork)).not.toContain("orphan stub");
+    expect(openWork.find((work) => work.id === "w3")?.blockedBy).toEqual([{ id: "w2", state: "open" }]);
 
     const startCancelled = await runCli(fixture, ["work", "start", "w1"], PEER);
     expect(startCancelled.exitCode).not.toBe(0);
@@ -157,31 +157,18 @@ test("62 work cancel is terminal, evidenced, and unblocks dependents", async () 
     expect(shown.stdout).toContain("duplicate of w6");
 
     // A cancelled blocker resolves its dependents.
-    const readyBefore = await runCli(fixture, ["ready", "--json"], PEER);
-    expect(readyBefore.exitCode).toBe(0);
-    const beforeData = JSON.parse(readyBefore.stdout).data as {
-      gated: Array<{ id: string; origin: string }>;
-      works: Array<{ title: string }>;
-    };
-    expect(beforeData.works.map((work) => work.title)).not.toContain("dependent item");
-    expect(beforeData.gated).toContainEqual(expect.objectContaining({
-      id: "w3",
-      origin: "work-blockers",
-    }));
+    const before = await listed();
+    expect(startable(before)).not.toContain("dependent item");
+    expect(before.find((work) => work.id === "w3")?.blockedBy).toEqual([{ id: "w2", state: "open" }]);
     const cancelBlocker = await runCli(
       fixture,
       ["work", "cancel", "w2", "--reason", "blocker abandoned"],
       PEER,
     );
     expect(cancelBlocker.exitCode).toBe(0);
-    const readyAfter = await runCli(fixture, ["ready", "--json"], PEER);
-    expect(readyAfter.exitCode).toBe(0);
-    const afterData = JSON.parse(readyAfter.stdout).data as {
-      gated: unknown[];
-      works: Array<{ title: string }>;
-    };
-    expect(afterData.works.map((work) => work.title)).toContain("dependent item");
-    expect(afterData.gated).toEqual([]);
+    const after = await listed();
+    expect(startable(after)).toContain("dependent item");
+    expect(after.every((work) => work.blockedBy.length === 0 && work.gate === null)).toBe(true);
 
     // A done item refuses cancel.
     expect((await runCli(fixture, ["work", "start", "w4"], PEER)).exitCode).toBe(0);

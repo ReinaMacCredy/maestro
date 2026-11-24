@@ -286,7 +286,7 @@ test("195 repeated work reads write a shared-pid downgrade exactly once", async 
       ["work", "show", work],
       ["work", "show", work],
       ["work", "list"],
-      ["ready"],
+      ["work", "list", "--all"],
     ]) {
       expect((await runCli(fixture, command, session("observer"))).exitCode).toBe(0);
     }

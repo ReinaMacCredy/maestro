@@ -4789,7 +4789,7 @@ test("SLP v2 hard cut rejects old verbs and leaves legacy records read-only", as
     );
     expect(emergencyStopped.exitCode).toBe(0);
     for (const administrative of [
-      ["ready", "--json"],
+      ["work", "list", "--json"],
       ["decision", "list", "--json"],
     ]) {
       const result = await runCliAt(

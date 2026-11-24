@@ -16,7 +16,6 @@ verbs:
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
-  ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
@@ -123,8 +122,10 @@ subverbs:
     --rationale <value>   Record why this decision was made.
     --supersedes <value>  Supersede a locked decision with this draft.
     --work <value>        Link this draft to a work item.
-  list      List decisions and their current states. *
-    --json  Emit one compact JSON success envelope.
+  list      List the 20 most recently updated decisions, newest first, with the total. *
+    --all           List every decision in id order.
+    --json          Emit one compact JSON success envelope.
+    --work <value>  List the decisions linked to one work ID.
   lock      Lock a draft decision against further edits.
     usage: maestro decision lock <id>
     --dissent <value>  Record the dissenting view.
@@ -156,9 +157,11 @@ usage: maestro decision draft <text-or-id> [replacement]
     --work <value>        Link this draft to a work item.
 
 ### maestro decision list --help
-decision list  List decisions and their current states. *
+decision list  List the 20 most recently updated decisions, newest first, with the total. *
 usage: maestro decision list
-    --json  Emit one compact JSON success envelope.
+    --all           List every decision in id order.
+    --json          Emit one compact JSON success envelope.
+    --work <value>  List the decisions linked to one work ID.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro decision lock --help
@@ -208,7 +211,6 @@ verbs:
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
-  ready      List ready work and gated items with their blockers. *
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
@@ -423,13 +425,6 @@ usage: maestro plugin enable <name>
 ### maestro plugin list --help
 plugin list  List built-in plugins. *
 usage: maestro plugin list
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro ready --help
-ready  List ready work and gated items with their blockers. *
-usage: maestro ready
-    --all   List blocked work too; --json always carries it under gated.
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
@@ -648,8 +643,10 @@ subverbs:
     --evidence <value>            Record opaque completion evidence.
     --json                        Emit one compact JSON success envelope.
     --proof <value> (repeatable)  Record proof paired with a claim.
-  list     List tracked work and current states. *
-    --json  Emit one compact JSON success envelope.
+  list     List open and active work with holders, blockers and gates; done and cancelled work is counted. *
+    --all             List every item, done and cancelled included.
+    --json            Emit one compact JSON success envelope.
+    --parent <value>  List the children of one work ID in every state.
   note     Append a note to a work item.
     usage: maestro work note <id> <text>
     --blocked       Flag the note as blocked and push it one SLP seat up.
@@ -728,9 +725,11 @@ usage: maestro work done <id>
     --proof <value> (repeatable)  Record proof paired with a claim.
 
 ### maestro work list --help
-work list  List tracked work and current states. *
+work list  List open and active work with holders, blockers and gates; done and cancelled work is counted. *
 usage: maestro work list
-    --json  Emit one compact JSON success envelope.
+    --all             List every item, done and cancelled included.
+    --json            Emit one compact JSON success envelope.
+    --parent <value>  List the children of one work ID in every state.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro work note --help

@@ -12,12 +12,12 @@ function session(id: string): Record<string, string> {
   };
 }
 
-test("182 ready and work show preserve stable work fields while adding decisions", async () => {
+test("182 work list and work show preserve stable work fields while adding decisions", async () => {
   await withFixture(async (fixture) => {
     const work = idFrom(
       await runCli(fixture, ["work", "add", "read path item", "--atomic-reason", "fixture"]),
     );
-    const readyBefore = await runCli(fixture, ["ready"], session("lane-ready"));
+    const listBefore = await runCli(fixture, ["work", "list"], session("lane-reader"));
     const decision = idFrom(
       await runCli(fixture, [
         "decision",
@@ -28,10 +28,10 @@ test("182 ready and work show preserve stable work fields while adding decisions
       ]),
     );
 
-    const readyAfter = await runCli(fixture, ["ready"], session("lane-ready"));
+    const listAfter = await runCli(fixture, ["work", "list"], session("lane-reader"));
     const showAfter = await runCli(fixture, ["work", "show", work]);
 
-    expect(readyAfter.stdout.split("\n")[0]).toBe(readyBefore.stdout.split("\n")[0]);
+    expect(listAfter.stdout.split("\n")[0]).toBe(listBefore.stdout.split("\n")[0]);
     expect(showAfter.stdout).toContain(`decision: ${decision} [draft] keep decisions attached to work`);
 
     const showJson = await runCli(fixture, ["work", "show", work, "--json"]);

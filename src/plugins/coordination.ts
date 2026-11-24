@@ -250,7 +250,7 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       brief.register(() => "  see or change: maestro plugin list|enable|disable <name>", { events: ["SessionStart"] }),
     );
-    context.effect(() => brief.register(() => "next: maestro ready", { events: ["SessionStart"] }));
+    context.effect(() => brief.register(() => "next: maestro work list", { events: ["SessionStart"] }));
     context.effect(() =>
       brief.register(() =>
         driftAdvisory(process.env.HOME ?? process.cwd(), resolve(import.meta.dir, "..", "..")),
