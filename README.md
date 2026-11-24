@@ -102,12 +102,10 @@ policy.
 
 The canonical Workspace Pack lives at `~/maestro/SLP.md`. Starting a team
 copies its exact bytes to `<project>/.maestro/SLP.md`, pins its version and
-digest for that generation, creates exactly one Team Supervisor and one Lead,
+digest for that generation, creates exactly one Lead plus the runtime pane,
 and creates initial `OPEN` work for the Lead. Peers are opened lazily by
-assigned work. `maestro team start --lead-only` opens the other shape, one Lead
-plus the runtime pane and no Team Supervisor; the shape is pinned for the
-generation and the Hub Supervisor is that Lead's reviewer.
-`--lead-model`, `--peer-model` and `--supervisor-model` pick a seat's model
+assigned work, and the Hub Supervisor is the Lead's reviewer.
+`--lead-model` and `--peer-model` pick a seat's model
 for the generation on its launch line, leaving the profile, its digest and the
 pack untouched; `maestro work add --to <peer> --model <model>` does the same
 for one Peer. Install seeds the
@@ -146,18 +144,6 @@ first with `maestro work note <id> "owner asked: <what>" --owner`: provenance
 only, exclusive with `--blocked` and `--rework`, it sets no blocked flag and
 pushes an `OWNER` line one seat up. Inside the item's objective the seat acts
 at once; outside it the item is not widened and new work is opened instead.
-
-The Hub room holds the owner's declared presence. `maestro owner here` and
-`maestro owner away` record it on her own words, `maestro owner` prints it, and
-the Hub prompt line and the room's `maestro status` carry `owner: here|away`.
-While she is away, an owner-scope blocker that has reached the Hub is ruled at
-once with `maestro decide "<choice>" --why "<reason>" --work <id>
---provisional` so the team continues; that `maestro status` lists every
-provisional ruling until she confirms it with `maestro decision confirm <id>`
-or supersedes it with a decision that `--replaces` it. An away presence never
-grants commit, push, tag, release, install mid-generation, or any destructive
-change. Like `decision`, `owner` and `decision confirm` are Hub-room verbs, not
-SLP operations: the nine above stay the whole role surface.
 
 Normal stop uses one transient foreground non-agent helper pane in the Hub so
 the Team Supervisor can close itself safely. This is internal, not another SLP
@@ -208,10 +194,9 @@ missing identities or targets.
 
 - `maestro work add|start|note|done|show|list` manages the work lifecycle;
   `work list` is the orientation view: open work, holders, blockers and gates.
-- `maestro decision draft|lock|confirm|show|list` manages durable choices;
-  `confirm` clears a provisional Hub ruling.
-- `maestro owner` reads the Hub room's declared owner presence, or records it
-  as here or away.
+- `maestro decision add|draft|lock|show|list` manages durable choices; `add`
+  records and locks in one command, `draft` is for a choice that waits on the
+  owner.
 - `maestro attention` scans the current repository and `maestro brief`
   summarizes every registered repository.
 - `maestro term list|show` reads the glossary; `maestro memory
