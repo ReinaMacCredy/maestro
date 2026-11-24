@@ -61,8 +61,6 @@ function listTerms(context: PluginContext): TermRecord[] {
     .map(fromRow);
 }
 
-// Observability rebuilds search_index from its own tables only, so terms
-// re-index themselves on apply and on every write (bundle precedent).
 function indexTerm(context: PluginContext, term: TermRecord): void {
   if (!tableExists(context.store.database, "search_index")) return;
   context.store.database
@@ -128,9 +126,6 @@ export const termPlugin: BuiltInPlugin = {
         updated_at TEXT NOT NULL
       );
     `);
-    if (!context.store.readOnly) {
-      for (const term of listTerms(context)) indexTerm(context, term);
-    }
 
     context.effect(() =>
       registerSessionCommand(

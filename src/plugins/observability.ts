@@ -435,7 +435,9 @@ export const observabilityPlugin: BuiltInPlugin = {
       context.store.database.exec("BEGIN IMMEDIATE");
       try {
         if (currentVersion() !== SEARCH_INDEX_VERSION) {
-          context.store.database.run("DELETE FROM search_index WHERE surface != '[legacy]'");
+          context.store.database.run(
+            "DELETE FROM search_index WHERE surface IN ('work', 'note', 'decision', 'log', 'prompt')",
+          );
           context.store.database.run(`
             INSERT INTO search_index(surface, entity_id, text)
             SELECT 'work', id, title || ' ' || COALESCE(acceptance, '') || ' ' || COALESCE(evidence, '') FROM work

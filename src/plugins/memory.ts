@@ -743,9 +743,6 @@ export const memoryPlugin: BuiltInPlugin = {
         updated_at TEXT NOT NULL
       );
     `);
-    if (!context.store.readOnly) {
-      for (const fact of listFacts(context.store.database, true)) indexFact(context, fact);
-    }
 
     context.effect(() =>
       (context.brief as BriefService).register(() => {

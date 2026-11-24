@@ -662,15 +662,6 @@ export const bundlePlugin: BuiltInPlugin = {
     // A paused bundle stays active in the state machine and only carries the
     // pause stamp (d778: waymark paused -> paused); the CHECK is left alone.
     context.store.ensureColumn("bundles", "paused_at", "ALTER TABLE bundles ADD COLUMN paused_at TEXT");
-    // Observability rebuilds search_index from scratch each startup and only
-    // knows its own tables; re-insert archived snapshots (import-rust precedent).
-    if (!context.store.readOnly) {
-      for (const row of context.store.database
-        .query<BundleRow, []>("SELECT * FROM bundles WHERE state = 'archived'")
-        .all()) {
-        indexSnapshot(context, fromRow(row));
-      }
-    }
 
     context.effect(() =>
       registerSessionCommand(
