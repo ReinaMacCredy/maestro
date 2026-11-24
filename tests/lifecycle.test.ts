@@ -725,13 +725,15 @@ test("51 CI runs tests, type-check, and anti-goal greps on push and pull request
       "Install zsh and ripgrep for the shellrc tests and the anti-goal gates",
       "Test",
       "Type-check",
+      "Differential oracle checks itself",
+      "Differential against the pinned old version",
       "A1 no daemon or scheduler",
       "A2 mechanism-only kernel",
       "A3 no escape-hatch flags",
     ]);
     expect(steps.every((step) => step.if === undefined)).toBe(true);
     const stepByName = new Map(steps.map((step) => [step.name, step]));
-    expect(stepByName.get("Test")?.run).toBe("bun test");
+    expect(stepByName.get("Test")?.run).toBe("bun scripts/test-shards.ts");
     expect(stepByName.get("Type-check")?.run).toBe("bunx tsc --noEmit");
 
     const sourceText = await readFile(join(projectRoot, "src", "kernel", "index.ts"), "utf8");
