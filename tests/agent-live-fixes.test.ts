@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture, workEvents } from "./helpers.ts";
+import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture, workEvents } from "./helpers.ts";
 
 test("91 an empty work list points at work add", async () => {
   await withFixture(async (fixture) => {
@@ -263,6 +263,7 @@ test("102b UNKNOWN_FLAG redacts a value glued to the flag with = in the message 
 // <token>` made the token a positional and UNKNOWN_ARGUMENT echoed it.
 test("102c UNKNOWN_ARGUMENT never echoes a positional that follows a valueless flag, naming the flag instead", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const spaced = await runCli(fixture, ["install", "--seat-token", "sk-ant-oat01-SEC7-fixture"]);
     expect(spaced.exitCode).toBe(2);
     const error = (JSON.parse(spaced.stderr) as { error: Record<string, unknown> }).error;

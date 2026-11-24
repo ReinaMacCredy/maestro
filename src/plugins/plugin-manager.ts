@@ -26,7 +26,7 @@ async function readRepoConfig(path: string): Promise<ConfigFile> {
   return JSON.parse(await readFile(path, "utf8")) as ConfigFile;
 }
 
-async function updateEntry(path: string, name: string, disabled: boolean): Promise<void> {
+export async function updateEntry(path: string, name: string, disabled: boolean): Promise<void> {
   const config = await readRepoConfig(path);
   const entry = config.plugins.find((candidate) => candidate.name === name);
   if (entry) entry.disabled = disabled;

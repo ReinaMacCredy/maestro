@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
-import { runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 // room d122-d126 (store at ~/maestro): the collaboration and autonomy layer.
 // d123: an owner walk-in is recorded as `work note --owner`, a provenance flag
@@ -200,6 +200,7 @@ test("d126: maestro work add refuses --mode with INVALID_OPTION inside a team an
 // w697 made status answer from both stores rather than letting one win.
 test("w736 decision show in the room resolves a room ruling, and prints both spaces when one id names a row in each", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const room = await markedRoom(fixture);
     const hubEnvironment = { HERDR_PANE_ID: "hub:p0" };
 

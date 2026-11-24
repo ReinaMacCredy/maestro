@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { resolveSeat, seatDigest, seatLaunchPath } from "../src/plugins/slp-seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
-import { runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 // room d128 (w728): a seat's model is a launch-time choice. team start gains
 // --lead-model and --peer-model, recorded on the team row; work add --to
@@ -282,6 +282,7 @@ test("seat-model: work add --to <peer> --model on an already-acknowledged Peer p
 // honour looked accepted. Both refuse the same way, before any store write.
 test("seat-model: work add outside SLP refuses --model and --fresh alike and writes nothing (Hub finding F1)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const listIds = async (): Promise<string[]> => {
       const listed = await runCliAt(fixture, fixture.repo, ["work", "list", "--json"]);
       expect(listed.exitCode).toBe(0);

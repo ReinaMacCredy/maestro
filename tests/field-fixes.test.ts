@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { seatLaunchPath } from "../src/plugins/slp-seats.ts";
-import { prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
+import { enableSlp, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 const OWNER = { MAESTRO_SESSION_ID: "eperm-owner", MAESTRO_SESSION_PID: "1" };
 const PEER = {
@@ -208,6 +208,7 @@ test("63 [lint] install leaves repository instructions owner-managed", async () 
 
 test("289 [lint] recipe and installed Hub expose the same simplified SLP roles", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const recipe = await runCli(fixture, ["recipe", "show", "slp"]);
     expect(recipe.exitCode).toBe(0);

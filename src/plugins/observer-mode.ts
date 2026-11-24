@@ -15,6 +15,7 @@ const observerPlugins = new Set([
   "policy-breakdown",
   "policy-proof",
   "recipe",
+  "slp",
   "term",
   "attention",
   "version",

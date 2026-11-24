@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { builtInPlugins } from "../src/plugins/index.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { skillNames } from "../src/plugins/skills.ts";
-import { runCli, withFixture } from "./helpers.ts";
+import { enableSlp, runCli, withFixture } from "./helpers.ts";
 
 // room d134 (d892): the pack carries two shared blocks, the default one every
 // seat reads and the Peer's.
@@ -140,6 +140,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
   expect(readOnlyMode).toContain("--local");
 
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     for (const command of [
       ["team"],
       ["team", "start"],
@@ -164,7 +165,7 @@ test("310 [lint] supervised-team site guidance matches the registered lifecycle 
 test("311 [lint] SLP v2 is the only registered team architecture and states its cooperative boundary", async () => {
   const root = join(import.meta.dir, "..");
   const pluginNames = builtInPlugins.map((plugin) => plugin.name);
-  expect(pluginNames.filter((name) => name === "slp-v2")).toEqual(["slp-v2"]);
+  expect(pluginNames.filter((name) => name === "slp")).toEqual(["slp"]);
   for (const retired of ["team", "team-runtime", "team-observer", "team-sensor", "team-advisor"]) {
     expect(pluginNames).not.toContain(retired);
     expect(await Bun.file(join(root, "src", "plugins", `${retired}.ts`)).exists()).toBe(false);

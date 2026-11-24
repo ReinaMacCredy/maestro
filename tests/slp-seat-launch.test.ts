@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { parseSeatFile, resolveSeat, seatDigest, seatLaunchPath, type SeatName } from "../src/plugins/slp-seats.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { fakeHerdrCommands, installFakeHerdr } from "./helpers-herdr.ts";
-import { prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, prepareInstallFixture, runCli, runCliAt, withFixture, type Fixture } from "./helpers.ts";
 
 const shippedRoot = join(import.meta.dir, "..", "src", "plugins", "resources");
 
@@ -214,6 +214,7 @@ test("pre-d906-generation: a team row pinning profiles {lead, peer-opus} with a 
 
 test("seat-file-inherits: an owner seat file carrying frontmatter and no body renders the shipped mandate under its frontmatter; its digest covers both files; the shipped layer still refuses an empty body (w700, d862)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const owner = join(fixture.home, "maestro", "profiles");
     await mkdir(owner, { recursive: true });
@@ -247,6 +248,7 @@ test("seat-file-inherits: an owner seat file carrying frontmatter and no body re
 
 test("lead-mandate-rendered: the installed maestro-lead seat carries room d118's self-work default and room d117's Hub reviewer line from the shared contract", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 

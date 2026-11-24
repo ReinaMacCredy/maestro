@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import {
@@ -10,12 +10,14 @@ import {
   type CliInvocation,
   type CliResult,
 } from "../kernel/cli.ts";
-import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import type { PluginContext } from "../kernel/loader.ts";
 import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { isRoom } from "./room.ts";
 import type { DecisionSection } from "./decision.ts";
 import type { InstallEvent } from "./install.ts";
+import { updateEntry } from "./plugin-manager.ts";
+import type { RecipeService } from "./recipe.ts";
 import { installMachineFiles, removeMachineFiles, seatTokenCheck, syncSeatFiles } from "./slp-plugin.ts";
 import { resolveSeat, seatDigest, seatFileDirectories, seatNames, writeSeatToken, type Seat } from "./slp-seats.ts";
 import {
@@ -1307,6 +1309,8 @@ async function startTeam(
     throw new CliError("SLP_PACK_MISSING", `missing canonical Workspace Pack: ${packPath}`);
   }
   const hubPackBytes = new Uint8Array(await readFile(packPath));
+  // The Lead and Peer panes run in the project, so the start turns the plugin on there.
+  await updateEntry(join(projectPath, ".maestro", "config"), "slp", false);
   migrateRoom(context.store);
   const snapshotPath = join(projectPath, ".maestro", "SLP.md");
   let attachedRoom = false;
@@ -4637,195 +4641,202 @@ function registerCoreSeams(context: PluginContext): void {
   context.effect(() => context.events.on<{ home: string }, string>("doctor", ({ home }) => seatTokenCheck(home)));
 }
 
-export const slpV2Plugin: BuiltInPlugin = {
-  name: "slp-v2",
-  apply(context) {
-    const runtime = new HerdrSlpRuntime();
-    registerCoreSeams(context);
+export function applySlp(context: PluginContext): void {
+  const runtime = new HerdrSlpRuntime();
+  registerCoreSeams(context);
+  const recipes = context.recipe as RecipeService | undefined;
+  if (recipes) {
     context.effect(() =>
-      registerSessionCommand(
-        context,
-        "team start",
-        (invocation): Promise<CliResult> => {
-          // room d128: a seat's model is a launch-time choice. Each flag is
-          // passed through unvalidated (the harness judges the name); only an
-          // empty value is refused here, since it would launch `--model ""`.
-          const models: PackModels = {};
-          for (const [flag, seat] of [
-            ["lead-model", "lead"],
-            ["peer-model", "peer"],
-          ] as const) {
-            const value = stringOption(invocation, flag);
-            if (value === undefined) continue;
-            if (value.trim() === "") {
-              throw new CliError("INVALID_OPTION", `--${flag} needs a model name; the harness validates it, maestro passes it through`);
-            }
-            models[seat] = value;
+      recipes.register({
+        name: "slp",
+        description: "Know which SLP role a session holds (Supervisor, Lead, Peer) and what it owns.",
+        body: () => readFileSync(join(import.meta.dir, "recipes", "slp.md"), "utf8"),
+      })
+    );
+  }
+  context.effect(() =>
+    registerSessionCommand(
+      context,
+      "team start",
+      (invocation): Promise<CliResult> => {
+        // room d128: a seat's model is a launch-time choice. Each flag is
+        // passed through unvalidated (the harness judges the name); only an
+        // empty value is refused here, since it would launch `--model ""`.
+        const models: PackModels = {};
+        for (const [flag, seat] of [
+          ["lead-model", "lead"],
+          ["peer-model", "peer"],
+        ] as const) {
+          const value = stringOption(invocation, flag);
+          if (value === undefined) continue;
+          if (value.trim() === "") {
+            throw new CliError("INVALID_OPTION", `--${flag} needs a model name; the harness validates it, maestro passes it through`);
           }
-          return startTeam(
-            context,
-            runtime,
-            requiredPosition(invocation, 0, "project"),
-            requiredPosition(invocation, 1, "objective"),
-            models,
-          );
-        },
-        {
-          description: "Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).",
-          flags: {
-            "--lead-model": {
-              description: "Launch the Lead with this model (`claude --model` / `codex --model` on its launch line); the lead seat file's model is the default; recorded on the team row (room d128).",
-              value: true,
-            },
-            "--peer-model": {
-              description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
-              value: true,
-            },
-          },
-          positionals: [
-            { name: "project", required: true },
-            { name: "objective", required: true },
-          ],
-          rootDescription: "Run the simplified supervised-team lifecycle.",
-        },
-      ),
-    );
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "team stop",
-        (invocation): Promise<CliResult> => stopTeam(context, runtime, invocation),
-        {
-          description: "Stop one complete SLP team, or abandon unfinished work from Hub.",
-          flags: {
-            "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
-            "--reason": {
-              description:
-                "The closing report shown on the Hub ledger (w722); with --emergency, why unfinished work is abandoned.",
-              value: true,
-            },
-          },
-          positionals: [{ name: "team-id", required: true }],
-          rootDescription: "Run the simplified supervised-team lifecycle.",
-        },
-      ),
-    );
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "work take",
-        (invocation): CliResult =>
-          takeWork(context, requiredPosition(invocation, 0, "work id")),
-        {
-          description: "Take assigned OPEN work or reviewer-granted RETURNED SLP work.",
-          positionals: [{ name: "work-id", required: true }],
-          rootDescription: "Move supervised work through its four-state lifecycle.",
-        },
-      ),
-    );
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "work return",
-        (invocation): Promise<CliResult> =>
-          returnWork(
-            context,
-            requiredPosition(invocation, 0, "work id"),
-            requiredPosition(invocation, 1, "return body"),
-          ),
-        {
-          description: "Return ACTIVE SLP work with its bounded result body.",
-          positionals: [
-            { name: "work-id", required: true },
-            { name: "body", required: true },
-          ],
-          rootDescription: "Move supervised work through its four-state lifecycle.",
-        },
-      ),
-    );
-    context.effect(() =>
-      registerSessionCommand(
-        context,
-        "work accept",
-        (invocation): Promise<CliResult> =>
-          acceptWork(
-            context,
-            requiredPosition(invocation, 0, "work id"),
-            stringOption(invocation, "outcome") ?? "accepted",
-          ),
-        {
-          description: "Accept RETURNED SLP work at the reviewer boundary.",
-          flags: {
-            "--outcome": {
-              description: "Record accepted or cancelled; cancellation may close OPEN work.",
-              value: true,
-            },
-          },
-          positionals: [{ name: "work-id", required: true }],
-          rootDescription: "Move supervised work through its four-state lifecycle.",
-        },
-      ),
-    );
-    // Hub d96/d97: the plugin entrypoints and the runtime's own readout. None
-    // is an SLP operation; Herdr launches the first two from the manifest.
-    context.effect(() =>
-      context.cli.register(
-        "slp runtime",
-        async (): Promise<CliResult> => {
-          const exitCode = await runSlpRuntime(runtimeConfigFromEnvironment());
-          if (exitCode !== 0) throw new CliError("RUNTIME_EXIT", `maestro slp runtime exited with ${exitCode}`);
-          return { data: { exitCode }, text: "runtime stopped" };
-        },
-        {
-          description: "Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).",
-          rootDescription: "Maestro's Herdr plugin entrypoints and the runtime readout.",
-        },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "slp restore",
-        (): Promise<CliResult> => runSlpRestore(),
-        { description: "Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived." },
-      ),
-    );
-    context.effect(() =>
-      context.cli.register(
-        "slp status",
-        (): Promise<CliResult> => {
-          const team = activeLocalTeam(context);
-          if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
-          return slpRuntimeStatus(team.project_path, team.team_id, team.generation);
-        },
-        { description: "Read the runtime's pending wakes for the running generation.", mutates: false },
-      ),
-    );
-    // w740 (d898): bundle open says a design has begun; the SLP plugin owns
-    // the push, so the bundle plugin only announces the event.
-    context.effect(() =>
-      context.events.on<{ bundleId: string; workIds: string[] }>(
-        "bundle.open",
-        async (opened, next) => {
-          await pushDesignOpened(context, opened.bundleId, opened.workIds);
-          return next();
-        },
-      ),
-    );
-    context.effect(() =>
-      registerSessionCommand(context, "decide", (invocation): Promise<CliResult> => decide(context, invocation), {
-        description: "Record one immutable settled decision.",
+          models[seat] = value;
+        }
+        return startTeam(
+          context,
+          runtime,
+          requiredPosition(invocation, 0, "project"),
+          requiredPosition(invocation, 1, "objective"),
+          models,
+        );
+      },
+      {
+        description: "Start or restore one SLP team generation: one Lead pane plus the runtime pane; the Hub Supervisor reviews the Lead's work (room d117).",
         flags: {
-          "--replaces": { description: "Link the decision it replaces.", value: true },
-          "--scope": {
-            description: "Select owner or cross-team scope when acting as Hub Supervisor.",
+          "--lead-model": {
+            description: "Launch the Lead with this model (`claude --model` / `codex --model` on its launch line); the lead seat file's model is the default; recorded on the team row (room d128).",
             value: true,
           },
-          "--why": { description: "Record why this choice is settled.", value: true },
-          "--work": { description: "Link the decision to SLP work.", value: true },
+          "--peer-model": {
+            description: "Launch every Peer this generation opens with this model unless work add --model names another; recorded on the team row (room d128); name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
+            value: true,
+          },
         },
-        positionals: [{ name: "choice", required: true }],
-        rootDescription: "Record a settled SLP decision in one operation.",
-      }),
-    );
-  },
-};
+        positionals: [
+          { name: "project", required: true },
+          { name: "objective", required: true },
+        ],
+        rootDescription: "Run the simplified supervised-team lifecycle.",
+      },
+    ),
+  );
+  context.effect(() =>
+    registerSessionCommand(
+      context,
+      "team stop",
+      (invocation): Promise<CliResult> => stopTeam(context, runtime, invocation),
+      {
+        description: "Stop one complete SLP team, or abandon unfinished work from Hub.",
+        flags: {
+          "--emergency": { description: "Use Hub owner authority and abandon unfinished work." },
+          "--reason": {
+            description:
+              "The closing report shown on the Hub ledger (w722); with --emergency, why unfinished work is abandoned.",
+            value: true,
+          },
+        },
+        positionals: [{ name: "team-id", required: true }],
+        rootDescription: "Run the simplified supervised-team lifecycle.",
+      },
+    ),
+  );
+  context.effect(() =>
+    registerSessionCommand(
+      context,
+      "work take",
+      (invocation): CliResult =>
+        takeWork(context, requiredPosition(invocation, 0, "work id")),
+      {
+        description: "Take assigned OPEN work or reviewer-granted RETURNED SLP work.",
+        positionals: [{ name: "work-id", required: true }],
+        rootDescription: "Move supervised work through its four-state lifecycle.",
+      },
+    ),
+  );
+  context.effect(() =>
+    registerSessionCommand(
+      context,
+      "work return",
+      (invocation): Promise<CliResult> =>
+        returnWork(
+          context,
+          requiredPosition(invocation, 0, "work id"),
+          requiredPosition(invocation, 1, "return body"),
+        ),
+      {
+        description: "Return ACTIVE SLP work with its bounded result body.",
+        positionals: [
+          { name: "work-id", required: true },
+          { name: "body", required: true },
+        ],
+        rootDescription: "Move supervised work through its four-state lifecycle.",
+      },
+    ),
+  );
+  context.effect(() =>
+    registerSessionCommand(
+      context,
+      "work accept",
+      (invocation): Promise<CliResult> =>
+        acceptWork(
+          context,
+          requiredPosition(invocation, 0, "work id"),
+          stringOption(invocation, "outcome") ?? "accepted",
+        ),
+      {
+        description: "Accept RETURNED SLP work at the reviewer boundary.",
+        flags: {
+          "--outcome": {
+            description: "Record accepted or cancelled; cancellation may close OPEN work.",
+            value: true,
+          },
+        },
+        positionals: [{ name: "work-id", required: true }],
+        rootDescription: "Move supervised work through its four-state lifecycle.",
+      },
+    ),
+  );
+  // Hub d96/d97: the plugin entrypoints and the runtime's own readout. None
+  // is an SLP operation; Herdr launches the first two from the manifest.
+  context.effect(() =>
+    context.cli.register(
+      "slp runtime",
+      async (): Promise<CliResult> => {
+        const exitCode = await runSlpRuntime(runtimeConfigFromEnvironment());
+        if (exitCode !== 0) throw new CliError("RUNTIME_EXIT", `maestro slp runtime exited with ${exitCode}`);
+        return { data: { exitCode }, text: "runtime stopped" };
+      },
+      {
+        description: "Run the team runtime pane for MAESTRO_SLP_TEAM and MAESTRO_SLP_GENERATION (opened by team start through the maestro Herdr plugin).",
+        rootDescription: "Maestro's Herdr plugin entrypoints and the runtime readout.",
+      },
+    ),
+  );
+  context.effect(() =>
+    context.cli.register(
+      "slp restore",
+      (): Promise<CliResult> => runSlpRestore(),
+      { description: "Herdr startup hook: reopen the runtime pane of every RUNNING generation whose role panes survived." },
+    ),
+  );
+  context.effect(() =>
+    context.cli.register(
+      "slp status",
+      (): Promise<CliResult> => {
+        const team = activeLocalTeam(context);
+        if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
+        return slpRuntimeStatus(team.project_path, team.team_id, team.generation);
+      },
+      { description: "Read the runtime's pending wakes for the running generation.", mutates: false },
+    ),
+  );
+  // w740 (d898): bundle open says a design has begun; the SLP plugin owns
+  // the push, so the bundle plugin only announces the event.
+  context.effect(() =>
+    context.events.on<{ bundleId: string; workIds: string[] }>(
+      "bundle.open",
+      async (opened, next) => {
+        await pushDesignOpened(context, opened.bundleId, opened.workIds);
+        return next();
+      },
+    ),
+  );
+  context.effect(() =>
+    registerSessionCommand(context, "decide", (invocation): Promise<CliResult> => decide(context, invocation), {
+      description: "Record one immutable settled decision.",
+      flags: {
+        "--replaces": { description: "Link the decision it replaces.", value: true },
+        "--scope": {
+          description: "Select owner or cross-team scope when acting as Hub Supervisor.",
+          value: true,
+        },
+        "--why": { description: "Record why this choice is settled.", value: true },
+        "--work": { description: "Link the decision to SLP work.", value: true },
+      },
+      positionals: [{ name: "choice", required: true }],
+      rootDescription: "Record a settled SLP decision in one operation.",
+    }),
+  );
+}

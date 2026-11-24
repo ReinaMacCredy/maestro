@@ -294,6 +294,15 @@ export async function writeConfig(
   );
 }
 
+// The slp plugin is off by default (d879); a fixture that runs a team turns it on for the whole fixture home, the room and every project included.
+export async function enableSlp(fixture: Fixture): Promise<void> {
+  await mkdir(join(fixture.home, ".maestro"), { recursive: true });
+  await writeFile(
+    join(fixture.home, ".maestro", "config"),
+    `${JSON.stringify({ plugins: [{ name: "slp", disabled: false }] })}\n`,
+  );
+}
+
 export async function setPlugin(
   fixture: Fixture,
   name: string,

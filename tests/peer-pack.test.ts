@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseSeatFile, seatLaunchPath, type SeatName } from "../src/plugins/slp-seats.ts";
-import { prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const shippedRoot = join(import.meta.dir, "..", "src", "plugins", "resources");
 
@@ -41,6 +41,7 @@ const seatWords = [
 
 test("peer-pack-render: install renders maestro-peer from the SLP.md peer block and maestro-lead from the default block (d892, red 1)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
@@ -59,6 +60,7 @@ test("peer-pack-render: install renders maestro-peer from the SLP.md peer block 
 
 test("peer-pack-words: nothing a Peer reads names a seat, a rank or the protocol, and the one surviving protocol line is the acknowledgement (d891, red 2)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
@@ -78,6 +80,7 @@ test("peer-pack-words: nothing a Peer reads names a seat, a rank or the protocol
 
 test("peer-pack-fallback: a Hub pack with no peer block renders the Peer from that pack's own default block and install says which block to copy (d892, red 3)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
 
@@ -109,6 +112,7 @@ test("peer-pack-fallback: a Hub pack with no peer block renders the Peer from th
 // the code path maestro install uses, so no live Peer is needed to see them.
 test("peer-pack-first-lines: the opening of the rendered Peer mandate is the working agreement and the acknowledgement (w737 render proof)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
     const first30 = (await renderedBody(fixture, "peer")).split("\n").slice(0, 31).join("\n");

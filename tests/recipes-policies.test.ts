@@ -25,7 +25,6 @@ const recipeNames = [
   "verification-skill",
   "unattended",
   "worktree",
-  "slp",
   "style-cpp",
   "style-csharp",
   "style-dart",

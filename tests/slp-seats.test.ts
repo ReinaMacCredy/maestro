@@ -11,7 +11,7 @@ import {
   type SeatName,
 } from "../src/plugins/slp-seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
-import { prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, prepareInstallFixture, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 async function writeSeatFile(directory: string, seat: SeatName, text: string): Promise<string> {
   await mkdir(directory, { recursive: true });
@@ -40,6 +40,7 @@ async function messageOf(action: () => unknown): Promise<string> {
 
 test("seat-file-parse: every key renders, each malformed seat file fails install naming the file and key, and a repo seat file shadows the owner's, which shadows the shipped one (red 1)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const repoSeats = join(fixture.repo, ".maestro", "profiles");
     const ownerSeats = join(fixture.home, "maestro", "profiles");

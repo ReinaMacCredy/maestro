@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { installFakeHerdr } from "./helpers-herdr.ts";
-import { runCliAt, withFixture } from "./helpers.ts";
+import { enableSlp, runCliAt, withFixture } from "./helpers.ts";
 import { envelope, phaseFree } from "./helpers-slp.ts";
 
 test("SLP v2 records one-step immutable decisions and preserves the replaced record", async () => {
@@ -101,6 +101,7 @@ test("SLP v2 records one-step immutable decisions and preserves the replaced rec
 
 test("SLP v2 serializes ten concurrent decision ids without dropping a decision", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const room = await scaffoldRoom(fixture.home);
     expect(
       (

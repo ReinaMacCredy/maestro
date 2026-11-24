@@ -8,7 +8,7 @@ import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { slpRuntimeDirectory } from "../src/plugins/slp-process.ts";
-import { runCli, runCliAt, withFixture } from "./helpers.ts";
+import { enableSlp, runCli, runCliAt, withFixture } from "./helpers.ts";
 import {
   editFakeHerdrState,
   emitFakeHerdrEvent,
@@ -201,6 +201,7 @@ test("plugin-manifest: install renders the manifest with the binary path and lin
 
 test("install without Herdr renders the manifest, warns, and completes", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const installed = await runCli(fixture, ["install"], {
       HERDR_SOCKET_PATH: join(fixture.root, "missing.sock"),
       PATH: [dirname(process.execPath), "/usr/bin", "/bin"].join(":"),
@@ -320,6 +321,7 @@ test("watch-gone: install writes no Watch shim, team start opens the runtime plu
 
 test("kernel-no-herdr: with HERDR_SOCKET_PATH pointing at a missing socket the classic verbs work and team start fails naming the socket (red 11, A2)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const socket = join(fixture.root, "missing.sock");
     const environment = { HERDR_SOCKET_PATH: socket, PATH: [dirname(process.execPath), "/usr/bin", "/bin"].join(":") };
     const added = await runCli(fixture, ["work", "add", "kernel item", "--json"], environment);

@@ -10,9 +10,9 @@
 // name is the thing worth catching.
 
 import { Database } from "bun:sqlite";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { runCli, withFixture, type Fixture } from "./helpers.ts";
+import { enableSlp, runCli, withFixture, type Fixture } from "./helpers.ts";
 
 const repoRoot = join(import.meta.dir, "..");
 export const snapshotDirectory = join(import.meta.dir, "snapshots");
@@ -61,6 +61,18 @@ export async function helpSurface(fixture: Fixture): Promise<string> {
     }
   }
   return `${sections.join("\n").trimEnd()}\n`;
+}
+
+// help.txt is read with the slp plugin off, its default (d879); this keeps every help page the plugin adds or changes.
+export async function slpHelpSurface(fixture: Fixture): Promise<string> {
+  const sections = (text: string) => text.trimEnd().split(/\n(?=### )/);
+  const off = new Set(sections(await helpSurface(fixture)));
+  await enableSlp(fixture);
+  try {
+    return `${sections(await helpSurface(fixture)).filter((section) => !off.has(section)).join("\n")}\n`;
+  } finally {
+    await rm(join(fixture.home, ".maestro", "config"));
+  }
 }
 
 // ----------------------------------------------------------------- schema
@@ -187,6 +199,7 @@ export interface Surface {
 
 export const surfaces: Surface[] = [
   { name: "help.txt", render: helpSurface },
+  { name: "help-slp.txt", render: slpHelpSurface },
   { name: "schema.txt", render: schemaSurface },
   { name: "schema-objects.txt", render: () => declaredSchemaObjectsSurface() },
   { name: "resources.txt", render: () => resourcesSurface() },

@@ -128,6 +128,9 @@ depth; the playbook suggests the steps.
 | A long task driven to a checkable predicate while the user is away | unattended |
 | No playbook fits, or large cross-cutting work the user steps away from | figure-it-out |
 
+Supervised teams (SLP) are a plugin that is off by default: `maestro plugin
+enable slp` turns it on, and `maestro recipe show slp` then describes the roles.
+
 Skills load by bare name in every tool and serve steps inside a playbook:
 
 - Material unsettled decisions, design questions, or new scope needing

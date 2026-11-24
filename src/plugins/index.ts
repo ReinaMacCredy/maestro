@@ -18,7 +18,7 @@ import { recipePlugin } from "./recipe.ts";
 import { attentionPlugin } from "./attention.ts";
 import { versionPlugin } from "./version.ts";
 import { workPlugin } from "./work.ts";
-import { slpV2Plugin } from "./slp-v2.ts";
+import { slpPlugin } from "./slp.ts";
 import { termPlugin } from "./term.ts";
 import { topicPlugin } from "./topic.ts";
 import { memoryPlugin } from "./memory.ts";
@@ -45,6 +45,6 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   mcpPlugin,
   versionPlugin,
   installPlugin,
-  slpV2Plugin,
+  slpPlugin,
   lifecyclePlugin,
 ];

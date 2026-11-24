@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { scaffoldRoom } from "../src/plugins/room.ts";
 import { formatSkillSync, materializeSkills, skillNames } from "../src/plugins/skills.ts";
 import {
+  enableSlp,
   idFrom,
   prepareInstallFixture,
   runCli,
@@ -555,6 +556,7 @@ test("442 install preserves review-date frontmatter in every method skill", asyn
 
 test("242 owner preferences are immutable Hub decisions whose replacements preserve history", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     await runCli(fixture, ["install"], { PATH: path });
     const room = join(fixture.home, "maestro");

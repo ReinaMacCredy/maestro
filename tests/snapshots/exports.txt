@@ -94,6 +94,7 @@ WorkRecord
 WorkService
 acquireProcessLock
 agentDirectories
+applySlp
 attentionPlugin
 briefDeliveredBy
 briefPlugin
@@ -203,9 +204,9 @@ seatTokenCheck
 seatTokenPath
 sessionTtlMs
 skillNames
+slpPlugin
 slpRuntimeDirectory
 slpRuntimeStatus
-slpV2Plugin
 sourceFor
 sourceRecordFile
 sourceRecordPath
@@ -220,6 +221,7 @@ termPlugin
 topicPlugin
 uninstallRepo
 unlinkHerdrPlugin
+updateEntry
 versionPlugin
 warnBeforeRuntimeActivation
 workPlugin

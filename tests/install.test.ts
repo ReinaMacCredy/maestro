@@ -5,7 +5,7 @@ import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { seatConfigRoot, seatLaunchPath, seatTokenPath, writeSecretFile } from "../src/plugins/slp-seats.ts";
-import { hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
+import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
 const shellSourceLine =
@@ -522,6 +522,7 @@ test("313 scripts/install.sh --help prints usage and exits before touching the m
 
 test("seat-render: install writes each seat's Claude agent file and Codex session file, is byte-stable, and uninstall removes exactly what it wrote while user files stay untouched (A1, d906)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const claudeAgents = join(fixture.home, ".claude", "agents");
     const codexHome = join(fixture.home, ".codex");
@@ -599,6 +600,7 @@ test("seat-render: install writes each seat's Claude agent file and Codex sessio
 // by the file name alone.
 test("retire-agent-files: install removes the maestro-* agent files an earlier install rendered, keeps a hand-written maestro- file without the renderer's lines, reports the count once, and a second install says nothing (d906)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const claudeAgents = join(fixture.home, ".claude", "agents");
     const codexHome = join(fixture.home, ".codex");
@@ -644,6 +646,7 @@ test("retire-agent-files: install removes the maestro-* agent files an earlier i
 // no MCP servers.
 test("pstack-port: an owner seat file that still lists a retired skill installs, and the seat links skip that skill (d863)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     await mkdir(join(fixture.home, "maestro", "profiles"), { recursive: true });
     await writeFile(
@@ -662,6 +665,7 @@ test("pstack-port: an owner seat file that still lists a retired skill installs,
 
 test("seat-dirs-links: install renders skills/ from the seat's skills: list, removes a stale link, links projects and plugins to ~/.claude and writes .claude.json with mcpServers {} (R4)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const ownerSkill = join(fixture.home, ".claude", "skills", "owner-skill");
     await mkdir(ownerSkill, { recursive: true });
@@ -707,6 +711,7 @@ test("seat-dirs-links: install renders skills/ from the seat's skills: list, rem
 // carries it; doctor reports it; the owner's user settings stay byte for byte.
 test("seat-dirs-token: install --seat-token from stdin writes the 0600 token file, never prints the token, doctor reports missing then present, and ~/.claude/settings.json plus ~/.claude.json are byte-identical across install (R5)", async () => {
   await withFixture(async (fixture) => {
+    await enableSlp(fixture);
     const { path } = await prepareInstallFixture(fixture);
     const userSettings = join(fixture.home, ".claude", "settings.json");
     const userClaudeJson = join(fixture.home, ".claude.json");
@@ -779,6 +784,7 @@ test("seat-dirs-modes: under umask 022 install --seat-token leaves the token fil
   const previous = process.umask(0o022);
   try {
     await withFixture(async (fixture) => {
+      await enableSlp(fixture);
       const { path } = await prepareInstallFixture(fixture);
       const leadDir = join(seatConfigRoot(fixture.home), "lead");
       await mkdir(leadDir, { recursive: true });

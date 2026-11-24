@@ -3,7 +3,7 @@ import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { materializeSeats, seatTokenPath } from "../src/plugins/slp-seats.ts";
 import { materializeSkills } from "../src/plugins/skills.ts";
-import type { Fixture } from "./helpers.ts";
+import { enableSlp, type Fixture } from "./helpers.ts";
 
 // A socket fake of Herdr 0.9.0 (protocol 22): newline JSON over a unix
 // socket, one request per connection, events.subscribe kept open. Every
@@ -794,6 +794,7 @@ export async function installFakeHerdr(
   // machine carries what maestro install would have rendered into this home:
   // the Hub skills the shipped skills: lists name, a seat token (d846) and
   // the seat dirs with their agent files.
+  await enableSlp(fixture);
   await materializeSkills(fixture.home, "dev");
   await mkdir(dirname(seatTokenPath(fixture.home)), { recursive: true });
   await writeFile(seatTokenPath(fixture.home), "sk-ant-oat01-fake-herdr-fixture\n");
