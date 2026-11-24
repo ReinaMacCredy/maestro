@@ -40,7 +40,6 @@ HerdrSlpRuntime
 HerdrSubscription
 HerdrTab
 HerdrWorkspace
-ImproverTrigger
 IngestAction
 InstallStamp
 InstallStampRead
@@ -67,7 +66,6 @@ Ready
 RecipeEntry
 RecipeService
 RenderedProfile
-RepoLessons
 RunOptions
 RunningTeamRow
 RuntimePaneOpening
@@ -132,8 +130,6 @@ herdrPluginId
 herdrPluginManifestPath
 herdrProtocol
 herdrSocketPath
-improverNextAction
-improverTriggers
 installInRoomMessage
 installPlugin
 installStampFile
@@ -176,7 +172,6 @@ profileDirectories
 readGitHeadCommit
 readInstallStamp
 readPackageVersion
-readRepoLessons
 readRuntimeState
 readSeatToken
 readSourceRecord

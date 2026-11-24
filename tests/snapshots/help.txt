@@ -11,7 +11,7 @@ verbs:
   hook       Record harness events and print the current brief.
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
-  lesson     Record corrections the improver turns into doctrine edits. *
+  lesson     Record corrections that doctrine edits answer. *
   mcp        Expose Maestro through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
@@ -203,7 +203,7 @@ verbs:
   hook       Record harness events and print the current brief.
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
-  lesson     Record corrections the improver turns into doctrine edits. *
+  lesson     Record corrections that doctrine edits answer. *
   mcp        Expose Maestro through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
@@ -266,9 +266,9 @@ usage: maestro legacy show <id>
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro lesson --help
-lesson  Record corrections the improver turns into doctrine edits.
+lesson  Record corrections that doctrine edits answer.
 subverbs:
-  file     File a correction as a lesson the improver will read.
+  file     File a correction as a lesson for the next doctrine edit.
     usage: maestro lesson file <what-happened>
     --evidence <value> (repeatable)  A work or decision id that evidences it.
     --expected <value>               What was expected instead.
@@ -285,15 +285,13 @@ subverbs:
     --answer <value>  Why this lesson produced no edit.
     --commit <value>  The commit that carries the doctrine edit.
     --json            Emit one compact JSON success envelope.
-  render   Render the per-project lesson view under ~/maestro/PROJECT.
-    --json  Emit one compact JSON success envelope.
   show     Show one lesson and the evidence behind it. *
     usage: maestro lesson show <id>
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro lesson file --help
-lesson file  File a correction as a lesson the improver will read.
+lesson file  File a correction as a lesson for the next doctrine edit.
 usage: maestro lesson file <what-happened>
     --evidence <value> (repeatable)  A work or decision id that evidences it.
     --expected <value>               What was expected instead.
@@ -316,11 +314,6 @@ usage: maestro lesson process <id>
     --answer <value>  Why this lesson produced no edit.
     --commit <value>  The commit that carries the doctrine edit.
     --json            Emit one compact JSON success envelope.
-
-### maestro lesson render --help
-lesson render  Render the per-project lesson view under ~/maestro/PROJECT.
-usage: maestro lesson render
-    --json  Emit one compact JSON success envelope.
 
 ### maestro lesson show --help
 lesson show  Show one lesson and the evidence behind it. *

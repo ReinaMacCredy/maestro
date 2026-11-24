@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
   prepareInstallFixture,
   runCli,
-  runCliAt,
   withFixture,
   type Fixture,
 } from "./helpers.ts";
@@ -65,8 +64,7 @@ test("543 a correction becomes a lesson record in one command (w550/d40)", async
     expect(shown.stdout).toContain("expected: a relay card closes in one command");
     expect(shown.stdout).toContain("why: a relay card records a handoff");
     expect(shown.stdout).toContain("evidence: w7, d720");
-    // The project tag defaults to the store scope, which is the registry name
-    // the room renders its per-project view from (d723).
+    // The project tag defaults to the store scope (d723).
     expect(shown.stdout).toContain("project: repo");
 
     const [row] = lessons(fixture);
@@ -105,7 +103,7 @@ test("545 processing points a lesson at the commit that answers it and keeps it 
     expect(processed.stdout).toContain("l1 [processed]");
     expect(processed.stdout).toContain("commit: 47524c9c");
 
-    // The improver reads what is still pending; nothing is ever deleted.
+    // The plain list shows what is still pending; nothing is ever deleted.
     const pending = await runCli(fixture, ["lesson", "list"]);
     expect(pending.exitCode).toBe(0);
     expect(pending.stdout).not.toContain("l1");
@@ -122,7 +120,7 @@ test("545 processing points a lesson at the commit that answers it and keeps it 
 
 test("546 a rejected lesson is answered with the reason and stays as data (w550/d44)", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, fileArgs("the improver disagreed"))).exitCode).toBe(0);
+    expect((await runCli(fixture, fileArgs("the doctrine edit was rejected"))).exitCode).toBe(0);
 
     const bare = await runCli(fixture, ["lesson", "process", "l1"]);
     expect(bare.exitCode).not.toBe(0);
@@ -189,47 +187,50 @@ function backdate(fixture: Fixture, id: string, days: number): void {
   }
 }
 
-test("548 five pending lessons raise LESSONS_PENDING for their project (w551/d42)", async () => {
+test("548 any pending lesson raises LESSONS_PENDING with the count, the oldest and the list command (d890)", async () => {
   await withFixture(async (fixture) => {
-    for (let index = 0; index < 4; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-
     const quiet = await runCli(fixture, ["attention"]);
     expect(quiet.exitCode).toBe(0);
     expect(quiet.stdout).not.toContain("LESSONS_PENDING");
 
-    expect((await runCli(fixture, fileArgs("correction 4"))).exitCode).toBe(0);
+    expect((await runCli(fixture, fileArgs("the first correction"))).exitCode).toBe(0);
+    expect((await runCli(fixture, fileArgs("the second correction"))).exitCode).toBe(0);
+    backdate(fixture, "l1", 68);
 
     const raised = await runCli(fixture, ["attention"]);
     expect(raised.exitCode).toBe(0);
-    // room d129 point 2: the headline carries the count and the oldest id with
-    // its age, because one id is not something a Hub can act on.
-    expect(raised.stdout).toContain("attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days)");
-    expect(raised.stdout).toContain("5 lessons pending for repo");
-    expect(raised.stdout).toContain("maestro lesson list --project repo");
+    expect(raised.stdout.split("\n")[0]).toBe(
+      "attention LESSONS_PENDING 2 lessons pending, oldest l1 (68 days); read them: maestro lesson list",
+    );
+    expect(raised.stdout).toContain("smallest action: maestro lesson list");
+    expect(raised.stdout).not.toContain("team start");
+
+    const brief = await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain(
+      "attention LESSONS_PENDING 2 lessons pending, oldest l1 (68 days); read them: maestro lesson list",
+    );
+    expect(brief.stdout).not.toContain("team start");
+
+    for (const id of ["l1", "l2"]) {
+      expect((await runCli(fixture, ["lesson", "process", id, "--answer", "covered"])).exitCode).toBe(0);
+    }
+    const cleared = await runCli(fixture, ["attention"]);
+    expect(cleared.stdout).not.toContain("LESSONS_PENDING");
   });
 });
 
-test("549 seven days without an improver run raise it before the count does (w551/d724)", async () => {
+test("549 lesson process runs from a plain session with no team or role (d890)", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, fileArgs("the only correction"))).exitCode).toBe(0);
+    const filer = { MAESTRO_SESSION_ID: "filing-session", MAESTRO_SESSION_PID: String(process.pid) };
+    const plain = { MAESTRO_SESSION_ID: "plain-session", MAESTRO_SESSION_PID: String(process.pid) };
+    expect((await runCli(fixture, fileArgs("a correction filed elsewhere"), filer)).exitCode).toBe(0);
 
-    const fresh = await runCli(fixture, ["attention"]);
-    expect(fresh.stdout).not.toContain("LESSONS_PENDING");
-
-    backdate(fixture, "l1", 8);
-    const aged = await runCli(fixture, ["attention"]);
-    expect(aged.stdout).toContain("attention LESSONS_PENDING 1 lesson pending for repo, oldest l1 (8 days)");
-    expect(aged.stdout).toContain("no improver run");
-
-    // Processing it is the improver run: the clock restarts from there, so a
-    // lesson filed today does not re-raise.
-    expect((await runCli(fixture, ["lesson", "process", "l1", "--commit", "806ba20e"])).exitCode)
-      .toBe(0);
-    expect((await runCli(fixture, fileArgs("a fresh correction"))).exitCode).toBe(0);
-    const quiet = await runCli(fixture, ["attention"]);
-    expect(quiet.stdout).not.toContain("LESSONS_PENDING");
+    const processed = await runCli(fixture, ["lesson", "process", "l1", "--commit", "9f1e2d3c"], plain);
+    expect(processed.stderr).toBe("");
+    expect(processed.exitCode).toBe(0);
+    expect(processed.stdout).toContain("l1 [processed]");
+    expect(lessons(fixture)[0]?.commit_sha).toBe("9f1e2d3c");
   });
 });
 
@@ -248,264 +249,3 @@ test("550 brief carries LESSONS_PENDING from a registered project (w551/d42)", a
     expect(brief.stdout).toContain(fixture.repo);
   });
 });
-
-async function makeStore(path: string): Promise<void> {
-  await mkdir(join(path, ".maestro", "plugins"), { recursive: true });
-  await writeFile(join(path, ".maestro", "config"), `${JSON.stringify({ plugins: [] })}\n`);
-}
-
-test("551 the room renders one project view from its own store and the repository's (w552/d725)", async () => {
-  await withFixture(async (fixture) => {
-    const room = join(fixture.home, "maestro");
-    await makeStore(room);
-    await writeFile(join(room, "registry"), `${fixture.repo}\n${join(fixture.root, "gone")}\n`);
-
-    expect((await runCli(fixture, fileArgs("the Lead closed a relay in two commands"))).exitCode)
-      .toBe(0);
-    const roomFiled = await runCliAt(
-      fixture,
-      room,
-      fileArgs("the room relayed intent without naming the report target", [
-        "--project",
-        "repo",
-      ]),
-    );
-    expect(roomFiled.exitCode).toBe(0);
-
-    const rendered = await runCliAt(fixture, room, ["lesson", "render"]);
-    expect(rendered.exitCode).toBe(0);
-    expect(rendered.stdout).toContain("PROJECT/repo.md");
-
-    const view = await readFile(join(room, "PROJECT", "repo.md"), "utf8");
-    // Both stores reach one view: the repository files its own corrections and
-    // the room files the ones it makes about that project.
-    expect(view).toContain("the Lead closed a relay in two commands");
-    expect(view).toContain("the room relayed intent without naming the report target");
-    expect(view).toContain("a relay card closes in one command");
-    // A rendered view says so: an edit here is lost on the next render.
-    expect(view).toContain("maestro lesson render");
-    expect(view).toContain("never hand-edited");
-    // A registry entry that is not there is skipped, not an error.
-    expect(rendered.stdout).toContain("skipped");
-  });
-});
-
-test("552 a new team inherits processed lessons as well as pending ones (w552/d42)", async () => {
-  await withFixture(async (fixture) => {
-    const room = join(fixture.home, "maestro");
-    await makeStore(room);
-    await writeFile(join(room, "registry"), `${fixture.repo}\n`);
-
-    expect((await runCli(fixture, fileArgs("the correction already answered"))).exitCode).toBe(0);
-    expect((await runCli(fixture, fileArgs("the correction still open"))).exitCode).toBe(0);
-    expect((await runCli(fixture, ["lesson", "process", "l1", "--commit", "25f6cd03"])).exitCode)
-      .toBe(0);
-
-    expect((await runCliAt(fixture, room, ["lesson", "render"])).exitCode).toBe(0);
-    const view = await readFile(join(room, "PROJECT", "repo.md"), "utf8");
-
-    expect(view).toContain("the correction still open");
-    expect(view).toContain("the correction already answered");
-    expect(view).toContain("25f6cd03");
-  });
-});
-
-test("560 lesson render warns before it summarises and names the command that shows why (w558)", async () => {
-  await withFixture(async (fixture) => {
-    const room = join(fixture.home, "maestro");
-    await makeStore(room);
-    const broken = join(fixture.root, "broken");
-    await mkdir(join(broken, ".maestro"), { recursive: true });
-    await writeFile(join(broken, ".maestro", "config"), "not json\n");
-    await writeFile(join(room, "registry"), `${fixture.repo}\n${broken}\n`);
-
-    expect((await runCli(fixture, fileArgs("a correction worth rendering"))).exitCode).toBe(0);
-
-    const rendered = await runCliAt(fixture, room, ["lesson", "render"]);
-    expect(rendered.exitCode).toBe(0);
-
-    const lines = rendered.stdout.trim().split("\n");
-    const warning = lines.findIndex((line) => line.startsWith("Unreadable repository:"));
-    const summary = lines.findIndex((line) => line.startsWith("PROJECT/"));
-    // A store the render could not read is why the view below it is
-    // incomplete, so it is read before the view it qualifies, not after.
-    expect(warning).toBeGreaterThanOrEqual(0);
-    expect(summary).toBeGreaterThanOrEqual(0);
-    expect(warning).toBeLessThan(summary);
-    // render discards the child's stderr, so the line names the command that
-    // shows what the child said.
-    expect(rendered.stdout).toContain(`cd ${broken} && maestro lesson list --all`);
-  });
-});
-
-// room d129 points 2 and 3: today the hook line prints one lesson id and the
-// smallest action is "read the list". A Hub cannot act on either. The headline
-// carries the count and the oldest id with its age, and both the headline and
-// the room's ready line name an improver generation as the next thing to open
-// at the next generation boundary. Nothing starts a team: both are read verbs
-// (d705, d124), and room d132 keeps the shipped 5 and 7.
-test("663 the pending-lessons headline names an improver generation at the registered checkout (room d129, d132)", async () => {
-  await withFixture(async (fixture) => {
-    for (let index = 0; index < 5; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-    backdate(fixture, "l1", 3);
-    await mkdir(join(fixture.home, "maestro"), { recursive: true });
-    await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
-
-    const raised = await runCli(fixture, ["attention"]);
-    expect(raised.exitCode).toBe(0);
-    const headline = raised.stdout.split("\n")[0];
-    expect(headline).toBe(
-      `attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (3 days); ` +
-        `next: open an improver generation on repo at the next generation boundary: ` +
-        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
-    );
-    // The packet fields stay; only the smallest action becomes the generation.
-    for (const field of ["observed:", "evidence:", "unknown:", "question:", "human decision needed:"]) {
-      expect(raised.stdout).toContain(field);
-    }
-    expect(raised.stdout).toContain(
-      `smallest action: open an improver generation on repo at the next generation boundary: ` +
-        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
-    );
-    expect(raised.stdout).not.toContain("smallest action: maestro lesson list");
-
-    const ready = await runCli(fixture, ["ready"]);
-    expect(ready.exitCode).toBe(0);
-    expect(ready.stdout).toContain(
-      `next: open an improver generation on repo at the next generation boundary: ` +
-        `maestro team start ${fixture.repo} "<objective>" --lead-only`,
-    );
-  });
-});
-
-test("664 a quiet project names no improver generation in attention or ready (room d129, d132)", async () => {
-  await withFixture(async (fixture) => {
-    for (let index = 0; index < 4; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-
-    const quiet = await runCli(fixture, ["attention"]);
-    expect(quiet.stdout).not.toContain("LESSONS_PENDING");
-    const ready = await runCli(fixture, ["ready"]);
-    expect(ready.exitCode).toBe(0);
-    expect(ready.stdout).not.toContain("improver generation");
-  });
-});
-
-// Put the improver's own clock in the past: the last `lesson.process` event is
-// what `improverTriggers` measures the age trigger from, and once an improver
-// has run it is no longer the oldest pending lesson's age. The event log is
-// append-only by trigger, so this appends the later event rather than editing
-// one - which is also what a real second improver run would do.
-function recordImproverRun(fixture: Fixture, lessonId: string, days: number): void {
-  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-  try {
-    const when = new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
-    database
-      .query(
-        `INSERT INTO event_log (type, entity_type, entity_id, session_id, payload, created_at)
-         VALUES ('lesson.process', 'lesson', ?, NULL, '{}', ?)`,
-      )
-      .run(lessonId, when);
-  } finally {
-    database.close();
-  }
-}
-
-// w731 finding 2: the headline must name the number that fired. An age trigger
-// runs off the last improver run, so after one has happened a reader must not
-// be shown only the oldest lesson's age - which can sit under both thresholds
-// while the attention is entirely correct (room d129 point 2, d132).
-test("669 an age-fired headline names the improver clock, not only the oldest lesson's age (room d129, d132)", async () => {
-  await withFixture(async (fixture) => {
-    expect((await runCli(fixture, fileArgs("correction one"))).exitCode).toBe(0);
-    expect((await runCli(fixture, fileArgs("correction two"))).exitCode).toBe(0);
-    expect(
-      (await runCli(fixture, ["lesson", "process", "l1", "--answer", "already covered"])).exitCode,
-    ).toBe(0);
-    recordImproverRun(fixture, "l1", 30);
-    backdate(fixture, "l2", 2);
-
-    const raised = await runCli(fixture, ["attention"]);
-    expect(raised.exitCode).toBe(0);
-    const headline = raised.stdout.split("\n")[0] ?? "";
-    // It fired on the improver clock, so the clock is on the headline.
-    expect(headline).toContain("no improver run in 30 days");
-    // And the age beside `oldest` still labels the oldest lesson, not the clock.
-    expect(headline).toContain("1 lesson pending for repo, oldest l2 (2 days)");
-    expect(headline).toContain("next: open an improver generation on repo");
-  });
-});
-
-// The count trigger needs no clock: the number that fired is the count, and it
-// is already the first thing on the line.
-test("670 a count-fired headline carries no improver clock (room d129, d132)", async () => {
-  await withFixture(async (fixture) => {
-    for (let index = 0; index < 5; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-    backdate(fixture, "l1", 3);
-
-    const raised = await runCli(fixture, ["attention"]);
-    expect(raised.exitCode).toBe(0);
-    const headline = raised.stdout.split("\n")[0] ?? "";
-    expect(headline).toContain("5 lessons pending for repo, oldest l1 (3 days);");
-    expect(headline).not.toContain("no improver run in");
-  });
-});
-
-// Hub finding F5 (w734): the LESSONS_PENDING trigger evaluates the store of
-// the workspace it runs in, so in the Hub room it saw room lessons only and a
-// project's pending lessons never reached the Hub's own attention scan or its
-// prompt-hook line. In the Hub room the trigger also evaluates every checkout
-// in ~/maestro/registry, read-only, under the same thresholds (room d132: 5
-// lessons or 7 days).
-test("552 the Hub's attention scan and prompt-hook line carry a registered project's LESSONS_PENDING (w734 F5)", async () => {
-  await withFixture(async (fixture) => {
-    const room = join(fixture.home, "maestro");
-    await makeStore(room);
-    for (let index = 0; index < 5; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-    // A registry path that does not exist is skipped in silence, never an
-    // error on the hook line.
-    await writeFile(join(room, "registry"), `${fixture.repo}\n${join(fixture.root, "gone")}\n`);
-
-    const headline = "attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days)";
-    const action = `next: open an improver generation on repo at the next generation boundary: ` +
-      `maestro team start ${fixture.repo} "<objective>" --lead-only`;
-
-    const scanned = await runCliAt(fixture, room, ["attention"], { MAESTRO_READ_ONLY: "1" });
-    expect(scanned.stderr).toBe("");
-    expect(scanned.exitCode).toBe(0);
-    expect(scanned.stdout).toContain(headline);
-    expect(scanned.stdout).toContain(action);
-
-    // The prompt-hook line is the SessionStart brief, whose attention section
-    // is the same evaluation.
-    const hookLine = await runCliAt(fixture, room, ["brief", "--session"]);
-    expect(hookLine.exitCode).toBe(0);
-    expect(hookLine.stdout).toContain(headline);
-    expect(hookLine.stdout).toContain(action);
-  });
-}, 30_000);
-
-test("553 the Hub stays quiet for a registered project under both thresholds (w734 F5)", async () => {
-  await withFixture(async (fixture) => {
-    const room = join(fixture.home, "maestro");
-    await makeStore(room);
-    for (let index = 0; index < 3; index += 1) {
-      expect((await runCli(fixture, fileArgs(`correction ${index}`))).exitCode).toBe(0);
-    }
-    await writeFile(join(room, "registry"), `${fixture.repo}\n`);
-
-    const scanned = await runCliAt(fixture, room, ["attention"], { MAESTRO_READ_ONLY: "1" });
-    expect(scanned.exitCode).toBe(0);
-    expect(scanned.stdout).not.toContain("LESSONS_PENDING");
-    const hookLine = await runCliAt(fixture, room, ["brief", "--session"]);
-    expect(hookLine.exitCode).toBe(0);
-    expect(hookLine.stdout).not.toContain("LESSONS_PENDING");
-  });
-}, 30_000);

@@ -1,5 +1,5 @@
 # The self-improvement loop of d40, d42 and d44: a correction is filed as a lesson by
-# whoever made it, the improver reads lessons rather than free text, and every lesson
+# whoever made it, a doctrine edit reads lessons rather than free text, and every lesson
 # leaves the pile by a commit or by an answered rejection, never by deletion.
 $ maestro lesson file "the Lead dispatched a lane for a one-line doc fix" --expected "a one-line diff is done in place, with a card only for the claim" --why "a contract longer than the diff costs more than it protects" --target "recipe slp, Lane procedure" --evidence w41 --evidence h7
 l1 [pending] the Lead dispatched a lane for a one-line doc fix

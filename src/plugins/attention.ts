@@ -1,7 +1,6 @@
 import type { CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { BriefService } from "./coordination.ts";
-import { improverNextAction, improverTriggers } from "./lesson.ts";
 import type { WorkService } from "./work.ts";
 
 export type AttentionKind =
@@ -193,41 +192,35 @@ function humanDecisionRequiredDetections(
 }
 
 function lessonsPendingDetections(context: PluginContext, now: number): Detection[] {
-  return improverTriggers(context, now).map((trigger): Detection => {
-    const clock = trigger.lastRun
-      ? `last improver run ${trigger.since}`
-      : `no improver run yet, oldest filed ${trigger.since}`;
-    const action = improverNextAction(trigger, process.env.HOME ?? "");
-    const days = trigger.ageDays === 1 ? "1 day" : `${trigger.ageDays} days`;
-    const count = trigger.pending === 1 ? "1 lesson" : `${trigger.pending} lessons`;
-    // The headline names the number that fired. A count trigger shows it in
-    // `count`; an age trigger runs off the last improver run, which is not the
-    // oldest lesson's age once an improver has run, so say that clock rather
-    // than let the reader take the age beside `oldest` for the reason.
-    const sinceDays = trigger.sinceDays === 1 ? "1 day" : `${trigger.sinceDays} days`;
-    const fired = trigger.reason === "age" && trigger.lastRun
-      ? `, no improver run in ${sinceDays}`
-      : "";
-    return {
-      entityId: trigger.oldestId,
-      entityType: "lesson",
-      fingerprint: `lessons:${trigger.project}:${trigger.oldestId}:${trigger.reason}`,
-      kind: "LESSONS_PENDING",
-      packet: packet("LESSONS_PENDING", trigger.oldestId, {
-        headline: `${count} pending for ${trigger.project}, ` +
-          `oldest ${trigger.oldestId} (${days})${fired}; ${action}`,
-        observed: `${count} pending for ${trigger.project}; ${clock}`,
-        evidence: trigger.lastRun
-          ? `event_log lesson.process ${trigger.since}`
-          : `lessons.created_at ${trigger.since}`,
-        unknown: "whether these corrections still describe the doctrine as it stands",
-        question: `run the improver on ${trigger.project}? read them with maestro lesson list --project ${trigger.project}`,
-        smallestAction: action.replace(/^next: /, ""),
-      }),
-      subjectSession: null,
-      subjectWork: null,
-    };
-  });
+  if (!context.store.hasColumn("lessons", "state")) return [];
+  const pending = context.store.database
+    .query<{ created_at: string; id: string }, []>(
+      `SELECT id, created_at FROM lessons
+       WHERE state = 'pending'
+       ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
+    )
+    .all();
+  const oldest = pending[0];
+  if (!oldest) return [];
+  const age = Math.max(0, Math.floor((now - Date.parse(oldest.created_at)) / (24 * 60 * 60_000)));
+  const days = age === 1 ? "1 day" : `${age} days`;
+  const count = pending.length === 1 ? "1 lesson" : `${pending.length} lessons`;
+  return [{
+    entityId: oldest.id,
+    entityType: "lesson",
+    fingerprint: `lessons:${oldest.id}`,
+    kind: "LESSONS_PENDING",
+    packet: packet("LESSONS_PENDING", oldest.id, {
+      headline: `${count} pending, oldest ${oldest.id} (${days}); read them: maestro lesson list`,
+      observed: `${count} pending, oldest filed ${oldest.created_at}`,
+      evidence: `lessons.state = 'pending'; ${oldest.id} lessons.created_at ${oldest.created_at}`,
+      unknown: "whether these corrections still describe the doctrine as it stands",
+      question: "edit the doctrine they name, or answer them with maestro lesson process?",
+      smallestAction: "maestro lesson list",
+    }),
+    subjectSession: null,
+    subjectWork: null,
+  }];
 }
 
 function detect(context: PluginContext): Detection[] {

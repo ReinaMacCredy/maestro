@@ -347,11 +347,8 @@ test("260 attention raises only its three kinds, even from a store that would ha
     const expectedPacketHeads = {
       HUMAN_DECISION_REQUIRED: `attention HUMAN_DECISION_REQUIRED decision ${decision}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,
-      // room d129 point 2: this kind replaces the "<subject kind> <subject>"
-      // tail with the count, the oldest id and its age, plus the action.
-      LESSONS_PENDING: "attention LESSONS_PENDING 5 lessons pending for repo, oldest l1 (0 days); " +
-        "next: open an improver generation on repo at the next generation boundary: " +
-        "maestro team start <repo checkout> \"<objective>\" --lead-only",
+      LESSONS_PENDING: "attention LESSONS_PENDING 5 lessons pending, oldest l1 (0 days); " +
+        "read them: maestro lesson list",
     } satisfies Record<AttentionKind, string>;
     const observedKinds = [...new Set(detections.map((detection) => detection.kind))].sort();
     const after = openDatabase(fixture);

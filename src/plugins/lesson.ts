@@ -1,7 +1,4 @@
-import { Database } from "bun:sqlite";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname } from "node:path";
 import {
   CliError,
   requiredPosition,
@@ -11,175 +8,7 @@ import {
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import { resolveHomeDirectory, resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
-
-// d42 runs the improver on a schedule or a threshold, never per correction.
-// room d132 keeps the shipped numbers: 5 pending lessons, or an oldest lesson
-// 7 days old. d129 point 3 moved the pair here from attention.ts so one
-// evaluation feeds the packet, the hook line and ready; the names are the ones
-// d132 cites, because a decision that names a symbol should still find it.
-const lessonsPendingCount = 5;
-const lessonsPendingDays = 7;
-
-export interface ImproverTrigger {
-  // Age of the oldest pending lesson, which is what `oldest <id>` is labelled
-  // with. It is not always the number that fired: that is `sinceDays`, off the
-  // trigger's own clock `since`, the last improver run when there was one.
-  ageDays: number;
-  lastRun: string | null;
-  oldestId: string;
-  pending: number;
-  project: string;
-  reason: "age" | "count";
-  since: string;
-  sinceDays: number;
-}
-
-interface PendingLessonRow {
-  created_at: string;
-  id: string;
-  project: string;
-}
-
-// The one place the improver threshold is evaluated, so the attention packet,
-// the prompt hook line and the room's ready line cannot drift apart.
-//
-// Hub finding F5 (w734, d890): this used to read the running workspace's store
-// only, so in the Hub room it saw room lessons and a project's pending lessons
-// never reached the Hub at all. In the Hub room it also evaluates every
-// checkout in the registry, under the same thresholds and with the same
-// headline. A project the Hub store already speaks for keeps the Hub's own
-// reading: the registry never overrides what is in front of it.
-export function improverTriggers(context: PluginContext, now: number): ImproverTrigger[] {
-  const own = storeTriggers(context.store.database, now);
-  // The room directory, not the store file: a Hub whose store has not been
-  // created yet (a read-only first scan) still is the Hub, and samePath can
-  // only resolve a path that exists.
-  if (!samePath(dirname(dirname(context.store.path)), resolveHubRoom().room)) return own;
-  const seen = new Set(own.map((trigger) => trigger.project));
-  const registered: ImproverTrigger[] = [];
-  for (const checkout of registeredCheckouts(resolveHomeDirectory())) {
-    for (const trigger of checkoutTriggers(checkout, now)) {
-      if (seen.has(trigger.project)) continue;
-      seen.add(trigger.project);
-      registered.push(trigger);
-    }
-  }
-  return [...own, ...registered];
-}
-
-// d890: the store is opened read-only and every failure - a path that is gone,
-// a store that is not a maestro store, a schema this binary cannot read - skips
-// that project in silence. The hook line never carries an error from another
-// project's store, and never a headline it is not sure of.
-function checkoutTriggers(checkout: string, now: number): ImproverTrigger[] {
-  const storePath = join(checkout, ".maestro", "maestro.db");
-  if (!existsSync(storePath)) return [];
-  let database: Database | null = null;
-  try {
-    database = new Database(storePath, { readonly: true });
-    return storeTriggers(database, now);
-  } catch {
-    return [];
-  } finally {
-    database?.close();
-  }
-}
-
-function lessonsCarryState(database: Database): boolean {
-  try {
-    return database
-      .query<{ name: string }, []>("PRAGMA table_info(lessons)")
-      .all()
-      .some((column) => column.name === "state");
-  } catch {
-    return false;
-  }
-}
-
-function storeTriggers(database: Database, now: number): ImproverTrigger[] {
-  if (!lessonsCarryState(database)) return [];
-  const pending = database
-    .query<PendingLessonRow, []>(
-      `SELECT id, project, created_at FROM lessons
-       WHERE state = 'pending'
-       ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
-    )
-    .all();
-  const byProject = new Map<string, PendingLessonRow[]>();
-  for (const lesson of pending) {
-    const group = byProject.get(lesson.project);
-    if (group) group.push(lesson);
-    else byProject.set(lesson.project, [lesson]);
-  }
-  return [...byProject].flatMap(([project, lessons]): ImproverTrigger[] => {
-    const oldest = lessons[0];
-    if (!oldest) return [];
-    // An improver run is what marks lessons processed, so the last one in this
-    // project is the run; before the first, the oldest lesson starts the clock.
-    const lastRun = database
-      .query<{ created_at: string }, [string]>(
-        `SELECT event_log.created_at FROM event_log
-         JOIN lessons ON lessons.id = event_log.entity_id
-         WHERE event_log.type = 'lesson.process' AND lessons.project = ?
-         ORDER BY event_log.id DESC LIMIT 1`,
-      )
-      .get(project);
-    const since = lastRun?.created_at ?? oldest.created_at;
-    const day = 24 * 60 * 60_000;
-    const overdue = now - Date.parse(since) >= lessonsPendingDays * day;
-    if (lessons.length < lessonsPendingCount && !overdue) return [];
-    return [{
-      ageDays: Math.max(0, Math.floor((now - Date.parse(oldest.created_at)) / day)),
-      lastRun: lastRun?.created_at ?? null,
-      oldestId: oldest.id,
-      pending: lessons.length,
-      project,
-      reason: lessons.length >= lessonsPendingCount ? "count" : "age",
-      since,
-      sinceDays: Math.max(0, Math.floor((now - Date.parse(since)) / day)),
-    }];
-  });
-}
-
-// room d129 point 3: when the trigger fires, the next thing to open at the
-// next generation boundary is an improver generation, said in words a Hub
-// reads as an action. It is a sentence in a read verb, never a timer and never
-// an automatic start (d705, d124).
-export function improverNextAction(trigger: ImproverTrigger, home: string): string {
-  const checkout = registeredCheckout(trigger.project, home) ?? `<${trigger.project} checkout>`;
-  return `next: open an improver generation on ${trigger.project} at the next generation boundary: ` +
-    `maestro team start ${checkout} "<objective>" --lead-only`;
-}
-
-// Every checkout the registry lists, in file order. A registry that is absent
-// or unreadable simply lists nothing: the Hub then sees only its own store.
-function registeredCheckouts(home: string): string[] {
-  const registry = join(home, "maestro", "registry");
-  if (!existsSync(registry)) return [];
-  try {
-    return readFileSync(registry, "utf8").split(/\r?\n/).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-// The registry is the only place a project name is bound to a checkout path.
-// An unreadable or silent registry leaves the placeholder rather than a wrong
-// path: the Hub then supplies the checkout itself.
-function registeredCheckout(project: string, home: string): string | null {
-  const registry = join(home, "maestro", "registry");
-  if (!existsSync(registry)) return null;
-  try {
-    return readFileSync(registry, "utf8")
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .find((path) => basename(path) === project) ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export interface LessonRecord {
   answer: string | null;
@@ -250,7 +79,7 @@ function requireLesson(context: PluginContext, id: string): LessonRecord {
 }
 
 // A correction is only a lesson when it carries the gap it names and the
-// reason behind it; a half-filed one teaches the improver nothing.
+// reason behind it; a half-filed one teaches a doctrine edit nothing.
 function requiredOption(invocation: CliInvocation, flag: string, label: string): string {
   const value = stringOption(invocation, flag.slice(2))?.trim();
   if (!value) {
@@ -262,7 +91,7 @@ function requiredOption(invocation: CliInvocation, flag: string, label: string):
 }
 
 // The store lives at <root>/.maestro/maestro.db, so its root basename is the
-// registry name the room renders its per-project view from (d723).
+// project name (d723).
 function defaultProject(context: PluginContext): string {
   return basename(dirname(dirname(context.store.path))) || basename(process.cwd());
 }
@@ -284,86 +113,6 @@ function format(lesson: LessonRecord): string {
 
 function line(lesson: LessonRecord): string {
   return `${lesson.id} [${lesson.state}] (${lesson.project}) ${lesson.target} | ${lesson.happened}`;
-}
-
-interface SourcedLesson {
-  lesson: LessonRecord;
-  source: string;
-}
-
-export interface RepoLessons {
-  error: boolean;
-  lessons: LessonRecord[];
-  missing: boolean;
-  repo: string;
-}
-
-async function registeredRepos(home: string): Promise<string[]> {
-  const registry = join(home, "maestro", "registry");
-  if (!existsSync(registry)) return [];
-  return (await readFile(registry, "utf8")).split(/\r?\n/).filter(Boolean);
-}
-
-// The store a repository owns is read through its own CLI, never by opening its
-// database here: the child is what keeps a store too new to read honest.
-export async function readRepoLessons(repo: string): Promise<RepoLessons> {
-  if (!existsSync(repo) || !existsSync(join(repo, ".maestro"))) {
-    return { error: false, lessons: [], missing: true, repo };
-  }
-  const cli = resolve(process.argv[1] ?? join(import.meta.dir, "..", "..", "bin", "maestro.ts"));
-  const child = Bun.spawn([process.execPath, cli, "lesson", "list", "--all", "--json"], {
-    cwd: repo,
-    env: { ...process.env, MAESTRO_READ_ONLY: "1" },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, , exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (exitCode !== 0) return { error: true, lessons: [], missing: false, repo };
-  try {
-    const envelope = JSON.parse(stdout) as { data?: { lessons?: LessonRecord[] } };
-    return { error: false, lessons: envelope.data?.lessons ?? [], missing: false, repo };
-  } catch {
-    return { error: true, lessons: [], missing: false, repo };
-  }
-}
-
-function entry({ lesson, source }: SourcedLesson): string {
-  return [
-    `### ${lesson.id} (${basename(source)}) ${lesson.happened}`,
-    `- target: ${lesson.target}`,
-    `- expected: ${lesson.expected}`,
-    `- why: ${lesson.why}`,
-    `- evidence: ${lesson.evidence.join(", ")}`,
-    lesson.commit ? `- commit: ${lesson.commit}` : null,
-    lesson.answer ? `- answer: ${lesson.answer}` : null,
-    `- filed: ${lesson.createdAt}`,
-    `- source: ${source}`,
-  ]
-    .filter((line): line is string => line !== null)
-    .join("\n");
-}
-
-function view(project: string, sourced: SourcedLesson[]): string {
-  const section = (title: string, state: "pending" | "processed"): string[] => {
-    const entries = sourced.filter((item) => item.lesson.state === state).map(entry);
-    return entries.length === 0 ? [] : [`## ${title}`, "", entries.join("\n\n")];
-  };
-  return [
-    `# Lessons: ${project}`,
-    "",
-    "Rendered by `maestro lesson render` from the room store and every registered",
-    "repository's store. This file is a view and is never hand-edited: an edit here",
-    "is lost on the next render. File a correction with `maestro lesson file`.",
-    "",
-    ...section("Pending", "pending"),
-    "",
-    ...section("Processed", "processed"),
-    "",
-  ].join("\n");
 }
 
 export const lessonPlugin: BuiltInPlugin = {
@@ -439,7 +188,7 @@ export const lessonPlugin: BuiltInPlugin = {
         const filed = transaction.immediate();
         return { data: { lesson: filed }, text: format(filed) };
       }, {
-        description: "File a correction as a lesson the improver will read.",
+        description: "File a correction as a lesson for the next doctrine edit.",
         flags: {
           "--target": {
             description: "Name the doctrine this corrects: a recipe section, a rule, a template, a skill, or a Workspace Protocol.",
@@ -458,7 +207,7 @@ export const lessonPlugin: BuiltInPlugin = {
           },
         },
         positionals: [{ name: "what-happened", required: true }],
-        rootDescription: "Record corrections the improver turns into doctrine edits.",
+        rootDescription: "Record corrections that doctrine edits answer.",
       }),
     );
 
@@ -542,59 +291,6 @@ export const lessonPlugin: BuiltInPlugin = {
           "--project": { description: "Only lessons tagged with this project.", value: true },
         },
         mutates: false,
-      }),
-    );
-
-    context.effect(() =>
-      context.cli.register("lesson render", async (): Promise<CliResult> => {
-        const home = process.env["HOME"] ?? process.cwd();
-        const local = dirname(dirname(context.store.path));
-        const repos = (await registeredRepos(home)).filter((repo) => resolve(repo) !== local);
-        const scanned = await Promise.all(repos.map(readRepoLessons));
-        const sourced: SourcedLesson[] = [
-          ...service.list({ all: true }).map((lesson) => ({ lesson, source: local })),
-          ...scanned.flatMap((result) =>
-            result.lessons.map((lesson) => ({ lesson, source: result.repo }))
-          ),
-        ];
-
-        const byProject = new Map<string, SourcedLesson[]>();
-        for (const item of sourced) {
-          const group = byProject.get(item.lesson.project) ?? [];
-          group.push(item);
-          byProject.set(item.lesson.project, group);
-        }
-
-        const directory = join(home, "maestro", "PROJECT");
-        await mkdir(directory, { recursive: true });
-        const written: string[] = [];
-        for (const [project, group] of [...byProject].sort(([a], [b]) => a.localeCompare(b))) {
-          group.sort((left, right) => left.lesson.createdAt.localeCompare(right.lesson.createdAt));
-          const path = join(directory, `${project}.md`);
-          await writeFile(path, view(project, group));
-          const pending = group.filter((item) => item.lesson.state === "pending").length;
-          written.push(`PROJECT/${project}.md: ${group.length} lessons (${pending} pending)`);
-        }
-
-        const unavailable = scanned.flatMap((result) =>
-          result.missing
-            ? [`skipped: ${result.repo} (missing)`]
-            : result.error
-              // The child's stderr is discarded, so the line names the command
-              // that shows what it said; a store left out is why the view below
-              // is incomplete, so it is read before the view, not after it.
-              ? [
-                `Unreadable repository: ${result.repo}; run: cd ${result.repo} && maestro lesson list --all`,
-              ]
-              : []
-        );
-        const lines = [...unavailable, ...written];
-        return {
-          data: { directory, projects: [...byProject.keys()], written: written.length },
-          text: lines.length > 0 ? lines.join("\n") : "No lessons to render.",
-        };
-      }, {
-        description: "Render the per-project lesson view under ~/maestro/PROJECT.",
       }),
     );
   },
