@@ -341,6 +341,9 @@ export async function seedTerms(
           "INSERT INTO terms (id, name, definition, work_id, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
         )
         .run(term.id, term.name, term.definition, now, now);
+      database
+        .query("INSERT INTO search_index(surface, entity_id, text) VALUES ('term', ?, ?)")
+        .run(term.id, `${term.name} ${term.definition}`);
     }
   } finally {
     database.close();

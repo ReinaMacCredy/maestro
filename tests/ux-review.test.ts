@@ -80,10 +80,10 @@ test("604 help marks the verbs observer mode admits", async () => {
     expect(root.stdout).toMatch(/^  term {2,}.* \*$/m);
     expect(root.stdout).toMatch(/^  install {2,}.*[^*]$/m);
     expect(root.stdout).toContain("  *  a verb it admits (on a root verb: at least one of its subverbs)");
-    const term = await runCli(fixture, ["help", "term"]);
-    expect(term.stdout).toMatch(/^  list {2,}.* \*$/m);
-    expect(term.stdout).toMatch(/^  add {2,}.*[^*]$/m);
-    expect(term.stdout).toContain("* runs under MAESTRO_READ_ONLY=1");
+    const work = await runCli(fixture, ["help", "work"]);
+    expect(work.stdout).toMatch(/^  list {2,}.* \*$/m);
+    expect(work.stdout).toMatch(/^  add {2,}.*[^*]$/m);
+    expect(work.stdout).toContain("* runs under MAESTRO_READ_ONLY=1");
     const memory = await runCli(fixture, ["help", "memory"]);
     expect(memory.stdout).toMatch(/^  render {2,}.*[^*]$/m);
     const unknown = await runCli(fixture, ["policy", "list"], { MAESTRO_READ_ONLY: "1" });
