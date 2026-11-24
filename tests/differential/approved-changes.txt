@@ -55,6 +55,7 @@ gone plugin enable policy-witness # d902: the text gate is deleted
 gone plugin enable policy-qa # d902: the text gate is deleted
 gone plugin enable policy-research # d902: the text gate is deleted
 gone plugin enable policy-lifecycle # d902: the text gate is deleted
+drop-line work show /^gate: policy-(tdd|qa|witness|layer|research|lifecycle) / # d902: a deleted gate prints no line for a store that had it enabled
 gone term add # d909: terms are read-only
 output term list when /maestro term add/ # d909: the empty list no longer points at term add
 gone trace # d910: trace is deleted
@@ -95,6 +96,7 @@ output recipe show feature # d916: rewritten in place
 output recipe show bug-fix # d916: rewritten in place
 output recipe show refactoring # d916: rewritten in place
 output recipe show multi-phase-plan # d916: rewritten in place
+output recipe show no-comments # d916: its pointers to deleted recipes become plain sentences
 output brief # d911, d890: the brief is rewritten short
 output hook record # d911, d896: the brief is rewritten short and names no deleted verb
 output work start when /maestro (status|ready)/ # d896: hints stop naming deleted verbs
