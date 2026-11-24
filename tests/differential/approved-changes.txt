@@ -88,6 +88,7 @@ output work done in archive.seq # d895: closing the last linked card archives it
 output bundle show in archive.seq # d895: closing the last linked card archives its bundle
 any bundle check # d903: two rules remain
 drop-line bundle show /maestro bundle check / # d903: the scaffold sentences describe the two remaining rules
+drop-line bundle show /record via .maestro decision / # d884: the scaffold names decision add
 output plugin list # d885, d888, d902: deleted plugins leave the list
 output doctor # d885, d886, d879: a new store no longer creates the tables of deleted or disabled plugins, so the table count drops
 output recipe list # d916, d904: thirteen recipes leave and the review recipe arrives
