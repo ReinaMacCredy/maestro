@@ -372,6 +372,26 @@ export function recordedPrompts(fixture: Fixture, sessionId?: string): string[] 
   }
 }
 
+export interface StoredSession {
+  anchor: string;
+  harness: string | null;
+  id: string;
+  last_event: string;
+  last_seen: string;
+  pid: number;
+}
+
+export function storedSessions(fixture: Fixture): StoredSession[] {
+  const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
+  try {
+    return database
+      .query<StoredSession, []>("SELECT id, pid, anchor, harness, last_event, last_seen FROM sessions ORDER BY id")
+      .all();
+  } finally {
+    database.close();
+  }
+}
+
 export function workEvents(fixture: Fixture, id: string): string {
   const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), { readonly: true });
   try {

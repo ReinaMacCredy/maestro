@@ -121,7 +121,7 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     const brokenRepo = join(fixture.root, "broken-git-indirection");
     await mkdir(brokenRepo, { recursive: true });
     await writeFile(join(brokenRepo, ".git"), "gitdir: /definitely/missing/maestro-git-dir\n");
-    const broken = await runCliAt(fixture, brokenRepo, ["status"]);
+    const broken = await runCliAt(fixture, brokenRepo, ["work", "list"]);
     expect(broken.exitCode).not.toBe(0);
     expect(await Bun.file(join(brokenRepo, ".maestro", "maestro.db")).exists()).toBeFalse();
 
@@ -143,7 +143,7 @@ test("B3.3 shared stores stay isolated between repositories", async () => {
     );
     await chmod(fakeGit, 0o755);
 
-    const filesystemBoundary = await runCliAt(fixture, outsideRepo, ["status"], {
+    const filesystemBoundary = await runCliAt(fixture, outsideRepo, ["work", "list"], {
       PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
     });
     expect(filesystemBoundary.exitCode).toBe(0);

@@ -8,6 +8,7 @@ import {
   prepareInstallFixture,
   runCli,
   runInstalledCliAt,
+  storedSessions,
   type CliResult,
   type Fixture,
   withFixture,
@@ -113,10 +114,7 @@ test("257 agents outside Herdr still record SessionStart and UserPromptSubmit wi
       environment,
       JSON.stringify({ prompt: "record this prompt outside a pane" }),
     );
-    const status = await runCli(fixture, ["status", "--json"]);
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ harness: string | null; id: string; lastEvent: string }> };
-    }).data.sessions;
+    const sessions = storedSessions(fixture);
 
     expect(started.exitCode).toBe(0);
     expect(started.stdout).not.toContain("pending message");
@@ -125,7 +123,7 @@ test("257 agents outside Herdr still record SessionStart and UserPromptSubmit wi
       expect.objectContaining({
         harness: "codex",
         id: "outside-pane-codex",
-        lastEvent: "UserPromptSubmit",
+        last_event: "UserPromptSubmit",
       }),
     );
     expect(recordedPrompts(fixture, "outside-pane-codex")).toContain("record this prompt outside a pane");
@@ -212,13 +210,7 @@ test("350 installed hook configuration executes both current adapters", async ()
       expect(stderr).toBe("");
       expect(stdout).toContain("held work:");
 
-      const status = await runInstalledCliAt(fixture, fixture.repo, ["status", "--json"], {
-        PATH: path,
-      });
-      const sessions = (JSON.parse(status.stdout) as {
-        data: { sessions: Array<{ harness: string | null; id: string }> };
-      }).data.sessions;
-      expect(sessions).toContainEqual(expect.objectContaining({ harness, id: sessionId }));
+      expect(storedSessions(fixture)).toContainEqual(expect.objectContaining({ harness, id: sessionId }));
     }
   });
 });
@@ -387,45 +379,5 @@ test("261 watch is absent and returns the ordinary UNKNOWN_VERB error", async ()
     expect(error.code).toBe("UNKNOWN_VERB");
     expect(error.verb).toBe("watch");
     expect(error.message).toContain("unknown verb: watch");
-  });
-});
-
-test("262 status hides dead noise by default while --all and --live remain explicit", async () => {
-  await withFixture(async (fixture) => {
-    for (const [id, pid] of [
-      ["live-status", process.pid],
-      ["dead-status", 2_147_483_647],
-    ] as const) {
-      const recorded = await runCli(
-        fixture,
-        ["hook", "record", "--event", "SessionStart", "--harness", "codex"],
-        { MAESTRO_SESSION_ID: id, MAESTRO_SESSION_PID: String(pid) },
-      );
-      expect(recorded.exitCode).toBe(0);
-    }
-
-    const status = await runCli(fixture, ["status"]);
-    const all = await runCli(fixture, ["status", "--all"]);
-    const live = await runCli(fixture, ["status", "--live"]);
-    const liveJson = await runCli(fixture, ["status", "--live", "--json"]);
-
-    expect(status.exitCode).toBe(0);
-    expect(status.stdout).toContain("live-status [live]");
-    expect(status.stdout).not.toContain("dead-status [dead]");
-    expect(status.stdout.trim().split("\n").at(-1)).toBe(
-      "1 dead sessions hidden (0 hold work); --all to list",
-    );
-    expect(all.exitCode).toBe(0);
-    expect(all.stdout).toContain("live-status [live]");
-    expect(all.stdout).toContain("dead-status [dead]");
-    expect(live.exitCode).toBe(0);
-    expect(live.stdout).toContain("live-status [live]");
-    expect(live.stdout).not.toContain("dead-status");
-    expect(liveJson.exitCode).toBe(0);
-    const sessions = (JSON.parse(liveJson.stdout) as {
-      data: { sessions: Array<{ id: string; live: boolean }> };
-    }).data.sessions;
-    expect(sessions.some((session) => session.id === "live-status" && session.live)).toBe(true);
-    expect(sessions.some((session) => session.id === "dead-status")).toBe(false);
   });
 });

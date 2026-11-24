@@ -66,14 +66,6 @@ test("602 work show states what done will require while the work is open", async
   });
 });
 
-test("603 status carries the age of each session's last hook event", async () => {
-  await withFixture(async (fixture) => {
-    await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session);
-    const status = await runCli(fixture, ["status"], session);
-    expect(status.stdout).toMatch(/^ux-review \[live\] SessionStart \d+s ago pid=/m);
-  });
-});
-
 test("604 help marks the verbs observer mode admits", async () => {
   await withFixture(async (fixture) => {
     const root = await runCli(fixture, ["help"]);
@@ -140,8 +132,6 @@ test("607 SessionStart prunes dead sessions older than 30 days that hold nothing
     const ids = after.query<{ id: string }, []>("SELECT id FROM sessions ORDER BY id").all().map((row) => row.id);
     after.close();
     expect(ids).toEqual(["old-holder", "recent-dead", "ux-review"]);
-    const trace = await runCli(fixture, ["status", "--all"], session);
-    expect(trace.stdout).not.toContain("old-idle");
   });
 });
 

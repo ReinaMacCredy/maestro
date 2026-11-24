@@ -4613,8 +4613,24 @@ function registerCoreSeams(context: PluginContext): void {
     })
   );
   context.effect(() =>
-    context.events.on<CliInvocation, CliResult>("status.invoke", async (invocation, next) =>
-      (await maybeHandleSlpStatus(context, invocation)) ?? next()
+    context.cli.register(
+      "status",
+      async (invocation): Promise<CliResult> => {
+        const status = await maybeHandleSlpStatus(context, invocation);
+        if (status) return status;
+        throw new CliError(
+          "NO_ACTIVE_TEAM",
+          invocation.positionals[0]
+            ? "status <work-id> reads SLP team work from a role pane; outside a running team use: maestro work show <id>"
+            : "status reads a running SLP team from a role pane or the Hub room; for tracked work run: maestro work list",
+        );
+      },
+      {
+        description: "Show the SLP team readout: the Hub's teams, a seat's work, one work item or one ruling.",
+        flags: { "--all": { description: "List DONE work instead of counting it." } },
+        mutates: false,
+        positionals: [{ name: "work-id", required: false }],
+      },
     )
   );
   context.effect(() =>

@@ -7,6 +7,13 @@ const enable = "maestro plugin enable slp";
 const verbs = ["team", "slp", "decide", "work take", "work return", "work accept"];
 
 function refuseWhileOff(args: readonly string[]): void {
+  if (args[0] === "status") {
+    throw new CliError(
+      "PLUGIN_DISABLED",
+      `status left core (d896): for tracked work and who holds it run: maestro work list; the team readout is part of the slp plugin, which is off; run: ${enable}`,
+      { command: "maestro work list", plugin: "slp", verb: "status" },
+    );
+  }
   const verb = verbs.find((candidate) => candidate.split(" ").every((part, index) => args[index] === part));
   if (!verb) return;
   throw new CliError("PLUGIN_DISABLED", `${verb} is part of the slp plugin, which is off; run: ${enable}`, {

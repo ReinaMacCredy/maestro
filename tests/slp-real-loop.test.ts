@@ -54,24 +54,12 @@ test("200 read-only status treats pre-anchor session rows as PID-anchored", asyn
 
     const diagnosed = await runCli(fixture, ["doctor"], { PATH: path });
     expect(diagnosed.exitCode).toBe(0);
-    const all = await runCli(fixture, ["status", "--all", "--json"], {
+    const brief = await runCli(fixture, ["brief", "--session"], {
       MAESTRO_READ_ONLY: "1",
     });
-    const live = await runCli(fixture, ["status", "--live", "--json"], {
-      MAESTRO_READ_ONLY: "1",
-    });
-    expect(all.exitCode).toBe(0);
-    expect(live.exitCode).toBe(0);
-    const allSessions = (JSON.parse(all.stdout) as {
-      data: { sessions: Array<{ id: string; live: boolean }> };
-    }).data.sessions;
-    const liveSessions = (JSON.parse(live.stdout) as {
-      data: { sessions: Array<{ id: string; live: boolean }> };
-    }).data.sessions;
-    expect(allSessions).toContainEqual(expect.objectContaining({ id: "legacy-live", live: true }));
-    expect(allSessions).toContainEqual(expect.objectContaining({ id: "legacy-dead", live: false }));
-    expect(liveSessions).toContainEqual(expect.objectContaining({ id: "legacy-live", live: true }));
-    expect(liveSessions.some((session) => session.id === "legacy-dead")).toBe(false);
+    expect(brief.exitCode).toBe(0);
+    expect(brief.stdout).toContain("live peers:\n- legacy-live holds: none");
+    expect(brief.stdout).not.toContain("legacy-dead");
   });
 });
 
@@ -83,7 +71,7 @@ test("352 [closeout-only] doctor and read-only status do not migrate the pre-anc
 
     expect((await runCli(fixture, ["doctor"], { PATH: path })).exitCode).toBe(0);
     expect(
-      (await runCli(fixture, ["status", "--json"], { MAESTRO_READ_ONLY: "1" })).exitCode,
+      (await runCli(fixture, ["brief", "--session"], { MAESTRO_READ_ONLY: "1" })).exitCode,
     ).toBe(0);
 
     const verified = new Database(databasePath, { readonly: true });

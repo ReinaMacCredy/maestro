@@ -51,8 +51,7 @@ export function compactLine(summary: CompactSummary | null, now = Date.now()): s
   return `compacts: ${summary.count}${age === "" ? "" : ` (last ${age})`}`;
 }
 
-// The one age renderer the session surfaces share; `maestro status` adds
-// "ago" to it and the compact line reads "(last 5m)".
+// The one age renderer the session surfaces share; the compact line reads "(last 5m)".
 export function relativeAge(iso: string, now = Date.now()): string {
   const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
   if (!Number.isFinite(seconds)) return "";

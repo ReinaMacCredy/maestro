@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { chmod, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, withFixture, workEvents } from "./helpers.ts";
+import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, storedSessions, withFixture, workEvents } from "./helpers.ts";
 
 test("91 an empty work list points at work add", async () => {
   await withFixture(async (fixture) => {
@@ -107,10 +107,9 @@ test("95 status reflects completion instead of pinning the last start", async ()
     expect((await runCli(fixture, ["work", "start", item])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "done", item, "--evidence", "done"])).exitCode).toBe(0);
 
-    const status = await runCli(fixture, ["status"]);
-    expect(status.exitCode).toBe(0);
-    expect(status.stdout).toContain("work.done");
-    expect(status.stdout).not.toContain("work.start pid");
+    const lastEvents = storedSessions(fixture).map((session) => session.last_event);
+    expect(lastEvents).toContain("work.done");
+    expect(lastEvents).not.toContain("work.start");
   });
 });
 
@@ -136,14 +135,8 @@ test("97 [lint] maestro-work names the opaque evidence form", async () => {
 test("98 session lastEvent records what happened, not what was attempted", async () => {
   await withFixture(async (fixture) => {
     const session = { MAESTRO_SESSION_ID: "honest-session", MAESTRO_SESSION_PID: String(process.pid) };
-    const lastEvent = async (): Promise<string | undefined> => {
-      const status = await runCli(fixture, ["status", "--json"], session);
-      expect(status.exitCode).toBe(0);
-      const sessions = (JSON.parse(status.stdout) as {
-        data: { sessions: Array<{ id: string; lastEvent: string }> };
-      }).data.sessions;
-      return sessions.find((candidate) => candidate.id === session.MAESTRO_SESSION_ID)?.lastEvent;
-    };
+    const lastEvent = async (): Promise<string | undefined> =>
+      storedSessions(fixture).find((candidate) => candidate.id === session.MAESTRO_SESSION_ID)?.last_event;
     expect(
       (await runCli(fixture, ["hook", "record", "--event", "SessionStart"], session)).exitCode,
     ).toBe(0);
@@ -188,14 +181,18 @@ test("99 status renders held work per session", async () => {
     );
     expect((await runCli(fixture, ["work", "start", item], session)).exitCode).toBe(0);
 
-    const holding = await runCli(fixture, ["status"], session);
-    expect(holding.exitCode).toBe(0);
-    expect(holding.stdout).toContain(`holds: ${item}`);
+    const held = async (): Promise<string[]> =>
+      (JSON.parse((await runCli(fixture, ["work", "list", "--all", "--json"], session)).stdout) as {
+        data: { works: Array<{ holder: { id: string } | null; id: string }> };
+      }).data.works
+        .filter((work) => work.holder?.id === session.MAESTRO_SESSION_ID)
+        .map((work) => work.id);
+    expect(await held()).toEqual([item]);
 
     expect(
       (await runCli(fixture, ["work", "done", item, "--evidence", "done"], session)).exitCode,
     ).toBe(0);
-    expect((await runCli(fixture, ["status"], session)).stdout).toContain("holds: none");
+    expect(await held()).toEqual([]);
   });
 });
 
@@ -382,7 +379,11 @@ test("109 current holders can abandon active work and dead holders recover befor
       expect(shown.stdout).toContain(`[cancelled] abandoned attempt`);
       expect(shown.stdout).toContain("cancel reason: approach is invalid");
       expect(shown.stdout).not.toContain("held by:");
-      expect((await runCli(fixture, ["status"], current)).stdout).toContain("holds: none");
+      expect(
+        (JSON.parse((await runCli(fixture, ["work", "list", "--all", "--json"], current)).stdout) as {
+          data: { works: Array<{ holder: { id: string } | null }> };
+        }).data.works.filter((work) => work.holder?.id === current.MAESTRO_SESSION_ID),
+      ).toEqual([]);
     } finally {
       staleHolder.kill();
     }
@@ -442,7 +443,6 @@ test("112 help documents --json on every command, read and write alike", async (
   await withFixture(async (fixture) => {
     const supported = [
       ["decision", "lock"],
-      ["status"],
       ["search"],
       ["work", "list"],
       ["work", "show"],

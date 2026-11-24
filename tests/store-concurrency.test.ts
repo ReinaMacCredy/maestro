@@ -34,7 +34,7 @@ test("B3.10 concurrent shared-store startup and work creation avoid locks and du
         runCliAt(
           fixture,
           index % 2 === 0 ? fixture.repo : worktree,
-          ["status"],
+          ["work", "list"],
           sessionEnvironment(`status-${index}`),
         ),
       ),

@@ -45,7 +45,7 @@ test("616 commands refuse a cwd inside the repository store in normal and observ
     ];
 
     for (const [cwd, environment] of cases) {
-      const result = await runCliAt(fixture, cwd, ["status"], environment);
+      const result = await runCliAt(fixture, cwd, ["work", "list"], environment);
       const reportedCwd = await realpath(cwd);
       const reportedOwner = await realpath(fixture.repo);
       const failure = JSON.parse(result.stderr) as {
@@ -565,13 +565,13 @@ test("48 status and hook brief report local drift unless auto-update checks are 
     const { source } = await createSourceCheckout(fixture);
     const runtime = await installSource(fixture, source);
 
-    const current = await runInstalled(fixture, runtime, source, ["status"]);
+    const current = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
     expect(current.stdout).not.toContain("maestro update");
 
     await writeFile(join(source, "drift.txt"), "drift\n");
     await git(source, ["add", "drift.txt"]);
     await git(source, ["commit", "-m", "local drift"]);
-    const drifted = await runInstalled(fixture, runtime, source, ["status"]);
+    const drifted = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
     const brief = await runInstalled(fixture, runtime, source, [
       "hook",
       "record",
@@ -585,7 +585,7 @@ test("48 status and hook brief report local drift unless auto-update checks are 
       fixture,
       runtime,
       source,
-      ["status"],
+      ["brief", "--session"],
       { MAESTRO_AUTO_UPDATE: "0" },
     );
     expect(disabled.stdout).not.toContain("maestro update");
@@ -859,7 +859,7 @@ test("562 the drift nag names the source branch and the commits no remote holds 
     await writeFile(join(source, "drift.txt"), "drift\n");
     await git(source, ["add", "drift.txt"]);
     await git(source, ["commit", "-m", "unpublished work on main"]);
-    const ahead = await runInstalled(fixture, runtime, source, ["status"]);
+    const ahead = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
 
     expect(ahead.stdout).toContain("run maestro update");
     expect(ahead.stdout).toContain("on main; separately, the source holds 1 commit no remote has");
@@ -868,7 +868,7 @@ test("562 the drift nag names the source branch and the commits no remote holds 
     await writeFile(join(source, "lane-note.txt"), "lane work\n");
     await git(source, ["add", "lane-note.txt"]);
     await git(source, ["commit", "-m", "lane work"]);
-    const lane = await runInstalled(fixture, runtime, source, ["status"]);
+    const lane = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
 
     expect(lane.stdout).toContain("on improver/w557; separately, the source holds 2 commits no remote has");
   });
@@ -893,7 +893,7 @@ test("w706 the drift line states its own magnitude, keeps the unpublished count 
     }
     await git(source, ["push", "origin", "HEAD~1:main"]);
     const head = await git(source, ["rev-parse", "HEAD"]);
-    const behind = await runInstalled(fixture, runtime, source, ["status"]);
+    const behind = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
     expect(updateLine(behind)).toBe(
       `[update] runtime ${short(installed)} is 3 commits behind source ${short(head)} on main` +
         "; separately, the source holds 1 commit no remote has; run maestro update",
@@ -906,7 +906,7 @@ test("w706 the drift line states its own magnitude, keeps the unpublished count 
     await git(source, ["add", "other-line.txt"]);
     await git(source, ["commit", "-m", "other line of work"]);
     const diverged = await git(source, ["rev-parse", "HEAD"]);
-    const split = await runInstalled(fixture, runtime, source, ["status"]);
+    const split = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
     expect(updateLine(split)).toBe(
       `[update] runtime ${short(installed)} has diverged from source ${short(diverged)} on main: ` +
         "1 commit behind and 1 ahead; separately, the source holds 1 commit no remote has; run maestro update",
@@ -921,7 +921,7 @@ test("w706 the drift line states its own magnitude, keeps the unpublished count 
     await git(source, ["add", "."]);
     await git(source, ["commit", "-m", "reclone"]);
     const reclone = await git(source, ["rev-parse", "HEAD"]);
-    const unmeasured = await runInstalled(fixture, runtime, source, ["status"]);
+    const unmeasured = await runInstalled(fixture, runtime, source, ["brief", "--session"]);
     expect(updateLine(unmeasured)).toBe(
       `[update] runtime ${short(installed)} differs from source ${short(reclone)} on main; run maestro update`,
     );
@@ -946,7 +946,7 @@ test("w736 the drift line names the boundary instead of the update verb while th
 
     // No room at all: the line is unchanged, which is every repository that is
     // not driving a team.
-    expect(updateLine(await runInstalled(fixture, runtime, source, ["status"])))
+    expect(updateLine(await runInstalled(fixture, runtime, source, ["brief", "--session"])))
       .toContain("; run maestro update");
 
     const roomStore = join(fixture.home, "maestro", ".maestro", "maestro.db");
@@ -957,7 +957,7 @@ test("w736 the drift line names the boundary instead of the update verb while th
       .run("maestro-w736", 13, "RUNNING");
     room.close();
 
-    const running = updateLine(await runInstalled(fixture, runtime, source, ["status"]));
+    const running = updateLine(await runInstalled(fixture, runtime, source, ["brief", "--session"]));
     expect(running).toContain("commit behind source");
     expect(running).toEndWith("; install at the next boundary (a generation is running)");
     expect(running).not.toContain("run maestro update");
@@ -966,7 +966,7 @@ test("w736 the drift line names the boundary instead of the update verb while th
     const stopped = new Database(roomStore);
     stopped.query("UPDATE slp_teams SET state = 'STOPPED'").run();
     stopped.close();
-    expect(updateLine(await runInstalled(fixture, runtime, source, ["status"])))
+    expect(updateLine(await runInstalled(fixture, runtime, source, ["brief", "--session"])))
       .toEndWith("; run maestro update");
   });
 });

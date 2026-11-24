@@ -98,7 +98,7 @@ test("623 unknown recipe errors list every valid recipe name", async () => {
 
 test("624 recipe show leaves the repository tree unchanged", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "list"])).exitCode).toBe(0);
     const before = await snapshotTree(fixture.repo);
     const shown = await runCli(fixture, ["recipe", "show", "bug-fix"]);
     const after = await snapshotTree(fixture.repo);

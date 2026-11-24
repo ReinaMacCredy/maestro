@@ -31,7 +31,7 @@ without asking. Nothing merges here under any grant.
    threads, but never fix them at the cost of restarting the frontier's
    checks. If you catch yourself upstack while the frontier is red, stop and
    go back down.
-3. Keep one babysitter per stack. Before you start, read `maestro status`
+3. Keep one babysitter per stack. Before you start, read `maestro work list`
    and check that no live session already babysits it.
 4. Never change the stack's shape. No base retarget, rebase, stack-wide push
    or force-push from inside a babysit. Fix on the owning branch, report

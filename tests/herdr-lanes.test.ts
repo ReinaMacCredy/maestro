@@ -6,7 +6,7 @@ import { runCli, withFixture } from "./helpers.ts";
 
 test("249 persisted session liveness remains PID and TTL based", async () => {
   await withFixture(async (fixture) => {
-    expect((await runCli(fixture, ["status"])).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "list"])).exitCode).toBe(0);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
     const insert = database.query(
       `INSERT INTO sessions (id, pid, last_event, last_seen, harness, anchor, scope)
@@ -21,19 +21,27 @@ test("249 persisted session liveness remains PID and TTL based", async () => {
       fixture.repo,
     );
     insert.run("dead-pid", 2_147_483_647, new Date().toISOString(), "pid", fixture.repo);
+    const hold = database.query(
+      `INSERT INTO work (id, title, kind, state, held_by, created_at, updated_at)
+       VALUES (?, ?, 'task', 'active', ?, ?, ?)`,
+    );
+    for (const [id, holder] of [["w1", "fresh-ttl"], ["w2", "stale-ttl"], ["w3", "dead-pid"]] as const) {
+      hold.run(id, `held by ${holder}`, holder, new Date().toISOString(), new Date().toISOString());
+    }
     database.close();
 
-    const status = await runCli(fixture, ["status", "--all", "--json"], {
+    const listed = await runCli(fixture, ["work", "list", "--json"], {
+      MAESTRO_READ_ONLY: "1",
       MAESTRO_SESSION_ID: "phase2-observer",
       MAESTRO_SESSION_PID: String(process.pid),
     });
-    expect(status.exitCode).toBe(0);
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ id: string; live: boolean }> };
-    }).data.sessions;
-    expect(sessions.find((session) => session.id === "fresh-ttl")?.live).toBe(true);
-    expect(sessions.find((session) => session.id === "stale-ttl")?.live).toBe(false);
-    expect(sessions.find((session) => session.id === "dead-pid")?.live).toBe(false);
+    expect(listed.exitCode).toBe(0);
+    const holders = (JSON.parse(listed.stdout) as {
+      data: { works: Array<{ holder: { id: string; live: boolean } | null }> };
+    }).data.works.flatMap((work) => (work.holder ? [work.holder] : []));
+    expect(holders.find((holder) => holder.id === "fresh-ttl")?.live).toBe(true);
+    expect(holders.find((holder) => holder.id === "stale-ttl")?.live).toBe(false);
+    expect(holders.find((holder) => holder.id === "dead-pid")?.live).toBe(false);
   });
 });
 

@@ -281,37 +281,6 @@ test("238 install registers each repository exactly once", async () => {
   });
 });
 
-test("283 status marks exactly the caller session in bare, live, and JSON output", async () => {
-  await withFixture(async (fixture) => {
-    const caller = { MAESTRO_SESSION_ID: "caller", MAESTRO_SESSION_PID: String(process.pid) };
-    const peer = { MAESTRO_SESSION_ID: "peer", MAESTRO_SESSION_PID: String(process.pid) };
-    for (const environment of [caller, peer]) {
-      expect(
-        (
-          await runCli(
-            fixture,
-            ["hook", "record", "--event", "SessionStart", "--harness", "codex"],
-            environment,
-          )
-        ).exitCode,
-      ).toBe(0);
-    }
-
-    for (const args of [["status"], ["status", "--live"]]) {
-      const status = await runCli(fixture, args, caller);
-      const marked = status.stdout.split("\n").filter((line) => line.endsWith(" (this session)"));
-      expect(status.exitCode).toBe(0);
-      expect(marked).toHaveLength(1);
-      expect(marked[0]).toStartWith("caller ");
-    }
-
-    const json = await runCli(fixture, ["status", "--live", "--json"], caller);
-    expect(json.exitCode).toBe(0);
-    expect((JSON.parse(json.stdout) as { data: { currentSession: string } }).data.currentSession)
-      .toBe("caller");
-  });
-});
-
 test("237 brief says every registered repository is running normally in one line", async () => {
   await withFixture(async (fixture) => {
     const { path } = await prepareInstallFixture(fixture);

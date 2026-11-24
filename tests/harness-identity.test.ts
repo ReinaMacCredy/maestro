@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { runCli, withFixture } from "./helpers.ts";
+import { runCli, storedSessions, withFixture } from "./helpers.ts";
 
 function sessionEnvironment(id: string, pid = process.pid): Record<string, string> {
   return {
@@ -49,18 +49,10 @@ test("B3.7 hook-recorded harness identity is shown while an absent harness remai
       ).exitCode,
     ).toBe(0);
 
-    const human = await runCli(fixture, ["status"]);
-    const json = await runCli(fixture, ["status", "--json"]);
-    const envelope = JSON.parse(json.stdout) as {
-      data: { sessions: Array<{ harness: string | null; id: string }> };
-    };
-    expect(human.stdout).toContain("claude-session");
-    expect(human.stdout).toContain("harness=claude");
-    expect(envelope.data.sessions.find((session) => session.id === "claude-session")?.harness).toBe(
-      "claude",
-    );
-    expect(envelope.data.sessions.find((session) => session.id === "unknown-session")?.harness).toBeNull();
-    expect(envelope.data.sessions.find((session) => session.id === "legacy-session")?.harness).toBeNull();
+    const sessions = storedSessions(fixture);
+    expect(sessions.find((session) => session.id === "claude-session")?.harness).toBe("claude");
+    expect(sessions.find((session) => session.id === "unknown-session")?.harness).toBeNull();
+    expect(sessions.find((session) => session.id === "legacy-session")?.harness).toBeNull();
   });
 });
 
@@ -77,10 +69,7 @@ test("68 bare SessionStart preserves the Claude harness guessed from the environ
         MAESTRO_SESSION_PID: String(process.pid),
       },
     );
-    const status = await runCli(fixture, ["status", "--json"]);
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ harness: string | null; id: string }> };
-    }).data.sessions;
+    const sessions = storedSessions(fixture);
 
     expect(recorded.exitCode).toBe(0);
     expect(sessions.find((session) => session.id === sessionId)?.harness).toBe("claude");

@@ -8,7 +8,7 @@ import { latestCheckpoints, type WorkRecord, type WorkService } from "./work.ts"
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { currentPaneId, recordCompaction, relativeAge } from "./session-telemetry.ts";
+import { currentPaneId, recordCompaction } from "./session-telemetry.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -136,11 +136,6 @@ function livePeers(
       heldWork: items.filter((item) => item.heldBy === session.id),
       id: session.id,
     }));
-}
-
-function formatAge(iso: string, now = Date.now()): string {
-  const age = relativeAge(iso, now);
-  return age === "" ? "" : `${age} ago`;
 }
 
 const deadSessionRetentionMs = 30 * 86_400_000;
@@ -339,85 +334,6 @@ export const coordinationPlugin: BuiltInPlugin = {
             "--source": { description: "Why the harness event fired (SessionStart: startup, resume, clear, compact).", value: true },
           },
           rootDescription: "Record harness events and print the current brief.",
-        },
-      ),
-    );
-
-    context.effect(() =>
-      context.cli.register(
-        "status",
-        (invocation): Promise<CliResult> => context.events.waterfall<CliInvocation, CliResult>("status.invoke", invocation, async (invocation) => {
-          if (invocation.positionals[0]) {
-            throw new CliError(
-              "NO_ACTIVE_TEAM",
-              "status <work-id> reads SLP v2 team work from a role pane; outside a running team use: maestro work show <id>",
-            );
-          }
-          const currentSession = context.sessions.current().id;
-          const allSessions = context.sessions.list();
-          const items = work.snapshot();
-          const holds = new Map<string, string[]>();
-          for (const item of items) {
-            if (!item.heldBy) continue;
-            holds.set(item.heldBy, [...holds.get(item.heldBy) ?? [], item.id]);
-          }
-          const preservesDeadSession = (sessionId: string) =>
-            (holds.get(sessionId)?.length ?? 0) > 0;
-          const liveOnly = invocation.options.live === true;
-          const showAll = invocation.options.all === true;
-          const sessions = allSessions.filter((session) =>
-            liveOnly
-              ? session.live
-              : showAll || session.live || preservesDeadSession(session.id)
-          );
-          const shownSessionIds = new Set(sessions.map((session) => session.id));
-          const hiddenDead = allSessions.filter(
-            (session) => !session.live && !shownSessionIds.has(session.id),
-          ).length;
-          const shownDeadHolders = sessions.filter(
-            (session) => !session.live && preservesDeadSession(session.id),
-          ).length;
-          const peers = livePeers(sessions, items, currentSession);
-          const advisory = await driftAdvisory(
-            process.env.HOME ?? process.cwd(),
-            resolve(import.meta.dir, "..", ".."),
-          );
-          const holdsFor = (sessionId: string) => holds.get(sessionId) ?? [];
-          const sessionText =
-            sessions.length > 0
-              ? sessions
-                  .map(
-                    (session) =>
-                      `${session.id} [${session.live ? "live" : "dead"}] ${session.lastEvent} ${formatAge(session.lastSeen)} pid=${session.pid} harness=${session.harness ?? "unknown"} holds: ${holdsFor(session.id).join(", ") || "none"}${session.id === currentSession ? " (this session)" : ""}`,
-                  )
-                  .join("\n")
-              : "no sessions";
-          return {
-            data: {
-              currentSession,
-              held: Object.fromEntries(sessions.map((session) => [session.id, holdsFor(session.id)])),
-              hiddenDead,
-              livePeers: peers,
-              sessions,
-            },
-            text: [
-              sessionText,
-              formatLivePeers(peers),
-              advisory,
-              !liveOnly && hiddenDead > 0
-                ? `${hiddenDead} dead sessions hidden (${shownDeadHolders} hold work); --all to list`
-                : "",
-            ].filter(Boolean).join("\n"),
-          };
-        }),
-        {
-          description: "Show sessions, live peers, and held work.",
-          flags: {
-            "--all": { description: "Show all recorded sessions." },
-            "--live": { description: "Show live sessions only." },
-          },
-          mutates: false,
-          positionals: [{ name: "work-id", required: false }],
         },
       ),
     );

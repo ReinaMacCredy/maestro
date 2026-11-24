@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, workEvents, type Fixture } from "./helpers.ts";
+import { idFrom, runCli, storedSessions, withFixture, workEvents, type Fixture } from "./helpers.ts";
 
 async function noPsEnvironment(fixture: Fixture): Promise<Record<string, string>> {
   const path = join(fixture.root, "no-ps-bin");
@@ -64,10 +64,7 @@ test("54 sandboxed processes without an identity get fresh sessions and never in
     expect(completed.stderr).toContain("LEASE_HELD");
     expect(completed.stderr).toContain(holder);
 
-    const status = await runCli(fixture, ["status", "--json"], environment);
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ anchor: string; id: string }> };
-    }).data.sessions.filter((session) => session.anchor === "ttl");
+    const sessions = storedSessions(fixture).filter((session) => session.anchor === "ttl");
     expect(sessions.length).toBeGreaterThan(1);
     expect(new Set(sessions.map((session) => session.id)).size).toBe(sessions.length);
 
@@ -137,10 +134,6 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
       (JSON.parse((await runCli(fixture, ["work", "show", id, "--json"], observer)).stdout).data as {
         work: { state: string };
       }).work.state;
-    const status = await runCli(fixture, ["status", "--all", "--json"], observer);
-    const sessions = (JSON.parse(status.stdout) as {
-      data: { sessions: Array<{ id: string; live: boolean }> };
-    }).data.sessions;
 
     expect(holderLive(staleId)).toBeFalse();
     expect(holderLive(freshId)).toBeTrue();
@@ -148,9 +141,7 @@ test("55 TTL liveness follows last_seen while PID liveness follows the PID", asy
     expect(await stateOf(staleId)).toBe("open");
     expect(await stateOf(freshId)).toBe("active");
     expect(await stateOf(pidId)).toBe("open");
-    expect(sessions.find((session) => session.id === "stale-ttl")?.live).toBeFalse();
-    expect(sessions.find((session) => session.id === "fresh-ttl")?.live).toBeTrue();
-    expect(sessions.find((session) => session.id === "dead-pid")?.live).toBeFalse();
+    expect((await runCli(fixture, ["brief", "--session"], observer)).stdout).not.toContain("- dead-pid holds:");
   });
 });
 

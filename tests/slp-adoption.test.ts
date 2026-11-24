@@ -6,6 +6,7 @@ import {
   prepareInstallFixture,
   runCli,
   runTool,
+  storedSessions,
   type Fixture,
   withFixture,
 } from "./helpers.ts";
@@ -519,13 +520,8 @@ test("pstack-port: a stale PreToolUse hook from an older install records nothing
   await withFixture(async (fixture) => {
     const work = await addWork(fixture, "held while a sub-agent spawns");
     await startWork(fixture, work, "stale-hook-holder");
-    const lastEvent = async (): Promise<string | undefined> => {
-      const status = await runCli(fixture, ["status", "--json"], session("stale-hook-holder"));
-      const sessions = (JSON.parse(status.stdout) as {
-        data: { sessions: Array<{ id: string; lastEvent: string }> };
-      }).data.sessions;
-      return sessions.find((candidate) => candidate.id === "stale-hook-holder")?.lastEvent;
-    };
+    const lastEvent = async (): Promise<string | undefined> =>
+      storedSessions(fixture).find((candidate) => candidate.id === "stale-hook-holder")?.last_event;
     const before = await lastEvent();
     const fired = await runCli(
       fixture,
@@ -574,8 +570,8 @@ test("151 MAESTRO_SESSION_NONE records no session while status remains observabl
   await withFixture(async (fixture) => {
     await recordSession(fixture, "existing-session");
     const none = { ...session("ignored-session"), MAESTRO_SESSION_NONE: "1" };
-    const status = await runCli(fixture, ["status"], none);
-    expect(status.exitCode).toBe(0);
+    const listed = await runCli(fixture, ["work", "list"], none);
+    expect(listed.exitCode).toBe(0);
     const database = openDatabase(fixture);
     try {
       expect(

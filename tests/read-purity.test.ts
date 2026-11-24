@@ -106,7 +106,7 @@ test("472 a declared-pure verb answers the same whether or not the WAL sidecars 
     // These are the verbs the desktop polls per repository (w526); making any of them mutating
     // would make watching a store change it.
     for (
-      const name of ["status", "attention", "work list", "decision list", "search"]
+      const name of ["attention", "work list", "decision list", "search"]
     ) {
       expect([...pure.keys()]).toContain(name);
     }

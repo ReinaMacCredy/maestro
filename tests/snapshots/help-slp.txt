@@ -19,7 +19,7 @@ verbs:
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
   slp        Maestro's Herdr plugin entrypoints and the runtime readout. *
-  status     Show sessions, live peers, and held work. *
+  status     Show the SLP team readout: the Hub's teams, a seat's work, one work item or one ruling. *
   team       Run the simplified supervised-team lifecycle.
   term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
@@ -62,7 +62,7 @@ verbs:
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
   slp        Maestro's Herdr plugin entrypoints and the runtime readout. *
-  status     Show sessions, live peers, and held work. *
+  status     Show the SLP team readout: the Hub's teams, a seat's work, one work item or one ruling. *
   team       Run the simplified supervised-team lifecycle.
   term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
@@ -105,6 +105,13 @@ usage: maestro slp runtime
 ### maestro slp status --help
 slp status  Read the runtime's pending wakes for the running generation. *
 usage: maestro slp status
+    --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
+
+### maestro status --help
+status  Show the SLP team readout: the Hub's teams, a seat's work, one work item or one ruling. *
+usage: maestro status [work-id]
+    --all   List DONE work instead of counting it.
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 

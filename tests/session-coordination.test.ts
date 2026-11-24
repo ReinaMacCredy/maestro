@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { idFrom, recordedPrompts, runCli, withFixture } from "./helpers.ts";
+import { idFrom, recordedPrompts, runCli, storedSessions, withFixture } from "./helpers.ts";
 
 test("13 hook record persists a session event reflected by status", async () => {
   await withFixture(async (fixture) => {
@@ -7,12 +7,10 @@ test("13 hook record persists a session event reflected by status", async () => 
       MAESTRO_SESSION_ID: "codex-13",
       MAESTRO_SESSION_PID: String(process.pid),
     });
-    const status = await runCli(fixture, ["status"]);
+    const session = storedSessions(fixture).find((row) => row.id === "codex-13");
 
     expect(recorded.exitCode).toBe(0);
-    expect(status.exitCode).toBe(0);
-    expect(status.stdout).toContain("codex-13");
-    expect(status.stdout).toContain("SessionStart");
+    expect(session?.last_event).toBe("SessionStart");
   });
 });
 

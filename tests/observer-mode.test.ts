@@ -161,16 +161,8 @@ test("213 read-only status downgrades shared PID anchors only in memory", async 
     insert.run("shared-b", process.pid, stale, fixture.repo);
     database.close();
 
-    const result = await runCli(fixture, ["status", "--json"], readOnly);
+    const result = await runCli(fixture, ["brief", "--session"], readOnly);
     expect(result.exitCode).toBe(0);
-    const envelope = JSON.parse(result.stdout) as {
-      data: { sessions: Array<{ anchor: string; id: string }> };
-    };
-    expect(
-      envelope.data.sessions
-        .filter((session) => session.id.startsWith("shared-"))
-        .map((session) => session.anchor),
-    ).toEqual(["ttl", "ttl"]);
 
     const stored = new Database(path, { readonly: true });
     try {

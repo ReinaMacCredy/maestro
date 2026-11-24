@@ -6,7 +6,7 @@ that make the lane understandable.
 
 ## Create the lane
 
-1. Read `git status --short --branch`, `git worktree list`, `maestro status`, and the
+1. Read `git status --short --branch`, `git worktree list`, `maestro work list`, and the
    target `maestro work show <id>`.
 2. Choose a unique branch and path from the intended base commit.
 3. Create it with normal git commands, then confirm branch, HEAD, and path.
@@ -54,7 +54,7 @@ gates are the review. They come from pstack's worktree-cleanup playbook
    branch is merged into the base its PRs target, not only `origin/HEAD`.
    When the goal is disk space, record `df -h /` first.
 2. A classification is advice, not permission. Cross-check every candidate
-   against what is live: `maestro status` for live sessions and held work,
+   against what is live: `maestro work list` for held work and whether its holder is live,
    and the owner's word on which sessions are in use. A live
    session can own sibling worktrees whose names appear nowhere else. When the
    owner's set and your classification disagree, the owner's set wins.

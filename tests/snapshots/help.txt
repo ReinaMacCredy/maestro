@@ -17,7 +17,6 @@ verbs:
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
-  status     Show sessions, live peers, and held work. *
   term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
@@ -211,7 +210,6 @@ verbs:
   recipe     Browse and read shipped workflow recipes. *
   room       Manage the room repository registry.
   search     Search work, decisions, notes, terms and event history, here and in the Hub. *
-  status     Show sessions, live peers, and held work. *
   term       List glossary terms. *
   topic      Keep what agents produce while discussing a topic (demos, reports, notes, captures) in .maestro/topic, out of git.
   uninstall  Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.
@@ -464,14 +462,6 @@ usage: maestro search <query>
     --json           Emit one compact JSON success envelope.
     --limit <value>  Set the maximum number of results.
     --local          Search this store only; skip the Hub room.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro status --help
-status  Show sessions, live peers, and held work. *
-usage: maestro status [work-id]
-    --all   Show all recorded sessions.
-    --json  Emit one compact JSON success envelope.
-    --live  Show live sessions only.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro term --help

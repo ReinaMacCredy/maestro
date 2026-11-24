@@ -2,11 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-interface StatusEnvelope {
+interface WorkListEnvelope {
   data?: {
-    livePeers?: Array<{
-      heldWork?: unknown[];
-      id?: string;
+    works?: Array<{
+      holder?: { id?: string; live?: boolean } | null;
     }>;
   };
 }
@@ -58,17 +57,17 @@ async function scanRepo(repo: string, caller: string): Promise<RepoActivationSca
   } catch {
     return { holders: 0, repo, unsafe: true };
   }
-  const status = await readRepoJson(repo, ["status", "--live", "--json"]) as StatusEnvelope | null;
-  // status --live excludes dead sessions; under MAESTRO_READ_ONLY the caller
-  // is not the child's current session, so it is excluded here.
-  const peers = status?.data?.livePeers;
-  if (!Array.isArray(peers)) {
+  const listed = await readRepoJson(repo, ["work", "list", "--json"]) as WorkListEnvelope | null;
+  const works = listed?.data?.works;
+  if (!Array.isArray(works)) {
     return { holders: 0, repo, unsafe: true };
   }
-  const holders = peers.filter((peer) => {
-    if (typeof peer?.id !== "string" || peer.id === caller) return false;
-    return Array.isArray(peer.heldWork) && peer.heldWork.length > 0;
-  }).length;
+  const holders = new Set(
+    works
+      .map((work) => work?.holder)
+      .filter((holder) => holder?.live === true && typeof holder.id === "string" && holder.id !== caller)
+      .map((holder) => holder?.id),
+  ).size;
   return { holders, repo, unsafe: false };
 }
 

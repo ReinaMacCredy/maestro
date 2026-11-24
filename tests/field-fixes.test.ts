@@ -32,9 +32,11 @@ test("61 EPERM-only pids stay alive while dead pids still expire", async () => {
     // a peer's read verbs must not expire the lease.
     const listed = await runCli(fixture, ["work", "list"], PEER);
     expect(listed.exitCode).toBe(0);
-    const status = await runCli(fixture, ["status"], PEER);
-    expect(status.stdout).toContain("eperm-owner");
-    expect(status.stdout).not.toContain("eperm-owner [dead]");
+    const holder = (JSON.parse((await runCli(fixture, ["work", "list", "--json"], PEER)).stdout) as {
+      data: { works: Array<{ holder: { id: string; live: boolean } | null; id: string }> };
+    }).data.works.find((work) => work.id === "w1")?.holder;
+    expect(holder?.id).toBe("eperm-owner");
+    expect(holder?.live).toBe(true);
 
     const shown = await runCli(fixture, ["work", "show", "w1"], PEER);
     expect(shown.stdout).toContain("active");

@@ -48,6 +48,11 @@ test("slp is off by default: ordinary verbs create no slp_ table, its verbs are 
         message: `${verb} ${offHint}`,
       });
     }
+    const status = await runCli(fixture, ["status"]);
+    expect(status.exitCode).toBe(1);
+    expect(JSON.parse(status.stderr).error.message).toBe(
+      "status left core (d896): for tracked work and who holds it run: maestro work list; the team readout is part of the slp plugin, which is off; run: maestro plugin enable slp",
+    );
     const assigned = await runCli(fixture, ["work", "add", "for a peer", "--to", "peer-1"]);
     expect(assigned.exitCode).toBe(2);
     expect(JSON.parse(assigned.stderr).error).toMatchObject({ code: "UNKNOWN_FLAG", flag: "--to" });

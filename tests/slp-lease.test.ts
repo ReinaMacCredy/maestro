@@ -495,9 +495,7 @@ test("480 work add alone records a live session before attributing its event", a
     expect(added.exitCode).toBe(0);
     const work = idFrom(added);
 
-    const live = await runCli(fixture, ["status", "--live"]);
-    expect(live.exitCode).toBe(0);
-    expect(live.stdout).toContain("add-only [live]");
+    expect((await runCli(fixture, ["brief", "--session"])).stdout).toContain("\n- add-only holds:");
 
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,

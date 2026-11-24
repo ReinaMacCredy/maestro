@@ -5,7 +5,7 @@ import { chmod, cp, mkdir, readdir, readFile, readlink, stat, symlink, writeFile
 import { dirname, join } from "node:path";
 import { resolveHomeDirectory } from "../src/plugins/home.ts";
 import { seatConfigRoot, seatLaunchPath, seatTokenPath, writeSecretFile } from "../src/plugins/slp-seats.ts";
-import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, withFixture } from "./helpers.ts";
+import { enableSlp, hostEnvironment, idFrom, prepareInstallFixture, runCli, runInstalledCliAt, storedSessions, withFixture } from "./helpers.ts";
 
 const roomTrustPrefix = "room Codex setup:";
 const shellSourceLine =
@@ -165,11 +165,7 @@ test("A5 / B3.9 install preserves rollback and writes harness-specific adapters"
       expect(stderr).toBe("");
       expect(exitCode).toBe(0);
       expect(stdout).toContain("held work:");
-      const status = await runCli(fixture, ["status", "--json"]);
-      const envelope = JSON.parse(status.stdout) as {
-        data: { sessions: Array<{ harness: string | null; id: string }> };
-      };
-      expect(envelope.data.sessions.find((session) => session.id === sessionId)?.harness).toBe(
+      expect(storedSessions(fixture).find((session) => session.id === sessionId)?.harness).toBe(
         harness,
       );
     }
