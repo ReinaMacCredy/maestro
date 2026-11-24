@@ -215,15 +215,12 @@ missing identities or targets.
   as here or away.
 - `maestro attention` scans the current repository and `maestro brief`
   summarizes every registered repository.
-- `maestro term add|list|show` keeps the glossary; `maestro memory
+- `maestro term list|show` reads the glossary; `maestro memory
   ingest|list|show|retract|render` runs the Hub memory.
-- `maestro bundle open|close|pause|resume|list|show|save|import` runs design
-  bundles; `import` brings a `.waymark/` tree in with an item-by-item report
-  and a dry run.
+- `maestro bundle open|close|list|show|check` runs design bundles.
 - `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
   manages the configured extension set.
-- `maestro import rust` imports preserved Rust data; `maestro legacy show`
-  reads imported cards and files.
+- `maestro legacy show` reads cards and files imported from the Rust line.
 - `maestro install`, `maestro update`, `maestro uninstall`, and
   `maestro doctor` manage and diagnose the source-installed runtime.
 - `maestro version` reports the package version and installed commit.
@@ -264,8 +261,8 @@ mail, pushes work into another session, or delivers PostToolUse packets.
 `maestro recipe list` and `maestro recipe show <name>` serve the shipped
 Markdown methods. The installed skills drive bundle, design, work, and
 verification lifecycles, plus read-only explore, diagnose, coach, and
-questionnaire engagements. `maestro plugin` lists and manages built-in, global,
-and repository plugins; policy plugins remain removable instead of being
+questionnaire engagements. `maestro plugin` lists, enables and disables the built-in
+plugins; policy plugins remain removable instead of being
 baked into the kernel.
 
 Use `maestro help` for the complete verb list and `maestro <verb> --help` for
@@ -273,31 +270,9 @@ the current syntax and flags.
 
 ## Rust-era data
 
-The last Rust stores are preserved under `legacy/rust/`. Import the card store
-read-only with:
-
-```sh
-maestro import rust --path legacy/rust/store.sqlite
-```
-
-Add `--promote` to create native work, decisions, and provenance notes:
-
-```sh
-maestro import rust --path legacy/rust/store.sqlite --promote
-```
-
-Promotion preserves card kinds, terminal outcomes, decision links,
-supersession chronology, and receipt provenance. Orphan receipts are skipped
-and counted. The `legacy_map` table makes repeated promotion idempotent.
-
-Archived Rust snapshots can also be imported for search:
-
-```sh
-maestro import rust --path legacy/rust/archive-cards.sqlite
-```
-
-Bun decodes zstd snapshot payloads when possible and falls back to stored
-search text when it cannot. Imported records remain available through
+The last Rust stores are preserved under `legacy/rust/`. The importer left
+with v0.127.0; to bring one of them into a store, run `maestro import rust`
+from v0.126.0 once. Records already imported stay available through
 `maestro search` and `maestro legacy show <id>`. See
 [`legacy/rust/README.md`](legacy/rust/README.md) for the preserved datasets and
 their exact counts.

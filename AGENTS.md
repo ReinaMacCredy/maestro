@@ -17,7 +17,7 @@ for the tier rule (quickfix: a one-sentence diff with no Full trigger, done
 directly with inline verification and no record; Light: a work item; Full: a
 bundle). Bundles live in `.maestro/bundle/<id>/` (SPEC/NOTES/VERIFY); NOTES.md
 is an overwrite-only handoff, and history lives in the store (`maestro work
-note`, `maestro trace`, decisions), never in the file.
+note`, decisions), never in the file.
 
 Rules:
 
