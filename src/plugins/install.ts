@@ -507,9 +507,11 @@ export async function codexHookTrustRecorded(root: string, home: string): Promis
   return missing.size === 0;
 }
 
-function renderedByMaestro(name: string, text: string): boolean {
-  const stem = /^maestro-([a-z0-9-]+)\.(?:md|toml|config\.toml)$/.exec(name)?.[1];
-  if (!stem) return false;
+function agentFileStem(name: string): string | undefined {
+  return /^maestro-([a-z0-9-]+)\.(?:md|toml|config\.toml)$/.exec(name)?.[1];
+}
+
+function renderedByMaestro(name: string, stem: string, text: string): boolean {
   if (name.endsWith(".config.toml")) {
     return /^(?:model = "[^"\n]*"\n)?(?:model_reasoning_effort = "[^"\n]*"\n)?developer_instructions = """\n[\s\S]*\n"""\n$/.test(text);
   }
@@ -526,8 +528,10 @@ export async function retireAgentFiles(directories: readonly string[], keep: Rea
     if (!existsSync(directory)) continue;
     for (const entry of await readdir(directory)) {
       const file = join(directory, entry);
-      if (keep.has(file) || !(await stat(file)).isFile()) continue;
-      if (!renderedByMaestro(entry, await readFile(file, "utf8"))) continue;
+      // ~/.codex holds other tools' files, some of them gigabytes: only a maestro- name is opened.
+      const stem = agentFileStem(entry);
+      if (!stem || keep.has(file) || !(await stat(file)).isFile()) continue;
+      if (!renderedByMaestro(entry, stem, await readFile(file, "utf8"))) continue;
       await rm(file, { force: true });
       retired.push(file);
     }

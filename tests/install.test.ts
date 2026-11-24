@@ -619,9 +619,12 @@ test("retire-agent-files: install removes the maestro-* agent files an earlier i
       [join(codexHome, "maestro-mine.config.toml"), 'model = "gpt-5"\nmodel_provider = "mine"\n'],
     ]);
     for (const [file, content] of [...rendered, ...handWritten]) await writeFile(file, content);
+    const foreign = join(codexHome, "thread_history_1.sqlite");
+    await writeFile(foreign, "another tool's data");
+    await chmod(foreign, 0o000);
 
     const first = await runCli(fixture, ["install"], { PATH: path });
-    expect(first.exitCode).toBe(0);
+    expect({ exitCode: first.exitCode, stderr: first.stderr }).toMatchObject({ exitCode: 0 });
     expect(first.stdout.match(/retired \d+ maestro agent files/g)).toEqual(["retired 7 maestro agent files"]);
     for (const file of rendered.keys()) expect({ file, exists: existsSync(file) }).toEqual({ file, exists: false });
     for (const [file, content] of handWritten) expect(await readFile(file, "utf8")).toBe(content);
