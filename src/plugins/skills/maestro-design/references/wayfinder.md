@@ -26,7 +26,7 @@ in the map's notes, produce decisions, not deliverables.
 | the map | a parent work item, `maestro work add "<destination>" --kind idea --acceptance "<what reaching the end looks like>"` |
 | a ticket | a child, `maestro work add "<question>" --parent <mapId> --kind research\|idea\|task` |
 | blocking | `--blocked-by <ticketId>` on the child (repeatable), or `maestro work block <ticketId> --by <ticketId>` once both exist |
-| the frontier | `maestro ready`: open, unblocked children |
+| the frontier | `maestro work list --parent <mapId>`: the open children that show no `blocked by` |
 | claim | `maestro work start <ticketId>`; the lease is the claim |
 | resolve | `maestro decision add ... --work <ticketId>`, then `maestro work done <ticketId> --claim "<answer>" --proof "<evidence>"` |
 | decisions so far | `maestro work show <mapId>` lists the closed children; `maestro bundle show` renders their decisions |
@@ -104,7 +104,7 @@ a research ticket, or the end of the frontier.
 ### Work through the map
 
 1. `maestro work show <mapId>` for the low-resolution view, then
-   `maestro ready` for the frontier.
+   `maestro work list --parent <mapId>` for the frontier.
 2. Choose the ticket: the one the user named, else the first frontier ticket.
    `maestro work start` it before any work.
 3. Resolve it, zooming into related or closed tickets on demand.
