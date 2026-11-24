@@ -101,6 +101,7 @@ output recipe show bug-fix # d916: rewritten in place
 output recipe show refactoring # d916: rewritten in place
 output recipe show multi-phase-plan # d916: rewritten in place
 output recipe show no-comments # d916: its pointers to deleted recipes become plain sentences
+output recipe show verification-skill # d906: the recipe names a model tier, not a profile
 output brief # d911, d890: the brief is rewritten short
 output hook record # d911, d896: the brief is rewritten short and names no deleted verb
 output work start when /maestro (status|ready)/ # d896: hints stop naming deleted verbs
