@@ -167,15 +167,17 @@ test("d894 a store whose ledgers already share ids shows them as before, and ope
     const observedWork = await runCli(fixture, ["work", "show", work], { MAESTRO_READ_ONLY: "1" });
     expect(observedWork.exitCode).toBe(0);
     expect(observedWork.stdout).toContain("plain card");
-    const ledgerOnly = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
-    expect(ledgerOnly.exitCode).toBe(0);
-    expect(ledgerOnly.stdout).toContain("plain decision");
-    expect(ledgerOnly.stdout).not.toContain("slp ruling");
+    const pluginOff = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
+    expect(pluginOff.exitCode).toBe(0);
+    expect(pluginOff.stdout).toContain("plain decision");
+    expect(pluginOff.stdout).toContain(`${decision} [team] by lead\nchoice: slp ruling\nwhy: why`);
+    expect(pluginOff.stdout).toContain("maestro plugin enable slp");
     await enableSlp(fixture);
     const observedDecision = await runCli(fixture, ["decision", "show", decision], { MAESTRO_READ_ONLY: "1" });
     expect(observedDecision.exitCode).toBe(0);
     expect(observedDecision.stdout).toContain("plain decision");
     expect(observedDecision.stdout).toContain("slp ruling");
+    expect(observedDecision.stdout).not.toContain("maestro plugin enable slp");
     await rm(join(fixture.home, ".maestro", "config"));
     withDatabase(path, (database) => {
       expect(database.query("SELECT name FROM sqlite_master WHERE name = 'id_counters'").get()).toBeNull();

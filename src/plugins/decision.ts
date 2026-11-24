@@ -1,5 +1,6 @@
 import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
+import { tableExists } from "../kernel/store.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import type { WorkService } from "./work.ts";
 
@@ -19,6 +20,28 @@ export interface DecisionRecord {
   supersededById: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// d876: a ruling the slp plugin stored stays readable while the plugin is off.
+function storedSlpRuling(context: PluginContext, id: string): DecisionSection | null {
+  if (!tableExists(context.store, "slp_decisions")) return null;
+  const row = context.store.database
+    .query<{ actor: string; choice: string; scope: string; why: string; work_id: string | null }, [string]>(
+      "SELECT actor, choice, scope, why, work_id FROM slp_decisions WHERE id = ?",
+    )
+    .get(id);
+  if (!row) return null;
+  return {
+    data: { slpDecisions: [{ actor: row.actor, choice: row.choice, id, scope: row.scope, why: row.why, workId: row.work_id }] },
+    label: "SLP rulings",
+    text: [
+      `${id} [${row.scope}] by ${row.actor}`,
+      ...(row.work_id ? [`work: ${row.work_id}`] : []),
+      `choice: ${row.choice}`,
+      `why: ${row.why}`,
+      "the slp plugin that recorded this is off; its full view: maestro plugin enable slp",
+    ].join("\n"),
+  };
 }
 
 export interface DecisionSection {
@@ -591,6 +614,10 @@ export const decisionPlugin: BuiltInPlugin = {
         // w736 F4, l4: other decision spaces answer to the same dNNN ids; each is printed, none hides another.
         const sections = (await context.events.serial<{ id: string }>("decision.show", { id }))
           .filter((section): section is DecisionSection => typeof section === "object" && section !== null);
+        if (sections.length === 0) {
+          const stored = storedSlpRuling(context, id);
+          if (stored) sections.push(stored);
+        }
         if (!decision && sections.length === 0) {
           throw new CliError("NOT_FOUND", `decision not found: ${id}`, { id });
         }
