@@ -43,7 +43,7 @@ test("182 work list and work show preserve stable work fields while adding decis
       };
     };
     expect(showEnvelope.data.work).toEqual(expect.objectContaining({
-      atomicReason: "fixture",
+      atomicReason: null,
       id: work,
       kind: "task",
       state: "open",

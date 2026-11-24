@@ -19,39 +19,7 @@ async function addWork(fixture: Fixture, title: string, extra: string[] = []): P
   return idFrom(await runCli(fixture, ["work", "add", title, ...extra]));
 }
 
-test("160 work start declares an existing item atomic instead of forcing a duplicate", async () => {
-  await withFixture(async (fixture) => {
-    const work = await addWork(fixture, "rate limiter: add the IP tier");
-
-    const blocked = await runCli(fixture, ["work", "start", work], session("lead"));
-    expect(blocked.exitCode).not.toBe(0);
-    expect(blocked.stderr).toContain("GATE_BLOCKED");
-
-    const started = await runCli(
-      fixture,
-      ["work", "start", work],
-      session("lead"),
-    );
-    expect(started.exitCode).toBe(0);
-
-    const shown = await runCli(fixture, ["work", "show", work]);
-    expect(shown.stdout).toContain("[active]");
-    expect(shown.stdout).toContain("atomic reason: single file, acceptance in one sentence");
-
-    const listed = await runCli(fixture, ["work", "list"]);
-    expect(listed.stdout).not.toContain("[cancelled]");
-  });
-});
-
-test("161 the breakdown gate names the self-unblocking command for the blocked item", async () => {
-  await withFixture(async (fixture) => {
-    const work = await addWork(fixture, "rate limiter: add the IP tier");
-    const blocked = await runCli(fixture, ["work", "start", work], session("lead"));
-    expect(blocked.stderr).toContain(`maestro work start ${work} --atomic-reason`);
-  });
-});
-
-test("162 an atomic reason on start never bypasses the open-children gate", async () => {
+test("162 work start on a parent with an open child is refused by the open-children gate", async () => {
   await withFixture(async (fixture) => {
     const parent = await addWork(fixture, "parent scope");
     const child = idFrom(
