@@ -12,7 +12,7 @@ verbs:
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
   lesson     Record corrections that doctrine edits answer. *
-  mcp        Expose Maestro through a foreground stdio MCP transport. *
+  mcp        Deliver the session brief through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
@@ -204,7 +204,7 @@ verbs:
   install    Install Maestro runtime and repository hook wiring.
   legacy     Read imported legacy cards without changing them. *
   lesson     Record corrections that doctrine edits answer. *
-  mcp        Expose Maestro through a foreground stdio MCP transport. *
+  mcp        Deliver the session brief through a foreground stdio MCP transport. *
   memory     Global memory facts in the Hub store; every verb runs from any cwd, writes reach the Hub through its own CLI. *
   owner      Hub only: print the owner's declared presence, or record here|away on her own words (room d124).
   plugin     Manage built-in plugins. *
@@ -322,14 +322,14 @@ usage: maestro lesson show <id>
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro mcp --help
-mcp  Expose Maestro through a foreground stdio MCP transport.
+mcp  Deliver the session brief through a foreground stdio MCP transport.
 subverbs:
-  serve  Serve exactly two Maestro meta-tools over foreground stdio MCP. *
+  serve  Serve the session brief as MCP initialize instructions over foreground stdio; no tools. *
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1
 
 ### maestro mcp serve --help
-mcp serve  Serve exactly two Maestro meta-tools over foreground stdio MCP. *
+mcp serve  Serve the session brief as MCP initialize instructions over foreground stdio; no tools. *
 usage: maestro mcp serve
     --json  Emit one compact JSON success envelope.
 * runs under MAESTRO_READ_ONLY=1

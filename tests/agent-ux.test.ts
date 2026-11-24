@@ -2,63 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, writeConfig, type Fixture, workEvents } from "./helpers.ts";
-
-interface JsonRpcResponse {
-  id: number;
-  result?: Record<string, unknown>;
-}
-
-const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
-
-function startMcp(fixture: Fixture, plugins: string[] = []) {
-  const entry = plugins.length > 0 ? join(import.meta.dir, "fixture-plugins.ts") : cli;
-  const child = Bun.spawn([process.execPath, entry, "mcp", "serve"], {
-    cwd: fixture.repo,
-    env: {
-      ...process.env,
-      HOME: fixture.home,
-      MAESTRO_TEST_PLUGINS: plugins.join(","),
-      MAESTRO_SESSION_ID: "test-session",
-      MAESTRO_SESSION_PID: String(process.pid),
-    },
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const reader = child.stdout.getReader();
-  const decoder = new TextDecoder();
-  let buffered = "";
-
-  async function request(id: number, method: string, params: Record<string, unknown> = {}) {
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
-    while (!buffered.includes("\n")) {
-      const chunk = await reader.read();
-      if (chunk.done) throw new Error(`MCP server closed before replying to ${method}`);
-      buffered += decoder.decode(chunk.value, { stream: true });
-    }
-    const newline = buffered.indexOf("\n");
-    const line = buffered.slice(0, newline);
-    buffered = buffered.slice(newline + 1);
-    return JSON.parse(line) as JsonRpcResponse;
-  }
-
-  async function close(): Promise<void> {
-    child.stdin.end();
-    expect(await child.exited).toBe(0);
-    expect(await new Response(child.stderr).text()).toBe("");
-  }
-
-  return { close, request };
-}
-
-async function initialize(mcp: ReturnType<typeof startMcp>): Promise<void> {
-  await mcp.request(1, "initialize", {
-    protocolVersion: "2025-06-18",
-    capabilities: {},
-    clientInfo: { name: "maestro-tests", version: "1" },
-  });
-}
+import { idFrom, runCli, withFixture, workEvents, type Fixture } from "./helpers.ts";
 
 async function noPsEnvironment(fixture: Fixture): Promise<Record<string, string>> {
   const path = join(fixture.root, "no-ps-bin");
@@ -225,41 +169,6 @@ test("56 work done takes an unheld lease and names the holder that lost it (w548
     expect(expired.stdout).toContain(`${expiredId} done`);
     expect(expired.stdout).toContain("expired-holder");
     expect(expired.stdout.toLowerCase()).toContain("pid");
-  });
-});
-
-test("57 maestro_find tokenizes, ranks, caps, and hints after zero hits", async () => {
-  await withFixture(async (fixture) => {
-    const mcp = startMcp(fixture, ["find-load"]);
-    await initialize(mcp);
-
-    const matched = await mcp.request(2, "tools/call", {
-      name: "maestro_find",
-      arguments: { query: "track a task" },
-    });
-    const missed = await mcp.request(3, "tools/call", {
-      name: "maestro_find",
-      arguments: { query: "xylophonicquasar" },
-    });
-    await mcp.close();
-    const result = matched.result?.structuredContent as {
-      recipes: Array<{ name: string }>;
-      verbs: Array<{ name: string }>;
-    };
-    const empty = missed.result?.structuredContent as {
-      hint?: string;
-      recipes: unknown[];
-      verbs: unknown[];
-    };
-
-    expect(result.verbs).toHaveLength(10);
-    expect(result.recipes).toHaveLength(5);
-    expect(result.verbs[0]?.name).toBe("task 00");
-    expect(result.recipes[0]?.name).toBe("task-recipe-00");
-    expect(empty.verbs).toEqual([]);
-    expect(empty.recipes).toEqual([]);
-    expect(empty.hint).toContain("maestro help");
-    expect(empty.hint).toContain("single-word");
   });
 });
 

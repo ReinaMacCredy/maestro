@@ -1,13 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { version } from "../package.json";
-import {
-  idFrom,
-  runCli,
-  withFixture,
-  writeConfig,
-  type Fixture,
-} from "./helpers.ts";
+import { runCli, withFixture, type Fixture } from "./helpers.ts";
 
 interface JsonRpcResponse {
   error?: { code: number; message: string };
@@ -18,14 +12,12 @@ interface JsonRpcResponse {
 
 const cli = join(import.meta.dir, "..", "bin", "maestro.ts");
 
-function startMcp(fixture: Fixture, plugins: string[] = []) {
-  const entry = plugins.length > 0 ? join(import.meta.dir, "fixture-plugins.ts") : cli;
-  const child = Bun.spawn([process.execPath, entry, "mcp", "serve"], {
+function startMcp(fixture: Fixture) {
+  const child = Bun.spawn([process.execPath, cli, "mcp", "serve"], {
     cwd: fixture.repo,
     env: {
       ...process.env,
       HOME: fixture.home,
-      MAESTRO_TEST_PLUGINS: plugins.join(","),
       MAESTRO_SESSION_ID: "test-session",
       MAESTRO_SESSION_PID: String(process.pid),
     },
@@ -85,112 +77,31 @@ async function initialize(mcp: ReturnType<typeof startMcp>) {
   return response;
 }
 
-test("42 MCP initialize carries the dynamic brief and lists exactly two meta-tools", async () => {
+test("42 MCP initialize carries the session brief as instructions and lists no tools (d891)", async () => {
   await withFixture(async (fixture) => {
     const mcp = startMcp(fixture);
 
     const initialized = await initialize(mcp);
     const listed = await mcp.request(2, "tools/list");
+    const called = await mcp.request(3, "tools/call", {
+      name: "maestro_run",
+      arguments: { line: "work list" },
+    });
     const closed = await mcp.close();
-    const tools = (listed.result?.tools ?? []) as Array<{ name: string }>;
+    const brief = await runCli(fixture, ["brief", "--session"], {
+      MAESTRO_SESSION_ID: "test-session",
+      MAESTRO_SESSION_PID: String(process.pid),
+    });
 
     expect(initialized.error).toBeUndefined();
     expect(initialized.result?.serverInfo).toEqual({ name: "maestro", version });
     expect(initialized.result?.instructions).toContain("held work:");
     expect(initialized.result?.instructions).toContain("enabled policies:");
-    expect(initialized.result?.instructions).not.toContain("pending message");
     expect(initialized.result?.instructions).toContain("recipes:");
-    expect(tools.map((tool) => tool.name)).toEqual(["maestro_find", "maestro_run"]);
-    expect(closed).toEqual({ exitCode: 0, stderr: "" });
-  });
-});
-
-test("43 maestro_find reads the live registry and recipes while maestro_run uses normal dispatch", async () => {
-  await withFixture(async (fixture) => {
-    await writeConfig(fixture, [{ name: "moon-disabled", disabled: true }]);
-    const mcp = startMcp(fixture, ["moon-tools", "moon-disabled"]);
-    await initialize(mcp);
-
-    const pluginFind = await mcp.request(2, "tools/call", {
-      name: "maestro_find",
-      arguments: { query: "moon" },
-    });
-    const recipeFind = await mcp.request(3, "tools/call", {
-      name: "maestro_find",
-      arguments: { query: "work" },
-    });
-    const ran = await mcp.request(4, "tools/call", {
-      name: "maestro_run",
-      arguments: { line: 'work add "MCP created item" --kind idea' },
-    });
-    const strict = await mcp.request(5, "tools/call", {
-      name: "maestro_run",
-      arguments: { line: "work list discarded-positional" },
-    });
-    const closed = await mcp.close();
-    const pluginResult = pluginFind.result?.structuredContent as {
-      recipes: Array<{ name: string }>;
-      verbs: Array<{
-        description: string;
-        flags: Array<{
-          description: string;
-          multiple: boolean;
-          name: string;
-          value: boolean;
-        }>;
-        name: string;
-      }>;
-    };
-    const recipeResult = recipeFind.result?.structuredContent as {
-      recipes: Array<{ name: string }>;
-    };
-    const runEnvelope = ran.result?.structuredContent as {
-      data: { work: { title: string } };
-      ok: boolean;
-    };
-    const listed = await runCli(fixture, ["work", "list"]);
-
-    expect(pluginResult.verbs).toContainEqual({
-      name: "moon launch",
-      description: "Launch moon work through a plugin verb.",
-      flags: [
-        {
-          name: "--target",
-          description: "Choose the launch target.",
-          multiple: false,
-          value: true,
-        },
-      ],
-    });
-    expect(JSON.stringify(pluginResult)).not.toContain("moon secret");
-    expect(recipeResult.recipes.map((recipe) => recipe.name)).toContain("worktree");
-    expect(runEnvelope.ok).toBe(true);
-    expect(runEnvelope.data.work.title).toBe("MCP created item");
-    expect(listed.stdout).toContain("MCP created item");
-    expect(strict.result?.isError).toBe(true);
-    expect(JSON.stringify(strict.result)).toContain("UNKNOWN_ARGUMENT");
-    expect(closed).toEqual({ exitCode: 0, stderr: "" });
-  });
-});
-
-test("44 policy gates reached through maestro_run return tool errors with unblocking commands", async () => {
-  await withFixture(async (fixture) => {
-    const work = idFrom(await runCli(fixture, ["work", "add", "MCP gated", "--kind", "idea"]));
-    expect(await runCli(fixture, ["work", "start", work])).toHaveProperty("exitCode", 0);
-    const mcp = startMcp(fixture);
-    await initialize(mcp);
-
-    const blocked = await mcp.request(2, "tools/call", {
-      name: "maestro_run",
-      arguments: { line: `work done ${work} --claim "done"` },
-    });
-    const closed = await mcp.close();
-
-    expect(blocked.result?.isError).toBe(true);
-    expect(JSON.stringify(blocked.result)).toContain("GATE_BLOCKED");
-    expect(JSON.stringify(blocked.result)).toContain("policy-proof");
-    expect(JSON.stringify(blocked.result)).toContain(`maestro work done ${work}`);
-    expect(JSON.stringify(blocked.result)).toContain("--proof");
+    expect(initialized.result?.instructions).toBe(brief.stdout.trimEnd());
+    expect(listed.result).toEqual({ tools: [] });
+    expect(called.result).toBeUndefined();
+    expect(called.error?.code).toBe(-32601);
     expect(closed).toEqual({ exitCode: 0, stderr: "" });
   });
 });
@@ -208,10 +119,7 @@ test("305 MCP rejects a null frame and continues serving the same process", asyn
       id: null,
       error: { code: -32600, message: "invalid JSON-RPC request" },
     });
-    expect((listed.result?.tools as Array<{ name: string }>).map((tool) => tool.name)).toEqual([
-      "maestro_find",
-      "maestro_run",
-    ]);
+    expect(listed.result).toEqual({ tools: [] });
     expect(closed).toEqual({ exitCode: 0, stderr: "" });
   });
 });
