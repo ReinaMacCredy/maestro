@@ -20,6 +20,8 @@ any work start when /requires a child breakdown/ # d880: a parentless item start
 drop-line work show /^atomic reason: / # d880: new items carry no atomic reason
 drop-line work show /^gate: policy-(breakdown|dispatch) / # d880, d885: the breakdown gate text shrinks and the dispatch gate is gone
 output work show * --json # d880, d883: the envelope loses the atomic reason of new items and gains the check record
+drop-line work show /^proof kind: / # d883: a close is stamped as text or check
+drop-line work show /^gate: policy-proof / # d883: the proof gate names --check
 
 output attention # d882, d892: three detectors remain
 flag-gone decision draft --review-at value # d892: scheduled review is removed
