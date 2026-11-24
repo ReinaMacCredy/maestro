@@ -32,7 +32,6 @@ drop-line decision lock /^review at: / # d892: scheduled review is removed
 gone dispatch # d885: dispatch is deleted
 gone handback # d885: handback is deleted
 gone plugin enable policy-dispatch # d885: policy-dispatch is deleted
-gone plugin disable policy-dispatch # d885: policy-dispatch is deleted
 gone graph # d886: the graph engine is deleted
 gone import # d887: the Rust importer is deleted
 gone plugin new # d888: external plugins are deleted
