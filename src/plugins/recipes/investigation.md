@@ -27,8 +27,8 @@ You own the answer.
 6. Name what you did not check: sources you could not reach, paths you did
    not trace, and questions still open.
 7. Land the findings. A fact that settles a durable choice becomes a decision
-   (`maestro decision draft "<choice>" --rationale "<why, with source>"`,
-   then `maestro decision lock <id>`). Evidence for an open work item is a
+   (`maestro decision add "<choice>" --rationale "<why, with source>"`).
+   Evidence for an open work item is a
    `maestro work note`. A long artifact goes in the folder
    `maestro topic path <slug>` prints. With no work item, the answer stays in
    the reply.

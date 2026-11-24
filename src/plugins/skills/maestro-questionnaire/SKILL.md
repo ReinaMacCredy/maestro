@@ -39,8 +39,8 @@ recipient knows and what the user needs.
    2 is covered by a question.
 
 When the answers come back, they are settled forks: record each as
-`maestro decision draft "<answer>" --rationale "<why, per <recipient>>" --work <id>`
-then `maestro decision lock <id>`, and clear the Next Action. The filled
+`maestro decision add "<answer>" --rationale "<why, per <recipient>>" --work <id>`,
+and clear the Next Action. The filled
 questionnaire is the evidence the decision cites.
 
 ## Document structure

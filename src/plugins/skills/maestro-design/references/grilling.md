@@ -23,8 +23,8 @@ For each question:
   the harness offers a question card, use it: one decision per card, "what
   this does" first, the sketch per option, the `my rec:` line on every fork.
 - Record durable decisions under the shared workflow's threshold:
-  `maestro decision draft "<choice>" --rationale "<why + rejected alternative>" --work <id>`
-  then `maestro decision lock <id>`. An answer to a fork is
+  `maestro decision add "<choice>" --rationale "<why + rejected alternative>" --work <id>`.
+  An answer to a fork is
   never an implementation order, even when the chosen option is
   itself an artifact (a script, a schema, a prototype); building starts only
   on an explicit request.

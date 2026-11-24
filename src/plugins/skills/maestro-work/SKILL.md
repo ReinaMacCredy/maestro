@@ -144,7 +144,7 @@ the accepted behavior rather than current output.
   failure. Do not invent public behavior merely to get a test to compile.
 - For a material choice outside the acceptance, pause that slice and apply
   [Decisions and readiness](~/maestro/WORKFLOW.md#decisions-and-readiness).
-  Reversible internal details do not require a user question or a decision lock.
+  Reversible internal details do not require a user question or a recorded decision.
 - Scope the user cuts mid-work leaves in the same turn: drop it from the red
   list and VERIFY.md, remove the tests and dead code written for it, and
   record the cut as a decision.

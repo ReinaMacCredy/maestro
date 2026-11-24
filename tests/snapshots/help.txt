@@ -110,10 +110,18 @@ usage: maestro decide <choice>
 ### maestro decision --help
 decision  Record durable decisions and their lifecycle.
 subverbs:
+  add       Record a decision and lock it in one step.
+    usage: maestro decision add <text>
+    --dissent <value>     Record the dissenting view.
+    --json                Emit one compact JSON success envelope.
+    --parent <value>      Attach this decision beneath a parent decision.
+    --rationale <value>   Record why this decision was made.
+    --supersedes <value>  Supersede a locked decision with this one.
+    --work <value>        Link this decision to a work item.
   confirm   Hub only: confirm a provisional decision recorded while the owner was away (room d125).
     usage: maestro decision confirm <decision-id>
     --json  Emit one compact JSON success envelope.
-  draft     Create or edit a draft decision.
+  draft     Create or edit a draft that waits on the owner; the usual decision is recorded and locked in one step by decision add.
     usage: maestro decision draft <text-or-id> [replacement]
     --dissent <value>     Record the dissenting view.
     --json                Emit one compact JSON success envelope.
@@ -140,13 +148,23 @@ subverbs:
     --reason <value>  Record why the draft was withdrawn.
 * runs under MAESTRO_READ_ONLY=1
 
+### maestro decision add --help
+decision add  Record a decision and lock it in one step.
+usage: maestro decision add <text>
+    --dissent <value>     Record the dissenting view.
+    --json                Emit one compact JSON success envelope.
+    --parent <value>      Attach this decision beneath a parent decision.
+    --rationale <value>   Record why this decision was made.
+    --supersedes <value>  Supersede a locked decision with this one.
+    --work <value>        Link this decision to a work item.
+
 ### maestro decision confirm --help
 decision confirm  Hub only: confirm a provisional decision recorded while the owner was away (room d125).
 usage: maestro decision confirm <decision-id>
     --json  Emit one compact JSON success envelope.
 
 ### maestro decision draft --help
-decision draft  Create or edit a draft decision.
+decision draft  Create or edit a draft that waits on the owner; the usual decision is recorded and locked in one step by decision add.
 usage: maestro decision draft <text-or-id> [replacement]
     --dissent <value>     Record the dissenting view.
     --json                Emit one compact JSON success envelope.

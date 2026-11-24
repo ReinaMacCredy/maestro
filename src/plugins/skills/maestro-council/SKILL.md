@@ -22,7 +22,7 @@ No Observer seat exists (Hub d98); a council has exactly the seats below.
 ## Steps
 
 1. Confirm a council is warranted: the fork is hard to reverse and its blast
-   radius is wide. A reversible choice is a plain `maestro decision draft`.
+   radius is wide. A reversible choice is a plain `maestro decision add`.
 2. Write the neutral brief from [references/brief.md](references/brief.md).
    Keep the original request verbatim, give every fact its provenance, list
    unverified premises as claims, keep hard constraints apart from
@@ -63,8 +63,7 @@ No Observer seat exists (Hub d98); a council has exactly the seats below.
 9. Record one binding verdict:
 
    ```
-   maestro decision draft "<decision>" --rationale "<why; accepted and rejected claims; the Lead's answer to the dissent>" --dissent "<losing view>" --work <id>
-   maestro decision lock <id>
+   maestro decision add "<decision>" --rationale "<why; accepted and rejected claims; the Lead's answer to the dissent>" --dissent "<losing view>" --work <id>
    ```
 
 10. Note the handoff on the work item with `maestro work note <id>`: the

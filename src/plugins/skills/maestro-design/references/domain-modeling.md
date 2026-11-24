@@ -13,8 +13,7 @@ session already reads:
 
 ```
 maestro term list | maestro term show <name>            # the glossary
-maestro decision draft "<choice>" --rationale "<why + rejected alternative>" --work <id>
-maestro decision lock <id>                              # the recorded decision
+maestro decision add "<choice>" --rationale "<why + rejected alternative>" --work <id>   # the recorded decision
 maestro search "<word>"                                 # terms, decisions, work, bundles
 ```
 

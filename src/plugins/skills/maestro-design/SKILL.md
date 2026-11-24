@@ -81,8 +81,8 @@ re-deriving the argument.
 - Present a blocking user-owned fork with a concrete recommendation;
   resolve reversible implementation details within the approved scope directly.
 - Record durable decisions under WORKFLOW.md's threshold:
-  `maestro decision draft "<choice>" --rationale "<why, with the rejected alternative>" --work <id>`
-  then `maestro decision lock <id>`. Supersede an old decision with
+  `maestro decision add "<choice>" --rationale "<why, with the rejected alternative>" --work <id>`.
+  Supersede an old decision with
   `--supersedes`; never rewrite its history.
 - Keep acceptance, non-goals, and authority visible on the work item.
 - A Full-tier `maestro bundle open <id> --work <workId>` tells the reviewer
@@ -102,7 +102,7 @@ re-deriving the argument.
 A hard-to-reverse fork with wide blast radius runs the `maestro-council`
 protocol: neutral brief, sealed seats, one premise check on unanimity, one
 cross-examination round, one audit of the draft verdict, and one
-binding verdict recorded with `maestro decision draft --rationale` carrying
+binding verdict recorded with `maestro decision add --rationale` carrying
 the dissent. The candidate under review stays frozen; a new finding creates
 a new candidate.
 

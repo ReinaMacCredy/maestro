@@ -28,7 +28,7 @@ in the map's notes, produce decisions, not deliverables.
 | blocking | `--blocked-by <ticketId>` on the child (repeatable), or `maestro work block <ticketId> --by <ticketId>` once both exist |
 | the frontier | `maestro ready`: open, unblocked children |
 | claim | `maestro work start <ticketId>`; the lease is the claim |
-| resolve | `maestro decision draft ... --work <ticketId>`, `decision lock`, then `maestro work done <ticketId> --claim "<answer>" --proof "<evidence>"` |
+| resolve | `maestro decision add ... --work <ticketId>`, then `maestro work done <ticketId> --claim "<answer>" --proof "<evidence>"` |
 | decisions so far | `maestro work show <mapId>` lists the closed children; `maestro bundle show` renders their decisions |
 | not yet specified | `maestro work note <mapId> "fog: <suspected question>"` |
 | out of scope | `maestro work cancel <ticketId> --reason "beyond the destination: <why>"` |

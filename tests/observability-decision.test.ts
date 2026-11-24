@@ -260,7 +260,7 @@ test("452 withdrawn decisions refuse edits, locks, supersession, and invalid wit
     expect(JSON.parse(lockedWithdrawal.stderr).error).toEqual(expect.objectContaining({
       code: "INVALID_STATE",
       message: expect.stringContaining(
-        `maestro decision draft "<replacement>" --supersedes ${locked}`,
+        `maestro decision add "<replacement>" --supersedes ${locked}`,
       ),
     }));
 
@@ -485,5 +485,56 @@ test("568 decision draft refuses the links an edit would drop (w562)", async () 
     const edited = await runCli(fixture, ["decision", "draft", open, "the draft reworded"]);
     expect(edited.exitCode).toBe(0);
     expect(edited.stdout).toContain("the draft reworded");
+  });
+});
+
+test("d884 decision add records and locks in one command; a draft for the owner stays on draft", async () => {
+  await withFixture(async (fixture) => {
+    const work = idFrom(await runCli(fixture, ["work", "add", "the card", "--kind", "idea"]));
+    const first = await runCli(fixture, ["decision", "add", "keep the store in one file"]);
+    expect(first.exitCode).toBe(0);
+    const predecessor = idFrom(first);
+    expect(first.stdout).toContain(`${predecessor} [locked] keep the store in one file`);
+
+    const added = await runCli(fixture, [
+      "decision",
+      "add",
+      "split the store per project",
+      "--rationale",
+      "projects never share rows",
+      "--dissent",
+      "one file is simpler to back up",
+      "--work",
+      work,
+      "--supersedes",
+      predecessor,
+      "--json",
+    ]);
+    expect(added.exitCode).toBe(0);
+    expect(JSON.parse(added.stdout).data.decision).toEqual(expect.objectContaining({
+      state: "locked",
+      text: "split the store per project",
+      rationale: "projects never share rows",
+      dissent: "one file is simpler to back up",
+      workId: work,
+      supersedesId: predecessor,
+    }));
+    const successor = JSON.parse(added.stdout).data.decision.id as string;
+    const old = await runCli(fixture, ["decision", "show", predecessor]);
+    expect(old.stdout).toContain(`${predecessor} [superseded]`);
+    expect(old.stdout).toContain(`superseded by: ${successor}`);
+
+    const forOwner = await runCli(fixture, ["decision", "add", "ask about retention", "--needs-owner"]);
+    expect(forOwner.exitCode).not.toBe(0);
+    expect(forOwner.stderr).toContain("decision draft");
+    expect(forOwner.stderr).toContain("--needs-owner");
+
+    const emptyAdd = await runCli(fixture, ["decision", "add", ""]);
+    const emptyDraft = await runCli(fixture, ["decision", "draft", ""]);
+    expect(emptyAdd.exitCode).not.toBe(0);
+    expect(JSON.parse(emptyAdd.stderr).error).toEqual(JSON.parse(emptyDraft.stderr).error);
+
+    const listed = await runCli(fixture, ["decision", "list", "--json"]);
+    expect(JSON.parse(listed.stdout).data.decisions).toHaveLength(2);
   });
 });

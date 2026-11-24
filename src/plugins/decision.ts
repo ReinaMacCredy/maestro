@@ -202,6 +202,167 @@ export const decisionPlugin: BuiltInPlugin = {
     };
     context.effect(() => context.provide("decision", service));
 
+    const insertDraft = (invocation: CliInvocation, needsOwner: boolean): DecisionRecord => {
+      const text = requiredPosition(invocation, 0, "decision text");
+      // A one-positional invocation naming an existing decision reads as an
+      // edit that forgot its replacement text, and the create path cannot
+      // tell it from a decision whose text is literally that id. It minted
+      // one titled d727 beside the decision it meant to edit (w562).
+      const named = getDecision(context, text);
+      if (named) {
+        const retire = named.state === "draft"
+          ? `maestro decision withdraw ${named.id} --reason "<why>" to drop it`
+          : `maestro decision draft "<text>" --supersedes ${named.id} to retire it`;
+        throw new CliError(
+          "MISSING_ARGUMENT",
+          `${named.id} already exists, so this reads as an edit with no replacement text; run: maestro decision draft ${named.id} "<replacement text>" to edit its text, maestro decision draft ${named.id} --rationale "<why>" to edit a field alone, or ${retire}`,
+          { field: "replacement text", id: named.id, state: named.state },
+        );
+      }
+      const rationale = option(invocation, "rationale");
+      const dissent = option(invocation, "dissent");
+      const parentId = option(invocation, "parent");
+      const workId = option(invocation, "work");
+      const supersedesId = option(invocation, "supersedes");
+      if (parentId) requireDecision(context, parentId);
+      if (workId) {
+        const work = context.work as WorkService;
+        if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
+      }
+      if (supersedesId) {
+        requireSupersessionTarget(context, supersedesId);
+      }
+      const now = new Date().toISOString();
+      const id = context.store.nextPrefixedId("decisions", "d");
+      context.store.database
+        .query(
+          `INSERT INTO decisions
+            (id, text, rationale, dissent, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          text,
+          rationale,
+          dissent,
+          needsOwner ? 1 : 0,
+          parentId,
+          workId,
+          supersedesId,
+          now,
+          now,
+        );
+      context.log.append({
+        type: "decision.draft",
+        entityType: "decision",
+        entityId: id,
+        sessionId: context.sessions.current().id,
+        payload: {
+          text,
+          parentId,
+          workId,
+          supersedesId,
+        },
+      });
+      return service.get(id) as DecisionRecord;
+    };
+
+    const lockDraft = (id: string, suppliedDissent: string | null): DecisionRecord => {
+      const decision = requireDecision(context, id);
+      if (decision.state !== "draft") {
+        throw new CliError("INVALID_STATE", `${id} is ${decision.state}`);
+      }
+      const updatedAt = new Date().toISOString();
+      if (decision.supersedesId) {
+        const predecessor = requireDecision(context, decision.supersedesId);
+        if (predecessor.state !== "locked") {
+          throw new CliError(
+            "SUPERSESSION_CONFLICT",
+            `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${predecessor.supersededById ?? "another decision"}`,
+            {
+              id,
+              predecessorId: predecessor.id,
+              supersededById: predecessor.supersededById,
+            },
+          );
+        }
+        const superseded = context.store.database
+          .query(
+            `UPDATE decisions
+             SET state = 'superseded', superseded_by_id = ?, updated_at = ?
+             WHERE id = ? AND state = 'locked' AND superseded_by_id IS NULL`,
+          )
+          .run(id, updatedAt, predecessor.id);
+        if (superseded.changes === 0) {
+          const current = requireDecision(context, predecessor.id);
+          throw new CliError(
+            "SUPERSESSION_CONFLICT",
+            `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${current.supersededById ?? "another decision"}`,
+            {
+              id,
+              predecessorId: predecessor.id,
+              supersededById: current.supersededById,
+            },
+          );
+        }
+        context.log.append({
+          type: "decision.supersede",
+          entityType: "decision",
+          entityId: id,
+          sessionId: context.sessions.current().id,
+          payload: { supersedesId: predecessor.id },
+        });
+      }
+      const locked = context.store.database
+        .query(
+          "UPDATE decisions SET state = 'locked', dissent = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
+        )
+        .run(
+          suppliedDissent ?? decision.dissent,
+          updatedAt,
+          id,
+        );
+      if (locked.changes === 0) {
+        const current = requireDecision(context, id);
+        throw new CliError("INVALID_STATE", `${id} is ${current.state}`);
+      }
+      context.log.append({
+        type: "decision.lock",
+        entityType: "decision",
+        entityId: id,
+        sessionId: context.sessions.current().id,
+      });
+      return service.get(id) as DecisionRecord;
+    };
+
+    context.effect(() =>
+      registerSessionCommand(context, "decision add", (invocation): CliResult => {
+        if (invocation.options["needs-owner"] === true) {
+          const command = 'maestro decision draft "<text>" --needs-owner';
+          throw new CliError(
+            "INVALID_ARGUMENT",
+            `decision add locks at once, and a decision that waits on the owner stays a draft; run: ${command}`,
+            { command },
+          );
+        }
+        const added = context.store.database
+          .transaction(() => lockDraft(insertDraft(invocation, false).id, null))
+          .immediate();
+        return { data: { decision: added }, text: format(added) };
+      }, {
+        description: "Record a decision and lock it in one step.",
+        flags: {
+          "--rationale": { description: "Record why this decision was made.", value: true },
+          "--dissent": { description: "Record the dissenting view.", value: true },
+          "--parent": { description: "Attach this decision beneath a parent decision.", value: true },
+          "--work": { description: "Link this decision to a work item.", value: true },
+          "--supersedes": { description: "Supersede a locked decision with this one.", value: true },
+          "--needs-owner": { hidden: true },
+        },
+        positionals: [{ name: "text", required: true }],
+      }),
+    );
+
     context.effect(() =>
       registerSessionCommand(
         context,
@@ -306,83 +467,13 @@ export const decisionPlugin: BuiltInPlugin = {
             };
           }
 
-          // A one-positional invocation naming an existing decision reads as an
-          // edit that forgot its replacement text, and the create path cannot
-          // tell it from a decision whose text is literally that id. It minted
-          // one titled d727 beside the decision it meant to edit (w562).
-          const named = getDecision(context, first);
-          if (named) {
-            const retire = named.state === "draft"
-              ? `maestro decision withdraw ${named.id} --reason "<why>" to drop it`
-              : `maestro decision draft "<text>" --supersedes ${named.id} to retire it`;
-            throw new CliError(
-              "MISSING_ARGUMENT",
-              `${named.id} already exists, so this reads as an edit with no replacement text; run: maestro decision draft ${named.id} "<replacement text>" to edit its text, maestro decision draft ${named.id} --rationale "<why>" to edit a field alone, or ${retire}`,
-              { field: "replacement text", id: named.id, state: named.state },
-            );
-          }
-
-          const text = first;
-          const rationale = option(invocation, "rationale");
-          const parentId = option(invocation, "parent");
-          const workId = option(invocation, "work");
-          const supersedesId = option(invocation, "supersedes");
-          if (parentId) requireDecision(context, parentId);
-          if (workId) {
-            const work = context.work as WorkService;
-            if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
-          }
-          if (supersedesId) {
-            requireSupersessionTarget(context, supersedesId);
-          }
-          const now = new Date().toISOString();
-          const transaction = context.store.database.transaction(() => {
-            if (parentId) requireDecision(context, parentId);
-            if (workId) {
-              const work = context.work as WorkService;
-              if (!work.get(workId)) throw new CliError("NOT_FOUND", `work not found: ${workId}`);
-            }
-            if (supersedesId) {
-              requireSupersessionTarget(context, supersedesId);
-            }
-            const id = context.store.nextPrefixedId("decisions", "d");
-            context.store.database
-              .query(
-                `INSERT INTO decisions
-                  (id, text, rationale, dissent, needs_owner, state, parent_id, work_id, supersedes_id, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
-              )
-              .run(
-                id,
-                text,
-                rationale,
-                suppliedDissent,
-                needsOwner ? 1 : 0,
-                parentId,
-                workId,
-                supersedesId,
-                now,
-                now,
-              );
-            context.log.append({
-              type: "decision.draft",
-              entityType: "decision",
-              entityId: id,
-              sessionId: context.sessions.current().id,
-              payload: {
-                text,
-                parentId,
-                workId,
-                supersedesId,
-              },
-            });
-            return service.get(id) as DecisionRecord;
-          });
-          const created = transaction.immediate();
+          const created = context.store.database
+            .transaction(() => insertDraft(invocation, needsOwner))
+            .immediate();
           return { data: { decision: created }, text: format(created) };
         },
         {
-          description: "Create or edit a draft decision.",
+          description: "Create or edit a draft that waits on the owner; the usual decision is recorded and locked in one step by decision add.",
           flags: {
             "--rationale": { description: "Record why this decision was made.", value: true },
             "--dissent": { description: "Record the dissenting view.", value: true },
@@ -415,7 +506,7 @@ export const decisionPlugin: BuiltInPlugin = {
           const decision = requireDecision(context, id);
           if (decision.state !== "draft") {
             if (decision.state === "locked") {
-              const command = `maestro decision draft "<replacement>" --supersedes ${id}`;
+              const command = `maestro decision add "<replacement>" --supersedes ${id}`;
               throw new CliError(
                 "INVALID_STATE",
                 `${id} is locked; locked decisions are retired with: ${command}`,
@@ -475,74 +566,9 @@ export const decisionPlugin: BuiltInPlugin = {
       registerSessionCommand(context, "decision lock", (invocation): CliResult => {
         const id = requiredPosition(invocation, 0, "decision id");
         const suppliedDissent = option(invocation, "dissent");
-        const lock = context.store.database.transaction(() => {
-          const decision = requireDecision(context, id);
-          if (decision.state !== "draft") {
-            throw new CliError("INVALID_STATE", `${id} is ${decision.state}`);
-          }
-          const updatedAt = new Date().toISOString();
-          if (decision.supersedesId) {
-            const predecessor = requireDecision(context, decision.supersedesId);
-            if (predecessor.state !== "locked") {
-              throw new CliError(
-                "SUPERSESSION_CONFLICT",
-                `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${predecessor.supersededById ?? "another decision"}`,
-                {
-                  id,
-                  predecessorId: predecessor.id,
-                  supersededById: predecessor.supersededById,
-                },
-              );
-            }
-            const superseded = context.store.database
-              .query(
-                `UPDATE decisions
-                 SET state = 'superseded', superseded_by_id = ?, updated_at = ?
-                 WHERE id = ? AND state = 'locked' AND superseded_by_id IS NULL`,
-              )
-              .run(id, updatedAt, predecessor.id);
-            if (superseded.changes === 0) {
-              const current = requireDecision(context, predecessor.id);
-              throw new CliError(
-                "SUPERSESSION_CONFLICT",
-                `${id} cannot supersede ${predecessor.id}; ${predecessor.id} is already superseded by ${current.supersededById ?? "another decision"}`,
-                {
-                  id,
-                  predecessorId: predecessor.id,
-                  supersededById: current.supersededById,
-                },
-              );
-            }
-            context.log.append({
-              type: "decision.supersede",
-              entityType: "decision",
-              entityId: id,
-              sessionId: context.sessions.current().id,
-              payload: { supersedesId: predecessor.id },
-            });
-          }
-          const locked = context.store.database
-            .query(
-              "UPDATE decisions SET state = 'locked', dissent = ?, updated_at = ? WHERE id = ? AND state = 'draft'",
-            )
-            .run(
-              suppliedDissent ?? decision.dissent,
-              updatedAt,
-              id,
-            );
-          if (locked.changes === 0) {
-            const current = requireDecision(context, id);
-            throw new CliError("INVALID_STATE", `${id} is ${current.state}`);
-          }
-          context.log.append({
-            type: "decision.lock",
-            entityType: "decision",
-            entityId: id,
-            sessionId: context.sessions.current().id,
-          });
-          return service.get(id) as DecisionRecord;
-        });
-        const locked = lock.immediate();
+        const locked = context.store.database
+          .transaction(() => lockDraft(id, suppliedDissent))
+          .immediate();
         return { data: { decision: locked }, text: format(locked) };
       }, {
         description: "Lock a draft decision against further edits.",

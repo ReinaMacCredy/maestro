@@ -68,8 +68,7 @@ approach away and try another.
    decision plus the throwaway artifact, not shippable code. Hand the chosen
    direction to `maestro recipe show feature` for the real build.
    - A verdict that settles a durable choice is recorded with
-     `maestro decision draft "<choice>" --rationale "<observed evidence and prototype path>" --work <id>`,
-     then `maestro decision lock <id>`.
+     `maestro decision add "<choice>" --rationale "<observed evidence and prototype path>" --work <id>`.
    - Only a decision-encoding fragment (a schema, a reducer, a type shape) may
      enter a locked decision or a bundle's SPEC.md.
    - Porting the prototype is production work, routed by tier

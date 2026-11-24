@@ -330,9 +330,8 @@ test("651 [lint] maestro-council: a short Lead-only procedure with the d94 unani
   expect(council).toContain("COMPROMISED");
   expect(council).toContain("CONCEDE | MAINTAIN | NARROW | REVERSE");
   expect(council).toContain("CLEAR | REVISE | STOP");
-  expect(council).toContain("maestro decision draft");
+  expect(council).toContain("maestro decision add");
   expect(council).toContain("--dissent");
-  expect(council).toContain("maestro decision lock");
   expect(council).not.toContain("model-routing.md");
   for (const gone of ["maestro graph", "maestro dispatch", "handback", "subagent_type", "maestro-<seat>", "--to peer-"]) {
     expect(council).not.toContain(gone);
