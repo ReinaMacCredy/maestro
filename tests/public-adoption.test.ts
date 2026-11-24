@@ -31,7 +31,8 @@ test("503 [lint] SECURITY.md names a private report channel and never a public o
 test("504 [lint] CONTRIBUTING.md states the toolchain and every gate CI enforces", async () => {
   const contributing = await repoFile("CONTRIBUTING.md");
   const ci = await repoFile(".github/workflows/ci.yml");
-  expect(contributing).toContain("bun test");
+  expect(contributing).toContain("bun scripts/test-shards.ts");
+  expect(contributing).toContain("bun scripts/differential.ts");
   expect(contributing).toContain("bunx tsc --noEmit");
   // Each named CI gate is a promise to a contributor; a renamed gate must not
   // leave the promise pointing at nothing.

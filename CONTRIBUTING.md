@@ -14,7 +14,7 @@ introduce Node-only APIs, a second package manager, or a build step.
 git clone https://github.com/ReinaMacCredy/maestro.git
 cd maestro
 bun install
-bun test
+bun scripts/test-shards.ts
 ```
 
 Install your checkout over your own machine with `bun bin/maestro.ts install`,
@@ -32,11 +32,12 @@ which points `maestro update` at that checkout.
 
 ## Before you open a pull request
 
-Run all four. CI runs the same checks and will fail on any of them.
+Run all of these. CI runs the same checks and will fail on any of them.
 
 ```sh
-bun test
+bun scripts/test-shards.ts
 bunx tsc --noEmit
+bun scripts/differential.ts
 ```
 
 Plus the three architectural gates, which are greps CI enforces:
