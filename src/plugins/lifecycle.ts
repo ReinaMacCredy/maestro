@@ -1,27 +1,26 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Cli, CliError, type CliOptions, type CliResult } from "../kernel/cli.ts";
-import type { BuiltInPlugin } from "../kernel/loader.ts";
+import { CliError, type CliResult } from "../kernel/cli.ts";
+import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 import { warnBeforeRuntimeActivation } from "./activation-scan.ts";
 import {
+  agentDirectories,
   codexHookTrustRecorded,
   forgetRepository,
   readGitHeadCommit,
-  removeSeatFiles,
+  retireAgentFiles,
   gitMainWorktree,
   stampRuntime,
   uninstallRepo,
 } from "./install.ts";
 import { readInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory, resolveHubRoom } from "./home.ts";
-import { installInRoomMessage, isRoom } from "./room.ts";
-import { skillNames } from "./skills.ts";
-import { readSeatToken, seatTokenPath } from "./slp-seats.ts";
-import { unlinkHerdrPlugin } from "./slp-plugin.ts";
+import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
+import { formatSkillSync, materializeSkills, skillNames } from "./skills.ts";
 import { readSourceRecord } from "./source-record.ts";
 
 interface CommandResult {
@@ -322,50 +321,21 @@ async function update(): Promise<CliResult> {
   const packageJson = JSON.parse(
     await readFile(join(source, "package.json"), "utf8"),
   ) as PackageJson;
-  // Same reason as the room templates below: skillNames and the skill sources
-  // live in the module this process imported before the swap, so materializing
-  // in-process writes the outgoing release's list and a skill the new commit
-  // adds needs a second update to appear.
-  let skillText = "";
-  if (newCommit) {
-    const synced = await command(runtime, [
-      process.execPath,
-      "-e",
-      `const skills = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "skills.ts")).href)});` +
-        `const sync = await skills.materializeSkills(${JSON.stringify(home)}, ${JSON.stringify(newCommit)});` +
-        `console.log(skills.formatSkillSync(sync));`,
-    ]);
-    if (synced.exitCode !== 0) {
-      throw new CliError(
-        "SKILL_SYNC_FAILED",
-        `runtime installed but the managed skills were not materialized: ${synced.stderr || `bun exited ${synced.exitCode}`}; run maestro update again`,
-        { fix: "run maestro update again" },
-      );
-    }
-    skillText = synced.stdout.trim();
-  }
-  // Refresh the generated room templates after an update; previously only
-  // install did this. The templates are compiled into room.ts, and this
-  // process imported it before the swap, so calling scaffoldRoom in-process
-  // writes the outgoing release's text and leaves the room reading doctrine
-  // one release behind. A query string does not help: Bun keys the module
-  // cache on the resolved path and ignores it. Only a fresh process loads the
-  // runtime that was just swapped in.
-  const scaffolded = await command(runtime, [
+  // Bun caches modules by path, so only a fresh process of the swapped runtime writes the new release's files.
+  const refreshed = await command(process.cwd(), [
     process.execPath,
-    "-e",
-    `const room = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "room.ts")).href)});` +
-      `await room.scaffoldRoom(${JSON.stringify(home)});` +
-      `const install = await import(${JSON.stringify(pathToFileURL(join(runtime, "src", "plugins", "install.ts")).href)});` +
-      `await install.syncSeatFiles(${JSON.stringify(home)}, ${JSON.stringify(resolve(process.cwd()))});`,
+    join(runtime, "bin", "maestro.ts"),
+    "update",
+    "--after-swap",
   ]);
-  if (scaffolded.exitCode !== 0) {
+  if (refreshed.exitCode !== 0) {
     throw new CliError(
-      "ROOM_SCAFFOLD_FAILED",
-      `runtime installed but the room templates were not refreshed: ${scaffolded.stderr || `bun exited ${scaffolded.exitCode}`}; run maestro update again`,
+      "UPDATE_REFRESH_FAILED",
+      `runtime installed but the generated files were not refreshed: ${refreshed.stderr || `bun exited ${refreshed.exitCode}`}; run maestro update again`,
       { fix: "run maestro update again" },
     );
   }
+  const skillText = refreshed.stdout.trim();
   return {
     data: { aheadOnly, noUpstream, oldCommit, newCommit, version: packageJson.version },
     text: (noUpstream
@@ -544,7 +514,22 @@ function legacyStoreCheck(storePath: string): string | null {
 }
 
 
-async function doctor(): Promise<CliResult> {
+function eventLines(results: unknown[]): string[] {
+  return results.flat().filter((line): line is string => typeof line === "string" && line !== "");
+}
+
+async function afterSwap(context: PluginContext): Promise<CliResult> {
+  const home = homeDirectory();
+  const stamp = await readInstallStamp(resolve(import.meta.dir, "..", ".."));
+  const lines: string[] = [];
+  if (stamp.status === "valid") lines.push(formatSkillSync(await materializeSkills(home, stamp.stamp.commit)));
+  await scaffoldRoom(home);
+  const retired = await retireAgentFiles(agentDirectories(home));
+  lines.push(...eventLines(await context.events.serial("update", { home, repo: resolve(process.cwd()), retired })));
+  return { data: { refreshed: true }, text: lines.join("\n") };
+}
+
+async function doctor(context: PluginContext): Promise<CliResult> {
   const home = homeDirectory();
   const repo = resolve(process.cwd());
   const runtime = runtimeRoot(home);
@@ -713,14 +698,7 @@ async function doctor(): Promise<CliResult> {
   if (room && !roomDenyHealthy) {
     issues.push({ component: "room", fix: roomFix, message: "room deny list is missing" });
   }
-  // d846: the token from claude setup-token lasts a year, so its write date
-  // is the only expiry signal maestro has.
-  if (readSeatToken(home)) {
-    const written = (await stat(seatTokenPath(home))).mtime.toISOString().slice(0, 10);
-    checks.push(`seat token: present (written ${written})`);
-  } else {
-    checks.push("seat token: missing");
-  }
+  checks.push(...eventLines(await context.events.serial("doctor", { home })));
 
   const storeLocation = resolveStoreLocation(repo);
   const storePath = storeLocation.path;
@@ -760,12 +738,12 @@ async function doctor(): Promise<CliResult> {
   return { data: { checks, healthy: true }, text: `doctor: healthy\n${checks.join("\n")}` };
 }
 
-async function uninstall(): Promise<CliResult> {
+async function uninstall(context: PluginContext): Promise<CliResult> {
   const repo = resolve(process.cwd());
   refuseRepositoryWiringInRoom(repo);
   const removed = await uninstallRepo(repo);
-  removed.push(...await removeSeatFiles(homeDirectory()));
-  removed.push(...await unlinkHerdrPlugin(homeDirectory()));
+  removed.push(...await retireAgentFiles(agentDirectories(homeDirectory())));
+  removed.push(...eventLines(await context.events.serial("uninstall", { home: homeDirectory() })));
   if (await forgetRepository(homeDirectory(), repo)) removed.push(`${repo} registry line`);
   return {
     data: { removed },
@@ -775,43 +753,29 @@ async function uninstall(): Promise<CliResult> {
   };
 }
 
-function registerLifecycle(cli: Cli): void {
-  cli.register("doctor", doctor, {
-    description: "Diagnose the machine runtime and current repository wiring read-only.",
-    mutates: false,
-  });
-  cli.register("uninstall", uninstall, {
-    description: "Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.",
-  });
-  cli.register("update", update, {
-    description: "Fast-forward the recorded source checkout and resync the runtime.",
-  });
-}
-
-export async function runLifecycleCommand(
-  args: string[],
-  cliOptions: CliOptions = {},
-): Promise<number | null> {
-  if (!new Set(["doctor", "uninstall", "update"]).has(args[0] ?? "")) return null;
-  const cli = new Cli(cliOptions);
-  registerLifecycle(cli);
-  return cli.dispatch(args);
-}
-
 export const lifecyclePlugin: BuiltInPlugin = {
   name: "lifecycle",
   apply(context) {
-    for (const [verb, handler, description] of [
-      ["doctor", doctor, "Diagnose the machine runtime and current repository wiring read-only."],
-      ["uninstall", uninstall, "Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>."],
-      ["update", update, "Fast-forward the recorded source checkout and resync the runtime."],
-    ] as const) {
-      context.effect(() =>
-        context.cli.register(verb, handler, {
-          description,
-          ...(verb === "doctor" ? { mutates: false } : {}),
-        })
-      );
-    }
+    context.effect(() =>
+      context.cli.register("doctor", () => doctor(context), {
+        description: "Diagnose the machine runtime and current repository wiring read-only.",
+        mutates: false,
+      })
+    );
+    context.effect(() =>
+      context.cli.register("uninstall", () => uninstall(context), {
+        description: "Remove Maestro-managed wiring from the current repository; to drop a repository from the Hub registry only, run maestro room forget <path>.",
+      })
+    );
+    context.effect(() =>
+      context.cli.register(
+        "update",
+        (invocation) => invocation.options["after-swap"] === true ? afterSwap(context) : update(),
+        {
+          description: "Fast-forward the recorded source checkout and resync the runtime.",
+          flags: { "--after-swap": { hidden: true } },
+        },
+      )
+    );
   },
 };

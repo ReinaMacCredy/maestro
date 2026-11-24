@@ -14,6 +14,7 @@ export interface Plugin {
 }
 
 export interface BuiltInPlugin extends Plugin {
+  applyDisabled?(context: PluginContext): void | Promise<void>;
   defaultDisabled?: boolean;
 }
 
@@ -81,6 +82,7 @@ export class Loader {
 
   async loadAll(): Promise<void> {
     const pending: BuiltInPlugin[] = [];
+    const disabled: BuiltInPlugin[] = [];
     for (const plugin of this.builtIns) {
       const entry = this.config.get(plugin.name);
       if (entry?.disabled ?? plugin.defaultDisabled ?? false) {
@@ -90,6 +92,7 @@ export class Loader {
           status: "disabled",
           requires: plugin.requires,
         });
+        disabled.push(plugin);
       } else {
         pending.push(plugin);
       }
@@ -120,6 +123,7 @@ export class Loader {
         });
       }
     }
+    for (const plugin of disabled) await this.applyDisabled(plugin);
   }
 
   async unload(name: string): Promise<void> {
@@ -173,6 +177,22 @@ export class Loader {
         diagnostic: error instanceof Error ? error.message : String(error),
         requires: plugin.requires,
       });
+    } finally {
+      this.currentPlugin = null;
+      this.context.cli.owner = null;
+    }
+  }
+
+  private async applyDisabled(plugin: BuiltInPlugin): Promise<void> {
+    if (!plugin.applyDisabled) return;
+    this.currentPlugin = plugin.name;
+    this.context.cli.owner = plugin.name;
+    try {
+      await plugin.applyDisabled(this.context);
+    } catch (error) {
+      await this.unload(plugin.name);
+      const record = this.records.find((candidate) => candidate.name === plugin.name);
+      if (record) record.diagnostic = error instanceof Error ? error.message : String(error);
     } finally {
       this.currentPlugin = null;
       this.context.cli.owner = null;

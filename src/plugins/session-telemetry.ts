@@ -61,3 +61,33 @@ export function relativeAge(iso: string, now = Date.now()): string {
   if (seconds < 86_400) return `${Math.round(seconds / 3600)}h`;
   return `${Math.round(seconds / 86_400)}d`;
 }
+
+const ancestorPaneIdPattern = /(?:^|\s)HERDR_PANE_ID=(\S+)/g;
+
+// Codex sometimes runs a role's shell commands without the HERDR_* variables
+// while its own process still carries them (lab g9, 2026-09-02); the pane
+// identity then comes from the nearest ancestor process that has it (d770).
+// macOS ps hides the environment of Apple platform binaries (zsh, sh), so the
+// walk passes through the shell and reads it from the agent process.
+export function currentPaneId(): string | undefined {
+  if (process.env.HERDR_PANE_ID) return process.env.HERDR_PANE_ID;
+  let pid = process.ppid;
+  for (let depth = 0; depth < 10 && Number.isInteger(pid) && pid > 1; depth += 1) {
+    let environment: ReturnType<typeof Bun.spawnSync>;
+    let parent: ReturnType<typeof Bun.spawnSync>;
+    try {
+      environment = Bun.spawnSync(["ps", "eww", "-o", "command=", "-p", String(pid)]);
+      parent = Bun.spawnSync(["ps", "-o", "ppid=", "-p", String(pid)]);
+    } catch {
+      return undefined;
+    }
+    if (environment.exitCode !== 0 || parent.exitCode !== 0) return undefined;
+    if (!environment.stdout || !parent.stdout) return undefined;
+    // ps prints the environment after the arguments; the last match is the env.
+    const matches = [...environment.stdout.toString().matchAll(ancestorPaneIdPattern)];
+    const match = matches.at(-1);
+    if (match) return match[1];
+    pid = Number(parent.stdout.toString().trim());
+  }
+  return undefined;
+}

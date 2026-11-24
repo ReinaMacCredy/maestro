@@ -1,7 +1,6 @@
 import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { slpDecisionResult } from "./slp-v2.ts";
 import type { WorkService } from "./work.ts";
 
 export interface DecisionRecord {
@@ -20,6 +19,12 @@ export interface DecisionRecord {
   supersededById: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DecisionSection {
+  data: Record<string, unknown>;
+  label: string;
+  text: string;
 }
 
 interface DecisionRow {
@@ -580,15 +585,13 @@ export const decisionPlugin: BuiltInPlugin = {
     );
 
     context.effect(() =>
-      context.cli.register("decision show", (invocation): CliResult => {
+      context.cli.register("decision show", async (invocation): Promise<CliResult> => {
         const id = requiredPosition(invocation, 0, "decision id");
         const decision = getDecision(context, id);
-        // w736 F4, l4: the ledger is not the only decision space in a store;
-        // the SLP rulings answer to the same dNNN ids, in the Hub room and in a
-        // project checkout alike. Both are printed rather than one hiding the
-        // other, each labelled with the store it was read from.
-        const slp = slpDecisionResult(context, id);
-        if (!decision && !slp) {
+        // w736 F4, l4: other decision spaces answer to the same dNNN ids; each is printed, none hides another.
+        const sections = (await context.events.serial<{ id: string }>("decision.show", { id }))
+          .filter((section): section is DecisionSection => typeof section === "object" && section !== null);
+        if (!decision && sections.length === 0) {
           throw new CliError("NOT_FOUND", `decision not found: ${id}`, { id });
         }
         const width = invocation.options.wide === true || !process.stdout.isTTY
@@ -600,14 +603,14 @@ export const decisionPlugin: BuiltInPlugin = {
         // that answered. One space answering prints exactly what it printed
         // before: a heading on a single answer would be noise about a collision
         // that is not happening.
-        const collided = decision !== null && slp !== null;
+        const collided = (decision ? 1 : 0) + sections.length > 1;
         return {
-          data: { decision, ...(slp ? { slpDecisions: slp.decisions } : {}) },
+          data: Object.assign({ decision }, ...sections.map((section) => section.data)),
           text: [
             ...(decision
               ? [`${collided ? `${id} in the decision ledger:\n` : ""}${formatDecision(decision, width)}`]
               : []),
-            ...(slp ? [`${collided ? `${id} in the SLP rulings:\n` : ""}${slp.text}`] : []),
+            ...sections.map((section) => `${collided ? `${id} in the ${section.label}:\n` : ""}${section.text}`),
           ].join("\n\n"),
         };
       }, {

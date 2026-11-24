@@ -19,9 +19,12 @@ export interface CommandOptions {
   rootDescription?: string;
 }
 
-export interface CliOptions {
+export interface CliGuard {
   beforeInvoke?: (command: string, mutates: boolean) => Promise<void> | void;
   beforeUnknown?: (args: readonly string[]) => Promise<void> | void;
+}
+
+export interface CliOptions extends CliGuard {
   helpFooter?: string;
   readOnlyAdmits?: (owner: string | null, mutates: boolean) => boolean;
 }
@@ -171,8 +174,17 @@ export function failureEnvelope(error: unknown): CliFailureEnvelope {
 export class Cli {
   private readonly commands = new Map<string, CommandDefinition>();
   private readonly extensions = new Map<string, Map<string, FlagDefinition>>();
+  private readonly guards: CliGuard[] = [];
 
   constructor(private readonly options: CliOptions = {}) {}
+
+  guard(guard: CliGuard): Disposer {
+    this.guards.push(guard);
+    return () => {
+      const index = this.guards.indexOf(guard);
+      if (index >= 0) this.guards.splice(index, 1);
+    };
+  }
 
   // The loader names the plugin being applied so help can say which verbs
   // observer mode admits; the answer depends on the owning plugin, not the verb.
@@ -317,7 +329,7 @@ export class Cli {
     }
     const found = this.findCommand(args);
     if (!found) {
-      await this.options.beforeUnknown?.(args);
+      for (const guard of [this.options, ...this.guards]) await guard.beforeUnknown?.(args);
       const { attempted, suggestions } = this.nearestCommands(args);
       throw new CliError(
         "UNKNOWN_VERB",
@@ -326,7 +338,9 @@ export class Cli {
       );
     }
     const { command, definition, consumed } = found;
-    await this.options.beforeInvoke?.(command, this.commandMutates(command) ?? true);
+    for (const guard of [this.options, ...this.guards]) {
+      await guard.beforeInvoke?.(command, definition.mutates);
+    }
     const remaining = args.slice(consumed);
     const jsonIndex = remaining.indexOf("--json");
     const wantsJson = jsonIndex >= 0;

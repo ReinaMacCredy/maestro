@@ -6,15 +6,18 @@ import {
   CliError,
   requiredPosition,
   stringOption,
+  type CliGuard,
   type CliInvocation,
-  type CliOptions,
   type CliResult,
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { Store, resolveStoreLocation, tableExists } from "../kernel/store.ts";
 import { resolveHomeDirectory } from "./home.ts";
 import { isRoom } from "./room.ts";
-import { resolveSeat, seatDigest, seatFileDirectories, seatNames, type Seat } from "./slp-seats.ts";
+import type { DecisionSection } from "./decision.ts";
+import type { InstallEvent } from "./install.ts";
+import { installMachineFiles, removeMachineFiles, seatTokenCheck, syncSeatFiles } from "./slp-plugin.ts";
+import { resolveSeat, seatDigest, seatFileDirectories, seatNames, writeSeatToken, type Seat } from "./slp-seats.ts";
 import {
   buildSlpTeamPlan,
   HerdrSlpRuntime,
@@ -28,7 +31,7 @@ import {
   type SlpTeamPlan,
 } from "./slp-runtime.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { compactLine, compactsForPane } from "./session-telemetry.ts";
+import { compactLine, compactsForPane, currentPaneId } from "./session-telemetry.ts";
 import {
   openRuntimePane,
   recordRuntimePane,
@@ -182,39 +185,32 @@ function canonicalCheckoutRoot(cwd: string): string {
   return realpathSync.native(resolveStoreLocation(cwd).root);
 }
 
-export function slpV2CliOptions(cwd = process.cwd()): CliOptions {
+function paneGuard(store: Store, cwd = process.cwd()): CliGuard {
   return {
     beforeInvoke(command) {
       const replacement = [...nonTeamVerbs.entries()]
         .filter(([verb]) => command === verb || command.startsWith(`${verb} `))
         .sort(([left], [right]) => right.length - left.length)[0]?.[1];
       if (!replacement) return;
-      const location = resolveStoreLocation(cwd);
-      if (!existsSync(location.path)) return;
+      if (!tableExists(store, "slp_local_teams") || !tableExists(store, "slp_local_roles")) return;
       const paneId = currentPaneId();
       if (!paneId) return;
-      const store = new Store(location.path, { readonly: true });
-      try {
-        if (!tableExists(store, "slp_local_teams") || !tableExists(store, "slp_local_roles")) return;
-        const activeRole = store.database
-          .query<{ present: number }, [string, string]>(
-            `SELECT 1 AS present
-             FROM slp_local_teams AS team
-             JOIN slp_local_roles AS role
-               ON role.team_id = team.team_id AND role.generation = team.generation
-             WHERE team.project_path = ? AND team.state = 'RUNNING' AND role.pane_id = ?
-             LIMIT 1`,
-          )
-          .get(canonicalCheckoutRoot(cwd), paneId);
-        if (activeRole) {
-          throw new CliError(
-            "SLP_V2_CUTOVER",
-            `${command} was retired by SLP v2; use maestro ${replacement}`,
-            { command, replacement },
-          );
-        }
-      } finally {
-        store.close();
+      const activeRole = store.database
+        .query<{ present: number }, [string, string]>(
+          `SELECT 1 AS present
+           FROM slp_local_teams AS team
+           JOIN slp_local_roles AS role
+             ON role.team_id = team.team_id AND role.generation = team.generation
+           WHERE team.project_path = ? AND team.state = 'RUNNING' AND role.pane_id = ?
+           LIMIT 1`,
+        )
+        .get(canonicalCheckoutRoot(cwd), paneId);
+      if (activeRole) {
+        throw new CliError(
+          "SLP_V2_CUTOVER",
+          `${command} was retired by SLP v2; use maestro ${replacement}`,
+          { command, replacement },
+        );
       }
     },
   };
@@ -1702,36 +1698,6 @@ function requireActiveOrLegacy(context: PluginContext): ActiveLocalTeam | null {
   return active;
 }
 
-const ancestorPaneIdPattern = /(?:^|\s)HERDR_PANE_ID=(\S+)/g;
-
-// Codex sometimes runs a role's shell commands without the HERDR_* variables
-// while its own process still carries them (lab g9, 2026-09-02); the pane
-// identity then comes from the nearest ancestor process that has it (d770).
-// macOS ps hides the environment of Apple platform binaries (zsh, sh), so the
-// walk passes through the shell and reads it from the agent process.
-export function currentPaneId(): string | undefined {
-  if (process.env.HERDR_PANE_ID) return process.env.HERDR_PANE_ID;
-  let pid = process.ppid;
-  for (let depth = 0; depth < 10 && Number.isInteger(pid) && pid > 1; depth += 1) {
-    let environment: ReturnType<typeof Bun.spawnSync>;
-    let parent: ReturnType<typeof Bun.spawnSync>;
-    try {
-      environment = Bun.spawnSync(["ps", "eww", "-o", "command=", "-p", String(pid)]);
-      parent = Bun.spawnSync(["ps", "-o", "ppid=", "-p", String(pid)]);
-    } catch {
-      return undefined;
-    }
-    if (environment.exitCode !== 0 || parent.exitCode !== 0) return undefined;
-    if (!environment.stdout || !parent.stdout) return undefined;
-    // ps prints the environment after the arguments; the last match is the env.
-    const matches = [...environment.stdout.toString().matchAll(ancestorPaneIdPattern)];
-    const match = matches.at(-1);
-    if (match) return match[1];
-    pid = Number(parent.stdout.toString().trim());
-  }
-  return undefined;
-}
-
 function requireSlpActor(context: PluginContext, allowed: readonly SlpRole[]): SlpActor {
   const team = activeLocalTeam(context);
   if (!team) throw new CliError("NO_ACTIVE_TEAM", "no running SLP team is bound to this workspace");
@@ -2043,7 +2009,7 @@ function refuseDiscardedWorkAddOptions(invocation: CliInvocation): void {
   );
 }
 
-export async function maybeHandleSlpWorkAdd(
+async function maybeHandleSlpWorkAdd(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
@@ -2338,7 +2304,7 @@ export async function maybeHandleSlpWorkAdd(
   };
 }
 
-export async function maybeHandleSlpWorkNote(
+async function maybeHandleSlpWorkNote(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
@@ -4092,7 +4058,7 @@ function decisionData(row: SlpDecisionRow, store: "hub" | "project"): SlpDecisio
 // space is read from whichever store the command runs in, and the label names
 // that store rather than the seat that authored the row, which is the label
 // l4 found pointing the wrong way.
-export function slpDecisionResult(
+function slpDecisionResult(
   context: PluginContext,
   id: string,
 ): { decisions: unknown[]; text: string } | null {
@@ -4284,7 +4250,7 @@ async function readWorkDetail(
   };
 }
 
-export async function maybeHandleSlpStatus(
+async function maybeHandleSlpStatus(
   context: PluginContext,
   invocation: CliInvocation,
 ): Promise<CliResult | null> {
@@ -4570,10 +4536,112 @@ function teamStatusText(
   ].join("\n");
 }
 
+const workAddFlags = {
+  "--to": {
+    description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
+    value: true,
+  },
+  "--model": {
+    description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the peer seat file's model); passed through unvalidated (room d128), so name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
+    value: true,
+  },
+  "--fresh": {
+    description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.",
+  },
+};
+
+const workNoteFlags = {
+  "--blocked": {
+    description: "Flag the note as blocked and push it one SLP seat up.",
+  },
+  "--owner": {
+    description: "Record an owner walk-in typed into this seat's pane (room d123): provenance only, pushed one SLP seat up, never a blocked flag.",
+  },
+  "--rework": {
+    description: "Grant the current SLP return revision one reviewer-authorized retake.",
+  },
+};
+
+function registerCoreSeams(context: PluginContext): void {
+  context.effect(() => context.cli.guard(paneGuard(context.store)));
+  for (const [flag, definition] of Object.entries(workAddFlags)) {
+    context.effect(() => context.cli.registerFlag("work add", flag, definition));
+  }
+  for (const [flag, definition] of Object.entries(workNoteFlags)) {
+    context.effect(() => context.cli.registerFlag("work note", flag, definition));
+  }
+  context.effect(() =>
+    context.cli.registerFlag("install", "--seat-token", {
+      description: "Read one claude setup-token token from stdin and store it for every Claude seat (d846).",
+    })
+  );
+  context.effect(() =>
+    context.events.on<CliInvocation, CliResult>("work.add.invoke", async (invocation, next) => {
+      if (invocation.options.start === true && invocation.options.to !== undefined) {
+        throw new CliError("INVALID_OPTION", "--start is not available for SLP work add --to <peer>; the Peer takes its card with work take");
+      }
+      const slp = await maybeHandleSlpWorkAdd(context, invocation);
+      if (slp) return slp;
+      // Hub finding F1 (g7, w734): an option only a Lead's Peer add can honour refuses before any store write.
+      if (invocation.options.model !== undefined) {
+        throw new CliError("INVALID_OPTION", "--model is available only for SLP work add --to <peer>");
+      }
+      if (invocation.options.fresh !== undefined) {
+        throw new CliError("INVALID_OPTION", "--fresh is available only for SLP work add --to <peer>");
+      }
+      return next();
+    })
+  );
+  context.effect(() =>
+    context.events.on<CliInvocation, CliResult>("work.note.invoke", async (invocation, next) => {
+      const slp = await maybeHandleSlpWorkNote(context, invocation);
+      if (slp) return slp;
+      if (invocation.options.rework === true) {
+        throw new CliError("INVALID_OPTION", "--rework is available only for SLP RETURNED work");
+      }
+      if (invocation.options.blocked === true) {
+        throw new CliError("INVALID_OPTION", "--blocked is available only for SLP work");
+      }
+      if (invocation.options.owner === true) {
+        throw new CliError("INVALID_OPTION", "--owner is available only for SLP work held or reviewed by a seat");
+      }
+      return next();
+    })
+  );
+  context.effect(() =>
+    context.events.on<CliInvocation, CliResult>("status.invoke", async (invocation, next) =>
+      (await maybeHandleSlpStatus(context, invocation)) ?? next()
+    )
+  );
+  context.effect(() =>
+    context.events.on<{ id: string }, DecisionSection | null>("decision.show", ({ id }) => {
+      const slp = slpDecisionResult(context, id);
+      return slp ? { data: { slpDecisions: slp.decisions }, label: "SLP rulings", text: slp.text } : null;
+    })
+  );
+  context.effect(() =>
+    context.events.on<{ home: string; invocation: CliInvocation }>("install.begin", async ({ home, invocation }) => {
+      // The re-executed install inherits the flag, but the token is already written and stdin is spent.
+      if (invocation.options["seat-token"] !== true || process.env.MAESTRO_INSTALL_REEXEC === "1") return;
+      await writeSeatToken(home, await Bun.stdin.text());
+    })
+  );
+  context.effect(() => context.events.on<InstallEvent, string>("install", (event) => installMachineFiles(event)));
+  context.effect(() =>
+    context.events.on<{ home: string; repo: string; retired: string[] }, string>("update", async ({ home, repo, retired }) => {
+      await syncSeatFiles(home, repo, retired);
+      return "";
+    })
+  );
+  context.effect(() => context.events.on<{ home: string }, string[]>("uninstall", ({ home }) => removeMachineFiles(home)));
+  context.effect(() => context.events.on<{ home: string }, string>("doctor", ({ home }) => seatTokenCheck(home)));
+}
+
 export const slpV2Plugin: BuiltInPlugin = {
   name: "slp-v2",
   apply(context) {
     const runtime = new HerdrSlpRuntime();
+    registerCoreSeams(context);
     context.effect(() =>
       registerSessionCommand(
         context,

@@ -1,7 +1,19 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HerdrClient, SlpRuntimeError } from "./herdr-client.ts";
+import { retireAgentFiles, type InstallEvent } from "./install.ts";
+import {
+  formatSeatSync,
+  materializeSeats,
+  removeSeatConfig,
+  seatDirectory,
+  seatLaunchPath,
+  readSeatToken,
+  seatNames,
+  seatTokenPath,
+  type SeatSync,
+} from "./slp-seats.ts";
 
 // Hub d96: maestro ships a Herdr plugin manifest; install renders it with the
 // installed binary and links it over the socket, uninstall unlinks it. Every
@@ -89,4 +101,56 @@ export async function unlinkHerdrPlugin(
     removed.push(manifest);
   }
   return removed;
+}
+
+function seatAgentDirectories(home: string): string[] {
+  return [join(home, ".codex"), ...seatNames.map((seat) => join(seatDirectory(home, seat), "agents"))];
+}
+
+function seatLaunchFiles(home: string): string[] {
+  return seatNames.flatMap((seat) => [seatLaunchPath(home, "claude", seat), seatLaunchPath(home, "codex", seat)]);
+}
+
+export async function syncSeatFiles(home: string, repo: string, retired: string[]): Promise<SeatSync> {
+  const seats = await materializeSeats(home, repo);
+  retired.push(...await retireAgentFiles(seatAgentDirectories(home), new Set(seats.launchFiles)));
+  return seats;
+}
+
+export async function installMachineFiles(event: InstallEvent): Promise<string> {
+  const seats = await syncSeatFiles(event.home, event.repo, event.retired);
+  const link = await linkHerdrPlugin(event.home, event.binary, event.version);
+  return [
+    formatSeatSync(seats, event.home),
+    `herdr plugin: ${link.status === "unreachable" ? link.warning : `${link.status} at ${link.directory}`}`,
+    ...(seats.seatToken === "missing"
+      ? [`warning: no seat token at ${seatTokenPath(event.home)}, so Claude seats cannot log in; run: claude setup-token | maestro install --seat-token`]
+      : []),
+  ].join("\n");
+}
+
+export async function removeMachineFiles(home: string): Promise<string[]> {
+  return [
+    ...await retireAgentFiles(seatAgentDirectories(home)),
+    ...await removeSeatConfig(home),
+    ...await unlinkHerdrPlugin(home),
+  ];
+}
+
+// The seat token and ~/maestro/profiles are the owner's, so they stay.
+export async function removeStaleMachineFiles(home: string): Promise<string[]> {
+  const launchFiles = seatLaunchFiles(home).filter((path) => existsSync(path));
+  if (launchFiles.length === 0 && !existsSync(herdrPluginManifestPath(home))) return [];
+  const removed = existsSync(herdrPluginManifestPath(home)) ? await unlinkHerdrPlugin(home) : [];
+  for (const path of launchFiles) {
+    await rm(path, { force: true });
+    removed.push(path);
+  }
+  return [...removed, ...await retireAgentFiles(seatAgentDirectories(home))];
+}
+
+// d846: the token from claude setup-token lasts a year, so its write date is the only expiry signal maestro has.
+export async function seatTokenCheck(home: string): Promise<string> {
+  if (!readSeatToken(home)) return "seat token: missing";
+  return `seat token: present (written ${(await stat(seatTokenPath(home))).mtime.toISOString().slice(0, 10)})`;
 }

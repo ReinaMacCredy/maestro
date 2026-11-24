@@ -14,7 +14,6 @@ import { resolveStoreLocation } from "../kernel/store.ts";
 import type { DecisionService } from "./decision.ts";
 import { modifiedTrackedFiles, namesCommit } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { maybeHandleSlpWorkAdd, maybeHandleSlpWorkNote } from "./slp-v2.ts";
 
 export interface WorkRecord {
   id: string;
@@ -434,108 +433,7 @@ export const workPlugin: BuiltInPlugin = {
               "--mode is not an option (room d126): items carry no collaboration tag, and a fork is always raised with work note --blocked",
             );
           }
-          const start = invocation.options.start === true;
-          if (start && invocation.options.to !== undefined) {
-            throw new CliError("INVALID_OPTION", "--start is not available for SLP work add --to <peer>; the Peer takes its card with work take");
-          }
-          const slp = await maybeHandleSlpWorkAdd(context, invocation);
-          if (slp) return slp;
-          // Hub finding F1 (g7, w734): every option that only a Lead's Peer
-          // add can honour refuses the same way here, before any store write.
-          // --model and --fresh used to fall through in silence, so an add
-          // outside SLP looked as if it had carried them.
-          if (invocation.options.model !== undefined) {
-            throw new CliError("INVALID_OPTION", "--model is available only for SLP work add --to <peer>");
-          }
-          if (invocation.options.fresh !== undefined) {
-            throw new CliError("INVALID_OPTION", "--fresh is available only for SLP work add --to <peer>");
-          }
-          const title = requiredPosition(invocation, 0, "work title");
-          const parentId = stringOption(invocation, "parent") ?? null;
-          const blockers = stringOptions(invocation, "blocked-by");
-          for (const blocker of blockers) requireWork(context, blocker);
-          let id = "";
-          const now = new Date().toISOString();
-          const kind = stringOption(invocation, "kind") ?? "task";
-          const acceptance = stringOption(invocation, "acceptance") ?? null;
-          const sessionId = context.sessions.current().id;
-          const gate = await context.events.waterfall<WorkAddGateInput, GateResult>(
-            "work.add",
-            { kind, parentId, sessionId, title },
-            async () => ({ blocked: false }),
-          );
-          blockIfNeeded(gate);
-          context.store.database.exec("BEGIN IMMEDIATE");
-          try {
-            if (parentId) {
-              const parent = requireWork(context, parentId);
-              if (parent.state === "done" || parent.state === "cancelled") {
-                throw new CliError(
-                  "INVALID_STATE",
-                  `${parentId} is ${parent.state} and cannot accept children; add new top-level work instead: maestro work add "<title>"`,
-                );
-              }
-            }
-            id = context.store.nextCountedId("w", ["work", "slp_work"]);
-            context.sessions.record("work.add");
-            context.store.database
-              .query(
-                `INSERT INTO work
-                  (id, title, kind, state, parent_id, acceptance, created_at, updated_at)
-                 VALUES (?, ?, ?, 'open', ?, ?, ?, ?)`,
-              )
-              .run(id, title, kind, parentId, acceptance, now, now);
-            const insertBlocker = context.store.database.query(
-              "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
-            );
-            for (const blocker of blockers) insertBlocker.run(id, blocker);
-            if (start) {
-              const unresolved = unresolvedBlockers(context, id);
-              if (unresolved.length > 0) {
-                const details = blockerDetails(context, id, unresolved, sessionId);
-                throw new CliError("BLOCKED", details.reason, {
-                  blockers: details.blockers,
-                  command: details.command,
-                });
-              }
-              blockIfNeeded(
-                await context.events.waterfall<WorkGateInput, GateResult>(
-                  "work.start",
-                  { work: requireWork(context, id), children: [], sessionId },
-                  async () => ({ blocked: false }),
-                ),
-              );
-              context.sessions.record("work.start");
-              context.store.database
-                .query("UPDATE work SET state = 'active', held_by = ?, updated_at = ? WHERE id = ?")
-                .run(sessionId, now, id);
-            }
-            context.store.database.exec("COMMIT");
-          } catch (error) {
-            try {
-              context.store.database.exec("ROLLBACK");
-            } catch {}
-            throw error;
-          }
-          context.log.append({
-            type: "work.add",
-            entityType: "work",
-            entityId: id,
-            sessionId,
-            payload: { title, kind, parentId, acceptance, blockers },
-          });
-          if (!start) return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
-          context.log.append({
-            type: "work.start",
-            entityType: "work",
-            entityId: id,
-            sessionId,
-            payload: { holder: sessionId },
-          });
-          return {
-            data: { work: service.get(id) },
-            text: `${id} added: ${title}\n${id} started by ${sessionId}`,
-          };
+          return context.events.waterfall<CliInvocation, CliResult>("work.add.invoke", invocation, addWork);
         },
         {
           description: "Add a tracked work item.",
@@ -553,17 +451,6 @@ export const workPlugin: BuiltInPlugin = {
             },
             "--acceptance": { description: "Record the observable acceptance condition.", value: true },
             "--start": { description: "Also start the new item, claiming its lease for this session, as work start does." },
-            "--to": {
-              description: "Assign SLP work to a Peer; without it the Lead opens an item for itself.",
-              value: true,
-            },
-            "--model": {
-              description: "Lead only: launch the --to Peer with this model on its launch line (default: the generation's --peer-model, else the peer seat file's model); passed through unvalidated (room d128), so name a model the peer seat's harness accepts, or its pane dies on the harness's own error.",
-              value: true,
-            },
-            "--fresh": {
-              description: "Lead only: reset a reused --to Peer pane to a fresh harness context (Claude /clear, Codex /new), proven by a new harness session, and re-check READY before the OPEN push; a no-op on a pane being opened, refused while the Peer holds ACTIVE work or when the reset does not take.",
-            },
             "--mode": { hidden: true, value: true },
           },
           positionals: [{ name: "title", required: true }],
@@ -571,6 +458,96 @@ export const workPlugin: BuiltInPlugin = {
         },
       ),
     );
+
+    async function addWork(invocation: CliInvocation): Promise<CliResult> {
+      const start = invocation.options.start === true;
+      const title = requiredPosition(invocation, 0, "work title");
+      const parentId = stringOption(invocation, "parent") ?? null;
+      const blockers = stringOptions(invocation, "blocked-by");
+      for (const blocker of blockers) requireWork(context, blocker);
+      let id = "";
+      const now = new Date().toISOString();
+      const kind = stringOption(invocation, "kind") ?? "task";
+      const acceptance = stringOption(invocation, "acceptance") ?? null;
+      const sessionId = context.sessions.current().id;
+      const gate = await context.events.waterfall<WorkAddGateInput, GateResult>(
+        "work.add",
+        { kind, parentId, sessionId, title },
+        async () => ({ blocked: false }),
+      );
+      blockIfNeeded(gate);
+      context.store.database.exec("BEGIN IMMEDIATE");
+      try {
+        if (parentId) {
+          const parent = requireWork(context, parentId);
+          if (parent.state === "done" || parent.state === "cancelled") {
+            throw new CliError(
+              "INVALID_STATE",
+              `${parentId} is ${parent.state} and cannot accept children; add new top-level work instead: maestro work add "<title>"`,
+            );
+          }
+        }
+        id = context.store.nextCountedId("w", ["work", "slp_work"]);
+        context.sessions.record("work.add");
+        context.store.database
+          .query(
+            `INSERT INTO work
+              (id, title, kind, state, parent_id, acceptance, created_at, updated_at)
+             VALUES (?, ?, ?, 'open', ?, ?, ?, ?)`,
+          )
+          .run(id, title, kind, parentId, acceptance, now, now);
+        const insertBlocker = context.store.database.query(
+          "INSERT INTO work_blockers (work_id, blocker_id) VALUES (?, ?)",
+        );
+        for (const blocker of blockers) insertBlocker.run(id, blocker);
+        if (start) {
+          const unresolved = unresolvedBlockers(context, id);
+          if (unresolved.length > 0) {
+            const details = blockerDetails(context, id, unresolved, sessionId);
+            throw new CliError("BLOCKED", details.reason, {
+              blockers: details.blockers,
+              command: details.command,
+            });
+          }
+          blockIfNeeded(
+            await context.events.waterfall<WorkGateInput, GateResult>(
+              "work.start",
+              { work: requireWork(context, id), children: [], sessionId },
+              async () => ({ blocked: false }),
+            ),
+          );
+          context.sessions.record("work.start");
+          context.store.database
+            .query("UPDATE work SET state = 'active', held_by = ?, updated_at = ? WHERE id = ?")
+            .run(sessionId, now, id);
+        }
+        context.store.database.exec("COMMIT");
+      } catch (error) {
+        try {
+          context.store.database.exec("ROLLBACK");
+        } catch {}
+        throw error;
+      }
+      context.log.append({
+        type: "work.add",
+        entityType: "work",
+        entityId: id,
+        sessionId,
+        payload: { title, kind, parentId, acceptance, blockers },
+      });
+      if (!start) return { data: { work: service.get(id) }, text: `${id} added: ${title}` };
+      context.log.append({
+        type: "work.start",
+        entityType: "work",
+        entityId: id,
+        sessionId,
+        payload: { holder: sessionId },
+      });
+      return {
+        data: { work: service.get(id) },
+        text: `${id} added: ${title}\n${id} started by ${sessionId}`,
+      };
+    }
 
     context.effect(() =>
       registerSessionCommand(context, "work start", async (invocation): Promise<CliResult> => {
@@ -782,47 +759,13 @@ export const workPlugin: BuiltInPlugin = {
           if (!existsSync(file)) throw new CliError("NOT_FOUND", `note file not found: ${file}`, { file });
           invocation.positionals[1] = readFileSync(file, "utf8").trimEnd();
         }
-        const slp = await maybeHandleSlpWorkNote(context, invocation);
-        if (slp) return slp;
-        if (invocation.options.rework === true) {
-          throw new CliError("INVALID_OPTION", "--rework is available only for SLP RETURNED work");
-        }
-        if (invocation.options.blocked === true) {
-          throw new CliError("INVALID_OPTION", "--blocked is available only for SLP work");
-        }
-        if (invocation.options.owner === true) {
-          throw new CliError("INVALID_OPTION", "--owner is available only for SLP work held or reviewed by a seat");
-        }
-        const id = requiredPosition(invocation, 0, "work id");
-        const text = requiredPosition(invocation, 1, "note text");
-        requireWork(context, id);
-        const createdAt = new Date().toISOString();
-        context.store.database
-          .query("INSERT INTO work_notes (work_id, text, created_at) VALUES (?, ?, ?)")
-          .run(id, text, createdAt);
-        context.log.append({
-          type: "work.note",
-          entityType: "work",
-          entityId: id,
-          sessionId: context.sessions.current().id,
-          payload: { text },
-        });
-        return { data: { id, text }, text: `${id} note: ${text}` };
+        return context.events.waterfall<CliInvocation, CliResult>("work.note.invoke", invocation, noteWork);
       }, {
         description: "Append a note to a work item.",
         flags: {
-          "--blocked": {
-            description: "Flag the note as blocked and push it one SLP seat up.",
-          },
           "--file": {
             description: "Read the note body from this file instead of the text argument.",
             value: true,
-          },
-          "--owner": {
-            description: "Record an owner walk-in typed into this seat's pane (room d123): provenance only, pushed one SLP seat up, never a blocked flag.",
-          },
-          "--rework": {
-            description: "Grant the current SLP return revision one reviewer-authorized retake.",
           },
         },
         positionals: [
@@ -831,6 +774,24 @@ export const workPlugin: BuiltInPlugin = {
         ],
       }),
     );
+
+    function noteWork(invocation: CliInvocation): CliResult {
+      const id = requiredPosition(invocation, 0, "work id");
+      const text = requiredPosition(invocation, 1, "note text");
+      requireWork(context, id);
+      const createdAt = new Date().toISOString();
+      context.store.database
+        .query("INSERT INTO work_notes (work_id, text, created_at) VALUES (?, ?, ?)")
+        .run(id, text, createdAt);
+      context.log.append({
+        type: "work.note",
+        entityType: "work",
+        entityId: id,
+        sessionId: context.sessions.current().id,
+        payload: { text },
+      });
+      return { data: { id, text }, text: `${id} note: ${text}` };
+    }
 
     context.effect(() =>
       registerSessionCommand(

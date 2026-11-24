@@ -21,10 +21,8 @@ import { readInstallStamp, writeInstallStamp } from "./install-stamp.ts";
 import { resolveHomeDirectory, samePath } from "./home.ts";
 import { installInRoomMessage, isRoom, scaffoldRoom } from "./room.ts";
 import { formatSkillSync, materializeSkills } from "./skills.ts";
-import { formatSeatSync, materializeSeats, removeSeatConfig, seatDirectory, seatNames, seatTokenPath, writeSeatToken } from "./slp-seats.ts";
 import { modifiedTrackedFiles } from "./git-status.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { linkHerdrPlugin } from "./slp-plugin.ts";
 import { sourceRecordPath, writeSourceRecord } from "./source-record.ts";
 
 interface PluginEntry {
@@ -62,6 +60,14 @@ interface RoomClaudeSettings extends HookConfig {
 
 interface PackageJson {
   name?: string;
+  version: string;
+}
+
+export interface InstallEvent {
+  binary: string;
+  home: string;
+  repo: string;
+  retired: string[];
   version: string;
 }
 
@@ -514,13 +520,7 @@ function renderedByMaestro(name: string, text: string): boolean {
 }
 
 // d906: a maestro- file without the lines the old renderer wrote is the owner's.
-async function retireAgentFiles(home: string, keep: ReadonlySet<string>): Promise<string[]> {
-  const directories = [
-    join(home, ".claude", "agents"),
-    join(home, ".codex", "agents"),
-    join(home, ".codex"),
-    ...seatNames.map((seat) => join(seatDirectory(home, seat), "agents")),
-  ];
+export async function retireAgentFiles(directories: readonly string[], keep: ReadonlySet<string> = new Set()): Promise<string[]> {
   const retired: string[] = [];
   for (const directory of directories) {
     if (!existsSync(directory)) continue;
@@ -535,18 +535,14 @@ async function retireAgentFiles(home: string, keep: ReadonlySet<string>): Promis
   return retired;
 }
 
-export async function syncSeatFiles(home: string, repo: string): Promise<{ seatTokenMissing: boolean; text: string }> {
-  const seats = await materializeSeats(home, repo);
-  const retired = await retireAgentFiles(home, new Set(seats.launchFiles));
-  return {
-    seatTokenMissing: seats.seatToken === "missing",
-    text: formatSeatSync(seats, home) +
-      (retired.length > 0 ? `\nretired ${retired.length} maestro agent files an earlier install wrote; maestro ships no sub-agent definitions` : ""),
-  };
+export function agentDirectories(home: string): string[] {
+  return [join(home, ".claude", "agents"), join(home, ".codex", "agents")];
 }
 
-export async function removeSeatFiles(home: string): Promise<string[]> {
-  return [...await retireAgentFiles(home, new Set()), ...await removeSeatConfig(home)];
+export function formatRetired(retired: readonly string[]): string {
+  return retired.length > 0
+    ? `retired ${retired.length} maestro agent files an earlier install wrote; maestro ships no sub-agent definitions`
+    : "";
 }
 
 export async function syncRuntime(sourceRoot: string, runtimeRoot: string): Promise<void> {
@@ -690,7 +686,7 @@ export const installPlugin: BuiltInPlugin = {
         }
         const repo = process.cwd();
         const home = resolveHomeDirectory();
-        if (invocation.options["seat-token"] === true) await writeSeatToken(home, await Bun.stdin.text());
+        await context.events.emit("install.begin", { home, invocation });
         const existingSourceRecord = sourceRecordPath(home);
         if (existsSync(existingSourceRecord)) {
           await chmod(dirname(existingSourceRecord), 0o700);
@@ -743,9 +739,7 @@ export const installPlugin: BuiltInPlugin = {
             stampBefore.stamp.commit !== stampAfter.stamp.commit
           ) {
             const child = Bun.spawnSync(
-              // The token file is already written; the child must not read
-              // stdin a second time.
-              [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2).filter((argument) => argument !== "--seat-token")],
+              [process.execPath, join(runtimeRoot, "bin", "maestro.ts"), ...process.argv.slice(2)],
               {
                 cwd: repo,
                 env: { ...process.env, MAESTRO_INSTALL_REEXEC: "1" },
@@ -795,8 +789,16 @@ export const installPlugin: BuiltInPlugin = {
         await rm(observeShim, { force: true });
         await rm(sensorShim, { force: true });
         const room = await scaffoldRoom(home);
-        const seatSync = await syncSeatFiles(home, repo);
-        const pluginLink = await linkHerdrPlugin(home, shim, await readSourceVersion(sourceRoot));
+        const installed: InstallEvent = {
+          binary: shim,
+          home,
+          repo,
+          retired: await retireAgentFiles(agentDirectories(home)),
+          version: await readSourceVersion(sourceRoot),
+        };
+        const pluginLines = (await context.events.serial("install", installed))
+          .filter((line): line is string => typeof line === "string" && line !== "");
+        const retired = formatRetired(installed.retired);
         await writeHarnessWiring(room);
         await writeRoomDenySettings(room);
         const roomCodexHookTrustRecorded = await codexHookTrustRecorded(room, home);
@@ -820,17 +822,14 @@ export const installPlugin: BuiltInPlugin = {
               ? `\nalso wrote ${join(mainWorktree, ".codex")} (Codex reads project hooks from the git main worktree)`
               : "") +
             (skillSync ? `\n${formatSkillSync(skillSync)}` : "") +
-            `\n${seatSync.text}` +
-            `\nherdr plugin: ${pluginLink.status === "unreachable" ? pluginLink.warning : `${pluginLink.status} at ${pluginLink.directory}`}` +
+            (retired ? `\n${retired}` : "") +
+            pluginLines.map((line) => `\n${line}`).join("") +
             `\nroom: ${room}` +
             `\nregistered: ${resolve(repo)} in ${join(home, "maestro", "registry")}` +
             (shellSourceWritten ? "" : `\nadd this line to your shell startup file: ${shellSourceLine}`) +
             (roomCodexHookTrustRecorded
               ? "\nroom Codex hooks: Codex has recorded trust for both hooks (the hash is not verifiable here); re-check with /hooks if they stop firing"
               : `\nroom Codex setup: trust ${room} when Codex asks, then open /hooks and trust both room-local Maestro hooks; start a new Codex session afterward`) +
-            (seatSync.seatTokenMissing
-              ? `\nwarning: no seat token at ${seatTokenPath(home)}, so Claude seats cannot log in; run: claude setup-token | maestro install --seat-token`
-              : "") +
             (codexHooksChanged ? "\nreview Codex hook trust with /hooks" : "") +
             (dirtySource > 0
               ? `\nwarning: ${sourceRoot} has ${dirtySource} modified tracked files; the installed runtime carries uncommitted changes`
@@ -838,11 +837,6 @@ export const installPlugin: BuiltInPlugin = {
         };
       }, {
         description: "Install Maestro runtime and repository hook wiring.",
-        flags: {
-          "--seat-token": {
-            description: "Read one claude setup-token token from stdin and store it for every Claude seat (d846).",
-          },
-        },
       }),
     );
   },

@@ -12,6 +12,7 @@ CliCommandDescriptor
 CliError
 CliFailureEnvelope
 CliFlagDescriptor
+CliGuard
 CliHandler
 CliInvocation
 CliOptions
@@ -20,6 +21,7 @@ CliSuccessEnvelope
 CommandOptions
 CompactSummary
 DecisionRecord
+DecisionSection
 DecisionService
 Disposer
 EventListener
@@ -41,6 +43,7 @@ HerdrSubscription
 HerdrTab
 HerdrWorkspace
 IngestAction
+InstallEvent
 InstallStamp
 InstallStampRead
 LessonRecord
@@ -90,6 +93,7 @@ WorkGateInput
 WorkRecord
 WorkService
 acquireProcessLock
+agentDirectories
 attentionPlugin
 briefDeliveredBy
 briefPlugin
@@ -110,6 +114,7 @@ failureEnvelope
 forgetRepository
 formatDecision
 formatFact
+formatRetired
 formatSeatSync
 formatSkillSync
 formatTerm
@@ -120,6 +125,7 @@ herdrPluginManifestPath
 herdrProtocol
 herdrSocketPath
 installInRoomMessage
+installMachineFiles
 installPlugin
 installStampFile
 isRoom
@@ -132,9 +138,6 @@ linkHerdrPlugin
 materializeProfiles
 materializeSeats
 materializeSkills
-maybeHandleSlpStatus
-maybeHandleSlpWorkAdd
-maybeHandleSlpWorkNote
 mcpPlugin
 memoryPlugin
 mergeSettings
@@ -164,8 +167,9 @@ recordRuntimePane
 registerSessionCommand
 registeredProjects
 relativeAge
+removeMachineFiles
 removeSeatConfig
-removeSeatFiles
+removeStaleMachineFiles
 renderHerdrPluginManifest
 renderIndex
 requiredPosition
@@ -174,10 +178,10 @@ resolveHubRoom
 resolveSeat
 resolveSourceRoot
 resolveStoreLocation
+retireAgentFiles
 retiredSkillNames
 roomOwnerLine
 run
-runLifecycleCommand
 runSlpProcess
 runSlpRestore
 runSlpRuntime
@@ -195,13 +199,12 @@ seatDirectory
 seatFileDirectories
 seatLaunchPath
 seatNames
+seatTokenCheck
 seatTokenPath
 sessionTtlMs
 skillNames
-slpDecisionResult
 slpRuntimeDirectory
 slpRuntimeStatus
-slpV2CliOptions
 slpV2Plugin
 sourceFor
 sourceRecordFile

@@ -8,8 +8,7 @@ import { latestCheckpoints, type WorkRecord, type WorkService } from "./work.ts"
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
-import { recordCompaction, relativeAge } from "./session-telemetry.ts";
-import { currentPaneId, maybeHandleSlpStatus } from "./slp-v2.ts";
+import { currentPaneId, recordCompaction, relativeAge } from "./session-telemetry.ts";
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -347,9 +346,7 @@ export const coordinationPlugin: BuiltInPlugin = {
     context.effect(() =>
       context.cli.register(
         "status",
-        async (invocation): Promise<CliResult> => {
-          const slp = await maybeHandleSlpStatus(context, invocation);
-          if (slp) return slp;
+        (invocation): Promise<CliResult> => context.events.waterfall<CliInvocation, CliResult>("status.invoke", invocation, async (invocation) => {
           if (invocation.positionals[0]) {
             throw new CliError(
               "NO_ACTIVE_TEAM",
@@ -412,7 +409,7 @@ export const coordinationPlugin: BuiltInPlugin = {
                 : "",
             ].filter(Boolean).join("\n"),
           };
-        },
+        }),
         {
           description: "Show sessions, live peers, and held work.",
           flags: {

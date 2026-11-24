@@ -11,12 +11,15 @@ export interface RunOptions {
   allowBuiltIn?: (plugin: BuiltInPlugin) => boolean;
   cli?: CliOptions;
   readOnly?: boolean;
+  storeInMemory?: boolean;
 }
 
 export async function run(args: string[], options: RunOptions = {}): Promise<number> {
   const repo = process.cwd();
   const home = process.env.HOME ?? repo;
-  const storeLocation = resolveStoreLocation(repo);
+  const storeLocation = options.storeInMemory
+    ? { path: ":memory:", root: repo }
+    : resolveStoreLocation(repo);
   const store = new Store(storeLocation.path, { readonly: options.readOnly });
   const cli = new Cli(options.cli);
   const events = new Events();

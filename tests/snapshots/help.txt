@@ -194,9 +194,10 @@ usage: maestro decision withdraw <id>
     --reason <value>  Record why the draft was withdrawn.
 
 ### maestro doctor --help
-doctor  Diagnose the machine runtime and current repository wiring read-only.
+doctor  Diagnose the machine runtime and current repository wiring read-only. *
 usage: maestro doctor
     --json  Emit one compact JSON success envelope.
+* runs under MAESTRO_READ_ONLY=1
 
 ### maestro handoff --help
 handoff  Seed untouched NOTES.md sections from store and git evidence.
