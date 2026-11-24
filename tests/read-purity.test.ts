@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { idFrom, runCli, withFixture, type CliResult, type Fixture } from "./helpers.ts";
+import { runCli, withFixture, type CliResult, type Fixture } from "./helpers.ts";
 
 // `maestro mcp` is pure but blocks on stdin as a server, so it cannot be swept
 // by invocation. Every other verb the CLI advertises is exercised.
@@ -66,20 +66,9 @@ function content(path: string): string {
 }
 
 async function populate(fixture: Fixture): Promise<void> {
-  const work = idFrom(await runCli(fixture, ["work", "add", "swept", "--atomic-reason", "fixture"]));
+  await runCli(fixture, ["work", "add", "swept", "--atomic-reason", "fixture"]);
   await runCli(fixture, ["hook", "record", "--event", "SessionStart"]);
   await runCli(fixture, ["decision", "draft", "a settled choice", "--rationale", "because"]);
-  await runCli(fixture, [
-    "dispatch", "open", work,
-    "--objective", "return one view",
-    "--owned-scope", "read-only fixture",
-    "--excluded-scope", "source",
-    "--mutation", "no-write",
-    "--stop-condition", "one handback",
-    "--lane", "scout",
-    "--evidence-required", "source: note",
-    "--pane", "w1:p1",
-  ]);
   // Two sessions on one pid: the shared-pid downgrade is a write that a
   // declared-pure read would otherwise perform.
   await runCli(fixture, ["hook", "record", "--event", "SessionStart"], {

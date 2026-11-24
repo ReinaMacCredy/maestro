@@ -9,11 +9,6 @@ import {
 } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import { resolveStoreLocation, tableExists } from "../kernel/store.ts";
-import type {
-  DispatchService,
-  HandbackRecord,
-  HandbackService,
-} from "./dispatch.ts";
 import { formatImportReport, importWaymarkTree } from "./bundle-import.ts";
 import { resolveHubRoom, samePath } from "./home.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -405,16 +400,6 @@ function failedNotesForWork(
     .map((row) => ({ text: row.text, workId: row.work_id }));
 }
 
-function handbacksForWork(context: PluginContext, workIds: string[]): HandbackRecord[] {
-  const dispatch = context.dispatch as DispatchService;
-  const handback = context.handback as HandbackService;
-  return workIds.flatMap((workId) =>
-    dispatch.list(workId).flatMap((record) =>
-      dispatch.council(workId, record.id).sealed ? [] : handback.list(record.id)
-    )
-  );
-}
-
 interface NotesSection {
   body: string;
   bodyEnd: number;
@@ -542,7 +527,7 @@ function bundleWorkReferencesWork(context: PluginContext): boolean {
 }
 
 // SQLite cannot drop a foreign key in place, so an existing table is rebuilt
-// once, rows copied, the way the handbacks status vocabulary was widened.
+// once, rows copied.
 function migrateBundleWorkWorkIdForeignKey(context: PluginContext): void {
   if (context.store.readOnly || !bundleWorkReferencesWork(context)) return;
   const migration = context.store.database.transaction(() => {
@@ -580,7 +565,6 @@ function replaceScaffoldBase(
 function handoffContent(
   context: PluginContext,
   workIds: string[],
-  handbacks: HandbackRecord[],
 ): Map<HandoffSectionName, string> {
   const work = context.work as WorkService;
   const byId = new Map(work.snapshot().map((record) => [record.id, record]));
@@ -596,20 +580,10 @@ function handoffContent(
   const decisionLines = decisionsForWork(context, workIds).map(
     (decision) => `- ${decision.id} [${decision.state}] ${decision.text}`,
   );
-  const handbackLines = handbacks.flatMap((handback) => [
-    `- ${handback.id} [${handback.status}] dispatch ${handback.dispatchId}`,
-    `  claim: ${handback.claim}`,
-    `  proof: ${handback.proof}`,
-    `  assumptions not verified: ${handback.assumptions}`,
-    `  residual risks: ${handback.residualRisks}`,
-    `  incidental findings: ${handback.incidentalFindings}`,
-  ]);
   const currentState = [
     ...(workLines.length > 0 ? ["Work:", ...workLines] : []),
     ...(workLines.length > 0 && decisionLines.length > 0 ? [""] : []),
     ...(decisionLines.length > 0 ? ["Decisions:", ...decisionLines] : []),
-    ...((workLines.length > 0 || decisionLines.length > 0) && handbackLines.length > 0 ? [""] : []),
-    ...(handbackLines.length > 0 ? ["Handbacks:", ...handbackLines] : []),
   ];
   const failed = failedNotesForWork(context, workIds).map(
     (note) => `- ${note.workId}: ${note.text}`,
@@ -641,7 +615,7 @@ function headline(bundle: BundleRecord): string {
 
 export const bundlePlugin: BuiltInPlugin = {
   name: "bundle",
-  inject: ["work", "decision", "dispatch", "handback"],
+  inject: ["work", "decision"],
   requires:
     "bundle open/close/list/show/save: scaffold a SPEC/NOTES/VERIFY trio, snapshot it into the store on close, recall it via search and bundle show",
   apply(context) {
@@ -870,11 +844,10 @@ export const bundlePlugin: BuiltInPlugin = {
           }
           const original = await file.text();
           const workIds = linkedWorkIds(context, id);
-          const handbacks = handbacksForWork(context, workIds);
           const sectionResult = replaceUntouchedSections(
             id,
             original,
-            handoffContent(context, workIds, handbacks),
+            handoffContent(context, workIds),
           );
           const baseResult = replaceScaffoldBase(
             sectionResult.notes,
@@ -897,7 +870,7 @@ export const bundlePlugin: BuiltInPlugin = {
             payload: { leftAlone, written },
           });
           return {
-            data: { bundle, leftAlone, notesPath, written, handbacks },
+            data: { bundle, leftAlone, notesPath, written },
             text: [
               `${id} handoff: ${notesPath}`,
               `wrote: ${written.join(", ") || "none"}`,

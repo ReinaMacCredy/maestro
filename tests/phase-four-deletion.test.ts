@@ -225,26 +225,6 @@ test("350 installed hook configuration executes both current adapters", async ()
   });
 });
 
-test("351 [lint] installed work guidance stays on dispatch and handback vocabulary", async () => {
-  await withFixture(async (fixture) => {
-    const { path } = await prepareInstallFixture(fixture);
-    expect((await runCli(fixture, ["install"], { PATH: path })).exitCode).toBe(0);
-    const workSkillRoot = join(fixture.home, "maestro", "skills", "maestro-work");
-    const workSkill = await readFile(join(workSkillRoot, "SKILL.md"), "utf8");
-    const conflictHandoff = (await runCli(fixture, ["recipe", "show", "conflict-handoff"], { PATH: path })).stdout;
-    const worktree = (await runCli(fixture, ["recipe", "show", "worktree"], { PATH: path })).stdout;
-
-    expect(workSkill).toMatch(/<!-- maestro-skill-version: [0-9a-f]{40} -->/);
-    expect(workSkill).toContain("`maestro recipe show conflict-handoff`");
-    for (const reference of [conflictHandoff, worktree]) {
-      expect(reference).toContain("herdr pane send-text");
-      expect(reference).toContain("maestro dispatch");
-      expect(reference).toContain("maestro handback");
-      expect(reference).not.toContain("maestro msg");
-    }
-  });
-});
-
 test("259 supervisor start is absent and returns the ordinary UNKNOWN_VERB error", async () => {
   await withFixture(async (fixture) => {
     const started = await runCli(fixture, ["supervisor", "start"]);
@@ -309,150 +289,6 @@ test("260 every exported attention kind has an independent read-only detection s
     await startWork(fixture, collisionA, "collision-a");
     await startWork(fixture, collisionB, "collision-b");
 
-    const dispatchWork = await addWork(fixture, "unreturned lane");
-    const opened = await runCli(fixture, [
-        "dispatch",
-        "open",
-        dispatchWork,
-        "--objective",
-        "return the result",
-        "--owned-scope",
-        "scratch",
-        "--excluded-scope",
-        "product source",
-        "--mutation",
-        "no-write",
-        "--stop-condition",
-        "handback filed",
-        "--lane",
-        "delivery",
-        "--evidence-required",
-        "source",
-        "--pane",
-        "w1:pZ",
-      ]);
-    expect(opened.exitCode).toBe(0);
-    const dispatch = opened.stdout.match(/\b(x\d+)\b/)?.[1];
-    expect(dispatch).toBeDefined();
-    expect(
-      (
-        await runCli(fixture, ["dispatch", "accept", dispatch as string], {
-          MAESTRO_SESSION_ID: "unreturned-holder",
-          MAESTRO_SESSION_PID: String(process.pid),
-        })
-      ).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(fixture, [
-          "dispatch",
-          "confirm",
-          dispatch as string,
-          "--session",
-          "unreturned-holder",
-        ])
-      ).exitCode,
-    ).toBe(0);
-
-    const unacceptedWork = await addWork(fixture, "undelivered lane");
-    const unacceptedOpened = await runCli(fixture, [
-      "dispatch",
-      "open",
-      unacceptedWork,
-      "--objective",
-      "accept the stored contract",
-      "--owned-scope",
-      "scratch",
-      "--excluded-scope",
-      "product source",
-      "--mutation",
-      "no-write",
-      "--stop-condition",
-      "dispatch accepted",
-      "--lane",
-      "delivery",
-      "--evidence-required",
-      "source",
-      "--pane",
-      "w1:pX",
-    ]);
-    expect(unacceptedOpened.exitCode).toBe(0);
-    const unacceptedDispatch = unacceptedOpened.stdout.match(/\b(x\d+)\b/)?.[1];
-    expect(unacceptedDispatch).toBeDefined();
-
-    const handbackWork = await addWork(fixture, "returned lane awaiting review");
-    const handbackOpened = await runCli(fixture, [
-      "dispatch",
-      "open",
-      handbackWork,
-      "--objective",
-      "return a result for review",
-      "--owned-scope",
-      "scratch",
-      "--excluded-scope",
-      "product source",
-      "--mutation",
-      "no-write",
-      "--stop-condition",
-      "handback filed",
-      "--lane",
-      "delivery",
-      "--evidence-required",
-      "source",
-      "--pane",
-      "w1:pY",
-    ]);
-    expect(handbackOpened.exitCode).toBe(0);
-    const handbackDispatch = handbackOpened.stdout.match(/\b(x\d+)\b/)?.[1];
-    expect(handbackDispatch).toBeDefined();
-    expect(
-      (
-        await runCli(fixture, ["dispatch", "accept", handbackDispatch as string], {
-          MAESTRO_SESSION_ID: "handback-holder",
-          MAESTRO_SESSION_PID: String(process.pid),
-        })
-      ).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(fixture, [
-          "dispatch",
-          "confirm",
-          handbackDispatch as string,
-          "--session",
-          "handback-holder",
-        ])
-      ).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(
-          fixture,
-          [
-            "handback",
-            "file",
-            handbackDispatch as string,
-            "--status",
-            "DONE",
-            "--claim",
-            "the lane returned",
-            "--proof",
-            "source: fixture",
-            "--assumptions",
-            "None",
-            "--residual-risks",
-            "None",
-            "--incidental-findings",
-            "None",
-          ],
-          {
-            MAESTRO_SESSION_ID: "handback-holder",
-            MAESTRO_SESSION_PID: String(process.pid),
-          },
-        )
-      ).exitCode,
-    ).toBe(0);
-
     for (let index = 0; index < 5; index += 1) {
       expect(
         (
@@ -481,12 +317,6 @@ test("260 every exported attention kind has an independent read-only detection s
       database
         .query("UPDATE decisions SET created_at = ? WHERE id = ?")
         .run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), decision);
-      database
-        .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
-        .run(new Date(Date.now() - 3 * 60 * 60_000).toISOString(), dispatch as string);
-      database
-        .query("UPDATE dispatches SET created_at = ? WHERE id = ?")
-        .run(new Date(Date.now() - 11 * 60_000).toISOString(), unacceptedDispatch as string);
     } finally {
       database.close();
     }
@@ -512,9 +342,6 @@ test("260 every exported attention kind has an independent read-only detection s
     const expectedSubjects = {
       DECISION_REVIEW_DUE: reviewWork,
       DECISION_STALE: decisionWork,
-      DISPATCH_UNACCEPTED: unacceptedWork,
-      DISPATCH_UNRETURNED: dispatchWork,
-      HANDBACK_UNREVIEWED: handbackWork,
       HUMAN_DECISION_REQUIRED: decisionWork,
       LEAD_COLLISION: stalled,
       REPEATED_FAILURE: repeated,
@@ -525,9 +352,6 @@ test("260 every exported attention kind has an independent read-only detection s
     const expectedPacketHeads = {
       DECISION_REVIEW_DUE: `attention DECISION_REVIEW_DUE decision ${reviewDecision}`,
       DECISION_STALE: `attention DECISION_STALE decision ${decision}`,
-      DISPATCH_UNACCEPTED: `attention DISPATCH_UNACCEPTED dispatch ${unacceptedDispatch}`,
-      DISPATCH_UNRETURNED: `attention DISPATCH_UNRETURNED dispatch ${dispatch}`,
-      HANDBACK_UNREVIEWED: `attention HANDBACK_UNREVIEWED dispatch ${handbackDispatch}`,
       HUMAN_DECISION_REQUIRED: `attention HUMAN_DECISION_REQUIRED decision ${decision}`,
       LEAD_COLLISION: `attention LEAD_COLLISION work ${stalled},${repeated}`,
       REPEATED_FAILURE: `attention REPEATED_FAILURE work ${repeated}`,

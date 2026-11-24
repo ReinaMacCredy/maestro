@@ -2,7 +2,6 @@ import { CliError, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { SessionRecord } from "../kernel/sessions.ts";
 import type { BriefService } from "./coordination.ts";
-import type { DispatchRecord, DispatchService, HandbackService } from "./dispatch.ts";
 import { improverNextAction, improverTriggers } from "./lesson.ts";
 import type { WorkService } from "./work.ts";
 
@@ -14,9 +13,6 @@ export type AttentionKind =
   | "HUMAN_DECISION_REQUIRED"
   | "LEAD_COLLISION"
   | "SCOPE_COLLISION"
-  | "DISPATCH_UNACCEPTED"
-  | "DISPATCH_UNRETURNED"
-  | "HANDBACK_UNREVIEWED"
   | "LESSONS_PENDING";
 
 interface AttentionWorkRow {
@@ -42,7 +38,7 @@ interface FailedNoteRow {
 
 interface Detection {
   entityId: string;
-  entityType: "decision" | "dispatch" | "lesson" | "work";
+  entityType: "decision" | "lesson" | "work";
   fingerprint: string;
   holderRole?: "lead" | "peer";
   kind: AttentionKind;
@@ -66,7 +62,6 @@ export interface AttentionFinding {
 
 export interface AttentionOptions {
   decisionStaleHours: number;
-  dispatchStaleHours: number;
   staleMinutes: number;
 }
 
@@ -74,7 +69,7 @@ export interface AttentionService {
   scan(options: AttentionOptions): AttentionFinding[];
 }
 
-const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "lesson" | "work"> = {
+const subjectKind: Record<AttentionKind, "decision" | "lesson" | "work"> = {
   STALLED_LEASE: "work",
   REPEATED_FAILURE: "work",
   DECISION_STALE: "decision",
@@ -82,9 +77,6 @@ const subjectKind: Record<AttentionKind, "decision" | "dispatch" | "lesson" | "w
   HUMAN_DECISION_REQUIRED: "decision",
   LEAD_COLLISION: "work",
   SCOPE_COLLISION: "work",
-  DISPATCH_UNACCEPTED: "dispatch",
-  DISPATCH_UNRETURNED: "dispatch",
-  HANDBACK_UNREVIEWED: "dispatch",
   LESSONS_PENDING: "lesson",
 };
 
@@ -121,20 +113,6 @@ function latestStart(context: PluginContext, workId: string): EventRow | null {
        ORDER BY id DESC LIMIT 1`,
     )
     .get(workId) ?? null;
-}
-
-function acceptedBeforeLatestStart(context: PluginContext, dispatch: DispatchRecord): boolean {
-  const start = latestStart(context, dispatch.workId);
-  if (!start) return false;
-  const acceptance = context.store.database
-    .query<EventRow, [string]>(
-      `SELECT id, created_at FROM event_log
-       WHERE entity_type = 'dispatch' AND entity_id = ?
-         AND type IN ('dispatch.accept', 'dispatch.confirm')
-       ORDER BY id DESC LIMIT 1`,
-    )
-    .get(dispatch.id);
-  return acceptance !== null && acceptance.id < start.id;
 }
 
 function minutesSince(iso: string, now: number): number {
@@ -187,8 +165,7 @@ function stalledDetections(
     const holder = sessions.get(work.heldBy);
     if (!holder) return [];
     // A dead holder is not a slow one, so freshness is not the question: it will
-    // never come back, and the card would otherwise sit active forever. This is
-    // the shape DISPATCH_UNRETURNED already uses for a dead holder.
+    // never come back, and the card would otherwise sit active forever.
     if (holder.live && Date.parse(holder.lastSeen) >= cutoff) return [];
     const start = latestStart(context, work.id);
     const startId = start?.id ?? 0;
@@ -220,7 +197,6 @@ function repeatedFailureDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
 ): Detection[] {
-  const dispatch = context.dispatch as DispatchService;
   return works.flatMap((work): Detection[] => {
     if (work.state === "done" || work.state === "cancelled") return [];
     const start = latestStart(context, work.id);
@@ -241,12 +217,8 @@ function repeatedFailureDetections(
           .all(work.id);
     const third = notes[2];
     if (!third) return [];
-    const holderRole = work.heldBy && dispatch
-        .list(work.id)
-        .some((record) => record.state === "open" && record.heldBy === work.heldBy)
-      ? "peer"
-      : "lead";
-    const route = holderRole === "peer" ? "lead" : "supervisor";
+    const holderRole = "lead";
+    const route = "supervisor";
     const startEvidence = start ? `work.start #${start.id}` : "no work.start on record";
     return [{
       entityId: work.id,
@@ -393,29 +365,6 @@ function decisionReviewDueDetections(
   });
 }
 
-function scopeTokens(scope: string): string[] {
-  return scope
-    .split(/[\s,]+/)
-    .filter((token) => token.includes("/") || token.includes("."));
-}
-
-function matchingScopeTokens(left: string[], right: string[]): string[] {
-  const matches = new Set<string>();
-  for (const leftToken of left) {
-    for (const rightToken of right) {
-      if (
-        leftToken === rightToken ||
-        leftToken.startsWith(`${rightToken}/`) ||
-        rightToken.startsWith(`${leftToken}/`)
-      ) {
-        matches.add(leftToken);
-        matches.add(rightToken);
-      }
-    }
-  }
-  return [...matches].sort();
-}
-
 function scopeCollisionDetections(
   context: PluginContext,
   works: AttentionWorkRow[],
@@ -453,40 +402,6 @@ function scopeCollisionDetections(
       });
     }
   }
-  const dispatches = (context.dispatch as DispatchService)
-    .list()
-    .filter((dispatch) => dispatch.state === "open");
-  for (let leftIndex = 0; leftIndex < dispatches.length; leftIndex += 1) {
-    const left = dispatches[leftIndex];
-    if (!left) continue;
-    for (let rightIndex = leftIndex + 1; rightIndex < dispatches.length; rightIndex += 1) {
-      const right = dispatches[rightIndex];
-      if (!right || left.workId === right.workId) continue;
-      if (left.lane !== "delivery" || right.lane !== "delivery") continue;
-      const leftExcluded = new Set(scopeTokens(left.excludedScope));
-      const rightExcluded = new Set(scopeTokens(right.excludedScope));
-      const matches = matchingScopeTokens(
-        scopeTokens(left.ownedScope).filter((token) => !rightExcluded.has(token)),
-        scopeTokens(right.ownedScope).filter((token) => !leftExcluded.has(token)),
-      );
-      if (matches.length === 0) continue;
-      detections.push({
-        entityId: left.id,
-        entityType: "dispatch",
-        fingerprint: `collision:dispatch:${left.id}:${right.id}`,
-        kind: "SCOPE_COLLISION",
-        packet: packet("SCOPE_COLLISION", `${left.id},${right.id}`, {
-          observed: `open dispatches on ${left.workId} and ${right.workId} have overlapping owned scopes`,
-          evidence: `owned_scope tokens ${matches.join(", ")}`,
-          unknown: "whether the scopes intentionally overlap or compete for the same mutation",
-          question: "keep both lanes, split scope, or cancel one dispatch?",
-          smallestAction: `maestro dispatch show ${left.id}`,
-        }),
-        subjectSession: null,
-        subjectWork: left.workId,
-      });
-    }
-  }
   return detections;
 }
 
@@ -495,22 +410,11 @@ function leadCollisionDetections(
   works: AttentionWorkRow[],
   sessions: Map<string, SessionRecord>,
 ): Detection[] {
-  const deliveryPeers = new Set(
-    (context.dispatch as DispatchService)
-      .list()
-      .filter(
-        (record) =>
-          record.state === "open" && record.lane === "delivery" && record.heldBy &&
-          acceptedBeforeLatestStart(context, record),
-      )
-      .map((record) => `${record.workId}:${record.heldBy}`),
-  );
   const active = works
     .filter(
       (work) =>
         work.state === "active" && work.heldBy &&
-        sessions.get(work.heldBy)?.live &&
-        !deliveryPeers.has(`${work.id}:${work.heldBy}`),
+        sessions.get(work.heldBy)?.live,
     )
     .sort((left, right) => left.id.localeCompare(right.id));
   const detections: Detection[] = [];
@@ -535,8 +439,7 @@ function leadCollisionDetections(
             `parent work ${first.id} held by ${first.heldBy}; ` +
             `parent work ${second.id} held by ${second.heldBy}`,
           evidence:
-            "both work items active and parentless; both sessions live; " +
-            "neither holder has an open delivery dispatch on its work item",
+            "both work items active and parentless; both sessions live",
           unknown:
             "whether the work items are independent project dimensions or competing Lead scopes",
           question: "keep both Leads, split scope, or release one lease?",
@@ -548,168 +451,6 @@ function leadCollisionDetections(
     }
   }
   return detections;
-}
-
-function dispatchUnreturnedDetections(
-  context: PluginContext,
-  workById: Map<string, AttentionWorkRow>,
-  sessions: Map<string, SessionRecord>,
-  now: number,
-  dispatchStaleHours: number,
-): Detection[] {
-  const cutoff = now - dispatchStaleHours * 60 * 60_000;
-  const dispatch = context.dispatch as DispatchService;
-  return dispatch.list().flatMap((record): Detection[] => {
-    if (record.state !== "open") return [];
-    if (record.claimedBy) return [];
-    const work = workById.get(record.workId);
-    if (!work || work.state === "done" || work.state === "cancelled") return [];
-    const holder = record.heldBy ? sessions.get(record.heldBy) : undefined;
-    if ((!holder || holder.live) && Date.parse(record.createdAt) >= cutoff) return [];
-    const subjectSession = record.heldBy ?? record.targetSession;
-    const observed = holder
-      ? holder.live
-        ? `dispatch for ${record.workId} has no handback after ${minutesSince(record.createdAt, now)} minutes; holder session ${holder.id} is live`
-        : `dispatch for ${record.workId} has no handback; holder session ${holder.id} is dead`
-      : `dispatch for ${record.workId} has no handback after ${minutesSince(record.createdAt, now)} minutes`;
-    const evidence = holder
-      ? `dispatches.held_by ${holder.id}; sessions.live ${holder.live}; no handbacks row`
-      : `dispatches.created_at ${record.createdAt}; no handbacks row`;
-    const unknown = holder
-      ? holder.live
-        ? "whether the live lane is working, blocked, or needs more time"
-        : "why the dead holder stopped without filing a handback"
-      : "whether the lane is working, blocked, or abandoned";
-    return [{
-      entityId: record.id,
-      entityType: "dispatch",
-      fingerprint: `dispatch-unreturned:${record.id}`,
-      kind: "DISPATCH_UNRETURNED",
-      packet: packet("DISPATCH_UNRETURNED", record.id, {
-        observed,
-        evidence,
-        unknown,
-        question: "wait, contact the lane, cancel it, or re-scope?",
-        smallestAction: `maestro dispatch show ${record.id}`,
-      }),
-      subjectSession,
-      subjectWork: record.workId,
-    }];
-  });
-}
-
-function dispatchUnacceptedDetections(
-  context: PluginContext,
-  workById: Map<string, AttentionWorkRow>,
-  sessions: Map<string, SessionRecord>,
-  now: number,
-): Detection[] {
-  const cutoff = now - 10 * 60_000;
-  const dispatch = context.dispatch as DispatchService;
-  return dispatch.list().flatMap((record): Detection[] => {
-    if (
-      record.state !== "open" ||
-      record.heldBy !== null ||
-      Date.parse(record.createdAt) > cutoff
-    ) {
-      return [];
-    }
-    const claimant = record.claimedBy ? sessions.get(record.claimedBy) : undefined;
-    if (claimant?.live) return [];
-    const work = workById.get(record.workId);
-    if (!work || work.state === "done" || work.state === "cancelled") return [];
-    const pane = record.pane ?? "none";
-    const pendingClaim = record.claimedBy !== null;
-    return [{
-      entityId: record.id,
-      entityType: "dispatch",
-      fingerprint: `dispatch-unaccepted:${record.id}`,
-      kind: "DISPATCH_UNACCEPTED",
-      packet: packet("DISPATCH_UNACCEPTED", record.id, {
-        observed: pendingClaim
-          ? `${record.id} has an unconfirmed claim by ${record.claimedBy}; claimant is not live`
-          : `${record.id} opened ${minutesSince(record.createdAt, now)} minutes ago on pane ${pane}, never accepted`,
-        evidence: pendingClaim
-          ? `dispatches.claimed_by ${record.claimedBy}; sessions.live false; confirmation pending`
-          : "dispatch state open; no session bound to the pane",
-        unknown: pendingClaim
-          ? "why the claim was not confirmed before the claimant stopped"
-          : "whether the brief reached the pane",
-        question: pendingClaim ? "confirm the claim or cancel and reopen?" : "was the stored contract delivered?",
-        smallestAction: pendingClaim
-          ? `maestro dispatch confirm ${record.id} --session ${record.claimedBy}`
-          : `herdr agent list, then send the stored contract from maestro dispatch show ${record.id} with mbrief <name> <file>, never an inline double-quoted brief (l26); open the prompt with a plain lowercase sentence, never a word a harness could read as a slash command, and confirm agent_status=working before leaving`,
-      }),
-      subjectSession: record.claimedBy ?? record.targetSession,
-      subjectWork: record.workId,
-    }];
-  });
-}
-
-function handbackUnreviewedDetections(
-  context: PluginContext,
-  workById: Map<string, AttentionWorkRow>,
-  now: number,
-): Detection[] {
-  const dispatch = context.dispatch as DispatchService;
-  const handbacks = context.handback as HandbackService;
-  const dispatches = dispatch.list();
-  return dispatches.flatMap((record): Detection[] => {
-    if (record.state !== "returned") return [];
-    const work = workById.get(record.workId);
-    if (!work || work.state === "done" || work.state === "cancelled") return [];
-    const latest = handbacks.list(record.id).at(-1);
-    if (!latest) return [];
-    // A sealed council's packets are unreadable by design; the finding
-    // appears once the seal opens.
-    if (dispatch.council(record.workId, record.id).sealed) return [];
-    // The explicit record of a Lead having read the packet. The other two clears
-    // stay: closing the work and citing the handback in a later dispatch each
-    // prove a review happened without anyone having to say so.
-    if (handbacks.reviewed(latest.id)) return [];
-    const cites = new RegExp(`\\b${latest.id}\\b`);
-    const reviewed = dispatches.some(
-      (other) =>
-        other.workId === record.workId && other.createdAt > latest.createdAt &&
-        (cites.test(other.objective) || cites.test(other.evidenceRequired)),
-    );
-    if (reviewed) return [];
-    // The smallest action has to be one that actually clears this: reading the
-    // packet is a pure read and closing the work needs a lease, so before the
-    // review verb the finding survived every review a Lead could really do.
-    const review = `maestro handback review ${latest.id} --note "<what you decided>"`;
-    // The substantive move moves into the question, where "what should I do"
-    // belongs, so making the smallest action the clearing verb costs no guidance.
-    let question = "close the work, re-dispatch, or cancel?";
-    if (latest.status === "BLOCKED") {
-      question = "retry condition met? then re-dispatch on the same pane or cancel";
-    } else if (latest.status === "DEPENDENCY_REQUEST") {
-      question =
-        "accept or decline the dependency request? accepting opens it as a work item in the other scope";
-    } else if (latest.status === "COUNCIL_REQUEST") {
-      question =
-        "open another council generation or decline? a second generation is d688, a decline is a work note";
-    } else if (latest.status === "REOPEN_REQUEST") {
-      question = "grant another lease or decline?";
-    }
-    const smallestAction = review;
-    return [{
-      entityId: record.id,
-      entityType: "dispatch",
-      fingerprint: `handback-unreviewed:${record.id}`,
-      kind: "HANDBACK_UNREVIEWED",
-      packet: packet("HANDBACK_UNREVIEWED", record.id, {
-        observed:
-          `${record.id} returned ${latest.status} (${latest.id}) ${minutesSince(latest.createdAt, now)} minutes ago; work ${record.workId} is still ${work.state}`,
-        evidence: `handbacks row ${latest.id} status ${latest.status}; work.state ${work.state}; no later dispatch on ${record.workId} cites ${latest.id}`,
-        unknown: "whether the Lead has read the return packet",
-        question,
-        smallestAction,
-      }),
-      subjectSession: record.heldBy ?? record.targetSession,
-      subjectWork: record.workId,
-    }];
-  });
 }
 
 function lessonsPendingDetections(context: PluginContext, now: number): Detection[] {
@@ -774,15 +515,6 @@ function detect(context: PluginContext, options: AttentionOptions): Detection[] 
     ...humanDecisionRequiredDetections(context, workById),
     ...leadCollisionDetections(context, works, sessions),
     ...scopeCollisionDetections(context, works, sessions),
-    ...dispatchUnreturnedDetections(
-      context,
-      workById,
-      sessions,
-      now,
-      options.dispatchStaleHours,
-    ),
-    ...dispatchUnacceptedDetections(context, workById, sessions, now),
-    ...handbackUnreviewedDetections(context, workById, now),
     ...lessonsPendingDetections(context, now),
   ];
 }
@@ -863,7 +595,6 @@ function scanFromInvocation(
   return service.scan({
     staleMinutes: numericOption(invocation, "stale", 30),
     decisionStaleHours: numericOption(invocation, "decision-stale", 24),
-    dispatchStaleHours: numericOption(invocation, "dispatch-stale", 2),
   });
 }
 
@@ -873,15 +604,11 @@ const attentionFlags = {
     description: "Draft decision threshold in hours (default 24).",
     value: true,
   },
-  "--dispatch-stale": {
-    description: "Unreturned dispatch threshold in hours (default 2).",
-    value: true,
-  },
 } as const;
 
 export const attentionPlugin: BuiltInPlugin = {
   name: "attention",
-  inject: ["work", "dispatch"],
+  inject: ["work"],
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS attention (
@@ -901,7 +628,7 @@ export const attentionPlugin: BuiltInPlugin = {
     context.effect(() =>
       (context.brief as BriefService).register(() =>
         service
-          .scan({ staleMinutes: 30, decisionStaleHours: 24, dispatchStaleHours: 2 })
+          .scan({ staleMinutes: 30, decisionStaleHours: 24 })
           .filter((finding) => finding.kind !== "REPEATED_FAILURE" || finding.route === "lead")
           .map((finding) => finding.packet.split("\n")[0] ?? finding.kind)
           .join("\n")

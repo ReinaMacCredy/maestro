@@ -19,7 +19,7 @@ authorization, and tier rules. This recipe is a procedure, not another policy.
 
 ### Perceive
 
-Read the current work, decisions, handbacks, and source evidence. Identify one
+Read the current work, decisions, and source evidence. Identify one
 unsettled fork or contradiction. Stop if the requested authority is unclear.
 
 ### Choose

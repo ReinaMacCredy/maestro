@@ -70,7 +70,7 @@ more, and a singleton clears a higher bar. A duplicate of clear existing
 guidance is an execution miss and is dropped. Guidance that exists but is
 buried becomes a lesson about its placement.
 
-File each kept finding as one lesson, with the work, handback or decision id
+File each kept finding as one lesson, with the work or decision id
 it came from as `--evidence`. A finding with no such id is reported, not
 filed. When a lint, refusal, hook or test could enforce the lesson, say so in
 `--expected`. The improver builds that mechanism in its own pass, so nothing

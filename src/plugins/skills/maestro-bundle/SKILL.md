@@ -26,7 +26,7 @@ maestro bundle open <id> --work <workId>   # scaffold SPEC/NOTES/VERIFY, link wo
 
 Follow [Bundle contract](~/maestro/WORKFLOW.md#bundle-contract-tier-full).
 Use `maestro handoff <bundle-id>` to render NOTES.md from work, decisions,
-handbacks, failures, and the latest checkpoint. Fill only placeholders the
+failures, and the latest checkpoint. Fill only placeholders the
 store cannot prove, including original authorization and retained gates.
 Use `maestro bundle show <id>` to read the contract and linked decisions.
 Never create root `SPEC-*`, `NOTES-*`, or `VERIFY-*` files.

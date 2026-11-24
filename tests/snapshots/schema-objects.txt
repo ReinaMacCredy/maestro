@@ -1,13 +1,8 @@
-index dispatches_work_id
 table attention
 table bundle_work
 table bundles
 table decisions
-table dispatch_councils
-table dispatches
 table event_log
-table handback_reviews
-table handbacks
 table legacy_cards
 table legacy_decisions
 table legacy_files
@@ -45,4 +40,3 @@ trigger search_note_insert
 trigger search_prompt_insert
 trigger search_work_insert
 trigger search_work_update
-unique index handbacks_dispatch_id

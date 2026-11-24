@@ -3,7 +3,6 @@ import { briefPlugin } from "./brief.ts";
 import { bundlePlugin } from "./bundle.ts";
 import { coordinationPlugin } from "./coordination.ts";
 import { decisionPlugin } from "./decision.ts";
-import { dispatchPlugin } from "./dispatch.ts";
 import { importRustPlugin } from "./import-rust.ts";
 import { installPlugin } from "./install.ts";
 import { lessonPlugin } from "./lesson.ts";
@@ -15,7 +14,6 @@ import { pluginTrustPlugin } from "./plugin-trust.ts";
 import { policyAutoPrPlugin } from "./policy-auto-pr.ts";
 import { policyBreakdownPlugin } from "./policy-breakdown.ts";
 import { policyCardBudgetPlugin } from "./policy-card-budget.ts";
-import { policyDispatchPlugin } from "./policy-dispatch.ts";
 import { policyLayerPlugin } from "./policy-layer.ts";
 import { policyLifecyclePlugin } from "./policy-lifecycle.ts";
 import { policyProofPlugin } from "./policy-proof.ts";
@@ -37,12 +35,10 @@ export const builtInPlugins: readonly BuiltInPlugin[] = [
   pluginTrustPlugin,
   briefPlugin,
   workPlugin,
-  dispatchPlugin,
   decisionPlugin,
   lessonPlugin,
   coordinationPlugin,
   attentionPlugin,
-  policyDispatchPlugin,
   policyProofPlugin,
   policyBreakdownPlugin,
   policyCardBudgetPlugin,

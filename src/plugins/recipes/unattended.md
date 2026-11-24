@@ -24,7 +24,7 @@ the item that holds the run:
 
 ### Perceive
 
-Reconstruct state from `maestro status`, `maestro ready`, `maestro work show`, decisions, and handbacks.
+Reconstruct state from `maestro status`, `maestro ready`, `maestro work show`, and decisions.
 Read the predicate note first. Do not rely on conversational memory.
 
 ### Choose

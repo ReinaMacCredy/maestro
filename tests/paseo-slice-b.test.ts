@@ -18,36 +18,6 @@ function session(id: string): Record<string, string> {
   };
 }
 
-function dispatchOpenArgs(work: string): string[] {
-  return [
-    "dispatch",
-    "open",
-    work,
-    "--objective",
-    "Route repeated failure attention",
-    "--owned-scope",
-    "fixture",
-    "--excluded-scope",
-    "product source",
-    "--mutation",
-    "no-write",
-    "--stop-condition",
-    "routing is observable",
-    "--lane",
-    "delivery",
-    "--evidence-required",
-    "source: CLI output",
-    "--pane",
-    "w1:p390",
-  ];
-}
-
-function dispatchId(stdout: string): string {
-  const match = stdout.match(/^(x\d+) \[open\]/);
-  if (!match?.[1]) throw new Error(`missing dispatch id in stdout: ${stdout}`);
-  return match[1];
-}
-
 async function addFailedNotes(
   fixture: Fixture,
   work: string,
@@ -62,17 +32,8 @@ function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-test("390 REPEATED_FAILURE routes by the current holder role", async () => {
+test("390 REPEATED_FAILURE routes a Lead-held episode to the supervisor", async () => {
   await withFixture(async (fixture) => {
-    const peerWork = idFrom(
-      await runCli(fixture, [
-        "work",
-        "add",
-        "peer failure episode",
-        "--atomic-reason",
-        "routing fixture",
-      ]),
-    );
     const leadWork = idFrom(
       await runCli(fixture, [
         "work",
@@ -82,27 +43,8 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
         "routing fixture",
       ]),
     );
-    const peer = session("peer-holder");
     const lead = session("lead-holder");
-    const opened = await runCli(fixture, dispatchOpenArgs(peerWork));
-    expect(opened.exitCode).toBe(0);
-    expect(
-      (await runCli(fixture, ["dispatch", "accept", dispatchId(opened.stdout)], peer)).exitCode,
-    ).toBe(0);
-    expect(
-      (
-        await runCli(fixture, [
-          "dispatch",
-          "confirm",
-          dispatchId(opened.stdout),
-          "--session",
-          "peer-holder",
-        ])
-      ).exitCode,
-    ).toBe(0);
-    expect((await runCli(fixture, ["work", "start", peerWork], peer)).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "start", leadWork], lead)).exitCode).toBe(0);
-    await addFailedNotes(fixture, peerWork, peer);
     await addFailedNotes(fixture, leadWork, lead);
 
     const hook = await runCli(
@@ -111,14 +53,12 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
       session("lead-viewer"),
     );
     expect(hook.exitCode).toBe(0);
-    expect(hook.stdout).toContain(`attention REPEATED_FAILURE work ${peerWork}`);
     expect(hook.stdout).not.toContain(`attention REPEATED_FAILURE work ${leadWork}`);
 
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
     const room = await runCli(fixture, ["brief"], { MAESTRO_READ_ONLY: "1" });
     expect(room.exitCode).toBe(0);
-    expect(room.stdout).not.toContain(`attention REPEATED_FAILURE work ${peerWork}`);
     expect(room.stdout).toContain(`attention REPEATED_FAILURE work ${leadWork}`);
 
     const attention = await runCli(fixture, ["attention", "--json"], session("scanner"));
@@ -134,14 +74,6 @@ test("390 REPEATED_FAILURE routes by the current holder role", async () => {
         }>;
       };
     }).data.detections.filter((finding) => finding.kind === "REPEATED_FAILURE");
-    expect(findings).toContainEqual(
-      expect.objectContaining({
-        holderRole: "peer",
-        route: "lead",
-        subjectWork: peerWork,
-        packet: expect.stringContaining("holder role: peer"),
-      }),
-    );
     expect(findings).toContainEqual(
       expect.objectContaining({
         holderRole: "lead",

@@ -5,15 +5,6 @@ import { join, resolve } from "node:path";
 import { CliError } from "../kernel/cli.ts";
 import { resolveStoreLocation } from "../kernel/store.ts";
 
-interface DispatchEnvelope {
-  data?: {
-    dispatches?: Array<{
-      heldBy?: string | null;
-      state?: string;
-    }>;
-  };
-}
-
 interface StatusEnvelope {
   data?: {
     livePeers?: Array<{
@@ -106,27 +97,16 @@ async function scanRepo(repo: string, caller: string): Promise<RepoActivationSca
     return { holders: 0, legacyTeams: [], repo, unsafe: true };
   }
   const legacyTeams = liveLegacyTeams(repo);
-  const [statusValue, dispatchValue] = await Promise.all([
-    readRepoJson(repo, ["status", "--live", "--json"]),
-    readRepoJson(repo, ["dispatch", "list", "--json"]),
-  ]);
-  const status = statusValue as StatusEnvelope | null;
-  const dispatch = dispatchValue as DispatchEnvelope | null;
+  const status = await readRepoJson(repo, ["status", "--live", "--json"]) as StatusEnvelope | null;
   // status --live excludes dead sessions; under MAESTRO_READ_ONLY the caller
   // is not the child's current session, so it is excluded here.
   const peers = status?.data?.livePeers;
-  if (!Array.isArray(peers) || !Array.isArray(dispatch?.data?.dispatches)) {
+  if (!Array.isArray(peers)) {
     return { holders: 0, legacyTeams: legacyTeams ?? [], repo, unsafe: true };
   }
-  const openDispatchHolders = new Set(
-    dispatch.data.dispatches
-      .filter((item) => item?.state === "open" && typeof item.heldBy === "string")
-      .map((item) => item.heldBy as string),
-  );
   const holders = peers.filter((peer) => {
     if (typeof peer?.id !== "string" || peer.id === caller) return false;
-    return (Array.isArray(peer.heldWork) && peer.heldWork.length > 0) ||
-      openDispatchHolders.has(peer.id);
+    return Array.isArray(peer.heldWork) && peer.heldWork.length > 0;
   }).length;
   return { holders, legacyTeams: legacyTeams ?? [], repo, unsafe: legacyTeams === null };
 }
@@ -157,7 +137,7 @@ export async function warnBeforeRuntimeActivation(
   if (holders > 0) {
     const subject = holders === 1 ? "1 live session holds" : `${holders} live sessions hold`;
     process.stderr.write(
-      `[${action}] ${subject} work or an open dispatch (repos: ${holderRepos.join(", ")}); they load the new runtime on their next maestro call\n`,
+      `[${action}] ${subject} work (repos: ${holderRepos.join(", ")}); they load the new runtime on their next maestro call\n`,
     );
   }
   const unsafeRepos = results.filter((result) => result.unsafe).map((result) => result.repo);

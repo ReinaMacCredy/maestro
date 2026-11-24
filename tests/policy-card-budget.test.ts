@@ -4,16 +4,6 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { idFrom, runCli, setPlugin, withFixture, type Fixture } from "./helpers.ts";
 
-const dispatchFlags = [
-  "--objective", "return one view",
-  "--owned-scope", "read-only fixture",
-  "--excluded-scope", "source",
-  "--mutation", "no-write",
-  "--stop-condition", "one handback",
-  "--lane", "scout",
-  "--evidence-required", "source: note",
-];
-
 async function add(fixture: Fixture, title: string, extra: string[] = [], env = {}) {
   return runCli(fixture, ["work", "add", title, ...extra], env);
 }
@@ -34,7 +24,7 @@ test("463 policy-card-budget ships disabled: unattended cards pile up until it i
   });
 });
 
-test("464 the fourth unattended card is refused and the error names the three exits", async () => {
+test("464 the fourth unattended card is refused and the error names the two exits", async () => {
   await withFixture(async (fixture) => {
     await setPlugin(fixture, "policy-card-budget", false);
     const ids: string[] = [];
@@ -52,22 +42,19 @@ test("464 the fourth unattended card is refused and the error names the three ex
     expect(envelope.error.origin).toBe("policy-card-budget");
     for (const id of ids) expect(envelope.error.message).toContain(id);
     expect(envelope.error.message).toContain("maestro work done");
-    expect(envelope.error.message).toContain("maestro dispatch open");
     expect(envelope.error.message).toContain("maestro work cancel");
     expect(envelope.error.blockers?.map((blocker) => blocker.id)).toEqual(ids);
   });
 });
 
-test("465 release, an unaccepted dispatch, a rotated session id, and --parent do not free a slot", async () => {
+test("465 release, a rotated session id, and --parent do not free a slot", async () => {
   await withFixture(async (fixture) => {
     await setPlugin(fixture, "policy-card-budget", false);
     const first = idFrom(await add(fixture, "finding 1"));
     // Holding then releasing (lane.md step 5) leaves the card unattended again.
     expect((await runCli(fixture, ["work", "start", first, "--atomic-reason", "fixture"])).exitCode).toBe(0);
     expect((await runCli(fixture, ["work", "release", first])).exitCode).toBe(0);
-    const second = idFrom(await add(fixture, "finding 2"));
-    // A dispatch nobody accepted is not a worker.
-    expect((await runCli(fixture, ["dispatch", "open", second, ...dispatchFlags, "--pane", "no:such:pane"])).exitCode).toBe(0);
+    expect((await add(fixture, "finding 2")).exitCode).toBe(0);
     expect((await add(fixture, "finding 3")).exitCode).toBe(0);
 
     const rotated = await add(fixture, "finding 4", [], { MAESTRO_SESSION_ID: "another-session" });
@@ -80,17 +67,11 @@ test("465 release, an unaccepted dispatch, a rotated session id, and --parent do
   });
 });
 
-test("466 a live holder, an accepted dispatch, and a cancelled card each free a slot; a dead holder does not", async () => {
+test("466 a live holder and a cancelled card each free a slot; a dead holder does not", async () => {
   await withFixture(async (fixture) => {
     await setPlugin(fixture, "policy-card-budget", false);
     const held = idFrom(await add(fixture, "held by a live session"));
     expect((await runCli(fixture, ["work", "start", held, "--atomic-reason", "fixture"])).exitCode).toBe(0);
-
-    const dispatched = idFrom(await add(fixture, "accepted by a lane"));
-    expect((await runCli(fixture, [
-      "dispatch", "open", dispatched, ...dispatchFlags, "--pane", "w1:p1", "--target-session", "lane-one",
-    ])).exitCode).toBe(0);
-    expect((await runCli(fixture, ["dispatch", "accept", "x1"], { MAESTRO_SESSION_ID: "lane-one" })).exitCode).toBe(0);
 
     const dead = idFrom(await add(fixture, "held by a dead session"));
     expect((await runCli(fixture, ["work", "start", dead, "--atomic-reason", "fixture"], {
@@ -98,7 +79,7 @@ test("466 a live holder, an accepted dispatch, and a cancelled card each free a 
       MAESTRO_SESSION_PID: "999999",
     })).exitCode).toBe(0);
 
-    // held + dispatched are attended; dead counts as one; two more fill the budget.
+    // held is attended; dead counts as one; two more fill the budget.
     expect((await add(fixture, "unattended 1")).exitCode).toBe(0);
     const third = idFrom(await add(fixture, "unattended 2"));
     const refused = await add(fixture, "unattended 3");

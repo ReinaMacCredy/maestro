@@ -3,12 +3,12 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { dispatchLaneVocabulary } from "../src/plugins/dispatch.ts";
+import { laneVocabulary } from "../src/plugins/coordination.ts";
 import { idFrom, prepareInstallFixture, runCli, withFixture } from "./helpers.ts";
 
 setDefaultTimeout(15_000);
 
-test("287 [lint] maestro-work skill lane line matches the dispatch vocabulary", async () => {
+test("287 [lint] maestro-work skill lane line matches the brief lane vocabulary", async () => {
   // Proves source documentation parity, not independent runtime lane acceptance or rejection.
   const skill = await readFile(
     join(import.meta.dir, "..", "src", "plugins", "skills", "maestro-work", "SKILL.md"),
@@ -17,7 +17,7 @@ test("287 [lint] maestro-work skill lane line matches the dispatch vocabulary", 
   const laneLine = skill.split("\n").find((line) => line.startsWith("Lane: "));
   expect(laneLine).toBeDefined();
   expect(laneLine?.slice("Lane: ".length).split("|").map((name) => name.trim())).toEqual(
-    dispatchLaneVocabulary.map(({ name }) => name),
+    laneVocabulary.map(({ name }) => name),
   );
 });
 

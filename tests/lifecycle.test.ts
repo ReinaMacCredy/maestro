@@ -389,7 +389,7 @@ test("438 update warns about live holders and still completes", async () => {
 
     expect(updated.exitCode).toBe(0);
     expect(updated.stderr).toContain(
-      `[update] 1 live session holds work or an open dispatch (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
+      `[update] 1 live session holds work (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
     );
   });
 });

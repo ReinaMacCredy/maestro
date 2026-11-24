@@ -24,62 +24,6 @@ function sessionEnvironment(id: string): Record<string, string> {
   };
 }
 
-function dispatchOpenArgs(work: string, pane: string): string[] {
-  return [
-    "dispatch",
-    "open",
-    work,
-    "--objective",
-    `concurrent lane ${pane}`,
-    "--owned-scope",
-    "scratch fixture",
-    "--excluded-scope",
-    "product source",
-    "--mutation",
-    "no-write",
-    "--stop-condition",
-    "contract stored",
-    "--lane",
-    "decision",
-    "--evidence-required",
-    "source: concurrent CLI readback",
-    "--pane",
-    pane,
-  ];
-}
-
-function dispatchId(result: { stdout: string }): string {
-  const match = result.stdout.match(/^(x\d+) \[open\]/);
-  if (!match?.[1]) throw new Error(`missing dispatch id in stdout: ${result.stdout}`);
-  return match[1];
-}
-
-function handbackArgs(dispatch: string): string[] {
-  return [
-    "handback",
-    "file",
-    dispatch,
-    "--status",
-    "DONE",
-    "--claim",
-    "concurrent handback persisted",
-    "--proof",
-    "source: concurrent CLI readback",
-    "--assumptions",
-    "None",
-    "--residual-risks",
-    "None",
-    "--incidental-findings",
-    "None",
-  ];
-}
-
-function handbackId(result: { stdout: string }): string {
-  const match = result.stdout.match(/^(h\d+) \[DONE\]/);
-  if (!match?.[1]) throw new Error(`missing handback id in stdout: ${result.stdout}`);
-  return match[1];
-}
-
 test("B3.10 concurrent shared-store startup and work creation avoid locks and duplicate IDs", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
@@ -199,14 +143,11 @@ export default {
   });
 }, 120_000);
 
-test("291 concurrent decision, dispatch, and handback allocation stays serialized", async () => {
+test("291 concurrent decision allocation stays serialized", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
     const worktree = join(fixture.root, "entity-id-worktree");
     await addLinkedWorktree(fixture.repo, worktree);
-    const work = idFrom(
-      await runCli(fixture, ["work", "add", "concurrent entities", "--atomic-reason", "fixture"]),
-    );
 
     const decisions = await Promise.all([
       runCli(fixture, ["decision", "draft", "concurrent decision A"], sessionEnvironment("decision-a")),
@@ -223,75 +164,6 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     );
     expect(new Set(decisions.map(idFrom)).size).toBe(2);
 
-    // The council is declared before the race so the two concurrent opens join
-    // one recorded generation instead of racing to infer one (d706).
-    const anchor = await runCli(
-      fixture,
-      [...dispatchOpenArgs(work, "race:anchor"), "--council-members", "3"],
-      sessionEnvironment("dispatch-open-a"),
-    );
-    expect(anchor.exitCode).toBe(0);
-    const councilAnchor = dispatchId(anchor);
-    const dispatches = await Promise.all([
-      runCli(
-        fixture,
-        [...dispatchOpenArgs(work, "race:a"), "--council-anchor", councilAnchor],
-        sessionEnvironment("dispatch-open-a"),
-      ),
-      runCliAt(
-        fixture,
-        worktree,
-        [...dispatchOpenArgs(work, "race:b"), "--council-anchor", councilAnchor],
-        sessionEnvironment("dispatch-open-b"),
-      ),
-    ]);
-    expect(dispatches.map((result) => result.exitCode)).toEqual([0, 0]);
-    expect(dispatches.map((result) => result.stderr).join("\n")).not.toMatch(
-      /INTERNAL|database is locked|UNIQUE constraint/,
-    );
-    const dispatchIds = dispatches.map(dispatchId);
-    expect(new Set(dispatchIds).size).toBe(2);
-    const council = await runCli(fixture, ["dispatch", "list", work]);
-    expect(council.stdout).toContain("council: sealed (0/3 returned)");
-
-    const holders = ["handback-a", "handback-b"];
-    const openers = ["dispatch-open-a", "dispatch-open-b"];
-    for (const [index, dispatch] of dispatchIds.entries()) {
-      expect(
-        (
-          await runCli(
-            fixture,
-            ["dispatch", "accept", dispatch],
-            sessionEnvironment(holders[index] as string),
-          )
-        ).exitCode,
-      ).toBe(0);
-      expect(
-        (
-          await runCli(
-            fixture,
-            ["dispatch", "confirm", dispatch, "--session", holders[index] as string],
-            sessionEnvironment(openers[index] as string),
-          )
-        ).exitCode,
-      ).toBe(0);
-    }
-    const handbacks = await Promise.all([
-      runCli(
-        fixture,
-        handbackArgs(dispatchIds[0] as string),
-        sessionEnvironment(holders[0] as string),
-      ),
-      runCliAt(
-        fixture,
-        worktree,
-        handbackArgs(dispatchIds[1] as string),
-        sessionEnvironment(holders[1] as string),
-      ),
-    ]);
-    expect(handbacks.map((result) => result.exitCode)).toEqual([0, 0]);
-    expect(new Set(handbacks.map(handbackId)).size).toBe(2);
-
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
       readonly: true,
     });
@@ -299,7 +171,7 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
       .query<{ count: number; type: string }, []>(
         `SELECT type, COUNT(*) AS count
          FROM event_log
-         WHERE type IN ('decision.draft', 'dispatch.open', 'handback.file')
+         WHERE type IN ('decision.draft')
          GROUP BY type
          ORDER BY type`,
       )
@@ -307,8 +179,6 @@ test("291 concurrent decision, dispatch, and handback allocation stays serialize
     database.close();
     expect(eventCounts).toEqual([
       { count: 2, type: "decision.draft" },
-      { count: 3, type: "dispatch.open" },
-      { count: 2, type: "handback.file" },
     ]);
   });
 }, 120_000);
@@ -421,61 +291,6 @@ export default {
   });
 }, 120_000);
 
-test("293 dispatch cancel and handback file have one terminal winner", async () => {
-  await withFixture(async (fixture) => {
-    for (let trial = 0; trial < 12; trial += 1) {
-      const work = idFrom(
-        await runCli(fixture, ["work", "add", `dispatch terminal race ${trial}`, "--atomic-reason", "fixture"]),
-      );
-      const holder = `terminal-holder-${trial}`;
-      const dispatch = dispatchId(
-        await runCli(fixture, dispatchOpenArgs(work, `terminal:${trial}`)),
-      );
-      expect(
-        (
-          await runCli(
-            fixture,
-            ["dispatch", "accept", dispatch],
-            sessionEnvironment(holder),
-          )
-        ).exitCode,
-      ).toBe(0);
-      expect(
-        (
-          await runCli(fixture, [
-            "dispatch",
-            "confirm",
-            dispatch,
-            "--session",
-            holder,
-          ])
-        ).exitCode,
-      ).toBe(0);
-      const outcomes = await Promise.all([
-        runCli(
-          fixture,
-          ["dispatch", "cancel", dispatch, "--reason", "terminal race"],
-          sessionEnvironment("lead"),
-        ),
-        runCli(fixture, handbackArgs(dispatch), sessionEnvironment(holder)),
-      ]);
-      expect(outcomes.filter((result) => result.exitCode === 0)).toHaveLength(1);
-      const database = new Database(join(fixture.repo, ".maestro", "maestro.db"), {
-        readonly: true,
-      });
-      const row = database
-        .query<{ cancelled: number; returned: number }, [string]>(
-          `SELECT cancelled_at IS NOT NULL AS cancelled,
-                  EXISTS(SELECT 1 FROM handbacks WHERE dispatch_id = dispatches.id) AS returned
-           FROM dispatches WHERE id = ?`,
-        )
-        .get(dispatch);
-      database.close();
-      expect(Number(row?.cancelled) + Number(row?.returned)).toBe(1);
-    }
-  });
-}, 120_000);
-
 test("306 concurrent attention scans raise one row and one event", async () => {
   await withFixture(async (fixture) => {
     await initializeGitRepository(fixture.repo);
@@ -532,33 +347,5 @@ test("306 concurrent attention scans raise one row and one event", async () => {
         .get(decision)?.count,
     ).toBe(1);
     stored.close();
-  });
-}, 120_000);
-
-test("307 concurrent startup adds one pane column to an old dispatch schema", async () => {
-  await withFixture(async (fixture) => {
-    await initializeGitRepository(fixture.repo);
-    const worktree = join(fixture.root, "dispatch-migration-worktree");
-    await addLinkedWorktree(fixture.repo, worktree);
-    expect((await runCli(fixture, ["version"])).exitCode).toBe(0);
-    const databasePath = join(fixture.repo, ".maestro", "maestro.db");
-    const legacy = new Database(databasePath);
-    legacy.exec("ALTER TABLE dispatches DROP COLUMN pane");
-    legacy.close();
-
-    const startups = await Promise.all([
-      runCli(fixture, ["version"], sessionEnvironment("migration-a")),
-      runCliAt(fixture, worktree, ["version"], sessionEnvironment("migration-b")),
-    ]);
-    expect(startups.map((result) => result.exitCode)).toEqual([0, 0]);
-
-    const migrated = new Database(databasePath, { readonly: true });
-    expect(
-      migrated
-        .query<{ name: string }, []>("PRAGMA table_info(dispatches)")
-        .all()
-        .filter((column) => column.name === "pane"),
-    ).toHaveLength(1);
-    migrated.close();
   });
 }, 120_000);

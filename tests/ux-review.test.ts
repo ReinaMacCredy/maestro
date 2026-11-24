@@ -113,13 +113,13 @@ test("606 brief --session prints the SessionStart brief the hook delivers", asyn
     expect(brief.exitCode).toBe(0);
     expect(brief.stdout).toBe(hook.stdout);
     expect(brief.stdout).toContain("method: before the first step, name the task's playbook");
-    expect(brief.stdout).toContain("enabled policies: policy-breakdown, policy-dispatch, policy-lifecycle, policy-proof\n  see or change: maestro plugin list|enable|disable <name>\n");
+    expect(brief.stdout).toContain("enabled policies: policy-breakdown, policy-lifecycle, policy-proof\n  see or change: maestro plugin list|enable|disable <name>\n");
     const prompt = await runCli(fixture, ["hook", "record", "--event", "UserPromptSubmit"], session);
     expect(prompt.stdout).not.toContain("see or change");
   });
 });
 
-test("607 SessionStart prunes dead sessions older than 30 days that hold nothing and sit in no dispatch", async () => {
+test("607 SessionStart prunes dead sessions older than 30 days that hold nothing", async () => {
   await withFixture(async (fixture) => {
     const held = idFrom(await runCli(fixture, ["work", "add", "Held by a ghost", "--json"], session));
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));

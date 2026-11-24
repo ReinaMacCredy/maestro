@@ -4,7 +4,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import {
-  idFrom,
   initializeGitRepository,
   prepareInstallFixture,
   runCli,
@@ -131,107 +130,6 @@ test("225 the codex check verifies hook declarations but never guesses trusted h
     const stale = await runCli(fixture, ["doctor"], { PATH: path });
     expect(stale.stdout).toContain("codex hooks: stale");
     expect(stale.stdout).toContain("maestro install");
-  });
-});
-
-test("230 concurrent dispatch acceptance has exactly one winner", async () => {
-  await withFixture(async (fixture) => {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const work = idFrom(
-        await runCli(
-          fixture,
-          ["work", "add", `accept race ${attempt}`, "--atomic-reason", "race fixture"],
-        ),
-      );
-      const opened = await runCli(fixture, [
-        "dispatch",
-        "open",
-        work,
-        "--objective",
-        "accept once",
-        "--owned-scope",
-        "scratch store",
-        "--excluded-scope",
-        "source edits",
-        "--mutation",
-        "no-write",
-        "--stop-condition",
-        "accepted",
-        "--lane",
-        "delivery",
-        "--evidence-required",
-        "source proof",
-        "--pane",
-        "w1:pD",
-      ]);
-      expect(opened.exitCode).toBe(0);
-      const dispatch = opened.stdout.match(/\bx\d+\b/)?.[0];
-      if (!dispatch) throw new Error(`missing dispatch id: ${opened.stdout}`);
-
-      const contenders = await Promise.all([
-        runCli(fixture, ["dispatch", "accept", dispatch], session(`accept-a-${attempt}`)),
-        runCli(fixture, ["dispatch", "accept", dispatch], session(`accept-b-${attempt}`)),
-      ]);
-      const winners = contenders.filter((result) => result.exitCode === 0);
-      const losers = contenders.filter((result) => result.exitCode !== 0);
-      expect(winners).toHaveLength(1);
-      expect(losers).toHaveLength(1);
-      expect(losers[0]?.stderr).toContain("DISPATCH_CLAIMED");
-      const winnerSession = contenders[0]?.exitCode === 0
-        ? `accept-a-${attempt}`
-        : `accept-b-${attempt}`;
-
-      const database = probeDatabase(fixture);
-      try {
-        expect(
-          database
-            .query<{ claimed_by: string | null; held_by: string | null }, [string]>(
-              "SELECT claimed_by, held_by FROM dispatches WHERE id = ?",
-            )
-            .get(dispatch),
-        ).toEqual({ claimed_by: winnerSession, held_by: null });
-        expect(
-          database
-            .query<{ count: number }, [string]>(
-              "SELECT count(*) AS count FROM event_log WHERE type = 'dispatch.accept' AND entity_id = ?",
-            )
-            .get(dispatch)?.count,
-        ).toBe(1);
-      } finally {
-        database.close();
-      }
-
-      expect(
-        (
-          await runCli(fixture, [
-            "dispatch",
-            "confirm",
-            dispatch,
-            "--session",
-            winnerSession,
-          ])
-        ).exitCode,
-      ).toBe(0);
-      const confirmed = probeDatabase(fixture);
-      try {
-        expect(
-          confirmed
-            .query<{ claimed_by: string | null; held_by: string | null }, [string]>(
-              "SELECT claimed_by, held_by FROM dispatches WHERE id = ?",
-            )
-            .get(dispatch),
-        ).toEqual({ claimed_by: null, held_by: winnerSession });
-        expect(
-          confirmed
-            .query<{ count: number }, [string]>(
-              "SELECT count(*) AS count FROM event_log WHERE type = 'dispatch.confirm' AND entity_id = ?",
-            )
-            .get(dispatch)?.count,
-        ).toBe(1);
-      } finally {
-        confirmed.close();
-      }
-    }
   });
 });
 

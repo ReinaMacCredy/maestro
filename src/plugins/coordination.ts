@@ -5,12 +5,19 @@ import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { Harness, SessionRecord } from "../kernel/sessions.ts";
 import { tableExists } from "../kernel/store.ts";
 import { latestCheckpoints, type WorkRecord, type WorkService } from "./work.ts";
-import { dispatchLaneVocabulary, type DispatchService } from "./dispatch.ts";
 import { driftAdvisory } from "./lifecycle.ts";
 import { isRoom } from "./room.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { recordCompaction, relativeAge } from "./session-telemetry.ts";
 import { currentPaneId, maybeHandleSlpStatus, roomOwnerLine } from "./slp-v2.ts";
+
+export const laneVocabulary = [
+  { brief: "scout no-write", name: "scout" },
+  { brief: "decision x2-3", name: "decision" },
+  { brief: "delivery", name: "delivery" },
+  { brief: "challenge", name: "challenge" },
+  { brief: "shadow no-write", name: "shadow" },
+] as const;
 
 interface LivePeer {
   heldWork: WorkRecord[];
@@ -129,19 +136,14 @@ function formatAge(iso: string, now = Date.now()): string {
 
 const deadSessionRetentionMs = 30 * 86_400_000;
 
-// A dead session that holds nothing and appears in no dispatch is history the
-// event log already keeps; the sessions table only needs it for 30 days.
+// A dead session that holds nothing is history the event log already keeps;
+// the sessions table only needs it for 30 days.
 function pruneDeadSessions(context: PluginContext): void {
   if (context.store.readOnly) return;
   const cutoff = new Date(Date.now() - deadSessionRetentionMs).toISOString();
   const referenced = new Set<string>();
   for (const item of (context.work as WorkService).snapshot()) {
     if (item.heldBy) referenced.add(item.heldBy);
-  }
-  for (const dispatch of (context.dispatch as DispatchService).list()) {
-    for (const id of [dispatch.targetSession, dispatch.openedBy, dispatch.claimedBy, dispatch.heldBy]) {
-      if (id) referenced.add(id);
-    }
   }
   const stale = context.sessions
     .list()
@@ -170,7 +172,7 @@ function formatLivePeers(peers: LivePeer[]): string {
 
 export const coordinationPlugin: BuiltInPlugin = {
   name: "coordination",
-  inject: ["work", "dispatch"],
+  inject: ["work"],
   apply(context) {
     context.store.migrate(`
       DROP TABLE IF EXISTS message_cursors;
@@ -193,7 +195,7 @@ export const coordinationPlugin: BuiltInPlugin = {
           [
             "method: before the first step, name the task's playbook from ~/maestro/WORKFLOW.md#routing (a question is investigation, a defect bug-fix, new behavior feature), run maestro recipe show <name>, and copy its numbered steps into your plan list (skip: <reason> for a step you drop); only a quickfix, a one-sentence change, skips this; tracked work: maestro work add|start|done; Full adds a bundle with ~/maestro/skills/maestro-{bundle,verify}/SKILL.md; any tier: maestro-{coach,questionnaire}; rules: ~/maestro/WORKFLOW.md",
             "  read ~/maestro/WORKFLOW.md: recon before tier selection; decision ownership, testing discipline, resume authority, and completion/delivery rules live there, not in this brief",
-            `intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (${dispatchLaneVocabulary.map(({ brief }) => brief).join(" | ")}); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
+            `intake: problem in one sentence; route by ~/maestro/WORKFLOW.md; optional lane (${laneVocabulary.map(({ brief }) => brief).join(" | ")}); a finding is not work: doctrine correction -> maestro lesson file, code finding -> review doc or handback, work add only for the next thing being built`,
           ].join("\n"),
         { events: ["SessionStart"] },
       ),
@@ -242,39 +244,6 @@ export const coordinationPlugin: BuiltInPlugin = {
     // while she is away, how many provisional rulings wait for her.
     context.effect(() =>
       brief.register(() => roomOwnerLine(context), { events: ["SessionStart", "UserPromptSubmit"] }),
-    );
-    context.effect(() =>
-      brief.register(
-        (sessionId) => {
-          const dispatches = (context.dispatch as DispatchService).list();
-          const peerDispatches = dispatches.filter(
-            (dispatch) =>
-              dispatch.heldBy === sessionId ||
-              dispatch.claimedBy === sessionId ||
-              dispatch.targetSession === sessionId,
-          );
-          if (peerDispatches.length > 0) {
-            const openDispatches = peerDispatches.filter(
-              (dispatch) => dispatch.state === "open",
-            );
-            if (openDispatches.length > 0) {
-              return `role: peer (${openDispatches.map(({ id }) => id).join(", ")}) — dispatch prompts only; anything else is not your role`;
-            }
-            const latest = peerDispatches.at(-1)!;
-            return `role: peer (last ${latest.id} ${latest.state}) — dispatch prompts only; anything else is not your role`;
-          }
-          const openedDispatches = dispatches.filter(
-            (dispatch) => dispatch.openedBy === sessionId,
-          );
-          if (openedDispatches.length === 0) return "";
-          const openDispatches = openedDispatches.filter(
-            (dispatch) => dispatch.state === "open",
-          );
-          const openText = openDispatches.map(({ id }) => id).join(", ") || "none";
-          return `role: lead (open ${openText}; ${openedDispatches.length - openDispatches.length} closed)`;
-        },
-        { events: ["SessionStart", "UserPromptSubmit"] },
-      ),
     );
     context.effect(() =>
       brief.register(() => {
@@ -438,26 +407,8 @@ export const coordinationPlugin: BuiltInPlugin = {
             if (!item.heldBy) continue;
             holds.set(item.heldBy, [...holds.get(item.heldBy) ?? [], item.id]);
           }
-          const openDispatchSessions = new Set<string>();
-          const itemsById = new Map(items.map((item) => [item.id, item]));
-          for (const dispatch of (context.dispatch as DispatchService).list()) {
-            const item = itemsById.get(dispatch.workId);
-            if (
-              dispatch.state !== "open" ||
-              !item ||
-              item.state === "done" ||
-              item.state === "cancelled"
-            ) continue;
-            for (const sessionId of [
-              dispatch.claimedBy,
-              dispatch.heldBy,
-              dispatch.targetSession,
-            ]) {
-              if (sessionId) openDispatchSessions.add(sessionId);
-            }
-          }
           const preservesDeadSession = (sessionId: string) =>
-            (holds.get(sessionId)?.length ?? 0) > 0 || openDispatchSessions.has(sessionId);
+            (holds.get(sessionId)?.length ?? 0) > 0;
           const liveOnly = invocation.options.live === true;
           const showAll = invocation.options.all === true;
           const sessions = allSessions.filter((session) =>

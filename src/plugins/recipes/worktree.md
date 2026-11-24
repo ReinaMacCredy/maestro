@@ -1,8 +1,8 @@
 # Worktree
 
 Use this recipe to isolate concurrent changes or a bounded delivery lane. Git
-owns branches and worktrees; Maestro records the work, decisions, notes,
-dispatches, and handbacks that make the lane understandable.
+owns branches and worktrees; Maestro records the work, decisions, and notes
+that make the lane understandable.
 
 ## Create the lane
 
@@ -11,10 +11,10 @@ dispatches, and handbacks that make the lane understandable.
 2. Choose a unique branch and path from the intended base commit.
 3. Create it with normal git commands, then confirm branch, HEAD, and path.
 4. Use `herdr pane list` to identify the lane pane, then record its value, the
-   owned paths, and the stop condition with `maestro dispatch open --pane <pane-id>`
-   when another session owns the bounded work.
+   owned paths, and the stop condition in a `maestro work note` when another
+   session owns the bounded work.
 5. Use `herdr pane send-text <pane-id> "<coordination note>"` for immediate
-   coordination; keep durable scope and outcomes in the dispatch and handback.
+   coordination; keep durable scope and outcomes in work notes.
 
 ## Commands that work here
 
@@ -37,7 +37,7 @@ git branch -d <branch>
 
 ## Return and clean up
 
-File `maestro handback file <dispatch-id>` with the branch, commit, target,
+Return maestro-work's handback packet with the branch, commit, target,
 verification commands, dirty state, and exact next git command. The receiving
 owner performs merge-back. Remove the worktree and branch only after the landed
 commit is verified and no live owner or conflict remains.
@@ -55,7 +55,7 @@ gates are the review. They come from pstack's worktree-cleanup playbook
    When the goal is disk space, record `df -h /` first.
 2. A classification is advice, not permission. Cross-check every candidate
    against what is live: `maestro status` for live sessions and held work,
-   open dispatches, and the owner's word on which sessions are in use. A live
+   and the owner's word on which sessions are in use. A live
    session can own sibling worktrees whose names appear nowhere else. When the
    owner's set and your classification disagree, the owner's set wins.
 3. Pause on irreversible loss. For a worktree with tracked uncommitted edits,

@@ -44,21 +44,15 @@ apply to every writer of one run go in one file every brief points at.
 - `shadow` runs beside the owner without writing and returns comparison
   evidence that is never a candidate or a work write lease.
 
-No-write names the file boundary only. `maestro dispatch accept` and
-`maestro handback file` are the lane's own two writes and are never in the
-excluded scope, so a scout or shadow lane can still accept and return. A
-subagent opens no dispatch: the holder that briefed it reviews its diff and
-keeps the item.
+No-write names the file boundary only. A subagent's holder, the one that
+briefed it, reviews its diff and keeps the item.
 
 The canonical parallel shapes are delivery and challenge on the same scope,
 or a council of decision lanes run by `maestro-council`.
 
 ## Handback
 
-Return this packet when the writer stops. `maestro dispatch accept` leaves
-the dispatch claimed, not held, and `maestro handback file` refuses with
-`DISPATCH_UNCONFIRMED` until the opener runs `maestro dispatch confirm`, so
-ask for the confirm at acceptance rather than at the stop condition.
+Return this packet when the writer stops.
 
 ```text
 Status: <DONE | BLOCKED | UNTESTABLE | UNKNOWN | FAILED | CHALLENGE | REOPEN_REQUEST | DEPENDENCY_REQUEST | COUNCIL_REQUEST>
@@ -118,7 +112,7 @@ Smallest new information needed: <next fact that would change the approach>
   pair-checking gate is enabled, with the gate's tag prefix (`test:`, `qa:`)
   on the claim. Report pending delivery approval separately from completion. In a
   bundle, run `maestro handoff <bundle-id>` before releasing the work item:
-  it renders NOTES.md from the store (work, decisions, handbacks, `failed:`
+  it renders NOTES.md from the store (work, decisions, `failed:`
   and `checkpoint:` notes, base commit); hand-edit only Authority and
   whatever the store cannot derive, never the rendered sections.
 

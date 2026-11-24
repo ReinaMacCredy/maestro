@@ -448,7 +448,7 @@ export const lessonPlugin: BuiltInPlugin = {
           "--expected": { description: "What was expected instead.", value: true },
           "--why": { description: "Why the expectation is the right one.", value: true },
           "--evidence": {
-            description: "A work, handback, or decision id that evidences it.",
+            description: "A work or decision id that evidences it.",
             value: true,
             multiple: true,
           },

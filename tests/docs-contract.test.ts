@@ -94,9 +94,6 @@ test("309 [lint] every README verb-tour command resolves through CLI help", asyn
   // Proves documentation-to-registry resolution, not valid-fixture execution of each command family.
   const readme = await Bun.file(join(import.meta.dir, "..", "README.md")).text();
   const commands = documentedCommands(readme);
-  expect(commands).toContainEqual(["dispatch", "list"]);
-  expect(commands).toContainEqual(["handback", "show"]);
-  expect(commands).not.toContainEqual(["handback", "list"]);
 
   await withFixture(async (fixture) => {
     for (const command of commands) {
@@ -236,25 +233,15 @@ test("576 [lint] non-SLP procedures share one risk-based workflow without mandat
   });
 });
 
-test("639 [lint] WORKFLOW.md states the two-model boundary and dispatch/handback help names its scope (Hub d87)", async () => {
+test("639 [lint] WORKFLOW.md states the two-model boundary (Hub d87)", async () => {
   const root = join(import.meta.dir, "..", "src", "plugins");
   const workflow = await Bun.file(join(root, "resources", "WORKFLOW.md")).text();
   const boundary = workflow.match(/## Two coordination models\n\n([\s\S]*?)\n\n## /)?.[1] ?? "";
   expect(boundary.split("\n\n")).toHaveLength(1);
   expect(boundary).toContain("nine SLP v2 operations");
-  for (const classic of ["work start", "decision draft", "ready", "dispatch", "handback", "councils"]) {
+  for (const classic of ["work start", "decision draft", "ready"]) {
     expect(boundary).toContain(classic);
   }
-  expect(boundary).toMatch(/not legacy/);
-
-  await withFixture(async (fixture) => {
-    for (const verb of ["dispatch", "handback"]) {
-      const help = await runCli(fixture, [verb, "--help"]);
-      expect(help.exitCode).toBe(0);
-      const opening = help.stdout.split("\n")[0] ?? "";
-      expect(opening).toMatch(new RegExp(`^${verb} {2,}.*lane contracts outside a running SLP team`, "i"));
-    }
-  });
 });
 
 test("645 [lint] memory help and WORKFLOW.md state the any-cwd rule; uninstall help names room forget (UX F help findings, F10)", async () => {

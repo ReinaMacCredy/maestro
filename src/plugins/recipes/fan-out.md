@@ -31,9 +31,8 @@ it as each step says.
   broader workers.
 - A unit that needs a separate verifier gets one on a different model family
   from its worker.
-- A brief uses the dispatch envelope's fields (maestro-work, Dispatch) but is
-  not a `maestro dispatch open`. The seat keeps the work item and its lease;
-  a subagent brief opens no dispatch and no work item.
+- A brief uses the dispatch envelope's fields (maestro-work, Dispatch). The
+  seat keeps the work item and its lease; a subagent brief opens no work item.
 - Work too large for one seat to drain is a team. The Lead adds Peers per
   `maestro recipe show slp`, and each Peer fans out inside its own seat.
   There is no nested coordinator subagent.

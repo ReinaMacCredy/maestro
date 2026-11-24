@@ -35,11 +35,9 @@ next action goes on a waking operation - `maestro work add`,
 `maestro work return`, `maestro work accept`, `maestro work note --rework` -
 never on a plain note, and a pane inside a tool call reads nothing until that
 call returns (l15).
-When a Peer accepts a dispatch, run `maestro dispatch confirm <id>` at once,
-before arming any wait: the Peer's own `maestro work start` is gated on that confirm,
-so a Lead that batches it with the wait costs the lane its first turn. A Peer
+A Peer
 whose agent process is interrupted mid-slice keeps everything that matters,
-its files on disk and its lease and dispatch hold in the store; recover it with
+its files on disk and its lease in the store; recover it with
 a resume brief pointing at its own working tree, never a new dispatch and never
 a reconstruction.
 

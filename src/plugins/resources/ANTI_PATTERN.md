@@ -100,13 +100,12 @@ work state exists only when `maestro status <work-id>` shows it.
 Two seats hold the same scope at the same time, so each one's work is correct
 alone and the pair is a conflict nobody owns.
 
-In maestro: two threads writing the same file; two open dispatches whose owned
-scopes overlap.
+In maestro: two threads writing the same file.
 
 evidence: the concurrency rule exists because of it - WORKFLOW.md requires that
 "concurrent threads write only disjoint, exclusively owned paths", one work
 item per tracked thread, and `attention.ts` raises a `SCOPE_COLLISION` card
-when two live holders or two open delivery dispatches share a scope token. The
+when two live sessions hold sibling work items. The
 0.107 Rust line shipped the same rule as the warm-file overlap banner with the
 cross-worktree active union (Hub memory,
 `project_same-branch-conflict-prevention-shipped`, 2026-06-17).

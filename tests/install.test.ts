@@ -53,7 +53,7 @@ test("282 first install needs no rollback binary and targets the detected shell"
   });
 }, 20_000);
 
-test("439 install warns about a live dispatch holder and still completes", async () => {
+test("439 install warns about a live work holder and still completes", async () => {
   await withFixture(async (fixture) => {
     const peer = {
       MAESTRO_SESSION_ID: "activation-install-peer",
@@ -67,7 +67,7 @@ test("439 install warns about a live dispatch holder and still completes", async
       [
         "work",
         "add",
-        "live install dispatch",
+        "live install work",
         "--atomic-reason",
         "fixture",
       ],
@@ -75,37 +75,7 @@ test("439 install warns about a live dispatch holder and still completes", async
     );
     expect(added.exitCode).toBe(0);
     const work = idFrom(added);
-    const opened = await runCli(
-      fixture,
-      [
-        "dispatch",
-        "open",
-        work,
-        "--objective",
-        "hold a live dispatch during install",
-        "--owned-scope",
-        "fixture",
-        "--excluded-scope",
-        "product source",
-        "--mutation",
-        "no-write",
-        "--stop-condition",
-        "install completes",
-        "--lane",
-        "scout",
-        "--evidence-required",
-        "source: fixture",
-        "--pane",
-        "fixture:p1",
-        "--target-session",
-        peer.MAESTRO_SESSION_ID,
-      ],
-      peer,
-    );
-    expect(opened).toEqual(expect.objectContaining({ exitCode: 0 }));
-    const dispatch = opened.stdout.match(/^x\d+/)?.[0];
-    if (!dispatch) throw new Error(`missing dispatch id in stdout: ${opened.stdout}`);
-    expect((await runCli(fixture, ["dispatch", "accept", dispatch], peer)).exitCode).toBe(0);
+    expect((await runCli(fixture, ["work", "start", work], peer)).exitCode).toBe(0);
     await mkdir(join(fixture.home, "maestro"), { recursive: true });
     await writeFile(join(fixture.home, "maestro", "registry"), `${fixture.repo}\n`);
     const { path } = await prepareInstallFixture(fixture);
@@ -117,7 +87,7 @@ test("439 install warns about a live dispatch holder and still completes", async
 
     expect(installed.exitCode).toBe(0);
     expect(installed.stderr).toContain(
-      `[install] 1 live session holds work or an open dispatch (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
+      `[install] 1 live session holds work (repos: ${fixture.repo}); they load the new runtime on their next maestro call`,
     );
   });
 });

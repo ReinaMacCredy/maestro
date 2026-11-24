@@ -153,7 +153,7 @@ Skills load by bare name in every tool and serve steps inside a playbook:
 Inside a playbook the main chat never writes code. A subagent under the
 `delegate` profile writes it; the main chat plans, briefs, reviews the diff,
 and verifies. The work item, its lease, and its proof stay with the main
-chat, so a subagent opens no dispatch row. A quickfix outside any playbook is
+chat. A quickfix outside any playbook is
 written directly.
 
 - Brief every subagent in maestro-work's dispatch envelope, with file
@@ -195,10 +195,7 @@ running SLP team (a Lead, Peer, or Team Supervisor pane after `team start`)
 only the nine SLP v2 operations apply, and the retired verbs redirect to them.
 Everywhere else (plain sessions, the Hub room, design and wayfinding sessions)
 the classic surface is the live model: `work start|done`,
-`decision draft|lock`, `ready`, `dispatch` and `handback` lane contracts,
-councils, worktree lanes, and policy-dispatch. `dispatch` and `handback` are
-not legacy and are not scheduled for removal; they are the lane contracts
-outside a running SLP team.
+`decision draft|lock`, `ready`, councils, and worktree lanes.
 
 ## Bundle contract (tier Full)
 

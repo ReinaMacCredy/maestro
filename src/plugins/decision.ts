@@ -1,6 +1,5 @@
 import { CliError, requiredPosition, type CliInvocation, type CliResult } from "../kernel/cli.ts";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
-import type { DispatchService } from "./dispatch.ts";
 import { registerSessionCommand } from "./session-required.ts";
 import { slpDecisionResult } from "./slp-v2.ts";
 import type { WorkService } from "./work.ts";
@@ -159,7 +158,7 @@ export function formatDecision(decision: DecisionRecord, width: number | null): 
 
 export const decisionPlugin: BuiltInPlugin = {
   name: "decision",
-  inject: ["work", "dispatch"],
+  inject: ["work"],
   apply(context) {
     context.store.migrate(`
       CREATE TABLE IF NOT EXISTS decisions (
@@ -286,10 +285,6 @@ export const decisionPlugin: BuiltInPlugin = {
               const rationale = suppliedRationale ?? existing.rationale;
               const dissent = suppliedDissent ?? existing.dissent;
               const reviewAt = suppliedReviewAt ?? existing.reviewAt;
-              const council = existing.workId
-                ? (context.dispatch as DispatchService).council(existing.workId)
-                : null;
-              const sealedCouncil = council?.sealed ? council.generationAnchor : null;
               const updatedAt = new Date().toISOString();
               const updated = context.store.database
                 .query(
@@ -322,22 +317,14 @@ export const decisionPlugin: BuiltInPlugin = {
                 payload: {
                   text,
                   edit: true,
-                  ...(sealedCouncil ? { sealedCouncil } : {}),
                 },
               });
               return {
                 decision: service.get(existing.id) as DecisionRecord,
                 previous: existing.text,
-                sealedCouncil,
-                workId: existing.workId,
               };
             });
             const updated = edit.immediate();
-            if (updated.sealedCouncil && updated.workId) {
-              process.stderr.write(
-                `[sealed] ${updated.workId} council is sealed; this draft is readable by its lanes\n`,
-              );
-            }
             return {
               data: { decision: updated.decision, previous: updated.previous },
               text: `${format(updated.decision)}\nprevious: ${updated.previous}`,
@@ -383,10 +370,6 @@ export const decisionPlugin: BuiltInPlugin = {
             if (supersedesId) {
               requireSupersessionTarget(context, supersedesId);
             }
-            const council = workId
-              ? (context.dispatch as DispatchService).council(workId)
-              : null;
-            const sealedCouncil = council?.sealed ? council.generationAnchor : null;
             const id = context.store.nextPrefixedId("decisions", "d");
             context.store.database
               .query(
@@ -417,17 +400,11 @@ export const decisionPlugin: BuiltInPlugin = {
                 parentId,
                 workId,
                 supersedesId,
-                ...(sealedCouncil ? { sealedCouncil } : {}),
               },
             });
-            return { decision: service.get(id) as DecisionRecord, sealedCouncil };
+            return service.get(id) as DecisionRecord;
           });
-          const { decision: created, sealedCouncil } = transaction.immediate();
-          if (sealedCouncil && workId) {
-            process.stderr.write(
-              `[sealed] ${workId} council is sealed; this draft is readable by its lanes\n`,
-            );
-          }
+          const created = transaction.immediate();
           return { data: { decision: created }, text: format(created) };
         },
         {

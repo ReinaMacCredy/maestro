@@ -123,7 +123,7 @@ test("B3.6 status and hook briefs show live peers with held work and stay silent
   });
 });
 
-test("B3.7 status hides dead noise but keeps dead work and dispatch owners", async () => {
+test("B3.7 status hides dead noise but keeps dead work owners", async () => {
   await withFixture(async (fixture) => {
     const held = idFrom(await runCli(fixture, ["work", "add", "dead-held work"]));
     expect(
@@ -135,33 +135,7 @@ test("B3.7 status hides dead noise but keeps dead work and dispatch owners", asy
         )
       ).exitCode,
     ).toBe(0);
-    const dispatched = idFrom(await runCli(fixture, ["work", "add", "dispatched work"]));
-    const opened = await runCli(fixture, [
-      "dispatch",
-      "open",
-      dispatched,
-      "--objective",
-      "exercise status filtering",
-      "--owned-scope",
-      "tests",
-      "--excluded-scope",
-      "production",
-      "--mutation",
-      "no-write",
-      "--stop-condition",
-      "status is observed",
-      "--lane",
-      "scout",
-      "--evidence-required",
-      "test output",
-      "--pane",
-      "fixture",
-      "--target-session",
-      "dead-dispatch",
-    ]);
-    expect(opened.exitCode).toBe(0);
     for (const [id, pid] of [
-      ["dead-dispatch", 99_999_998],
       ["dead-hidden", 99_999_997],
     ] as const) {
       expect(
@@ -183,10 +157,9 @@ test("B3.7 status hides dead noise but keeps dead work and dispatch owners", asy
     expect(status.exitCode).toBe(0);
     expect(status.stdout).toContain("dead-holder [dead]");
     expect(status.stdout).toContain(`holds: ${held}`);
-    expect(status.stdout).toContain("dead-dispatch [dead]");
     expect(status.stdout).not.toContain("dead-hidden [dead]");
     expect(status.stdout.trim().split("\n").at(-1)).toBe(
-      "1 dead sessions hidden (2 hold work); --all to list",
+      "1 dead sessions hidden (1 hold work); --all to list",
     );
 
     const all = await runCli(fixture, ["status", "--all"]);
@@ -204,10 +177,8 @@ test("B3.7 status hides dead noise but keeps dead work and dispatch owners", asy
       };
     }).data;
     expect(data.sessions.map((session) => session.id)).toContain("dead-holder");
-    expect(data.sessions.map((session) => session.id)).toContain("dead-dispatch");
     expect(data.sessions.map((session) => session.id)).not.toContain("dead-hidden");
     expect(data.held["dead-holder"]).toEqual([held]);
-    expect(data.held["dead-dispatch"]).toEqual([]);
     expect(data.held).not.toHaveProperty("dead-hidden");
     expect(data.hiddenDead).toBe(1);
 
@@ -218,7 +189,7 @@ test("B3.7 status hides dead noise but keeps dead work and dispatch owners", asy
       expect(
         database.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM sessions").get()
           ?.count,
-      ).toBe(4);
+      ).toBe(3);
     } finally {
       database.close();
     }

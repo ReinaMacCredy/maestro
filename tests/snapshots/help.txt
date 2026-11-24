@@ -5,9 +5,7 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
-  dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
-  handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *
   hook       Record harness events and print the current brief.
@@ -43,7 +41,6 @@ environment:
 attention  Scan store state for attention packets without mutating work. *
 usage: maestro attention
     --decision-stale <value>  Draft decision threshold in hours (default 24).
-    --dispatch-stale <value>  Unreturned dispatch threshold in hours (default 2).
     --json                    Emit one compact JSON success envelope.
     --stale <value>           Stalled lease threshold in minutes (default 30).
 * runs under MAESTRO_READ_ONLY=1
@@ -228,160 +225,10 @@ usage: maestro decision withdraw <id>
     --json            Emit one compact JSON success envelope.
     --reason <value>  Record why the draft was withdrawn.
 
-### maestro dispatch --help
-dispatch  Lane contracts outside a running SLP team: open, accept, cancel, and read them.
-subverbs:
-  accept   Accept a dispatch without taking the work write lease.
-    usage: maestro dispatch accept <id>
-    --json  Emit one compact JSON success envelope.
-  cancel   Cancel a dispatch while keeping its row and reason.
-    usage: maestro dispatch cancel <id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Record why the lane was abandoned.
-  confirm  Confirm a dispatch claim or validate its targeted holder as the opener.
-    usage: maestro dispatch confirm <id>
-    --json             Emit one compact JSON success envelope.
-    --session <value>  Name the claimed or targeted session.
-  list     List dispatch contracts, optionally for one work item. *
-    usage: maestro dispatch list [work-id]
-    --json  Emit one compact JSON success envelope.
-  open     Store a complete lane contract on a work item.
-    usage: maestro dispatch open <work-id>
-    --council-anchor <value>     Join the council declared by this dispatch id.
-    --council-members <value>    Declare a blind council of this many views; later members join with --council-anchor.
-    --evidence-required <value>  Name the required evidence.
-    --excluded-scope <value>     Name the excluded scope.
-    --json                       Emit one compact JSON success envelope.
-    --lane <value>               Name the lane type.
-    --mutation <value>           Declare the mutation boundary.
-    --objective <value>          State the observable objective.
-    --owned-scope <value>        Name the lane-owned scope.
-    --pane <value>               Record the pane that owns the lane.
-    --stop-condition <value>     State when the lane stops.
-    --target-session <value>     Address a session already known by its harness session id, the value Herdr reports as agent_session.value; never the Herdr agent name.
-  show     Show one stored dispatch contract. *
-    usage: maestro dispatch show <id>
-    --json  Emit one compact JSON success envelope.
-  unseal   Open a sealed council early and record why.
-    usage: maestro dispatch unseal <work-id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Record why the council opened early.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro dispatch accept --help
-dispatch accept  Accept a dispatch without taking the work write lease.
-usage: maestro dispatch accept <id>
-    --json  Emit one compact JSON success envelope.
-
-### maestro dispatch cancel --help
-dispatch cancel  Cancel a dispatch while keeping its row and reason.
-usage: maestro dispatch cancel <id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Record why the lane was abandoned.
-
-### maestro dispatch confirm --help
-dispatch confirm  Confirm a dispatch claim or validate its targeted holder as the opener.
-usage: maestro dispatch confirm <id>
-    --json             Emit one compact JSON success envelope.
-    --session <value>  Name the claimed or targeted session.
-
-### maestro dispatch list --help
-dispatch list  List dispatch contracts, optionally for one work item. *
-usage: maestro dispatch list [work-id]
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro dispatch open --help
-dispatch open  Store a complete lane contract on a work item.
-usage: maestro dispatch open <work-id>
-    --council-anchor <value>     Join the council declared by this dispatch id.
-    --council-members <value>    Declare a blind council of this many views; later members join with --council-anchor.
-    --evidence-required <value>  Name the required evidence.
-    --excluded-scope <value>     Name the excluded scope.
-    --json                       Emit one compact JSON success envelope.
-    --lane <value>               Name the lane type.
-    --mutation <value>           Declare the mutation boundary.
-    --objective <value>          State the observable objective.
-    --owned-scope <value>        Name the lane-owned scope.
-    --pane <value>               Record the pane that owns the lane.
-    --stop-condition <value>     State when the lane stops.
-    --target-session <value>     Address a session already known by its harness session id, the value Herdr reports as agent_session.value; never the Herdr agent name.
-
-### maestro dispatch show --help
-dispatch show  Show one stored dispatch contract. *
-usage: maestro dispatch show <id>
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro dispatch unseal --help
-dispatch unseal  Open a sealed council early and record why.
-usage: maestro dispatch unseal <work-id>
-    --json            Emit one compact JSON success envelope.
-    --reason <value>  Record why the council opened early.
-
 ### maestro doctor --help
 doctor  Diagnose the machine runtime and current repository wiring read-only.
 usage: maestro doctor
     --json  Emit one compact JSON success envelope.
-
-### maestro handback --help
-handback  Return packets for lane contracts outside a running SLP team: file, list, review.
-subverbs:
-  file    File a shape-checked return packet for a dispatch.
-    usage: maestro handback file <dispatch-id>
-    --assumptions <value>           List unverified assumptions or None.
-    --candidate <value>             Record an opaque commit or digest.
-    --claim <value>                 State what is now believed true.
-    --incidental-findings <value>   List incidental findings or None.
-    --json                          Emit one compact JSON success envelope.
-    --lessons <value> (repeatable)  Name a lesson this return answers as <lesson id>@<store path>; repeats.
-    --proof <value>                 Name layered evidence for the claim.
-    --request <value>               State the retry condition or requested action.
-    --residual-risks <value>        List residual risks or None.
-    --status <value>                Set the handback status.
-  list    List handbacks for one dispatch or work item. *
-    usage: maestro handback list <dispatch-or-work-id>
-    --json  Emit one compact JSON success envelope.
-  review  Record that the opener read a returned handback.
-    usage: maestro handback review <id>
-    --json          Emit one compact JSON success envelope.
-    --note <value>  State what the review concluded.
-  show    Show the handback for a handback or dispatch id. *
-    usage: maestro handback show <id>
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro handback file --help
-handback file  File a shape-checked return packet for a dispatch.
-usage: maestro handback file <dispatch-id>
-    --assumptions <value>           List unverified assumptions or None.
-    --candidate <value>             Record an opaque commit or digest.
-    --claim <value>                 State what is now believed true.
-    --incidental-findings <value>   List incidental findings or None.
-    --json                          Emit one compact JSON success envelope.
-    --lessons <value> (repeatable)  Name a lesson this return answers as <lesson id>@<store path>; repeats.
-    --proof <value>                 Name layered evidence for the claim.
-    --request <value>               State the retry condition or requested action.
-    --residual-risks <value>        List residual risks or None.
-    --status <value>                Set the handback status.
-
-### maestro handback list --help
-handback list  List handbacks for one dispatch or work item. *
-usage: maestro handback list <dispatch-or-work-id>
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
-
-### maestro handback review --help
-handback review  Record that the opener read a returned handback.
-usage: maestro handback review <id>
-    --json          Emit one compact JSON success envelope.
-    --note <value>  State what the review concluded.
-
-### maestro handback show --help
-handback show  Show the handback for a handback or dispatch id. *
-usage: maestro handback show <id>
-    --json  Emit one compact JSON success envelope.
-* runs under MAESTRO_READ_ONLY=1
 
 ### maestro handoff --help
 handoff  Seed untouched NOTES.md sections from store and git evidence.
@@ -395,9 +242,7 @@ verbs:
   bundle     Durable design bundles: scaffold, snapshot, recall. *
   decide     Record one immutable settled decision.
   decision   Record durable decisions and their lifecycle. *
-  dispatch   Lane contracts outside a running SLP team: open, accept, cancel, and read them. *
   doctor     Diagnose the machine runtime and current repository wiring read-only. *
-  handback   Return packets for lane contracts outside a running SLP team: file, list, review. *
   handoff    Seed untouched NOTES.md sections from store and git evidence.
   help       Show top-level or per-verb help. *
   hook       Record harness events and print the current brief.
@@ -488,7 +333,7 @@ lesson  Record corrections the improver turns into doctrine edits.
 subverbs:
   file     File a correction as a lesson the improver will read.
     usage: maestro lesson file <what-happened>
-    --evidence <value> (repeatable)  A work, handback, or decision id that evidences it.
+    --evidence <value> (repeatable)  A work or decision id that evidences it.
     --expected <value>               What was expected instead.
     --json                           Emit one compact JSON success envelope.
     --project <value>                Tag another project; defaults to this store's project.
@@ -513,7 +358,7 @@ subverbs:
 ### maestro lesson file --help
 lesson file  File a correction as a lesson the improver will read.
 usage: maestro lesson file <what-happened>
-    --evidence <value> (repeatable)  A work, handback, or decision id that evidences it.
+    --evidence <value> (repeatable)  A work or decision id that evidences it.
     --expected <value>               What was expected instead.
     --json                           Emit one compact JSON success envelope.
     --project <value>                Tag another project; defaults to this store's project.

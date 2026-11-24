@@ -10,7 +10,6 @@ import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import type { BuiltInPlugin, PluginContext } from "../kernel/loader.ts";
 import type { DecisionService } from "./decision.ts";
-import type { DispatchService } from "./dispatch.ts";
 import { modifiedTrackedFiles, namesCommit } from "./git-status.ts";
 import { improverNextAction, improverTriggers } from "./lesson.ts";
 import { registerSessionCommand } from "./session-required.ts";
@@ -1242,7 +1241,6 @@ export const workPlugin: BuiltInPlugin = {
         const blockerLines = blockers.map(
           (blocker) => `blocker: ${blocker.id} [${blocker.state}] ${blocker.title}`,
         );
-        const dispatches = (context.dispatch as DispatchService | undefined)?.list(work.id) ?? [];
         const decisions = ((context.decision as DecisionService | undefined)?.list() ?? [])
           .filter((decision) => decision.workId === work.id);
         // What done will demand is only discoverable on rejection otherwise:
@@ -1258,7 +1256,7 @@ export const workPlugin: BuiltInPlugin = {
               )
               .map((record) => ({ policy: record.name, requires: record.requires ?? "" }));
         return {
-          data: { work, children, blockers, notes, noteCount: allNotes.length, dispatches, decisions, gates },
+          data: { work, children, blockers, notes, noteCount: allNotes.length, decisions, gates },
           text: [
             formatWork(work),
             ...gates.map((gate) => `gate: ${gate.policy} ${gate.requires}`),
@@ -1266,10 +1264,6 @@ export const workPlugin: BuiltInPlugin = {
             ...childLines,
             ...(noteCountLine ? [noteCountLine] : []),
             ...notes.map((note) => `note: ${note.text}`),
-            ...dispatches.map(
-              (dispatch) =>
-                `dispatch: ${dispatch.id} [${dispatch.state}] ${dispatch.lane}: ${dispatch.objective}`,
-            ),
             ...decisions.map(
               (decision) =>
                 `decision: ${decision.id} [${decision.state}] ${decision.text}`,
@@ -1399,19 +1393,6 @@ export const workPlugin: BuiltInPlugin = {
               (work) => `${work.id} ${work.title} [gated by ${work.origin}: ${work.reason}]`,
             ),
           ];
-          const dispatches = ((context.dispatch as DispatchService | undefined)?.list() ?? [])
-            .filter(
-              (dispatch) =>
-                dispatch.state === "open" &&
-                dispatch.heldBy === null &&
-                (dispatch.targetSession === null || dispatch.targetSession === sessionId),
-            );
-          lines.push(
-            ...dispatches.map(
-              (dispatch) =>
-                `dispatch: ${dispatch.id} [takeable] ${dispatch.lane} for ${dispatch.workId}: ${dispatch.objective}`,
-            ),
-          );
           if (hiddenBlocked > 0) {
             lines.push(`${hiddenBlocked} blocked by open work hidden; --all to list`);
           }
@@ -1429,7 +1410,7 @@ export const workPlugin: BuiltInPlugin = {
             (work) => work.state === "done" || work.state === "cancelled",
           );
           return {
-            data: { works, gated, dispatches },
+            data: { works, gated },
             text: lines.length > 0
               ? lines.join("\n")
               : held.length > 0

@@ -20,19 +20,13 @@ CliResult
 CliSuccessEnvelope
 CommandOptions
 CompactSummary
-CouncilStatus
 DecisionRecord
 DecisionService
-DispatchRecord
-DispatchService
 Disposer
 EventListener
 EventLog
 Events
 FlagDefinition
-HandbackRecord
-HandbackService
-HandbackStatus
 Harness
 HerdrAgent
 HerdrAgentStatus
@@ -131,8 +125,6 @@ currentPaneId
 decisionPlugin
 defaultBufferDirectories
 defaultSlpPack
-dispatchLaneVocabulary
-dispatchPlugin
 driftAdvisory
 editDistance
 failureEnvelope
@@ -148,7 +140,6 @@ gitMainWorktree
 grandfatherHomePlugins
 grantTrust
 guardArtifactBoundary
-handbackStatusVocabulary
 herdrPluginDirectory
 herdrPluginId
 herdrPluginManifestPath
@@ -164,6 +155,7 @@ installPlugin
 installStampFile
 isGeneratedTermName
 isRoom
+laneVocabulary
 latestCheckpoints
 launchArguments
 lessonPlugin
@@ -196,7 +188,6 @@ pluginTrustPredicate
 policyAutoPrPlugin
 policyBreakdownPlugin
 policyCardBudgetPlugin
-policyDispatchPlugin
 policyLayerPlugin
 policyLifecyclePlugin
 policyProofPlugin

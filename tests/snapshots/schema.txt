@@ -1,7 +1,3 @@
-index dispatches_work_id
-  CREATE INDEX dispatches_work_id ON dispatches(work_id)
-index handbacks_dispatch_id
-  CREATE UNIQUE INDEX handbacks_dispatch_id ON handbacks(dispatch_id)
 index sqlite_autoindex_attention_1
   (implicit)
 index sqlite_autoindex_bundle_work_1
@@ -9,14 +5,6 @@ index sqlite_autoindex_bundle_work_1
 index sqlite_autoindex_bundles_1
   (implicit)
 index sqlite_autoindex_decisions_1
-  (implicit)
-index sqlite_autoindex_dispatch_councils_1
-  (implicit)
-index sqlite_autoindex_dispatches_1
-  (implicit)
-index sqlite_autoindex_handback_reviews_1
-  (implicit)
-index sqlite_autoindex_handbacks_1
   (implicit)
 index sqlite_autoindex_legacy_cards_1
   (implicit)
@@ -52,16 +40,8 @@ table bundles
   CREATE TABLE bundles ( id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('active', 'archived')), directory TEXT NOT NULL, spec TEXT, notes TEXT, verify TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , paused_at TEXT)
 table decisions
   CREATE TABLE decisions ( id TEXT PRIMARY KEY, text TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('draft', 'locked', 'superseded')), parent_id TEXT REFERENCES decisions(id), work_id TEXT REFERENCES work(id), supersedes_id TEXT REFERENCES decisions(id), superseded_by_id TEXT REFERENCES decisions(id), created_at TEXT NOT NULL, updated_at TEXT NOT NULL , rationale TEXT, needs_owner INTEGER NOT NULL DEFAULT 0, dissent TEXT, review_at TEXT, withdrawn_at TEXT, withdraw_reason TEXT)
-table dispatch_councils
-  CREATE TABLE dispatch_councils ( work_id TEXT NOT NULL REFERENCES work(id), generation_anchor TEXT NOT NULL REFERENCES dispatches(id), unsealed_at TEXT NOT NULL, unseal_reason TEXT NOT NULL, PRIMARY KEY(work_id, generation_anchor) )
-table dispatches
-  CREATE TABLE dispatches ( id TEXT PRIMARY KEY, work_id TEXT NOT NULL REFERENCES work(id), objective TEXT NOT NULL, owned_scope TEXT NOT NULL, excluded_scope TEXT NOT NULL, mutation TEXT NOT NULL, stop_condition TEXT NOT NULL, lane TEXT NOT NULL, evidence_required TEXT NOT NULL, pane TEXT, target_session TEXT, opened_by TEXT, claimed_by TEXT, held_by TEXT, cancelled_at TEXT, cancel_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL , generation_anchor TEXT, expected_members INTEGER)
 table event_log
   CREATE TABLE event_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, entity_type TEXT, entity_id TEXT, session_id TEXT, payload TEXT NOT NULL, created_at TEXT NOT NULL )
-table handback_reviews
-  CREATE TABLE handback_reviews ( handback_id TEXT PRIMARY KEY REFERENCES handbacks(id), reviewed_by TEXT NOT NULL, note TEXT NOT NULL, created_at TEXT NOT NULL )
-table handbacks
-  CREATE TABLE handbacks ( id TEXT PRIMARY KEY, dispatch_id TEXT NOT NULL REFERENCES dispatches(id), status TEXT NOT NULL CHECK(status IN ( 'DONE', 'BLOCKED', 'UNTESTABLE', 'UNKNOWN', 'FAILED', 'CHALLENGE', 'REOPEN_REQUEST', 'DEPENDENCY_REQUEST', 'COUNCIL_REQUEST' )), claim TEXT NOT NULL, proof TEXT NOT NULL, assumptions TEXT NOT NULL, residual_risks TEXT NOT NULL, incidental_findings TEXT NOT NULL, created_at TEXT NOT NULL , request TEXT, candidate TEXT, lessons TEXT)
 table legacy_cards
   CREATE TABLE legacy_cards ( id TEXT PRIMARY KEY NOT NULL, source TEXT NOT NULL DEFAULT 'store', card_type TEXT NOT NULL, parent TEXT, status TEXT NOT NULL, title TEXT NOT NULL, record_file TEXT NOT NULL, card_yaml TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, imported_at TEXT NOT NULL )
 table legacy_decisions
