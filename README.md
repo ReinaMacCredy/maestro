@@ -169,8 +169,8 @@ setup at [SLP setup and storage](https://maestro.maccredyreina.me/getting-starte
 
 ## Work, decisions, and evidence
 
-- `maestro status` shows session identity, held work, and live peers;
-  `maestro ready` shows work that can start and the gates blocking other work.
+- `maestro work list` shows open work, who holds each active item, and what
+  blocks or gates the rest.
 - `maestro work` manages work trees, dependencies, leases, notes, cancellation,
   claims, and proof.
 - Method rules live in [WORKFLOW.md](src/plugins/resources/WORKFLOW.md), installed
@@ -206,9 +206,8 @@ missing identities or targets.
 
 ## Verb tour
 
-- `maestro status` shows sessions and leases; `maestro ready` shows startable
-  and gated work.
-- `maestro work add|start|note|done|show|list` manages the work lifecycle.
+- `maestro work add|start|note|done|show|list` manages the work lifecycle;
+  `work list` is the orientation view: open work, holders, blockers and gates.
 - `maestro decision draft|lock|confirm|show|list` manages durable choices;
   `confirm` clears a provisional Hub ruling.
 - `maestro owner` reads the Hub room's declared owner presence, or records it
