@@ -30,14 +30,21 @@ Add one block to `scripts/journey.sh` per journey the change touches, invoking
 `maestro` exactly as a user types it. The script already drives:
 
 - recipe catalog: `recipe list` shows the recipe, `recipe show` prints it.
-- playbooks: 18 playbook and method recipes listed, bug-fix's steps shown,
-  the retired `work` recipe refused; `~/maestro/PRINCIPLES.md` has 24
-  sections; seven skills; the ten new agent renders; no PreToolUse hook.
-- brief and grant: the SessionStart `method:` line routes by playbook; the
+- the proof gate and the check: `plugin enable policy-proof`; `work add --start`
+  creates and claims a card that `work list` shows as held; `work done` without
+  proof is refused; `work done --check "true"` closes it and `work show` prints
+  `proof kind: check` and the `check:` line; a second card closed with
+  `--evidence` prints `proof kind: text`.
+- decisions: `decision add --rationale --work` records and locks in one
+  command, and `decision list` shows it.
+- playbooks: 18 playbook recipes listed, bug-fix's steps shown, the unknown
+  `work` recipe refused; `~/maestro/PRINCIPLES.md` has 24 sections; seven
+  skills; no `maestro-*` agent files; no PreToolUse hook.
+- brief and grant: the SessionStart brief opens with the `maestro:` line; the
   `delivery grant:` line appears only while `policy-auto-pr` is enabled.
-- bundle check: a fresh bundle's U1 skeleton is reported and exits 1.
-- the proof gate: `plugin enable policy-proof`, then `work done` without
-  evidence is refused and `work done --evidence` passes.
+- bundles: `bundle check` passes a fresh bundle and `bundle check --final`
+  exits 1 on its empty VERIFY result; `work done` on the bundle's only card
+  archives it, and `bundle list --all` shows it archived.
 - reinstall: a second install keeps the repository's policy choices.
 
 ## Capture
@@ -59,16 +66,13 @@ is the proof and stays.
 | install / update / uninstall | install, reinstall | doctor healthy; `.maestro/config` keeps enables |
 | doctor, version | doctor | commit and source match the checkout |
 | recipe | recipe catalog, playbooks | new recipe listed and shown; playbooks listed, `work` refused |
-| PRINCIPLES.md, skills list, profiles, Claude hooks | playbooks | 24 sections, nine skills, ten renders, no PreToolUse |
-| brief, policy-auto-pr | brief and grant | `method:` line; grant line only while enabled |
-| plugin + policy gates | policy gate | blocked then passing `work done` |
-| work lifecycle (add, start, note, done, show) | policy gate (partial) | `w1 done` |
-| ready, status, trace, search | GAP | |
-| bundle check | bundle check | U1 skeleton reported, exit 1 |
-| bundle open/close, handoff | GAP | |
-| decision, decide, term, lesson | GAP | |
-| dispatch, handback | GAP | |
-| memory, room, owner (Hub) | GAP | |
-| topic, prompt, hook, brief, attention | GAP | |
-| team, slp (Herdr panes) | GAP: needs a live herdr room | |
-| graph, mcp | GAP | |
+| PRINCIPLES.md, skills list, agent files, Claude hooks | playbooks | 24 sections, seven skills, zero `maestro-*` agent files, no PreToolUse |
+| brief, policy-auto-pr | brief and grant | `maestro:` line; grant line only while enabled |
+| plugin + policy gates | proof gate | blocked then passing `work done` |
+| work lifecycle (add --start, list, done --check, done --evidence, show) | proof gate | `proof kind: check` and `proof kind: text` |
+| decision add, decision list | decisions | `d1 [locked]` |
+| bundle open, check, auto-archive | bundles | check exit 0, `--final` exit 1, `probe [archived]` |
+| search, attention, handoff, bundle close | GAP | |
+| lesson, term, topic, hook, mcp | GAP | |
+| memory, room (Hub) | GAP | |
+| SLP plugin: team, slp, decide, status (Herdr panes) | GAP: needs a live herdr room | |

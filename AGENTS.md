@@ -26,7 +26,9 @@ Rules:
   checkout, fast-forward only.
 - Kernel stays free of policy vocabulary (CI gate A2); no daemon, scheduler, or
   detached process (A1); no escape-hatch flags such as `lean` or `--lane light`
-  (A3). Run `bun test`, `bunx tsc --noEmit`, and those greps before pushing.
+  (A3). Before pushing, run the suite with `bun scripts/test-shards.ts`, then
+  `bunx tsc --noEmit`, `bun scripts/differential.ts` (an intended output change
+  is approved in `tests/differential/approved-changes.txt`), and those greps.
 - Test-first: red test, minimal change, green; the full suite runs after
   install, from the checkout being installed.
 - Never hand-edit the `.claude/` and `.codex/` wiring; the installer owns those
