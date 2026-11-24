@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
+    "fast-check": "4.11.0",
     "typescript": "7.0.2"
   }
 }

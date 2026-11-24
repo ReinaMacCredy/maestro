@@ -1,0 +1,23 @@
+@b work add "survey zq1x" --kind research
+@b work start w1
+@b work start w1
+@b work start w1
+@a work add "survey zq2x" --kind research
+@a work release w2
+@a work add "survey zq3x" --kind research
+@b work add "build zq4x" --kind task --parent w1
+@a work add "build zq5x" --kind task --parent w2
+@b work add "build zq6x" --kind task --parent w3
+@a work cancel w5 --reason dropped
+@b work cancel w1 --reason dropped
+@a work add "build zq7x" --kind task --parent w1
+@a work cancel w4 --reason dropped
+@b work done w2 --evidence "bun test: 3 pass"
+@b work start w5
+@b work release w7
+@b work add "build zq8x" --kind task --parent w2
+@b work release w6
+@b work done w7 --evidence "bun test: 3 pass"
+@a work cancel w7 --reason dropped
+@b decision draft "prefer zq9x" --rationale measured
+@b work release w1
