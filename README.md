@@ -48,9 +48,9 @@ rollback executable already exists.
 Install also scaffolds `~/maestro`, the Supervisor room, and registers the
 current repository there, and writes the shared method to
 `~/maestro/WORKFLOW.md`, which routes each kind of task to a playbook
-(`maestro recipe list`). It materializes nine managed skills under
+(`maestro recipe list`). It materializes eight managed skills under
 `~/maestro/skills`: `maestro-bundle`, `maestro-design`, `maestro-work`,
-`maestro-verify`, `maestro-improve`, `maestro-council`, `maestro-graph`, and
+`maestro-verify`, `maestro-improve`, `maestro-council`, and
 the read-only `maestro-coach` and `maestro-questionnaire`. The
 installer links those skills for Claude without overwriting unmanaged skills.
 
@@ -227,10 +227,6 @@ missing identities or targets.
   and a dry run.
 - `maestro recipe list|show` serves methods; `maestro plugin list|enable|disable`
   manages the configured extension set.
-- `maestro graph run|next|result|show|list|trust` drives a pre-known
-  multi-agent path from one graph markdown file; maestro executes the
-  deterministic nodes and hands the agent nodes back to whichever harness
-  is driving.
 - `maestro import rust` imports preserved Rust data; `maestro legacy show`
   reads imported cards and files.
 - `maestro install`, `maestro update`, `maestro uninstall`, and
