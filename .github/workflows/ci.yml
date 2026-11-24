@@ -37,9 +37,9 @@ jobs:
         run: |
           if git cat-file -e "$BASE:scripts/differential.ts" 2>/dev/null; then
             git show "$BASE:scripts/differential.ts" > "$RUNNER_TEMP/differential.ts"
-            bun "$RUNNER_TEMP/differential.ts" --root "$PWD" --base "$BASE"
+            bun "$RUNNER_TEMP/differential.ts" --root "$PWD" --base "$BASE" --strict
           else
-            bun scripts/differential.ts
+            bun scripts/differential.ts --strict
           fi
       - name: A1 no daemon or scheduler
         run: |

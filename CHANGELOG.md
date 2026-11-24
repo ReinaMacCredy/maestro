@@ -11,6 +11,124 @@ TypeScript-on-Bun line and continues the existing version sequence.
 
 ## [Unreleased]
 
+## [0.127.0] - 2026-11-25
+
+A debloat release. The command line loses the features the usage data showed
+nobody called, and stored data stays readable: no table is dropped and no row
+is removed (d876). A new store no longer creates the tables of a removed
+feature.
+
+### Removed
+
+- The graph engine: `maestro graph`, the shipped graphs and the
+  `maestro-graph` skill (d886).
+- `maestro dispatch` and `maestro handback`, `policy-dispatch` and council
+  sealing (d885). `work show` no longer lists the dispatches stored for a card.
+- `maestro import rust`; imported cards stay readable through
+  `maestro legacy show` and `maestro search` (d887).
+- External plugins: `maestro plugin new|add|remove|trust|untrust`.
+  `plugin list|enable|disable` remain for the built-in plugins (d888).
+- `maestro bundle import|pause|resume|save`, `maestro prompt list`,
+  `maestro trace`, `maestro term add` (d889, d909, d910).
+- `maestro lesson render` and the lesson improver pipeline. The lesson ledger
+  stays: `lesson file|list|show|process` (d890).
+- `maestro ready` and `maestro status` in the core; `maestro work list` is the
+  orientation verb (d896).
+- `--atomic-reason` on `work add|start|done` and the parentless-start check.
+  A parent with open write-like children still cannot be started or closed
+  (d880).
+- `--review-at` on decisions and the attention flags `--stale`,
+  `--decision-stale`, `--dispatch-stale`. Attention raises three kinds:
+  `HUMAN_DECISION_REQUIRED`, `LESSONS_PENDING`, `REPEATED_FAILURE`
+  (d882, d892).
+- The MCP tools `maestro_run` and `maestro_find`; `maestro mcp serve` delivers
+  the session brief only (d891).
+- The policies `policy-tdd`, `policy-layer`, `policy-witness`, `policy-qa`,
+  `policy-research` and `policy-lifecycle` (d902). A config that still names
+  one loads quietly.
+- The recipes `architect`, `arena`, `audit`, `benchmark-checklist`,
+  `conflict-handoff`, `design`, `fan-out`, `how`, `learning`, `ship`,
+  `technical-writing`, `unslop` and `why` (d916), and the `maestro-improve`
+  skill (d917).
+- Every sub-agent profile. `maestro install` removes the `maestro-*` agent
+  files an earlier install wrote into `~/.claude/agents` and `~/.codex/agents`;
+  a hand-written file is left alone. Delegation uses the harness's own agent
+  types with a written brief and the model named in the call (d906).
+- In the team layer (SLP): the Team Supervisor seat, the supervised shape and
+  its stop grants, `--lead-only`, `--supervisor-model`, `--profile` and
+  `--peer-profile`; provisional rulings, `maestro decision confirm` and
+  `maestro owner`; the orphan auto-stop and `maestro slp event`; the Observer
+  seat, the dialog and repeat stall kinds, and the compatibility code for
+  retired verbs and pack version 2 (d897, d898, d899).
+
+### Added
+
+- `maestro work add "<title>" --start` creates a card and claims it for the
+  calling session in one command (d919).
+- `maestro work done <id> --check "<command>"` runs the command and records it
+  with its exit code, duration, commit and whether the tree was clean. It
+  starts in observe mode: a failing check is recorded and the card still
+  closes. A close with `--evidence` text alone is recorded as text (d883).
+- `maestro decision add "<text>" --rationale "<why>" --work <id>` records and
+  locks a decision in one command. `decision draft` and `decision lock` remain
+  for a draft that waits on the owner (d884).
+- The `review` recipe and a root `REVIEW.md`: one reviewer over a frozen diff,
+  in rounds, with a reliability checklist (d904, d918).
+- For contributors: `bun scripts/test-shards.ts` runs the suite in parallel
+  file shards (d877); `bun scripts/differential.ts` compares the tree with the
+  previous release over a command corpus and re-reads stores built by it,
+  with every accepted difference listed in
+  `tests/differential/approved-changes.txt` (d913-d915); property tests over
+  random two-session command sequences (d905); `bun scripts/usage-count.ts`
+  counts verb, recipe and skill calls in local transcripts (d912).
+
+### Changed
+
+- The team layer (`team`, `slp`, `decide`, `status`, `work take|return|accept`,
+  `work add --to`) is a built-in plugin named `slp` that is off by default:
+  `maestro plugin enable slp`. With it off those verbs are refused with the
+  enable command, `maestro install` links no Herdr plugin, writes no seat
+  files and removes the Herdr link and the seat launch files an earlier
+  install wrote, and a new store gets no SLP tables. A stored SLP ruling stays readable through `decision show`.
+  `maestro team start` enables the plugin in the project it starts a team for
+  (d878, d879).
+- A team has one shape: the Hub reviews one Lead, and the Lead hands work to
+  Peers. Wakes about a Lead go to the Hub (d898).
+- `maestro work list` prints open and active cards with their holder, blockers
+  and gates, then one count line for done and cancelled cards; `--all` and
+  `--parent <id>` reach the rest. `maestro decision list` prints the twenty
+  most recent and the total; `--all` and `--work <id>` reach the rest
+  (d893, d896).
+- `maestro bundle list` prints active bundles, most recently updated first. A
+  bundle archives itself when `work done` closes the last open card linked to
+  it, and reports VERIFY rows that have no result (d895).
+- `maestro bundle check` fails only when a SPEC unit has no VERIFY row, and
+  with `--final` when a row has no result (d903).
+- Card and decision ids come from one counter per prefix, shared by the plain
+  ledgers and the SLP ledgers (d894).
+- The session brief is short and reaches one harness process once, whether the
+  hook or the MCP transport speaks first. `~/maestro/WORKFLOW.md` is rewritten:
+  playbooks are guidance to read when one fits, and the order to copy a
+  playbook's steps into the plan list is gone (d911).
+- `maestro-council` is a short procedure run by hand with ordinary sub-agents
+  (d917).
+- Testing discipline in `~/maestro/WORKFLOW.md` adds rules for a unit test
+  written after the code, for listing failure modes before an isolated test,
+  for edits to existing tests as their own review item, and for quarantining
+  a flaky test.
+- The desktop pill reads `work list` instead of the removed `status` and
+  `ready`.
+
+### Fixed
+
+- The search index was rebuilt on every invocation; rows are now indexed when
+  they are written.
+- A session whose process id had been reused by another process kept showing
+  as live.
+- `--help` after a verb's arguments printed the top-level help.
+- `maestro install` printed `herdr plugin:` twice when Herdr was not
+  running.
+
 ## [0.126.0] - 2026-10-17
 
 ### Added
