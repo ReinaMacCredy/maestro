@@ -313,7 +313,7 @@ export class Cli {
           argument: unexpected,
         });
       }
-      const help = this.helpText(target);
+      const help = await this.helpFor(target);
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     const helpIndex = args.indexOf("--help");
@@ -324,7 +324,7 @@ export class Cli {
           argument: unexpected,
         });
       }
-      const help = this.helpText(this.helpTarget(args.slice(0, helpIndex)).target);
+      const help = await this.helpFor(this.helpTarget(args.slice(0, helpIndex)).target);
       return { result: { data: { help }, text: help }, wantsJson: false };
     }
     const found = this.findCommand(args);
@@ -434,6 +434,14 @@ export class Cli {
       });
     }
     return { command, options, positionals };
+  }
+
+  private async helpFor(target?: string): Promise<string> {
+    const known = !target || [...this.commands.keys()].some((command) => command === target || command.startsWith(`${target} `));
+    if (!known) {
+      for (const guard of [this.options, ...this.guards]) await guard.beforeUnknown?.(target.split(" "));
+    }
+    return this.helpText(target);
   }
 
   private helpText(target?: string): string {
