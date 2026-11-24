@@ -602,7 +602,8 @@ test("retire-agent-files: install removes the maestro-* agent files an earlier i
     const codexHome = join(fixture.home, ".codex");
     const codexAgents = join(codexHome, "agents");
     const peerAgents = join(seatConfigRoot(fixture.home), "peer", "agents");
-    for (const directory of [claudeAgents, codexAgents, peerAgents]) await mkdir(directory, { recursive: true });
+    const retiredSeatAgents = join(seatConfigRoot(fixture.home), "team-supervisor", "agents");
+    for (const directory of [claudeAgents, codexAgents, peerAgents, retiredSeatAgents]) await mkdir(directory, { recursive: true });
     const rendered = new Map([
       [join(claudeAgents, "maestro-delegate.md"), '---\nname: maestro-delegate\ndescription: "Delegate"\nmodel: opus\n---\n\nRole: Delegate.\n'],
       [join(claudeAgents, "maestro-lead.md"), '---\nname: maestro-lead\ndescription: "old seat file"\n---\n\nRole: Lead.\n'],
@@ -610,6 +611,7 @@ test("retire-agent-files: install removes the maestro-* agent files an earlier i
       [join(codexAgents, "maestro-peer.toml"), 'name = "maestro-peer"\ndescription = "bounded execution"\ndeveloper_instructions = """\nRole: Peer.\n"""\n'],
       [join(codexHome, "maestro-peer-delegate.config.toml"), 'model = "opus"\ndeveloper_instructions = """\nRole: Delegate.\n"""\n'],
       [join(peerAgents, "maestro-peer-delegate.md"), '---\nname: maestro-peer-delegate\ndescription: "Delegate"\n---\n\nRole: Delegate.\n'],
+      [join(retiredSeatAgents, "maestro-team-supervisor.md"), '---\nname: maestro-team-supervisor\ndescription: "a seat an earlier version had"\n---\n\nRole: Team Supervisor.\n'],
     ]);
     const handWritten = new Map([
       [join(claudeAgents, "maestro-mine.md"), "---\nname: my-own-agent\n---\nhand written\n"],
@@ -620,7 +622,7 @@ test("retire-agent-files: install removes the maestro-* agent files an earlier i
 
     const first = await runCli(fixture, ["install"], { PATH: path });
     expect(first.exitCode).toBe(0);
-    expect(first.stdout.match(/retired \d+ maestro agent files/g)).toEqual(["retired 6 maestro agent files"]);
+    expect(first.stdout.match(/retired \d+ maestro agent files/g)).toEqual(["retired 7 maestro agent files"]);
     for (const file of rendered.keys()) expect({ file, exists: existsSync(file) }).toEqual({ file, exists: false });
     for (const [file, content] of handWritten) expect(await readFile(file, "utf8")).toBe(content);
     for (const seat of ["lead", "peer"] as const) {

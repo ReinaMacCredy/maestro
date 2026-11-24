@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HerdrClient, SlpRuntimeError } from "./herdr-client.ts";
@@ -7,7 +7,7 @@ import {
   formatSeatSync,
   materializeSeats,
   removeSeatConfig,
-  seatDirectory,
+  seatConfigRoot,
   seatLaunchPath,
   readSeatToken,
   seatNames,
@@ -103,8 +103,13 @@ async function unlinkHerdrPlugin(
   return removed;
 }
 
+// A seat an earlier version had keeps its directory, so every directory under the root is swept.
 function seatAgentDirectories(home: string): string[] {
-  return [join(home, ".codex"), ...seatNames.map((seat) => join(seatDirectory(home, seat), "agents"))];
+  const root = seatConfigRoot(home);
+  const seats = existsSync(root)
+    ? readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+    : [];
+  return [join(home, ".codex"), ...seats.map((seat) => join(root, seat, "agents"))];
 }
 
 function seatLaunchFiles(home: string): string[] {
@@ -122,7 +127,7 @@ export async function installMachineFiles(event: InstallEvent): Promise<string> 
   const link = await linkHerdrPlugin(event.home, event.binary, event.version);
   return [
     formatSeatSync(seats, event.home),
-    `herdr plugin: ${link.status === "unreachable" ? link.warning : `${link.status} at ${link.directory}`}`,
+    link.status === "unreachable" ? link.warning : `herdr plugin: ${link.status} at ${link.directory}`,
     ...(seats.seatToken === "missing"
       ? [`warning: no seat token at ${seatTokenPath(event.home)}, so Claude seats cannot log in; run: claude setup-token | maestro install --seat-token`]
       : []),
