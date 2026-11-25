@@ -265,6 +265,11 @@ requirements without treating them as a demand for duplicate tests.
 - Before adding a test, name the gap: "Which plausible wrong implementation would this catch
   that existing checks would miss?" Assert the observable contract, not internal
   structure, mock choreography, or an expectation copied from the implementation.
+- A unit test written after the code was never seen failing, so its pass
+  proves little. Keep it only when it names a bug the behavior-level tests
+  (integration, end-to-end) would miss; otherwise extend those tests instead.
+- Before writing an isolated test, list the unit's failure modes, then test
+  the ones that matter. A test with no failure mode behind it is padding.
 - Falsify the test itself: would it still pass if every function it imports
   returned `undefined`? Then it checks nothing; rewrite the assertion around a
   literal observed result or delete the test.
@@ -281,9 +286,16 @@ requirements without treating them as a demand for duplicate tests.
   product behavior or scope still needs approval.
 - Stop when acceptance and in-scope risks have sufficient evidence. Do not
   start a coverage campaign, unrelated edge-case sweep, or blanket mutation
-  testing. There is no arbitrary numerical cap on tests.
+  testing. There is no arbitrary numerical cap on tests. A mutation run scoped
+  to tests being pruned is evidence for that deletion, not a campaign.
 - Never delete, skip, or weaken a failing test to manufacture a pass. Correct
   a wrong test openly against the approved contract and record the reason.
+- Each edit to an existing test (a changed expectation, a deleted case, an
+  added skip) is its own review item in the handback, named apart from the
+  production change it accompanies.
+- A flaky test leaves the suite only when someone quarantines it into a
+  separate job with a named owner and a date. A quarantined test is outside
+  the current change; it is not fixed, rewritten, or deleted in passing.
 - A command run as evidence shows its stderr, and a negative result from it is
   believed only after that same command has produced a positive on a case known
   to be positive. Where the claim is that nothing happened, falsify the check
