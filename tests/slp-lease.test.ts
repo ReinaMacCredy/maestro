@@ -233,7 +233,11 @@ test("194 an exclusive live pid stays pid-anchored even with a cold last_seen", 
     );
     expect((await runCli(fixture, ["work", "start", work], session(holder, 1))).exitCode).toBe(0);
     const database = new Database(join(fixture.repo, ".maestro", "maestro.db"));
-    const cold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    // The host must predate last_seen: two hours ago, or just after boot on a machine younger than that (a CI runner).
+    const booted = Date.parse(
+      Bun.spawnSync(["ps", "-o", "lstart=", "-p", "1"], { env: { LC_ALL: "C" } }).stdout.toString().trim(),
+    );
+    const cold = new Date(Math.max(booted + 1000, Date.now() - 2 * 60 * 60 * 1000)).toISOString();
     database.query("UPDATE sessions SET last_seen = ? WHERE id = ?").run(cold, holder);
     database.close();
 
